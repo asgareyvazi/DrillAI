@@ -1,0 +1,271 @@
+"""RBAC: roles, permissions and policy evaluation.
+
+The permission model is intentionally small and explicit:
+
+* a permission is a dotted string ``<area>.<object>.<verb>`` (``well.read``,
+  ``workflow.publish``, ``action.engine.run``);
+* a **role** is a named set of permission patterns where ``*`` matches one segment and
+  ``**`` matches the rest (``well.*``, ``engines.**``);
+* a **principal** holds roles and an explicit action-level ceiling;
+* every check is **org-scoped** — a role assignment always carries the org it belongs to, and
+  cross-org access is denied before any object is loaded.
+
+Patterns (rather than enumerated permission lists) keep role definitions readable while the
+matching function stays deterministic and testable. Nothing here hits the database: services
+resolve role assignments to principals, then ask this module.
+"""
+
+from __future__ import annotations
+
+import fnmatch
+from dataclasses import dataclass, field
+
+from drillai.security.actions import ActionLevel, Principal
+
+__all__ = [
+    "ROLE_CATALOGUE",
+    "SYSTEM_ROLES",
+    "Role",
+    "effective_permissions",
+    "permission_granted",
+    "permissions_match",
+    "principal_from_roles",
+    "require_permissions",
+]
+
+from drillai.core.errors import PermissionDenied
+from drillai.security.actions import permission_matches
+
+
+@dataclass(frozen=True)
+class Role:
+    """A role definition. ``system=True`` roles are seeded and editable-but-not-deletable."""
+
+    key: str
+    name: str
+    description: str
+    permissions: tuple[str, ...] = ()
+    max_action_level: ActionLevel = ActionLevel.OBSERVE
+    is_system: bool = True
+
+    def grants(self, permission: str) -> bool:
+        return any(_pattern_matches(pattern, permission) for pattern in self.permissions)
+
+
+def _pattern_matches(pattern: str, permission: str) -> bool:
+    if pattern == permission:
+        return True
+    if pattern.endswith(".**"):
+        return permission.startswith(pattern[:-3] + ".")
+    if pattern.endswith(".*"):
+        prefix = pattern[:-2]
+        return permission.count(".") == prefix.count(".") + 1 and permission.startswith(prefix + ".")
+    if "*" in pattern:
+        return fnmatch.fnmatchcase(permission, pattern)
+    return False
+
+
+#: System roles shipped with the platform. Domain packs add roles; orgs may fork these.
+ROLE_CATALOGUE: tuple[Role, ...] = (
+    Role(
+        key="viewer",
+        name="Viewer",
+        description="Read-only access to wells, documents, context and results.",
+        permissions=(
+            "well.read",
+            "project.read",
+            "document.read",
+            "evidence.read",
+            "context.read",
+            "engine.read",
+            "workflow.read",
+            "twin.read",
+            "recommendation.read",
+            "dashboard.read",
+            "registry.read",
+        ),
+        max_action_level=ActionLevel.OBSERVE,
+    ),
+    Role(
+        key="engineer",
+        name="Drilling engineer",
+        description="Full read access plus running engines, drafting scenarios and advising.",
+        permissions=(
+            "well.*",
+            "project.read",
+            "document.*",
+            "evidence.*",
+            "context.read",
+            "engine.*",
+            "workflow.read",
+            "workflow.draft",
+            "workflow.run",
+            "twin.*",
+            "recommendation.*",
+            "offset.*",
+            "optimization.*",
+            "dashboard.*",
+            "artifact.draft",
+            "scenario.create",
+            "action:engine.run",
+            "action:offset.analyze",
+            "action:twin.update",
+            "registry.read",
+        ),
+        max_action_level=ActionLevel.DRAFT,
+    ),
+    Role(
+        key="drilling_supervisor",
+        name="Drilling supervisor",
+        description="Advises, drafts and proposes changes to the drilling program; approves L4 execution.",
+        permissions=(
+            "well.*",
+            "project.read",
+            "document.*",
+            "evidence.*",
+            "context.read",
+            "engine.*",
+            "workflow.*",
+            "twin.*",
+            "recommendation.*",
+            "offset.*",
+            "optimization.*",
+            "operations.*",
+            "dashboard.*",
+            "action:**",
+            "registry.read",
+        ),
+        max_action_level=ActionLevel.EXECUTE_WITH_APPROVAL,
+    ),
+    Role(
+        key="well_manager",
+        name="Well manager",
+        description="Accountable authority: approves plans, permits automation within an envelope.",
+        permissions=("**", "registry.read"),
+        max_action_level=ActionLevel.AUTHORIZED_AUTOMATION,
+    ),
+    Role(
+        key="integrity_engineer",
+        name="Well integrity engineer",
+        description="Barrier, verification and certification authority (L3 proposal rights).",
+        permissions=(
+            "well.*",
+            "document.*",
+            "evidence.*",
+            "context.read",
+            "engine.*",
+            "twin.*",
+            "integrity.*",
+            "requirement.*",
+            "recommendation.*",
+            "dashboard.*",
+            "action:integrity.verify",
+            "registry.read",
+        ),
+        max_action_level=ActionLevel.PROPOSE,
+    ),
+    Role(
+        key="data_manager",
+        name="Data manager",
+        description="Owns ingestion, catalogues and data quality; no engineering approvals.",
+        permissions=(
+            "document.*",
+            "evidence.*",
+            "catalog.*",
+            "ingestion.*",
+            "context.read",
+            "well.read",
+            "project.read",
+            "dashboard.read",
+            "registry.read",
+        ),
+        max_action_level=ActionLevel.DRAFT,
+    ),
+    Role(
+        key="auditor",
+        name="Auditor",
+        description="Reads everything, writes nothing; used for compliance review.",
+        permissions=("*.read", "audit.read", "workflow.read", "evidence.read", "registry.read"),
+        max_action_level=ActionLevel.OBSERVE,
+    ),
+    Role(
+        key="admin",
+        name="Platform administrator",
+        description="Manages users, roles, integrations and registries; not an engineering authority.",
+        permissions=(
+            "admin.**",
+            "registry.*",
+            "user.*",
+            "role.*",
+            "integration.*",
+            "audit.read",
+            "*.read",
+            "project.write",
+        ),
+        max_action_level=ActionLevel.EXECUTE_WITH_APPROVAL,
+    ),
+)
+
+SYSTEM_ROLES: dict[str, Role] = {role.key: role for role in ROLE_CATALOGUE}
+
+
+def effective_permissions(roles: list[Role]) -> frozenset[str]:
+    """Expand role patterns into a concrete permission set (patterns are kept for matching)."""
+    return frozenset(pattern for role in roles for pattern in role.permissions)
+
+
+#: One implementation of permission matching, shared with the action gate so that a role's
+#: ``engine.*`` pattern means the same thing everywhere.
+permissions_match = permission_matches
+
+
+def permission_granted(principal: Principal, permission: str) -> bool:
+    return permissions_match(principal.permissions, permission)
+
+
+def require_permissions(principal: Principal, *permissions: str) -> None:
+    missing = [permission for permission in permissions if not permission_granted(principal, permission)]
+    if missing:
+        raise PermissionDenied(
+            f"missing permission(s): {', '.join(missing)}",
+            details={"missing": missing, "role_keys": list(principal.role_keys)},
+        )
+
+
+def principal_from_roles(
+    *,
+    principal_id: str,
+    org_id: str | None,
+    roles: list[Role],
+    kind: str = "user",
+    display_name: str | None = None,
+    scopes: tuple[str, ...] = (),
+) -> Principal:
+    """Compose a principal from role assignments: permissions union, ceiling = highest role."""
+    ceiling = max((role.max_action_level for role in roles), key=lambda level: level.rank, default=ActionLevel.OBSERVE)
+    return Principal(
+        id=principal_id,
+        kind=kind,
+        display_name=display_name,
+        org_id=org_id,
+        role_keys=tuple(role.key for role in roles),
+        permissions=effective_permissions(roles),
+        max_action_level=ceiling,
+        scopes=scopes,
+    )
+
+
+@dataclass(frozen=True)
+class OrgPolicy:
+    """Org-level switches that gate dangerous capability globally.
+
+    Defaults are the safe ones: automation off, no outbound messaging, no auto-publish.
+    """
+
+    automation_enabled: bool = False
+    automation_envelopes: dict[str, dict] = field(default_factory=dict)
+    require_dual_approval: bool = False
+    allowed_integrations: tuple[str, ...] = ()
+    data_residency: str | None = None
+    retention_days: int = 3650
+    private_llm_only: bool = False
