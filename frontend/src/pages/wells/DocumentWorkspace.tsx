@@ -27,7 +27,7 @@ import {
   Tabs,
 } from '../../components/common'
 import { useI18n } from '../../i18n'
-import { formatDateTime, humanise } from '../../lib/format'
+import { formatDateTime, formatNumber, humanise } from '../../lib/format'
 
 function ProcessingReportView({ report }: { report: DdrProcessingReport }) {
   const { t } = useI18n()
@@ -103,7 +103,7 @@ function ProcessingReportView({ report }: { report: DdrProcessingReport }) {
 }
 
 export default function DocumentWorkspace() {
-  const { t } = useI18n()
+  const { t, locale } = useI18n()
   const { wellId } = useParams<{ wellId: string }>()
   const id = wellId as string
   const queryClient = useQueryClient()
@@ -144,7 +144,14 @@ export default function DocumentWorkspace() {
   const upload = useMutation({
     mutationFn: (file: File) => drillingApi.uploadDocument(file, { well_id: id, doc_type: docType }),
     onSuccess: (result) => {
-      setMessage(`Uploaded ${result.document.title} · ${result.job ? 'ingestion started' : 'no job'}`)
+      // Identical bytes are one document: the pipeline reuses the existing one and records a
+      // `skipped_duplicate` job. Saying "ingestion started" there would be false, so it does not.
+      const status = result.job?.status ?? 'no ingestion job'
+      setMessage(
+        result.job?.status === 'skipped_duplicate'
+          ? `Identical content was already ingested — reused ${result.document.title} (no new document)`
+          : `Uploaded ${result.document.title} · ingestion ${status}`,
+      )
       setSearchParams({ document: result.document.id })
       queryClient.invalidateQueries({ queryKey: ['documents', id] })
     },
@@ -292,13 +299,18 @@ export default function DocumentWorkspace() {
                   <Badge tone="neutral">chunks {selected.extraction_summary.chunks}</Badge>
                   <Badge tone="neutral">records {selected.extraction_summary.records}</Badge>
                   <Badge tone="neutral">evidence {selected.extraction_summary.evidence_links}</Badge>
+                  {/*
+                    The API reports the extractor set that ran, not the ones that produced rows. Saying
+                    "extractors matched" here would claim work that did not happen, so the set is named
+                    as a set and the absence of rows is stated separately.
+                  */}
                   {Object.keys(selected.extraction_summary.extractors).length > 0 && (
                     <Badge tone="info">
-                      extractors: {Object.keys(selected.extraction_summary.extractors).join(', ')}
+                      extractor set: {Object.keys(selected.extraction_summary.extractors).join(', ')}
                     </Badge>
                   )}
-                  {Object.keys(selected.extraction_summary.extractors).length === 0 && (
-                    <Badge tone="warning">no extractor matched this document</Badge>
+                  {selected.extraction_summary.records === 0 && (
+                    <Badge tone="warning">no records extracted</Badge>
                   )}
                 </div>
                 <div className="mt-3">
@@ -319,50 +331,47 @@ export default function DocumentWorkspace() {
                 <Card title={t('documents.extractedRecords')}>
                   <Async query={detail}>
                     {(data) => {
-                      const records = data.records ?? []
+                      const records = data.records
                       if (records.length === 0)
                         return (
                           <EmptyState
                             message="No structured record was extracted from this document."
-                            hint={
-                              Object.keys(selected.extraction_summary.extractors).length === 0
-                                ? 'No extractor claimed this document type. The text is still searchable for retrieval.'
-                                : 'The extractors that matched produced no rows.'
-                            }
+                            hint={`The extractor set (${Object.keys(selected.extraction_summary.extractors).join(', ') || 'none'}) ran and produced no rows. The text is still searchable for retrieval.`}
                           />
                         )
                       return (
                         <Table
                           rows={records}
-                          rowKey={(row, index) => String((row as Record<string, unknown>).id ?? index)}
+                          rowKey={(record) => record.id}
                           columns={[
                             {
                               key: 'kind',
                               header: 'Record',
-                              render: (row) => {
-                                const record = row as Record<string, unknown>
-                                return (
-                                  <span>
-                                    <span className="font-medium">{String(record.record_kind ?? record.kind ?? 'record')}</span>
-                                    <span className="block font-mono text-[10px] text-graphite-500">
-                                      {String(record.extractor ?? '')} · confidence{' '}
-                                      {record.confidence === null || record.confidence === undefined
-                                        ? '—'
-                                        : Number(record.confidence).toFixed(2)}
-                                    </span>
+                              render: (record) => (
+                                <span>
+                                  <span className="font-medium">{humanise(record.record_type)}</span>
+                                  <span className="block font-mono text-[10px] text-graphite-500">
+                                    {record.method ?? 'method not recorded'}
+                                    {record.method_version ? `@${record.method_version}` : ''} · confidence{' '}
+                                    {formatNumber(record.confidence, locale, 2)}
                                   </span>
-                                )
-                              },
+                                </span>
+                              ),
+                            },
+                            {
+                              key: 'validation',
+                              header: 'Validation',
+                              render: (record) => <Badge tone="neutral">{humanise(record.validation_state)}</Badge>,
                             },
                             {
                               key: 'payload',
                               header: 'Content',
-                              render: (row) => <Json value={(row as Record<string, unknown>).payload} max={80} />,
+                              render: (record) => <Json value={record.payload} max={80} />,
                             },
                             {
                               key: 'page',
                               header: t('common.page'),
-                              render: (row) => String((row as Record<string, unknown>).page_number ?? '—'),
+                              render: (record) => formatNumber(record.page_number, locale, 0),
                               align: 'end',
                             },
                           ]}
@@ -387,13 +396,12 @@ export default function DocumentWorkspace() {
                               className="rounded-md border border-graphite-100 p-2.5 text-xs dark:border-graphite-800"
                             >
                               <div className="flex flex-wrap gap-2">
-                                <Badge tone="info">
-                                  {String((link.record as Record<string, unknown>).record_kind ?? 'record')}
-                                </Badge>
+                                <Badge tone="info">{humanise(link.record.record_type)}</Badge>
+                                <Badge tone="neutral">{link.record.method ?? 'method not recorded'}</Badge>
                                 {link.region && (
                                   <Badge tone="neutral">
-                                    page {String((link.region as Record<string, unknown>).page_number ?? '—')} ·{' '}
-                                    {String((link.region as Record<string, unknown>).region_kind ?? 'region')}
+                                    page {formatNumber(link.region.page_number, locale, 0)} ·{' '}
+                                    {humanise(link.region.region_kind)}
                                   </Badge>
                                 )}
                                 {!link.region && <Badge tone="warning">no region captured</Badge>}

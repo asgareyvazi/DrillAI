@@ -15,6 +15,9 @@ import type {
   ContextBundle,
   DdrProcessingReport,
   DocumentRow,
+  DocumentDetail,
+  DocumentProvenance,
+  IngestionJob,
   DrillingState,
   EngineListItem,
   EngineRunEnvelope,
@@ -99,22 +102,9 @@ export const drillingApi = {
   // ------------------------------------------------------------------ documents & evidence
   listDocuments: (params: { well_id?: string; doc_type?: string } = {}) =>
     api.get<Page<DocumentRow>>('/documents', { query: params }),
-  getDocument: (documentId: string) =>
-    api.get<{
-      document: DocumentRow
-      ingestion_jobs: Array<Record<string, unknown>>
-      chunks?: Array<Record<string, unknown>>
-      records?: Array<Record<string, unknown>>
-      evidence?: EvidenceItem[]
-    }>(`/documents/${enc(documentId)}`),
+  getDocument: (documentId: string) => api.get<DocumentDetail>(`/documents/${enc(documentId)}`),
   documentProvenance: (documentId: string) =>
-    api.get<{
-      document_id: string
-      extraction_summary: DocumentRow['extraction_summary']
-      chain: Array<{ record: Record<string, unknown>; region: Record<string, unknown> | null; document: Record<string, unknown> }>
-      region_count: number
-      record_count: number
-    }>(`/documents/${enc(documentId)}/provenance`),
+    api.get<DocumentProvenance>(`/documents/${enc(documentId)}/provenance`),
   uploadDocument: async (
     file: File,
     fields: { well_id?: string; wellbore_id?: string; section_id?: string; doc_type?: string; title?: string },
@@ -133,7 +123,8 @@ export const drillingApi = {
     }
     return (await response.json()) as {
       document: DocumentRow
-      job: Record<string, unknown>
+      /** The ingestion job, or `null` when the upload produced no job. */
+      job: IngestionJob | null
       record_ids: string[]
       evidence_link_ids: string[]
     }

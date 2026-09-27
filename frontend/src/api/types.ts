@@ -354,6 +354,93 @@ export interface DocumentRow {
   created_at: string
 }
 
+/** One row an extractor produced, with the method and version that produced it. */
+export interface ExtractionRecord {
+  id: string
+  document_id: string
+  /** The extractor's record kind, e.g. `operation_row`, `report_header`, `mud_property`. */
+  record_type: string
+  payload: Record<string, unknown>
+  payload_schema_key: string | null
+  payload_schema_version: number | null
+  page_number: number | null
+  region_id: string | null
+  depth_md_si: number | null
+  depth_tvd_si: number | null
+  observed_at: string | null
+  /** How the row was read (`regex_header`, `table_row`, `label_value`, …) and by which version. */
+  method: string | null
+  method_version: string | null
+  confidence: number | null
+  validation_state: string
+  quality_flags: string[]
+  unit_context: Record<string, string>
+  promoted_to_kind: string | null
+  promoted_to_id: string | null
+  is_demo_fixture: boolean
+}
+
+export interface DocumentChunk {
+  id: string
+  chunk_index: number
+  kind: string
+  page_number: number | null
+  section_id: string | null
+  depth_from_si: number | null
+  depth_to_si: number | null
+  text: string
+  token_estimate: number | null
+}
+
+/** One ingestion attempt: what ran, what it produced, and whether it succeeded. */
+export interface IngestionJob {
+  id: string
+  document_id: string
+  raw_artifact_id: string | null
+  status: string
+  trigger: string
+  pipeline: Record<string, unknown>
+  stats: DocumentRow['extraction_summary']
+  extractor_versions: Record<string, string>
+  attempts: number
+  started_at: string | null
+  finished_at: string | null
+  duration_ms: number | null
+  error: string | null
+  warnings: string[]
+  trace_id: string | null
+}
+
+export interface DocumentDetail {
+  document: DocumentRow
+  ingestion_jobs: IngestionJob[]
+  region_count: number
+  chunks: DocumentChunk[]
+  records: ExtractionRecord[]
+  evidence_links: EvidenceItem[]
+}
+
+/** region → extraction → record, as the backend builds it. */
+export interface DocumentProvenanceLink {
+  record: ExtractionRecord
+  region: {
+    id: string
+    page_number: number | null
+    region_kind: string
+    bbox: Record<string, number> | null
+    text_excerpt?: string | null
+  } | null
+  document: { id: string; title: string } | Record<string, unknown>
+}
+
+export interface DocumentProvenance {
+  document_id: string
+  extraction_summary: DocumentRow['extraction_summary']
+  chain: DocumentProvenanceLink[]
+  region_count: number
+  record_count: number
+}
+
 export interface EvidenceItem {
   id: string
   subject_kind: string
