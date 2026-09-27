@@ -1,0 +1,30 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light dark;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+/* Numeric columns and identifiers use a monospace face so digits line up: engineering tables are
+   read by comparing columns, and proportional digits make that harder. */
+.font-mono {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Keep the xyflow canvas legible in the dark theme. */
+.react-flow__attribution {
+  background: transparent;
+}
+.dark .react-flow__controls button,
+.dark .react-flow__minimap {
+  background-color: #1c212b;
+  color: #eceef2;
+  border-color: #3f4859;
+}

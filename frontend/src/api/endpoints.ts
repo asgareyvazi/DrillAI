@@ -1,0 +1,253 @@
+/**
+ * Every backend call the UI makes, in one place.
+ *
+ * Components never build a URL or unwrap an envelope themselves. If an endpoint is missing here it
+ * is not used by the UI — which is how we keep the frontend from inventing a contract.
+ */
+
+import { api } from './client'
+import type {
+  AdvisorAnswer,
+  AdvisorQuestionCatalogue,
+  AgentCatalogue,
+  ApprovalRow,
+  AuditTrail,
+  ContextBundle,
+  DdrProcessingReport,
+  DocumentRow,
+  DrillingState,
+  EngineListItem,
+  EngineRunEnvelope,
+  EngineRunListItem,
+  EvidenceItem,
+  EvidenceSummary,
+  ImpactReport,
+  NodeRunState,
+  NodeTypeCatalogue,
+  NptSummary,
+  OptimisationExplanation,
+  OptimisationObjectives,
+  OptimisationResult,
+  Page,
+  PlatformActions,
+  PlatformCapabilities,
+  PlatformExtractors,
+  PlatformTools,
+  Project,
+  ProviderCatalogue,
+  RecommendationRow,
+  Report,
+  ReportKind,
+  RunEvent,
+  RunSummary,
+  TimelineEntry,
+  TwinState,
+  UnitCatalogue,
+  Well,
+  WellSection,
+  Wellbore,
+  Workflow,
+  WorkflowGraph,
+  WorkflowValidation,
+} from './types'
+
+const enc = encodeURIComponent
+
+export interface OptimisePayload {
+  parameters: Array<Record<string, unknown>>
+  hydraulics_inputs: Record<string, unknown>
+  torque_drag_inputs?: Record<string, unknown> | null
+  limits: Record<string, number>
+  objectives: Array<{ key: string; sense?: string }>
+  section_id?: string | null
+  samples: number
+  title?: string | null
+  persist_recommendation?: boolean
+}
+
+export const drillingApi = {
+  // ------------------------------------------------------------------ assets
+  listWells: (params: { project_id?: string; limit?: number; offset?: number } = {}) =>
+    api.get<Page<Well>>('/wells', { query: params }),
+  getWell: (wellId: string) => api.get<Well & { wellbores: Wellbore[] }>(`/wells/${enc(wellId)}`),
+  listWellbores: (wellId: string) => api.get<Page<Wellbore>>(`/wells/${enc(wellId)}/wellbores`),
+  listSections: (wellboreId: string) => api.get<Page<WellSection>>(`/wellbores/${enc(wellboreId)}/sections`),
+  listProjects: () => api.get<Page<Project>>('/projects'),
+
+  // ------------------------------------------------------------------ cockpit
+  wellState: (wellId: string) => api.get<{ state: DrillingState }>(`/wells/${enc(wellId)}/state`),
+  wellTimeline: (wellId: string, params: { kinds?: string[]; limit?: number } = {}) =>
+    api.get<{ entries: TimelineEntry[]; count: number; kinds_available: string[] }>(
+      `/wells/${enc(wellId)}/timeline`,
+      { query: params },
+    ),
+  wellNpt: (wellId: string, params: { basis?: string; include_offsets?: boolean } = {}) =>
+    api.get<{ npt: NptSummary }>(`/wells/${enc(wellId)}/npt`, { query: params }),
+  wellKpis: (wellId: string) =>
+    api.get<{ kpis: Array<Record<string, unknown>>; present_count: number; total: number }>(
+      `/wells/${enc(wellId)}/kpis`,
+    ),
+  wellTwin: (wellId: string) => api.get<TwinState>(`/wells/${enc(wellId)}/twin`),
+  wellAudit: (wellId: string) => api.get<AuditTrail>(`/wells/${enc(wellId)}/audit`),
+  wellContext: (wellId: string, params: { purpose?: string } = {}) =>
+    api.get<{ bundle: ContextBundle }>(`/wells/${enc(wellId)}/context`, { query: params }),
+  wellRecommendations: (wellId: string) =>
+    api.get<Page<RecommendationRow>>(`/wells/${enc(wellId)}/recommendations`),
+  wellEngineRuns: (wellId: string, params: { engine_key?: string; limit?: number } = {}) =>
+    api.get<Page<EngineRunListItem>>(`/wells/${enc(wellId)}/engine-runs`, { query: params }),
+
+  // ------------------------------------------------------------------ documents & evidence
+  listDocuments: (params: { well_id?: string; doc_type?: string } = {}) =>
+    api.get<Page<DocumentRow>>('/documents', { query: params }),
+  getDocument: (documentId: string) =>
+    api.get<{
+      document: DocumentRow
+      ingestion_jobs: Array<Record<string, unknown>>
+      chunks?: Array<Record<string, unknown>>
+      records?: Array<Record<string, unknown>>
+      evidence?: EvidenceItem[]
+    }>(`/documents/${enc(documentId)}`),
+  documentProvenance: (documentId: string) =>
+    api.get<{
+      document_id: string
+      extraction_summary: DocumentRow['extraction_summary']
+      chain: Array<{ record: Record<string, unknown>; region: Record<string, unknown> | null; document: Record<string, unknown> }>
+      region_count: number
+      record_count: number
+    }>(`/documents/${enc(documentId)}/provenance`),
+  uploadDocument: async (
+    file: File,
+    fields: { well_id?: string; wellbore_id?: string; section_id?: string; doc_type?: string; title?: string },
+  ) => {
+    const form = new FormData()
+    form.append('file', file)
+    for (const [key, value] of Object.entries(fields)) if (value) form.append(key, value)
+    const response = await fetch(`${import.meta.env.VITE_API_BASE ?? '/api/v1'}/documents`, {
+      method: 'POST',
+      body: form,
+      credentials: 'include',
+    })
+    if (!response.ok) {
+      const text = await response.text().catch(() => '')
+      throw new Error(text || `upload failed with ${response.status}`)
+    }
+    return (await response.json()) as {
+      document: DocumentRow
+      job: Record<string, unknown>
+      record_ids: string[]
+      evidence_link_ids: string[]
+    }
+  },
+  processDocument: (documentId: string, body: { document_id?: string; dry_run?: boolean } = {}) =>
+    api.post<{ processing: DdrProcessingReport }>(`/documents/${enc(documentId)}/process`, body),
+  listEvidence: (params: { well_id?: string; document_id?: string; limit?: number } = {}) =>
+    api.get<Page<EvidenceItem>>('/evidence', { query: params }),
+  evidenceSummary: (params: { well_id?: string } = {}) =>
+    api.get<EvidenceSummary>('/evidence/summary', { query: params }),
+  documentFileUrl: (documentId: string) => `/api/v1/documents/${enc(documentId)}/file`,
+
+  // ------------------------------------------------------------------ engines
+  listEngines: () => api.get<Page<EngineListItem>>('/registry/engines'),
+  getEngine: (key: string) => api.get<EngineListItem>(`/registry/engines/${enc(key)}`),
+  runEngine: (
+    key: string,
+    body: { inputs: Record<string, unknown>; well_id?: string; wellbore_id?: string; section_id?: string },
+  ) => api.post<EngineRunEnvelope>(`/registry/engines/${enc(key)}/run`, body),
+
+  // ------------------------------------------------------------------ optimisation
+  optimisationObjectives: () => api.get<OptimisationObjectives>('/engineering/optimisation/objectives'),
+  optimise: (wellId: string, body: OptimisePayload) =>
+    api.post<{ optimisation: OptimisationResult }>(`/wells/${enc(wellId)}/engineering/optimise`, body),
+  optimisationExplanation: (runId: string) =>
+    api.get<{ explanation: OptimisationExplanation }>(`/engineering/optimisation/${enc(runId)}`),
+  dependencies: () => api.get<{ graph: import('./types').DependencyGraph }>('/engineering/dependencies'),
+  impact: (wellId: string, ports: string[]) =>
+    api.get<{ impact: ImpactReport }>(`/wells/${enc(wellId)}/engineering/impact`, { query: { ports } }),
+
+  // ------------------------------------------------------------------ advisor & reports
+  advisorQuestions: () => api.get<AdvisorQuestionCatalogue>('/advisor/questions'),
+  askAdvisor: (wellId: string, body: { question: string; use_llm?: boolean }) =>
+    api.post<{ answer: AdvisorAnswer }>(`/wells/${enc(wellId)}/advisor`, body),
+  reportKinds: () => api.get<{ kinds: ReportKind[]; note: string }>('/reports/kinds'),
+  buildReport: (wellId: string, kind: string) =>
+    api.get<{ report: Report }>(`/wells/${enc(wellId)}/reports/${enc(kind)}`),
+
+  // ------------------------------------------------------------------ workflows
+  listWorkflows: () => api.get<Page<Workflow>>('/workflows'),
+  getWorkflow: (workflowId: string, params: { version?: number; include_graph?: boolean } = {}) =>
+    api.get<Workflow & { graph?: WorkflowGraph | null; published_version?: number | null }>(
+      `/workflows/${enc(workflowId)}`,
+      { query: params },
+    ),
+  createWorkflow: (body: {
+    key: string
+    name: string
+    description?: string
+    graph?: WorkflowGraph
+    tags?: string[]
+  }) => api.post<Workflow>('/workflows', body),
+  saveWorkflowGraph: (
+    workflowId: string,
+    body: { graph: WorkflowGraph; notes?: string; change_reason?: string; publish?: boolean },
+  ) => api.put<Record<string, unknown>>(`/workflows/${enc(workflowId)}/graph`, body),
+  validateWorkflow: (graph: WorkflowGraph) =>
+    api.post<{ validation: WorkflowValidation; summary: Record<string, unknown> }>(
+      '/workflows/validate',
+      graph as unknown as Record<string, unknown>,
+    ),
+  publishWorkflow: (workflowId: string) =>
+    api.post<Record<string, unknown>>(`/workflows/${enc(workflowId)}/publish`, {}),
+  // The run-start endpoint returns the run row directly, not wrapped in an envelope.
+  startRun: (
+    workflowId: string,
+    body: {
+      well_id?: string
+      project_id?: string
+      wellbore_id?: string
+      section_id?: string
+      inputs?: Record<string, unknown>
+      is_dry_run?: boolean
+    },
+  ) => api.post<RunSummary>(`/workflows/${enc(workflowId)}/runs`, body),
+  listRuns: (params: { workflow_id?: string; well_id?: string; status?: string; limit?: number } = {}) =>
+    api.get<Page<RunSummary>>('/runs', { query: params }),
+  getRun: (runId: string) =>
+    api.get<RunSummary & {
+      nodes?: NodeRunState[]
+      events?: RunEvent[]
+      artifacts?: Array<Record<string, unknown>>
+      pending_approval?: ApprovalRow | null
+      resumable?: boolean
+    }>(`/runs/${enc(runId)}`),
+  runNodes: (runId: string) => api.get<Page<NodeRunState>>(`/runs/${enc(runId)}/nodes`),
+  runEvents: (runId: string, params: { after_seq?: number } = {}) =>
+    api.get<Page<RunEvent> & { after_seq: number }>(`/runs/${enc(runId)}/events`, { query: params }),
+  // Resuming takes the approval id as a query parameter and returns the resumed run row.
+  resumeRun: (runId: string, approvalId?: string) =>
+    api.post<RunSummary>(`/runs/${enc(runId)}/resume`, undefined, {
+      query: approvalId ? { approval_id: approvalId } : {},
+    }),
+  nodeTypes: () => api.get<NodeTypeCatalogue>('/registry/node-types'),
+  listApprovals: (params: { status?: string; limit?: number } = { status: 'pending' }) =>
+    api.get<Page<ApprovalRow>>('/approvals', { query: params }),
+  decideApproval: (
+    approvalId: string,
+    body: { decision: 'approved' | 'rejected'; comment?: string; resume?: boolean },
+  ) =>
+    api.post<{ approval: ApprovalRow; resumed_run: RunSummary | null }>(
+      `/approvals/${enc(approvalId)}/decide`,
+      body,
+    ),
+
+  // ------------------------------------------------------------------ platform & registry
+  capabilities: () => api.get<PlatformCapabilities>('/platform/capabilities'),
+  agents: () => api.get<AgentCatalogue>('/platform/agents'),
+  providers: () => api.get<ProviderCatalogue>('/platform/providers'),
+  integrations: () => api.get<Record<string, unknown>>('/platform/integrations'),
+  actions: () => api.get<PlatformActions>('/registry/actions'),
+  tools: () => api.get<PlatformTools>('/registry/tools'),
+  extractors: () => api.get<PlatformExtractors>('/registry/extractors'),
+  units: () => api.get<UnitCatalogue>('/registry/units'),
+  version: () => api.get<Record<string, unknown>>('/version'),
+  healthReady: () => api.get<Record<string, unknown>>('/health/ready'),
+}
