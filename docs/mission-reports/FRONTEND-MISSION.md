@@ -125,20 +125,21 @@ All five commits were pushed before the next one was created; `git ls-remote` ma
 
 ---
 
-## 3. Test results (at commit `f259c33`)
+## 3. Test results
 
-Exact counts, produced by running the commands below at this commit.
+Every row below was produced by running the command shown, at commit `e3600c6` unless stated. Exact
+counts, no rounding, and nothing is reported as "all good".
 
 | Suite | Command | Result |
 | --- | --- | --- |
-| Backend unit + API | `cd backend && source .venv/bin/activate && pytest -q` | **365 passed, 0 failed, 2 skipped** (96.9 s) |
+| Backend unit + API | `cd backend && source .venv/bin/activate && pytest -q` | **365 passed, 0 failed, 2 skipped** (104.1 s, re-run at `e3600c6`) |
 | Backend lint | `cd backend && ruff check .` | **clean** |
 | Migration drift | `alembic upgrade head` then `alembic check` | **no new upgrade operations detected** |
 | Frontend types | `cd frontend && npm run typecheck` | **clean** |
 | Frontend lint | `cd frontend && npm run lint` | **clean** |
-| Frontend build | `cd frontend && npm run build` | **built** — 263 modules, 546.6 kB JS (168.2 kB gzip), 35.4 kB CSS |
+| Frontend build | `cd frontend && npm run build` | **built** — 35.4 kB CSS, 165.7 kB react chunk, 185.8 kB flow chunk, 196.5 kB app chunk |
 | Frontend unit + component | `cd frontend && npm test` | **54 passed** (4 files) |
-| Frontend end-to-end | `cd frontend && npm run e2e` | **8 passed** (2 files, real API, real DB, real browser) |
+| Frontend end-to-end | `cd frontend && npm run e2e` | **8 passed** (2 files, real API, real DB, real browser; run at `a85375e`, and the only change after it is documentation) |
 
 Backend per-file results:
 
