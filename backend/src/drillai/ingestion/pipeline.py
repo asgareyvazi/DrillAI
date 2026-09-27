@@ -546,6 +546,14 @@ class IngestionPipeline:
             if payload.get("report_date") and document.issue_date is None:
                 with contextlib.suppress(ValueError):  # a malformed date must not lose the page text
                     document.issue_date = dt.datetime.fromisoformat(payload["report_date"]).replace(tzinfo=dt.UTC)
+            # A daily report covers one day: its report date *is* the reporting period. Deriving
+            # the period here means every downstream consumer (operations, timeline, twin
+            # validity, NPT attribution) has an unambiguous date without re-parsing the header.
+            if document.issue_date is not None:
+                if document.period_start is None:
+                    document.period_start = document.issue_date
+                if document.period_end is None:
+                    document.period_end = document.issue_date + dt.timedelta(days=1)
         # ``classification`` is the data-sensitivity label (internal/confidential); parser
         # provenance belongs with the rest of the extraction summary.
         document.extraction_summary = {

@@ -23,6 +23,7 @@ from drillai.api.routers import (
     assets,
     context,
     documents,
+    drilling,
     evidence,
     health,
     platform,
@@ -140,6 +141,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(workflows.router, prefix=prefix)
     app.include_router(runs.router, prefix=prefix)
     app.include_router(twin.router, prefix=prefix)
+    app.include_router(drilling.router, prefix=prefix)
 
     @app.get("/", include_in_schema=False)
     async def root() -> dict[str, object]:

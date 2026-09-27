@@ -174,6 +174,11 @@ def extracted_record_out(row: Any) -> dict[str, Any]:
         "method_version": row.method_version,
         "confidence": row.confidence,
         "validation_state": row.validation_state,
+        # Where this record ended up. The document → record → domain-object chain is the product's
+        # evidence story; without the promotion target the UI could only say "extracted", not
+        # "this row became operation opr_… on this well".
+        "promoted_to_kind": row.promoted_to_kind,
+        "promoted_to_id": row.promoted_to_id,
         "unit_context": row.unit_context,
         "quality_flags": list(row.quality_flags or []),
         "is_demo_fixture": row.is_demo_fixture,

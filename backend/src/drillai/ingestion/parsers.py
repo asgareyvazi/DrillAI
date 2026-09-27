@@ -29,11 +29,14 @@ from drillai.core.errors import ExtractionFailed, UnsupportedFormat
 
 __all__ = [
     "PARSER_REGISTRY",
+    "TABLE_HEADER_TOKENS",
     "ParsedDocument",
     "ParsedPage",
     "ParsedRegion",
     "Parser",
+    "build_table",
     "detect_content_type",
+    "detect_header_row",
     "parse_bytes",
     "parse_csv",
     "parse_docx",
@@ -45,6 +48,93 @@ __all__ = [
 
 MAX_PAGES = 2000
 MAX_BYTES = 64 * 1024 * 1024
+
+
+#: Column-name vocabulary used to locate the header row of a table. Real DDR/program exports from
+#: rig reporting systems carry a title and metadata block *above* the operations table, so
+#: "row 0 is the header" is wrong for the most important documents the platform ingests. The
+#: detector scores candidate rows against these tokens and picks the best match; a table whose
+#: first row already looks like a header keeps that row, so nothing regresses.
+TABLE_HEADER_TOKENS: frozenset[str] = frozenset(
+    {
+        "operation", "operations", "activity", "activities", "description", "code", "duration",
+        "start", "end", "from", "to", "depth", "md", "tvd", "inclination", "azimuth", "dls",
+        "wob", "rpm", "flow", "flow rate", "spp", "torque", "hookload", "rop", "ecd", "mse",
+        "bit", "bha", "nozzle", "tfa", "size", "od", "id", "weight", "grade", "pressure",
+        "temperature", "mud", "mud weight", "pv", "yp", "date", "time", "well", "section",
+        "casing", "cement", "remarks", "comment", "qty", "quantity", "unit", "value",
+        "parameter", "survey", "station", "npt", "loss", "problem", "cost", "hours", "hrs",
+    }
+)
+
+#: How far into a sheet/report the header row is searched. Deeper than this and the "table" is
+#: really a narrative block.
+MAX_HEADER_SEARCH_ROWS = 25
+
+
+def _normalise_cell(value: str) -> str:
+    return re.sub(r"[^a-z0-9 ]+", " ", str(value).lower()).strip()
+
+
+def detect_header_row(rows: list[list[str]]) -> tuple[int, list[str], float]:
+    """Locate the header row of a table.
+
+    Returns ``(index, header_values, confidence)``. Scoring is deliberately simple and
+    explainable: a cell counts when it normalises to a known header token, and the best candidate
+    wins on (number of token hits, number of non-empty cells). Rows that are mostly numbers are
+    penalised, because a data row is not a header.
+    """
+    best_index, best_score = 0, -1.0
+    for index, row in enumerate(rows[:MAX_HEADER_SEARCH_ROWS]):
+        cells = [_normalise_cell(cell) for cell in row]
+        non_empty = [cell for cell in cells if cell]
+        if not non_empty:
+            continue
+        hits = sum(
+            1
+            for cell in non_empty
+            if cell in TABLE_HEADER_TOKENS or any(token in cell for token in TABLE_HEADER_TOKENS)
+        )
+        numeric = sum(1 for cell in non_empty if re.fullmatch(r"-?\d+([.,]\d+)?", cell))
+        if numeric == len(non_empty):
+            continue
+        score = hits * 2.0 - numeric * 0.5 + len(non_empty) * 0.05
+        if score > best_score:
+            best_index, best_score = index, score
+    header = [str(cell) for cell in rows[best_index]] if rows else []
+    hits = sum(
+        1
+        for cell in (_normalise_cell(cell) for cell in header)
+        if cell and any(token in cell for token in TABLE_HEADER_TOKENS)
+    )
+    confidence = min(1.0, 0.5 + 0.25 * hits) if hits else 0.4
+    return best_index, header, confidence
+
+
+def build_table(rows: list[list[str]], *, sheet: str | None = None) -> dict[str, Any]:
+    """Build the region table payload, including the detected header row index.
+
+    ``cells`` keeps *every* row (title block included) so that a later extractor can still read
+    metadata above the table; ``header_row`` tells it where the data starts. Consumers that
+    assumed ``cells[0]`` is the header must use ``header_row`` instead.
+    """
+    header_row, header, confidence = detect_header_row(rows)
+    width = max((len(row) for row in rows), default=0)
+    cells = [
+        [{"row": row_index, "col": col_index, "text": value} for col_index, value in enumerate(row)]
+        for row_index, row in enumerate(rows)
+    ]
+    table: dict[str, Any] = {
+        "rows": len(rows),
+        "cols": width,
+        "cells": cells,
+        "header": header,
+        "header_row": header_row,
+        "header_confidence": round(confidence, 3),
+    }
+    if sheet is not None:
+        table["sheet"] = sheet
+    return table
 
 
 @dataclass
@@ -182,14 +272,7 @@ class CsvParser:
         rows = list(reader)
         if not rows:
             raise ExtractionFailed("CSV file has no rows")
-        header = rows[0]
-        width = max(len(row) for row in rows)
-        cells = [
-            [{"row": row_index, "col": col_index, "text": value}
-             for col_index, value in enumerate(row)]
-            for row_index, row in enumerate(rows)
-        ]
-        table = {"rows": len(rows), "cols": width, "cells": cells, "header": header}
+        table = build_table(rows)
         page = ParsedPage(
             page_number=1,
             text="\n".join(delimiter.join(row) for row in rows),
@@ -199,7 +282,12 @@ class CsvParser:
         )
         return ParsedDocument(
             pages=[page], content_type="text/csv", parser=self.name, parser_version=self.version,
-            metadata={"filename": filename, "row_count": len(rows), "columns": header},
+            metadata={
+                "filename": filename,
+                "row_count": len(rows),
+                "columns": table["header"],
+                "header_row": table["header_row"],
+            },
         )
 
 
@@ -299,12 +387,7 @@ class XlsxParser:
             if not rows:
                 warnings.append(f"worksheet {sheet.title!r} is empty and was skipped")
                 continue
-            width = max(len(row) for row in rows)
-            cells = [
-                [{"row": row_index, "col": col_index, "text": value} for col_index, value in enumerate(row)]
-                for row_index, row in enumerate(rows)
-            ]
-            table = {"rows": len(rows), "cols": width, "cells": cells, "header": rows[0], "sheet": sheet.title}
+            table = build_table(rows, sheet=sheet.title)
             text = "\n".join(" | ".join(row) for row in rows)
             pages.append(
                 ParsedPage(

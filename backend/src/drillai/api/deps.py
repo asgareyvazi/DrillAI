@@ -23,6 +23,7 @@ from typing import Annotated, Any
 from fastapi import Depends, Header, Query, Request
 from pydantic import BeforeValidator
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from drillai.core.clock import UTC
@@ -220,10 +221,30 @@ def require(*permissions: str, level: ActionLevel | None = None) -> Callable[...
 
 
 async def ensure_org(session: AsyncSession, slug: str, *, name: str | None = None) -> Organization:
-    """Resolve the org for the authenticated principal, creating the dev org on first use."""
+    """Resolve the org for the authenticated principal, creating the dev org on first use.
+
+    Two requests arriving together on a database that has never been used are a normal first-boot
+    condition, not an error: a browser opens a screen and the client fires several queries at once.
+    Both would see "no such org" and both would try to insert it, which the unique constraint on
+    ``slug`` correctly refuses. The insert therefore runs inside a savepoint so that losing the race
+    costs nothing but a re-read — and, in particular, does not roll back the caller's work.
+    """
     org = (await session.execute(select(Organization).where(Organization.slug == slug))).scalar_one_or_none()
-    if org is None:
-        org = Organization(id=new_id("org"), slug=slug, name=name or slug.replace("-", " ").title())
-        session.add(org)
-        await session.flush()
-    return org
+    if org is not None:
+        return org
+
+    candidate = Organization(id=new_id("org"), slug=slug, name=name or slug.replace("-", " ").title())
+    try:
+        async with session.begin_nested():
+            session.add(candidate)
+            await session.flush()
+    except IntegrityError:
+        org = (
+            await session.execute(select(Organization).where(Organization.slug == slug))
+        ).scalar_one_or_none()
+        if org is None:  # pragma: no cover - the row was deleted between the insert and the re-read
+            raise
+        return org
+    return candidate
+
+

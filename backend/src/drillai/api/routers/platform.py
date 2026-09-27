@@ -64,6 +64,74 @@ async def capabilities(
     }
 
 
+#: Roles the development identity switch may assume. Only meaningful when authentication is disabled;
+#: the backend still evaluates every request against the resulting principal.
+DEV_ROLE_PRESETS: tuple[str, ...] = (
+    "viewer",
+    "engineer",
+    "drilling_supervisor",
+    "integrity_engineer",
+    "well_manager",
+    "data_manager",
+    "auditor",
+    "admin",
+)
+
+
+@router.get("/platform/identity", summary="Who the caller is, and what they may do")
+async def identity(
+    auth: Annotated[AuthContext, Depends(require("well.read"))],
+) -> dict[str, Any]:
+    """The caller's principal as the platform resolved it.
+
+    A user interface has to know its own authorization context to render affordances honestly
+    (a publish button that always fails is worse than no button), but it must never *decide*
+    authorization: this endpoint reports what the server already computed, and every request is
+    still checked server-side. No credential material is returned — only the permission patterns
+    and the action-level ceiling.
+    """
+    from drillai.security.rbac import ROLE_CATALOGUE
+
+    settings = get_settings()
+    principal = auth.principal
+    return {
+        "principal_id": principal.id,
+        "principal_kind": getattr(principal, "kind", "user"),
+        "org_id": auth.org_id,
+        "role_keys": list(principal.role_keys),
+        "roles": [
+            {
+                "key": role.key,
+                "name": role.name,
+                "description": role.description,
+                "max_action_level": role.max_action_level.value,
+            }
+            for role in ROLE_CATALOGUE
+            if role.key in principal.role_keys
+        ],
+        "available_roles": [
+            {
+                "key": role.key,
+                "name": role.name,
+                "description": role.description,
+                "max_action_level": role.max_action_level.value,
+                "permissions": list(role.permissions),
+            }
+            for role in ROLE_CATALOGUE
+        ],
+        "permissions": sorted(principal.permissions),
+        "max_action_level": principal.max_action_level.value,
+        "auth_enabled": settings.auth_enabled,
+        "identity_source": "bearer_token" if settings.auth_enabled else "development_header",
+        "development_presets": list(DEV_ROLE_PRESETS),
+        "locale": auth.locale,
+        "note": (
+            "Permissions are patterns (for example 'well.*'). The server evaluates them on every "
+            "request; the UI uses them only to avoid offering actions that will be refused."
+        ),
+    }
+
+
 @router.get("/platform/providers", summary="LLM providers and models")
 async def providers(
     _: Annotated[AuthContext, Depends(require("registry.read"))],

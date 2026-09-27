@@ -47,6 +47,9 @@ packages = ["src/drillai"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# `tests.api.conftest` is imported by name, so the project root has to be importable no matter how
+# pytest was invoked (`pytest`, `python -m pytest`, or a runner with a different CWD).
+pythonpath = ["."]
 addopts = "-q --strict-markers"
 asyncio_mode = "auto"
 markers = [

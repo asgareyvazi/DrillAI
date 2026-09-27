@@ -795,8 +795,11 @@ async def test_csv_roundtrip_keeps_the_declared_period(client):
     assert shifted.json()["document"]["period_start"].startswith("2026-01-05")
 
 
-def test_csv_helper_is_deterministic():
-    """Guard the fixture itself: a drifting test fixture would hide real regressions."""
+async def test_csv_helper_is_deterministic():
+    """Guard the fixture itself: a drifting test fixture would hide real regressions.
+
+    Async only because the module marks every test asyncio; there is nothing to await here.
+    """
     rows = list(csv.DictReader(io.StringIO(CSV_REPORT)))
     assert len(rows) == 2
     assert rows[0]["mud_weight_ppg"] == "12.4"

@@ -122,6 +122,30 @@ def extract(document: ParsedDocument, *, doc_type: str) -> tuple[list[ExtractedR
 
 # --------------------------------------------------------------------------- patterns
 
+#: Rows that introduce a *new* block inside the same sheet. Spreadsheet DDR exports stack several
+#: logical tables in one worksheet (operations, then drilling parameters, then mud, then surveys),
+#: so an extractor must know where its own table ends. Recognising the heading is what stops
+#: "WOB (klbf) | 18.5" from being read as an operation row.
+SECTION_HEADING_RE = re.compile(
+    r"^\s*(?P<name>operations?|activities|activity|drilling\s+parameters?|drilling\s+data|"
+    r"mud\s+(properties|parameters|checks?)|survey(s)?|surveys?\s+(data|stations?)|depth\s+readings?|"
+    r"casing(\s*[/&]\s*cement)?|cement(ing)?|bit\s+record|bha|nozzles?|pumps?|"
+    r"personnel|hse|safety|bulk|inventory|costs?|time\s+breakdown|npt|problems?|"
+    r"remarks?|notes?|summary)\s*[:\-]?\s*$",
+    re.IGNORECASE,
+)
+
+
+def is_section_heading(values: list[str]) -> bool:
+    """True when a table row introduces a new block rather than carrying data."""
+    cells = [value.strip() for value in values if value and value.strip()]
+    if not cells:
+        return True
+    if len(cells) > 2:
+        return False
+    return bool(SECTION_HEADING_RE.match(cells[0]))
+
+
 _DATE_PATTERNS = (
     re.compile(r"(?P<y>20\d{2})[-/](?P<m>\d{1,2})[-/](?P<d>\d{1,2})"),
     re.compile(r"(?P<d>\d{1,2})[-/](?P<m>\d{1,2})[-/](?P<y>20\d{2})"),
@@ -239,8 +263,14 @@ class OperationTableExtractor(Extractor):
                 if not any(any(hint in column for hint in self._HEADER_HINTS) for column in header):
                     continue
                 columns = {name: index for index, name in enumerate(header)}
-                for row_index, row in enumerate(region.table["cells"][1:], start=1):
+                # The parser detects where the header actually is; a title/metadata block above
+                # the table must not be parsed as data rows.
+                header_row = int(region.table.get("header_row") or 0)
+                for row_index, row in enumerate(region.table["cells"][header_row + 1:], start=header_row + 1):
                     values = [cell["text"] for cell in row]
+                    if is_section_heading(values):
+                        # End of this logical table: later blocks belong to other extractors.
+                        break
                     joined = " | ".join(values)
                     if not joined.strip():
                         continue
@@ -415,7 +445,8 @@ class SurveyTableExtractor(Extractor):
                             break
                 if not {"md", "inclination"} <= set(column_of):
                     continue
-                for row in region.table["cells"][1:]:
+                header_row = int(region.table.get("header_row") or 0)
+                for row in region.table["cells"][header_row + 1:]:
                     values = [str(cell["text"]) for cell in row]
 
                     def cell_value(field_name: str, columns=column_of, texts=values) -> str | None:
@@ -514,6 +545,47 @@ class NumberedParameterExtractor(Extractor):
         for page in document.pages:
             values: dict[str, Any] = {}
             units: dict[str, str] = {}
+            # Two-column table blocks (``Parameter | Value``) are the most common shape of a
+            # spreadsheet DDR parameter section and carry the drilling KPIs.
+            for region in page.regions:
+                if region.kind != "table" or not region.table:
+                    continue
+                header_row = int(region.table.get("header_row") or 0)
+                for row in region.table["cells"][header_row + 1:]:
+                    cells = [cell["text"].strip() for cell in row if cell["text"].strip()]
+                    if len(cells) != 2:
+                        continue
+                    label, raw_value = cells
+                    if SECTION_HEADING_RE.match(label):
+                        continue
+                    # "WOB (klbf)" carries its unit in the label: split it out so the label stays a
+                    # clean engineering name and the unit travels with the number.
+                    inline_unit = None
+                    unit_match = re.match(
+                        r"^(?P<label>.*?)\s*[(\[]\s*(?P<unit>[^)\]\s][^)\]]*?)\s*[)\]]\s*$",
+                        label,
+                    )
+                    if unit_match:
+                        label = unit_match.group("label").strip()
+                        inline_unit = unit_match.group("unit").strip()
+                    key = re.sub(r"[^a-z0-9]+", "_", label.lower()).strip("_")
+                    if not key or key in values:
+                        continue
+                    match = re.match(
+                        r"^(?P<value>-?\d{1,7}(?:[.,]\d{1,4})?)\s*"
+                        r"(?P<unit>%|m|ft|ppg|kg/m3|g/cm3|sg|psi|bar|barg|kpa|cp|s|min|h|hr|kn|klbf|"
+                        r"rpm|l/min|m3/min|deg|°|bbl|gpm|ft/h|m/h)?$",
+                        raw_value,
+                    )
+                    if match is None:
+                        continue
+                    value = _to_float(match.group("value"))
+                    if value is None:
+                        continue
+                    values[key] = value
+                    unit = match.group("unit") or inline_unit
+                    if unit:
+                        units[key] = unit
             for line in page.text.splitlines():
                 match = self._LINE_RE.match(line.strip())
                 if not match:

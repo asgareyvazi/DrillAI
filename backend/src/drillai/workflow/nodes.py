@@ -36,6 +36,7 @@ from dataclasses import dataclass, field
 from typing import Any, ClassVar
 
 from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from drillai.core.clock import UTC
@@ -736,6 +737,244 @@ async def _notify(context: NodeContext, config: BaseModel) -> NodeOutcome:
     )
 
 
+# --------------------------------------------------------------------------- drilling nodes
+#
+# These nodes are what turn the platform into a drilling product rather than a generic workflow
+# engine: they operate on the *drilling* domain objects through the same services the API uses, so
+# a workflow can never do something the API cannot (and stays inside the same authorization and
+# audit rules).
+
+
+class ProcessDdrConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    document_id: str | None = Field(
+        default=None,
+        description=(
+            "explicit document; when omitted the latest ddr document for the well in scope is used"
+        ),
+    )
+    dry_run: bool = Field(
+        default=False, description="compute the promotion plan without writing any rows"
+    )
+
+
+async def _process_ddr(context: NodeContext, config: BaseModel) -> NodeOutcome:
+    """Promote the latest DDR into structured operations, events and twin state."""
+    from drillai.db.models import Document
+    from drillai.drilling.ddr import DdrProcessor
+
+    cfg = ProcessDdrConfig.model_validate(config)
+    document_id = cfg.document_id
+    resolved_from = "explicit"
+    if document_id is None:
+        if not context.well_id:
+            raise ValidationFailed(
+                "process_ddr needs either an explicit document_id or a well in scope",
+                details={"node_id": context.node_id},
+            )
+        row = (
+            await context.session.execute(
+                select(Document)
+                .where(
+                    Document.org_id == context.org_id,
+                    Document.well_id == context.well_id,
+                    Document.doc_type.in_(("ddr", "drilling_document")),
+                )
+                .order_by(Document.created_at.desc())
+                .limit(1)
+            )
+        ).scalars().first()
+        if row is None:
+            return NodeOutcome(
+                outputs={"processed": False, "reason": "no DDR document is on file for this well"},
+                notes=["nothing to promote: the well has no DDR document"],
+            )
+        document_id = row.id
+        resolved_from = "latest_ddr_for_well"
+    processor = DdrProcessor(context.session, context.org_id, actor_id=context.principal.id)
+    report = await processor.process(document_id, dry_run=cfg.dry_run or context.dry_run)
+    payload = report.to_dict()
+    return NodeOutcome(
+        outputs={
+            "document_id": document_id,
+            "resolved_from": resolved_from,
+            "processed": True,
+            "dry_run": payload["dry_run"],
+            "operations_created": payload["operations_created"],
+            "events_created": payload["events_created"],
+            "npt_hours_classified": payload["npt_hours_classified"],
+            "records_needing_review": payload["records_needing_review"],
+            "not_promoted": payload["not_promoted"],
+            "warnings": payload["warnings"],
+        },
+        notes=list(payload["warnings"])[:5],
+    )
+
+
+class WellStateConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    include_missing: bool = True
+
+
+async def _well_state(context: NodeContext, config: BaseModel) -> NodeOutcome:
+    """Assemble the drilling state of the well in scope."""
+    from drillai.drilling.state import WellStateService
+
+    cfg = WellStateConfig.model_validate(config)
+    if not context.well_id:
+        raise ValidationFailed("well_state requires a well in scope", details={"node_id": context.node_id})
+    state = await WellStateService(context.session, context.org_id).state(context.well_id)
+    return NodeOutcome(
+        outputs={
+            "well": state["well"],
+            "progress": state["progress"],
+            "operation": state["operation"],
+            "measured": state["measured"],
+            "npt": state["npt"],
+            "risks": state["risks"],
+            "documents": state["documents"],
+            "counts": state["counts"],
+            "missing": state["missing"] if cfg.include_missing else [],
+            "missing_count": len(state["missing"]),
+        },
+        notes=(
+            [f"{len(state['missing'])} piece(s) of data are missing for this well"]
+            if state["missing"]
+            else []
+        ),
+    )
+
+
+class NptSummaryConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    basis: str = Field(default="events", pattern="^(events|operations)$")
+    include_offsets: bool = True
+
+
+async def _npt_summary(context: NodeContext, config: BaseModel) -> NodeOutcome:
+    """NPT total, Pareto and attribution for the well in scope."""
+    from drillai.drilling.npt import NptService
+
+    cfg = NptSummaryConfig.model_validate(config)
+    if not context.well_id:
+        raise ValidationFailed("npt_summary requires a well in scope", details={"node_id": context.node_id})
+    summary = await NptService(context.session, context.org_id).summarise(
+        context.well_id, basis=cfg.basis, include_offsets=cfg.include_offsets
+    )
+    payload = summary.to_dict()
+    return NodeOutcome(
+        outputs={
+            "total_hours": payload["total_hours"],
+            "percent_of_well_time": payload["percent_of_well_time"],
+            "event_count": payload["event_count"],
+            "by_category": payload["by_category"][:8],
+            "top_case": payload["cases"][0] if payload["cases"] else None,
+            "controllable_hours": payload["controllable_hours"],
+            "notes": payload["notes"],
+        },
+        notes=payload["notes"][:3],
+    )
+
+
+class OptimiseConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    parameters: list[dict[str, Any]] = Field(min_length=1)
+    hydraulics_inputs: dict[str, Any]
+    torque_drag_inputs: dict[str, Any] | None = None
+    limits: dict[str, float] = Field(default_factory=dict)
+    objectives: list[dict[str, Any]] = Field(default_factory=list)
+    samples: int = Field(default=24, ge=2, le=500)
+    title: str | None = None
+
+
+async def _optimise(context: NodeContext, config: BaseModel) -> NodeOutcome:
+    """Run the drilling parameter optimisation, persist it, and emit the recommendation id."""
+    from drillai.drilling.optimisation import DrillingOptimisationService
+
+    cfg = OptimiseConfig.model_validate(config)
+    if not context.well_id:
+        raise ValidationFailed("optimise requires a well in scope", details={"node_id": context.node_id})
+    service = DrillingOptimisationService(context.session, context.org_id, actor_id=context.principal.id)
+    result = await service.optimise(
+        well_id=context.well_id,
+        parameters=cfg.parameters,
+        hydraulics_inputs=cfg.hydraulics_inputs,
+        torque_drag_inputs=cfg.torque_drag_inputs,
+        limits=cfg.limits,
+        objectives=cfg.objectives,
+        section_id=context.section_id,
+        samples=cfg.samples,
+        title=cfg.title,
+    )
+    explanation = result["explanation"]
+    return NodeOutcome(
+        outputs={
+            "optimization_run_id": result["optimization_run_id"],
+            "recommendation_id": result["recommendation_id"],
+            "candidates_evaluated": explanation["candidates_evaluated"],
+            "feasible_count": explanation["feasible_count"],
+            "pareto_count": explanation["pareto_count"],
+            "recommended": explanation["recommended"],
+            "why_not": explanation["why_not"],
+            "not_evaluated": result["not_evaluated"],
+        },
+        engine_run_id=(explanation.get("engine_run_ids") or [None])[0],
+        notes=[
+            f"{explanation['feasible_count']} of {explanation['candidates_evaluated']} candidates "
+            "are feasible",
+            "performance objectives (ROP, MSE) are not predicted: no model exists",
+        ],
+    )
+
+
+class AdvisorConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    question: str = "where_are_we"
+    use_llm: bool = Field(
+        default=False,
+        description=(
+            "when true the configured LLM narrates the already-computed facts; it never computes "
+            "or alters a value"
+        ),
+    )
+
+
+async def _advisor_answer(context: NodeContext, config: BaseModel) -> NodeOutcome:
+    """Produce the six-section operations-advisor answer for the well in scope."""
+    from drillai.drilling.advisor import ADVISOR_QUESTIONS, OperationsAdvisor
+
+    cfg = AdvisorConfig.model_validate(config)
+    if cfg.question not in ADVISOR_QUESTIONS:
+        raise ValidationFailed(
+            "unknown advisor question",
+            details={"question": cfg.question, "known": sorted(ADVISOR_QUESTIONS)},
+        )
+    if not context.well_id:
+        raise ValidationFailed("advisor requires a well in scope", details={"node_id": context.node_id})
+    router = context.services.get("llm_router") if cfg.use_llm else None
+    advisor = OperationsAdvisor(context.session, context.org_id, llm_router=router)
+    answer = await advisor.ask(context.well_id, cfg.question)
+    payload = answer.to_dict()
+    return NodeOutcome(
+        outputs={
+            "question": payload["question"],
+            "facts": payload["facts"],
+            "calculations": payload["calculations"],
+            "evidence": payload["evidence"],
+            "inference": payload["inference"],
+            "recommendation": payload["recommendation"],
+            "unknown": payload["unknown"],
+            "narrative": payload["narrative"],
+            "sections": payload["sections"],
+        },
+        llm_call_id=None,
+        notes=[
+            "facts and calculations are assembled from recorded data and engine runs; the "
+            "narrative cannot modify them"
+        ],
+    )
+
+
 # --------------------------------------------------------------------------- integration node
 
 
@@ -890,6 +1129,75 @@ def install_default_nodes() -> None:
             action_level=ActionLevel.EXECUTE_WITH_APPROVAL,
             produces=("message.queued",),
             terminal=True,
+        ),
+        NodeSpec(
+            key="drilling.process_ddr",
+            name="Process daily drilling report",
+            family=NodeFamily.DATA,
+            description=(
+                "Promote the latest DDR into structured operations, NPT events, survey stations and "
+                "twin state, with provenance and an explicit list of what was not promoted."
+            ),
+            executor=_process_ddr,
+            config_model=ProcessDdrConfig,
+            action_level=ActionLevel.DRAFT,
+            required_inputs=("document.raw",),
+            produces=("operation.state", "npt.statistics", "twin.state"),
+            tags=("drilling", "ddr", "ingestion"),
+        ),
+        NodeSpec(
+            key="drilling.well_state",
+            name="Well drilling state",
+            family=NodeFamily.ANALYTICS,
+            description="Where are we: progress, current/previous/next operation, measured KPIs, risks, gaps.",
+            executor=_well_state,
+            config_model=WellStateConfig,
+            action_level=ActionLevel.OBSERVE,
+            required_inputs=("operation.state",),
+            produces=("operation.state", "schedule.state"),
+            tags=("drilling", "kpi"),
+        ),
+        NodeSpec(
+            key="drilling.npt_summary",
+            name="NPT summary and Pareto",
+            family=NodeFamily.ANALYTICS,
+            description="Non-productive time from recorded events, with Pareto by category and attribution.",
+            executor=_npt_summary,
+            config_model=NptSummaryConfig,
+            action_level=ActionLevel.OBSERVE,
+            required_inputs=("npt.statistics",),
+            produces=("npt.statistics",),
+            tags=("drilling", "npt"),
+        ),
+        NodeSpec(
+            key="drilling.optimise",
+            name="Drilling parameter optimisation",
+            family=NodeFamily.ENGINEERING,
+            description=(
+                "Generate candidate parameters, evaluate them with the hydraulics and torque&drag "
+                "engines, rank them on computed objectives and persist an explained recommendation."
+            ),
+            executor=_optimise,
+            config_model=OptimiseConfig,
+            action_level=ActionLevel.DRAFT,
+            required_inputs=("drilling.parameters", "mud.properties", "wellbore.geometry"),
+            produces=("optimization.candidates", "optimization.frontier", "recommendation.state"),
+            tags=("drilling", "optimization"),
+        ),
+        NodeSpec(
+            key="ai.advisor_answer",
+            name="Operations advisor answer",
+            family=NodeFamily.AI,
+            description=(
+                "Six-section answer contract: facts, calculations, evidence, inference, "
+                "recommendation, unknown. Optional LLM narration cannot alter the first two."
+            ),
+            executor=_advisor_answer,
+            config_model=AdvisorConfig,
+            action_level=ActionLevel.OBSERVE,
+            required_inputs=("operation.state", "document.evidence"),
+            produces=("recommendation.evidence",),
+            tags=("drilling", "advisor"),
         ),
         NodeSpec(
             key="integration.http_fetch",
