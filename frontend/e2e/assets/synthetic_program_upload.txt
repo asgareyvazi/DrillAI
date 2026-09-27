@@ -1,0 +1,5 @@
+Well Drilling Program - SYNTHETIC TEST DATA - Well NF-12
+Section: 8-1/2 in
+Planned mud weight window: 12.2 - 12.8 ppg
+Planned TD: 2860 m MD
+Procedure: drill to section TD, run 7 in liner.

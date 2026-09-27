@@ -65,7 +65,9 @@ export default defineConfig({
     {
       command: 'node e2e/start-api.mjs',
       url: `${API_URL}/api/v1/health`,
-      reuseExistingServer: !process.env.CI,
+      // Never reuse a running API. It holds the database of an earlier run, so a green suite would
+      // be reporting on a server and a seed that no longer belong to this commit.
+      reuseExistingServer: false,
       timeout: 120_000,
       stdout: 'pipe',
       stderr: 'pipe',
@@ -76,7 +78,8 @@ export default defineConfig({
     {
       command: `npx vite --host 127.0.0.1 --port ${WEB_PORT} --strictPort`,
       url: `${WEB_URL}/`,
-      reuseExistingServer: !process.env.CI,
+      // Same reason as the API: a dev server left running serves the previous revision's modules.
+      reuseExistingServer: false,
       timeout: 120_000,
       stdout: 'pipe',
       stderr: 'pipe',
