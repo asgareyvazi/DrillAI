@@ -12,12 +12,19 @@ engineering arithmetic, and it never invents engineering values.
 | Path | Contents |
 | --- | --- |
 | `backend/` | Python 3.11 service: domain models, engines, data fabric, workflow runtime, AI/LLM abstraction, FastAPI |
-| `scripts/` | Operator/repository tooling (`smoke_e2e.py` end-to-end smoke check) |
-| `frontend/` | Reserved for the React/TypeScript client — **not implemented yet** (see Status) |
-| `docs/` | Reserved for architecture documents and ADRs — **not written yet** (see Status) |
+| `scripts/` | Operator/repository tooling (`bootstrap.sh` setup, `seed_demo.py` demo data, `smoke_e2e.py` API smoke check) |
+| `frontend/` | React/TypeScript client: the drilling intelligence workspace (see `docs/FRONTEND.md`) |
+| `docs/` | Frontend documentation and the mission reports (`docs/mission-reports/`) |
 | `ops/` | Reserved for deployment assets (Compose profiles, images) — **not written yet** |
 
-## Quickstart (backend)
+## Quickstart
+
+```bash
+# backend + frontend + a browser, from a fresh checkout
+scripts/bootstrap.sh
+```
+
+Or step by step (backend):
 
 ```bash
 cd backend
@@ -73,11 +80,20 @@ Implemented and covered by tests (backend):
 - FastAPI service (assets/context/documents/evidence/twin/workflows/runs/registry/platform) with
   request IDs, structured errors, CORS, i18n/RTL locale plumbing and observability hooks.
 
+Frontend status: the workspace is implemented and committed under `frontend/` — well list and
+cockpit (state, NPT, timeline, twin, audit, missing data), document workspace, engineering and
+optimisation workspaces, advisor and reports, workflow studio, run monitor, library and platform
+pages, in English and Persian. `docs/FRONTEND.md` describes the boundaries it holds to and
+`docs/FRONTEND_TESTING.md` lists what is verified and what is not.
+
 Not implemented yet (do not assume otherwise):
 
-- **No frontend.** The React/TypeScript workflow editor and the §41 UI acceptance walkthrough are
-  not built; the API is exercised by the API test suite and the smoke script instead.
-- **No architecture documents or ADRs** in `docs/` yet, and no `ops/` deployment assets.
+- **Only the first UI journey is automated end to end.** The well → cockpit → documents → evidence
+  journey runs in a browser against the real backend (`frontend/e2e/well-cockpit.spec.ts`); the
+  workflow, run, approval, failure, WebSocket and RTL journeys are listed in
+  `docs/FRONTEND_TESTING.md` and are **not** yet covered by a browser test.
+- **No `ops/` deployment assets and no CI workflow file** yet; the same commands run locally are
+  documented in `docs/FRONTEND_TESTING.md`.
 - The WebSocket run-event stream endpoint exists but is **verified manually only** — the automated
   stream test was removed because it hung the suite rather than test the stream.
 - Integration adapters for messaging (Telegram/WhatsApp/email), WITSML/ETP and vector databases are
