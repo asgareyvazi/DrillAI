@@ -37,5 +37,14 @@ drillai.db*
 .DS_Store
 Thumbs.db
 
-# --- node (reserved for the future frontend) ---
+# --- node ---
 node_modules/
+*.tsbuildinfo
+
+# --- frontend build & test output ---
+frontend/dist/
+frontend/coverage/
+frontend/.e2e/
+frontend/test-results/
+frontend/playwright-report/
+frontend/playwright/.cache/
