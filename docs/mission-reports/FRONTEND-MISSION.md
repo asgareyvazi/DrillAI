@@ -12,8 +12,8 @@ Remote: `origin` → `https://github.com/asgareyvazi/DrillAI`.
 
 | | |
 | --- | --- |
-| Current checkpoint | 6 — documentation and the first fully clean tree |
-| Current commit | `a6d1cc810e4096b809c522501514b47bd283aa36` (recorded in the next commit below) |
+| Current checkpoint | 7 — the document/ingestion/evidence journey, and three contract defects fixed |
+| Current commit | `a85375e74d09b63e0cb907592fa3833e8cce9716` |
 | Remote commit | matched `git ls-remote --heads origin arena/01a0dca0-drillai` at the time of writing |
 | Working tree | `git status --porcelain` empty — nothing left uncommitted or untracked |
 
@@ -105,6 +105,24 @@ All five commits were pushed before the next one was created; `git ls-remote` ma
   `git status --porcelain` is **empty**. Before this checkpoint the frontend, the drilling domain and
   the test harness existed only in a working tree — the state this mission exists to eliminate.
 
+### Checkpoint 7 — Documents, ingestion, records and evidence in a browser
+
+- Commits `80e347c` (product fix) and `a85375e` (journey and harness), both pushed and verified.
+- New journey: `e2e/documents-evidence.spec.ts`, 4 tests, run against the real stack.
+- Defects it found and that are now fixed:
+  1. every extracted row was rendered as the literal word "record" — the code read `record_kind`
+     where the API sends `record_type`, and looked for an `extractor` field that does not exist
+     (the API sends `method`/`method_version`);
+  2. the extraction badge claimed "extractors: …" for a document from which nothing was extracted
+     (the API reports the extractor **set that ran**, not the ones that produced rows);
+  3. re-uploading identical bytes reused the existing document while the UI reported
+     "ingestion started" — the pipeline's `skipped_duplicate` job is now stated as such;
+  4. the API layer's document calls were `Record<string, unknown>` placeholders, now typed
+     (`ExtractionRecord`, `IngestionJob`, `DocumentChunk`, `DocumentProvenance`).
+- Harness honesty fixes: the Playwright config no longer reuses a running server on either port
+  (a leftover server holds the previous database and the previous revision's modules), and
+  `scripts/run-e2e.mjs` refuses to start when a port is occupied, naming the fix.
+
 ---
 
 ## 3. Test results (at commit `f259c33`)
@@ -120,7 +138,7 @@ Exact counts, produced by running the commands below at this commit.
 | Frontend lint | `cd frontend && npm run lint` | **clean** |
 | Frontend build | `cd frontend && npm run build` | **built** — 263 modules, 546.6 kB JS (168.2 kB gzip), 35.4 kB CSS |
 | Frontend unit + component | `cd frontend && npm test` | **54 passed** (4 files) |
-| Frontend end-to-end | `cd frontend && npm run e2e` | **4 passed** (1 file, real API, real DB, real browser) |
+| Frontend end-to-end | `cd frontend && npm run e2e` | **8 passed** (2 files, real API, real DB, real browser) |
 
 Backend per-file results:
 
@@ -155,14 +173,19 @@ The two skips are the PostgreSQL integration tests, skipped by design when
 
 ### End-to-end pass/fail list (this checkpoint)
 
-`e2e/well-cockpit.spec.ts`, 4 tests, all executed against the real backend:
+`e2e/well-cockpit.spec.ts` and `e2e/documents-evidence.spec.ts`, 8 tests, all executed against the
+real backend, a seeded real database and a real browser (results from commit `a85375e`):
 
-| # | Test | Result |
-| --- | --- | --- |
-| 1 | lists the seeded well and opens a cockpit that matches the API | **PASS** |
-| 2 | shows measured progress, NPT and missing-data honesty from the API | **PASS** |
-| 3 | the operation timeline merges documents, operations and events | **PASS** |
-| 4 | deep links survive a reload and an unknown well is a not-found, not a blank page | **PASS** |
+| # | Spec | Test | Result |
+| --- | --- | --- | --- |
+| 1 | well-cockpit | lists the seeded well and opens a cockpit that matches the API | **PASS** |
+| 2 | well-cockpit | shows measured progress, NPT and missing-data honesty from the API | **PASS** |
+| 3 | well-cockpit | the operation timeline merges documents, operations and events | **PASS** |
+| 4 | well-cockpit | deep links survive a reload and an unknown well is a not-found, not a blank page | **PASS** |
+| 5 | documents-evidence | shows the extraction the backend actually performed on the seeded documents | **PASS** |
+| 6 | documents-evidence | an extracted value can be traced back to its page and its evidence | **PASS** |
+| 7 | documents-evidence | uploading a new report runs the real pipeline, and identical bytes are not ingested twice | **PASS** |
+| 8 | documents-evidence | the upload assets are the backend's own synthetic fixtures | **PASS** |
 
 The remaining journeys (documents → evidence, workflow studio, run monitor, approval, failing node,
 WebSocket, context persistence, permissions, RTL/accessibility, error-matrix surfaces) are **not yet
@@ -172,8 +195,8 @@ automated** and are therefore not claimed.
 
 ## 4. Known limitations
 
-- Only journey 1 is automated end to end. Everything else in the brief is implemented in the UI but
-  unproven at the browser level.
+- Journeys 1 and 2 are automated end to end (well/cockpit and documents/ingestion/evidence).
+  Everything else in the brief is implemented in the UI but unproven at the browser level.
 - Persian covers the shell and cockpit strings, not every string in every workspace.
 - There is no CI workflow file yet; the gate commands are documented in
   `docs/FRONTEND_TESTING.md` but are currently run by hand.
@@ -186,9 +209,10 @@ automated** and are therefore not claimed.
 
 ## 5. Next checkpoints
 
-1. Automate the remaining journeys, highest value first: documents → ingestion → records → evidence;
-   workflow create → configure → connect → validate → save → publish; run → node execution → events;
-   approval approve/reject including refresh-while-waiting; and the failing-node journey.
+1. Automate the remaining journeys, highest value first: workflow create → configure → connect →
+   validate → save → publish; run → node execution → events; approval approve/reject including
+   refresh-while-waiting; and the failing-node journey. (Documents → ingestion → records → evidence
+   is done — checkpoint 7.)
 2. Add the WebSocket journey with REST reconciliation, and the error-matrix surfaces
    (401/403/404/409/422/500/network/timeout/malformed).
 3. Add permission journeys against backend authority, and RTL/accessibility checks.
