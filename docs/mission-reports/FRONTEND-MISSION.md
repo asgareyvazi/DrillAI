@@ -10,6 +10,13 @@ one.
 Mission target branch: `arena/01a0dca0-drillai` (never `main`; no merge into `main`).
 Remote: `origin` → `https://github.com/asgareyvazi/DrillAI`.
 
+| | |
+| --- | --- |
+| Current checkpoint | 6 — documentation and the first fully clean tree |
+| Current commit | `a6d1cc810e4096b809c522501514b47bd283aa36` (recorded in the next commit below) |
+| Remote commit | matched `git ls-remote --heads origin arena/01a0dca0-drillai` at the time of writing |
+| Working tree | `git status --porcelain` empty — nothing left uncommitted or untracked |
+
 ---
 
 ## 1. Baseline (repository verification, this session)
@@ -88,6 +95,15 @@ verified against the remote before the next began.
 
 All five commits were pushed before the next one was created; `git ls-remote` matched local `HEAD` at
 `f259c336b6185e9b0be0264c8c660122b0142f08`.
+
+### Checkpoint 6 — Documentation, and a repository with nothing outstanding
+
+- Commits `a6d1cc8` — `docs: describe the frontend, its tests and the mission state in the repository`
+- Contents: `docs/FRONTEND.md`, `docs/FRONTEND_TESTING.md`, `docs/mission-reports/FRONTEND-MISSION.md`
+  (this file) and the `README.md` corrections.
+- Effect: every artefact produced so far is committed **and** present on the remote branch, and
+  `git status --porcelain` is **empty**. Before this checkpoint the frontend, the drilling domain and
+  the test harness existed only in a working tree — the state this mission exists to eliminate.
 
 ---
 
