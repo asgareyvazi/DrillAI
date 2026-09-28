@@ -10,16 +10,60 @@ one.
 Mission target branch: `arena/01a0dca0-drillai` (never `main`; no merge into `main`).
 Remote: `origin` → `https://github.com/asgareyvazi/DrillAI`.
 
-| | |
-| --- | --- |
-| Current checkpoint | 7 — the document/ingestion/evidence journey, and three contract defects fixed |
-| Current commit | `a85375e74d09b63e0cb907592fa3833e8cce9716` |
-| Remote commit | matched `git ls-remote --heads origin arena/01a0dca0-drillai` at the time of writing |
-| Working tree | `git status --porcelain` empty — nothing left uncommitted or untracked |
+## Where the work stands right now
+
+Five different things are easy to confuse, so they are named separately. Nothing in this file may
+state "current commit" without saying which of these it means.
+
+| | SHA | What it is |
+| --- | --- | --- |
+| Current HEAD | `6d31861502a93832454de87348738a2f81f4110a` | what the working tree is checked out at |
+| Remote HEAD | `6d31861502a93832454de87348738a2f81f4110a` | `git ls-remote origin refs/heads/arena/01a0dca0-drillai` — **matches local** |
+| Last source (implementation) commit | `a85375e` | the last commit that changed product code or tests |
+| Last test-producing commit | `a85375e` | the commit the frontend E2E numbers below were produced at |
+| Last documentation-only commit | `6d31861` | this report and the docs — changes no product code |
+| Working tree | — | `git status --porcelain` empty; 203 files tracked; no untracked files |
+| Mission branch state | — | branch exists on the remote and contains every commit listed in §2 |
+
+The previous revision of this file said "current commit: `a85375e`" while HEAD was `6d31861`. That
+was a documentation-only difference, and it is corrected here rather than left to mislead a future
+session.
 
 ---
 
-## 1. Baseline (repository verification, this session)
+## 0. Session 2 — verification performed before any change (Checkpoint 0)
+
+The environment was wiped between sessions again: the sandbox came back with a fresh, shallow clone
+and no `backend/.venv`, no `frontend/node_modules` and no prepared browser. The working tree files
+were intact and `git status` was clean against the baseline commit, so nothing was lost — but the
+mission branch had to be re-attached to the remote before any work continued.
+
+Commands and their actual results:
+
+| Command | Result |
+| --- | --- |
+| `git ls-remote origin` | `6d31861502a93832454de87348738a2f81f4110a  refs/heads/arena/01a0dca0-drillai`; `bfa066b… refs/heads/main` |
+| `git fetch --depth=50 origin arena/01a0dca0-drillai` | succeeded; branch history recovered (13 commits visible) |
+| `git reset --mixed FETCH_HEAD` | local branch re-attached at `6d31861`; `git status --porcelain` → **0 entries** (tree already matched the commit) |
+| `git rev-parse HEAD` | `6d31861502a93832454de87348738a2f81f4110a` |
+| `git branch -vv` | `* arena/01a0dca0-drillai 6d31861` (tracking established by push/pull after re-attach) |
+| `git log --oneline -n 20` | 13 commits: `aa7ff9d` (platform foundation) → `6d31861` (docs) |
+| `git ls-files | wc -l` | 203 tracked files |
+| `git status --porcelain` | empty |
+| `scripts/bootstrap.sh` | backend venv rebuilt, 400 npm packages installed, Chromium 153.0.8010.0 verified |
+| `frontend: npx tsc -b --noEmit` | **PASS** |
+| `frontend: npx eslint .` | **PASS** |
+| `frontend: npx vitest run` | **54 passed** (4 files) — reproduces the Checkpoint 6/7 number |
+| `backend: pytest -q` | **365 passed, 2 skipped** (138.8 s) — reproduces the recorded number |
+| `backend: ruff check .` | **All checks passed** |
+
+So the restored environment reproduces the previously recorded results at `6d31861` before any new
+code was written. That reproduction is the starting point of this session, not evidence of the new
+work: every result for the new checkpoints is produced again below at the commit it belongs to.
+
+---
+
+## 1. Baseline (repository verification, session 1)
 
 | Item | Value |
 | --- | --- |
