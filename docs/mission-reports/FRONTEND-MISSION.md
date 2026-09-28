@@ -19,16 +19,22 @@ state "current commit" without saying which of these it means.
 | --- | --- | --- |
 | Checkpoint 0 HEAD | `80fb61dd3a07312d2a56da99d63e658d19961616` | the reconciled state the previous session ended on |
 | Checkpoint 1 commit | `c9c000593e2ded279127236193d53b4590ba90d5` | workflow studio lifecycle, contracts fixed at the source |
-| Checkpoint 1 (docs) | `99a655e054285f0827f114c0514ab13c34038a18` | the report above |
-| Remote HEAD | `c9c000593e2ded279127236193d53b4590ba90d5` | `git ls-remote origin refs/heads/arena/01a0dca0-drillai` — **matches local** |
-| Last source (implementation) commit | `c9c0005` | the last commit that changed product code or tests |
-| Last test-producing commit | `c9c0005` | the commit the unit and E2E numbers below were produced at |
-| Last documentation-only commit | `99a655e` | this report — changes no product code |
-| Working tree | — | `git status --porcelain` empty at `c9c0005`; no untracked files |
+| Checkpoint 1 (docs) | `99a655e054285f0827f114c0514ab13c34038a18` | the report for checkpoint 1 |
+| Session 3 baseline HEAD | `b3cd73d` | the commit this session's verification started from |
+| Backend pause fix | `b8a88fe` | `human.approval` became a real pause; approvals publish what they asked for |
+| Bootstrap mode fix | `67c9230` | `scripts/bootstrap.sh` executable in the index and on disk |
+| Checkpoint 2 commit | `60adee04684843455868a1ae6a7c9f00ae3852b6` | run monitor on the real run contract, with the approval record |
+| Remote HEAD | `60adee04684843455868a1ae6a7c9f00ae3852b6` | `git ls-remote origin refs/heads/arena/01a0dca0-drillai` — **matches local** |
+| Last source (implementation) commit | `60adee0` | the last commit that changed product code or tests |
+| Last test-producing commit | `60adee0` | the commit the unit and E2E numbers below were produced at |
+| Last documentation-only commit | this report | changes no product code |
+| Working tree | — | `git status --porcelain` empty at `60adee0`; no untracked files |
 | Mission branch state | — | branch exists on the remote and contains every commit listed in §2 |
 
-An earlier revision of this file described the state at `6d31861`; the header above is the state at
+An earlier revision of this file described the state at `c9c0005`; the header above is the state at
 the current commit. Results produced at one commit are never reported as evidence for another.
+The environment was wiped twice during session 3 (a fresh clone at the grafted base `bfa066b` each
+time); the recovery procedure and what survived are recorded in §0.1.
 
 ---
 
@@ -63,6 +69,25 @@ code was written. That reproduction is the starting point of this session, not e
 work: every result for the new checkpoints is produced again below at the commit it belongs to.
 
 ---
+
+## 0.1 Session 3 — two environment resets, and how the repository was recovered
+
+Both resets arrived without warning and left the same shape: a fresh clone checked out at the grafted
+base `bfa066b28e0071880cb9191a4f1d47fdaa143e04`, the working-tree *files* intact, and no
+`backend/.venv`, no `frontend/node_modules`, no `/tmp`. Nothing committed was ever lost — the branch is
+the durable record, which is why every checkpoint is pushed before the next begins.
+
+| Command | Result |
+| --- | --- |
+| `git status --short` | `?? backend/`, `?? frontend/`, `?? docs/`, `?? scripts/` — tracked history absent, files present |
+| `git fetch --depth=50 origin arena/01a0dca0-drillai` | succeeded; branch history recovered |
+| `git update-ref refs/remotes/origin/arena/01a0dca0-drillai FETCH_HEAD` | remote ref rebuilt |
+| `git reset --mixed FETCH_HEAD` | local branch re-attached at the remote tip; **working tree preserved** (uncommitted work survived) |
+| `bash scripts/bootstrap.sh` | backend venv, 400 npm packages, Chromium 153.0.8010.0 re-provisioned |
+
+An earlier recovery of the same kind is recorded in §0. The lesson recorded there held: a lost session
+never implies lost work, because the work was committed and pushed before the next batch began.
+
 
 ## 1. Baseline (repository verification, session 1)
 
@@ -233,6 +258,58 @@ to *that* well); publishing is offered only to an identity the server accepts it
 loads an older version without overwriting the newest; the palette is the node registry (every node
 type the API returns appears, and the tab badge counts them).
 
+### Checkpoint 2 — Run lifecycle, and the approval record
+
+- Commit `60adee04684843455868a1ae6a7c9f00ae3852b6` —
+  `feat(frontend): run monitor on the real run contract, with the approval record (Checkpoint 2)`.
+- Preceding commits in the same checkpoint, each pushed and verified before the next:
+  `b8a88fe` (the `human.approval` pause and what an approver is shown) and `67c9230` (bootstrap
+  executable in the index, not only on disk).
+
+**Root causes found by running the product, not by reading it**
+
+1. **A `human.approval` node never stopped the run.** The traversal discarded `NodeOutcome.approval`,
+   so the seeded gate workflow "succeeded" unattended. Proven with a live probe against a seeded API
+   (`201 succeeded`, `pending_approval_id: null`) before any code changed. Fixed in the runtime: the
+   run parks in `waiting_approval`, the *executing* node's row is the record of the wait (a second row
+   would make one execution look like two), and the approval carries the requester's own title,
+   description, action level, required role, risk notes and evidence references.
+2. **Everything behind an approved gate was skipped.** `nodes._approval` returned `branch=decision`,
+   and `_apply_branch` treats a non-null branch as router semantics, so the plain edge after the gate
+   was never taken. A decision is data, not a branch name. Fixed, with a regression test that fails
+   against the pre-fix body (`issue` stayed `skipped` after the resume).
+3. **`GET /runs/{id}` was typed as the run, not as the envelope.** The client read
+   `RunSummary & {nodes…}` while the API returns `{run, workflow, node_runs, artifacts, events,
+   pending_approval, resumable}` — which is why fields looked "missing" on a running run.
+4. **Node runs were displayed by a field the API does not send.** `NodeRunState.name` vs the
+   serializer's `node_name`, so every row silently fell back to the node id.
+5. **A decision note was silently discarded.** The client sent `comment`; `ApprovalDecision` has no
+   such field and Pydantic ignores extras, so `decision_note` stayed null and nothing complained.
+   Canonical: `note` in, `decision_note` out.
+6. **A decided approval became invisible.** The monitor asked for `status=pending` only, so the note
+   and the conditions a person recorded disappeared at the moment they were recorded. `GET /approvals`
+   gained a `run_id` filter and `status=any` is now used for the run's own record; the inbox gained a
+   status filter for the same reason.
+7. **`conditions` had two shapes.** The API accepted an object and stored a list; the same field was an
+   object on one row and a list on the next. Now always the list the column holds.
+8. **A run's hole section was not stored.** `POST /workflows/{id}/runs` accepted `section_id`, but no
+   column existed — it survived only inside `context`. Model column + migration `9c1f4b7d5a20` (which
+   backfills existing rows from the context blob) + runtime + serializer, and a test proving two wells
+   keep their own scope and no stale scope leaks between runs.
+9. **`Badge`/`Button`/`Card` swallowed the attributes callers passed.** `data-*` and `aria-*` props were
+   dropped on the floor, which silently disabled test hooks and accessible labels.
+10. **Copy defects:** the sidebar and the page were both named "Run Monitor" (two controls, one name);
+    the run list tab asserted a count it did not show.
+
+**Also fixed while proving the journey**
+
+- `Table` gained an announced selected row (`aria-current`) instead of colour alone.
+- A rejection requires a reason before it can be sent, and resume is refused while a decision is
+  pending — the server refuses both, and the UI no longer offers them as if they would work.
+- Values the server did not return are named (`Not returned`, `None`) instead of rendering as blanks.
+- A catalogue-coverage test now fails when a `t('…')` key is missing from either language, which is how
+  65 run-monitor/approval strings were found and translated rather than left as `⟦key⟧`.
+
 ---
 
 ## 3. Test results
@@ -240,7 +317,53 @@ type the API returns appears, and the tab badge counts them).
 Every row below was produced by running the command shown, at the commit named in the row. Exact
 counts, no rounding, and nothing is reported as "all good".
 
-At `c9c0005` (Checkpoint 1):
+### At `60adee0` (Checkpoint 2) — the current commit
+
+| Suite / command | Result |
+| --- | --- |
+| `npx tsc -b --noEmit` (frontend) | clean, 0 errors |
+| `npx eslint src e2e --max-warnings=0` (frontend) | clean, 0 warnings, 0 errors |
+| `npx vitest run` | **109 passed** in 10 files: `format` 18, `client` 12, `common` 15, `WellCockpit` 9, `workflowGraph` 12, `NodeConfigEditor` 12, `permissions` 10, `i18n/catalogue` 3, `i18n/usage` 3, **`RunMonitor` 15** |
+| `npm run build` | clean (`vite build`, 3.03 s) |
+| `node scripts/run-e2e.mjs` (Playwright, real API + real database + real build) | **23 passed / 0 failed** (4 cockpit, 4 documents, 9 workflow studio, **6 run monitor**) |
+| `.venv/bin/python -m pytest -q` (backend, full suite) | **370 passed, 2 skipped** |
+| `.venv/bin/ruff check .` (backend) | All checks passed |
+| `alembic upgrade head` + `alembic check` (fresh database) | No new upgrade operations detected |
+
+The two skips are the PostgreSQL integration tests, skipped by design when
+`DRILLAI_TEST_POSTGRES=1` is not set. The pytest summary line is suppressed in this sandbox, so the
+count is taken from the progress output (370 `.` + 2 `s`, no `F` or `E`).
+
+New backend tests at this commit (4): the approval node suspends the run and records what it asked
+for; a rejected approval stops the run before the next node; an approval node above the caller's
+ceiling is still refused (an approval is not a bypass); a run records the scope it was started with —
+two wells, two runs, each reading back its own scope. The existing L4 approval contract test gained
+the `status=any` / `run_id` reads and the list-shaped `conditions` assertions.
+
+New frontend tests at this commit (18): 15 component tests of the run monitor over payloads captured
+from the running API, and 3 catalogue-coverage assertions that fail when a used key is missing.
+
+#### The six new browser journeys (all PASS at `60adee0`)
+
+| # | Spec | Test | Result |
+| --- | --- | --- | --- |
+| 1 | run-monitor | a published definition runs on a real well and stops at its approval gate | **PASS** |
+| 2 | run-monitor | a decision taken by another identity resumes the run and is recorded with its note | **PASS** |
+| 3 | run-monitor | a rejection cancels the run instead of resuming it | **PASS** |
+| 4 | run-monitor | the approval inbox lists what is waiting and can be widened to decisions taken | **PASS** |
+| 5 | run-monitor | the run list shows the runs the API returns, with their own scope and status | **PASS** |
+| 6 | run-monitor | a run that fails says which node failed and why (real `failing-node-demo`) | **PASS** |
+
+Journey 1 starts `Daily Drilling Intelligence` from the studio against the seeded well, asserts the
+server parked the run at the gate, that every node execution the API recorded is shown by the name the
+API gave it, that the approval card carries the title, description, action level, required role and
+risk notes, and that a page reload reproduces the same state. Journey 2 decides as a *different*
+identity (`well_manager`, while the supervisor started it), asserts the resume completed every node
+that had been skipped, then reloads and reads the recorded decision — note, conditions and decider —
+from the run's own approval record. Journey 3 rejects and asserts the run is `cancelled` with the
+rejection named in its error and the downstream node still unrun.
+
+### At `c9c0005` (Checkpoint 1) — superseded
 
 | Suite / command | Result |
 | --- | --- |
@@ -323,39 +446,49 @@ automated** and are therefore not claimed.
 
 ## 4. Known limitations
 
-- Journeys 1, 2 and 3 are automated end to end (well/cockpit, documents/ingestion/evidence, and the
-  workflow studio lifecycle). The run lifecycle, live events, approvals, the error matrix, permissions
-  and context persistence are implemented in the UI but not yet proven at the browser level.
-- Persian covers the shell and cockpit strings, not every string in every workspace.
-- There is no CI workflow file yet; the gate commands are documented in
-  `docs/FRONTEND_TESTING.md` but are currently run by hand.
+- Journeys 1–4 are automated end to end (well/cockpit; documents/ingestion/evidence; the workflow
+  studio lifecycle; and, new in checkpoint 2, the run lifecycle, the approval and rejection journeys,
+  the approval inbox and the deterministic failing-node journey). Live events over the WebSocket, the
+  error matrix, permission journeys, context persistence, RTL and accessibility are **not yet proven
+  at the browser level** — they are checkpoint 3 onwards.
+- The run monitor still refreshes a live run on a 2 s interval. That is a deliberate stopgap and it is
+  documented in the source: checkpoint 3 replaces it with the events stream rather than running both.
+  A run waiting for a human is not polled at all.
+- `MISSION CLOSED` requires the WebSocket to be genuinely verified. It is not yet: the backend
+  endpoint exists and its contract is recorded, but no browser journey has opened it.
+- There is no CI workflow file yet; the gate commands are documented in `docs/FRONTEND_TESTING.md` and
+  are currently run by hand (in this session, in full, at every checkpoint).
 - No `ops/` deployment assets.
-- The run-event WebSocket is verified manually only.
-- The studio still holds a number of English literals that are not in the catalogue (the edge
-  inspector's hints, several diagnostic `title` attributes, and the run-context explanatory lines).
-  They are enumerated here rather than left implicit, and the RTL checkpoint covers them.
+- Persian now covers the shell, cockpit, studio and run monitor; the catalogue-coverage test bounds
+  what is left, and every remaining literal is one that test does not see (attributes rather than
+  `t('…')` calls) — the RTL checkpoint finishes them.
 - A run started from the editor pins the version the editor is showing. That is deliberate (the
   engine supports it and a draft run is a real capability) but the interface does not yet warn when
-  the pinned version is not the published one; the run-context journey is where that is finished.
-- Accessibility has been written for (roles, labels, `aria-live`, keyboard-reachable controls) but is
-  not yet asserted by an automated test.
+  the pinned version is not the published one; the context checkpoint is where that is finished.
+- Accessibility has been written for (roles, labels, `aria-live`, keyboard-reachable controls, an
+  announced selected row) but is not yet asserted by an automated test.
+- The workspace fixtures under `frontend/src/test/fixtures` are captured from the running API and
+  trimmed deterministically (a ~52 KB generated context prompt appears in several places in one
+  payload; strings over 2000 characters become a marker). Keys, types and short values are untouched.
 
 ---
 
 ## 5. Next checkpoints
 
-1. Checkpoint 2 of the continuation brief: the run lifecycle in the browser — published workflow →
-   select well → run → queued → running → node execution → final state, with the run list, the
-   inspector, a deterministic failing-node journey, and reload reconstruction for running, completed
-   and `waiting_approval` runs. (The studio lifecycle is done — checkpoint 8; documents → ingestion →
-   records → evidence is checkpoint 7.)
-2. Add the WebSocket journey with REST reconciliation, and the error-matrix surfaces
-   (401/403/404/409/422/500/network/timeout/malformed).
-3. Add permission journeys against backend authority, and RTL/accessibility checks.
-4. Add the CI workflow (frontend install/typecheck/lint/test/build + backend tests/lint/migration
-   check + the E2E suite), with no ignored failures, and verify it from a clean `npm ci`.
-5. Finish the Persian catalogue and the remaining docs, then run the final certification from a clean
-   checkout.
+1. **Checkpoint 3 — live events.** A reusable WebSocket layer (not socket code in a component) for
+   `GET /runs/{run_id}/events/stream`: token in the query string, `after_seq` resume, the
+   `stream_opened` / `run_event` / `stream_idle` / `stream_closed` / `stream_error` contract, bounded
+   reconnect backoff, deduplication by `run_id + seq`, REST reconciliation as the source of truth, an
+   honest connection indicator, and a browser journey that proves a reconnect loses no event and
+   duplicates none. The dev-identity query parameter is gated so production never trusts it.
+2. **Checkpoint 4 — the error matrix** (401/403/404/409/422/500/network/timeout/malformed), with
+   recovery, and never "backend unreachable" for a deliberate abort.
+3. **Checkpoint 5 — permissions, context, RTL, accessibility**: the real role catalogue against
+   backend authority, deep links and reload context, query-key scoping, Persian/RTL across the five
+   surfaces, and keyboard/`aria` assertions on the real journeys.
+4. **Checkpoint 6 — CI and certification**: `.github/workflows/` running install → typecheck → lint →
+   unit → build → backend tests → backend lint → migration check → real-stack E2E with no ignored
+   failures, then the full certification from a clean checkout.
 
 ---
 
