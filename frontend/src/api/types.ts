@@ -973,18 +973,28 @@ export interface NodeTypeCatalogue {
   total: number
 }
 
+/**
+ * A run, as the server serializes it.
+ *
+ * Every field here is one the API actually sends. The scope columns (`project_id`, `well_id`,
+ * `wellbore_id`, `section_id`, `operation_id`) are what the run was started against, and `context` is
+ * the scope record written at start time — a monitor shows both so a reader can tell a run that had
+ * no well from a run whose well was not displayed.
+ */
 export interface RunSummary {
   id: string
   workflow_id: string
-  workflow_version_id?: string | null
-  workflow_key?: string | null
-  version: number
+  workflow_version_id: string | null
+  workflow_key: string | null
+  version: number | null
   status: string
   trigger_type: string
   project_id: string | null
   well_id: string | null
-  wellbore_id?: string | null
-  operation_id?: string | null
+  wellbore_id: string | null
+  section_id: string | null
+  operation_id: string | null
+  context: Record<string, unknown>
   inputs: Record<string, unknown>
   outputs: Record<string, unknown>
   variables: Record<string, unknown>
@@ -998,17 +1008,27 @@ export interface RunSummary {
   pending_approval_id: string | null
   is_dry_run: boolean
   initiated_by: string | null
-  [key: string]: unknown
+  approved_by: string | null
+  metrics: Record<string, unknown>
 }
 
+/**
+ * One execution of one node, as `GET /runs/{id}/nodes` and the run envelope return it.
+ *
+ * The label the server sends is `node_name`; an earlier version of this interface read `name`, which
+ * silently fell back to the node id for every row.
+ */
 export interface NodeRunState {
   id: string
-  run_id?: string
+  run_id: string
   node_id: string
   node_type: string
-  name?: string | null
+  node_name: string | null
   status: string
   attempt?: number
+  max_attempts?: number
+  duration_ms?: number | null
+  resolution?: string | null
   started_at: string | null
   finished_at: string | null
   outputs?: Record<string, unknown>
@@ -1017,7 +1037,24 @@ export interface NodeRunState {
   llm_call_id?: string | null
   tool_call_id?: string | null
   approval_id?: string | null
-  [key: string]: unknown
+}
+
+/**
+ * A run with everything recorded alongside it.
+ *
+ * `GET /runs/{id}` answers with an envelope, not a bare run row: the run, the definition it executed,
+ * the node executions, the artifacts, the event log, the approval it may be waiting for, and whether
+ * it can be resumed. Reading that envelope as if it were the run itself is why the interface showed
+ * missing fields.
+ */
+export interface RunDetail {
+  run: RunSummary
+  workflow: { id: string; key: string; name: string; status: string } | null
+  node_runs: NodeRunState[]
+  artifacts: Array<Record<string, unknown>>
+  events?: RunEvent[]
+  pending_approval?: ApprovalRow | null
+  resumable: boolean
 }
 
 export interface RunEvent {
@@ -1044,20 +1081,46 @@ export interface RunStepResult {
   [key: string]: unknown
 }
 
+/**
+ * An approval, field for field as the server serializes it.
+ *
+ * The request and the response do **not** use the same name for the same idea: a decision is sent as
+ * `note` and comes back as `decision_note`. Both spellings are the server's, so both are here, and
+ * nothing in the interface may invent a third one — `comment` and `payload` were exactly that, and
+ * they read fields this API has never sent.
+ *
+ * `conditions` are the terms a decision was granted under, `risk_notes` is what the requester
+ * declared, `request_payload` is the request itself and `proposed_action` the recorded intent:
+ * together, what an approver decides on.
+ */
 export interface ApprovalRow {
   id: string
-  run_id: string
-  node_id: string
-  title: string | null
-  status: string
+  kind: string
+  subject_kind: string | null
+  subject_id: string | null
+  run_id: string | null
+  node_run_id: string | null
+  node_id: string | null
+  project_id: string | null
+  well_id: string | null
+  title: string
+  description: string | null
   action_level: ActionLevel
+  proposed_action: string | null
+  request_payload: Record<string, unknown>
+  risk_notes: string | null
+  evidence_refs: string[]
+  conditions: string[]
+  required_role: string | null
+  requested_by: string | null
   requested_at: string
-  requested_by?: string | null
-  decided_by?: string | null
-  decided_at?: string | null
-  comment?: string | null
-  payload?: Record<string, unknown>
-  [key: string]: unknown
+  expires_at: string | null
+  status: string
+  decided_by: string | null
+  decided_at: string | null
+  decision_note: string | null
+  /** Present on list rows only: whether the approval is past its expiry and still pending. */
+  overdue?: boolean
 }
 
 // --------------------------------------------------------------------------- platform

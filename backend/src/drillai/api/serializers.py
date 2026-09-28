@@ -244,7 +244,11 @@ def run_out(row: Any) -> dict[str, Any]:
         "project_id": row.project_id,
         "well_id": row.well_id,
         "wellbore_id": row.wellbore_id,
+        "section_id": row.section_id,
         "operation_id": row.operation_id,
+        # The scope as it was recorded at start time. The individual columns are the queryable copy;
+        # this is the record a reader can check against without joining anything.
+        "context": row.context or {},
         "inputs": row.inputs or {},
         "outputs": row.outputs or {},
         "variables": row.variables or {},
@@ -326,7 +330,10 @@ def approval_out(row: Any) -> dict[str, Any]:
         # never returns would be a decision nobody can audit.
         "risk_notes": row.risk_notes,
         "evidence_refs": list(row.evidence_refs or []),
-        "conditions": row.conditions or {},
+        # The column holds a list of conditions. Normalised here because the value crosses the wire
+        # to clients that type it: an approval row may not be an object on one row and a list on the
+        # next depending on which schema happened to have written it.
+        "conditions": list(row.conditions) if isinstance(row.conditions, list) else [],
         "required_role": row.required_role,
         "requested_by": row.requested_by,
         "requested_at": _iso(row.requested_at),

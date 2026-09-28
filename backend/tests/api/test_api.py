@@ -508,22 +508,46 @@ async def test_l4_node_suspends_the_run_and_the_approval_resumes_it(client):
         json={
             "decision": "approved",
             "note": "Checked the notification list",
-            "conditions": {"review_window": "next 24 h"},
+            "conditions": ["review_window: next 24 h"],
             "resume": True,
         },
     )
     assert decided.status_code == 200, decided.text
     assert decided.json()["approval"]["status"] == "approved"
     # The note and the conditions are what makes a decision auditable: they go in as `note` and
-    # `conditions` and must come back out under the serializer's own names.
+    # `conditions` and must come back out under the serializer's own names, with the shape the stored
+    # column actually has (a list of conditions), not one shape on one row and another on the next.
     assert decided.json()["approval"]["decision_note"] == "Checked the notification list"
-    assert decided.json()["approval"]["conditions"] == {"review_window": "next 24 h"}
+    assert decided.json()["approval"]["conditions"] == ["review_window: next 24 h"]
     assert decided.json()["approval"]["risk_notes"] is None  # this approval declared none
     assert decided.json()["approval"]["evidence_refs"] == []
 
     reread = await client.get(f"/api/v1/approvals/{approval_id}", headers=headers())
     assert reread.json()["approval"]["decision_note"] == "Checked the notification list"
-    assert reread.json()["approval"]["conditions"] == {"review_window": "next 24 h"}
+    assert reread.json()["approval"]["conditions"] == ["review_window: next 24 h"]
+
+    # A decided approval is still readable — `status=any` is how a monitor shows what a run went
+    # through after the fact — and `run_id` scopes that read to the run being displayed.
+    decided_list = await client.get("/api/v1/approvals", params={"status": "any"}, headers=headers())
+    assert approval_id in [item["id"] for item in decided_list.json()["items"]]
+    pending_only = await client.get("/api/v1/approvals", params={"status": "pending"}, headers=headers())
+    assert approval_id not in [item["id"] for item in pending_only.json()["items"]]
+
+    scoped = await client.get(
+        "/api/v1/approvals",
+        params={"status": "any", "run_id": run.json()["id"]},
+        headers=headers(),
+    )
+    assert [item["id"] for item in scoped.json()["items"]] == [approval_id]
+    assert scoped.json()["items"][0]["decision_note"] == "Checked the notification list"
+    assert scoped.json()["items"][0]["conditions"] == ["review_window: next 24 h"]
+
+    other_run = await client.get(
+        "/api/v1/approvals",
+        params={"status": "any", "run_id": "run_does_not_exist"},
+        headers=headers(),
+    )
+    assert other_run.json()["items"] == []
     resumed = decided.json()["resumed_run"]
     assert resumed["status"] != "waiting_approval"
     assert resumed["approved_by"] == "usr_dev_well_manager"
@@ -531,6 +555,101 @@ async def test_l4_node_suspends_the_run_and_the_approval_resumes_it(client):
     final = await client.get(f"/api/v1/runs/{run.json()['id']}", headers=headers())
     assert final.json()["run"]["pending_approval_id"] is None
     assert final.json()["resumable"] is False
+
+
+
+async def test_a_run_records_the_scope_it_was_started_with(client):
+    """The run carries the well/wellbore/section it was started for — and nothing else.
+
+    A run is the record of *what was executed against what*. If the scope were lost or inherited from
+    a previously started run, a monitor could show one well's execution next to another well's name,
+    which is worse than showing nothing. Two wells, two runs, each reading back its own scope.
+    """
+    project_id, well_a = await _create_project_and_well(client, name="Scope project")
+    well_b = await client.post(
+        "/api/v1/wells",
+        json={"project_id": project_id, "name": "VAL-2", "well_type": "development"},
+        headers=headers(),
+    )
+    assert well_b.status_code == 201, well_b.text
+    well_b_id = well_b.json()["id"]
+    wellbore = await client.post(
+        f"/api/v1/wells/{well_a}/wellbores",
+        json={"name": "VAL-1 12.25in", "hole_size_in": 12.25},
+        headers=headers(),
+    )
+    assert wellbore.status_code == 201, wellbore.text
+    wellbore_id = wellbore.json()["id"]
+    section = await client.post(
+        f"/api/v1/wellbores/{wellbore_id}/sections",
+        json={"sequence": 1, "name": "12.25in section", "kind": "surface", "hole_size_in": 12.25},
+        headers=headers(),
+    )
+    assert section.status_code == 201, section.text
+    section_id = section.json()["id"]
+
+    graph = {"nodes": [{"id": "prepare", "type": "logic.set_variables", "config": {"variables": {"n": 1}}}], "edges": []}
+    created = await client.post(
+        "/api/v1/workflows",
+        headers=headers("drilling_supervisor"),
+        json={"key": "scope_flow", "name": "Scope flow", "graph": graph},
+    )
+    assert created.status_code == 201, created.text
+    workflow_id = created.json()["id"]
+    await client.post(f"/api/v1/workflows/{workflow_id}/publish", headers=headers("drilling_supervisor"))
+
+    def scope_of(run_body: dict) -> dict:
+        return {
+            "project_id": run_body["project_id"],
+            "well_id": run_body["well_id"],
+            "wellbore_id": run_body["wellbore_id"],
+            "section_id": run_body["section_id"],
+            "operation_id": run_body["operation_id"],
+        }
+
+    first = await client.post(
+        f"/api/v1/workflows/{workflow_id}/runs",
+        headers=headers("drilling_supervisor"),
+        json={
+            "project_id": project_id,
+            "well_id": well_a,
+            "wellbore_id": wellbore_id,
+            "section_id": section_id,
+            "inputs": {"plan_date": "2026-03-15"},
+            "is_dry_run": True,
+            "trigger_type": "schedule",
+            "version": 1,
+        },
+    )
+    assert first.status_code == 201, first.text
+    assert scope_of(first.json()) == {
+        "project_id": project_id,
+        "well_id": well_a,
+        "wellbore_id": wellbore_id,
+        "section_id": section_id,
+        "operation_id": None,
+    }
+    assert first.json()["context"]["scope"]["section_id"] == section_id
+    assert first.json()["is_dry_run"] is True
+    assert first.json()["trigger_type"] == "schedule"
+    assert first.json()["inputs"] == {"plan_date": "2026-03-15"}
+
+    # A second run for the other well: the scope must be this run's, not the previous run's.
+    second = await client.post(
+        f"/api/v1/workflows/{workflow_id}/runs",
+        headers=headers("drilling_supervisor"),
+        json={"project_id": project_id, "well_id": well_b_id},
+    )
+    assert second.status_code == 201, second.text
+    assert second.json()["well_id"] == well_b_id
+    assert second.json()["wellbore_id"] is None
+    assert second.json()["section_id"] is None
+    assert second.json()["inputs"] == {}
+
+    # ...and the first run still reads back its own scope afterwards.
+    reread = await client.get(f"/api/v1/runs/{first.json()['id']}", headers=headers())
+    assert reread.json()["run"]["well_id"] == well_a
+    assert reread.json()["run"]["section_id"] == section_id
 
 
 async def test_human_approval_node_pauses_the_run_and_publishes_what_it_asked_for(client):
@@ -592,6 +711,9 @@ async def test_human_approval_node_pauses_the_run_and_publishes_what_it_asked_fo
     assert approval["evidence_refs"] == ["doc_seeded_ddr"]
     assert approval["request_payload"]["node_type"] == "human.approval"
     assert approval["status"] == "pending"
+    # A pending approval carries the same shape as a decided one: an empty list of conditions, not an
+    # empty object. One field, one type, whatever the state of the row.
+    assert approval["conditions"] == []
 
     # The node that asked is waiting, and what comes after it has not run.
     node_runs = {row["node_id"]: row["status"] for row in detail.json()["node_runs"]}

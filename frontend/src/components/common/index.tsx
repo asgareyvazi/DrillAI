@@ -22,6 +22,7 @@ export function Card({
   children,
   className,
   dense,
+  ...rest
 }: {
   title?: ReactNode
   subtitle?: ReactNode
@@ -29,13 +30,14 @@ export function Card({
   children: ReactNode
   className?: string
   dense?: boolean
-}) {
+} & Omit<React.ComponentPropsWithoutRef<'section'>, 'children' | 'title' | 'className'>) {
   return (
     <section
       className={clsx(
         'rounded-lg border border-graphite-200 bg-white shadow-sm dark:border-graphite-800 dark:bg-graphite-900',
         className,
       )}
+      {...rest}
     >
       {(title || actions) && (
         <header className="flex items-start justify-between gap-3 border-b border-graphite-100 px-4 py-3 dark:border-graphite-800">
@@ -61,6 +63,7 @@ export function Button({
   disabled,
   onClick,
   title,
+  ...rest
 }: {
   children: ReactNode
   variant?: 'default' | 'primary' | 'ghost' | 'danger'
@@ -69,7 +72,7 @@ export function Button({
   disabled?: boolean
   onClick?: () => void
   title?: string
-}) {
+} & Omit<React.ComponentPropsWithoutRef<'button'>, 'children' | 'title' | 'className' | 'type' | 'disabled' | 'onClick'>) {
   return (
     <button
       type={type}
@@ -89,6 +92,7 @@ export function Button({
           'border-transparent bg-transparent text-graphite-600 hover:bg-graphite-100 dark:text-graphite-300 dark:hover:bg-graphite-800',
         variant === 'danger' && 'border-danger bg-danger text-white hover:opacity-90',
       )}
+      {...rest}
     >
       {children}
     </button>
@@ -99,11 +103,12 @@ export function Badge({
   children,
   tone = 'neutral',
   title,
+  ...rest
 }: {
   children: ReactNode
   tone?: 'neutral' | 'ok' | 'warning' | 'danger' | 'info'
   title?: string
-}) {
+} & Omit<React.ComponentPropsWithoutRef<'span'>, 'children' | 'title' | 'className'>) {
   const tones: Record<string, string> = {
     neutral: 'bg-graphite-100 text-graphite-700 dark:bg-graphite-800 dark:text-graphite-200',
     ok: 'bg-emerald-50 text-ok dark:bg-emerald-950 dark:text-emerald-300',
@@ -118,6 +123,7 @@ export function Badge({
         'inline-flex items-center rounded px-1.5 py-0.5 text-[11px] font-medium whitespace-nowrap',
         tones[tone],
       )}
+      {...rest}
     >
       {children}
     </span>
@@ -368,12 +374,15 @@ export function Table<T>({
   rowKey,
   empty,
   onRowClick,
+  isRowActive,
 }: {
   rows: T[]
   columns: Array<{ key: string; header: ReactNode; render: (row: T) => ReactNode; align?: 'start' | 'end' }>
   rowKey: (row: T, index: number) => string
   empty?: ReactNode
   onRowClick?: (row: T) => void
+  /** Marks the row the page is showing in detail. Announced as `aria-current`, not colour alone. */
+  isRowActive?: (row: T) => boolean
 }) {
   if (rows.length === 0) return <>{empty ?? <EmptyState />}</>
   return (
@@ -400,9 +409,11 @@ export function Table<T>({
             <tr
               key={rowKey(row, index)}
               onClick={onRowClick ? () => onRowClick(row) : undefined}
+              aria-current={isRowActive?.(row) ? 'true' : undefined}
               className={clsx(
                 'border-b border-graphite-100 last:border-0 dark:border-graphite-800',
                 onRowClick && 'cursor-pointer hover:bg-graphite-50 dark:hover:bg-graphite-800/60',
+                isRowActive?.(row) && 'bg-graphite-50 dark:bg-graphite-800/60',
               )}
             >
               {columns.map((column) => (

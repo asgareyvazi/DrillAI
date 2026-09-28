@@ -26,6 +26,7 @@ import type {
   EvidenceSummary,
   ImpactReport,
   NodeRunState,
+  RunDetail,
   PlatformIdentity,
   NodeTypeCatalogue,
   NptSummary,
@@ -215,14 +216,7 @@ export const drillingApi = {
   ) => api.post<RunSummary>(`/workflows/${enc(workflowId)}/runs`, body),
   listRuns: (params: { workflow_id?: string; well_id?: string; status?: string; limit?: number } = {}) =>
     api.get<Page<RunSummary>>('/runs', { query: params }),
-  getRun: (runId: string) =>
-    api.get<RunSummary & {
-      nodes?: NodeRunState[]
-      events?: RunEvent[]
-      artifacts?: Array<Record<string, unknown>>
-      pending_approval?: ApprovalRow | null
-      resumable?: boolean
-    }>(`/runs/${enc(runId)}`),
+  getRun: (runId: string) => api.get<RunDetail>(`/runs/${enc(runId)}`),
   runNodes: (runId: string) => api.get<Page<NodeRunState>>(`/runs/${enc(runId)}/nodes`),
   runEvents: (runId: string, params: { after_seq?: number } = {}) =>
     api.get<Page<RunEvent> & { after_seq: number }>(`/runs/${enc(runId)}/events`, { query: params }),
@@ -232,11 +226,32 @@ export const drillingApi = {
       query: approvalId ? { approval_id: approvalId } : {},
     }),
   nodeTypes: () => api.get<NodeTypeCatalogue>('/registry/node-types'),
-  listApprovals: (params: { status?: string; limit?: number } = { status: 'pending' }) =>
-    api.get<Page<ApprovalRow>>('/approvals', { query: params }),
+  /**
+   * Approval requests.
+   *
+   * `status: 'any'` returns decided ones too, and `run_id` scopes the read to one run — that is how
+   * the run monitor shows the decision a run went through *after* it was taken, which is the part of
+   * the record an auditor actually needs.
+   */
+  listApprovals: (
+    params: { status?: string; run_id?: string; well_id?: string; limit?: number } = { status: 'pending' },
+  ) => api.get<Page<ApprovalRow>>('/approvals', { query: params }),
+  /**
+   * Record a human decision.
+   *
+   * The note goes out as `note` and comes back as `decision_note` — the server's names on each side
+   * of the wire. Sending `comment` (as this client used to) is not an error, it is a silently dropped
+   * field: the decision was recorded with no justification and nothing complained.
+   */
   decideApproval: (
     approvalId: string,
-    body: { decision: 'approved' | 'rejected'; comment?: string; resume?: boolean },
+    body: {
+      decision: 'approved' | 'rejected'
+      note?: string
+      /** Conditions the decision is granted under, one statement per entry. */
+      conditions?: string[]
+      resume?: boolean
+    },
   ) =>
     api.post<{ approval: ApprovalRow; resumed_run: RunSummary | null }>(
       `/approvals/${enc(approvalId)}/decide`,

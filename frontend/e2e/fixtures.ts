@@ -21,6 +21,9 @@ export const ROLES = {
   engineer: 'engineer',
   viewer: 'viewer',
   supervisor: 'drilling_supervisor',
+  // The decider in the approval journeys: a different principal than the one that starts the run,
+  // because the server refuses a decision taken by the requester.
+  wellManager: 'well_manager',
   admin: 'admin',
 } as const
 

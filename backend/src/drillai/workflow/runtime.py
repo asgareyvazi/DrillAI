@@ -155,6 +155,7 @@ class WorkflowRuntime:
             project_id=scope.project_id,
             well_id=scope.well_id,
             wellbore_id=scope.wellbore_id,
+            section_id=scope.section_id,
             operation_id=scope.operation_id,
             context={"scope": scope.__dict__},
             inputs=inputs or {},

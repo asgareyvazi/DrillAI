@@ -157,6 +157,7 @@ class WorkflowRun(Base, IdMixin, TimestampMixin, OrgScopedMixin):
     project_id: Mapped[str | None] = mapped_column(String(64), index=True)
     well_id: Mapped[str | None] = mapped_column(String(64), index=True)
     wellbore_id: Mapped[str | None] = mapped_column(String(64), index=True)
+    section_id: Mapped[str | None] = mapped_column(String(64), index=True)
     operation_id: Mapped[str | None] = mapped_column(String(64), index=True)
     context: Mapped[dict] = mapped_column(JsonType, default=dict, nullable=False)
     inputs: Mapped[dict] = mapped_column(JsonType, default=dict, nullable=False)

@@ -34,10 +34,18 @@ RUN_STATUSES = ("queued", "running", "succeeded", "failed", "timed_out", "paused
 
 
 class ApprovalDecision(BaseModel):
+    """A recorded human decision.
+
+    ``note`` is the justification and is echoed back as ``decision_note`` (the server's two names for
+    the two directions); ``conditions`` are the terms the decision is granted under. Both are part of
+    the audit record, so both are typed here rather than left to whatever a client sends: a condition
+    is a statement, and the stored column holds a list of them.
+    """
+
     decision: str = Field(pattern="^(approved|rejected)$")
     note: str | None = Field(default=None, max_length=2000)
-    conditions: dict[str, Any] = Field(
-        default_factory=dict, description="Conditions the approval is granted under"
+    conditions: list[str] = Field(
+        default_factory=list, description="Conditions the approval is granted under"
     )
     resume: bool = Field(default=True, description="Continue the suspended run immediately")
 
@@ -211,14 +219,23 @@ async def list_approvals(
     session: Annotated[AsyncSession, Depends(get_db)],
     auth: Annotated[AuthContext, Depends(require("workflow.read"))],
     status: str = Query(default="pending"),
+    run_id: OptionalFilter = None,
     well_id: OptionalFilter = None,
     project_id: OptionalFilter = None,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
 ) -> dict[str, Any]:
+    """Approval requests, filtered by state and scope.
+
+    ``status="any"`` is what a run monitor uses: the approval a run went through has to remain
+    readable *after* the decision, because the note and the conditions are the record of why the run
+    continued (or did not). ``run_id`` scopes that read to the run being displayed.
+    """
     stmt = select(ApprovalRequest).where(ApprovalRequest.org_id == auth.org_id)
     if status != "any":
         stmt = stmt.where(ApprovalRequest.status == status)
+    if run_id:
+        stmt = stmt.where(ApprovalRequest.run_id == run_id)
     if well_id:
         stmt = stmt.where(ApprovalRequest.well_id == well_id)
     if project_id:
