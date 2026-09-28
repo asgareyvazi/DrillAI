@@ -19,10 +19,11 @@ state "current commit" without saying which of these it means.
 | --- | --- | --- |
 | Checkpoint 0 HEAD | `80fb61dd3a07312d2a56da99d63e658d19961616` | the reconciled state the previous session ended on |
 | Checkpoint 1 commit | `c9c000593e2ded279127236193d53b4590ba90d5` | workflow studio lifecycle, contracts fixed at the source |
+| Checkpoint 1 (docs) | `99a655e054285f0827f114c0514ab13c34038a18` | the report above |
 | Remote HEAD | `c9c000593e2ded279127236193d53b4590ba90d5` | `git ls-remote origin refs/heads/arena/01a0dca0-drillai` — **matches local** |
 | Last source (implementation) commit | `c9c0005` | the last commit that changed product code or tests |
 | Last test-producing commit | `c9c0005` | the commit the unit and E2E numbers below were produced at |
-| Last documentation-only commit | `80fb61d` | this report — changes no product code |
+| Last documentation-only commit | `99a655e` | this report — changes no product code |
 | Working tree | — | `git status --porcelain` empty at `c9c0005`; no untracked files |
 | Mission branch state | — | branch exists on the remote and contains every commit listed in §2 |
 
