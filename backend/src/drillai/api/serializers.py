@@ -320,7 +320,13 @@ def approval_out(row: Any) -> dict[str, Any]:
         "action_level": row.action_level,
         "proposed_action": row.proposed_action,
         "request_payload": row.request_payload or {},
+        # The approver decides on these three, so they have to leave the server: the risk the
+        # requester declared, the evidence the decision should rest on, and — after a decision —
+        # the conditions it was granted under. A decision recorded with conditions that the API
+        # never returns would be a decision nobody can audit.
+        "risk_notes": row.risk_notes,
         "evidence_refs": list(row.evidence_refs or []),
+        "conditions": row.conditions or {},
         "required_role": row.required_role,
         "requested_by": row.requested_by,
         "requested_at": _iso(row.requested_at),

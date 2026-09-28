@@ -49,7 +49,14 @@ from drillai.observability.tracing import get_tracer
 from drillai.security.actions import ActionLevel, Principal, envelope_allows
 from drillai.workflow.expressions import ExpressionError, evaluate_condition, resolve_references
 from drillai.workflow.graph import GraphNode, WorkflowGraph, validate_graph
-from drillai.workflow.nodes import NodeContext, NodeOutcome, NodeSpec, node_spec, registered_node_types
+from drillai.workflow.nodes import (
+    ApprovalSpec,
+    NodeContext,
+    NodeOutcome,
+    NodeSpec,
+    node_spec,
+    registered_node_types,
+)
 
 logger = get_logger(__name__)
 
@@ -397,7 +404,7 @@ class WorkflowRuntime:
         try:
             self._authorize(run, node, spec)
         except ApprovalRequired as exc:
-            await self._suspend(run, node, spec, state, exc)
+            await self._suspend(run, node, spec, state, error=exc)
             return None
         except PermissionDenied:
             raise
@@ -578,6 +585,17 @@ class WorkflowRuntime:
                     )
                 if outcome.artifacts:
                     await self._persist_artifacts(run, node_run, outcome)
+                if outcome.approval is not None:
+                    # The node asks for a decision before the run may continue (`human.approval`).
+                    # Its row stops being "succeeded": it is waiting, exactly as it is when the
+                    # authorization gate stops a node, and the same resume path will complete it.
+                    node_run.status = "waiting_approval"
+                    node_run.resolution = "awaiting_approval"
+                    node_run.duration_ms = (time.perf_counter() - started) * 1000
+                    await self.session.flush()
+                    await self._suspend(run, node, spec, state, request=outcome.approval, node_run=node_run)
+                    self._last_node_run = node_run
+                    return None
                 await self._event(run, "node_succeeded", message=f"{node.id} finished", node_id=node.id, node_run_id=node_run.id)
                 self._last_node_run = node_run
                 return outcome
@@ -616,12 +634,26 @@ class WorkflowRuntime:
         node: GraphNode,
         spec: NodeSpec,
         state: _Traversal,
-        error: ApprovalRequired,
+        *,
+        error: ApprovalRequired | None = None,
+        request: ApprovalSpec | None = None,
+        node_run: NodeRun | None = None,
     ) -> None:
-        payload = error.details or {}
+        """Park the run on a human decision, from either of the two ways one is asked for.
+
+        * the authorization gate refuses a node at L4 or above (``error``), or
+        * a node's executor returns an approval request of its own (``request``) — which is what
+          ``human.approval`` does, and what makes the node's declared contract real rather than a
+          declared intention.
+
+        Both paths persist the same row and leave the run in the same state, because the approver's
+        inbox and the resume path must not care which one produced it.
+        """
+        payload = (error.details if error else None) or {}
+        level = request.action_level if request else ActionLevel(spec.action_level)
         approval = ApprovalRequest(
             org_id=self.org_id,
-            kind="workflow_node",
+            kind=request.kind if request else "workflow_node",
             subject_kind="workflow_node",
             subject_id=f"{run.id}:{node.id}",
             run_id=run.id,
@@ -629,43 +661,61 @@ class WorkflowRuntime:
             node_id=node.id,
             project_id=run.project_id,
             well_id=run.well_id,
-            title=f"Approve {node.name or spec.name}",
-            description=f"Node {node.id} ({spec.key}) at action level {spec.action_level.value} requires a decision.",
-            request_payload={"node_type": spec.key, "config": node.config, "inputs": node.inputs},
+            title=request.title if request else f"Approve {node.name or spec.name}",
+            description=(
+                request.description
+                if request
+                else f"Node {node.id} ({spec.key}) at action level {spec.action_level.value} requires a decision."
+            ),
+            request_payload={
+                "node_type": spec.key,
+                "config": node.config,
+                "inputs": node.inputs,
+                **({"proposed_action": request.proposed_action} if request and request.proposed_action else {}),
+            },
             # ``proposed_action`` and ``risk_notes`` are human-readable text columns (what the
             # approver reads in the inbox); the structured form lives in ``request_payload``.
             proposed_action=json.dumps(
-                {"action_level": spec.action_level.value, "node_id": node.id, "node_type": spec.key},
+                {"action_level": level.value, "node_id": node.id, "node_type": spec.key},
                 sort_keys=True,
             ),
-            action_level=spec.action_level.value,
-            risk_notes=None,
-            required_role="approver",
-            evidence_refs=[],
+            action_level=level.value,
+            risk_notes="; ".join(request.risk_notes) if request and request.risk_notes else None,
+            required_role=(request.required_role if request and request.required_role else "approver"),
+            evidence_refs=list(request.evidence_refs) if request else [],
             requested_by=self.principal.id,
             requested_by_kind=self.principal.kind,
             requested_at=dt.datetime.now(tz=UTC),
+            expires_at=(
+                dt.datetime.now(tz=UTC) + dt.timedelta(hours=request.expires_in_hours)
+                if request and request.expires_in_hours
+                else None
+            ),
             status="pending",
             notification_state={"state": "pending", "attempts": 0},
             attributes={"reason": payload.get("reason")},
         )
         self.session.add(approval)
         await self.session.flush()
-        node_run = NodeRun(
-            org_id=self.org_id,
-            run_id=run.id,
-            node_id=node.id,
-            node_type=node.type,
-            node_name=node.name or spec.name,
-            status="waiting_approval",
-            attempt=1,
-            max_attempts=1,
-            inputs=dict(node.inputs),
-            resolution="awaiting_approval",
-            started_at=dt.datetime.now(tz=UTC),
-        )
-        self.session.add(node_run)
-        await self.session.flush()
+        if node_run is None:
+            # The authorization gate stops a node before it runs, so the waiting row is created here.
+            node_run = NodeRun(
+                org_id=self.org_id,
+                run_id=run.id,
+                node_id=node.id,
+                node_type=node.type,
+                node_name=node.name or spec.name,
+                status="waiting_approval",
+                attempt=1,
+                max_attempts=1,
+                inputs=dict(node.inputs),
+                resolution="awaiting_approval",
+                started_at=dt.datetime.now(tz=UTC),
+            )
+            self.session.add(node_run)
+            await self.session.flush()
+        # A node that asked for its own decision already has a row (it was executing); that row is
+        # the record of the wait, so a second one would make the same execution look like two.
         approval.node_run_id = node_run.id
         run.status = "waiting_approval"
         run.pending_approval_id = approval.id

@@ -505,10 +505,25 @@ async def test_l4_node_suspends_the_run_and_the_approval_resumes_it(client):
     decided = await client.post(
         f"/api/v1/approvals/{approval_id}/decide",
         headers=headers("well_manager"),
-        json={"decision": "approved", "note": "Checked the notification list", "resume": True},
+        json={
+            "decision": "approved",
+            "note": "Checked the notification list",
+            "conditions": {"review_window": "next 24 h"},
+            "resume": True,
+        },
     )
     assert decided.status_code == 200, decided.text
     assert decided.json()["approval"]["status"] == "approved"
+    # The note and the conditions are what makes a decision auditable: they go in as `note` and
+    # `conditions` and must come back out under the serializer's own names.
+    assert decided.json()["approval"]["decision_note"] == "Checked the notification list"
+    assert decided.json()["approval"]["conditions"] == {"review_window": "next 24 h"}
+    assert decided.json()["approval"]["risk_notes"] is None  # this approval declared none
+    assert decided.json()["approval"]["evidence_refs"] == []
+
+    reread = await client.get(f"/api/v1/approvals/{approval_id}", headers=headers())
+    assert reread.json()["approval"]["decision_note"] == "Checked the notification list"
+    assert reread.json()["approval"]["conditions"] == {"review_window": "next 24 h"}
     resumed = decided.json()["resumed_run"]
     assert resumed["status"] != "waiting_approval"
     assert resumed["approved_by"] == "usr_dev_well_manager"
@@ -516,6 +531,97 @@ async def test_l4_node_suspends_the_run_and_the_approval_resumes_it(client):
     final = await client.get(f"/api/v1/runs/{run.json()['id']}", headers=headers())
     assert final.json()["run"]["pending_approval_id"] is None
     assert final.json()["resumable"] is False
+
+
+async def test_human_approval_node_pauses_the_run_and_publishes_what_it_asked_for(client):
+    """A `human.approval` node is a real pause, with the requester's own title, risk and evidence.
+
+    The node sits below the authorization gate, so the only thing that can stop the run is the node
+    itself asking for a decision. Everything the approver needs has to be on the approval record.
+    """
+    _project, well_id = await _create_project_and_well(client)
+    graph = {
+        "nodes": [
+            {"id": "prepare", "type": "logic.set_variables", "config": {"variables": {"step": 1}}},
+            {
+                "id": "approve_plan",
+                "type": "human.approval",
+                "name": "Approve the plan",
+                "config": {
+                    "title": "Approve the daily plan",
+                    "description": "Review the computed state before the report is issued.",
+                    "action_level": "L3",
+                    "required_role": "drilling_supervisor",
+                    "risk_notes": ["The report reaches the rig site once approved."],
+                    "evidence_refs": ["doc_seeded_ddr"],
+                },
+            },
+            {"id": "issue", "type": "output.report", "config": {"title": "Daily report", "sections": {}}},
+        ],
+        "edges": [
+            {"id": "e1", "source": "prepare", "target": "approve_plan"},
+            {"id": "e2", "source": "approve_plan", "target": "issue"},
+        ],
+    }
+    created = await client.post(
+        "/api/v1/workflows",
+        headers=headers("drilling_supervisor"),
+        json={"key": "human_gate", "name": "Human gate", "graph": graph},
+    )
+    assert created.status_code == 201, created.text
+    workflow_id = created.json()["id"]
+    await client.post(f"/api/v1/workflows/{workflow_id}/publish", headers=headers("drilling_supervisor"))
+
+    run = await client.post(
+        f"/api/v1/workflows/{workflow_id}/runs",
+        headers=headers("drilling_supervisor"),
+        json={"well_id": well_id},
+    )
+    assert run.status_code == 201, run.text
+    body = run.json()
+    assert body["status"] == "waiting_approval", body
+    approval_id = body["pending_approval_id"]
+
+    detail = await client.get(f"/api/v1/runs/{body['id']}", headers=headers())
+    approval = detail.json()["pending_approval"]
+    assert approval["title"] == "Approve the daily plan"
+    assert approval["description"].startswith("Review the computed state")
+    assert approval["action_level"] == "L3"
+    assert approval["required_role"] == "drilling_supervisor"
+    assert approval["risk_notes"] and "rig site" in approval["risk_notes"]
+    assert approval["evidence_refs"] == ["doc_seeded_ddr"]
+    assert approval["request_payload"]["node_type"] == "human.approval"
+    assert approval["status"] == "pending"
+
+    # The node that asked is waiting, and what comes after it has not run.
+    node_runs = {row["node_id"]: row["status"] for row in detail.json()["node_runs"]}
+    assert node_runs["approve_plan"] == "waiting_approval"
+    assert node_runs["issue"] == "skipped"
+
+    # The supervisor requested it, so the decision has to come from someone else.
+    self_decision = await client.post(
+        f"/api/v1/approvals/{approval_id}/decide",
+        headers=headers("drilling_supervisor"),
+        json={"decision": "approved", "note": "fine"},
+    )
+    assert self_decision.status_code == 409
+
+    decided = await client.post(
+        f"/api/v1/approvals/{approval_id}/decide",
+        headers=headers("well_manager"),
+        json={"decision": "approved", "note": "Approved after review", "resume": True},
+    )
+    assert decided.status_code == 200, decided.text
+    assert decided.json()["approval"]["decision_note"] == "Approved after review"
+    assert decided.json()["resumed_run"]["status"] == "succeeded"
+
+    final = await client.get(f"/api/v1/runs/{body['id']}", headers=headers())
+    node_runs = {row["node_id"]: row["status"] for row in final.json()["node_runs"]}
+    assert node_runs["approve_plan"] == "succeeded"
+    assert node_runs["issue"] == "succeeded"
+    # The decision is visible after the fact, from the run and from the approval.
+    events = [event["type"] for event in final.json()["events"]]
+    assert "approval_decided" in events and "run_resumed" in events
 
 
 async def test_rejected_approval_cancels_the_run(client):

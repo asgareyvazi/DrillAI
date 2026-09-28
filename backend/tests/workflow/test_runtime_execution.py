@@ -388,6 +388,122 @@ async def test_l4_node_suspends_for_approval_then_resumes(session, project, supe
     assert {"approval_requested", "run_paused", "approval_decided", "run_resumed"} <= events
 
 
+async def test_a_human_approval_node_suspends_the_run_and_records_what_it_asked_for(
+    session, project, supervisor
+):
+    """A `human.approval` node must really stop the run.
+
+    The node declares an approval request; before this test existed the runtime discarded that
+    request and the run continued, so a graph that a designer had deliberately gated on a human
+    decision completed unattended.
+
+    The runner is a supervisor because the authorization gate still applies: a principal may not
+    drive a run containing work above its own action-level ceiling, approval or not. The approval is
+    a separate control *on top of* that — what it adds is a recorded human decision, taken by a
+    different principal, before the gated work proceeds.
+    """
+    graph = WorkflowGraph(
+        nodes=[
+            GraphNode(id="prepare", type="logic.set_variables", config={"variables": {"note": "ready"}}),
+            GraphNode(
+                id="approve",
+                type="human.approval",
+                config={
+                    "title": "Approve the daily plan",
+                    "description": "Review the computed state before the report is issued.",
+                    "action_level": "L3",
+                    "required_role": "drilling_supervisor",
+                    "risk_notes": ["The report reaches the rig site once approved."],
+                    "evidence_refs": ["doc_ddr_2026-03-15"],
+                },
+            ),
+            GraphNode(id="finish", type="logic.set_variables", config={"variables": {"done": True}}),
+        ],
+        edges=[
+            GraphEdge(id="e1", source="prepare", target="approve"),
+            GraphEdge(id="e2", source="approve", target="finish"),
+        ],
+    )
+    run, _workflow, runtime = await _start(session, project, supervisor, graph, key="wf-human-approval")
+    assert run.status == "waiting_approval", "the run must stop at the human approval node"
+    assert run.pending_approval_id is not None
+
+    # Scoped to this run: the database is shared by the file, so an unscoped select would also see
+    # approvals raised by the tests above.
+    approval = (
+        await session.execute(select(ApprovalRequest).where(ApprovalRequest.run_id == run.id))
+    ).scalars().one()
+    assert approval.title == "Approve the daily plan"
+    assert approval.description.startswith("Review the computed state")
+    assert approval.action_level == "L3"
+    assert approval.required_role == "drilling_supervisor"
+    assert approval.risk_notes and "rig site" in approval.risk_notes
+    assert approval.evidence_refs == ["doc_ddr_2026-03-15"]
+    assert approval.expires_at is not None
+    # The node that asked for the decision is recorded as waiting, not as having succeeded.
+    waiting = (
+        await session.execute(select(NodeRun).where(NodeRun.run_id == run.id, NodeRun.node_id == "approve"))
+    ).scalars().one()
+    assert waiting.status == "waiting_approval"
+    # The node after the gate never ran, and is recorded as skipped rather than left absent.
+    finish = (
+        await session.execute(select(NodeRun).where(NodeRun.run_id == run.id, NodeRun.node_id == "finish"))
+    ).scalars().all()
+    assert [row.status for row in finish] == ["skipped"]
+
+    approval.status = "approved"
+    approval.decided_by = "usr_supervisor"
+    approval.decision_note = "Approved after review"
+    approval.decided_at = dt.datetime.now(tz=dt.UTC)
+    await session.flush()
+
+    resumed = await runtime.resume(run.id, graph, approval_id=approval.id, decided_by="usr_supervisor")
+    assert resumed.status == "succeeded", resumed.error
+    # The waiting row is completed on resume rather than left dangling.
+    rows = (
+        await session.execute(select(NodeRun).where(NodeRun.run_id == run.id, NodeRun.node_id == "approve"))
+    ).scalars().all()
+    assert len(rows) == 1
+    assert rows[0].status == "succeeded"
+    assert rows[0].outputs.get("decision") == "approved"
+    assert resumed.variables.get("done") is True
+
+
+async def test_a_rejected_human_approval_stops_the_run_before_the_next_node(session, project, supervisor):
+    graph = WorkflowGraph(
+        nodes=[
+            GraphNode(id="approve", type="human.approval", config={"title": "Approve the plan"}),
+            GraphNode(id="finish", type="logic.set_variables", config={"variables": {"done": True}}),
+        ],
+        edges=[GraphEdge(id="e1", source="approve", target="finish")],
+    )
+    run, _workflow, runtime = await _start(session, project, supervisor, graph, key="wf-human-reject")
+    approval = (
+        await session.execute(select(ApprovalRequest).where(ApprovalRequest.run_id == run.id))
+    ).scalars().one()
+    approval.status = "rejected"
+    approval.decided_by = "usr_supervisor"
+    await session.flush()
+
+    result = await runtime.resume(run.id, graph, approval_id=approval.id)
+    assert result.status == "cancelled"
+    assert "rejected" in (result.error or "")
+    assert result.variables.get("done") is None
+
+
+async def test_an_approval_node_above_the_callers_ceiling_is_still_refused(session, project, engineer):
+    """An approval node is not a bypass: an L2 caller may not drive a graph that proposes at L3.
+
+    The decision is what a *different* principal contributes; the caller's own ceiling still governs
+    what the caller may set in motion.
+    """
+    graph = WorkflowGraph(
+        nodes=[GraphNode(id="approve", type="human.approval", config={"title": "Approve at L3", "action_level": "L3"})]
+    )
+    with pytest.raises(PermissionDenied):
+        await _start(session, project, engineer, graph, key="wf-approval-ceiling")
+
+
 async def test_rejected_approval_cancels_the_run_and_sends_nothing(session, project, supervisor):
     graph = WorkflowGraph(
         nodes=[GraphNode(id="notify", type="output.notify", config={"channel": "email", "recipient": "ops@example.com", "body": "hi"})],

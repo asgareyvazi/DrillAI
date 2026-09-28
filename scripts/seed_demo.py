@@ -90,8 +90,16 @@ class Api:
 #
 # The demo workflow is the product's default "Daily Drilling Intelligence" path, expressed with the
 # platform's own node types: load the engineering context, read the well state, compute NPT, stop for
-# a human decision, then publish a report. The approval node is deliberately at L3 so the run cannot
-# complete without a recorded human decision — that is the governance contract, not a demo trick.
+# a human decision, then publish a report.
+#
+# Two properties of this definition matter to anyone running it:
+#
+#   * the `human.approval` node suspends the run — it asks for a decision, and the run does not
+#     continue until one is recorded (the decision has to come from a different principal than the
+#     requester, which is the platform's separation-of-duties rule);
+#   * the node is at L3, and a principal may not drive work above its own action-level ceiling, so
+#     this workflow is run by a `drilling_supervisor` or above. An engineer may read and edit it, and
+#     the server refuses the run rather than silently downgrading the gate.
 APPROVAL_WORKFLOW_NODES = [
     {
         "id": "load_context",

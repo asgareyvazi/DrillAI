@@ -479,9 +479,13 @@ async def _approval(context: NodeContext, config: BaseModel) -> NodeOutcome:
     # A decision recorded on this node already (resume) is passed in as approval_payload.
     if context.approval_payload:
         decision = context.approval_payload.get("status")
+        # The decision is *data*, not a branch name. `logic.branch` picks between labelled edges; a
+        # human gate must not, or the plain edge that follows it in every sane graph would be
+        # evaluated as "not the matching branch" and dropped — the report after the approval would
+        # silently never run. Downstream routing reads the decision from this node's outputs, either
+        # through an edge condition (`${approve.decision} == 'approved'`) or not at all.
         return NodeOutcome(
             outputs={"decision": decision, "decided_by": context.approval_payload.get("decided_by")},
-            branch=decision,
             stop=decision == "rejected",
         )
     return NodeOutcome(
