@@ -62,6 +62,24 @@ class RunStart(BaseModel):
     trigger_type: str = "manual"
 
 
+def _validation_payload(stored: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Return a stored validation report in the shape the API documents.
+
+    ``is_valid`` is a computed field, so every report produced *now* carries it. Rows written before
+    that field existed are still valid rows, and answering with a shape the client cannot rely on
+    would push the missing boolean onto the UI: it is filled in here instead, from the same rule the
+    model uses. The stored row itself is left alone.
+    """
+    if stored is None:
+        return None
+    if "is_valid" in stored:
+        return stored
+    issues = stored.get("issues") or []
+    derived = dict(stored)
+    derived["is_valid"] = not any(issue.get("severity") == "error" for issue in issues)
+    return derived
+
+
 def _service(session: AsyncSession, auth: AuthContext) -> WorkflowService:
     return WorkflowService(session, org_id=auth.org_id or "", principal=auth.principal)
 
@@ -141,7 +159,7 @@ async def get_workflow(
         "node_count": version_row.node_count,
         "edge_count": version_row.edge_count,
         "published_at": version_row.published_at.isoformat() if version_row.published_at else None,
-        "validation": version_row.validation,
+        "validation": _validation_payload(version_row.validation),
         "notes": version_row.notes,
     }
     if include_graph:
@@ -176,7 +194,7 @@ async def workflow_version_detail(
         "version": row.version,
         "graph": row.graph,
         "graph_hash": row.graph_hash,
-        "validation": row.validation,
+        "validation": _validation_payload(row.validation),
         "notes": row.notes,
         "change_reason": row.change_reason,
         "published_at": row.published_at.isoformat() if row.published_at else None,
@@ -196,11 +214,7 @@ async def validate_workflow_graph(
     """
     parsed = WorkflowGraph.model_validate(graph)
     report = validate_graph(parsed, node_types=registered_node_types())
-    # ``is_valid`` is derived from the issues rather than stored, so it is computed here for the
-    # client: an editor needs a single boolean, and a run needs the full issue list.
-    payload = report.model_dump(mode="json")
-    payload["is_valid"] = report.is_valid
-    return {"validation": payload, "summary": graph_summary(parsed, report)}
+    return {"validation": report.model_dump(mode="json"), "summary": graph_summary(parsed, report)}
 
 
 @router.put("/workflows/{workflow_id}/graph", summary="Save a new version of the graph")
@@ -227,7 +241,7 @@ async def save_workflow_graph(
         "graph_hash": version.graph_hash,
         "node_count": version.node_count,
         "edge_count": version.edge_count,
-        "validation": version.validation,
+        "validation": _validation_payload(version.validation),
         "published_at": version.published_at.isoformat() if version.published_at else None,
     }
 
@@ -358,5 +372,5 @@ async def graph_by_version_id(
         "workflow_id": row.workflow_id,
         "version": row.version,
         "graph": row.graph,
-        "validation": row.validation,
+        "validation": _validation_payload(row.validation),
     }

@@ -106,11 +106,18 @@ export async function waitForLoaded(page: Page): Promise<void> {
   await expect(page.getByRole('status').filter({ hasText: 'Loading' })).toHaveCount(0)
 }
 
-/** Switch the development identity the UI sends with each request. */
+/**
+ * Switch the development identity the UI sends with each request.
+ *
+ * The option values are the *dev role strings* the app will send as `X-Dev-Roles`, which is what
+ * `ROLES` maps a short role name to — 'supervisor' is the identity `drilling_supervisor`, not a role
+ * literally called 'supervisor'.
+ */
 export async function selectRole(page: Page, role: RoleKey): Promise<void> {
   const select = page.getByLabel('Acting as')
-  await select.selectOption(role)
-  await expect(select).toHaveValue(role)
+  const value = ROLES[role]
+  await select.selectOption(value)
+  await expect(select).toHaveValue(value)
 }
 
 /** Switch the display unit system. */

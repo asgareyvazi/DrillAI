@@ -769,16 +769,97 @@ export interface ImpactReport {
 
 // --------------------------------------------------------------------------- workflows
 
+/**
+ * A workflow definition, exactly as `workflow_out` serialises it.
+ *
+ * Note what is *not* here: a `well_id`. A definition is org/project scoped; the well belongs to the
+ * run. Reading `workflow.well_id` gave `undefined` and produced unscoped runs, so the studio now asks
+ * for the run's context explicitly instead of guessing it from the definition.
+ */
 export interface Workflow {
   id: string
-  key?: string | null
+  key: string
   name: string
   description: string | null
+  category: string | null
+  domain_pack: string
+  project_id: string | null
   status: string
+  current_version: number
+  published_version_id: string | null
+  is_template: boolean
+  is_system_default: boolean
+  is_editable: boolean
+  forked_from_id: string | null
+  owner: string | null
+  tags: string[]
+  permissions: string[]
+  action_level: string
+  created_at: string | null
+  updated_at: string | null
+}
+
+/** The version metadata `GET /workflows/{id}` returns alongside the graph. */
+export interface WorkflowVersionSummary {
+  id: string
   version: number
-  created_at?: string
-  updated_at?: string
-  [key: string]: unknown
+  graph_hash: string
+  node_count: number
+  edge_count: number
+  published_at: string | null
+  validation: Record<string, unknown> | null
+  notes: string | null
+}
+
+/** `GET /workflows/{id}` — the definition, the version it resolved to, and that version's graph. */
+export interface WorkflowDetail {
+  workflow: Workflow
+  version: WorkflowVersionSummary
+  graph?: WorkflowGraph | null
+  summary?: Record<string, unknown>
+}
+
+/** `PUT /workflows/{id}/graph` — what the server actually created. */
+export interface WorkflowVersionSaved {
+  id: string
+  version: number
+  graph_hash: string
+  node_count: number
+  edge_count: number
+  validation: Record<string, unknown> | null
+  published_at: string | null
+}
+
+/** `POST /workflows/{id}/publish`. */
+export interface WorkflowPublished {
+  id: string
+  workflow_id: string
+  version: number
+  graph_hash: string
+  published_at: string | null
+}
+
+/** One row of `GET /workflows/{id}/versions`. */
+/**
+ * One row of a definition's version history, field for field.
+ *
+ * The list deliberately does not carry the graph: a history is a list of identities (hash, counts,
+ * who, when, whether it is the published one), while the graph of a chosen version is fetched on
+ * demand. It carries the validation error count so a history can show which versions were saved in a
+ * state the server would refuse to publish.
+ */
+export interface WorkflowVersionHistoryRow {
+  id: string
+  version: number
+  graph_hash: string
+  node_count: number
+  edge_count: number
+  published_at: string | null
+  created_at: string | null
+  created_by: string | null
+  change_reason: string | null
+  notes: string | null
+  validation_errors: number
 }
 
 export interface WorkflowGraphNode {
@@ -823,12 +904,53 @@ export interface WorkflowValidateIssue {
   details?: Record<string, unknown>
 }
 
+/**
+ * The server's validation report, field for field.
+ *
+ * `is_valid` is a computed field on the backend model, so it is present on every report — the
+ * editor's `POST /workflows/validate` answer and the report stored on a version row alike. The
+ * error and warning counts are *not* in the payload: a reader that needs them filters `issues` by
+ * `severity` rather than expecting the server to have split the list.
+ */
 export interface WorkflowValidation {
   is_valid: boolean
   issues: WorkflowValidateIssue[]
-  errors: WorkflowValidateIssue[]
-  warnings: WorkflowValidateIssue[]
-  order?: string[]
+  node_count: number
+  edge_count: number
+  entry_nodes: string[]
+  exit_nodes: string[]
+  node_types: Record<string, number>
+  families: Record<string, number>
+}
+
+export interface IdentityRole {
+  key: string
+  name: string
+  description: string
+  max_action_level: ActionLevel
+}
+
+/**
+ * Who the caller is, as the server resolved it.
+ *
+ * `permissions` are the caller's own patterns and `available_roles` describes the catalogue; the UI
+ * reads them to avoid offering actions that would be refused, and for nothing else — every request
+ * is still authorized server-side. No credential material is ever returned by this endpoint.
+ */
+export interface PlatformIdentity {
+  principal_id: string
+  principal_kind: string
+  org_id: string | null
+  role_keys: string[]
+  roles: IdentityRole[]
+  available_roles: Array<IdentityRole & { permissions: string[] }>
+  permissions: string[]
+  max_action_level: ActionLevel
+  auth_enabled: boolean
+  identity_source: 'bearer_token' | 'development_header'
+  development_presets: string[]
+  locale: string
+  note: string
 }
 
 export interface NodeTypeSpec {

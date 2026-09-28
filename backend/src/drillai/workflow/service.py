@@ -290,6 +290,9 @@ class WorkflowService:
                 "node_count": row.node_count,
                 "edge_count": row.edge_count,
                 "published_at": row.published_at.isoformat() if row.published_at else None,
+                "created_at": row.created_at.isoformat() if row.created_at else None,
+                "created_by": row.created_by,
+                "change_reason": row.change_reason,
                 "notes": row.notes,
                 "validation_errors": len(
                     [issue for issue in (row.validation or {}).get("issues", []) if issue.get("severity") == "error"]

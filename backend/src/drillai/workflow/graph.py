@@ -18,7 +18,7 @@ import datetime as dt
 from collections import defaultdict, deque
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, computed_field
 
 from drillai.core.errors import WorkflowDefinitionInvalid
 from drillai.core.serialization import content_hash
@@ -93,6 +93,17 @@ class ValidationReport(BaseModel):
     node_types: dict[str, int] = Field(default_factory=dict)
     families: dict[str, int] = Field(default_factory=dict)
 
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def is_valid(self) -> bool:
+        """Derived, never stored: the graph is valid exactly when it has no error-severity issue.
+
+        It is a computed field rather than a property so that every place a report is serialised --
+        the validate endpoint and the version rows alike -- publishes the same shape, and a client
+        never has to re-derive validity from the issue list.
+        """
+        return not self.errors
+
     @property
     def errors(self) -> list[GraphIssue]:
         return [issue for issue in self.issues if issue.severity == "error"]
@@ -100,10 +111,6 @@ class ValidationReport(BaseModel):
     @property
     def warnings(self) -> list[GraphIssue]:
         return [issue for issue in self.issues if issue.severity == "warning"]
-
-    @property
-    def is_valid(self) -> bool:
-        return not self.errors
 
 
 class WorkflowGraph(BaseModel):

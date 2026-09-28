@@ -26,6 +26,7 @@ import type {
   EvidenceSummary,
   ImpactReport,
   NodeRunState,
+  PlatformIdentity,
   NodeTypeCatalogue,
   NptSummary,
   OptimisationExplanation,
@@ -50,6 +51,10 @@ import type {
   WellSection,
   Wellbore,
   Workflow,
+  WorkflowDetail,
+  WorkflowVersionSaved,
+  WorkflowPublished,
+  WorkflowVersionHistoryRow,
   WorkflowGraph,
   WorkflowValidation,
 } from './types'
@@ -166,10 +171,12 @@ export const drillingApi = {
   // ------------------------------------------------------------------ workflows
   listWorkflows: () => api.get<Page<Workflow>>('/workflows'),
   getWorkflow: (workflowId: string, params: { version?: number; include_graph?: boolean } = {}) =>
-    api.get<Workflow & { graph?: WorkflowGraph | null; published_version?: number | null }>(
-      `/workflows/${enc(workflowId)}`,
-      { query: params },
-    ),
+    api.get<WorkflowDetail>(`/workflows/${enc(workflowId)}`, { query: params }),
+  identity: () => api.get<PlatformIdentity>('/platform/identity'),
+  workflowVersions: (workflowId: string, params: { limit?: number } = {}) =>
+    api.get<{ items: WorkflowVersionHistoryRow[]; total: number }>(`/workflows/${enc(workflowId)}/versions`, {
+      query: params,
+    }),
   createWorkflow: (body: {
     key: string
     name: string
@@ -180,14 +187,17 @@ export const drillingApi = {
   saveWorkflowGraph: (
     workflowId: string,
     body: { graph: WorkflowGraph; notes?: string; change_reason?: string; publish?: boolean },
-  ) => api.put<Record<string, unknown>>(`/workflows/${enc(workflowId)}/graph`, body),
+  ) => api.put<WorkflowVersionSaved>(`/workflows/${enc(workflowId)}/graph`, body),
   validateWorkflow: (graph: WorkflowGraph) =>
     api.post<{ validation: WorkflowValidation; summary: Record<string, unknown> }>(
       '/workflows/validate',
       graph as unknown as Record<string, unknown>,
     ),
-  publishWorkflow: (workflowId: string) =>
-    api.post<Record<string, unknown>>(`/workflows/${enc(workflowId)}/publish`, {}),
+  // The version is a query parameter, not a body: publishing is a statement about an existing row.
+  publishWorkflow: (workflowId: string, version?: number) =>
+    api.post<WorkflowPublished>(`/workflows/${enc(workflowId)}/publish`, undefined, {
+      query: version === undefined ? {} : { version },
+    }),
   // The run-start endpoint returns the run row directly, not wrapped in an envelope.
   startRun: (
     workflowId: string,
@@ -196,8 +206,11 @@ export const drillingApi = {
       project_id?: string
       wellbore_id?: string
       section_id?: string
+      operation_id?: string
       inputs?: Record<string, unknown>
+      version?: number
       is_dry_run?: boolean
+      trigger_type?: string
     },
   ) => api.post<RunSummary>(`/workflows/${enc(workflowId)}/runs`, body),
   listRuns: (params: { workflow_id?: string; well_id?: string; status?: string; limit?: number } = {}) =>

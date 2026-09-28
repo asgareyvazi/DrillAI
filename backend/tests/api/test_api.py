@@ -366,7 +366,13 @@ async def test_workflow_validate_create_save_publish_and_run(client):
     broken["nodes"][1]["inputs"]["stations"] = "${node.result.does_not_exist}"
     validation = await client.post("/api/v1/workflows/validate", json=broken, headers=headers())
     assert validation.status_code == 200
-    assert validation.json()["validation"]["is_valid"] is False
+    report = validation.json()["validation"]
+    assert report["is_valid"] is False
+    # The editor reads validity from the report rather than re-deriving it from the issue list, and a
+    # version row stores the same report, so the field has to be present on both paths.
+    assert {issue["severity"] for issue in report["issues"]} <= {"error", "warning"}
+    assert report["node_count"] == len(broken["nodes"])
+    assert "entry_nodes" in report and "exit_nodes" in report
 
     created = await client.post(
         "/api/v1/workflows",
@@ -383,6 +389,9 @@ async def test_workflow_validate_create_save_publish_and_run(client):
         json={"graph": _engine_graph(), "notes": "unchanged graph"},
     )
     assert saved.json()["version"] == 1  # an identical graph is a no-op, not a new version
+    assert saved.json()["validation"]["is_valid"] is True
+    stored = await client.get(f"/api/v1/workflows/{workflow_id}", headers=headers())
+    assert stored.json()["version"]["validation"]["is_valid"] is True
 
     published = await client.post(
         f"/api/v1/workflows/{workflow_id}/publish", headers=headers("drilling_supervisor")
