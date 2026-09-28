@@ -17,17 +17,17 @@ state "current commit" without saying which of these it means.
 
 | | SHA | What it is |
 | --- | --- | --- |
-| Current HEAD | `6d31861502a93832454de87348738a2f81f4110a` | what the working tree is checked out at |
-| Remote HEAD | `6d31861502a93832454de87348738a2f81f4110a` | `git ls-remote origin refs/heads/arena/01a0dca0-drillai` — **matches local** |
-| Last source (implementation) commit | `a85375e` | the last commit that changed product code or tests |
-| Last test-producing commit | `a85375e` | the commit the frontend E2E numbers below were produced at |
-| Last documentation-only commit | `6d31861` | this report and the docs — changes no product code |
-| Working tree | — | `git status --porcelain` empty; 203 files tracked; no untracked files |
+| Checkpoint 0 HEAD | `80fb61dd3a07312d2a56da99d63e658d19961616` | the reconciled state the previous session ended on |
+| Checkpoint 1 commit | `c9c000593e2ded279127236193d53b4590ba90d5` | workflow studio lifecycle, contracts fixed at the source |
+| Remote HEAD | `c9c000593e2ded279127236193d53b4590ba90d5` | `git ls-remote origin refs/heads/arena/01a0dca0-drillai` — **matches local** |
+| Last source (implementation) commit | `c9c0005` | the last commit that changed product code or tests |
+| Last test-producing commit | `c9c0005` | the commit the unit and E2E numbers below were produced at |
+| Last documentation-only commit | `80fb61d` | this report — changes no product code |
+| Working tree | — | `git status --porcelain` empty at `c9c0005`; no untracked files |
 | Mission branch state | — | branch exists on the remote and contains every commit listed in §2 |
 
-The previous revision of this file said "current commit: `a85375e`" while HEAD was `6d31861`. That
-was a documentation-only difference, and it is corrected here rather than left to mislead a future
-session.
+An earlier revision of this file described the state at `6d31861`; the header above is the state at
+the current commit. Results produced at one commit are never reported as evidence for another.
 
 ---
 
@@ -169,10 +169,92 @@ All five commits were pushed before the next one was created; `git ls-remote` ma
 
 ---
 
+### Checkpoint 8 — The workflow studio lifecycle (Checkpoint 1 of the continuation brief)
+
+- Commit `c9c0005`, pushed; local HEAD == remote HEAD at the time of writing.
+- Test counts at this commit: Vitest 91 (8 files), Playwright 17/17, backend 365 passed + 2 skipped,
+  `tsc`/`eslint`/`ruff` clean, `vite build` clean, `alembic check` clean.
+- The studio could list and create definitions, but editing one lost data and publishing was not
+  reachable from the interface at all. Both were real defects, not missing polish.
+
+**Fixed at the source, in the backend, rather than worked around in the client**
+
+1. `ValidationReport.is_valid` was a plain property, so it was **not** in any serialized report: the
+   validate endpoint added it by hand and a stored version row had no such field. The studio read
+   `validation.errors`, which existed neither on the wire nor in the model — a validation run blanked
+   the page with `Cannot read properties of undefined`. `is_valid` is now a serialized computed field,
+   and reports stored before the change are normalised on read (`_validation_payload`) instead of being
+   rewritten in the database.
+2. The version history payload carried no `created_at`, `created_by` or `change_reason`, so a version
+   list could not say when a version was saved or why. Added.
+3. `tests/api/test_api.py` now pins the report shape on both paths — the validate endpoint and the
+   version stored by a save.
+
+**Frontend**
+
+4. `lib/workflowGraph.ts`: one mapping between the graph contract and the canvas. Every field the
+   editor cannot display (`inputs`, `on_error`, `retry`, `timeout_seconds`, `is_breakpoint`, `notes`,
+   `action_level`, edge `condition`/`label`/`is_loop_back`, graph `settings`/`description`) is copied
+   forward, so saving an edited graph no longer deletes the rest of it. 12 tests.
+5. `StudioNode` had no `<Handle>`s. React Flow had nothing to anchor an edge to: a loaded graph
+   rendered as five disconnected boxes and no edge could be drawn or connected. Fixed, with the
+   handle names kept as canvas wiring rather than invented values in the saved graph.
+6. `NodeConfigEditor`: typing JSON no longer destroys what is being typed (the text is the source of
+   truth while editing, the parse error is shown inline, and the config is committed on blur only when
+   it parses); `config_schema` drives typed fields — names, required markers, primitives, enums,
+   defaults, ranges — beside the JSON view, with "not set" kept distinct from `false`. 12 tests.
+7. The editor loads the **newest saved version** explicitly. `GET /workflows/{id}` answers with the
+   published version when there is one, which is right for a run and wrong for an editor: after saving
+   a draft, reopening the workflow showed the published graph and the draft looked lost. The version
+   strip now says which version is loaded and when it is not the newest, and any version can be loaded
+   from the history (a read; saving from it creates a new version).
+8. Publishing is exposed and permission-aware: the identity endpoint's permission **patterns** decide
+   whether the buttons are offered, with the reason stated when they are not (`workflow.publish` is
+   held by the supervisor and well-manager roles, not by the engineer's default identity), and the
+   server refuses regardless — proven in the journey by a direct `POST /workflows/{id}/publish` that
+   answers 403 for the engineer and succeeds for the supervisor. `lib/permissions.ts` mirrors
+   `rbac._pattern_matches` case for case; 10 tests, plus the E2E cross-check.
+9. Unsaved edits are protected: the browser's own confirmation on reload, and the studio's own dialog
+   on switching definitions (stay, or discard and switch — the stored version is untouched either way).
+10. Save semantics are the server's: an unchanged graph creates no version and the editor says so; an
+    invalid graph saves as a draft the server refuses to publish; a real edit produces the next version
+    number; the numbers on screen always come from the server.
+
+**Proof (real stack, no mocks)**
+
+New journey `frontend/e2e/workflow-studio.spec.ts`, 9 tests: create → empty editor that says so;
+unchanged save → no new version → real edit → v2; add → configure from `config_schema` → connect →
+validate (the server's own message) → save invalid draft → publish refused → fix `title` → validate
+valid → save v2 → publish v2 → reload; every node and edge survives a save including the fields the
+editor does not display; a draft is not discarded without being asked; a run carries the well it was
+started for (a second well is created in the journey, and the same definition run against it is scoped
+to *that* well); publishing is offered only to an identity the server accepts it from; the history
+loads an older version without overwriting the newest; the palette is the node registry (every node
+type the API returns appears, and the tab badge counts them).
+
+---
+
 ## 3. Test results
 
-Every row below was produced by running the command shown, at commit `e3600c6` unless stated. Exact
+Every row below was produced by running the command shown, at the commit named in the row. Exact
 counts, no rounding, and nothing is reported as "all good".
+
+At `c9c0005` (Checkpoint 1):
+
+| Suite / command | Result |
+| --- | --- |
+| `npx tsc -b --noEmit` (frontend) | clean, 0 errors |
+| `npx eslint .` (frontend) | clean, 0 warnings, 0 errors |
+| `npx vitest run` | **91 passed** in 8 files: `format` 18, `client` 12, `common` 15, `WellCockpit` 9, `workflowGraph` 12, `NodeConfigEditor` 12, `permissions` 10, `i18n/catalogue` 3 |
+| `npm run build` | clean |
+| `npm run e2e` (Playwright, real API + real build) | **17 passed / 0 failed** (4 cockpit, 4 documents, 9 workflow studio) |
+| `python -m pytest -q` (backend, full suite) | **365 passed, 2 skipped** (the two are the PostgreSQL-marked tests, skipped without a PostgreSQL instance) |
+| `python -m ruff check .` (backend) | All checks passed |
+| `alembic upgrade head` + `alembic check` (fresh database) | No new upgrade operations detected |
+
+The pytest summary line is suppressed in this sandbox, so the count is taken from the progress output
+(365 `.` + 2 `s`, no `F` or `E`). It matches the pre-checkpoint baseline of 365/2, which is the point:
+this checkpoint added assertions to existing tests rather than new backend test functions.
 
 | Suite | Command | Result |
 | --- | --- | --- |
@@ -240,13 +322,20 @@ automated** and are therefore not claimed.
 
 ## 4. Known limitations
 
-- Journeys 1 and 2 are automated end to end (well/cockpit and documents/ingestion/evidence).
-  Everything else in the brief is implemented in the UI but unproven at the browser level.
+- Journeys 1, 2 and 3 are automated end to end (well/cockpit, documents/ingestion/evidence, and the
+  workflow studio lifecycle). The run lifecycle, live events, approvals, the error matrix, permissions
+  and context persistence are implemented in the UI but not yet proven at the browser level.
 - Persian covers the shell and cockpit strings, not every string in every workspace.
 - There is no CI workflow file yet; the gate commands are documented in
   `docs/FRONTEND_TESTING.md` but are currently run by hand.
 - No `ops/` deployment assets.
 - The run-event WebSocket is verified manually only.
+- The studio still holds a number of English literals that are not in the catalogue (the edge
+  inspector's hints, several diagnostic `title` attributes, and the run-context explanatory lines).
+  They are enumerated here rather than left implicit, and the RTL checkpoint covers them.
+- A run started from the editor pins the version the editor is showing. That is deliberate (the
+  engine supports it and a draft run is a real capability) but the interface does not yet warn when
+  the pinned version is not the published one; the run-context journey is where that is finished.
 - Accessibility has been written for (roles, labels, `aria-live`, keyboard-reachable controls) but is
   not yet asserted by an automated test.
 
@@ -254,10 +343,11 @@ automated** and are therefore not claimed.
 
 ## 5. Next checkpoints
 
-1. Automate the remaining journeys, highest value first: workflow create → configure → connect →
-   validate → save → publish; run → node execution → events; approval approve/reject including
-   refresh-while-waiting; and the failing-node journey. (Documents → ingestion → records → evidence
-   is done — checkpoint 7.)
+1. Checkpoint 2 of the continuation brief: the run lifecycle in the browser — published workflow →
+   select well → run → queued → running → node execution → final state, with the run list, the
+   inspector, a deterministic failing-node journey, and reload reconstruction for running, completed
+   and `waiting_approval` runs. (The studio lifecycle is done — checkpoint 8; documents → ingestion →
+   records → evidence is checkpoint 7.)
 2. Add the WebSocket journey with REST reconciliation, and the error-matrix surfaces
    (401/403/404/409/422/500/network/timeout/malformed).
 3. Add permission journeys against backend authority, and RTL/accessibility checks.
