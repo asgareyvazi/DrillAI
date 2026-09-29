@@ -27,6 +27,17 @@ export function setIdentity(next: ApiClientIdentity): void {
   identity = next
 }
 
+/**
+ * The identity the client is currently acting as.
+ *
+ * Exported because HTTP is no longer the only transport: a WebSocket handshake cannot carry the
+ * `X-Dev-Roles` header, so the stream layer has to build the same identity into its URL. Reading it
+ * from here keeps one source of truth — a screen can never act as two different principals.
+ */
+export function getIdentity(): ApiClientIdentity {
+  return identity
+}
+
 /** A structured backend error. `details` is the API's own error contract, passed through. */
 export class ApiError extends Error {
   readonly status: number
