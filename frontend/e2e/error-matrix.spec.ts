@@ -143,17 +143,34 @@ test.describe('the error matrix: what the interface says when a request fails', 
     expect(envelope.run.status).toBe('waiting_approval')
     const approvalId = envelope.pending_approval?.id as string
 
-    // Two operators, one run, the same approval open on both screens.
+    // Two operators, one run, the same approval open on both screens. The second screen has to stay on
+    // the snapshot it read *before* the decision — a stale screen is the state under test — so the one
+    // thing that would reconcile it within a frame is cut: its live stream. This is `routeWebSocket`,
+    // the same mechanism the checkpoint-3 journeys use to state exactly when a transport failed; the
+    // server is not stood in for, and no HTTP response is mocked.
     const other = await context.newPage()
+    await other.routeWebSocket(/\/runs\/[^/]+\/events\/stream/, (socket) => {
+      socket.onMessage(() => {})
+    })
     await page.goto(`/runs?run=${runId}`)
     await selectRole(page, 'wellManager')
     await other.goto(`/runs?run=${runId}`)
     await selectRole(other, 'wellManager')
     await expect(other.getByTestId('approval-approve')).toBeVisible()
 
-    // The first operator decides it.
+    // The first operator decides it, and the decision is confirmed against the server rather than
+    // against a redraw of the first screen. This used to wait for that redraw, which a slow run made
+    // long enough for the second screen's five-second inbox refresh to drop the button first — the
+    // journey passed only while it won that race.
     await page.getByTestId('approval-approve').click()
-    await expect(page.getByTestId('approval-approve')).toHaveCount(0, { timeout: 20_000 })
+    await expect
+      .poll(
+        async () =>
+          (await apiGet<ApprovalEnvelope>(request, `/approvals/${approvalId}`, 'wellManager')).approval
+            .status,
+        { timeout: 20_000, message: 'the server must hold the first decision before the second is sent' },
+      )
+      .toBe('approved')
 
     // The second operator's screen is now stale, and its decision is refused by the server.
     await other.getByTestId('approval-approve').click()
@@ -175,6 +192,9 @@ test.describe('the error matrix: what the interface says when a request fails', 
     await expect(other.getByTestId('approval-record')).toBeVisible({ timeout: 20_000 })
     await expect(other.getByText(/approved/i).first()).toBeVisible()
     await expect(other.getByTestId('approval-approve')).toHaveCount(0)
+    // The first operator's screen settled on the decision too, which is asserted here rather than
+    // before the second operator acted: it is evidence about this screen, not a gate on that click.
+    await expect(page.getByTestId('approval-approve')).toHaveCount(0, { timeout: 20_000 })
 
     // The decision that stands is the first one, and nothing the second operator sent changed it.
     const decided = await apiGet<ApprovalEnvelope>(request, `/approvals/${approvalId}`, 'wellManager')
