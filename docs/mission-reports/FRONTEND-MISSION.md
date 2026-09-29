@@ -29,7 +29,7 @@ state "current commit" without saying which of these it means.
 | Last source (implementation) commit | `d9cefaf` | the last commit that changed product code |
 | Last test-producing commit | `0297fd7` | the commit the unit, browser and backend numbers in §3 were produced at |
 | Local HEAD | the commit that carries this row | report-only; the source/test commits are `d9cefaf` / `0297fd7` |
-| Final documentation commit | `8f859ca` | the checkpoint-4 certification record — the report content, including this row |
+| Final documentation commit | `8f859ca` | the checkpoint-4 certification (counts, journeys, mutations, gate); the report-only commits above it only name or correct that record |
 | Remote HEAD | the commit that carries this row | one report-only commit above `8f859ca`; `git ls-remote --heads origin arena/01a0dca0-drillai` is the authority |
 | Publication state | — | **PUSHED AND VERIFIED** — local HEAD == remote HEAD, 0 unpushed commits |
 | Working tree | — | clean (`git status --porcelain` empty); no untracked files |
@@ -987,7 +987,7 @@ never worked around.
 | `main` | `git log --oneline -1 main` | `bfa066b` — untouched, and one commit behind nothing (this branch is not merged into it) |
 | Branch discipline | `git branch -a` | `main` and `arena/01a0dca0-drillai` only; no branch was created, renamed or deleted |
 | Secrets in the index | `git ls-files | grep -iE '\.env|credential|secret|\.pem$|\.key$'` | none |
-| Tracked files / source lines | `git ls-files` / `git ls-files '*.py' '*.ts' '*.tsx' | xargs wc -l` | 245 files / 64 846 lines |
+| Tracked files / source lines | `git ls-files` / `git ls-files '*.py' '*.ts' '*.tsx' | xargs wc -l` | 245 files / 64 856 lines |
 
 What was published, exactly — the commits that had been local when authentication failed, plus the
 rest of the checkpoint's tail:
