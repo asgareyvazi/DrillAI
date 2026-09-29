@@ -23,8 +23,28 @@ let identity: ApiClientIdentity = {
   devRoles: null,
 }
 
+const identityListeners = new Set<() => void>()
+
+/** The identity as a single comparable string, for consumers that need to react to it changing. */
+export function identityKey(identity: ApiClientIdentity = getIdentity()): string {
+  return `${identity.token ? 'token' : ''}|${identity.devRoles ?? ''}`
+}
+
 export function setIdentity(next: ApiClientIdentity): void {
+  const before = identityKey(identity)
   identity = next
+  if (identityKey(identity) === before) return
+  // The identity is external mutable state, and one consumer — the event stream — has to react to it
+  // whether or not anything else re-renders. TanStack Query's structural sharing means a refetch that
+  // returns the same data can leave a component untouched, so "a render will happen" is not a
+  // dependency: this is.
+  for (const listener of identityListeners) listener()
+}
+
+/** Subscribe to identity changes; returns the unsubscribe function. */
+export function subscribeIdentity(listener: () => void): () => void {
+  identityListeners.add(listener)
+  return () => identityListeners.delete(listener)
 }
 
 /**

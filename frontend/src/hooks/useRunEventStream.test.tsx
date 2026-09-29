@@ -8,7 +8,7 @@
  */
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { act, renderHook, waitFor } from '@testing-library/react'
+import { act, render, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import { RunEventStream } from '../lib/runEvents'
@@ -61,7 +61,48 @@ class FakeSocket implements RunEventSocketLike {
   }
 }
 
-/** One rendered hook plus the transport it created, so a test can drive the server's side. */
+/**
+ * One rendered screen plus the transport it created, so a test can drive the server's side.
+ *
+ * The hook is rendered through a small component rather than `renderHook` because a test also needs to
+ * re-render it with a *changed* run status — the reconciliation case, where REST reports the run has
+ * ended while the stream is still open.
+ */
+function Harness(props: {
+  runId: string
+  status: string
+  restEvents?: RunEvent[]
+  reconcileDebounceMs: number
+  sockets: FakeSocket[]
+  timers: Array<{ id: number; fn: () => void }>
+  onHandle: (handle: ReturnType<typeof useRunEventStream>) => void
+}) {
+  const handle = useRunEventStream(props.runId, {
+    runStatus: props.status,
+    restEvents: props.restEvents,
+    reconcileDebounceMs: props.reconcileDebounceMs,
+    createStream: (streamOptions) =>
+      new RunEventStream({
+        ...streamOptions,
+        createSocket: (url) => {
+          const socket = new FakeSocket(url)
+          props.sockets.push(socket)
+          return socket
+        },
+        setTimer: (fn) => {
+          props.timers.push({ id: props.timers.length + 1, fn })
+          return props.timers.length
+        },
+        clearTimer: (timerHandle) => {
+          const index = props.timers.findIndex((timer) => timer.id === Number(timerHandle))
+          if (index >= 0) props.timers.splice(index, 1)
+        },
+      }),
+  })
+  props.onHandle(handle)
+  return null
+}
+
 function setup(options: {
   runStatus?: string
   restEvents?: RunEvent[]
@@ -72,9 +113,18 @@ function setup(options: {
   const timers: Array<{ id: number; fn: () => void }> = []
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const runId = options.runId ?? 'run_1'
+  const renderProps = {
+    runId,
+    status: options.runStatus ?? 'running',
+    restEvents: options.restEvents,
+    reconcileDebounceMs: options.reconcileDebounceMs ?? 0,
+    sockets,
+    timers,
+    onHandle: () => {},
+  }
 
   queryClient.setQueryData<RunDetail>(['run', runId], {
-    run: { id: runId, status: options.runStatus ?? 'running' } as unknown as RunDetail['run'],
+    run: { id: runId, status: renderProps.status } as unknown as RunDetail['run'],
     workflow: null,
     node_runs: [],
     artifacts: [],
@@ -87,39 +137,21 @@ function setup(options: {
     <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
   )
 
-  const view = renderHook(
-    () =>
-      useRunEventStream(runId, {
-        runStatus: options.runStatus ?? 'running',
-        restEvents: options.restEvents,
-        reconcileDebounceMs: options.reconcileDebounceMs ?? 0,
-        createStream: (streamOptions) =>
-          new RunEventStream({
-            ...streamOptions,
-            createSocket: (url) => {
-              const socket = new FakeSocket(url)
-              sockets.push(socket)
-              return socket
-            },
-            setTimer: (fn) => {
-              timers.push({ id: timers.length + 1, fn })
-              return timers.length
-            },
-            clearTimer: (handle) => {
-              const index = timers.findIndex((timer) => timer.id === Number(handle))
-              if (index >= 0) timers.splice(index, 1)
-            },
-          }),
-      }),
+  let handle: ReturnType<typeof useRunEventStream> | null = null
+  const view = render(
+    <Harness {...renderProps} onHandle={(next) => (handle = next)} />,
     { wrapper },
   )
 
   return {
-    ...view,
+    view,
     queryClient,
     sockets,
     timers,
     runId,
+    result: () => handle as NonNullable<typeof handle>,
+    /** The same screen after REST reported a different run status — a reconciliation, not a remount. */
+    rerenderStatus: (status: string) => view.rerender(<Harness {...renderProps} status={status} onHandle={(next) => (handle = next)} />),
     events: () => queryClient.getQueryData<RunDetail>(['run', runId])?.events ?? [],
     /** The server's side of the connection, applied inside `act` so React sees every update. */
     server: {
@@ -139,6 +171,7 @@ function setup(options: {
         act(() => socket.send(payload))
       },
     },
+    unmount: () => view.unmount(),
   }
 }
 
@@ -166,11 +199,26 @@ describe('useRunEventStream: REST is the base, the socket is the increment', () 
     const h = setup({ restEvents: [] })
     await waitFor(() => expect(h.sockets).toHaveLength(1))
     h.server.open()
-    await waitFor(() => expect(h.result.current.status.state).toBe('live'))
+    await waitFor(() => expect(h.result().status.state).toBe('live'))
 
     h.server.send({ type: 'stream_closed', status: 'succeeded' })
-    await waitFor(() => expect(h.result.current.status.state).toBe('closed'))
-    expect(h.result.current.status.closedStatus).toBe('succeeded')
+    await waitFor(() => expect(h.result().status.state).toBe('closed'))
+    expect(h.result().status.closedStatus).toBe('succeeded')
+    h.unmount()
+  })
+
+  it('keeps saying the stream closed when the run that ended is the one being watched', async () => {
+    const h = setup({ runStatus: 'running', restEvents: [event(1)] })
+    await waitFor(() => expect(h.sockets).toHaveLength(1))
+    h.server.open()
+    h.server.send({ type: 'stream_closed', status: 'succeeded' })
+    await waitFor(() => expect(h.result().status.state).toBe('closed'))
+
+    // The reconciliation that follows reports a terminal run, which stops the stream — but the
+    // operator must still see that it was watched to its end, not "not streamed".
+    act(() => h.rerenderStatus('succeeded'))
+    await waitFor(() => expect(h.result().status.closedStatus).toBe('succeeded'))
+    expect(h.result().status.state).toBe('closed')
     h.unmount()
   })
 
@@ -181,17 +229,30 @@ describe('useRunEventStream: REST is the base, the socket is the increment', () 
     h.server.send({ type: 'future_event' })
     h.server.send({ type: 'run_event', event: { ...event(9), run_id: 'run_other' } })
 
-    await waitFor(() => expect(h.result.current.diagnostics.ignored).toHaveLength(2))
-    expect(h.result.current.status.state).toBe('live')
+    await waitFor(() => expect(h.result().diagnostics.ignored).toHaveLength(2))
+    expect(h.result().status.state).toBe('live')
     expect(h.events()).toHaveLength(0)
     h.unmount()
   })
 
-  it('does not open a stream for a run waiting for a human', async () => {
-    const h = setup({ runStatus: 'waiting_approval' })
+  it('streams a run parked at an approval, because a decision taken elsewhere is an event', async () => {
+    const h = setup({ runStatus: 'waiting_approval', restEvents: [event(1)] })
+    await waitFor(() => expect(h.sockets).toHaveLength(1))
+    h.server.open('waiting_approval', 1)
+    // Somebody decides in the approval inbox: the run resumes and finishes while this page watches.
+    h.server.send({ type: 'run_event', event: event(2, 'approval_decided') })
+    h.server.send({ type: 'stream_closed', status: 'succeeded' })
+
+    await waitFor(() => expect(h.result().status.closedStatus).toBe('succeeded'))
+    expect(h.events().map((row) => row.seq)).toEqual([1, 2])
+    h.unmount()
+  })
+
+  it('does not open a stream for a run that has already finished', async () => {
+    const h = setup({ runStatus: 'succeeded' })
     await new Promise((resolve) => setTimeout(resolve, 20))
     expect(h.sockets).toHaveLength(0)
-    expect(h.result.current.status.state).toBe('idle')
+    expect(h.result().status.state).toBe('idle')
     h.unmount()
   })
 

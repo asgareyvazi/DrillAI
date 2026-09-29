@@ -396,13 +396,25 @@ describe('run monitor: the live event stream', () => {
       options: Record<string, unknown>
     }
 
-  it('does not open a stream for a run that is waiting for a human', async () => {
+  it('listens on a run that is waiting for a human, and says so', async () => {
     api.getRun.mockResolvedValue(waiting)
     renderMonitor('/runs?run=run_1')
 
     await waitFor(() => expect(screen.getByTestId('run-status')).toHaveTextContent('Waiting approval'))
+    // A parked run can still change — a decision taken in the inbox, a resume by another operator —
+    // so the page listens rather than waiting for somebody to reload it.
+    await waitFor(() => expect(streamControls.instances).toHaveLength(1))
+
+    act(() => streamFor().emit({ state: 'live', cursor: 12 }))
+    await waitFor(() => expect(screen.getByTestId('run-stream-cursor')).toHaveTextContent('seq 12'))
+  })
+
+  it('does not listen on a run that has already finished', async () => {
+    api.getRun.mockResolvedValue(succeeded)
+    renderMonitor('/runs?run=run_1')
+
+    await waitFor(() => expect(screen.getByTestId('run-status')).toHaveTextContent('Succeeded'))
     expect(streamControls.instances).toHaveLength(0)
-    // Nothing changes until a person decides, so the page says so rather than pretending to listen.
     expect(screen.getByTestId('run-stream-status')).toHaveTextContent('Not streamed')
   })
 

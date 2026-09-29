@@ -16,21 +16,30 @@
  *   and disposed on unmount, when the run id changes, and when the identity changes. A stream from a
  *   previous run cannot publish into the current one, because the stream itself refuses frames whose
  *   `run_id` is not its own.
- * * **A run waiting for a human is not streamed at all.** Nothing changes until a person decides, and
- *   the frame rate would be zero: the server would idle, the client would reconnect on its own or the
- *   operator's decision would refresh the page. When the decision is made on this page the mutation
- *   invalidates the query, so the operator sees it immediately either way.
+ * * **A run waiting for a human is still streamed.** A parked run can change without this page
+ *   doing anything: a decision is taken in the approval inbox, another operator resumes it, a
+ *   breakpoint is cleared. Streaming is how the page hears about that; polling under the socket
+ *   would be the same stopgap in a new place. A terminal run is the only one with nothing left to
+ *   say, and it is not streamed.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import type { RunDetail, RunEvent } from '../api/types'
-import { getIdentity } from '../api/client'
+import { identityKey, subscribeIdentity } from '../api/client'
 import { highestSeq, mergeRunEvents, RunEventStream } from '../lib/runEvents'
 import type { RunStreamDecode, RunStreamStatus } from '../lib/runEvents'
 
-/** Statuses where the server can still produce events. `waiting_approval` and `paused` are not. */
-const STREAMABLE_STATUSES = new Set(['queued', 'running', 'pending'])
+/**
+ * Statuses where the server can still produce events.
+ *
+ * `waiting_approval` and `paused` are included, and that is deliberate: a parked run still *changes*
+ * — somebody else decides the approval, another operator resumes it, a breakpoint is cleared — and
+ * those events are precisely what a monitor page must not miss. The alternative would be an interval
+ * under the socket, which is the stopgap this replaced. A terminal run is the only one with nothing
+ * left to say, and it is not streamed.
+ */
+const STREAMABLE_STATUSES = new Set(['queued', 'running', 'pending', 'waiting_approval', 'paused'])
 
 /** How long to wait after the last event before reconciling once with REST. */
 const DEFAULT_RECONCILE_DEBOUNCE_MS = 400
@@ -103,9 +112,10 @@ export function useRunEventStream(
   }, [options.createStream])
 
   // The identity is part of the stream's identity: a socket opened as one principal must not keep
-  // feeding a screen that now acts as another one.
-  const identity = getIdentity()
-  const identityKey = `${identity.token ?? ''}|${identity.devRoles ?? ''}`
+  // feeding a screen that now acts as another one. It is read through a subscription rather than off
+  // a render, because a refetch that returns the same data does not re-render — and the socket would
+  // then still be the previous identity's.
+  const currentIdentity = useSyncExternalStore(subscribeIdentity, identityKey, identityKey)
 
   // The cursor starts where REST says the log is. A later REST response (a reconciliation that ran
   // ahead of the stream) can only ever move it forward, never back.
@@ -143,18 +153,22 @@ export function useRunEventStream(
     [],
   )
 
-  // Only a run REST has already described as live-ish is streamed. Waiting for that answer costs one
-  // request's latency and saves a handshake that would be thrown away for every run that is parked at
-  // an approval or already finished — which, on a monitor page opened from history, is most of them.
+  // A stream opens once REST has described the run's status, so a finished run — the common case when
+  // a monitor page is opened from history — never opens one.
   const streamable = enabled && runStatus !== undefined && runStatus !== null && STREAMABLE_STATUSES.has(runStatus)
 
   useEffect(() => {
     if (!streamable) {
-      // A run that cannot produce more events has nothing to stream; leaving a socket open would only
-      // make the indicator claim a liveness that does not exist.
+      // The run is finished (or has not been described yet): nothing more can arrive, so a socket
+      // would only make the indicator claim a liveness that does not exist.
       streamRef.current?.dispose()
       streamRef.current = null
-      setStatus((previous) => ({ ...previous, state: 'idle', cursor: cursorRef.current }))
+      // A stream that ended because the run ended keeps saying so. Resetting it to "not streamed"
+      // would erase the one moment the operator wants to see: the run finished, and this page was
+      // watching it when it did. (A monitor opened on an already-finished run starts idle.)
+      setStatus((previous) =>
+        previous.state === 'closed' ? previous : { ...previous, state: 'idle', cursor: cursorRef.current },
+      )
       return
     }
 
@@ -209,7 +223,7 @@ export function useRunEventStream(
       stream.dispose()
       if (streamRef.current === stream) streamRef.current = null
     }
-  }, [streamable, runId, identityKey, queryClient, reconcile, scheduleReconcile])
+  }, [streamable, runId, currentIdentity, queryClient, reconcile, scheduleReconcile])
 
   return { status, diagnostics, reconcile }
 }
