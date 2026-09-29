@@ -16,6 +16,7 @@
 
 import { holdsPermission } from '../src/lib/permissions'
 import { apiGet, apiPost, selectRole, test, expect } from './fixtures'
+import type { Page } from '@playwright/test'
 
 type Workflow = {
   id: string
@@ -96,6 +97,22 @@ async function hasVersion(
   if (response.status() === 404) return false
   expect(response.ok(), `GET /workflows/${workflowId} -> ${response.status()}`).toBeTruthy()
   return true
+}
+
+/**
+ * Open a stored definition and wait until the editor is really holding it.
+ *
+ * The badge says "saved" from the very first render — an empty draft matches an empty baseline, so
+ * nothing is unsaved — which makes it useless as a readiness signal. An edit made before the stored
+ * graph arrives is thrown away when the load replaces the draft, and whatever the journey was waiting
+ * for then never happens. The version label is rendered from the server's own answer, so that is the
+ * signal. A definition with no stored version has no label; those journeys wait for the editor's "no
+ * saved version yet" instead, which is also rendered from a completed read.
+ */
+async function openStoredWorkflow(page: Page, workflowId: string, version: number): Promise<void> {
+  await page.goto(`/workflows?workflow=${workflowId}`)
+  await expect(page.getByTestId('loaded-version')).toHaveText(new RegExp(`^v${version}(\\s|$)`))
+  await expect(page.getByText('saved', { exact: true })).toBeVisible()
 }
 
 async function createWorkflow(request: Parameters<typeof apiPost>[1], suffix: string): Promise<Workflow> {
@@ -386,8 +403,7 @@ test.describe('workflow studio: create, edit, validate, save, publish', () => {
     const workflowId = target?.id as string
     const before = await detail(request, workflowId)
 
-    await page.goto(`/workflows?workflow=${workflowId}`)
-    await expect(page.getByText('saved', { exact: true })).toBeVisible()
+    await openStoredWorkflow(page, workflowId, before.version.version)
 
     // Edit an edge through the edge inspector. An edge is an SVG path a few pixels wide, so dispatch
     // the click the canvas listens for rather than asking Playwright to hit-test a hairline. The
@@ -439,16 +455,31 @@ test.describe('workflow studio: create, edit, validate, save, publish', () => {
   })
 
   test('an unsaved draft is not discarded without being asked', async ({ page, request, consoleErrors }) => {
-    const workflows = await apiGet<{ items: Workflow[] }>(request, '/workflows')
-    expect(workflows.items.length, 'at least two definitions are needed').toBeGreaterThan(1)
-    const [first, second] = workflows.items
-    const stored = await detail(request, first.id)
+    // Both definitions are created here rather than taken from the list. The draft has to be dirty
+    // against the graph the editor loaded: adding a node the stored graph already contains leaves the
+    // graph equal to the saved one, so nothing is unsaved and the warning under test never appears —
+    // and journeys earlier in this file save exactly that kind of draft. Taking the first two rows of
+    // the list made the precondition a property of the run order, which is how this journey passed
+    // three times alone and then failed inside a full run.
+    const first = await createWorkflow(request, `draft-${Date.now()}`)
+    const second = await createWorkflow(request, `draft-other-${Date.now()}`)
 
     await page.goto(`/workflows?workflow=${first.id}`)
+    // A definition that has never been saved has no version, and the editor says so. That is the
+    // readiness signal here: an empty draft matches an empty baseline, so the badge reads "saved"
+    // from the first render and cannot be used to tell "loaded" from "still loading".
+    await expect(page.getByText(/no saved version yet/i)).toBeVisible()
+
+    // Make an edit and store it, so the draft that is later discarded is a draft against a real
+    // version rather than against an empty starting point.
+    await page.getByRole('button', { name: /load engineering context/i }).first().click()
+    await expect(page.getByText('unsaved changes', { exact: true })).toBeVisible()
+    await page.getByRole('button', { name: /save graph/i }).click()
+    await expect(page.getByTestId('studio-message')).toContainText('Saved as v1')
     await expect(page.getByText('saved', { exact: true })).toBeVisible()
 
-    // Make an edit, then try to switch away.
-    await page.getByRole('button', { name: /load engineering context/i }).first().click()
+    // A second edit, of a node type the version just saved does not contain, then try to switch away.
+    await page.getByRole('button', { name: /build report/i }).first().click()
     await expect(page.getByText('unsaved changes', { exact: true })).toBeVisible()
 
     await page.getByLabel('Workflows', { exact: true }).selectOption(second.id)
@@ -460,7 +491,8 @@ test.describe('workflow studio: create, edit, validate, save, publish', () => {
     await expect(page.getByText('unsaved changes', { exact: true })).toBeVisible()
     await expect(page).toHaveURL(new RegExp(`workflow=${first.id}`))
 
-    // Switching discards the draft — and the stored version was never touched.
+    // Switching discards the draft — and nothing was written anywhere: the definition being left is
+    // still on the version that was saved, and the one being opened never gained a version at all.
     await page.getByLabel('Workflows', { exact: true }).selectOption(second.id)
     await page
       .getByRole('dialog', { name: /unsaved graph changes/i })
@@ -469,9 +501,10 @@ test.describe('workflow studio: create, edit, validate, save, publish', () => {
     await expect(page).toHaveURL(new RegExp(`workflow=${second.id}`))
 
     const untouched = await detail(request, first.id)
-    expect(untouched.version.version).toBe(stored.version.version)
-    expect(untouched.version.graph_hash).toBe(stored.version.graph_hash)
-    expect(untouched.graph.nodes).toHaveLength(stored.graph.nodes.length)
+    expect(untouched.version.version).toBe(1)
+    expect(untouched.graph.nodes).toHaveLength(1)
+    expect(untouched.graph.edges).toHaveLength(0)
+    expect(await hasVersion(request, second.id)).toBe(false)
 
     expect(consoleErrors, `console errors: ${consoleErrors.join(' | ')}`).toEqual([])
   })
