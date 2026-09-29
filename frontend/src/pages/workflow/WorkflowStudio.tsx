@@ -549,6 +549,17 @@ function StudioBody({
           </>
         }
       >
+        {/*
+          The canvas is deliberately not mirrored in a right-to-left locale. A graph is geometry —
+          nodes at coordinates, edges from a source to a target — and its semantics are not a reading
+          order: mirroring it would change what "downstream" looks like while the data stayed the same.
+          That is guaranteed where the drawing is drawn: `@xyflow/react`'s own stylesheet sets
+          `direction: ltr` on `.react-flow`, so everything inside it (nodes, edges, controls, minimap)
+          lays out left to right while the editor's chrome around it follows the page. It is the
+          library's rule the product depends on here, so `e2e/rtl.spec.ts` asserts the resolved
+          direction of the canvas and the geometry of its nodes — an upstream change that started
+          mirroring the graph would be a failing journey, not a silent one.
+        */}
         <div className="h-[65vh] w-full">
           <ReactFlow
             nodes={decoratedNodes}

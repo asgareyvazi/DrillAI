@@ -628,7 +628,15 @@ export function Json({ value, max = 400 }: { value: unknown; max?: number }) {
   const text = JSON.stringify(value, null, 2) ?? 'null'
   const shown = text.length > max * 10 ? `${text.slice(0, max * 10)}\n…` : text
   return (
-    <pre className="max-h-72 overflow-auto rounded bg-graphite-50 p-2 text-[11px] leading-snug dark:bg-graphite-950">
+    /*
+     * A JSON body is punctuation and structure: `{`, `"key":`, `[`, `]`. In a right-to-left document
+     * those characters are neutral and get placed by the paragraph's direction, which turns nested
+     * braces inside out. The payload is not prose, so it states its own direction.
+     */
+    <pre
+      dir="ltr"
+      className="max-h-72 overflow-auto rounded bg-graphite-50 p-2 text-[11px] leading-snug dark:bg-graphite-950"
+    >
       {shown}
     </pre>
   )

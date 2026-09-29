@@ -46,6 +46,7 @@ function LocaleSwitch() {
       <select
         value={locale}
         onChange={(event) => setLocale(event.target.value as Locale)}
+        data-testid="locale-switch"
         className="rounded border border-graphite-300 bg-white px-1.5 py-1 dark:border-graphite-700 dark:bg-graphite-900"
       >
         {LOCALES.map((code) => (
