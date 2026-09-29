@@ -28,8 +28,9 @@ state "current commit" without saying which of these it means.
 | Checkpoint 4 completion commits | `4edff04`, `1584880`, `d9cefaf`, `9626647`, `1f68671`, `0297fd7` | journeys that can fail, the health badge and the dead-code audit, and three journeys whose preconditions are now facts |
 | Last source (implementation) commit | `d9cefaf` | the last commit that changed product code |
 | Last test-producing commit | `0297fd7` | the commit the unit, browser and backend numbers in §3 were produced at |
-| Local HEAD | this report commit | report-only; the source/test commits are `d9cefaf` / `0297fd7` |
-| Remote HEAD | this report commit | verified with `git ls-remote --heads origin arena/01a0dca0-drillai` after the last push |
+| Local HEAD | the commit that carries this row | report-only; the source/test commits are `d9cefaf` / `0297fd7` |
+| Final documentation commit | `8f859ca` | the checkpoint-4 certification record — the report content, including this row |
+| Remote HEAD | the commit that carries this row | one report-only commit above `8f859ca`; `git ls-remote --heads origin arena/01a0dca0-drillai` is the authority |
 | Publication state | — | **PUSHED AND VERIFIED** — local HEAD == remote HEAD, 0 unpushed commits |
 | Working tree | — | clean (`git status --porcelain` empty); no untracked files |
 | Checkpoint 4 status | — | `CHECKPOINT 4 — VERIFIED` (source/test commit `0297fd7`, report commit is the remote tip) |
@@ -996,7 +997,8 @@ rest of the checkpoint's tail:
 | `9626647` | `e2e/error-matrix.spec.ts`: the stale-decision journey is stale on purpose |
 | `1f68671` | `e2e/workflow-studio.spec.ts`: the draft journey owns its precondition |
 | `0297fd7` | `e2e/run-events.spec.ts`: the finished-run journey stops counting the wrong screen's socket |
-| this report commit | the durable record you are reading; the remote tip after the push |
+| `8f859ca` | the durable record: the checkpoint-4 certification, the counts, the mutation table and this gate |
+| the commit carrying this row | a one-row update naming `8f859ca`, so the report says exactly which SHA holds the certification; the remote tip |
 
 The three test commits were re-created after environment reset 10 destroyed the local history (§header);
 their content is byte-identical to the commits they replace, and the previously reported SHAs
@@ -1025,6 +1027,6 @@ Provenance, stated separately because they are different things:
 | --- | --- |
 | Final source (implementation) commit | `d9cefaf` |
 | Final test commit — every number in §3 was produced here | `0297fd7` |
-| Final report commit | this commit (the remote tip; `git ls-remote` is the authority) |
-| Remote HEAD | the same report commit |
+| Final report (documentation) commit | `8f859ca` — the report content |
+| Remote HEAD | the commit carrying this row, one report-only commit above `8f859ca` (`git ls-remote` is the authority) |
 | Unpushed commits | none |
