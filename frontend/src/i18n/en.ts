@@ -11,6 +11,10 @@ export const en = {
     tagline: 'Well Engineering Intelligence Platform',
     environment: 'Environment',
     wellNotRead: 'well details could not be read',
+    healthChecking: 'checking…',
+    healthUnreachable: 'API unreachable',
+    healthNotAnswering: 'API not answering',
+    healthError: 'API error',
   },
   nav: {
     wells: 'Wells',

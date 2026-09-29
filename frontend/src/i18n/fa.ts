@@ -10,6 +10,10 @@ export const fa = {
     tagline: 'سکوی هوشمند مهندسی چاه',
     environment: 'محیط',
     wellNotRead: 'جزئیات چاه خوانده نشد',
+    healthChecking: 'در حال بررسی…',
+    healthUnreachable: 'ارتباط با API برقرار نیست',
+    healthNotAnswering: 'API پاسخ نمی‌دهد',
+    healthError: 'خطای API',
   },
   nav: {
     wells: 'چاه‌ها',

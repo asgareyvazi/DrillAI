@@ -10,7 +10,7 @@
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { expect, test as base, type APIRequestContext, type Locator, type Page } from '@playwright/test'
+import { expect, test as base, type APIRequestContext, type Page } from '@playwright/test'
 import type { E2EFixtures } from './global-setup'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
@@ -141,20 +141,6 @@ export async function selectRole(page: Page, role: RoleKey): Promise<void> {
   const value = ROLES[role]
   await select.selectOption(value)
   await expect(select).toHaveValue(value)
-}
-
-/** Switch the display unit system. */
-export async function selectUnits(page: Page, units: 'si' | 'oilfield'): Promise<void> {
-  const select = page.getByLabel(/Units|Detail/)
-  await select.selectOption(units)
-}
-
-/**
- * The label in front of a value, as the cockpit renders it: the label and value live in the same
- * element, so the assertion can stay close to what a user reads.
- */
-export function cardWithText(page: Page, text: string): Locator {
-  return page.locator('div').filter({ hasText: text }).last()
 }
 
 /**

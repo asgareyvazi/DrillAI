@@ -91,3 +91,39 @@ describe('the application shell header', () => {
     expect(screen.getByTestId('shell-well-name')).not.toHaveTextContent('DrillAI')
   })
 })
+
+/**
+ * The health badge is the only error surface present on *every* screen, so what it claims about the
+ * backend is read more often than any panel's own error state. A single "API unreachable" for every
+ * failure sends an operator to check connectivity for a server fault or a deadline.
+ */
+describe('the health badge', () => {
+  it('says the API is unreachable when it really is', async () => {
+    api.getWell.mockResolvedValue(wellPayload as never)
+    api.healthReady.mockRejectedValue(new ApiError(0, 'network.unreachable', 'offline'))
+    renderShell('/wells')
+
+    await waitFor(() => expect(screen.getByTestId('shell-health')).toHaveTextContent(/unreachable/i))
+  })
+
+  it('does not blame the connection for a server fault, and says which failure it is', async () => {
+    api.getWell.mockResolvedValue(wellPayload as never)
+    api.healthReady.mockRejectedValue(new ApiError(500, 'platform.internal_error', 'boom'))
+    renderShell('/wells')
+
+    await waitFor(() => expect(screen.getByTestId('shell-health')).toHaveTextContent(/API error/i))
+    expect(screen.getByTestId('shell-health')).not.toHaveTextContent(/unreachable/i)
+    expect(screen.getByTestId('shell-health')).not.toHaveTextContent(/not answering/i)
+  })
+
+  it('keeps a deadline apart from an unreachable backend', async () => {
+    api.getWell.mockResolvedValue(wellPayload as never)
+    api.healthReady.mockRejectedValue(
+      new ApiError(0, 'network.timeout', 'too slow', {}, null, true, { kind: 'timeout' }),
+    )
+    renderShell('/wells')
+
+    await waitFor(() => expect(screen.getByTestId('shell-health')).toHaveTextContent(/not answering/i))
+    expect(screen.getByTestId('shell-health')).not.toHaveTextContent(/unreachable/i)
+  })
+})

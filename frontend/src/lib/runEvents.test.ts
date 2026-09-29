@@ -15,7 +15,6 @@ import { describe, expect, it } from 'vitest'
 import {
   DEFAULT_BACKOFF,
   RunEventStream,
-  backoffDelays,
   decodeRunStreamFrame,
   highestSeq,
   isRefusalCode,
@@ -556,10 +555,26 @@ describe('RunEventStream: honest state, resumable cursor, bounded retries', () =
     expect(isRefusalCode(null)).toBe(false)
   })
 
-  it('publishes a bounded reconnect timeline', () => {
-    const delays = backoffDelays()
-    expect(delays[0]).toBe(250)
-    expect(delays[delays.length - 1]).toBe(10_000)
-    expect(Math.max(...delays)).toBeLessThanOrEqual(10_000)
+  it('keeps the reconnect timeline bounded, on the scheduler the stream really uses', () => {
+    const h = harness({ runId: 'run_1' })
+    h.stream.connect()
+
+    // Failed connections only: a successful open resets the attempt counter, and the cap is what is
+    // under test. Ten drops at a factor of two is more than enough to reach it.
+    const delays: number[] = []
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      at(h.sockets, h.sockets.length - 1).drop(1006)
+      delays.push(at(h.timers, 0).ms)
+      h.flushTimers()
+    }
+
+    // This asserted a helper that recomputed the formula while the stream used its own copy of it —
+    // so a change to the real timeline would not have failed anything. The delays below are the ones
+    // the stream actually handed to its timer, with the harness's jitter pinned to zero.
+    expect(at(delays, 0)).toBe(DEFAULT_BACKOFF.initialMs)
+    expect(at(delays, 1)).toBeGreaterThan(at(delays, 0))
+    expect(Math.max(...delays)).toBeLessThanOrEqual(DEFAULT_BACKOFF.maxMs)
+    expect(at(delays, delays.length - 1)).toBe(DEFAULT_BACKOFF.maxMs)
+    h.stream.dispose()
   })
 })

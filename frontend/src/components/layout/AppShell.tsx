@@ -10,6 +10,7 @@ import { useQuery } from '@tanstack/react-query'
 import clsx from 'clsx'
 import type { ReactNode } from 'react'
 import { NavLink, Outlet, useParams } from 'react-router-dom'
+import { ApiError, isAbortError } from '../../api/client'
 import { drillingApi } from '../../api/endpoints'
 import { LOCALES, LOCALE_LABELS, useI18n, type Locale } from '../../i18n'
 import { useSession } from '../../stores/session'
@@ -97,16 +98,36 @@ function IdentityControls() {
 }
 
 function HealthBadge() {
+  const { t } = useI18n()
   const health = useQuery({
     queryKey: ['health-ready'],
     queryFn: ({ signal }) => drillingApi.healthReady(signal),
     retry: false,
     refetchInterval: 60_000,
   })
-  if (health.isLoading) return <Badge tone="neutral">checking…</Badge>
-  if (health.error) return <Badge tone="danger">API unreachable</Badge>
+  if (health.isLoading || isAbortError(health.error)) return <Badge tone="neutral">{t('app.healthChecking')}</Badge>
+  if (health.error) {
+    // The badge says which failure it is. Calling every one of them "unreachable" sends an operator to
+    // check connectivity for a server fault or a deadline, which is the wrong place to look.
+    const kind = health.error instanceof ApiError ? health.error.kind : null
+    const label =
+      kind === 'network'
+        ? t('app.healthUnreachable')
+        : kind === 'timeout'
+          ? t('app.healthNotAnswering')
+          : t('app.healthError')
+    return (
+      <Badge tone="danger" data-testid="shell-health">
+        {label}
+      </Badge>
+    )
+  }
   const status = String((health.data as Record<string, unknown>)?.status ?? 'ready')
-  return <Badge tone={status === 'ready' ? 'ok' : 'warning'}>{status}</Badge>
+  return (
+    <Badge tone={status === 'ready' ? 'ok' : 'warning'} data-testid="shell-health">
+      {status}
+    </Badge>
+  )
 }
 
 export function AppShell() {

@@ -529,12 +529,3 @@ export class RunEventStream {
     if (changed) this.options.onStatus?.(this.getStatus())
   }
 }
-
-/** The reconnect timeline, for a UI that wants to say what it is doing. Bounded by design. */
-export function backoffDelays(policy: BackoffPolicy = DEFAULT_BACKOFF, attempts = 8): number[] {
-  const delays: number[] = []
-  for (let attempt = 0; attempt < attempts; attempt += 1) {
-    delays.push(Math.min(policy.maxMs, policy.initialMs * policy.factor ** attempt))
-  }
-  return delays
-}
