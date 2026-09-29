@@ -1,6 +1,6 @@
 # Frontend Mission — Drilling Intelligence Workspace
 
-**Status: IN PROGRESS — NOT COMPLETE.**
+**Status: CHECKPOINT 4 — VERIFIED · MISSION IN PROGRESS — NOT COMPLETE.**
 
 This file is the durable record of the mission. It lives in Git on purpose: a future session must be
 able to resume from the repository alone, without the chat that produced it. Every checkpoint below
@@ -17,31 +17,47 @@ state "current commit" without saying which of these it means.
 
 | | SHA | What it is |
 | --- | --- | --- |
-| Checkpoint 0 HEAD | `80fb61dd3a07312d2a56da99d63e658d19961616` | the reconciled state the previous session ended on |
-| Checkpoint 1 commit | `c9c000593e2ded279127236193d53b4590ba90d5` | workflow studio lifecycle, contracts fixed at the source |
-| Checkpoint 1 (docs) | `99a655e054285f0827f114c0514ab13c34038a18` | the report for checkpoint 1 |
-| Session 3 baseline HEAD | `b3cd73d` | the commit this session's verification started from |
-| Backend pause fix | `b8a88fe` | `human.approval` became a real pause; approvals publish what they asked for |
+| Checkpoint 0 HEAD | `80fb61d` | the reconciled state the previous session ended on |
+| Checkpoint 1 commit | `c9c0005` | workflow studio lifecycle, contracts fixed at the source |
+| Backend pause fix | `b8a88fe` | `human.approval` became a real pause |
 | Bootstrap mode fix | `67c9230` | `scripts/bootstrap.sh` executable in the index and on disk |
-| Checkpoint 2 commit | `60adee04684843455868a1ae6a7c9f00ae3852b6` | run monitor on the real run contract, with the approval record |
-| Checkpoint 2 report commit | `2df05239c51be41d986e68c4c1ec881522b5cb21` | the report for checkpoint 2 |
-| Checkpoint 3 backend commit | `043ea6460180d0f12060f782c7185a7a7418e663` | the run event log became resumable, and the socket that tails it is tested |
-| Checkpoint 3 client commit | `dd6d311289edeb196d25aaa4fff225bde28f5784` | `frontend/src/lib/runEvents.ts` — the protocol, the cursor, the transport |
-| Checkpoint 3 integration commit | `618b9b4911f84567aefc6a88a7cdcbe57b6c2652` | the run monitor on the live stream, with the 2 s poll retired |
-| Checkpoint 3 browser commit | `1ec38b8277eb2ed95a4e958d40d0c63cbe26852c` | the real-browser journeys, disconnect and all |
-| Checkpoint 3 hardening commit | `1fa5dd904ba39201bb60704c1e23d6ad4cfa309b` | run switching and the named refusals |
-| Local HEAD | `d43f069` and the report-only commits after it | the remote tip; `git rev-parse HEAD` and `git ls-remote` agreed after every push in this checkpoint |
-| Remote HEAD | same commit as local | `git ls-remote --heads origin arena/01a0dca0-drillai` — **matches local** |
-| Report-only commits | `79ed0bc`, `d43f069`, and this one | change no product code and no tests; the last source commit remains `1fa5dd9` |
-| Publication state | — | **PUSHED AND VERIFIED** — five fast-forwards from `2df0523` |
-| Last source (implementation) commit | `1fa5dd9` | the last commit that changed product code or tests |
-| Last test-producing commit | `1fa5dd9` | the commit the unit and E2E numbers below were produced at |
-| Last documentation-only commit | this report | changes no product code |
-| Working tree | — | `git status --porcelain` empty at `1fa5dd9`; no untracked files |
-| Mission branch state | — | branch exists on the remote and contains every commit listed in §2 |
+| Checkpoint 2 commit | `60adee0` | run monitor on the real run contract, with the approval record |
+| Checkpoint 3 commits | `043ea64`, `dd6d311`, `618b9b4`, `1ec38b8`, `1fa5dd9` | the durable run-event log, the stream client, the monitor on it, the browser journeys, run switching and refusals |
+| Checkpoint 3 report commits | `79ed0bc`, `d43f069`, `6e5e318` | documentation only |
+| Checkpoint 4 commits | `3d719f0`, `572cc2c`, `bb15c60`, `e21530a`, `e1db229` | the error model, the backend contract and fault injector, the approval read, the browser matrix, the last eight silent reads |
+| Checkpoint 4 completion commits | `4edff04`, `1584880`, `d9cefaf`, `9626647`, `1f68671`, `0297fd7` | journeys that can fail, the health badge and the dead-code audit, and three journeys whose preconditions are now facts |
+| Last source (implementation) commit | `d9cefaf` | the last commit that changed product code |
+| Last test-producing commit | `0297fd7` | the commit the unit, browser and backend numbers in §3 were produced at |
+| Local HEAD | this report commit | report-only; the source/test commits are `d9cefaf` / `0297fd7` |
+| Remote HEAD | this report commit | verified with `git ls-remote --heads origin arena/01a0dca0-drillai` after the last push |
+| Publication state | — | **PUSHED AND VERIFIED** — local HEAD == remote HEAD, 0 unpushed commits |
+| Working tree | — | clean (`git status --porcelain` empty); no untracked files |
+| Checkpoint 4 status | — | `CHECKPOINT 4 — VERIFIED` (source/test commit `0297fd7`, report commit is the remote tip) |
 
 An earlier revision of this file described the state at `c9c0005`; the header above is the state at
-the current commit. Results produced at one commit are never reported as evidence for another.
+the current local commit, which is also the remote HEAD.
+
+**Environment reset 10, and the re-created commits.** The sandbox was reset a tenth time while this
+checkpoint's last three commits were still local: the repository was left on the grafted base commit
+`bfa066b` with no CP4 history at all, and the toolchain (the backend virtualenv, `frontend/node_modules`
+and the Playwright Chromium build) was gone. The working tree survived, so the *content* of the
+unpublished commits survived with it. Recovery, in order, before anything was changed: the working tree
+was archived (`tar`, 305 files, checksummed); the remote branch was fetched and the index reconciled to
+it (`git fetch --depth=200` → `git update-ref refs/remotes/origin/… FETCH_HEAD` → `git reset --mixed
+FETCH_HEAD`, which touches no file); the resulting `git status` showed exactly three modified files and
+nothing else, i.e. exactly the content of the lost commits. Those three were re-committed:
+
+| previously reported (never published, now unreachable) | re-created as | content |
+| --- | --- | --- |
+| `48d3cd2` | `9626647` | `e2e/error-matrix.spec.ts` — the stale-decision journey |
+| `23e29ba` | `1f68671` | `e2e/workflow-studio.spec.ts` — the draft journey |
+| `7080def` | this report commit | the report itself |
+| — | `0297fd7` | `e2e/run-events.spec.ts` — a premise fix found by the checkpoint-3 gate (below) |
+
+The file contents are byte-identical to what the lost commits carried: they came from the same working
+tree, which was backed up before the repository was touched, and the diff against the remote after
+reconciliation was exactly those files and no others. Only the SHAs are new, and the re-created commits
+say so in their own messages. Results produced at one commit are never reported as evidence for another.
 The environment was wiped twice during session 3 (a fresh clone at the grafted base `bfa066b` each
 time); the recovery procedure and what survived are recorded in §0.1.
 
@@ -457,12 +473,209 @@ the query string grants nothing when authentication is on.
 | Remaining blockers | none |
 | Next checkpoint | 4 — the error matrix (400/401/403/404/409/422/500/network/timeout/malformed/abort) with recovery, and never "backend unreachable" for a deliberate abort |
 
+### Checkpoint 4 — the error matrix, and every surface that used to lie
+
+| Field | Value |
+| --- | --- |
+| Checkpoint | 4 — one error model, every failure named and recoverable, and no read that reports a quiet success |
+| Local starting SHA | `6e5e318` (the report-only tip of checkpoint 3) |
+| Remote starting SHA | `6e5e318` |
+| Commits | `3d719f0` the client and the shared error surface; `572cc2c` the backend contract and the fault injector; `bb15c60` the approval read; `e21530a` the browser matrix; `e1db229` the last eight silent reads; `4edff04`, `1584880`, `9626647`, `1f68671`, `0297fd7` the journeys; `d9cefaf` the health badge and the audit |
+| Root causes | (1) a non-2xx answer was classified by status alone, so a 404 could read as an outage and a 403 as a sign-in problem; (2) a deliberate abort was wrapped in `ApiError(0, …)`, which is indistinguishable from an unreachable backend; (3) a deadline was a network failure with a message; (4) the timeout lived in a helper that did not abort the fetch, so the server kept working; (5) eight reads had neither `.error` nor an `<Async>` boundary and rendered `null`, `undefined`, `[]` or a fallback as if the read had succeeded; (6) nothing could produce the failures a healthy server cannot (an unhandled 500, a body that is not the contract, a deadline) in a real browser without intercepting HTTP |
+| The model | `ApiError` (`frontend/src/api/client.ts`) carries `status`, `code`, `kind`, `requestId`, `retryable`, `path`, `contentType`, `messageFromServer`. `classify()` is the only place a status becomes a kind (`invalid_request`, `unauthenticated`, `forbidden`, `not_found`, `conflict`, `validation`, `server`, `network`, `timeout`, `malformed`, `cancelled`, `unknown`); `ApiErrorExtras.kind` overrides it only at the transport boundary. The backend answers with `DrillAIError(code, http_status, retryable, message, details)` → `{"error": {code, message, retryable, details, trace_id?}}` and sends `X-Request-ID` |
+| Retry policy | one place: `shouldRetryRequest` (transport failures and 5xx only, two automatic attempts) in `createQueryClient()`; `canRetry` is its manual counterpart, and `ErrorState` renders "Retry" only when `canRetry`. A 409 offers "Reload the current state" (`error-reconcile`), never a retry |
+| Abort | a caller abort is re-thrown untouched and is never classified as network; the raw `AbortError` is recognised by `isAbortError` (client and `ErrorState`), so a cancellation renders nothing |
+| Timeout | at the transport boundary only: a deadline aborts the fetch (`DOMException(…, 'TimeoutError')`) and is classified `timeout`, distinct from a caller's cancellation and from an unreachable backend |
+| Fault injection | `POST /__faults/{arm,disarm}`, `GET /__faults/armed` (`backend/src/drillai/api/routers/faults.py`), modes `unhandled|slow|malformed`, `MAX_SLEEP_MS = 60_000`, mounted only when `settings.e2e_faults` is set; the server refuses the flag in production. The middleware is innermost, so injected responses still carry `X-Request-ID` and `X-Response-Time-Ms`. Nothing in the browser intercepts an HTTP request |
+| Files changed | `frontend/src/api/client.ts`, `frontend/src/api/endpoints.ts`, `frontend/src/api/queryClient.ts`, `frontend/src/components/common/index.tsx`, `frontend/src/components/evidence/EvidencePanel.tsx`, `frontend/src/components/layout/AppShell.tsx`, `frontend/src/pages/engineering/{Engineering,Optimisation}Workspace.tsx`, `frontend/src/pages/wells/{WellList,DocumentWorkspace}.tsx`, `frontend/src/pages/workflow/{WorkflowStudio,RunMonitor}.tsx`, `frontend/src/i18n/{en,fa}.ts`, `backend/src/drillai/api/{app.py,routers/faults.py}`, `backend/src/drillai/core/config.py`, plus the tests named below |
+| Tests added | 18 backend contract tests (`tests/api/test_error_contract.py`); 19 component tests for the eight silent reads; 3 tests for the health badge; 9 browser journeys (A–J); the client/query-client/cancellation suites |
+| Test counts at `0297fd7` | Vitest **237 passed** in 20 files; Playwright **38 passed / 0 failed** (33 main + 4 faults + 1 auth, 2.5 m); backend **397 passed, 2 skipped, 0 failed, 0 errors** of 399; `ruff check .` clean; `alembic check` on a fresh database: "No new upgrade operations detected"; `npm run build` 263.55 kB (71.15 kB gzip) |
+| Working tree at the gate | clean, no untracked files |
+| Publication | all commits pushed to `arena/01a0dca0-drillai`; `git ls-remote` == local HEAD — see §5.2 |
+| Remaining blockers | none for this checkpoint |
+
+#### The eight reads that reported a quiet success (commit `e1db229`)
+
+A scan for `useQuery` bindings that were referenced neither through `.error` nor through an `<Async>`
+boundary found exactly eight; they are the surfaces from the code, not a list copied from a brief.
+
+| Binding | What it did | What it does now |
+| --- | --- | --- |
+| `EvidencePanel.summary` | a failed strip read produced no strip at all, which is indistinguishable from "this run recorded no evidence" | the strip opens with `data-summary-state="failed"` and says the summary could not be read; no counts are invented; the rest of the panel still renders; retry only when `canRetry` |
+| `AppShell.well` | a failed well read fell back to the product name, which reads as "no well is open" | the header shows the route's id plus "well details could not be read" (`shell-well-name`/`shell-well-detail`) |
+| `EngineeringWorkspace.wellbores` | an empty scope list silently produced "sent against the well alone" | `engine-scope-failure` says the list could not be read and the run will be sent against the well alone; retry invalidates both scope queries |
+| `EngineeringWorkspace.sections` | a failed section read looked like "no sections" | `engine-scope-failure` says the run will be sent without a section |
+| `OptimisationWorkspace.wellbores` | as above | `optimise-scope-failure` with the same honesty about what will be sent |
+| `OptimisationWorkspace.sections` | as above | `optimise-scope-failure`, retry re-reads the sections |
+| `WellList.projects` | a failed project read produced a subtitle that read as a real inventory, including a fabricated `0 wells` | `projects-unavailable` card; the subtitle prints only what answered |
+| `WorkflowStudio.identity` | a failed permission read made every check answer "no", and the publish button claimed the identity lacks `workflow.publish` | `publishChecking` while loading and `cannotPublishUnknown` when the read failed, plus an `identity-unavailable` notice with retry |
+
+New visible strings were added to **both** catalogues (`en.ts`, `fa.ts`): `app.wellNotRead`,
+`app.healthChecking|healthUnreachable|healthNotAnswering|healthError`, `common.projects`,
+`wells.projectsUnavailable|projectsHint`, `cockpit.evidenceSummaryUnavailable`,
+`engineering.scopeUnavailable|scopeSectionUnavailable|scopeRetry`,
+`optimisation.scopeUnavailable`, `workflow.publishChecking|cannotPublishUnknown`, and earlier
+`errors.reloadState`.
+
+#### The health badge (commit `d9cefaf`)
+
+The audit of the error surfaces found one that checkpoint 4 had not touched: the shell's health badge,
+which is on every screen, called **every** failure "API unreachable" and was the only error text not
+going through the catalogue. A 500 from `/health` or a deadline now reads as an API error or as "not
+answering"; a real transport failure still reads as unreachable. Three component tests hold the three
+apart, and the label comes from the catalogue in both locales.
+
+#### The nine browser journeys
+
+Nothing here is mocked: the page issues ordinary requests, and a second instance of the same API —
+same application, same database schema, fault endpoints enabled by configuration and refused in
+production — answers them badly or not at all. The second frontend build differs only in
+`VITE_API_TIMEOUT_MS=3000`, so a deadline is reachable inside a journey.
+
+| # | Journey | Spec | What it proves |
+| --- | --- | --- | --- |
+| A | a deep link to a run that does not exist | `error-matrix` | 404 is `not_found` with a navigation way out, not an outage |
+| B | a real 401 with `www-authenticate: Bearer` | `error-auth` | "you are not signed in", not "backend unreachable"; the locked identity is signed out of the workspace |
+| C | an identity that may not decide an approval | `error-matrix` | 403 names the permission, offers no retry and no reconcile, and leaves the approval on screen |
+| D | an upload the server rejects | `error-matrix` | 422 reports what was wrong with the file; no fake success notice |
+| E | a decision somebody else already took | `error-matrix` | 409 with "reload the current state"; after reconciling, the record shows the standing decision and the second decision changed nothing |
+| F | an unhandled server fault | `error-faults` | 500 reads as a server failure, quotes the request id the server really sent, and retries successfully |
+| G | the network goes away | `error-matrix` | `network` with no invented status; recovery when the network returns |
+| H | a deadline the server is still holding | `error-faults` | `timeout`, the request really cancelled at the transport, a late answer cannot replace the screen, retry recovers |
+| I | a response that is not the contract | `error-faults` | `malformed` with a request id, and no retry offer |
+| J | a read the operator navigates away from | `error-faults` | no error state, no console noise, no stale overwrite, the abandoned request reported failed and never finished |
+
+#### Mutation certification (the six required mutations)
+
+Each mutation was applied to the real source, the named test was run and had to fail, the source was
+restored with `git checkout`, the test had to pass again, and the diff was inspected. No mutation was
+committed; `git status --porcelain` was empty after each pair.
+
+| # | Mutation | Target | Result |
+| --- | --- | --- | --- |
+| M1 | a caller abort is no longer re-thrown (`if (false && (options.signal?.aborted \|\| isAbortError(cause))) throw cause`) so it becomes `ApiError(0, 'network.unreachable')` | `api/client.ts` | **Caught at the unit level**: `src/api/client.test.ts` fails 3 of 38 — "passes a caller abort through instead of dressing it up as an outage", "aborts before the first byte when the caller has already cancelled", "keeps a caller abort distinct from a deadline that fired on the same request". Journey J still passes, and that is a property of React Query, not of the client: it drops a cancelled query before any render, so the classification never reaches the DOM. Probed directly: with a *mounted* observer (switching the approval filter from `pending` to `any` while the read is in flight) the screen shows 0 error states under both the clean and the mutated client. Recorded as the unit contract, not claimed as journey evidence |
+| M2 | the deadline classification removed (`if (false && timedOut)`) | `api/client.ts` | **Caught by journey H**: expected `data-error-kind="timeout"`, received `network`. Restored → passed |
+| M3 | 403 collapsed into 401 (`case 403: return 'unauthenticated'`) | `api/client.ts` | **Caught by journey C**: expected `forbidden`, received `unauthenticated`. Restored → passed |
+| M4 | 404 read as a network failure (`case 404: return 'network'`) | `api/client.ts` | **Caught by journey A**: expected `not_found`, received `network`. Restored → passed |
+| M5 | the caller's signal no longer forwarded (`if (false && options.signal)`) | `api/client.ts` | **Caught by journey J**: "an abandoned read reported: finished:after, failed:after" — the read the operator walked away from completed instead of being cancelled. Restored → passed |
+| M6 | the request id no longer retained (`this.requestId = null`) | `api/client.ts` | **Caught by journey F**: `the id on screen must be one the server sent — screen said "platform.internal_error", server sent req_…, req_…, req_…`. Restored → passed |
+
+Two of these mutations were only caught after the tests were made able to fail, which is the point of
+running them:
+
+- Journey J originally required *an* abandoned request to exist, which an incidental abort of the same
+  URL satisfied; under M5 the armed read **finished**. The journey now marks the moment of the
+  switch and requires the request abandoned there to be reported **failed after the switch** and never
+  **finished after the switch**, with the fault's 2 s delay kept below the client's 3 s deadline so
+  the deadline cannot be what ended it (`4edff04`, `1584880`).
+- Journey F originally required the request-id line to be non-empty — which the error *code* alone
+  already satisfied, so a client that dropped the id passed. It now compares what the screen shows
+  with the ids the server really put on its answers: the first attempt (dropping only the `X-Request-ID`
+  header) was still not caught, because the id also arrives in the error envelope; the mutation that
+  removes the retained id is the one the journey now fails on (`1584880`).
+- `page.on('requestfailed')` also reports the run's event-stream socket teardown, so the collector
+  filters to `resourceType() === 'fetch'`; otherwise journey J would pass for the wrong reason.
+
+#### The audits (commits `d9cefaf`, and the re-run of checkpoint 3's guarantees)
+
+| Audit | Result |
+| --- | --- |
+| A second error taxonomy | none: one `ApiError`, one `classify()`, one retry policy |
+| `fetch()` or `response.ok` outside the API layer | none (the only raw `fetch` is inside `api/client.ts`) |
+| `AbortController` outside the transport boundary | none |
+| Retry/timeout helpers | `backoffDelays` in `lib/runEvents.ts` had no production caller and its test asserted a copy of the formula the stream never used; removed, and the test now drives the stream through ten failed connections and asserts the delays it handed to its own timer (`d9cefaf`; verified by flattening the real timeline → 3 tests red) |
+| Dead test helpers | `selectUnits` and `cardWithText` in `e2e/fixtures.ts` had no caller anywhere in the repository; removed |
+| Duplicate fault injectors | one (`backend/src/drillai/api/routers/faults.py`) |
+| Route interception in acceptance E2E | no HTTP interception anywhere; two `routeWebSocket` uses, both deliberate and socket-level: the checkpoint-3 forced disconnect, and journey E's cut of the stale screen's stream |
+| Debug leftovers | no `.only`, `.skip`, `.todo`, `debugger`, `console.log` or TODO/FIXME outside the backend's documented ones; no snapshots |
+| Old error strings | no hard-coded "backend unreachable" outside the catalogue and the client's own `network` message |
+| Duplicate translations | none: 415 keys in each catalogue, identical paths, no duplicate path in either file (the catalogue test asserts parity and non-empty leaves) |
+| Unused components or hooks | none — every `src` module is imported, and every `lib`/`hooks` export has a caller or a test |
+
+Checkpoint 3's guarantees were re-run on this tree as a regression gate before the final numbers were
+taken: ordered application, dedupe, reconnect, `after_seq`, burst reconciliation, terminal handling,
+run switching, identity change, named refusals and the real-browser forced disconnect. Evidence:
+`src/lib/runEvents.test.ts` 36 passed, `src/hooks/useRunEventStream.test.tsx` 9 passed,
+`e2e/run-events.spec.ts` 5 passed in a real browser, and 28 backend tests
+(`tests/api/test_run_event_stream.py`, `tests/db/test_run_event_sequence_migration.py`,
+`tests/workflow/test_runtime_execution.py`) passed with 0 failures. No regression was found, so no
+new checkpoint-3 test was added.
+
+#### Three journeys whose preconditions were hopes (commits `9626647`, `1f68671`, `0297fd7`)
+
+Both failures appeared for the first time inside full runs — each had passed in isolation before —
+and both were premise failures rather than product failures:
+
+- **Journey E (the stale decision)** assumed the second operator's screen was still out of date when
+  its decision was sent. It was not: the screen's live stream reconciles it within a frame, and the
+  journey only passed while it outran that reconciliation; in a full run the first screen's redraw
+  took longer than the second screen's five-second inbox refresh, the approve button went away and
+  the click timed out. The second screen's stream is now cut with `routeWebSocket` (socket-level, no
+  HTTP mock, server untouched) and the first decision is confirmed against the server instead of
+  against a redraw of the other screen. Verified by three consecutive runs, then the full suite.
+- **The draft journey** took the first two rows of the workflow list and asserted that an edit made
+  the draft dirty. Journeys earlier in the same file save drafts containing exactly the node it adds,
+  so whether the graph changed depended on the run order. It now creates both definitions, saves the
+  first edit as v1, and edits a node type that version does not contain — so the dirty state is a
+  fact. The shared readiness gate (`openStoredWorkflow`) waits for the version label the server sent:
+  the "saved" badge is rendered from the first frame, before the stored graph arrives, and an edit
+  made in that window is thrown away by the load.
+
+- **The finished-run journey (checkpoint 3's, found by the checkpoint-3 gate below)** asserted that
+  loading a run which has already finished opens no stream socket — but it sampled the socket count on
+  the screen that had *started* the run, which is the screen watching it while the API finishes it. That
+  screen opens its socket when the read that said "parked" is answered, so on a loaded machine the socket
+  opened after the sample and the count was attributed to the wrong page. Diagnosed by instrumenting a
+  scratch copy of the file: the failing repeat logged `SAMPLE before=0` followed 45 ms later by
+  `OPEN page=/runs?run=<that run> url=/api/v1/runs/<that run>/events/stream?after_seq=12`. The run is now
+  finished while the page is on the list (no run open, nothing streaming), the sample is taken there, and
+  a settle window precedes the comparison so a late socket is still caught. Product behaviour is
+  unchanged: a fresh load of a terminal run opens no socket and reports `data-stream-state="idle"`.
+
+All three are recorded here because a green suite that passes for the wrong reason is not evidence, and
+because two of the three were only reachable inside a full run: each had passed in isolation.
+
 ---
 
 ## 3. Test results
 
 Every row below was produced by running the command shown, at the commit named in the row. Exact
 counts, no rounding, and nothing is reported as "all good".
+
+### At `0297fd7` (Checkpoint 4) — the final source/test commit
+
+Measured on the working tree at `0297fd7849bf9a4f6e164de862974bedec30fc00`, which is the last commit
+that changed a test, with a clean tree apart from the report. The last commit that changed product code
+is `d9cefaf`; `0297fd7` and the two commits before it are test-only. Every number below was produced by
+the command shown, at this commit, in this session, after the environment reset and the recovery
+described above — none of them is carried over from an earlier commit or from an earlier report.
+
+| Gate | Command | Result at `0297fd7` |
+| --- | --- | --- |
+| Frontend types | `npm run typecheck` (`tsc -b --noEmit`) | no output, exit 0 |
+| Frontend lint | `npx eslint .` | no output, exit 0 |
+| Frontend unit/component | `npm run test` | **237 passed** in 20 files (was 234 in 20 files at `e1db229`; the three new ones are the health badge) |
+| Frontend build | `npm run build` | built in 4.97 s; `index-D3VwJPYx.js` 263.55 kB (gzip 71.15 kB), `flow-*.js` 185.77 kB, `react-*.js` 165.65 kB, CSS 37.01 kB |
+| Browser (all three stacks) | `npx playwright test` | **38 passed, 0 failed** (2.5 m): 33 against the development-identity stack, 4 against the fault stack, 1 against the authentication stack |
+| Backend tests | `.venv/bin/python -m pytest -q --junitxml=…` | **399 tests: 397 passed, 2 skipped, 0 failed, 0 errors**. Both skips are the Postgres-only tests (`tests.db.test_persistence`), skipped because no Postgres server exists in this environment |
+| Backend lint | `.venv/bin/ruff check .` | "All checks passed!" |
+| Migration | fresh database → `alembic upgrade head` → `alembic check` | "No new upgrade operations detected." |
+| Checkpoint 3 realtime suite (backend) | `pytest tests/api/test_run_event_stream.py tests/db/test_run_event_sequence_migration.py tests/workflow/test_runtime_execution.py -q` | 28 passed (`............................  [100%]`) |
+
+The `38 passed` browser figure is the checkpoint-3 regression gate and the checkpoint-4 error matrix in
+one run: 33 journeys on the development-identity stack (including all five `run-events.spec.ts` stream
+journeys), 4 on the fault stack (the deadline, the malformed body, the unhandled fault, the deliberate
+cancellation) and 1 on the authentication stack (a real 401). It is also the restored-state evidence for
+mutations M2–M6 below: those mutations were applied and reverted one at a time, and this run is the
+whole suite passing on the restored code — a stronger check than re-running each targeted journey.
+
+Per-suite counts, as produced: backend 399 (`test_error_contract.py` 18, `test_run_event_stream.py` 8,
+`test_run_event_sequence_migration.py` 1, `test_runtime_execution.py` 19, remainder pre-existing);
+frontend unit 237 across 20 files (`runEvents.test.ts` 36, `client.test.ts` 38,
+`queryCancellation.test.tsx` 9, `AppShell.test.tsx` 6, `EvidencePanel.test.tsx` 3,
+`EngineeringWorkspace.test.tsx` 3, `OptimisationWorkspace.test.tsx` 3, `WellList.test.tsx` 4,
+`WorkflowStudio.test.tsx` 3, `catalogue.test.ts` 3, `usage.test.ts` 3, and the pre-existing suites);
+browser 38 (main 33, faults 4, auth 1).
 
 ### At `1fa5dd9` (Checkpoint 3) — the current source commit
 
@@ -659,17 +872,30 @@ automated** and are therefore not claimed.
 - Journeys 1–4 are automated end to end (well/cockpit; documents/ingestion/evidence; the workflow
   studio lifecycle; and, new in checkpoint 2, the run lifecycle, the approval and rejection journeys,
   the approval inbox and the deterministic failing-node journey). Live events over the WebSocket are
-  now proven at the browser level too (checkpoint 3, five journeys). The error matrix, permission
-  journeys, context persistence, RTL and accessibility are **not yet proven at the browser level** —
-  they are checkpoint 4 onwards.
+  proven at the browser level (checkpoint 3, five journeys) and the error matrix is too (checkpoint 4,
+  ten journeys across three stacks). Permission journeys, context persistence, RTL and accessibility
+  are **not yet proven at the browser level** — they are checkpoint 5 onwards.
+- Checkpoint 4's abort guarantee is proven at the unit level, not in a journey, and that is recorded
+  rather than papered over: React Query drops a cancelled query before any render, so a client that
+  wrapped an abort as a network failure would not change what any screen shows. The evidence is
+  `src/api/client.test.ts` (three failures under the mutation) plus a probe with a *mounted* observer
+  that showed the same 0 error states under both the clean and the mutated client.
+- Three journey preconditions were found to be properties of the run rather than facts and were
+  rebuilt (`9626647`, `1f68671`, `0297fd7`); every one of them had passed in isolation and failed
+  inside a full run. A green suite that passes for the wrong reason is not evidence, which is why the
+  mutation table and these three fixes are in this report rather than only in the commit messages.
+- Unlocalized literals remain in surfaces checkpoint 4 did not audit (`PlatformPage`'s "ready"/
+  "unreachable" badge, "Declared input ports", "Computed objectives", "Not returned", …). They are
+  pre-existing, they are not new strings introduced here, and they are the i18n/RTL checkpoint's
+  scope; every string this checkpoint added went into both catalogues.
 - The run monitor no longer polls: the 2 s interval was retired in checkpoint 3 (`618b9b4`), together
   with `LIVE_RUN_STATUSES`, and the replacement is the stream plus a REST reconciliation after bursts,
   on reconnect and on terminal. Runs in `waiting_approval` and `paused` are streamed as well — a
   parked run can change without this page doing anything.
 - The WebSocket is verified: a real server, a real socket in a real browser, a forced disconnect, and
-  a final log equal to the API's. What is **not** yet verified is the stream's behaviour under the
-  error matrix — token expiry mid-stream, a server restart, a proxy that closes with an unusual code,
-  and a refusal after a role change are checkpoint 4's scope.
+  a final log equal to the API's. Still **not** verified: token expiry mid-stream, a server restart, a
+  proxy that closes with an unusual code, and a refusal after a role change — refused connections are
+  tested by code (4401/4403/4404) but not against a real identity that loses its role while connected.
 - The frontend unit tests cover the stream's states, cursor, deduplication, reconnect URL,
   out-of-order frames, wrong-run frames, unknown frames, terminal close and disposal; the browser
   journeys cover the product-level behaviour. Nothing in the stream is verified only by a mock.
@@ -696,8 +922,12 @@ automated** and are therefore not claimed.
    tested socket), `dd6d311` (the reusable client), `618b9b4` (the run monitor on it, poll retired),
    `1ec38b8` (the browser journeys), `1fa5dd9` (run switching and named refusals). All pushed and
    verified on the remote.
-2. **Checkpoint 4 — the error matrix** (401/403/404/409/422/500/network/timeout/malformed), with
-   recovery, and never "backend unreachable" for a deliberate abort.
+2. ~~**Checkpoint 4 — the error matrix**~~ **Done and verified in this tree**, in ten commits:
+   `3d719f0` (the client model and the shared error surface), `572cc2c` (the backend contract and the
+   config-guarded fault injector), `bb15c60` (the approval read), `e21530a` (the browser matrix),
+   `e1db229` (the last eight silent reads), `4edff04`/`1584880` (journeys that can fail),
+   `d9cefaf` (the health badge and the dead-code audit), `9626647`/`1f68671`/`0297fd7` (three
+   preconditions that were hopes). All of them are published and verified on the remote (§5.2).
 3. **Checkpoint 5 — permissions, context, RTL, accessibility**: the real role catalogue against
    backend authority, deep links and reload context, query-key scoping, Persian/RTL across the five
    surfaces, and keyboard/`aria` assertions on the real journeys.
@@ -707,7 +937,7 @@ automated** and are therefore not claimed.
 
 ---
 
-## 5.1 The git gate, run at `79ed0bc`
+## 5.1 The git gate, run at `79ed0bc` (checkpoint 3)
 
 `git ls-remote` is what settles whether a commit is published; the local remote-tracking ref is a
 cache and can lag. It did lag here — `refs/remotes/origin/arena/01a0dca0-drillai` still pointed at
@@ -736,9 +966,65 @@ The branch is the only one this work touches; `main` is untouched at `bfa066b`.
 
 ---
 
+## 5.2 The git gate at the checkpoint-4 commit — published and verified
+
+The gate commands were run at `0297fd7` with a clean tree (§3). Publication is a normal fast-forward
+push: no force, no amend, no rewritten history, no second remote, no credential written anywhere. The
+earlier authentication failure was resolved by the user reconnecting GitHub in the environment; it was
+never worked around.
+
+| Check | Command | Result |
+| --- | --- | --- |
+| Branch | `git branch -vv` | `* arena/01a0dca0-drillai` tracking `origin/arena/01a0dca0-drillai` |
+| Local HEAD before the report commit | `git rev-parse HEAD` | `0297fd7849bf9a4f6e164de862974bedec30fc00` |
+| Remote HEAD before the report commit | `git ls-remote --heads origin arena/01a0dca0-drillai` | `0297fd7849bf9a4f6e164de862974bedec30fc00` |
+| Unpushed commits (before the report commit) | `git log --oneline origin/arena/01a0dca0-drillai..HEAD` | empty |
+| Push | `git push origin arena/01a0dca0-drillai` | fast-forward, `d9cefaf..0297fd7` |
+| Working tree | `git status --porcelain` | empty apart from this report, which is the commit that carries it |
+| Untracked files | `git status --porcelain` | none |
+| Shallow clone | `git rev-parse --is-shallow-repository` | `false` for the branch history fetched to depth 200 |
+| `main` | `git log --oneline -1 main` | `bfa066b` — untouched, and one commit behind nothing (this branch is not merged into it) |
+| Branch discipline | `git branch -a` | `main` and `arena/01a0dca0-drillai` only; no branch was created, renamed or deleted |
+| Secrets in the index | `git ls-files | grep -iE '\.env|credential|secret|\.pem$|\.key$'` | none |
+| Tracked files / source lines | `git ls-files` / `git ls-files '*.py' '*.ts' '*.tsx' | xargs wc -l` | 245 files / 64 846 lines |
+
+What was published, exactly — the commits that had been local when authentication failed, plus the
+rest of the checkpoint's tail:
+
+| Commit | What it is |
+| --- | --- |
+| `9626647` | `e2e/error-matrix.spec.ts`: the stale-decision journey is stale on purpose |
+| `1f68671` | `e2e/workflow-studio.spec.ts`: the draft journey owns its precondition |
+| `0297fd7` | `e2e/run-events.spec.ts`: the finished-run journey stops counting the wrong screen's socket |
+| this report commit | the durable record you are reading; the remote tip after the push |
+
+The three test commits were re-created after environment reset 10 destroyed the local history (§header);
+their content is byte-identical to the commits they replace, and the previously reported SHAs
+(`48d3cd2`, `23e29ba`, `7080def`) were never on the remote — they are superseded, not lost.
+
+---
+
 ## 6. Final verification and final commit
 
 Not yet applicable: the mission is not complete. When it is, this section will carry the re-run of
 every gate at the final commit, the Git report (target branch, initial and final local HEAD, final
 remote HEAD, match yes/no, clean tree, untracked files, unpushed commits, exact SHA), and the final
 status — exactly `MISSION CLOSED — VERIFIED` or `MISSION BLOCKED — NOT COMPLETE`.
+
+**CHECKPOINT 4 — VERIFIED.** Every acceptance criterion of the completion brief holds at this state:
+the eleven failure classifications are distinct and proven in a real browser (A–J), the eight audited
+reads are truthful, three weak journey preconditions were rebuilt and the mutations that prove them were
+re-run, the cleanup is audited, and every intended commit is on the remote with `git ls-remote` equal to
+the local tip (§5.2). The mission as a whole is unchanged: **MISSION IN PROGRESS — NOT COMPLETE**, with
+checkpoint 5 (permissions, context, RTL, accessibility) and checkpoint 6 (CI and the final certification)
+outstanding.
+
+Provenance, stated separately because they are different things:
+
+| | |
+| --- | --- |
+| Final source (implementation) commit | `d9cefaf` |
+| Final test commit — every number in §3 was produced here | `0297fd7` |
+| Final report commit | this commit (the remote tip; `git ls-remote` is the authority) |
+| Remote HEAD | the same report commit |
+| Unpushed commits | none |
