@@ -105,6 +105,12 @@ export const en = {
     noWells: 'No wells are registered yet.',
     noTimeline: 'No timeline entries in this period.',
     noDocuments: 'No documents have been ingested for this well.',
+        documentNotInList:
+          'This link names document {id}, which is not among the documents of this well — it may have been deleted, or it may belong to another well.',
+        documentNotInListHint:
+          'Nothing is shown for it, and the well it belongs to is not guessed at: a document is read through the well it was ingested for.',
+        documentOtherWell:
+          'Document {id} exists but belongs to another well ({well}), so it is not shown as part of this one.',
     noEvidence: 'No evidence has been linked to this item.',
     noRuns: 'No workflow runs yet.',
     noRecommendations: 'No recommendations have been produced for this well.',
@@ -323,6 +329,9 @@ export const en = {
     validityWarning: '{count} warning(s)',
     graphCounts: '{nodes} nodes · {edges} edges · {entry} entry · {exit} exit',
     noWorkflowSelected: 'Select or create a workflow to edit its graph.',
+    workflowNotInList:
+      'This link names workflow {id}, which is not in the workflows you can read — it may have been deleted, or it may belong to somebody else.',
+    workflowNotInListHint: 'Nothing is shown for it: the graph of a workflow you cannot list is not read either.',
     nodeId: 'Node id',
     nodeType: 'Node type',
     nodeLabel: 'Label',

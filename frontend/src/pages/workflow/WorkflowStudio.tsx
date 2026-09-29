@@ -959,6 +959,14 @@ export default function WorkflowStudio() {
   })
 
   const selected = workflows.data?.items.find((item) => item.id === selectedId) ?? null
+  /*
+   * A link can name a workflow that is not in the list: deleted since it was copied, or another
+   * organisation's. That is not "no workflow selected" — the reader did select one, by URL — and
+   * saying so would be a false statement about their own action. The list is the authority on what
+   * exists for this caller, so when it has been read and does not contain the id, the screen says
+   * exactly that and reads nothing for it.
+   */
+  const linkedButAbsent = Boolean(selectedId) && workflows.isSuccess && selected === null
 
   return (
     <div className="space-y-4">
@@ -1066,6 +1074,13 @@ export default function WorkflowStudio() {
               <ReactFlowProvider>
                 <StudioBody workflow={selected} onDirtyChange={setDirty} />
               </ReactFlowProvider>
+            ) : linkedButAbsent ? (
+              <div data-testid="workflow-not-in-list">
+                <EmptyState
+                  message={t('workflow.workflowNotInList', { id: selectedId ?? '' })}
+                  hint={t('workflow.workflowNotInListHint')}
+                />
+              </div>
             ) : (
               <EmptyState
                 message={t('workflow.noWorkflowSelected')}

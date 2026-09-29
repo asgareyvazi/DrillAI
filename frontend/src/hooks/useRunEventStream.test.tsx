@@ -16,10 +16,10 @@ import type { RunEventSocketLike } from '../lib/runEvents'
 import { useRunEventStream } from './useRunEventStream'
 import type { RunDetail, RunEvent } from '../api/types'
 
-function event(seq: number, type = 'node_succeeded'): RunEvent {
+function event(seq: number, type = 'node_succeeded', runId = 'run_1'): RunEvent {
   return {
     id: `rev_${seq}`,
-    run_id: 'run_1',
+    run_id: runId,
     seq,
     type,
     message: `${type} ${seq}`,
@@ -53,7 +53,10 @@ class FakeSocket implements RunEventSocketLike {
   }
 
   push(seq: number): void {
-    this.send({ type: 'run_event', event: event(seq) })
+    // Addressed to the run this socket is connected to, the way the server addresses them: the decoder
+    // refuses a `run_event` for another run, on purpose.
+    const runId = /\/runs\/([^/]+)\/events\/stream/.exec(this.url)?.[1] ?? 'run_1'
+    this.send({ type: 'run_event', event: event(seq, 'node_succeeded', runId) })
   }
 
   drop(code = 1006): void {
@@ -138,6 +141,8 @@ function setup(options: {
   )
 
   let handle: ReturnType<typeof useRunEventStream> | null = null
+  // The run the screen is showing *now*: the log a test reads is the one on display.
+  let currentRunId = runId
   const view = render(
     <Harness {...renderProps} onHandle={(next) => (handle = next)} />,
     { wrapper },
@@ -150,9 +155,35 @@ function setup(options: {
     timers,
     runId,
     result: () => handle as NonNullable<typeof handle>,
+    /**
+     * The same screen after the run in the URL changed — the query-parameter case, not a remount.
+     *
+     * The new run has its own detail row (the log begins at 1), because that is what REST would have
+     * returned for it.
+     */
+    switchRun: (nextRunId: string, events: RunEvent[]) => {
+      currentRunId = nextRunId
+      queryClient.setQueryData<RunDetail>(['run', nextRunId], {
+        run: { id: nextRunId, status: 'running' } as unknown as RunDetail['run'],
+        workflow: null,
+        node_runs: [],
+        artifacts: [],
+        events: events.map((row) => ({ ...row, run_id: nextRunId })),
+        pending_approval: null,
+        resumable: false,
+      } as RunDetail)
+      view.rerender(
+        <Harness
+          {...renderProps}
+          runId={nextRunId}
+          restEvents={events}
+          onHandle={(next) => (handle = next)}
+        />,
+      )
+    },
     /** The same screen after REST reported a different run status — a reconciliation, not a remount. */
     rerenderStatus: (status: string) => view.rerender(<Harness {...renderProps} status={status} onHandle={(next) => (handle = next)} />),
-    events: () => queryClient.getQueryData<RunDetail>(['run', runId])?.events ?? [],
+    events: () => queryClient.getQueryData<RunDetail>(['run', currentRunId])?.events ?? [],
     /** The server's side of the connection, applied inside `act` so React sees every update. */
     server: {
       open: (status = 'running', afterSeq = 0) => {
@@ -180,6 +211,31 @@ describe('useRunEventStream: REST is the base, the socket is the increment', () 
     const h = setup({ restEvents: [event(1), event(2), event(3)] })
     await waitFor(() => expect(h.sockets).toHaveLength(1))
     expect(h.sockets[0]?.url).toContain('after_seq=3')
+    h.unmount()
+  })
+
+  it('starts a different run at that run’s own cursor, not at the previous run’s', async () => {
+    /*
+     * `?run=A` followed by `?run=B` keeps the monitor mounted: the parameter changes, the hook's
+     * instance does not. A cursor is a position in *one* log, and the previous log's position is
+     * meaningless in the new one — worse than meaningless, because the hook drops every event whose
+     * `seq` is at or below the cursor. A stale cursor therefore discards the whole live log of the
+     * newly selected run, silently, while the screen looks connected.
+     */
+    const h = setup({ runId: 'run_a', restEvents: [event(1), event(2), event(3), event(4)] })
+    await waitFor(() => expect(h.sockets).toHaveLength(1))
+    expect(h.sockets[0]?.url).toContain('after_seq=4')
+
+    // The operator selects another run from the list, whose log starts again at 1.
+    h.switchRun('run_b', [event(1)])
+    await waitFor(() => expect(h.sockets).toHaveLength(2))
+    // The new socket asks for the new run's log, from the new run's cursor.
+    expect(h.sockets[1]?.url).toContain('after_seq=1')
+    h.server.open('running', 1)
+
+    // And its events are applied: the second run's log advances on screen.
+    h.server.push(2)
+    await waitFor(() => expect(h.events().map((row) => row.seq)).toEqual([1, 2]))
     h.unmount()
   })
 

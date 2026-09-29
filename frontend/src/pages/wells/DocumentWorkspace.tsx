@@ -10,6 +10,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
+import { ApiError } from '../../api/client'
 import { drillingApi } from '../../api/endpoints'
 import type { DdrProcessingReport, DocumentRow } from '../../api/types'
 import { EvidenceList, EvidencePanel } from '../../components/evidence/EvidencePanel'
@@ -131,6 +132,29 @@ export default function DocumentWorkspace() {
     queryFn: ({ signal }) => drillingApi.getDocument(selectedId as string, signal),
     enabled: Boolean(selectedId),
   })
+
+  /*
+   * Two ways a URL can name a document that must not be presented as this well's:
+   *
+   * * it is not among this well's documents at all (deleted, or never here), or
+   * * it exists and belongs to *another* well — the read succeeds, which is exactly why the page has
+   *   to check: showing another well's extraction, provenance and evidence under this well's header
+   *   would be a context mismatch dressed as data.
+   *
+   * The document read is the only place either fact can be established, so both are decided from it,
+   * and nothing about the document is rendered until they are settled.
+   */
+  const detailWellId = detail.data?.document.well_id ?? null
+  const documentElsewhere = Boolean(selectedId) && detailWellId !== null && detailWellId !== id
+  // A 404 is an answer, not a failure: it says the id names nothing this caller can read. Any other
+  // failure is a read that did not happen, and is reported as such rather than as an absence.
+  const detailNotFound = detail.error instanceof ApiError && detail.error.status === 404
+  const documentAbsent =
+    Boolean(selectedId) &&
+    !selected &&
+    !documentElsewhere &&
+    documents.isSuccess &&
+    (detail.isSuccess || detailNotFound)
   const provenance = useQuery({
     queryKey: ['document-provenance', selectedId],
     queryFn: ({ signal }) => drillingApi.documentProvenance(selectedId as string, signal),
@@ -265,7 +289,33 @@ export default function DocumentWorkspace() {
         </Card>
 
         <div className="space-y-3">
-          {!selected && <EmptyState message="Select a document to inspect its extraction, provenance and evidence." />}
+          {!selectedId && (
+            <EmptyState message="Select a document to inspect its extraction, provenance and evidence." />
+          )}
+
+          {/*
+            A document the link names that this page will not show, and why. The two reasons read
+            differently because they are different facts, and neither of them is "you selected nothing".
+          */}
+          {documentElsewhere && (
+            <div data-testid="document-other-well">
+              <EmptyState
+                message={t('empty.documentOtherWell', { id: selectedId ?? '', well: detailWellId ?? '' })}
+                hint={t('empty.documentNotInListHint')}
+              />
+            </div>
+          )}
+          {documentAbsent && (
+            <div data-testid="document-not-in-list">
+              <EmptyState
+                message={t('empty.documentNotInList', { id: selectedId ?? '' })}
+                hint={t('empty.documentNotInListHint')}
+              />
+            </div>
+          )}
+          {!selected && detail.error && !detailNotFound && (
+            <ErrorState error={detail.error} onRetry={() => void detail.refetch()} />
+          )}
 
           {selected && (
             <>

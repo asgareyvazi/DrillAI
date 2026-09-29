@@ -7,7 +7,7 @@
  */
 
 import { Component, type ErrorInfo, type ReactNode } from 'react'
-import { Navigate, Route, Routes } from 'react-router-dom'
+import { Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom'
 import { AppShell } from './components/layout/AppShell'
 import { Button, ErrorState } from './components/common'
 import WellList from './pages/wells/WellList'
@@ -49,6 +49,29 @@ class PageErrorBoundary extends Component<{ children: ReactNode }, { error: Erro
   }
 }
 
+/**
+ * A page whose whole subject is one well.
+ *
+ * The key is the well, so a change of context in the URL *replaces* the page instead of re-rendering
+ * it. Without that, everything a page holds in its own state survives the change — the section that
+ * was selected, the report that was generated, the advisor answer that was read — and the next well's
+ * screen shows the previous well's engineering as if it belonged to it. The rule this states is the
+ * one a reader would assume: a page is about exactly the well in its URL, and nothing about another
+ * well can be on it.
+ *
+ * The error boundary is inside the key too, so a well whose page failed does not stay failed after the
+ * reader moves to another well.
+ */
+function WellScoped({ children }: { children: ReactNode }) {
+  const { wellId } = useParams<{ wellId: string }>()
+  const { pathname } = useLocation()
+  // The path is the key: a different well, or a different workspace within the same well, is a
+  // different subject. Search parameters are deliberately *not* part of it — `?document=`, `?tab=` and
+  // the rest are navigations *within* one page, and remounting for those would discard the reader's
+  // work and their scroll position for no reason.
+  return <PageErrorBoundary key={`${wellId}${pathname}`}>{children}</PageErrorBoundary>
+}
+
 export function App() {
   return (
     <Routes>
@@ -62,12 +85,12 @@ export function App() {
             </PageErrorBoundary>
           }
         />
-        <Route path="/wells/:wellId/cockpit" element={<PageErrorBoundary><WellCockpit /></PageErrorBoundary>} />
-        <Route path="/wells/:wellId/documents" element={<PageErrorBoundary><DocumentWorkspace /></PageErrorBoundary>} />
-        <Route path="/wells/:wellId/engineering" element={<PageErrorBoundary><EngineeringWorkspace /></PageErrorBoundary>} />
-        <Route path="/wells/:wellId/optimisation" element={<PageErrorBoundary><OptimisationWorkspace /></PageErrorBoundary>} />
-        <Route path="/wells/:wellId/advisor" element={<PageErrorBoundary><AdvisorWorkspace /></PageErrorBoundary>} />
-        <Route path="/wells/:wellId/reports" element={<PageErrorBoundary><ReportsWorkspace /></PageErrorBoundary>} />
+        <Route path="/wells/:wellId/cockpit" element={<WellScoped><WellCockpit /></WellScoped>} />
+        <Route path="/wells/:wellId/documents" element={<WellScoped><DocumentWorkspace /></WellScoped>} />
+        <Route path="/wells/:wellId/engineering" element={<WellScoped><EngineeringWorkspace /></WellScoped>} />
+        <Route path="/wells/:wellId/optimisation" element={<WellScoped><OptimisationWorkspace /></WellScoped>} />
+        <Route path="/wells/:wellId/advisor" element={<WellScoped><AdvisorWorkspace /></WellScoped>} />
+        <Route path="/wells/:wellId/reports" element={<WellScoped><ReportsWorkspace /></WellScoped>} />
         <Route path="/workflows" element={<PageErrorBoundary><WorkflowStudio /></PageErrorBoundary>} />
         <Route path="/runs" element={<PageErrorBoundary><RunMonitor /></PageErrorBoundary>} />
         <Route path="/library" element={<PageErrorBoundary><LibraryPage /></PageErrorBoundary>} />

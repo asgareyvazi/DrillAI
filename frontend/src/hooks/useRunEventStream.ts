@@ -120,6 +120,7 @@ export function useRunEventStream(
   // The cursor starts where REST says the log is. A later REST response (a reconciliation that ran
   // ahead of the stream) can only ever move it forward, never back.
   const restCursor = useMemo(() => highestSeq(restEvents ?? []), [restEvents])
+  const cursorRunRef = useRef(runId)
   useEffect(() => {
     cursorRef.current = Math.max(cursorRef.current, restCursor)
   }, [restCursor])
@@ -170,6 +171,20 @@ export function useRunEventStream(
         previous.state === 'closed' ? previous : { ...previous, state: 'idle', cursor: cursorRef.current },
       )
       return
+    }
+
+    /*
+     * A cursor is a position in one log. The monitor stays mounted across a `?run=` change, so without
+     * this the *previous* run's position would be reused: the new socket would ask for events after a
+     * sequence the new run never had, and `applyEvent` below would drop every event at or below it.
+     * The screen would look connected while the new run's log stayed empty.
+     *
+     * The cursor therefore belongs to the run it was read from: a change of run starts again from that
+     * run's own REST cursor, and REST is still the authority for where it starts.
+     */
+    if (cursorRunRef.current !== runId) {
+      cursorRunRef.current = runId
+      cursorRef.current = restCursor
     }
 
     const applyEvent = (event: RunEvent) => {
@@ -223,7 +238,7 @@ export function useRunEventStream(
       stream.dispose()
       if (streamRef.current === stream) streamRef.current = null
     }
-  }, [streamable, runId, currentIdentity, queryClient, reconcile, scheduleReconcile])
+  }, [streamable, runId, currentIdentity, restCursor, queryClient, reconcile, scheduleReconcile])
 
   return { status, diagnostics, reconcile }
 }
