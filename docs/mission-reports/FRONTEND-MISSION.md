@@ -30,8 +30,9 @@ state "current commit" without saying which of these it means.
 | Checkpoint 3 integration commit | `618b9b4911f84567aefc6a88a7cdcbe57b6c2652` | the run monitor on the live stream, with the 2 s poll retired |
 | Checkpoint 3 browser commit | `1ec38b8277eb2ed95a4e958d40d0c63cbe26852c` | the real-browser journeys, disconnect and all |
 | Checkpoint 3 hardening commit | `1fa5dd904ba39201bb60704c1e23d6ad4cfa309b` | run switching and the named refusals |
-| Local HEAD | `1fa5dd9` | at the remote tip; the report commit that follows this one sits on top |
-| Remote HEAD | `1fa5dd9` | `git ls-remote --heads origin arena/01a0dca0-drillai` — **matches local** |
+| Local HEAD | `d43f069` and the report-only commits after it | the remote tip; `git rev-parse HEAD` and `git ls-remote` agreed after every push in this checkpoint |
+| Remote HEAD | same commit as local | `git ls-remote --heads origin arena/01a0dca0-drillai` — **matches local** |
+| Report-only commits | `79ed0bc`, `d43f069`, and this one | change no product code and no tests; the last source commit remains `1fa5dd9` |
 | Publication state | — | **PUSHED AND VERIFIED** — five fast-forwards from `2df0523` |
 | Last source (implementation) commit | `1fa5dd9` | the last commit that changed product code or tests |
 | Last test-producing commit | `1fa5dd9` | the commit the unit and E2E numbers below were produced at |
