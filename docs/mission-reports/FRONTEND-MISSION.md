@@ -24,15 +24,19 @@ state "current commit" without saying which of these it means.
 | Backend pause fix | `b8a88fe` | `human.approval` became a real pause; approvals publish what they asked for |
 | Bootstrap mode fix | `67c9230` | `scripts/bootstrap.sh` executable in the index and on disk |
 | Checkpoint 2 commit | `60adee04684843455868a1ae6a7c9f00ae3852b6` | run monitor on the real run contract, with the approval record |
-| Checkpoint 2 report commit | `2df05239c51be41d986e68c4c1ec881522b5cb21` | the report for checkpoint 2 — **the last commit on the remote** |
+| Checkpoint 2 report commit | `2df05239c51be41d986e68c4c1ec881522b5cb21` | the report for checkpoint 2 |
 | Checkpoint 3 backend commit | `043ea6460180d0f12060f782c7185a7a7418e663` | the run event log became resumable, and the socket that tails it is tested |
-| Local HEAD | `043ea64` | at the remote tip; the report commit that follows this one sits on top |
-| Remote HEAD | `043ea64` | `git ls-remote --heads origin arena/01a0dca0-drillai` — **matches local** |
-| Publication state | — | **PUSHED AND VERIFIED** — `2df0523..043ea64` fast-forward |
-| Last source (implementation) commit | `043ea64` | the last commit that changed product code or tests |
-| Last test-producing commit | `043ea64` | the commit the unit and E2E numbers below were produced at |
+| Checkpoint 3 client commit | `dd6d311289edeb196d25aaa4fff225bde28f5784` | `frontend/src/lib/runEvents.ts` — the protocol, the cursor, the transport |
+| Checkpoint 3 integration commit | `618b9b4911f84567aefc6a88a7cdcbe57b6c2652` | the run monitor on the live stream, with the 2 s poll retired |
+| Checkpoint 3 browser commit | `1ec38b8277eb2ed95a4e958d40d0c63cbe26852c` | the real-browser journeys, disconnect and all |
+| Checkpoint 3 hardening commit | `1fa5dd904ba39201bb60704c1e23d6ad4cfa309b` | run switching and the named refusals |
+| Local HEAD | `1fa5dd9` | at the remote tip; the report commit that follows this one sits on top |
+| Remote HEAD | `1fa5dd9` | `git ls-remote --heads origin arena/01a0dca0-drillai` — **matches local** |
+| Publication state | — | **PUSHED AND VERIFIED** — five fast-forwards from `2df0523` |
+| Last source (implementation) commit | `1fa5dd9` | the last commit that changed product code or tests |
+| Last test-producing commit | `1fa5dd9` | the commit the unit and E2E numbers below were produced at |
 | Last documentation-only commit | this report | changes no product code |
-| Working tree | — | `git status --porcelain` empty at `043ea64`; no untracked files |
+| Working tree | — | `git status --porcelain` empty at `1fa5dd9`; no untracked files |
 | Mission branch state | — | branch exists on the remote and contains every commit listed in §2 |
 
 An earlier revision of this file described the state at `c9c0005`; the header above is the state at
@@ -314,10 +318,74 @@ type the API returns appears, and the tab badge counts them).
 - A catalogue-coverage test now fails when a `t('…')` key is missing from either language, which is how
   65 run-monitor/approval strings were found and translated rather than left as `⟦key⟧`.
 
-### Checkpoint 3 — The stream a client can rely on (backend half)
+### Checkpoint 3 — The stream a client can rely on
 
-- Commit `043ea6460180d0f12060f782c7185a7a7418e663` —
-  `fix(realtime): make run event streams durable across resume and disconnect`.
+Three commits, in the order they were built: the durable log and the socket that tails it
+(`043ea64`), the reusable client (`dd6d311`), the run monitor on it (`618b9b4`), the browser
+journeys (`1ec38b8`) and their hardening (`1fa5dd9`).
+
+#### The client (`frontend/src/lib/runEvents.ts`)
+
+The wire protocol as a discriminated union, field for field as the server sends it, decoded by
+`decodeRunStreamFrame`, which returns *ignored with a reason* rather than throwing — an unknown frame
+type from a newer server, a frame for another run, a sequence that is not a number. `runEventStreamUrl`
+derives the socket URL from the configured API base (relative base → page origin, absolute base → its
+own host, `ws`/`wss` by scheme) and passes the token, or the development role, as a query parameter
+because a browser cannot set handshake headers; the development role is sent only outside a production
+build, whatever the session store holds. `mergeRunEvents` deduplicates by `run_id + seq` and orders by
+that sequence, because the same durable event legitimately arrives through REST, through the socket,
+and again after a reconnect. `RunEventStream` becomes `live` only when the protocol says
+`stream_opened`, resumes from the cursor the caller hands it, stops reconnecting on `stream_closed`
+and on a refusal (4401/4403/4404 — waiting cannot change an answer the server has already given), and
+`dispose` closes the socket, cancels the pending retry and leaves the instance inert.
+
+#### The screen (`useRunEventStream`, `RunMonitor`)
+
+The two-second interval is gone. The hook merges live events into the run's own query key and
+reconciles that query against REST after a burst, on every reconnect and once when the run ends, so
+the authoritative envelope still comes from REST. The indicator reports the transport unedited and
+shows the cursor it has applied (`Live · seq 27`): "Live" alone is a claim, a sequence number is
+evidence. A dropped socket reads *Realtime disconnected — showing saved history*; it is never called
+an unreachable backend, because REST may still be answering and the history on screen is still real.
+
+Two product problems surfaced only in the browser:
+
+* **The identity had to become a real dependency.** TanStack Query's structural sharing means a
+  refetch that returns identical data does not re-render, so a socket could outlive the identity that
+  opened it. The identity is now subscribable (`subscribeIdentity`/`identityKey` in `api/client.ts`)
+  and read through `useSyncExternalStore`. The identity-switch journey caught this; it is not
+  theoretical.
+* **A stream that ends because the run ends keeps saying so.** Resetting the indicator to "not
+  streamed" after a terminal close erased the moment the operator was watching for; a monitor opened
+  on an already-finished run still starts idle.
+
+`waiting_approval` and `paused` runs are streamed. A parked run changes without this page doing
+anything — a decision taken in the inbox, a resume by another operator — and that is exactly the
+event a monitor must not miss. The alternative would be an interval under the socket, which is the
+stopgap this checkpoint removed.
+
+#### The browser evidence
+
+`socket opens → events arrive → the transport is dropped → the server produces more events → the
+client reconnects with its cursor → the page equals the API log`.
+
+The disconnect is forced through Playwright's WebSocket routing, which connects to the real server and
+forwards both directions: the socket is real, the server is real, and only the failure is injected.
+The journey was checked against a deliberate regression — with the resume cursor forced back to `0`
+(the defect this checkpoint fixes), the journey fails. A test that cannot fail is not evidence.
+
+Five journeys: the drop-and-recover above; leaving the monitor closes its socket and opens no further
+ones; switching identity replaces the socket instead of reusing another principal's stream; switching
+runs closes A's socket and never mixes the two logs; and a run that has already finished is not
+streamed at all.
+
+---
+
+
+#### The backend half — commit `043ea64`
+
+Commit `043ea6460180d0f12060f782c7185a7a7418e663` —
+`fix(realtime): make run event streams durable across resume and disconnect`.
 
 The WebSocket endpoint carried a comment saying it was "verified manually", and manual verification
 had missed two defects that only a client shows you. Both were found by writing the test the comment
@@ -366,28 +434,27 @@ repeated `(run_id, seq)` is refused by the database; the migration renumbers dup
 constraining; a cursor past the end means "up to date" and replays nothing; and a development role in
 the query string grants nothing when authentication is on.
 
-### Checkpoint 3, backend half — the durable report block
+### Checkpoint 3 — the durable report block
 
 | Field | Value |
 | --- | --- |
-| Checkpoint | 3 — realtime: durable run-event streams (backend half) |
-| Local starting SHA | `2df0523` (after the reset recovery; the pre-reset local tip `bfa066b` held no mission commits) |
+| Checkpoint | 3 — realtime: a durable run-event stream, end to end |
+| Local starting SHA | `bfa066b` (a fresh grafted clone after environment reset 6) → `2df0523` after recovery |
 | Remote starting SHA | `2df05239c51be41d986e68c4c1ec881522b5cb21` |
-| Root causes | (1) event sequences restarted at 1 on resume, so a cursor-based client saw nothing after its cursor; (2) the socket handler never read from the client, so an abandoned connection kept polling forever; (3) the socket had no automated test at all — "verified manually" |
-| Files changed | `backend/src/drillai/workflow/runtime.py`, `backend/src/drillai/db/models/workflow.py`, `backend/src/drillai/api/deps.py`, `backend/src/drillai/api/routers/runs.py`, `backend/tests/api/conftest.py`, `backend/tests/workflow/test_runtime_execution.py` |
-| Files added | `backend/alembic/versions/7d5e1c4a90b2_run_event_sequence_unique.py`, `backend/tests/api/ws.py`, `backend/tests/api/test_run_event_stream.py`, `backend/tests/db/test_run_event_sequence_migration.py` |
+| Root causes | (1) event sequences restarted at 1 on resume, so a cursor-based client saw nothing after its cursor; (2) the socket handler never read from the client, so an abandoned connection kept polling forever; (3) the socket had no automated test at all — "verified manually"; (4) the run monitor polled every 2 s because no client existed for the stream; (5) a changed identity left the old principal's socket open |
+| Files changed | the backend four above, plus `frontend/src/api/client.ts`, `frontend/src/hooks/useRunEventStream.ts`, `frontend/src/pages/workflow/RunMonitor.tsx`, `frontend/src/i18n/{en,fa}.ts`, six captured fixtures |
+| Files added | the migration and three backend test files above, plus `frontend/src/lib/runEvents.ts`, `frontend/src/hooks/useRunEventStream.ts`, their test files, and `frontend/e2e/run-events.spec.ts` |
 | Migration | `7d5e1c4a90b2` (down_revision `9c1f4b7d5a20`): repair duplicate sequences, then `UNIQUE (run_id, seq)`; reversible |
-| Tests | 8 WebSocket + 1 migration + 1 runtime monotonicity regression (the existing resume test gained the assertion) |
-| Test counts | full backend **379 passed, 2 skipped**; WS file **8 passed** on three consecutive runs at `043ea64` |
-| E2E | not re-run in this checkpoint — no frontend or API-contract change; the `60adee0` numbers remain the E2E evidence and are labelled as such |
-| Commit SHA | `043ea6460180d0f12060f782c7185a7a7418e663` |
-| Push result | `2df0523..043ea64  arena/01a0dca0-drillai -> arena/01a0dca0-drillai` (fast-forward, exit 0) |
-| Remote SHA | `043ea6460180d0f12060f782c7185a7a7418e663` |
+| Tests added | 8 WebSocket + 1 migration data-repair + 1 runtime monotonicity regression + 36 stream + 9 hook + 6 monitor tests + 5 browser journeys |
+| Test counts at `1fa5dd9` | backend **379 passed, 2 skipped**; Vitest **161 passed** in 12 files; Playwright **28 passed** / 0 failed (23 pre-existing + 5 new) |
+| E2E provenance | the 28-pass run was made at `1fa5dd9`, after the last source change; the 23 pre-existing journeys were also re-run at that commit |
+| Commits | `043ea64` backend, `dd6d311` client, `618b9b4` integration, `1ec38b8` browser, `1fa5dd9` hardening |
+| Push result | five fast-forwards from `2df0523`, each verified with `git ls-remote` |
+| Remote SHA | `1fa5dd904ba39201bb60704c1e23d6ad4cfa309b` |
 | Local == remote | yes (`git rev-parse HEAD` == `git ls-remote --heads origin arena/01a0dca0-drillai`) |
-| Working tree | clean (`git status --porcelain` empty) |
-| Untracked | none |
-| Remaining blockers | none for this half; the frontend half of checkpoint 3 is the next work |
-| Next checkpoint | checkpoint 3, frontend half: `frontend/src/lib/runEvents.ts`, Run Monitor integration retiring the 2 s poll, and the real-browser reconnect journey |
+| Working tree | clean (`git status --porcelain` empty); untracked files: none |
+| Remaining blockers | none |
+| Next checkpoint | 4 — the error matrix (400/401/403/404/409/422/500/network/timeout/malformed/abort) with recovery, and never "backend unreachable" for a deliberate abort |
 
 ---
 
@@ -396,7 +463,32 @@ the query string grants nothing when authentication is on.
 Every row below was produced by running the command shown, at the commit named in the row. Exact
 counts, no rounding, and nothing is reported as "all good".
 
-### At `043ea64` (Checkpoint 3, backend) — the current source commit
+### At `1fa5dd9` (Checkpoint 3) — the current source commit
+
+Measured on the working tree at `1fa5dd904ba39201bb60704c1e23d6ad4cfa309b`, after the last commit that
+changed product code or tests. Each row's provenance is the commit named in it.
+
+| Suite / command | Commit | Result |
+| --- | --- | --- |
+| `npm run typecheck` (frontend) | `1fa5dd9` | clean, no diagnostics |
+| `npx eslint .` (frontend) | `1fa5dd9` | clean, no output |
+| `npx vitest run` (frontend, full suite) | `1fa5dd9` | **161 passed**, 12 files |
+| `npm run build` (frontend) | `1fa5dd9` | built in 4.26 s; `index-DButXYdn.js` 249.49 kB / gzip 67.67 kB |
+| `node scripts/run-e2e.mjs` (Playwright, real backend) | `1fa5dd9` | **28 passed**, 0 failed, 0 skipped |
+| `node scripts/run-e2e.mjs e2e/run-events.spec.ts` (the new journeys alone) | `1ec38b8` + run-switch journey at `1fa5dd9` | **5 passed** in 26.1 s |
+| `.venv/bin/python -m pytest -q` (backend, full suite) | `1fa5dd9` (no backend change since `043ea64`) | **379 passed, 2 skipped** |
+
+The five browser journeys, named:
+
+| Journey | What it proves |
+| --- | --- |
+| the socket opens, streams, survives a drop, and ends up equal to the API log | events arrive live; the transport is dropped mid-run; the server keeps producing events with no browser watching; the client reconnects with its cursor; the page's log equals `GET /runs/{id}/events` exactly, once each, in sequence order; a reload shows the same log |
+| leaving the run closes the socket instead of leaving it watching | navigating away disposes the stream: the socket closes and no further socket is opened |
+| changing identity replaces the socket rather than reusing another principal's stream | an identity change opens a new socket under the new identity and closes the old one |
+| moving to another run closes the first socket and never mixes the two logs | run A's socket closes when run B is opened, B's socket names B, and the page shows B's log only |
+| a run that has already finished is not streamed at all | a terminal run gets no socket and reads `idle`, not a stale "live" |
+
+### At `043ea64` (Checkpoint 3, backend) — superseded by `1fa5dd9`
 
 | Suite / command | Result |
 | --- | --- |
@@ -434,7 +526,7 @@ So the work was never actually "recovered from the report" — the files survive
 that had held them did not. It is committed now as `043ea64` and pushed (`2df0523..043ea64`), which is
 the point of the rule: until a commit is pushed, a wipe takes it.
 
-### At `60adee0` (Checkpoint 2) — the frontend numbers
+### At `60adee0` (Checkpoint 2) — superseded
 
 | Suite / command | Result |
 | --- | --- |
@@ -565,14 +657,21 @@ automated** and are therefore not claimed.
 
 - Journeys 1–4 are automated end to end (well/cockpit; documents/ingestion/evidence; the workflow
   studio lifecycle; and, new in checkpoint 2, the run lifecycle, the approval and rejection journeys,
-  the approval inbox and the deterministic failing-node journey). Live events over the WebSocket, the
-  error matrix, permission journeys, context persistence, RTL and accessibility are **not yet proven
-  at the browser level** — they are checkpoint 3 onwards.
-- The run monitor still refreshes a live run on a 2 s interval. That is a deliberate stopgap and it is
-  documented in the source: checkpoint 3 replaces it with the events stream rather than running both.
-  A run waiting for a human is not polled at all.
-- `MISSION CLOSED` requires the WebSocket to be genuinely verified. It is not yet: the backend
-  endpoint exists and its contract is recorded, but no browser journey has opened it.
+  the approval inbox and the deterministic failing-node journey). Live events over the WebSocket are
+  now proven at the browser level too (checkpoint 3, five journeys). The error matrix, permission
+  journeys, context persistence, RTL and accessibility are **not yet proven at the browser level** —
+  they are checkpoint 4 onwards.
+- The run monitor no longer polls: the 2 s interval was retired in checkpoint 3 (`618b9b4`), together
+  with `LIVE_RUN_STATUSES`, and the replacement is the stream plus a REST reconciliation after bursts,
+  on reconnect and on terminal. Runs in `waiting_approval` and `paused` are streamed as well — a
+  parked run can change without this page doing anything.
+- The WebSocket is verified: a real server, a real socket in a real browser, a forced disconnect, and
+  a final log equal to the API's. What is **not** yet verified is the stream's behaviour under the
+  error matrix — token expiry mid-stream, a server restart, a proxy that closes with an unusual code,
+  and a refusal after a role change are checkpoint 4's scope.
+- The frontend unit tests cover the stream's states, cursor, deduplication, reconnect URL,
+  out-of-order frames, wrong-run frames, unknown frames, terminal close and disposal; the browser
+  journeys cover the product-level behaviour. Nothing in the stream is verified only by a mock.
 - There is no CI workflow file yet; the gate commands are documented in `docs/FRONTEND_TESTING.md` and
   are currently run by hand (in this session, in full, at every checkpoint).
 - No `ops/` deployment assets.
@@ -592,14 +691,10 @@ automated** and are therefore not claimed.
 
 ## 5. Next checkpoints
 
-1. **Checkpoint 3 — live events.** The server half is at `043ea64` (above): the log is resumable, the
-   socket is tested, and the browser-shaped handshake works without opening a production hole. What
-   remains is the client half: a reusable WebSocket layer (`frontend/src/lib/runEvents.ts`, not socket
-   code inside a component) covering the `stream_opened` / `run_event` / `stream_idle` /
-   `stream_closed` / `stream_error` contract, deduplication by `run_id + seq`, bounded reconnect
-   backoff, REST reconciliation as the source of truth, an honest connection indicator, `RunMonitor`
-   integration that retires the 2 s poll only once the stream proves out, and a real-browser journey
-   in which a forced disconnect loses no event and duplicates none.
+1. ~~**Checkpoint 3 — live events.**~~ **Done**, in five commits: `043ea64` (the durable log and the
+   tested socket), `dd6d311` (the reusable client), `618b9b4` (the run monitor on it, poll retired),
+   `1ec38b8` (the browser journeys), `1fa5dd9` (run switching and named refusals). All pushed and
+   verified on the remote.
 2. **Checkpoint 4 — the error matrix** (401/403/404/409/422/500/network/timeout/malformed), with
    recovery, and never "backend unreachable" for a deliberate abort.
 3. **Checkpoint 5 — permissions, context, RTL, accessibility**: the real role catalogue against
