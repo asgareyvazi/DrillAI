@@ -122,14 +122,14 @@ export function EvidencePanel({
 
   const linked = useQuery({
     queryKey: ['evidence', { subjectKind, subjectId, wellId, documentId }],
-    queryFn: () =>
+    queryFn: ({ signal }) =>
       drillingApi.listEvidence({
         ...(subjectKind ? { subject_kind: subjectKind } : {}),
         ...(subjectId ? { subject_id: subjectId } : {}),
         ...(wellId ? { well_id: wellId } : {}),
         ...(documentId ? { document_id: documentId } : {}),
         limit: 200,
-      } as never),
+      } as never, signal),
     enabled: open,
     retry: false,
   })
@@ -223,7 +223,7 @@ export function EvidenceSummaryStrip({
   const { t } = useI18n()
   const summary = useQuery({
     queryKey: ['evidence-summary', wellId],
-    queryFn: () => drillingApi.evidenceSummary({ well_id: wellId }),
+    queryFn: ({ signal }) => drillingApi.evidenceSummary({ well_id: wellId }, signal),
     retry: false,
   })
   if (summary.isLoading || !summary.data) return null

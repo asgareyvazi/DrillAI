@@ -177,7 +177,7 @@ export default function AdvisorWorkspace() {
   const [answer, setAnswer] = useState<AdvisorAnswer | null>(null)
   const [showEvidence, setShowEvidence] = useState(false)
 
-  const questions = useQuery({ queryKey: ['advisor-questions'], queryFn: () => drillingApi.advisorQuestions() })
+  const questions = useQuery({ queryKey: ['advisor-questions'], queryFn: ({ signal }) => drillingApi.advisorQuestions(signal) })
   const ask = useMutation({
     mutationFn: (payload: { question: string; use_llm: boolean }) => drillingApi.askAdvisor(id, payload),
     onSuccess: (data) => setAnswer(data.answer),

@@ -27,7 +27,30 @@ describe('<Async>', () => {
     expect(screen.queryByText('data')).not.toBeInTheDocument()
   })
 
-  it('renders the error state with a retry that calls refetch', async () => {
+  it('renders a transient failure with a retry that calls refetch', async () => {
+    const refetch = vi.fn()
+    renderWithI18n(
+      <Async
+        query={{
+          isLoading: false,
+          error: new ApiError(0, 'network.unreachable', 'the backend is unreachable'),
+          data: undefined,
+          refetch,
+        }}
+      >
+        {() => <p>data</p>}
+      </Async>,
+    )
+
+    const alert = screen.getByRole('alert')
+    expect(alert).toHaveTextContent(/backend is unreachable/i)
+    expect(alert).toHaveAttribute('data-error-kind', 'network')
+
+    await userEvent.click(screen.getByRole('button', { name: /retry/i }))
+    expect(refetch).toHaveBeenCalledTimes(1)
+  })
+
+  it('renders a permission failure without offering a retry that cannot help', () => {
     const refetch = vi.fn()
     renderWithI18n(
       <Async
@@ -46,9 +69,8 @@ describe('<Async>', () => {
     expect(alert).toHaveTextContent(/do not have permission/i)
     expect(alert).toHaveTextContent('security.permission_denied')
     expect(alert).toHaveTextContent('req_9')
-
-    await userEvent.click(screen.getByRole('button', { name: /retry/i }))
-    expect(refetch).toHaveBeenCalledTimes(1)
+    expect(alert).toHaveAttribute('data-error-kind', 'forbidden')
+    expect(screen.queryByRole('button', { name: /retry/i })).not.toBeInTheDocument()
   })
 
   it('prefers the empty state over content when the caller says it is empty', () => {
@@ -82,12 +104,117 @@ describe('<Async>', () => {
 
 describe('<ErrorState>', () => {
   it('names a network failure differently from a not-found', () => {
-    const { unmount } = renderWithI18n(<ErrorState error={new ApiError(0, 'network_unreachable', 'x')} />)
+    const { unmount } = renderWithI18n(<ErrorState error={new ApiError(0, 'network.unreachable', 'x')} />)
     expect(screen.getByRole('alert')).toHaveTextContent(/backend is unreachable/i)
     unmount()
 
     renderWithI18n(<ErrorState error={new ApiError(404, 'platform.not_found', 'x')} />)
     expect(screen.getByRole('alert')).toHaveTextContent(/not found/i)
+  })
+
+  it('gives every failure class its own wording and its own kind', () => {
+    const cases: Array<[ApiError, string, RegExp]> = [
+      [new ApiError(400, 'platform.unsupported_operation', 'nope'), 'invalid_request', /could not accept this request/i],
+      [new ApiError(401, 'security.authentication_required', 'no'), 'unauthenticated', /not signed in/i],
+      [new ApiError(403, 'security.permission_denied', 'no'), 'forbidden', /do not have permission/i],
+      [new ApiError(404, 'platform.not_found', 'no'), 'not_found', /not found/i],
+      [new ApiError(409, 'platform.conflict', 'the approval has not been decided yet'), 'conflict', /refused this because of its current state/i],
+      [new ApiError(422, 'platform.validation_failed', 'unknown report kind'), 'validation', /rejected by the server/i],
+      [new ApiError(500, 'platform.internal_error', 'internal error'), 'server', /server failed to complete/i],
+      [new ApiError(0, 'network.unreachable', 'down'), 'network', /backend is unreachable/i],
+      [new ApiError(0, 'network.timeout', 'slow', {}, null, true, { kind: 'timeout' }), 'timeout', /timed out/i],
+      [
+        new ApiError(200, 'protocol.malformed_response', 'bad', {}, null, false, { kind: 'malformed' }),
+        'malformed',
+        /response this page could not read/i,
+      ],
+    ]
+
+    for (const [error, kind, wording] of cases) {
+      const { unmount } = renderWithI18n(<ErrorState error={error} />)
+      const alert = screen.getByRole('alert')
+      expect(alert, kind).toHaveAttribute('data-error-kind', kind)
+      expect(alert, kind).toHaveTextContent(wording)
+      unmount()
+    }
+  })
+
+  it('never calls a protocol failure or a timeout "unreachable"', () => {
+    for (const error of [
+      new ApiError(0, 'network.timeout', 'slow', {}, null, true, { kind: 'timeout' }),
+      new ApiError(200, 'protocol.malformed_response', 'bad', {}, null, false, { kind: 'malformed' }),
+    ]) {
+      const { unmount } = renderWithI18n(<ErrorState error={error} />)
+      expect(screen.getByRole('alert')).not.toHaveTextContent(/unreachable/i)
+      unmount()
+    }
+  })
+
+  it('shows the request id the server returned, so a failure can be traced', () => {
+    renderWithI18n(
+      <ErrorState
+        error={new ApiError(500, 'platform.internal_error', 'internal error', {}, 'req_20260929', false, {
+          kind: 'server',
+        })}
+      />,
+    )
+    expect(screen.getByTestId('error-request-id')).toHaveTextContent('request req_20260929')
+  })
+
+  it('offers a retry for the failures where asking again can help, and not otherwise', () => {
+    const retryable = [
+      new ApiError(0, 'network.unreachable', 'down'),
+      new ApiError(0, 'network.timeout', 'slow', {}, null, true, { kind: 'timeout' }),
+      new ApiError(503, 'http_503', 'unavailable'),
+    ]
+    for (const error of retryable) {
+      const onRetry = vi.fn()
+      const { unmount } = renderWithI18n(<ErrorState error={error} onRetry={onRetry} />)
+      expect(screen.getByRole('button', { name: /retry/i }), error.summary).toBeInTheDocument()
+      unmount()
+    }
+
+    const final = [
+      new ApiError(400, 'platform.unsupported_operation', 'nope'),
+      new ApiError(401, 'security.authentication_required', 'no'),
+      new ApiError(403, 'security.permission_denied', 'no'),
+      new ApiError(404, 'platform.not_found', 'no'),
+      new ApiError(409, 'platform.conflict', 'no'),
+      new ApiError(422, 'platform.validation_failed', 'no'),
+      new ApiError(200, 'protocol.malformed_response', 'bad', {}, null, false, { kind: 'malformed' }),
+    ]
+    for (const error of final) {
+      const onRetry = vi.fn()
+      const { unmount } = renderWithI18n(<ErrorState error={error} onRetry={onRetry} />)
+      expect(screen.queryByRole('button', { name: /retry/i }), error.summary).not.toBeInTheDocument()
+      unmount()
+    }
+  })
+
+  it('renders nothing at all for a cancelled request unless the caller asks for it', () => {
+    const { container, unmount } = renderWithI18n(<ErrorState error={ApiError.cancelled('/runs/run_a')} />)
+    expect(container).toBeEmptyDOMElement()
+    unmount()
+
+    renderWithI18n(<ErrorState error={ApiError.cancelled('/runs/run_a')} showCancelled />)
+    expect(screen.getByText(/cancelled/i)).toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('bounds a large detail payload instead of printing the whole response', () => {
+    renderWithI18n(
+      <ErrorState
+        error={
+          new ApiError(422, 'platform.validation_failed', 'too much', {
+            rows: Array.from({ length: 200 }, (_, index) => `row-${index}`),
+          })
+        }
+      />,
+    )
+    const alert = screen.getByRole('alert')
+    expect(alert).toHaveTextContent('row-0')
+    expect(alert).toHaveTextContent('…')
+    expect(alert.textContent!.length).toBeLessThan(2_400)
   })
 
   it('renders the backend detail payload for a validation failure', () => {

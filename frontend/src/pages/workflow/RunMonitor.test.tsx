@@ -204,7 +204,9 @@ describe('run monitor: the run list', () => {
     renderMonitor()
     const table = await screen.findByRole('table')
     await userEvent.click(at(within(table).getAllByRole('row'), 1, 'rendered rows'))
-    await waitFor(() => expect(api.getRun).toHaveBeenCalledWith(at(runsPage.items, 0, 'runs').id))
+    await waitFor(() =>
+      expect(api.getRun).toHaveBeenCalledWith(at(runsPage.items, 0, 'runs').id, expect.any(AbortSignal)),
+    )
   })
 })
 
@@ -216,7 +218,7 @@ describe('run monitor: a run waiting for a human', () => {
     expect(await screen.findByTestId('run-status')).toHaveTextContent(/waiting approval/i)
     expect(screen.getByTestId('run-awaiting-approval')).toBeInTheDocument()
     // The state came from the server: a reload is another fetch of the same envelope.
-    expect(api.getRun).toHaveBeenCalledWith(waiting.run.id)
+    expect(api.getRun).toHaveBeenCalledWith(waiting.run.id, expect.any(AbortSignal))
   })
 
   it('shows the scope the run was started against, naming what was not returned', async () => {
@@ -325,7 +327,10 @@ describe('run monitor: after a decision', () => {
     renderMonitor(`/runs?run=${succeeded.run.id}`)
     await screen.findByTestId('run-status')
     await waitFor(() =>
-      expect(api.listApprovals).toHaveBeenCalledWith({ run_id: succeeded.run.id, status: 'any' }),
+      expect(api.listApprovals).toHaveBeenCalledWith(
+        { run_id: succeeded.run.id, status: 'any' },
+        expect.any(AbortSignal),
+      ),
     )
   })
 
@@ -343,7 +348,7 @@ describe('run monitor: after a decision', () => {
     // The filter is what makes the audit trail reachable; pending stays the default.
     const filter = screen.getByLabelText('Approval status')
     await userEvent.selectOptions(filter, 'any')
-    await waitFor(() => expect(api.listApprovals).toHaveBeenCalledWith({ status: 'any' }))
+    await waitFor(() => expect(api.listApprovals).toHaveBeenCalledWith({ status: 'any' }, expect.any(AbortSignal)))
     const decided = at(approvals, 0, 'approvals')
     expect(await screen.findByText(String(decided.decision_note))).toBeInTheDocument()
   })

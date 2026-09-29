@@ -137,7 +137,7 @@ function StudioBody({
 
   const nodeTypesCatalogue = useQuery({
     queryKey: ['node-types'],
-    queryFn: () => drillingApi.nodeTypes(),
+    queryFn: ({ signal }) => drillingApi.nodeTypes(signal),
   })
   /**
    * Which version the editor is looking at.
@@ -149,19 +149,19 @@ function StudioBody({
    */
   const versions = useQuery({
     queryKey: ['workflow-versions', workflow.id],
-    queryFn: () => drillingApi.workflowVersions(workflow.id, { limit: 20 }),
+    queryFn: ({ signal }) => drillingApi.workflowVersions(workflow.id, { limit: 20 }, signal),
   })
   const [viewVersion, setViewVersion] = useState<number | null>(null)
   const newestVersion = versions.data?.items[0]?.version ?? null
   const targetVersion = viewVersion ?? newestVersion ?? undefined
   const graph = useQuery({
     queryKey: ['workflow-graph', workflow.id, targetVersion ?? 'newest'],
-    queryFn: () => drillingApi.getWorkflow(workflow.id, targetVersion === undefined ? {} : { version: targetVersion }),
+    queryFn: ({ signal }) => drillingApi.getWorkflow(workflow.id, targetVersion === undefined ? {} : { version: targetVersion }, signal),
     enabled: versions.isSuccess && (newestVersion !== null || viewVersion !== null),
   })
   // What this identity may actually do. The server decides; this only keeps the editor from
   // offering a button whose only possible outcome is a refusal.
-  const identity = useQuery({ queryKey: ['identity', devRoles], queryFn: () => drillingApi.identity() })
+  const identity = useQuery({ queryKey: ['identity', devRoles], queryFn: ({ signal }) => drillingApi.identity(signal) })
   const permissions = identity.data?.permissions
   const canPublish = holdsPermission(permissions, 'workflow.publish')
   const canDraft = holdsPermission(permissions, 'workflow.draft')
@@ -372,7 +372,7 @@ function StudioBody({
 
   // A run needs a well. A definition has no `well_id`, so the context is chosen here explicitly:
   // an unscoped run is not allowed to happen by accident.
-  const wells = useQuery({ queryKey: ['wells'], queryFn: () => drillingApi.listWells({ limit: 200 }) })
+  const wells = useQuery({ queryKey: ['wells'], queryFn: ({ signal }) => drillingApi.listWells({ limit: 200 }, signal) })
   const selectedWell = wells.data?.items.find((well) => well.id === runWellId) ?? null
 
   const startRun = useMutation({
@@ -922,8 +922,8 @@ export default function WorkflowStudio() {
   const dirtyRef = useRef(false)
   dirtyRef.current = dirty
 
-  const workflows = useQuery({ queryKey: ['workflows'], queryFn: () => drillingApi.listWorkflows() })
-  const nodeTypes = useQuery({ queryKey: ['node-types'], queryFn: () => drillingApi.nodeTypes() })
+  const workflows = useQuery({ queryKey: ['workflows'], queryFn: ({ signal }) => drillingApi.listWorkflows(signal) })
+  const nodeTypes = useQuery({ queryKey: ['node-types'], queryFn: ({ signal }) => drillingApi.nodeTypes(signal) })
 
   const create = useMutation({
     mutationFn: () =>

@@ -19,8 +19,8 @@ export default function WellList() {
   const { t, locale } = useI18n()
   const { unitSystem } = useSession()
   const navigate = useNavigate()
-  const wells = useQuery({ queryKey: ['wells'], queryFn: () => drillingApi.listWells({ limit: 200 }) })
-  const projects = useQuery({ queryKey: ['projects'], queryFn: () => drillingApi.listProjects() })
+  const wells = useQuery({ queryKey: ['wells'], queryFn: ({ signal }) => drillingApi.listWells({ limit: 200 }, signal) })
+  const projects = useQuery({ queryKey: ['projects'], queryFn: ({ signal }) => drillingApi.listProjects(signal) })
 
   return (
     <div className="space-y-4">

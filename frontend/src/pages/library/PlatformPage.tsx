@@ -16,14 +16,14 @@ import { humanise } from '../../lib/format'
 
 export default function PlatformPage() {
   const { t } = useI18n()
-  const capabilities = useQuery({ queryKey: ['capabilities'], queryFn: () => drillingApi.capabilities() })
+  const capabilities = useQuery({ queryKey: ['capabilities'], queryFn: ({ signal }) => drillingApi.capabilities(signal) })
   const integrations = useQuery({
     queryKey: ['integrations'],
-    queryFn: () => drillingApi.integrations(),
+    queryFn: ({ signal }) => drillingApi.integrations(signal),
   })
-  const providers = useQuery({ queryKey: ['providers'], queryFn: () => drillingApi.providers() })
-  const version = useQuery({ queryKey: ['version'], queryFn: () => drillingApi.version() })
-  const health = useQuery({ queryKey: ['health-ready'], queryFn: () => drillingApi.healthReady() })
+  const providers = useQuery({ queryKey: ['providers'], queryFn: ({ signal }) => drillingApi.providers(signal) })
+  const version = useQuery({ queryKey: ['version'], queryFn: ({ signal }) => drillingApi.version(signal) })
+  const health = useQuery({ queryKey: ['health-ready'], queryFn: ({ signal }) => drillingApi.healthReady(signal) })
 
   return (
     <div className="space-y-4">

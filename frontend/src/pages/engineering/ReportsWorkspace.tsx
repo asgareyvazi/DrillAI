@@ -71,7 +71,7 @@ export default function ReportsWorkspace() {
   const [kind, setKind] = useState('daily_drilling')
   const [report, setReport] = useState<Report | null>(null)
 
-  const kinds = useQuery({ queryKey: ['report-kinds'], queryFn: () => drillingApi.reportKinds() })
+  const kinds = useQuery({ queryKey: ['report-kinds'], queryFn: ({ signal }) => drillingApi.reportKinds(signal) })
   const build = useMutation({
     mutationFn: (reportKind: string) => drillingApi.buildReport(id, reportKind),
     onSuccess: (data) => setReport(data.report),

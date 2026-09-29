@@ -9,7 +9,7 @@
 
 import clsx from 'clsx'
 import { useId, type ReactNode } from 'react'
-import { ApiError } from '../../api/client'
+import { ApiError, canRetry } from '../../api/client'
 import { useI18n } from '../../i18n'
 import { formatValue } from '../../lib/format'
 
@@ -155,33 +155,97 @@ export function EmptyState({ message, hint }: { message?: string; hint?: string 
   )
 }
 
-export function ErrorState({ error, onRetry }: { error: unknown; onRetry?: () => void }) {
+/** The headline for each failure class. One mapping, so no page invents its own wording. */
+const ERROR_MESSAGE_KEYS = {
+  invalid_request: 'errors.invalidRequest',
+  unauthenticated: 'errors.notAuthenticated',
+  forbidden: 'errors.forbidden',
+  not_found: 'errors.notFound',
+  conflict: 'errors.conflict',
+  validation: 'errors.validation',
+  server: 'errors.server',
+  network: 'errors.network',
+  timeout: 'errors.timeout',
+  malformed: 'errors.malformed',
+  cancelled: 'errors.cancelled',
+  unknown: 'errors.generic',
+} as const
+
+/** What the operator can do about it, when there is something to say. */
+const ERROR_HINT_KEYS: Partial<Record<keyof typeof ERROR_MESSAGE_KEYS, string>> = {
+  invalid_request: 'errors.hintInvalidRequest',
+  unauthenticated: 'errors.hintNotAuthenticated',
+  forbidden: 'errors.hintForbidden',
+  not_found: 'errors.hintNotFound',
+  conflict: 'errors.hintConflict',
+  server: 'errors.hintServer',
+  timeout: 'errors.hintTimeout',
+  malformed: 'errors.hintMalformed',
+}
+
+/** Longest detail payload rendered, so an error page can never become a wall of JSON. */
+const DETAIL_LIMIT = 800
+
+/**
+ * The one place a failure is rendered.
+ *
+ * Which failure it is decides both the wording and whether a retry is offered: a retry button on a
+ * problem that cannot be fixed by asking again ("this identity may not read this run") is a lie told
+ * in the shape of a control. A cancelled request renders nothing at all — it is not a failure.
+ */
+export function ErrorState({
+  error,
+  onRetry,
+  showCancelled = false,
+}: {
+  error: unknown
+  onRetry?: () => void
+  /** Render an explicitly-cancelled request. Off by default: cancellation is not an error. */
+  showCancelled?: boolean
+}) {
   const { t } = useI18n()
   const apiError = error instanceof ApiError ? error : null
-  let message: string
-  if (apiError?.status === 0) message = t('errors.network')
-  else if (apiError?.isUnauthorized) message = t('errors.forbidden')
-  else if (apiError?.isNotFound) message = t('errors.notFound')
-  else if (apiError?.isValidation) message = `${t('errors.validation')} ${apiError.message}`
-  else message = apiError?.message ?? (error instanceof Error ? error.message : t('errors.generic'))
+  const kind = apiError?.kind
 
+  if (kind === 'cancelled') return showCancelled ? <EmptyState message={t('errors.cancelled')} /> : null
+
+  const message = apiError
+    ? t(ERROR_MESSAGE_KEYS[apiError.kind] as 'errors.generic')
+    : error instanceof Error
+      ? error.message
+      : t('errors.generic')
+  const hintKey = apiError ? ERROR_HINT_KEYS[apiError.kind] : undefined
+  // The server's own sentence, when it wrote one. "missing permission 'workflow.read'" is worth more
+  // than any generic phrasing this page could invent, and it is what makes a 403 actionable.
+  const explanation = apiError?.messageFromServer ? apiError.message : null
   const detail = apiError && Object.keys(apiError.details).length > 0 ? apiError.details : null
+  const detailText = detail ? JSON.stringify(detail, null, 2) : null
+  const rendered = detailText && detailText.length > DETAIL_LIMIT ? `${detailText.slice(0, DETAIL_LIMIT)}…` : detailText
+  const retryable = onRetry !== undefined && canRetry(error)
 
   return (
-    <div role="alert" className="rounded-md border border-danger/40 bg-red-50/60 p-4 dark:bg-red-950/30">
+    <div
+      role="alert"
+      data-testid="error-state"
+      data-error-kind={apiError?.kind ?? 'unknown'}
+      data-http-status={apiError?.status ?? undefined}
+      className="rounded-md border border-danger/40 bg-red-50/60 p-4 dark:bg-red-950/30"
+    >
       <p className="text-sm font-medium text-danger">{message}</p>
+      {explanation && <p className="mt-1 text-xs text-graphite-700 dark:text-graphite-200">{explanation}</p>}
+      {hintKey && <p className="mt-1 text-xs text-graphite-500">{t(hintKey as 'errors.generic')}</p>}
       {apiError && (
-        <p className="mt-1 font-mono text-[11px] text-graphite-500">
+        <p className="mt-1 font-mono text-[11px] text-graphite-500" data-testid="error-request-id">
           {apiError.code}
           {apiError.requestId ? ` · request ${apiError.requestId}` : ''}
         </p>
       )}
-      {detail && (
+      {rendered && (
         <pre className="mt-2 max-h-40 overflow-auto rounded bg-white/70 p-2 text-[11px] dark:bg-graphite-950/50">
-          {JSON.stringify(detail, null, 2)}
+          {rendered}
         </pre>
       )}
-      {onRetry && (
+      {retryable && (
         <div className="mt-3">
           <Button size="sm" onClick={onRetry}>
             {t('common.retry')}

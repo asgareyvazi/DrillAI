@@ -201,13 +201,13 @@ export default function OptimisationWorkspace() {
 
   const objectivesCatalogue = useQuery({
     queryKey: ['optimisation-objectives'],
-    queryFn: () => drillingApi.optimisationObjectives(),
+    queryFn: ({ signal }) => drillingApi.optimisationObjectives(signal),
   })
 
-  const wellbores = useQuery({ queryKey: ['wellbores', id], queryFn: () => drillingApi.listWellbores(id) })
+  const wellbores = useQuery({ queryKey: ['wellbores', id], queryFn: ({ signal }) => drillingApi.listWellbores(id, signal) })
   const sections = useQuery({
     queryKey: ['sections', wellbores.data?.items[0]?.id],
-    queryFn: () => drillingApi.listSections(wellbores.data?.items[0]?.id as string),
+    queryFn: ({ signal }) => drillingApi.listSections(wellbores.data?.items[0]?.id as string, signal),
     enabled: Boolean(wellbores.data?.items[0]?.id),
   })
 

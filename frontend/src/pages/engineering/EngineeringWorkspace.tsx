@@ -261,7 +261,7 @@ function EngineRunner({ engine, wellId, wellboreId, sectionId }: {
 
 function ImpactPanel({ wellId }: { wellId: string }) {
   const { t } = useI18n()
-  const graph = useQuery({ queryKey: ['dependency-graph'], queryFn: () => drillingApi.dependencies() })
+  const graph = useQuery({ queryKey: ['dependency-graph'], queryFn: ({ signal }) => drillingApi.dependencies(signal) })
   const [selected, setSelected] = useState<string[]>([])
   const [impact, setImpact] = useState<ImpactReport | null>(null)
 
@@ -383,14 +383,14 @@ export default function EngineeringWorkspace() {
   const [selectedEngine, setSelectedEngine] = useState<string | null>(null)
   const [category, setCategory] = useState<string>('all')
 
-  const engines = useQuery({ queryKey: ['engines'], queryFn: () => drillingApi.listEngines() })
-  const wellbores = useQuery({ queryKey: ['wellbores', id], queryFn: () => drillingApi.listWellbores(id) })
+  const engines = useQuery({ queryKey: ['engines'], queryFn: ({ signal }) => drillingApi.listEngines(signal) })
+  const wellbores = useQuery({ queryKey: ['wellbores', id], queryFn: ({ signal }) => drillingApi.listWellbores(id, signal) })
   const sections = useQuery({
     queryKey: ['sections', wellbores.data?.items[0]?.id],
-    queryFn: () => drillingApi.listSections(wellbores.data?.items[0]?.id as string),
+    queryFn: ({ signal }) => drillingApi.listSections(wellbores.data?.items[0]?.id as string, signal),
     enabled: Boolean(wellbores.data?.items[0]?.id),
   })
-  const runs = useQuery({ queryKey: ['well-engine-runs', id], queryFn: () => drillingApi.wellEngineRuns(id, { limit: 50 }) })
+  const runs = useQuery({ queryKey: ['well-engine-runs', id], queryFn: ({ signal }) => drillingApi.wellEngineRuns(id, { limit: 50 }, signal) })
 
   const engine = useMemo<EngineListItem | null>(
     () => engines.data?.items.find((item) => item.key === selectedEngine) ?? null,

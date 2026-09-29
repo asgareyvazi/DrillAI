@@ -515,7 +515,7 @@ function RunDetailView({ runId }: { runId: string }) {
 
   const detail = useQuery({
     queryKey: ['run', runId],
-    queryFn: () => drillingApi.getRun(runId),
+    queryFn: ({ signal }) => drillingApi.getRun(runId, signal),
     // No polling. `useRunEventStream` below is the transport for a live run: it merges events as they
     // are appended and reconciles this query against REST after a burst, on every reconnect and once
     // when the run ends. An interval here would be a second, slower copy of the same mechanism.
@@ -535,7 +535,7 @@ function RunDetailView({ runId }: { runId: string }) {
   // from the page at the moment they were recorded.
   const approvals = useQuery({
     queryKey: ['run-approvals', runId],
-    queryFn: () => drillingApi.listApprovals({ run_id: runId, status: 'any' }),
+    queryFn: ({ signal }) => drillingApi.listApprovals({ run_id: runId, status: 'any' }, signal),
   })
   const decidedApprovals = (approvals.data?.items ?? []).filter((row) => row.status !== 'pending')
 
@@ -791,7 +791,7 @@ export default function RunMonitor() {
 
   const runs = useQuery({
     queryKey: ['runs'],
-    queryFn: () => drillingApi.listRuns({ limit: 100 }),
+    queryFn: ({ signal }) => drillingApi.listRuns({ limit: 100 }, signal),
     // The list is not polled while a run is open: the open run has its own refresh, and a list that
     // silently reshuffles underneath a reader is worse than a list that is a few seconds old.
     refetchInterval: runId ? false : 5000,
@@ -801,7 +801,7 @@ export default function RunMonitor() {
   const [approvalStatus, setApprovalStatus] = useState<'pending' | 'approved' | 'rejected' | 'any'>('pending')
   const approvals = useQuery({
     queryKey: ['approvals', approvalStatus],
-    queryFn: () => drillingApi.listApprovals({ status: approvalStatus }),
+    queryFn: ({ signal }) => drillingApi.listApprovals({ status: approvalStatus }, signal),
     // Nothing starts or stops waiting for a human without someone acting, so this is a slow refresh,
     // not a live feed — and stopgap at that: the events stream (checkpoint 3) is the real transport.
     refetchInterval: approvalStatus === 'pending' ? 5000 : false,

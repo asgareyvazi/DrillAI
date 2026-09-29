@@ -25,12 +25,12 @@ export default function LibraryPage() {
   const { t } = useI18n()
   const [tab, setTab] = useState('engines')
 
-  const agents = useQuery({ queryKey: ['platform-agents'], queryFn: () => drillingApi.agents() })
-  const engines = useQuery({ queryKey: ['engines'], queryFn: () => drillingApi.listEngines() })
-  const tools = useQuery({ queryKey: ['platform-tools'], queryFn: () => drillingApi.tools() })
-  const actions = useQuery({ queryKey: ['platform-actions'], queryFn: () => drillingApi.actions() })
-  const extractors = useQuery({ queryKey: ['platform-extractors'], queryFn: () => drillingApi.extractors() })
-  const units = useQuery({ queryKey: ['units'], queryFn: () => drillingApi.units() })
+  const agents = useQuery({ queryKey: ['platform-agents'], queryFn: ({ signal }) => drillingApi.agents(signal) })
+  const engines = useQuery({ queryKey: ['engines'], queryFn: ({ signal }) => drillingApi.listEngines(signal) })
+  const tools = useQuery({ queryKey: ['platform-tools'], queryFn: ({ signal }) => drillingApi.tools(signal) })
+  const actions = useQuery({ queryKey: ['platform-actions'], queryFn: ({ signal }) => drillingApi.actions(signal) })
+  const extractors = useQuery({ queryKey: ['platform-extractors'], queryFn: ({ signal }) => drillingApi.extractors(signal) })
+  const units = useQuery({ queryKey: ['units'], queryFn: ({ signal }) => drillingApi.units(signal) })
 
   return (
     <div className="space-y-4">

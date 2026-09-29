@@ -438,33 +438,33 @@ export default function WellCockpit() {
   const [evidenceSubject, setEvidenceSubject] = useState<{ kind: string; id: string } | null>(null)
   const [nptCause, setNptCause] = useState<string | null>(null)
 
-  const state = useQuery({ queryKey: ['well-state', id], queryFn: () => drillingApi.wellState(id) })
+  const state = useQuery({ queryKey: ['well-state', id], queryFn: ({ signal }) => drillingApi.wellState(id, signal) })
   const timeline = useQuery({
     queryKey: ['well-timeline', id],
-    queryFn: () => drillingApi.wellTimeline(id, { limit: 500 }),
+    queryFn: ({ signal }) => drillingApi.wellTimeline(id, { limit: 500 }, signal),
     enabled: tab === 'timeline' || tab === 'overview',
   })
   const well = state.data?.state.well ?? null
   const npt = useQuery({
     queryKey: ['well-npt', id],
-    queryFn: () => drillingApi.wellNpt(id),
+    queryFn: ({ signal }) => drillingApi.wellNpt(id, {}, signal),
     // The endpoint answers with an envelope; unwrap it once here so every consumer sees a summary.
     select: (data) => data.npt,
     enabled: tab === 'overview' || tab === 'npt',
   })
   const twin = useQuery({
     queryKey: ['well-twin', id],
-    queryFn: () => drillingApi.wellTwin(id),
+    queryFn: ({ signal }) => drillingApi.wellTwin(id, signal),
     enabled: tab === 'twin',
   })
   const audit = useQuery({
     queryKey: ['well-audit', id],
-    queryFn: () => drillingApi.wellAudit(id),
+    queryFn: ({ signal }) => drillingApi.wellAudit(id, signal),
     enabled: tab === 'audit',
   })
   const documents = useQuery({
     queryKey: ['documents', id],
-    queryFn: () => drillingApi.listDocuments({ well_id: id }),
+    queryFn: ({ signal }) => drillingApi.listDocuments({ well_id: id }, signal),
     enabled: tab === 'documents',
   })
 

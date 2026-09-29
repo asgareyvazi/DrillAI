@@ -117,7 +117,7 @@ export default function DocumentWorkspace() {
 
   const documents = useQuery({
     queryKey: ['documents', id],
-    queryFn: () => drillingApi.listDocuments({ well_id: id }),
+    queryFn: ({ signal }) => drillingApi.listDocuments({ well_id: id }, signal),
   })
 
   const selected = useMemo<DocumentRow | null>(
@@ -127,17 +127,17 @@ export default function DocumentWorkspace() {
 
   const detail = useQuery({
     queryKey: ['document', selectedId],
-    queryFn: () => drillingApi.getDocument(selectedId as string),
+    queryFn: ({ signal }) => drillingApi.getDocument(selectedId as string, signal),
     enabled: Boolean(selectedId),
   })
   const provenance = useQuery({
     queryKey: ['document-provenance', selectedId],
-    queryFn: () => drillingApi.documentProvenance(selectedId as string),
+    queryFn: ({ signal }) => drillingApi.documentProvenance(selectedId as string, signal),
     enabled: Boolean(selectedId) && tab === 'provenance',
   })
   const documentEvidence = useQuery({
     queryKey: ['document-evidence', selectedId],
-    queryFn: () => drillingApi.listEvidence({ document_id: selectedId as string, limit: 200 }),
+    queryFn: ({ signal }) => drillingApi.listEvidence({ document_id: selectedId as string, limit: 200 }, signal),
     enabled: Boolean(selectedId) && tab === 'evidence',
   })
 

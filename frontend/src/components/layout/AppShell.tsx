@@ -99,7 +99,7 @@ function IdentityControls() {
 function HealthBadge() {
   const health = useQuery({
     queryKey: ['health-ready'],
-    queryFn: () => drillingApi.healthReady(),
+    queryFn: ({ signal }) => drillingApi.healthReady(signal),
     retry: false,
     refetchInterval: 60_000,
   })
@@ -115,7 +115,7 @@ export function AppShell() {
   const wellId = params.wellId
   const well = useQuery({
     queryKey: ['well', wellId],
-    queryFn: () => drillingApi.getWell(wellId as string),
+    queryFn: ({ signal }) => drillingApi.getWell(wellId as string, signal),
     enabled: Boolean(wellId),
     retry: false,
   })
