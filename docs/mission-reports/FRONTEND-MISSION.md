@@ -706,6 +706,35 @@ automated** and are therefore not claimed.
 
 ---
 
+## 5.1 The git gate, run at `79ed0bc`
+
+`git ls-remote` is what settles whether a commit is published; the local remote-tracking ref is a
+cache and can lag. It did lag here — `refs/remotes/origin/arena/01a0dca0-drillai` still pointed at
+`2df0523` after the pushes, which made `git log origin/…..HEAD` show seven "unpushed" commits that
+were in fact all on the remote. Fetching and re-pointing that ref (`git fetch --depth=50 origin
+arena/01a0dca0-drillai` → `git update-ref refs/remotes/origin/… FETCH_HEAD`) resolved it; the
+verification below uses `ls-remote` as the authority and the tracking ref only as a convenience.
+
+| Check | Command | Result |
+| --- | --- | --- |
+| Branch | `git branch -vv` | `* arena/01a0dca0-drillai 79ed0bc` (tracking `origin/arena/01a0dca0-drillai`) |
+| Local HEAD | `git rev-parse HEAD` | `79ed0bcbdc3c4500c3e8e0249064a5fe85ac0a12` |
+| Remote HEAD | `git ls-remote --heads origin arena/01a0dca0-drillai` | `79ed0bcbdc3c4500c3e8e0249064a5fe85ac0a12` |
+| Local == remote | — | **yes** |
+| Unpushed commits | `git log --oneline origin/arena/01a0dca0-drillai..HEAD` | 0 |
+| Difference from remote | `git diff --stat origin/arena/01a0dca0-drillai...HEAD` | empty |
+| Working tree | `git status --porcelain` | empty |
+| Untracked files | `git status --porcelain` | none |
+| Shallow clone | `git rev-parse --is-shallow-repository` | `false` (29 commits reconciled) |
+| Tracked files | `git ls-files` | 231 |
+| Source lines | `git ls-files '*.py' '*.ts' '*.tsx' | xargs wc -l` | 61 002 |
+| Secrets in the index | `git ls-files | grep -iE '\.env|credential|secret|\.pem|\.key$'` | none |
+| Ignored-but-present artefacts | `frontend/dist`, `.e2e/`, `node_modules`, `backend/.venv` | not tracked (`.gitignore`) |
+
+The branch is the only one this work touches; `main` is untouched at `bfa066b`.
+
+---
+
 ## 6. Final verification and final commit
 
 Not yet applicable: the mission is not complete. When it is, this section will carry the re-run of
