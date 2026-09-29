@@ -16,7 +16,7 @@
  */
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 import { MemoryRouter } from 'react-router-dom'
@@ -30,6 +30,71 @@ import pendingListFixture from '../../test/fixtures/approvals-list.json'
 import runSucceededFixture from '../../test/fixtures/run-succeeded.json'
 import runWaitingFixture from '../../test/fixtures/run-waiting-approval.json'
 import runsListFixture from '../../test/fixtures/runs-list.json'
+
+/**
+ * The stream is the one thing a jsdom component test cannot drive honestly — there is no server and
+ * no socket to connect to — so it is replaced here, and the *real* class is exercised against a
+ * deterministic socket by `src/lib/runEvents.test.ts` and `src/hooks/useRunEventStream.test.tsx`.
+ * What this file checks about it is what the screen renders from its state.
+ */
+const streamControls = vi.hoisted(() => {
+  const instances: Array<{ options: Record<string, unknown>; connect: () => void; dispose: () => void }> = []
+  return {
+    instances,
+    reset: () => {
+      instances.length = 0
+    },
+  }
+})
+
+vi.mock('../../lib/runEvents', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../lib/runEvents')>()
+  class FakeRunEventStream {
+    private status = {
+      state: 'idle' as const,
+      runId: '',
+      cursor: 0,
+      runStatus: null,
+      closedStatus: null,
+      attempts: 0,
+      closeCode: null,
+      lastError: null,
+    }
+
+    constructor(readonly options: Record<string, unknown>) {
+      streamControls.instances.push(this as unknown as (typeof streamControls.instances)[number])
+    }
+
+    getStatus() {
+      return { ...this.status, runId: String(this.options.runId ?? '') }
+    }
+
+    connect(): void {
+      // The screen connected: report the state an honest transport would report while the handshake
+      // is in flight, and let each test move it on from there.
+      this.emit({ state: 'connecting' })
+    }
+
+    dispose(): void {
+      this.emit({ state: 'closed' })
+    }
+
+    /** Used by the tests below to act like the server. */
+    emit(patch: Record<string, unknown>): void {
+      this.status = { ...this.status, ...patch, runId: String(this.options.runId ?? '') } as typeof this.status
+      ;(this.options.onStatus as ((status: unknown) => void) | undefined)?.(this.getStatus())
+    }
+
+    frame(decode: unknown): void {
+      ;(this.options.onFrame as ((frame: unknown) => void) | undefined)?.(decode)
+    }
+
+    terminal(status: string): void {
+      ;(this.options.onTerminal as ((status: string) => void) | undefined)?.(status)
+    }
+  }
+  return { ...actual, RunEventStream: FakeRunEventStream }
+})
 
 vi.mock('../../api/endpoints', () => ({
   drillingApi: {
@@ -88,6 +153,7 @@ function approvalsForRun(items: unknown[]) {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  streamControls.reset()
   api.listRuns.mockResolvedValue(runsPage)
   api.getRun.mockResolvedValue(waiting)
   // One mock that answers the way the API does: scoped by run when a run is being shown, otherwise
@@ -306,5 +372,111 @@ describe('run monitor: after a decision', () => {
       .slice(1)
       .map((row) => row.querySelector('td:nth-child(4) span')?.className ?? '')
     expect(new Set(tones).size).toBe(3)
+  })
+})
+
+/**
+ * The live transport, as the screen reports it.
+ *
+ * The indicator is the only part of this page that makes a claim about the *connection* rather than
+ * about the run, so it is the part that must never overstate: "live" only once the protocol opened,
+ * a dropped socket named as a dropped socket (REST is still working, and the saved history is still
+ * on screen), and a refusal never presented as something to wait for.
+ */
+describe('run monitor: the live event stream', () => {
+  const liveRun: RunDetail = {
+    ...succeeded,
+    run: { ...succeeded.run, status: 'running' },
+  }
+  const streamFor = () =>
+    streamControls.instances[streamControls.instances.length - 1] as unknown as {
+      emit: (patch: Record<string, unknown>) => void
+      frame: (decode: unknown) => void
+      terminal: (status: string) => void
+      options: Record<string, unknown>
+    }
+
+  it('does not open a stream for a run that is waiting for a human', async () => {
+    api.getRun.mockResolvedValue(waiting)
+    renderMonitor('/runs?run=run_1')
+
+    await waitFor(() => expect(screen.getByTestId('run-status')).toHaveTextContent('Waiting approval'))
+    expect(streamControls.instances).toHaveLength(0)
+    // Nothing changes until a person decides, so the page says so rather than pretending to listen.
+    expect(screen.getByTestId('run-stream-status')).toHaveTextContent('Not streamed')
+  })
+
+  it('says it is connecting before it says it is live', async () => {
+    api.getRun.mockResolvedValue(liveRun)
+    renderMonitor('/runs?run=run_1')
+
+    await waitFor(() => expect(streamControls.instances).toHaveLength(1))
+    await waitFor(() => expect(screen.getByTestId('run-stream-status')).toHaveAttribute('data-stream-state', 'connecting'))
+    expect(screen.getByTestId('run-stream-status')).toHaveTextContent('Connecting…')
+  })
+
+  it('reports live with the cursor it has actually applied', async () => {
+    api.getRun.mockResolvedValue(liveRun)
+    renderMonitor('/runs?run=run_1')
+    await waitFor(() => expect(streamControls.instances).toHaveLength(1))
+
+    act(() => streamFor().emit({ state: 'live', cursor: 27 }))
+
+    await waitFor(() => expect(screen.getByTestId('run-stream-status')).toHaveAttribute('data-stream-state', 'live'))
+    expect(screen.getByTestId('run-stream-status')).toHaveTextContent('Live')
+    // "seq 27" is evidence; "Live" on its own is only a claim.
+    expect(screen.getByTestId('run-stream-cursor')).toHaveTextContent('seq 27')
+  })
+
+  it('names a dropped connection as a dropped connection, not as an unreachable backend', async () => {
+    api.getRun.mockResolvedValue(liveRun)
+    renderMonitor('/runs?run=run_1')
+    await waitFor(() => expect(streamControls.instances).toHaveLength(1))
+
+    act(() => streamFor().emit({ state: 'disconnected', lastError: 'the connection failed' }))
+
+    await waitFor(() =>
+      expect(screen.getByTestId('run-stream-status')).toHaveAttribute('data-stream-state', 'disconnected'),
+    )
+    const badge = screen.getByTestId('run-stream-status')
+    expect(badge).toHaveTextContent('Realtime disconnected')
+    expect(badge).toHaveTextContent('showing saved history')
+    expect(badge).not.toHaveTextContent(/unreachable/i)
+    // The run itself is still on screen: REST answered, and history is not the transport's to lose.
+    expect(screen.getByTestId('run-status')).toHaveTextContent('Running')
+  })
+
+  it('keeps a server-side stream error visible instead of hiding it', async () => {
+    api.getRun.mockResolvedValue(liveRun)
+    renderMonitor('/runs?run=run_1')
+    await waitFor(() => expect(streamControls.instances).toHaveLength(1))
+
+    act(() => streamFor().emit({ state: 'live', lastError: 'the log could not be read' }))
+
+    await waitFor(() => expect(screen.getByTestId('run-stream-error')).toHaveTextContent('the log could not be read'))
+  })
+
+  it('does not poll: the run is fetched once and then carried by the stream', async () => {
+    vi.useFakeTimers()
+    try {
+      api.getRun.mockResolvedValue(liveRun)
+      renderMonitor('/runs?run=run_1')
+
+      // Time is advanced inside `act` and nothing waits on real timers, so the assertion below is
+      // about elapsed time, not about how fast the machine is.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(50)
+      })
+      expect(api.getRun).toHaveBeenCalledTimes(1)
+
+      // The stopgap this replaces asked the server every 2 seconds. Nine seconds must now produce
+      // exactly no further requests: the socket is the transport.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(9000)
+      })
+      expect(api.getRun).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

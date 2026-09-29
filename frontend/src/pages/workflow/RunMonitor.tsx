@@ -33,9 +33,8 @@ import {
 } from '../../components/common'
 import { useI18n } from '../../i18n'
 import { formatActionLevel, formatDateTime, formatDuration, formatStatus } from '../../lib/format'
-
-/** Terminal run states: once one is reached the monitor stops asking the server for updates. */
-const LIVE_RUN_STATUSES = new Set(['queued', 'running', 'pending'])
+import { useRunEventStream } from '../../hooks/useRunEventStream'
+import type { RunStreamStatus } from '../../lib/runEvents'
 
 function runStatusTone(status: string): 'ok' | 'warning' | 'danger' | 'info' | 'neutral' {
   switch (status) {
@@ -419,6 +418,68 @@ function NodeRunsTable({ nodeRuns }: { nodeRuns: NodeRunState[] }) {
   )
 }
 
+/**
+ * The connection indicator.
+ *
+ * It reports the transport's own state and nothing else: `connecting` while the handshake is in
+ * flight, `live` only once the server has opened the protocol, `reconnecting` while it is retrying,
+ * and `closed` when the run ended or the server refused the connection. A REST request that still
+ * works is not displayed here, and a dropped socket is never called "backend unreachable" — those are
+ * different failures with different fixes.
+ */
+function StreamStatusBadge({ status, received }: { status: RunStreamStatus; received: number }) {
+  const { t } = useI18n()
+
+  if (status.state === 'idle') {
+    return (
+      <Badge tone="neutral" data-testid="run-stream-status" data-stream-state="idle">
+        {t('workflow.streamIdle')}
+      </Badge>
+    )
+  }
+
+  const tone =
+    status.state === 'live'
+      ? 'ok'
+      : status.state === 'connecting' || status.state === 'reconnecting'
+        ? 'info'
+        : 'warning'
+  const label =
+    status.state === 'live'
+      ? t('workflow.streamLive')
+      : status.state === 'connecting'
+        ? t('workflow.streamConnecting')
+        : status.state === 'reconnecting'
+          ? t('workflow.streamReconnecting')
+          : status.state === 'closed'
+            ? t('workflow.streamClosed')
+            : t('workflow.streamDisconnected')
+
+  return (
+    <span className="inline-flex items-center gap-2">
+      <Badge tone={tone} data-testid="run-stream-status" data-stream-state={status.state}>
+        {label}
+      </Badge>
+      {/* A cursor the operator can see: "live" is a claim, "seq 27" is evidence that it is progressing. */}
+      {status.state === 'live' && status.cursor > 0 && (
+        <span className="text-[11px] text-slate-500" data-testid="run-stream-cursor">
+          seq {status.cursor}
+        </span>
+      )}
+      {status.state === 'live' && received > 0 && (
+        <span className="sr-only" data-testid="run-stream-received">
+          {received}
+        </span>
+      )}
+      {status.lastError && (
+        <span className="text-[11px] text-amber-700" data-testid="run-stream-error">
+          {status.lastError}
+        </span>
+      )}
+    </span>
+  )
+}
+
 function EventLog({ events }: { events: RunEvent[] }) {
   const { t } = useI18n()
   if (events.length === 0) return <EmptyState message={t('workflow.noEvents')} />
@@ -455,13 +516,17 @@ function RunDetailView({ runId }: { runId: string }) {
   const detail = useQuery({
     queryKey: ['run', runId],
     queryFn: () => drillingApi.getRun(runId),
-    // Stopgap while the run is live: the events stream (checkpoint 3) is the real transport, and it
-    // replaces this interval rather than sitting next to it. A run waiting for a human is not polled
-    // at all — nothing changes until a person decides, and that decision happens on this page.
-    refetchInterval: (query) => {
-      const status = query.state.data?.run.status
-      return status && LIVE_RUN_STATUSES.has(status) ? 2000 : false
-    },
+    // No polling. `useRunEventStream` below is the transport for a live run: it merges events as they
+    // are appended and reconciles this query against REST after a burst, on every reconnect and once
+    // when the run ends. An interval here would be a second, slower copy of the same mechanism.
+  })
+
+  // Live events for a run that can still produce them. A run waiting for a human is deliberately not
+  // streamed — nothing happens until somebody decides, and that decision happens on this page, where
+  // the mutation already invalidates this query.
+  const stream = useRunEventStream(runId, {
+    runStatus: detail.data?.run.status,
+    restEvents: detail.data?.events,
   })
 
   // The run's approval record, whatever state it is in. The envelope carries a *pending* approval,
@@ -500,6 +565,7 @@ function RunDetailView({ runId }: { runId: string }) {
                     {formatStatus(data.run.status)}
                   </Badge>
                   {data.run.is_dry_run && <Badge tone="info">{t('workflow.dryRun')}</Badge>}
+                  <StreamStatusBadge status={stream.status} received={stream.diagnostics.received} />
                   {data.run.duration_ms !== null && data.run.duration_ms !== undefined && (
                     <Badge tone="neutral">{formatDuration(data.run.duration_ms / 3_600_000)}</Badge>
                   )}
