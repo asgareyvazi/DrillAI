@@ -10,6 +10,7 @@ export const en = {
     name: 'DrillAI',
     tagline: 'Well Engineering Intelligence Platform',
     environment: 'Environment',
+    wellNotRead: 'well details could not be read',
   },
   nav: {
     wells: 'Wells',
@@ -50,6 +51,7 @@ export const en = {
     page: 'Page',
     total: 'Total',
     of: 'of',
+    projects: 'Projects',
     showEvidence: 'Show evidence',
     whyQuestion: 'Why?',
     whyNot: 'Why not the others?',
@@ -103,6 +105,10 @@ export const en = {
     noNpt: 'No non-productive time has been recorded.',
     noMissing: 'No missing data was identified.',
   },
+  wells: {
+    projectsUnavailable: 'The project list could not be read.',
+    projectsHint: 'The wells below are current; only the project breakdown is missing.',
+  },
   cockpit: {
     title: 'Well Cockpit',
     progress: 'Progress',
@@ -110,6 +116,7 @@ export const en = {
     plannedDepth: 'Planned depth',
     variance: 'Variance',
     currentSection: 'Current section',
+    evidenceSummaryUnavailable: 'Evidence summary could not be read',
     currentOperation: 'Current operation',
     previousOperation: 'Previous operation',
     nextOperation: 'Next planned operation',
@@ -158,6 +165,9 @@ export const en = {
     demoFixture: 'This document is a labelled synthetic fixture, not field data.',
   },
   engineering: {
+    scopeUnavailable: 'The wellbore and section scope could not be read, so this run would be sent against the well alone.',
+    scopeSectionUnavailable: 'The section scope could not be read, so this run would be sent without a section.',
+    scopeRetry: 'Read the scope again',
     title: 'Engineering Workspace',
     catalogue: 'Engine catalogue',
     runEngine: 'Run engine',
@@ -178,6 +188,7 @@ export const en = {
     recalculate: 'Recalculation candidates',
   },
   optimisation: {
+    scopeUnavailable: 'The section scope could not be read, so this request would be sent without one.',
     title: 'Drilling Parameter Optimisation',
     problem: 'Problem',
     parameters: 'Decision variables',
@@ -290,6 +301,9 @@ export const en = {
     validateHint: 'Validate to see graph issues.',
     noIssues: 'No issues were reported.',
     readOnlyIdentity: 'This identity can read workflows but not edit them: the palette and the inspector are shown so the graph can be inspected, and saving is refused by the server.',
+    publishChecking: 'checking the permissions of this identity…',
+    cannotPublishUnknown:
+      'The permissions of this identity could not be read, so publishing stays off — the server decides regardless of this button.',
     cannotPublish: "this identity does not hold 'workflow.publish' (roles: {roles}) — the server refuses the action regardless of this button",
     publishAfterSave: 'save the graph first: publishing names a version, and the editor holds unsaved changes',
     publishHint: 'publish this version so runs execute exactly it',

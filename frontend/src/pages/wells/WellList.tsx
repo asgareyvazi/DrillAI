@@ -10,7 +10,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { drillingApi } from '../../api/endpoints'
 import type { Well } from '../../api/types'
 import { PageHeader } from '../../components/layout/AppShell'
-import { Async, Badge, Button, Card, EmptyState, Table } from '../../components/common'
+import { Async, Badge, Button, Card, EmptyState, ErrorState, Table } from '../../components/common'
 import { useI18n } from '../../i18n'
 import { formatDate, formatNumber, formatStatus } from '../../lib/format'
 import { useSession } from '../../stores/session'
@@ -29,11 +29,18 @@ export default function WellList() {
         description="Select a well to open its cockpit. Every downstream workspace is scoped to one well."
       />
 
+      {/*
+        Each half of the subtitle is only said when the request behind it answered. It used to read
+        `${wells.data?.total ?? 0} wells …`, so a failed well read was printed as the number zero — a
+        fabricated count, on the same screen that also reported the failure below it.
+      */}
       <Card
         title="Registered wells"
         subtitle={
-          projects.data
-            ? `${wells.data?.total ?? 0} wells across ${projects.data.total} projects`
+          wells.data
+            ? projects.data
+              ? `${wells.data.total} wells across ${projects.data.total} projects`
+              : `${wells.data.total} wells`
             : undefined
         }
       >
@@ -95,6 +102,21 @@ export default function WellList() {
           )}
         </Async>
       </Card>
+
+      {/*
+        The project list is enrichment: the wells above are complete without it, so its failure must
+        not take the page down. It must not vanish either — an absent card reads as "there are no
+        projects", which is a statement this page has no evidence for.
+      */}
+      {projects.error && (
+        <Card title={t('common.projects')} dense>
+          <div className="space-y-1" data-testid="projects-unavailable">
+            <p className="text-sm">{t('wells.projectsUnavailable')}</p>
+            <p className="text-xs text-graphite-500">{t('wells.projectsHint')}</p>
+            <ErrorState error={projects.error} onRetry={() => void projects.refetch()} />
+          </div>
+        </Card>
+      )}
 
       {projects.data && projects.data.total > 0 && (
         <Card title="Projects" dense>

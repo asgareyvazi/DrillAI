@@ -155,13 +155,27 @@ export function AppShell() {
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex flex-wrap items-center justify-between gap-3 border-b border-graphite-200 bg-white px-4 py-2.5 dark:border-graphite-800 dark:bg-graphite-900">
           <div className="min-w-0">
-            <p className="truncate text-sm font-semibold">
-              {well.data ? well.data.name : t('app.name')}
+            {/*
+              Three states, not two. "No well is selected" and "the selected well could not be read"
+              are different facts, and this header used to render both as the application name — so a
+              cockpit whose well read failed looked like a page with no well at all, while the URL and
+              every panel below were unmistakably scoped to one. The id is known from the route, so it
+              is shown; nothing about the well is invented.
+            */}
+            <p className="truncate text-sm font-semibold" data-testid="shell-well-name">
+              {well.data ? well.data.name : wellId ? null : t('app.name')}
+              {wellId && !well.data && (
+                <span className="font-mono text-xs font-normal">{wellId}</span>
+              )}
             </p>
-            <p className="truncate text-[11px] text-graphite-500">
+            <p className="truncate text-[11px] text-graphite-500" data-testid="shell-well-detail">
               {well.data
                 ? `${well.data.well_type} · ${well.data.status}${well.data.operator ? ` · ${well.data.operator}` : ''}`
-                : t('app.tagline')}
+                : wellId
+                  ? well.error
+                    ? t('app.wellNotRead')
+                    : t('app.tagline')
+                  : t('app.tagline')}
             </p>
           </div>
           <div className="flex items-center gap-3">

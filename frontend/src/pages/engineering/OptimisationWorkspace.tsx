@@ -211,6 +211,15 @@ export default function OptimisationWorkspace() {
     enabled: Boolean(wellbores.data?.items[0]?.id),
   })
 
+  /**
+   * Set when the section read failed, so the request's real scope is stated before it is sent.
+   *
+   * `section_id` is filled from this read. With the read failed it was silently `null`, and the
+   * optimiser ranked candidates for a scope nobody had chosen — a real result for the wrong question,
+   * with nothing on screen to say so.
+   */
+  const scopeFailure = useMemo(() => (sections.error ? sections.error : null), [sections.error])
+
   const optimise = useMutation({
     mutationFn: (payload: OptimisePayload) => drillingApi.optimise(id, payload),
     onSuccess: (data) => {
@@ -368,6 +377,15 @@ export default function OptimisationWorkspace() {
                 </div>
               )}
             </Async>
+
+            {scopeFailure && (
+              <div data-testid="optimise-scope-failure" className="mt-2 space-y-1">
+                <ErrorState error={scopeFailure} onRetry={() => void sections.refetch()} />
+                <p className="text-xs text-graphite-600 dark:text-graphite-300">
+                  {t('optimisation.scopeUnavailable')}
+                </p>
+              </div>
+            )}
 
             {parseError && <p className="mt-2 text-xs text-danger">Invalid JSON: {parseError}</p>}
             {optimise.error && (

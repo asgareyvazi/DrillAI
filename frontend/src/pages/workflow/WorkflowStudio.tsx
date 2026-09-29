@@ -413,14 +413,24 @@ function StudioBody({
   /**
    * Why publishing is not offered, in the words of whatever is stopping it.
    *
-   * Three different reasons are collapsed into one disabled attribute, and a disabled button with no
-   * explanation is its own bug: the user cannot tell whether to save first, ask for a role, or wait.
+   * Four reasons are collapsed into one disabled attribute, and a disabled button with no explanation
+   * is its own bug: the user cannot tell whether to save first, ask for a role, or wait. They also
+   * cannot tell "you are not permitted" from "your permissions could not be read" — and the studio
+   * used to say the first while meaning the second, because a failed identity read leaves the
+   * permission list undefined and every check then answers *no*. Telling an engineer they lack a
+   * permission the server never denied is a false statement about their own account, so the unknown
+   * case is named separately. The button stays disabled either way: it is the server that decides,
+   * and offering an action that is certain to be refused is worse than not offering it.
    */
-  const publishDisabledReason = !canPublish
-    ? t('workflow.cannotPublish', { roles: identity.data?.role_keys.join(', ') || 'none' })
-    : dirty
-      ? t('workflow.publishAfterSave')
-      : t('workflow.publishHint')
+  const publishDisabledReason = identity.isLoading
+    ? t('workflow.publishChecking')
+    : !canPublish
+      ? identity.error || !identity.data
+        ? t('workflow.cannotPublishUnknown')
+        : t('workflow.cannotPublish', { roles: identity.data.role_keys.join(', ') || 'none' })
+      : dirty
+        ? t('workflow.publishAfterSave')
+        : t('workflow.publishHint')
   // The payload carries one issue list with a severity per issue; the badge counts what came back
   // rather than asking the server for a second, redundant pair of arrays.
   const validationIssues = {
@@ -490,6 +500,19 @@ function StudioBody({
           )}
         </Async>
       </Card>
+
+      {/*
+        The permission list is what the editor's capabilities are read from, so a failure there is not
+        cosmetic: every check answers *no* and the disabled buttons would claim the identity lacks a
+        permission. The reason is also carried in the buttons' titles, but a tooltip is not a place to
+        tell somebody their account is unauthorised, so it is said here, in the open, with a retry.
+      */}
+      {identity.error && (
+        <div data-testid="identity-unavailable" className="space-y-1">
+          <ErrorState error={identity.error} onRetry={() => void identity.refetch()} />
+          <p className="text-xs text-graphite-600 dark:text-graphite-300">{t('workflow.cannotPublishUnknown')}</p>
+        </div>
+      )}
 
       <Card
         title={t('workflow.canvas')}

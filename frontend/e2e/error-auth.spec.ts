@@ -32,8 +32,17 @@ test.describe('an authentication-enabled deployment', () => {
 
     await page.goto('/wells')
 
-    const state = errorState(page)
+    // The wells list is two reads (the wells and the project breakdown), and both are refused; the
+    // assertions are made against the first of them, and then against the page as a whole.
+    const state = errorState(page).first()
     await expect(state).toBeVisible({ timeout: 30_000 })
+    const kinds = await errorState(page).evaluateAll((nodes) =>
+      nodes.map((node) => node.getAttribute('data-error-kind')),
+    )
+    expect(kinds.length).toBeGreaterThan(0)
+    expect(new Set(kinds), 'every refusal on the page must be the same refusal').toEqual(
+      new Set(['unauthenticated']),
+    )
     await expect(state).toHaveAttribute('data-error-kind', 'unauthenticated')
     await expect(state).toHaveAttribute('data-http-status', '401')
     await expect(state).toContainText(/signed in|sign in/i)

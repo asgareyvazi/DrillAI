@@ -8,7 +8,7 @@
  * own port-level graph, so "what goes stale when this changes" is an answer the backend owns.
  */
 
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { drillingApi } from '../../api/endpoints'
@@ -87,11 +87,28 @@ function OutputTable({ outputs, onEvidence }: { outputs: Record<string, unknown>
   )
 }
 
-function EngineRunner({ engine, wellId, wellboreId, sectionId }: {
+/**
+ * Why a run's context may be incomplete.
+ *
+ * The wellbore and section are read to give an engine run its *scope*, and until now a failure in that
+ * read was invisible: the runner simply sent the request without them. The engine then computed a real
+ * number at a different scope from the one the page appeared to be working at, and nothing on screen
+ * said so. That is the failure mode this type exists to prevent — the run is still allowed (a
+ * well-scoped run is a legitimate thing to ask for), but not silently.
+ */
+type ScopeFailure = {
+  /** Which read failed, so the sentence names the context the run will not carry. */
+  what: 'wellbore' | 'section'
+  error: unknown
+  retry: () => void
+}
+
+function EngineRunner({ engine, wellId, wellboreId, sectionId, scope }: {
   engine: EngineListItem
   wellId: string
   wellboreId?: string
   sectionId?: string
+  scope?: ScopeFailure | null
 }) {
   const { t } = useI18n()
   const [inputs, setInputs] = useState<Record<string, unknown>>({})
@@ -198,6 +215,19 @@ function EngineRunner({ engine, wellId, wellboreId, sectionId }: {
           )}
         </div>
       </div>
+
+      {/*
+        The scope this run will actually be sent with, stated when it is not the scope the page meant
+        to use. Shown above the button so it is read before the run, not after.
+      */}
+      {scope && (
+        <div data-testid="engine-scope-failure" className="space-y-1">
+          <ErrorState error={scope.error} onRetry={scope.retry} />
+          <p className="text-xs text-graphite-600 dark:text-graphite-300">
+            {scope.what === 'wellbore' ? t('engineering.scopeUnavailable') : t('engineering.scopeSectionUnavailable')}
+          </p>
+        </div>
+      )}
 
       {parseError && <p className="text-xs text-danger">Invalid JSON: {parseError}</p>}
       {run.error && <ErrorState error={run.error} />}
@@ -383,6 +413,21 @@ export default function EngineeringWorkspace() {
   const [selectedEngine, setSelectedEngine] = useState<string | null>(null)
   const [category, setCategory] = useState<string>('all')
 
+  const queryClient = useQueryClient()
+
+  /**
+   * Re-read the scope after a failure.
+   *
+   * Invalidation rather than `refetch()`, because the two reads are chained: the section list is only
+   * asked for once a wellbore is known. Invalidating both marks the section query stale and lets it
+   * run once with the wellbore that comes back, instead of firing it now with nothing to ask about and
+   * again a moment later.
+   */
+  const readScopeAgain = (includeSections: boolean) => {
+    void queryClient.invalidateQueries({ queryKey: ['wellbores', id] })
+    if (includeSections) void queryClient.invalidateQueries({ queryKey: ['sections'] })
+  }
+
   const engines = useQuery({ queryKey: ['engines'], queryFn: ({ signal }) => drillingApi.listEngines(signal) })
   const wellbores = useQuery({ queryKey: ['wellbores', id], queryFn: ({ signal }) => drillingApi.listWellbores(id, signal) })
   const sections = useQuery({
@@ -391,6 +436,21 @@ export default function EngineeringWorkspace() {
     enabled: Boolean(wellbores.data?.items[0]?.id),
   })
   const runs = useQuery({ queryKey: ['well-engine-runs', id], queryFn: ({ signal }) => drillingApi.wellEngineRuns(id, { limit: 50 }, signal) })
+
+  /**
+   * Set when the wellbore or section read failed, in that order of severity.
+   *
+   * The two are not equivalent: without the wellbore there is no section either, because the section
+   * list is only asked for once a wellbore is known. Reporting the first failure is therefore the
+   * truthful thing to do, and the retry re-reads both so one press can restore the full scope.
+   */
+  // Not memoised on purpose: it is a description of the current query states, read on every render,
+  // and holding it in a memo would only add a dependency list that has to stay true.
+  const scopeFailure: ScopeFailure | null = wellbores.error
+    ? { what: 'wellbore', error: wellbores.error, retry: () => readScopeAgain(true) }
+    : sections.error
+      ? { what: 'section', error: sections.error, retry: () => readScopeAgain(false) }
+      : null
 
   const engine = useMemo<EngineListItem | null>(
     () => engines.data?.items.find((item) => item.key === selectedEngine) ?? null,
@@ -491,6 +551,7 @@ export default function EngineeringWorkspace() {
                   wellId={id}
                   wellboreId={wellbores.data?.items[0]?.id}
                   sectionId={sections.data?.items.at(-1)?.id}
+                  scope={scopeFailure}
                 />
               </Card>
             )}

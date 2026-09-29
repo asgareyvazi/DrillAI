@@ -15,6 +15,7 @@
 
 import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
+import { canRetry } from '../../api/client'
 import { drillingApi } from '../../api/endpoints'
 import type { EvidenceItem } from '../../api/types'
 import { useI18n } from '../../i18n'
@@ -213,6 +214,20 @@ export function WhyButton({
   )
 }
 
+/**
+ * The compact evidence strip used in a page header.
+ *
+ * It is a summary *and* the way into the panel, so the two are one control rather than a number next
+ * to a link — the count is the reason to open it.
+ *
+ * Which is also why it must not disappear when the count cannot be read. This strip used to render
+ * `null` on any failure, and the effect was not a missing number but a missing *door*: the only way
+ * into the evidence panel vanished from the cockpit, and a well whose evidence could not be counted
+ * looked like a well whose cockpit simply had no evidence control. The panel itself is still there
+ * and still works — it holds the citations attached to this screen — so the strip stays, says the
+ * summary could not be read, and offers a retry for the count alone. The list of links is *not*
+ * claimed to be empty, and the citations in the panel are untouched.
+ */
 export function EvidenceSummaryStrip({
   wellId,
   onOpen,
@@ -226,11 +241,45 @@ export function EvidenceSummaryStrip({
     queryFn: ({ signal }) => drillingApi.evidenceSummary({ well_id: wellId }, signal),
     retry: false,
   })
-  if (summary.isLoading || !summary.data) return null
+
+  if (summary.isLoading) return null
+
+  if (summary.error || !summary.data) {
+    return (
+      <div
+        data-testid="evidence-summary-strip"
+        data-summary-state={summary.error ? 'failed' : 'unavailable'}
+        className="flex flex-wrap items-center gap-2 rounded-md border border-graphite-200 px-3 py-1.5 text-xs dark:border-graphite-800"
+      >
+        <span className="font-medium">{t('common.evidence')}</span>
+        <span className="text-graphite-500">{t('cockpit.evidenceSummaryUnavailable')}</span>
+        <button
+          type="button"
+          onClick={onOpen}
+          className="text-signal-deep underline-offset-2 hover:underline dark:text-signal-light"
+        >
+          {t('common.showEvidence')}
+        </button>
+        {summary.error && canRetry(summary.error) && (
+          <button
+            type="button"
+            data-testid="evidence-summary-retry"
+            onClick={() => void summary.refetch()}
+            className="text-graphite-600 underline underline-offset-2 dark:text-graphite-300"
+          >
+            {t('common.retry')}
+          </button>
+        )}
+      </div>
+    )
+  }
+
   const data = summary.data
   return (
     <button
       type="button"
+      data-testid="evidence-summary-strip"
+      data-summary-state="loaded"
       onClick={onOpen}
       className="flex flex-wrap items-center gap-2 rounded-md border border-graphite-200 px-3 py-1.5 text-xs hover:bg-graphite-50 dark:border-graphite-800 dark:hover:bg-graphite-800"
     >
