@@ -9,6 +9,9 @@ Runs the real application over ASGI with a file-backed SQLite database:
 Authentication is disabled by default (``DRILLAI_AUTH_ENABLED=false``) so tests can act as a
 catalogued role via ``X-Dev-Roles``; ``auth_enabled_api`` builds a second app with bearer-token
 authentication switched on for the tests that need it.
+
+WebSocket endpoints are driven by ``WebSocketSession`` (see the ``websocket`` fixture): the same
+ASGI callable, in the same event loop as the test, speaking only what a browser can speak.
 """
 
 from __future__ import annotations
@@ -70,3 +73,17 @@ def headers(role: str = "engineer,admin", **extra: str) -> dict[str, str]:
     dev instance); tests that are about the authorization model pass a single explicit role.
     """
     return {"X-Dev-Roles": role, **extra}
+
+
+@pytest_asyncio.fixture
+def websocket(app):
+    """Open the application's WebSocket endpoint from inside the test's event loop.
+
+    Usage: ``async with websocket(path, dev_roles="drilling_supervisor") as socket: ...``
+    """
+    from tests.api.ws import WebSocketSession
+
+    def _connect(path: str, **query: str) -> WebSocketSession:
+        return WebSocketSession(app, path, query)
+
+    return _connect

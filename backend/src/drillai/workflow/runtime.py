@@ -31,7 +31,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from drillai.core.clock import UTC
@@ -104,7 +104,8 @@ class WorkflowRuntime:
         self.services = services or {}
         self.max_loop_iterations = max_loop_iterations
         self.node_timeout_seconds = node_timeout_seconds
-        self._event_seq = 0
+        # Per *run*, and seeded from the durable log on first use: see `_next_event_seq`.
+        self._event_seq: dict[str, int] = {}
 
     # ------------------------------------------------------------------ public API
 
@@ -818,6 +819,24 @@ class WorkflowRuntime:
         }
         await self.session.flush()
 
+    async def _next_event_seq(self, run_id: str) -> int:
+        """The next sequence number for a run, read from the durable log when it is not yet known.
+
+        Numbering from zero per runtime instance is not enough: a *resume* builds a new runtime for a
+        run that already has events, so the resumed stretch would repeat sequence numbers the client
+        has already consumed. A cursor-based reader — `after_seq` on the HTTP event log and on the
+        WebSocket — would then never receive the rest of the run, because the new rows are not
+        *after* the cursor at all. The log is the authority on where a run got to; process memory is
+        only a cache of it, one lookup per run per instance.
+        """
+        if run_id not in self._event_seq:
+            highest = (
+                await self.session.execute(select(func.max(RunEvent.seq)).where(RunEvent.run_id == run_id))
+            ).scalar()
+            self._event_seq[run_id] = int(highest or 0)
+        self._event_seq[run_id] += 1
+        return self._event_seq[run_id]
+
     async def _event(
         self,
         run: WorkflowRun,
@@ -829,14 +848,14 @@ class WorkflowRuntime:
         payload: dict[str, Any] | None = None,
         level: str = "info",
     ) -> None:
-        self._event_seq += 1
+        seq = await self._next_event_seq(run.id)
         from drillai.observability.tracing import current_trace
 
         trace = current_trace()
         row = RunEvent(
             org_id=self.org_id,
             run_id=run.id,
-            seq=self._event_seq,
+            seq=seq,
             type=event_type,
             node_id=node_id,
             node_run_id=node_run_id,

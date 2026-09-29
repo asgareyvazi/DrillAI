@@ -9,6 +9,7 @@ approval decision path, which is the only place a suspended run may continue.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import datetime as dt
 import json
 from typing import Annotated, Any
@@ -382,13 +383,20 @@ async def stream_run_events(websocket: WebSocket, run_id: str, after_seq: int = 
     deliberate: a dropped connection loses the stream, never the history, and a client that
     reconnects with ``after_seq`` resumes without gaps. Authentication reuses the HTTP principal —
     a browser passes the bearer token as a query parameter because the WebSocket API cannot set
-    headers.
+    headers, and in development the identity may arrive the same way.
+
+    Frames: ``stream_opened`` once, then one ``run_event`` per row in sequence order, then
+    ``stream_closed`` with the terminal status (the socket closes), or ``stream_idle`` after a long
+    quiet period so a client can reconnect. A refusal closes with 4401 (not authorized), 4403
+    (``workflow.read`` missing) or 4404 (run not found).
     """
     await websocket.accept()
     settings = websocket.app.state.settings
     database = websocket.app.state.database
     token = websocket.query_params.get("token")
-    dev_roles = websocket.headers.get("x-dev-roles")
+    # Headers first (a native client can set them), then the query string, which is the only channel a
+    # browser has during a WebSocket handshake. `current_auth` accepts the latter in development only.
+    dev_roles = websocket.headers.get("x-dev-roles") or websocket.query_params.get("dev_roles")
     principal_ok = False
     try:
         async with database.session() as session:
@@ -397,7 +405,7 @@ async def stream_run_events(websocket: WebSocket, run_id: str, after_seq: int = 
                 headers["authorization"] = f"Bearer {token}"
             if dev_roles:
                 headers["x-dev-roles"] = dev_roles
-            request = _HeaderShim(headers)
+            request = _HeaderShim(headers, dict(websocket.query_params))
             auth = await current_auth(request, session)  # type: ignore[arg-type]
             if not auth.principal.has_permission("workflow.read"):
                 await websocket.close(code=4403, reason="workflow.read is required")
@@ -424,9 +432,16 @@ async def stream_run_events(websocket: WebSocket, run_id: str, after_seq: int = 
 
     sequence = after_seq
     idle_ticks = 0
+    disconnect = asyncio.create_task(_watch_client_disconnect(websocket))
     try:
         while True:
-            await asyncio.sleep(settings.run_event_stream_poll_seconds)
+            # Wait for the poll interval *or* the client leaving, whichever happens first: a browser
+            # that closes the tab must free its stream immediately, not at the next tick.
+            done, _pending = await asyncio.wait(
+                {disconnect}, timeout=settings.run_event_stream_poll_seconds
+            )
+            if disconnect in done:
+                return
             async with database.session() as session:
                 rows = (
                     await session.execute(
@@ -454,18 +469,50 @@ async def stream_run_events(websocket: WebSocket, run_id: str, after_seq: int = 
         return
     except Exception as exc:  # pragma: no cover - transport level
         with_json = json.dumps({"type": "stream_error", "message": str(exc)})
-        try:
+        with contextlib.suppress(Exception):
             await websocket.send_text(with_json)
             await websocket.close(code=1011)
-        except Exception:
-            return
+    finally:
+        # Stop the watcher, and wait for it without re-raising its own cancellation into this frame:
+        # `asyncio.wait` returns the task's state instead of propagating it, so the only cancellation
+        # that can travel out of here is a genuine cancellation *of this handler* — which must not be
+        # swallowed by cleanup code.
+        disconnect.cancel()
+        with contextlib.suppress(Exception):
+            await asyncio.wait({disconnect})
+
+
+async def _watch_client_disconnect(websocket: WebSocket) -> None:
+    """Return as soon as the client goes away.
+
+    A handler that only *sends* cannot notice a dropped browser: nothing fails until the next write,
+    so an abandoned socket would keep reading the event log for a run nobody is watching — a task
+    that outlives its client, polling the database once per interval, indefinitely. Reading the socket
+    is what makes the disconnect observable, and it is noticed within one poll rather than never.
+
+    Any receive failure means the same thing here (the transport is gone), and the caller treats the
+    completion of this task as the end of the stream.
+    """
+    try:
+        while True:
+            message = await websocket.receive()
+            if message.get("type") == "websocket.disconnect":
+                return
+    except Exception:  # pragma: no cover - transport level; a failed receive is a dead client
+        return
 
 
 class _HeaderShim:
-    """Minimal request-like object so the HTTP auth dependency can be reused for WebSockets."""
+    """Minimal request-like object so the HTTP auth dependency can be reused for WebSockets.
 
-    def __init__(self, headers: dict[str, str]) -> None:
+    A WebSocket handshake cannot carry arbitrary request headers from a browser, so the query string
+    is part of the shim: that is where a browser hands over its bearer token, and — in development
+    only — the identity it wants to act as. The dependency itself decides whether either is trusted.
+    """
+
+    def __init__(self, headers: dict[str, str], query: dict[str, str] | None = None) -> None:
         self.headers = headers
+        self.query_params = query or {}
 
     @property
     def url(self) -> Any:  # pragma: no cover - only used by error handlers

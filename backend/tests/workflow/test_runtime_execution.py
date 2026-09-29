@@ -384,8 +384,18 @@ async def test_l4_node_suspends_for_approval_then_resumes(session, project, supe
     assert len(messages) == 1
     assert messages[0].status == "queued"
     assert messages[0].idempotency_key == f"{run.id}:notify"
-    events = {event.type for event in (await session.execute(select(RunEvent).where(RunEvent.run_id == run.id))).scalars().all()}
+    event_rows = (
+        await session.execute(select(RunEvent).where(RunEvent.run_id == run.id).order_by(RunEvent.seq))
+    ).scalars().all()
+    events = {event.type for event in event_rows}
     assert {"approval_requested", "run_paused", "approval_decided", "run_resumed"} <= events
+
+    # Resuming builds a fresh runtime. Numbering must continue from the durable log: a client reading
+    # the log from a cursor (`after_seq`) sees nothing at all if the resumed stretch repeats sequence
+    # numbers it has already consumed, which is a lost event however healthy the run looks.
+    sequences = [event.seq for event in event_rows]
+    assert sequences == list(range(1, len(sequences) + 1))
+    assert len(set(sequences)) == len(sequences)
 
 
 async def test_a_human_approval_node_suspends_the_run_and_records_what_it_asked_for(

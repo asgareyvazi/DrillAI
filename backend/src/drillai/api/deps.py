@@ -189,7 +189,16 @@ async def current_auth(
     # single developer session has to be able to create the container objects it works in. The
     # header stays available so a caller (or the UI's role switcher) can act as any catalogued
     # role and see the authorization model behave.
-    requested = [key.strip() for key in (x_dev_roles or "engineer,admin").split(",") if key.strip()]
+    #
+    # A browser cannot set request headers on a WebSocket handshake, so the same development
+    # identity is also accepted from the query string. Both paths sit *below* the
+    # ``settings.auth_enabled`` branch above: when authentication is on, neither the header nor the
+    # parameter is read at all, and a request without a bearer token is refused before this point.
+    requested_roles = x_dev_roles
+    if requested_roles is None:
+        params = getattr(request, "query_params", None)
+        requested_roles = params.get("dev_roles") if params is not None else None
+    requested = [key.strip() for key in (requested_roles or "engineer,admin").split(",") if key.strip()]
     org = await ensure_org(session, settings.dev_org_slug)
     principal = _dev_principal(org.id, requested)
     return AuthContext(

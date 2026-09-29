@@ -222,9 +222,15 @@ class NodeRun(Base, IdMixin, CreatedAtMixin, OrgScopedMixin):
 
 
 class RunEvent(Base, IdMixin, CreatedAtMixin, OrgScopedMixin):
-    """Append-only run log (sequence per run) — the replay/resume substrate."""
+    """Append-only run log (sequence per run) — the replay/resume substrate.
+
+    ``(run_id, seq)`` is unique and the constraint is load-bearing, not decoration: clients resume
+    from ``after_seq``, so a repeated sequence number is a silently lost event. Two writers on one
+    run must collide loudly rather than interleave.
+    """
 
     __tablename__ = "run_events"
+    __table_args__ = (UniqueConstraint("run_id", "seq", name="uq_run_events_run_seq"),)
     id_prefix = "rev"
 
     run_id: Mapped[str] = mapped_column(
