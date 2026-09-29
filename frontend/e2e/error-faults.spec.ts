@@ -137,6 +137,7 @@ test.describe('failures the server must be asked to produce', () => {
     await expect(state).not.toContainText(/unreachable/i)
     // The response arrived, so it has a request id: reacting to a protocol disagreement without one
     // would leave an operator with nothing to quote to whoever can look the request up.
+    // The request id on the screen is the one the server sent — that is what makes it usable in a log.
     await expect(state.getByTestId('error-request-id')).not.toBeEmpty()
 
     // Nothing is fixed by asking again in the same way, and the page must not pretend otherwise.
@@ -157,6 +158,17 @@ test.describe('failures the server must be asked to produce', () => {
     const wellsPath = '/api/v1/wells'
     await arm(request, { method: 'GET', path: wellsPath, mode: 'unhandled' })
 
+    // Every id the server put on *its own* answers, so the assertion below compares the screen with
+    // what really came back rather than merely checking that the line is not empty. The read may be
+    // attempted more than once (a server fault is worth retrying), and the screen reports the answer
+    // that ended it, so the comparison is against the set, not against one arbitrary attempt.
+    const servedIds: string[] = []
+    page.on('response', (answer) => {
+      if (new URL(answer.url()).pathname !== wellsPath) return
+      const id = answer.headers()['x-request-id']
+      if (id) servedIds.push(id)
+    })
+
     await page.goto('/wells')
     const state = errorState(page)
     await expect(state).toBeVisible({ timeout: 30_000 })
@@ -167,7 +179,14 @@ test.describe('failures the server must be asked to produce', () => {
     // The distinction that matters: a 500 is the server failing, not the network being gone.
     await expect(state).not.toContainText(/unreachable/i)
     await expect(state).not.toContainText(/timed out/i)
-    await expect(state.getByTestId('error-request-id')).not.toBeEmpty()
+    // The request id on the screen is one the server really sent — that is what makes it usable in a
+    // log, and it is the difference between quoting something and inventing something.
+    const shown = (await state.getByTestId('error-request-id').textContent()) ?? ''
+    expect(servedIds.length, 'the failing answers must carry an id at all').toBeGreaterThan(0)
+    expect(
+      servedIds.some((id) => shown.includes(id)),
+      `the id on screen must be one the server sent — screen said "${shown}", server sent ${servedIds.join(', ')}`,
+    ).toBeTruthy()
     await expect(state.getByRole('button', { name: /retry/i })).toBeVisible()
 
     await disarm(request)
@@ -189,12 +208,26 @@ test.describe('failures the server must be asked to produce', () => {
     const second = await startRunFromStudio(page, workflowId, wellId)
     await clearPendingApproval(request, second, 'Cleanup after the cancellation journey.')
 
-    // What the browser's network stack says about the requests the page gave up on. This is the
+    // What the browser's network stack says about the request the page gave up on. This is the
     // evidence that the abandonment reached the connection rather than being merely ignored: a client
-    // that only stopped listening would leave the requests as completed.
-    const abandoned: string[] = []
+    // that only stopped listening would leave the request to complete, and the answer nobody wanted
+    // would still arrive.
+    //
+    // `fetch` only: the run's event stream is torn down on the switch too, and a socket close is
+    // reported as a failed request. Counting that would make the assertion pass for the wrong reason.
+    let switched = false
+    const outcomes: string[] = []
     page.on('requestfailed', (sent) => {
-      if (sent.url().includes(`/api/v1/runs/${first}`)) abandoned.push(sent.failure()?.errorText ?? '')
+      if (sent.resourceType() !== 'fetch') return
+      if (sent.url().includes(`/api/v1/runs/${first}`)) {
+        outcomes.push(`failed:${switched ? 'after' : 'before'}`)
+      }
+    })
+    page.on('requestfinished', (sent) => {
+      if (sent.resourceType() !== 'fetch') return
+      if (sent.url().includes(`/api/v1/runs/${first}`)) {
+        outcomes.push(`finished:${switched ? 'after' : 'before'}`)
+      }
     })
 
     // The delay is deliberately *shorter* than this stack's three-second deadline, so the deadline
@@ -206,6 +239,7 @@ test.describe('failures the server must be asked to produce', () => {
     // The read of the first run is in flight and will not answer for two seconds.
     await expect(page.getByRole('link', { name: second })).toBeVisible({ timeout: 30_000 })
     // Switching to the second run abandons it.
+    switched = true
     await page.getByRole('link', { name: second }).click()
 
     await expect(page.getByText(second, { exact: false }).first()).toBeVisible()
@@ -213,15 +247,22 @@ test.describe('failures the server must be asked to produce', () => {
     // A cancelled request is silent: no error state, no outage wording.
     await expect(errorState(page)).toHaveCount(0)
 
-    // And it is really cancelled: the transport reports it as failed, not as a completed request that
-    // was quietly dropped.
+    // And it is really cancelled: the transport reports it as failed, rather than letting the request
+    // run to completion and quietly ignoring the answer.
     await expect
-      .poll(() => abandoned.length, {
+      .poll(() => outcomes.filter((outcome) => outcome === 'failed:after').length, {
         timeout: 15_000,
         message: 'switching runs must cancel the request it abandoned',
       })
       .toBeGreaterThan(0)
-    expect(abandoned.some((text) => /ABORT|ERR_/.test(text)), `browser said: ${abandoned.join(', ')}`).toBeTruthy()
+
+    // The delay is shorter than this stack's own deadline, so the deadline cannot be what ended the
+    // request — and a request that was merely ignored would appear here as having completed.
+    await page.waitForTimeout(3_000)
+    expect(
+      outcomes.filter((outcome) => outcome === 'finished:after'),
+      `an abandoned read reported: ${outcomes.join(', ')}`,
+    ).toEqual([])
 
     // Wait past the point where the abandoned response would have arrived, and check it did not
     // replace what the operator is looking at.
