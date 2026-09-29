@@ -435,14 +435,29 @@ describe('RunEventStream: honest state, resumable cursor, bounded retries', () =
     h.stream.dispose()
   })
 
-  it('does not reconnect after a refusal — the identity will not be accepted by waiting', () => {
+  it('does not reconnect after a refusal, and says which refusal it was', () => {
     const h = harness({ runId: 'run_1', cursor: 0 })
     h.stream.connect()
     at(h.sockets, 0).drop(4403)
     expect(h.status()).toBe('closed')
+    expect(h.stream.getStatus().lastError).toBe('this identity may not read this run')
     h.flushTimers()
     expect(h.sockets).toHaveLength(1)
     h.stream.dispose()
+  })
+
+  it('separates "no such run" from "not allowed" and from an unauthenticated refusal', () => {
+    for (const [code, expected] of [
+      [4404, 'the server has no such run'],
+      [4401, 'the server refused the connection'],
+    ] as const) {
+      const h = harness({ runId: 'run_1', cursor: 0 })
+      h.stream.connect()
+      at(h.sockets, 0).drop(code)
+      expect(h.stream.getStatus().lastError).toBe(expected)
+      expect(h.status()).toBe('closed')
+      h.stream.dispose()
+    }
   })
 
   it('distinguishes "up to date" from "finished" when the stream goes idle', () => {

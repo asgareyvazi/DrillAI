@@ -277,6 +277,48 @@ test.describe('run monitor: live events over the real socket', () => {
     expect(consoleErrors, `console errors: ${consoleErrors.join(' | ')}`).toEqual([])
   })
 
+  test('moving to another run closes the first socket and never mixes the two logs', async ({
+    page,
+    request,
+    consoleErrors,
+    wellId,
+  }) => {
+    const sockets = await observeStreamSockets(page)
+
+    // Run A: parks at its gate and starts streaming.
+    const runA = await startRunFromStudio(page, fixtures().workflow_id, wellId)
+    await expect(page.getByTestId('run-stream-status')).toHaveAttribute('data-stream-state', 'live')
+    const logA = (await envelopeEvents(request, runA, 'supervisor')).events.map((row) => row.seq)
+
+    // Run B: the same definition, a different run, selected within the same screen.
+    const runB = await startRunFromStudio(page, fixtures().workflow_id, wellId)
+    expect(runB).not.toBe(runA)
+    await expect(page.getByTestId('run-stream-cursor')).toBeVisible()
+
+    // A's stream ends when the screen moves on, and B's stream is B's.
+    await expect
+      .poll(() => sockets.length, { message: 'the second run must open its own stream' })
+      .toBeGreaterThan(1)
+    const openForB = sockets.filter((socket) => socket.url.includes(runB))
+    expect(openForB.length, "B's socket must name B").toBeGreaterThan(0)
+    const closedA = await Promise.race([
+      (sockets[0] as ObservedSocket).closed,
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 5000)),
+    ])
+    expect(closedA, "run A's socket must be closed, not left attached to another run").not.toBeNull()
+
+    // B's log is B's: the events of A cannot appear on this page, however similar the two runs are.
+    const eventsB = (await envelopeEvents(request, runB, 'supervisor')).events.map((row) => row.seq)
+    await expect.poll(async () => (await displayedSequences(page)).map(Number)).toEqual(eventsB)
+    const shown = (await displayedSequences(page)).map(Number)
+    expect(shown.length).toBeLessThan(logA.length + eventsB.length)
+    expect(shown).toEqual([...new Set(shown)])
+
+    await clearPendingApproval(request, runA, 'Cleanup after the run-switch journey (A).')
+    await clearPendingApproval(request, runB, 'Cleanup after the run-switch journey (B).')
+    expect(consoleErrors, `console errors: ${consoleErrors.join(' | ')}`).toEqual([])
+  })
+
   test('a run that has already finished is not streamed at all', async ({ page, request, consoleErrors, wellId }) => {
     const sockets = await observeStreamSockets(page)
     const runId = await startRunFromStudio(page, fixtures().workflow_id, wellId)
