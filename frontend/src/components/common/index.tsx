@@ -9,7 +9,7 @@
 
 import clsx from 'clsx'
 import { useId, type ReactNode } from 'react'
-import { ApiError, canRetry } from '../../api/client'
+import { ApiError, canRetry, isAbortError } from '../../api/client'
 import { useI18n } from '../../i18n'
 import { formatValue } from '../../lib/format'
 
@@ -207,6 +207,12 @@ export function ErrorState({
   const apiError = error instanceof ApiError ? error : null
   const kind = apiError?.kind
 
+  // A cancelled request is not a failure of anything, so there is nothing to render. The raw abort is
+  // checked as well as the classified kind, because a cancellation can reach a query's error state
+  // from a path this client did not create (a controller passed in by a caller, a fetch rejected by
+  // the browser) — and an abort rendered as "Something went wrong" is exactly the false alarm the
+  // classification exists to prevent.
+  if (isAbortError(error)) return null
   if (kind === 'cancelled') return showCancelled ? <EmptyState message={t('errors.cancelled')} /> : null
 
   const message = apiError

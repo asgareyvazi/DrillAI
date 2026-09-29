@@ -21,6 +21,7 @@ import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { ApiError } from '../../api/client'
 import { drillingApi } from '../../api/endpoints'
 import type { RunDetail, RunSummary } from '../../api/types'
 import { I18nProvider } from '../../i18n'
@@ -495,5 +496,109 @@ describe('run monitor: the live event stream', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+})
+
+describe('run monitor: when the read fails', () => {
+  it('shows a deep link to a run that does not exist as "not found", not as an outage', async () => {
+    api.getRun.mockRejectedValue(new ApiError(404, 'platform.not_found', "run 'run_missing' not found"))
+
+    renderMonitor('/runs?run=run_missing')
+
+    const state = await screen.findByTestId('error-state')
+    expect(state).toHaveAttribute('data-error-kind', 'not_found')
+    expect(state).toHaveTextContent(/not found/i)
+    expect(state).not.toHaveTextContent(/unreachable/i)
+    // The list the run belongs to is still there: a missing run does not break the page around it.
+    expect(await screen.findByRole('table')).toBeInTheDocument()
+  })
+
+  it('shows an identity that may not read the run as a permission problem, without a retry', async () => {
+    api.getRun.mockRejectedValue(
+      new ApiError(403, 'security.permission_denied', "missing permission 'workflow.read'", {}, 'req_403', false, {
+        messageFromServer: true,
+      }),
+    )
+
+    renderMonitor('/runs?run=run_1')
+
+    const state = await screen.findByTestId('error-state')
+    expect(state).toHaveAttribute('data-error-kind', 'forbidden')
+    expect(state).toHaveTextContent('workflow.read')
+    expect(state).toHaveTextContent('req_403')
+    expect(screen.queryByRole('button', { name: /retry/i })).not.toBeInTheDocument()
+  })
+
+  it('offers a bounded retry for a server failure and shows nothing when a run switch cancels it', async () => {
+    api.getRun.mockImplementationOnce(
+      (_runId, signal) =>
+        // The read is aborted, as it is when a run switch supersedes it. What arrives at the screen
+        // has to be nothing at all: no outage, no generic failure, no retry.
+        new Promise((_resolve, reject) => {
+          signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')))
+        }),
+    )
+
+    renderMonitor('/runs?run=run_1')
+    // The list the run belongs to is rendered from its own query and is unaffected.
+    expect(await screen.findByRole('table')).toBeInTheDocument()
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20))
+    })
+
+    expect(screen.queryByTestId('error-state')).not.toBeInTheDocument()
+    expect(screen.queryByText(/unreachable/i)).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /retry/i })).not.toBeInTheDocument()
+  })
+
+  it('reports a timed-out run read as a timeout, never as an unreachable backend', async () => {
+    api.getRun.mockRejectedValue(
+      new ApiError(0, 'network.timeout', 'The request timed out after 60000 ms.', { timeout_ms: 60000 }, null, true, {
+        kind: 'timeout',
+      }),
+    )
+
+    renderMonitor('/runs?run=run_1')
+
+    const state = await screen.findByTestId('error-state')
+    expect(state).toHaveAttribute('data-error-kind', 'timeout')
+    expect(state).toHaveTextContent(/timed out/i)
+    expect(state).not.toHaveTextContent(/unreachable/i)
+    expect(screen.getByRole('button', { name: /retry/i })).toBeInTheDocument()
+  })
+
+  it('reports a run payload it cannot read as a protocol failure, not as a network failure', async () => {
+    api.getRun.mockRejectedValue(
+      new ApiError(
+        200,
+        'protocol.malformed_response',
+        'The server returned a response this page could not read.',
+        { issue: 'expected an object with a "run" property' },
+        'req_shape',
+        false,
+        { kind: 'malformed' },
+      ),
+    )
+
+    renderMonitor('/runs?run=run_1')
+
+    const state = await screen.findByTestId('error-state')
+    expect(state).toHaveAttribute('data-error-kind', 'malformed')
+    // The detail payload is JSON, so the quote around the property name is escaped — the assertion
+    // is about the server's explanation being shown, not about its escaping.
+    expect(state).toHaveTextContent(/expected an object with a .*run.* property/)
+    expect(state).not.toHaveTextContent(/unreachable/i)
+  })
+
+  it('keeps a failed approval read inside the run that failed, leaving the rest of the page usable', async () => {
+    api.listApprovals.mockRejectedValue(new ApiError(500, 'platform.internal_error', 'internal error'))
+
+    renderMonitor('/runs?run=run_1')
+
+    // The run itself is rendered from its own query, which is the point: one failed panel does not
+    // take the screen with it.
+    expect(await screen.findByText(waiting.run.id)).toBeInTheDocument()
+    const states = await screen.findAllByTestId('error-state')
+    expect(states.every((node) => node.getAttribute('data-error-kind') === 'server')).toBe(true)
   })
 })

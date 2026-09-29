@@ -669,6 +669,14 @@ function RunDetailView({ runId }: { runId: string }) {
               />
             )}
 
+            {/*
+              The run's approval record is a second read, and until now a failure in it was rendered
+              as nothing at all: the section simply vanished, so a run whose decision history could
+              not be fetched looked like a run with no decisions — and the pending approval card above
+              would still offer a decision. A failed read says it failed.
+            */}
+            {approvals.error && <ErrorState error={approvals.error} onRetry={() => approvals.refetch()} />}
+
             {decidedApprovals.length > 0 && (
               <section className="space-y-3" data-testid="approval-record">
                 <h2 className="text-sm font-semibold tracking-tight">{t('workflow.approvalRecord')}</h2>
