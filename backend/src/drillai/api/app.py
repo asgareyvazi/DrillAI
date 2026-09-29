@@ -80,6 +80,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         raise ConfigurationError("DRILLAI_AUTH_ENABLED must be true in production")
     if settings.is_production and settings.cors_origins.strip() == "*":
         raise ConfigurationError("wildcard CORS origins are not allowed in production")
+    if settings.is_production and settings.e2e_faults:
+        # The fault routes are unauthenticated by construction (they exist to make the client fail,
+        # not to be authorised), so a deployment that enabled them by accident must not start at all.
+        raise ConfigurationError("DRILLAI_E2E_FAULTS must not be enabled in production")
 
     @contextlib.asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -143,6 +147,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(twin.router, prefix=prefix)
     app.include_router(drilling.router, prefix=prefix)
 
+    if settings.e2e_faults:
+        from drillai.api.routers import faults
+
+        logger.warning("e2e fault injection is enabled: /faults endpoints are mounted")
+        app.include_router(faults.router, prefix=prefix)
+
     @app.get("/", include_in_schema=False)
     async def root() -> dict[str, object]:
         return {
@@ -161,6 +171,11 @@ def _install_request_middleware(app: FastAPI) -> None:
     @app.middleware("http")
     async def correlation(request: Request, call_next):  # type: ignore[no-untyped-def]
         request_id = request.headers.get("X-Request-ID") or new_id("req")
+        # Published on the request so the error handlers report the same id this middleware puts in
+        # the response header. Reading the *incoming* header alone (as the handlers used to) meant a
+        # client that sent no id got an envelope with no trace id at all, and — for an unhandled
+        # error — no id header either, because that response is produced outside this middleware.
+        request.state.request_id = request_id
         set_log_context(request_id=request_id, http_path=request.url.path, http_method=request.method)
         started = time.perf_counter()
         try:
@@ -172,10 +187,18 @@ def _install_request_middleware(app: FastAPI) -> None:
         return response
 
 
+def _request_id(request: Request) -> str:
+    """The correlation id for this request, however far into the stack the handler is running."""
+    published = getattr(request.state, "request_id", None)
+    if isinstance(published, str) and published:
+        return published
+    return request.headers.get("X-Request-ID") or new_id("req")
+
+
 def _install_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(DrillAIError)
     async def drillai_error(request: Request, exc: DrillAIError) -> JSONResponse:
-        trace_id = request.headers.get("X-Request-ID")
+        trace_id = _request_id(request)
         if exc.http_status >= 500:
             logger.exception("request failed", extra={"extra_fields": {"code": exc.code, "path": request.url.path}})
         else:
@@ -183,7 +206,7 @@ def _install_error_handlers(app: FastAPI) -> None:
                 "request rejected",
                 extra={"extra_fields": {"code": exc.code, "path": request.url.path, "message": exc.message}},
             )
-        headers = {"Content-Language": _language(request)}
+        headers = {"Content-Language": _language(request), "X-Request-ID": trace_id}
         if isinstance(exc, AuthenticationRequired):
             headers["WWW-Authenticate"] = "Bearer"
         return JSONResponse(exc.to_payload(trace_id=trace_id), status_code=exc.http_status, headers=headers)
@@ -197,16 +220,17 @@ def _install_error_handlers(app: FastAPI) -> None:
                     "message": "request payload failed validation",
                     "retryable": False,
                     "details": {"issues": exc.errors()},
-                    "trace_id": request.headers.get("X-Request-ID"),
+                    "trace_id": _request_id(request),
                 }
             },
             status_code=422,
-            headers={"Content-Language": _language(request)},
+            headers={"Content-Language": _language(request), "X-Request-ID": _request_id(request)},
         )
 
     @app.exception_handler(Exception)
     async def unhandled_error(request: Request, exc: Exception) -> JSONResponse:
         logger.exception("unhandled error", extra={"extra_fields": {"path": request.url.path}})
+        trace_id = _request_id(request)
         return JSONResponse(
             {
                 "error": {
@@ -214,10 +238,14 @@ def _install_error_handlers(app: FastAPI) -> None:
                     "message": "internal error",  # never leak internals to a client
                     "retryable": False,
                     "details": {},
-                    "trace_id": request.headers.get("X-Request-ID"),
+                    "trace_id": trace_id,
                 }
             },
             status_code=500,
+            # This response is produced outside the correlation middleware (the server-error handler
+            # is the outermost layer), so the id has to be set here or a 500 would be the one response
+            # a client could not trace.
+            headers={"X-Request-ID": trace_id},
         )
 
 

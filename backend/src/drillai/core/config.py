@@ -115,6 +115,12 @@ class Settings(BaseSettings):
     seed_on_start: bool = False
     seed_demo_dataset: bool = False
 
+    # ------------------------------------------------------------------ end-to-end fault injection
+    # Enables the deterministic failure routes the browser suite needs (a real timeout, a malformed
+    # body, an unhandled fault). The app factory refuses to start when this is set in production, so
+    # the flag cannot open a debug endpoint on a deployment.
+    e2e_faults: bool = False
+
     @field_validator("database_url")
     @classmethod
     def _validate_database_url(cls, value: str) -> str:

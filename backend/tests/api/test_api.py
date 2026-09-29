@@ -896,10 +896,9 @@ async def test_csv_content_type_is_optional_and_content_decides(client):
     assert upload.json()["job"]["status"] == "succeeded"
 
 
-# NOTE: the run-event WebSocket endpoint (``/runs/{id}/events/stream``) is implemented but not
-# exercised by an automated test here: driving it needs the app's lifespan and its own event loop,
-# and the harness used for these HTTP tests disposes the database on exit. The durable event log
-# and the HTTP events endpoint *are* covered above; the socket is verified manually.
+# The run-event WebSocket endpoint has its own suite (``tests/api/test_run_event_stream.py``), which
+# drives the same ASGI callable from inside the test's event loop: the HTTP harness here disposes the
+# database on exit, which is the wrong lifetime to hold a socket open across.
 
 
 async def test_auth_enabled_requires_a_bearer_token(tmp_path, monkeypatch):

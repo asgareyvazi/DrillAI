@@ -7,8 +7,9 @@ Runs the real application over ASGI with a file-backed SQLite database:
 * requests over HTTP through ``httpx.ASGITransport`` — no mocks, no borrowed service calls.
 
 Authentication is disabled by default (``DRILLAI_AUTH_ENABLED=false``) so tests can act as a
-catalogued role via ``X-Dev-Roles``; ``auth_enabled_api`` builds a second app with bearer-token
-authentication switched on for the tests that need it.
+catalogued role via ``X-Dev-Roles``. The tests that need bearer-token authentication build their own
+app from the same factory with the flag on (see ``tests/api/test_error_contract.py`` and
+``test_api.py``), because the settings are read at factory time and are process-wide.
 
 WebSocket endpoints are driven by ``WebSocketSession`` (see the ``websocket`` fixture): the same
 ASGI callable, in the same event loop as the test, speaking only what a browser can speak.
