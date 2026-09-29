@@ -189,12 +189,21 @@ test.describe('failures the server must be asked to produce', () => {
     const second = await startRunFromStudio(page, workflowId, wellId)
     await clearPendingApproval(request, second, 'Cleanup after the cancellation journey.')
 
-    // The first run's own read is made slow; nothing else is touched, so the list and the second run
-    // answer normally.
-    await arm(request, { method: 'GET', path: `/api/v1/runs/${first}`, mode: 'slow', delay_ms: 6_000 })
+    // What the browser's network stack says about the requests the page gave up on. This is the
+    // evidence that the abandonment reached the connection rather than being merely ignored: a client
+    // that only stopped listening would leave the requests as completed.
+    const abandoned: string[] = []
+    page.on('requestfailed', (sent) => {
+      if (sent.url().includes(`/api/v1/runs/${first}`)) abandoned.push(sent.failure()?.errorText ?? '')
+    })
+
+    // The delay is deliberately *shorter* than this stack's three-second deadline, so the deadline
+    // cannot be what ends the request: only the operator navigating away can. Nothing else is
+    // touched, so the list and the second run answer normally.
+    await arm(request, { method: 'GET', path: `/api/v1/runs/${first}`, mode: 'slow', delay_ms: 2_000 })
 
     await page.goto(`/runs?run=${first}`)
-    // The read of the first run is in flight and will not answer for six seconds.
+    // The read of the first run is in flight and will not answer for two seconds.
     await expect(page.getByRole('link', { name: second })).toBeVisible({ timeout: 30_000 })
     // Switching to the second run abandons it.
     await page.getByRole('link', { name: second }).click()
@@ -203,6 +212,16 @@ test.describe('failures the server must be asked to produce', () => {
     await expect(page.getByText(/selected run/i).first()).toBeVisible()
     // A cancelled request is silent: no error state, no outage wording.
     await expect(errorState(page)).toHaveCount(0)
+
+    // And it is really cancelled: the transport reports it as failed, not as a completed request that
+    // was quietly dropped.
+    await expect
+      .poll(() => abandoned.length, {
+        timeout: 15_000,
+        message: 'switching runs must cancel the request it abandoned',
+      })
+      .toBeGreaterThan(0)
+    expect(abandoned.some((text) => /ABORT|ERR_/.test(text)), `browser said: ${abandoned.join(', ')}`).toBeTruthy()
 
     // Wait past the point where the abandoned response would have arrived, and check it did not
     // replace what the operator is looking at.
