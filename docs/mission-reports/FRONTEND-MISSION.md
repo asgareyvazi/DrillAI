@@ -24,11 +24,15 @@ state "current commit" without saying which of these it means.
 | Backend pause fix | `b8a88fe` | `human.approval` became a real pause; approvals publish what they asked for |
 | Bootstrap mode fix | `67c9230` | `scripts/bootstrap.sh` executable in the index and on disk |
 | Checkpoint 2 commit | `60adee04684843455868a1ae6a7c9f00ae3852b6` | run monitor on the real run contract, with the approval record |
-| Remote HEAD | `60adee04684843455868a1ae6a7c9f00ae3852b6` | `git ls-remote origin refs/heads/arena/01a0dca0-drillai` — **matches local** |
-| Last source (implementation) commit | `60adee0` | the last commit that changed product code or tests |
-| Last test-producing commit | `60adee0` | the commit the unit and E2E numbers below were produced at |
+| Checkpoint 2 report commit | `2df05239c51be41d986e68c4c1ec881522b5cb21` | the report for checkpoint 2 — **the last commit on the remote** |
+| Checkpoint 3 backend commit | `043ea6460180d0f12060f782c7185a7a7418e663` | the run event log became resumable, and the socket that tails it is tested |
+| Local HEAD | `043ea64` | at the remote tip; the report commit that follows this one sits on top |
+| Remote HEAD | `043ea64` | `git ls-remote --heads origin arena/01a0dca0-drillai` — **matches local** |
+| Publication state | — | **PUSHED AND VERIFIED** — `2df0523..043ea64` fast-forward |
+| Last source (implementation) commit | `043ea64` | the last commit that changed product code or tests |
+| Last test-producing commit | `043ea64` | the commit the unit and E2E numbers below were produced at |
 | Last documentation-only commit | this report | changes no product code |
-| Working tree | — | `git status --porcelain` empty at `60adee0`; no untracked files |
+| Working tree | — | `git status --porcelain` empty at `043ea64`; no untracked files |
 | Mission branch state | — | branch exists on the remote and contains every commit listed in §2 |
 
 An earlier revision of this file described the state at `c9c0005`; the header above is the state at
@@ -310,6 +314,81 @@ type the API returns appears, and the tab badge counts them).
 - A catalogue-coverage test now fails when a `t('…')` key is missing from either language, which is how
   65 run-monitor/approval strings were found and translated rather than left as `⟦key⟧`.
 
+### Checkpoint 3 — The stream a client can rely on (backend half)
+
+- Commit `043ea6460180d0f12060f782c7185a7a7418e663` —
+  `fix(realtime): make run event streams durable across resume and disconnect`.
+
+The WebSocket endpoint carried a comment saying it was "verified manually", and manual verification
+had missed two defects that only a client shows you. Both were found by writing the test the comment
+implied, against the real application.
+
+1. **The event log was not monotonic.** `WorkflowRuntime._event` numbered events from an instance
+   counter that started at zero, and resuming a run builds a new runtime — so the resumed stretch of
+   a suspended run repeated the sequence numbers its client had already consumed. A reader holding a
+   cursor (`after_seq=N` on `GET /runs/{id}/events` and on the socket) then received **nothing at
+   all**: the new rows are not *after* the cursor. The run looked healthy while the rest of its log
+   was invisible, which is the exact failure the durable log exists to prevent.
+   Fix: the runtime continues from the durable maximum (`_next_event_seq`, one lookup per run per
+   instance); `(run_id, seq)` is now unique **in the schema** rather than by convention; and
+   migration `7d5e1c4a90b2` repairs rows written by the old code before it adds the constraint —
+   scoped to the runs that actually contain a repeat, renumbered deterministically in recorded order,
+   merging nothing and deleting nothing. That ordering is proved against a database that *contains*
+   duplicates, because that is what every existing deployment has.
+2. **An abandoned socket outlived its client.** The handler only ever wrote, so nothing failed until
+   the next write; a browser closing the tab left a task polling the event log once per interval,
+   indefinitely, for a run nobody was watching. The handler now reads as well as writes and ends by
+   itself within one poll when the client goes away.
+
+The driver matters as much as the tests. `TestClient` tears its portal down by cancelling the
+handler wherever it happens to be, and cancelling a task in the middle of SQLAlchemy's
+greenlet-based aiosqlite bridge deadlocks the connection — the first version of this test file hung
+the suite instead of failing it. `tests/api/ws.py` drives the same ASGI callable inside the test's
+own event loop, speaking only what a browser can speak. It is the only WebSocket driver in the tree:
+the `TestClient` attempt was removed rather than left beside it, and no helper survives from it except
+one comment explaining why (in `ws.py`'s docstring). The driver also exposes `handler_state`, so a
+test can insist the handler ended by **returning** — a handler that stops because something cancelled
+it has not shown that it noticed the client leaving. The stream's own cleanup waits for the watcher
+through `asyncio.wait` for the same reason: a genuine cancellation of the handler must not be
+swallowed by its own tidy-up.
+
+**The browser-shaped handshake.** A browser cannot set handshake headers, so the development identity
+may now arrive as a query parameter (`?dev_roles=…`), read **below** the `auth_enabled` branch. A test
+presents that parameter to an app built with authentication enabled and gets `4401` — the parameter
+carries no authority there. An authorization journey (4403) is therefore reachable from a browser in
+development without opening a production hole.
+
+New backend tests at this commit (9): the socket replays the durable log in sequence order and closes
+with the terminal status; reconnecting with `after_seq` loses no event and duplicates none; closing
+the socket frees the server-side task (asserted by the fixture's own teardown); an unknown run is
+4404 and a role without `workflow.read` is 4403; the server sends only documented frame types; a
+repeated `(run_id, seq)` is refused by the database; the migration renumbers duplicates before
+constraining; a cursor past the end means "up to date" and replays nothing; and a development role in
+the query string grants nothing when authentication is on.
+
+### Checkpoint 3, backend half — the durable report block
+
+| Field | Value |
+| --- | --- |
+| Checkpoint | 3 — realtime: durable run-event streams (backend half) |
+| Local starting SHA | `2df0523` (after the reset recovery; the pre-reset local tip `bfa066b` held no mission commits) |
+| Remote starting SHA | `2df05239c51be41d986e68c4c1ec881522b5cb21` |
+| Root causes | (1) event sequences restarted at 1 on resume, so a cursor-based client saw nothing after its cursor; (2) the socket handler never read from the client, so an abandoned connection kept polling forever; (3) the socket had no automated test at all — "verified manually" |
+| Files changed | `backend/src/drillai/workflow/runtime.py`, `backend/src/drillai/db/models/workflow.py`, `backend/src/drillai/api/deps.py`, `backend/src/drillai/api/routers/runs.py`, `backend/tests/api/conftest.py`, `backend/tests/workflow/test_runtime_execution.py` |
+| Files added | `backend/alembic/versions/7d5e1c4a90b2_run_event_sequence_unique.py`, `backend/tests/api/ws.py`, `backend/tests/api/test_run_event_stream.py`, `backend/tests/db/test_run_event_sequence_migration.py` |
+| Migration | `7d5e1c4a90b2` (down_revision `9c1f4b7d5a20`): repair duplicate sequences, then `UNIQUE (run_id, seq)`; reversible |
+| Tests | 8 WebSocket + 1 migration + 1 runtime monotonicity regression (the existing resume test gained the assertion) |
+| Test counts | full backend **379 passed, 2 skipped**; WS file **8 passed** on three consecutive runs at `043ea64` |
+| E2E | not re-run in this checkpoint — no frontend or API-contract change; the `60adee0` numbers remain the E2E evidence and are labelled as such |
+| Commit SHA | `043ea6460180d0f12060f782c7185a7a7418e663` |
+| Push result | `2df0523..043ea64  arena/01a0dca0-drillai -> arena/01a0dca0-drillai` (fast-forward, exit 0) |
+| Remote SHA | `043ea6460180d0f12060f782c7185a7a7418e663` |
+| Local == remote | yes (`git rev-parse HEAD` == `git ls-remote --heads origin arena/01a0dca0-drillai`) |
+| Working tree | clean (`git status --porcelain` empty) |
+| Untracked | none |
+| Remaining blockers | none for this half; the frontend half of checkpoint 3 is the next work |
+| Next checkpoint | checkpoint 3, frontend half: `frontend/src/lib/runEvents.ts`, Run Monitor integration retiring the 2 s poll, and the real-browser reconnect journey |
+
 ---
 
 ## 3. Test results
@@ -317,7 +396,45 @@ type the API returns appears, and the tab badge counts them).
 Every row below was produced by running the command shown, at the commit named in the row. Exact
 counts, no rounding, and nothing is reported as "all good".
 
-### At `60adee0` (Checkpoint 2) — the current commit
+### At `043ea64` (Checkpoint 3, backend) — the current source commit
+
+| Suite / command | Result |
+| --- | --- |
+| `.venv/bin/python -m pytest -q` (backend, full suite) | **379 passed, 2 skipped** |
+| `.venv/bin/python -m pytest tests/api/test_run_event_stream.py` | **8 passed**, three consecutive runs after the driver gained the handler-state assertion (19 s, 16 s, 17 s; no failures) |
+| `.venv/bin/python -m pytest tests/db/test_run_event_sequence_migration.py` | **1 passed** (data repair, not schema: see §2) |
+| `.venv/bin/python -m pytest tests/workflow/test_runtime_execution.py` | **19 passed** (includes the monotonicity regression on resume) |
+| `.venv/bin/ruff check .` (backend) | All checks passed |
+| `alembic upgrade head` + `alembic check` (fresh database) | No new upgrade operations detected |
+| `alembic downgrade -1` then `upgrade head` | both applied cleanly (the constraint can be removed and re-added) |
+| Frontend (`npx tsc -b --noEmit`, `npx eslint`, `npx vitest run` 109 passed, `npm run build`) | unchanged since `60adee0` — no frontend source changed in this checkpoint |
+
+The two skips are the PostgreSQL integration tests, skipped by design when `DRILLAI_TEST_POSTGRES=1`
+is not set; the count is taken from the progress output (379 `.` + 2 `s`, no `F` or `E`).
+
+### Environment reset 6 — and how the unpushed work survived it
+
+This session began with another wipe: the checkout was a fresh grafted clone at `bfa066b` with a
+single tracked file, the two commits that held the WebSocket work (`08ab942`, `323e29d` — reported as
+unpushed in the previous session) were gone from local Git entirely, and `backend/.venv`,
+`frontend/node_modules` and the Chromium build were missing.
+
+Recovery, in order, without inventing anything:
+
+1. `git fetch --depth=50 origin arena/01a0dca0-drillai` — authentication worked again (the token that
+   blocked the previous session's push had been renewed), and the ref showed the remote tip was
+   `2df0523`, not `60adee0`: `2df0523` is the checkpoint-2 *report* commit, a docs-only descendant.
+2. `git update-ref refs/remotes/origin/arena/01a0dca0-drillai FETCH_HEAD`, then `git reset --mixed
+   FETCH_HEAD` — the branch pointer moved to the remote tip while the working tree was left alone.
+3. Result: the working tree held the entire WebSocket implementation as 11 changed/untracked files.
+   Nothing was rewritten from memory and nothing was lost.
+4. `bash scripts/bootstrap.sh` re-provisioned the virtualenv, the npm packages and Chromium.
+
+So the work was never actually "recovered from the report" — the files survived, only the commits
+that had held them did not. It is committed now as `043ea64` and pushed (`2df0523..043ea64`), which is
+the point of the rule: until a commit is pushed, a wipe takes it.
+
+### At `60adee0` (Checkpoint 2) — the frontend numbers
 
 | Suite / command | Result |
 | --- | --- |
@@ -475,12 +592,14 @@ automated** and are therefore not claimed.
 
 ## 5. Next checkpoints
 
-1. **Checkpoint 3 — live events.** A reusable WebSocket layer (not socket code in a component) for
-   `GET /runs/{run_id}/events/stream`: token in the query string, `after_seq` resume, the
-   `stream_opened` / `run_event` / `stream_idle` / `stream_closed` / `stream_error` contract, bounded
-   reconnect backoff, deduplication by `run_id + seq`, REST reconciliation as the source of truth, an
-   honest connection indicator, and a browser journey that proves a reconnect loses no event and
-   duplicates none. The dev-identity query parameter is gated so production never trusts it.
+1. **Checkpoint 3 — live events.** The server half is at `043ea64` (above): the log is resumable, the
+   socket is tested, and the browser-shaped handshake works without opening a production hole. What
+   remains is the client half: a reusable WebSocket layer (`frontend/src/lib/runEvents.ts`, not socket
+   code inside a component) covering the `stream_opened` / `run_event` / `stream_idle` /
+   `stream_closed` / `stream_error` contract, deduplication by `run_id + seq`, bounded reconnect
+   backoff, REST reconciliation as the source of truth, an honest connection indicator, `RunMonitor`
+   integration that retires the 2 s poll only once the stream proves out, and a real-browser journey
+   in which a forced disconnect loses no event and duplicates none.
 2. **Checkpoint 4 — the error matrix** (401/403/404/409/422/500/network/timeout/malformed), with
    recovery, and never "backend unreachable" for a deliberate abort.
 3. **Checkpoint 5 — permissions, context, RTL, accessibility**: the real role catalogue against
