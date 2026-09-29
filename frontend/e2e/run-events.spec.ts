@@ -304,6 +304,14 @@ test.describe('run monitor: live events over the real socket', () => {
     const sockets = await observeStreamSockets(page)
     const runId = await startRunFromStudio(page, fixtures().workflow_id, wellId)
 
+    // Leave the monitor before the run can finish. Starting a run navigates to the run, so the screen
+    // is watching a run that is about to end: its socket opens when the read that said "parked" was
+    // answered, which can be *after* the moment the run finishes. A count taken then would be that
+    // screen's socket, and the assertion below would be about the wrong page. On the list no run is
+    // open, so nothing is streaming and nothing is pending.
+    await page.goto('/runs')
+    await waitForLoaded(page)
+
     // Finish the run from the API, then open the monitor on it: there is nothing left to listen for.
     const parked = await envelopeEvents(request, runId, 'supervisor')
     await apiPost(
@@ -315,13 +323,15 @@ test.describe('run monitor: live events over the real socket', () => {
     const finished = await envelopeEvents(request, runId, 'supervisor')
     expect(finished.run.status).toBe('succeeded')
 
-    // The studio navigated to the monitor while the run was still parked, so it did open a stream
-    // then. What matters is what happens now, on a run that cannot change any more.
+    // What matters is what this load does, on a run that cannot change any more.
     const socketsBefore = sockets.length
     await page.goto(`/runs?run=${runId}`)
     await waitForLoaded(page)
     await expect(page.getByTestId('run-status')).toHaveText(/succeeded/i)
     await expect(page.getByTestId('run-stream-status')).toHaveAttribute('data-stream-state', 'idle')
+    // A socket that opened late would still be a socket, so the page is given time to open one before
+    // the count is compared. The register only grows, so nothing can open and go unnoticed.
+    await page.waitForTimeout(1500)
     expect(sockets.length, 'a finished run needs no socket').toBe(socketsBefore)
 
     expect(consoleErrors, `console errors: ${consoleErrors.join(' | ')}`).toEqual([])
