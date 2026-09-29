@@ -17,6 +17,7 @@
  */
 
 import { api, expect } from './client'
+import { engineRunEnvelope } from './engineRun'
 import type {
   AdvisorAnswer,
   AdvisorQuestionCatalogue,
@@ -31,7 +32,6 @@ import type {
   IngestionJob,
   DrillingState,
   EngineListItem,
-  EngineRunEnvelope,
   EngineRunListItem,
   EvidenceItem,
   EvidenceSummary,
@@ -154,10 +154,16 @@ export const drillingApi = {
   // ------------------------------------------------------------------ engines
   listEngines: (signal?: AbortSignal) => api.get<Page<EngineListItem>>('/registry/engines', { signal, validate: expect.paged() }),
   getEngine: (key: string, signal?: AbortSignal) => api.get<EngineListItem>(`/registry/engines/${enc(key)}`, { signal }),
+  // The live run's body is adapted to the envelope the workspace renders — and checked while it is
+  // adapted, so a rename on the server becomes a reported malformed response rather than a blank
+  // panel. See `engineRun.ts` for why the two names exist.
   runEngine: (
     key: string,
     body: { inputs: Record<string, unknown>; well_id?: string; wellbore_id?: string; section_id?: string },
-  ) => api.post<EngineRunEnvelope>(`/registry/engines/${enc(key)}/run`, body),
+  ) =>
+    api
+      .post<unknown>(`/registry/engines/${enc(key)}/run`, body)
+      .then((payload) => engineRunEnvelope(payload)),
 
   // ------------------------------------------------------------------ optimisation
   optimisationObjectives: (signal?: AbortSignal) => api.get<OptimisationObjectives>('/engineering/optimisation/objectives', { signal }),

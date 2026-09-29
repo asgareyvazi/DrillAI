@@ -215,12 +215,28 @@ export function ErrorState({
   if (isAbortError(error)) return null
   if (kind === 'cancelled') return showCancelled ? <EmptyState message={t('errors.cancelled')} /> : null
 
+  /*
+   * A conflict and a missing approval share the HTTP shape (409) and nothing else. "The server
+   * refused this because of its current state — reload to see the current state" is the right offer
+   * for a conflict: the screen is out of date and reading it again is the fix. For an action above
+   * the identity's ceiling the screen is not out of date at all — the server is waiting for a
+   * recorded approval, and reloading will change nothing. Offering it would send an operator to do
+   * something that cannot help, which is exactly what the recovery labels exist to prevent.
+   */
+  const approvalRequired = apiError?.isApprovalRequired === true
+
   const message = apiError
-    ? t(ERROR_MESSAGE_KEYS[apiError.kind] as 'errors.generic')
+    ? t(
+        (approvalRequired ? 'errors.approvalRequired' : ERROR_MESSAGE_KEYS[apiError.kind]) as 'errors.generic',
+      )
     : error instanceof Error
       ? error.message
       : t('errors.generic')
-  const hintKey = apiError ? ERROR_HINT_KEYS[apiError.kind] : undefined
+  const hintKey = apiError
+    ? approvalRequired
+      ? 'errors.hintApprovalRequired'
+      : ERROR_HINT_KEYS[apiError.kind]
+    : undefined
   // The server's own sentence, when it wrote one. "missing permission 'workflow.read'" is worth more
   // than any generic phrasing this page could invent, and it is what makes a 403 actionable.
   const explanation = apiError?.messageFromServer ? apiError.message : null
@@ -232,7 +248,7 @@ export function ErrorState({
   // screen *is* out of date, so the offer is to read the current state, and only when the caller has
   // something to re-read.
   const retryable = onRetry !== undefined && canRetry(error)
-  const reconcilable = onRetry !== undefined && !retryable && kind === 'conflict'
+  const reconcilable = onRetry !== undefined && !retryable && kind === 'conflict' && !approvalRequired
 
   return (
     <div

@@ -48,8 +48,9 @@ import {
   type StudioEdgeData,
   type StudioNodeData,
 } from '../../lib/workflowGraph'
-import { holdsAll, holdsPermission } from '../../lib/permissions'
-import { useSession } from '../../stores/session'
+import { useActionGate } from '../../hooks/useActionGate'
+import { useIdentity } from '../../hooks/useIdentity'
+import { holdsAll } from '../../lib/permissions'
 import { NodeConfigEditor, toConfigSchema } from './NodeConfigEditor'
 import { ApiError } from '../../api/client'
 import { PageHeader } from '../../components/layout/AppShell'
@@ -121,7 +122,6 @@ function StudioBody({
   onDirtyChange?: (dirty: boolean) => void
 }) {
   const { t } = useI18n()
-  const { devRoles } = useSession()
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const [nodes, setNodes] = useState<Node[]>([])
@@ -160,11 +160,15 @@ function StudioBody({
     enabled: versions.isSuccess && (newestVersion !== null || viewVersion !== null),
   })
   // What this identity may actually do. The server decides; this only keeps the editor from
-  // offering a button whose only possible outcome is a refusal.
-  const identity = useQuery({ queryKey: ['identity', devRoles], queryFn: ({ signal }) => drillingApi.identity(signal) })
+  // offering a button whose only possible outcome is a refusal. The identity is read through the
+  // shared hook, so the shell, the studio and every action gate share one answer for one principal.
+  const identity = useIdentity()
   const permissions = identity.data?.permissions
-  const canPublish = holdsPermission(permissions, 'workflow.publish')
-  const canDraft = holdsPermission(permissions, 'workflow.draft')
+  // The reason the editor says it cannot edit, worded once for every action in this screen.
+  const draftGate = useActionGate('workflow.draft')
+  const publishGate = useActionGate('workflow.publish')
+  const canDraft = draftGate.state === 'ready'
+  const canPublish = publishGate.state === 'ready'
 
   // The saved graph is loaded once into editor state and remembered as the baseline, so "unsaved
   // changes" is a real comparison against the stored version rather than a flag the editor sets
@@ -411,23 +415,13 @@ function StudioBody({
   const selectedSpec = selectedNode ? specByKey[(selectedNode.data as StudioNodeData).nodeType] : undefined
 
   /**
-   * Why publishing is not offered, in the words of whatever is stopping it.
-   *
-   * Four reasons are collapsed into one disabled attribute, and a disabled button with no explanation
-   * is its own bug: the user cannot tell whether to save first, ask for a role, or wait. They also
-   * cannot tell "you are not permitted" from "your permissions could not be read" — and the studio
-   * used to say the first while meaning the second, because a failed identity read leaves the
-   * permission list undefined and every check then answers *no*. Telling an engineer they lack a
-   * permission the server never denied is a false statement about their own account, so the unknown
-   * case is named separately. The button stays disabled either way: it is the server that decides,
-   * and offering an action that is certain to be refused is worse than not offering it.
+   * The button's own explanation, in the order an operator would act on it: whether the action is
+   * available at all (the server's answer, through the shared gate), and then whether this particular
+   * version may be published yet. "Save first" is only worth saying once "you may publish" is true.
    */
-  const publishDisabledReason = identity.isLoading
-    ? t('workflow.publishChecking')
-    : !canPublish
-      ? identity.error || !identity.data
-        ? t('workflow.cannotPublishUnknown')
-        : t('workflow.cannotPublish', { roles: identity.data.role_keys.join(', ') || 'none' })
+  const publishDisabledReason =
+    publishGate.state !== 'ready'
+      ? publishGate.reason
       : dirty
         ? t('workflow.publishAfterSave')
         : t('workflow.publishHint')
@@ -510,7 +504,7 @@ function StudioBody({
       {identity.error && (
         <div data-testid="identity-unavailable" className="space-y-1">
           <ErrorState error={identity.error} onRetry={() => void identity.refetch()} />
-          <p className="text-xs text-graphite-600 dark:text-graphite-300">{t('workflow.cannotPublishUnknown')}</p>
+          <p className="text-xs text-graphite-600 dark:text-graphite-300">{t('permissions.notRead')}</p>
         </div>
       )}
 
@@ -538,6 +532,8 @@ function StudioBody({
               onClick={() => publish.mutate()}
               disabled={publish.isPending || dirty || !canPublish}
               title={publishDisabledReason}
+              data-testid="workflow-publish"
+              data-publish-state={publishGate.state}
             >
               {t('workflow.publish')}
             </Button>

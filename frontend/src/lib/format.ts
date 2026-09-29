@@ -163,6 +163,18 @@ export function formatActionLevel(level: string | null | undefined): string {
   return ACTION_LEVEL_LABELS[level] ?? level
 }
 
+/**
+ * The numeric rank behind an action level (`L3` → 3), or `-1` for anything unrecognised.
+ *
+ * Comparing *ranks* is how the server decides whether a principal's ceiling permits an action
+ * (`ActionLevel.rank`), so the interface compares the same numbers from the same strings. An
+ * unrecognised level is ranked below everything on purpose: it is never treated as permission.
+ */
+export function levelRank(level: string | null | undefined): number {
+  const match = /^L(\d)$/.exec(level ?? '')
+  return match ? Number(match[1]) : -1
+}
+
 export function formatValidationStatus(status: string | null | undefined): string {
   switch (status) {
     case 'verified_against_reference':

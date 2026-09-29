@@ -208,6 +208,25 @@ describe('<ErrorState>', () => {
     expect(onRetry).toHaveBeenCalledTimes(1)
   })
 
+  it('reads an approval requirement as a decision to obtain, not as a stale screen to reload', async () => {
+    // Same status code as the conflict above, and a completely different remedy: the server has the
+    // current state already, and what is missing is a recorded approval from somebody with the
+    // authority to give one. Telling the operator to reload would send them to do nothing.
+    renderWithI18n(
+      <ErrorState
+        error={new ApiError(409, 'security.approval_required', 'action L4 requires a recorded approval')}
+        onRetry={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByRole('alert')).toHaveAttribute('data-error-kind', 'conflict')
+    expect(screen.getByRole('alert')).toHaveTextContent(/needs a recorded approval/i)
+    expect(screen.getByRole('alert')).toHaveTextContent(/an identity with the authority to approve/i)
+    // No "retry" and no "reload the current state": neither changes the decision.
+    expect(screen.queryByRole('button', { name: /retry/i })).toBeNull()
+    expect(screen.queryByTestId('error-reconcile')).toBeNull()
+  })
+
   it('offers no re-read when the caller has nothing to re-read', () => {
     renderWithI18n(<ErrorState error={new ApiError(409, 'platform.conflict', 'stale')} />)
 

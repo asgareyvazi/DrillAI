@@ -97,6 +97,9 @@ export const en = {
     hintServer: 'Nothing is wrong with your input — the server failed on its side.',
     hintTimeout: 'The server was still working when the deadline passed.',
     hintMalformed: 'The page and the API disagree about the response contract.',
+    approvalRequired: 'This action needs a recorded approval before the server will run it.',
+    hintApprovalRequired:
+      'An identity with the authority to approve must record the decision; nothing on this screen can substitute for it.',
   },
   empty: {
     noWells: 'No wells are registered yet.',
@@ -175,6 +178,7 @@ export const en = {
     title: 'Engineering Workspace',
     catalogue: 'Engine catalogue',
     runEngine: 'Run engine',
+    runEngineHint: 'this identity may run engines; the server still authorizes each request',
     inputs: 'Inputs',
     outputs: 'Outputs',
     result: 'Result',
@@ -305,10 +309,6 @@ export const en = {
     validateHint: 'Validate to see graph issues.',
     noIssues: 'No issues were reported.',
     readOnlyIdentity: 'This identity can read workflows but not edit them: the palette and the inspector are shown so the graph can be inspected, and saving is refused by the server.',
-    publishChecking: 'checking the permissions of this identity…',
-    cannotPublishUnknown:
-      'The permissions of this identity could not be read, so publishing stays off — the server decides regardless of this button.',
-    cannotPublish: "this identity does not hold 'workflow.publish' (roles: {roles}) — the server refuses the action regardless of this button",
     publishAfterSave: 'save the graph first: publishing names a version, and the editor holds unsaved changes',
     publishHint: 'publish this version so runs execute exactly it',
     saveHint: 'store the graph as a new version',
@@ -439,9 +439,22 @@ export const en = {
     outputsHash: 'Outputs hash',
     triggeredBy: 'Triggered by',
   },
+  permissions: {
+    checking: 'checking what this identity may do…',
+    noPermission:
+      "this identity does not hold '{permission}' (roles: {roles}) — the server refuses the action regardless of this control",
+    levelBelow:
+      'this identity may act up to {ceiling}; the action is registered at {required}, so the server would refuse it — a higher ceiling is what is missing, not the permission',
+    notRead:
+      'the permissions of this identity could not be read, so nothing is claimed about them — the server still decides',
+  },
   roles: {
     title: 'Acting as',
     note: 'Authorization is enforced by the API; the UI never widens access.',
+    development: 'development',
+    none: 'no roles',
+    notRead: 'roles not read',
+    bearerConfigured: 'bearer token configured',
   },
 } as const
 

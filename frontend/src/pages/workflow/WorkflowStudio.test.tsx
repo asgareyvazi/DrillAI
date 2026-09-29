@@ -24,6 +24,7 @@ vi.mock('../../api/endpoints', () => ({
     identity: vi.fn(),
     listWorkflows: vi.fn(),
     nodeTypes: vi.fn(),
+    actions: vi.fn(),
   },
   platformApi: {},
   workflowApi: {},
@@ -73,7 +74,39 @@ beforeEach(() => {
   vi.clearAllMocks()
   api.listWorkflows.mockResolvedValue({ items: [workflow], total: 1, limit: 100, offset: 0 } as never)
   api.nodeTypes.mockResolvedValue({ items: [], families: {}, total: 0 } as never)
+  api.actions.mockResolvedValue(actionsPayload as never)
 })
+
+/**
+ * The action catalogue, as the server serves it. `workflow.publish` is registered at L3, so a
+ * principal whose ceiling is below L3 cannot publish even when it holds the permission — and that is
+ * a different fact from not holding it.
+ */
+const actionsPayload = {
+  items: [
+    { key: 'workflow.draft', level: 'L2', description: 'draft', permission: 'workflow.draft' },
+    { key: 'workflow.publish', level: 'L3', description: 'publish', permission: 'workflow.publish' },
+  ],
+  total: 2,
+  levels: { L2: 'draft', L3: 'propose' },
+}
+
+function identityWith(options: { permissions: string[]; ceiling: string; roles?: string[] }) {
+  return {
+    principal_id: 'usr_dev',
+    principal_kind: 'user',
+    role_keys: options.roles ?? ['engineer'],
+    roles: [],
+    available_roles: [],
+    permissions: options.permissions,
+    max_action_level: options.ceiling,
+    auth_enabled: false,
+    identity_source: 'development_header',
+    development_presets: [],
+    locale: 'en',
+    note: '',
+  } as never
+}
 
 describe('the studio identity gate', () => {
   it('says the permissions could not be read, not that the identity lacks one', async () => {
@@ -92,31 +125,75 @@ describe('the studio identity gate', () => {
     renderStudio()
 
     const notice = await screen.findByTestId('identity-unavailable')
-    api.identity.mockResolvedValue({
-      subject: 'dev',
-      role_keys: ['engineer'],
-      permissions: ['workflow.*'],
-    } as never)
+    api.identity.mockResolvedValue(
+      identityWith({ permissions: ['workflow.*'], ceiling: 'L4', roles: ['drilling_supervisor'] }),
+    )
     await userEvent.click(within(notice).getByRole('button', { name: /retry/i }))
 
     await waitFor(() => expect(screen.queryByTestId('identity-unavailable')).toBeNull())
     expect(api.identity).toHaveBeenCalledTimes(2)
   })
 
-  it('still names a genuine permission gap as a permission gap', async () => {
-    api.identity.mockResolvedValue({
-      subject: 'dev',
-      role_keys: ['viewer'],
-      permissions: ['workflow.read'],
-    } as never)
+  it('enables publishing when the identity holds the permission and a sufficient ceiling', async () => {
+    api.identity.mockResolvedValue(
+      identityWith({ permissions: ['workflow.publish'], ceiling: 'L4', roles: ['drilling_supervisor'] }),
+    )
     renderStudio()
 
-    // No failure anywhere: this identity really may not publish.
+    const publish = await screen.findByTestId('workflow-publish')
+    await waitFor(() => expect(publish).toHaveAttribute('data-publish-state', 'ready'))
+    // The server's register still decides; being offered is not being authorised.
+    expect(publish).toBeEnabled()
+  })
+
+  it('names a ceiling that is too low as a ceiling problem, not a missing permission', async () => {
+    // The permission is held; the ceiling is not high enough. `authorize()` checks the ceiling first
+    // and refuses with `{required_level, ceiling}`, so the interface must say that — sending an
+    // operator to ask for a permission they already have is a false statement about their account.
+    api.identity.mockResolvedValue(
+      identityWith({ permissions: ['workflow.publish'], ceiling: 'L2', roles: ['data_manager'] }),
+    )
+    renderStudio()
+
+    const publish = await screen.findByTestId('workflow-publish')
+    await waitFor(() => expect(publish).toHaveAttribute('data-publish-state', 'level-below'))
+    expect(publish).toBeDisabled()
+    expect(publish).toHaveAttribute('title', expect.stringContaining('may act up to L2'))
+    expect(publish).toHaveAttribute('title', expect.stringContaining('L3'))
+    expect(publish).not.toHaveAttribute('title', expect.stringContaining("does not hold 'workflow.publish'"))
+  })
+
+  it('names a genuine permission gap as a permission gap when the ceiling is sufficient', async () => {
+    // An administrator: a ceiling high enough to publish, and no `workflow.publish` permission — the
+    // server refuses it with `{permission, role_keys}`, and that is what the screen must say.
+    api.identity.mockResolvedValue(
+      identityWith({ permissions: ['admin.**', '*.read'], ceiling: 'L4', roles: ['admin'] }),
+    )
+    renderStudio()
+
     await waitFor(() => expect(screen.queryByTestId('identity-unavailable')).toBeNull())
     await waitFor(() => {
-      const publish = screen.getByRole('button', { name: /^publish$/i })
+      const publish = screen.getByTestId('workflow-publish')
       expect(publish).toBeDisabled()
+      expect(publish).toHaveAttribute('data-publish-state', 'no-permission')
       expect(publish).toHaveAttribute('title', expect.stringContaining("does not hold 'workflow.publish'"))
+      expect(publish).toHaveAttribute('title', expect.stringContaining('admin'))
     })
+  })
+
+  it('does not claim a refusal when the action catalogue could not be read', async () => {
+    api.identity.mockResolvedValue(
+      identityWith({ permissions: ['workflow.publish'], ceiling: 'L4', roles: ['drilling_supervisor'] }),
+    )
+    api.actions.mockRejectedValue(new ApiError(403, 'security.permission_denied', 'refused'))
+    renderStudio()
+
+    const publish = await screen.findByTestId('workflow-publish')
+    await waitFor(() => expect(publish).toHaveAttribute('data-publish-state', 'unknown'))
+    // Withheld, but not explained away as a permission the server never denied.
+    expect(publish).toBeDisabled()
+    expect(publish).toHaveAttribute('title', expect.stringContaining('could not be read'))
+    expect(publish).not.toHaveAttribute('title', expect.stringContaining('does not hold'))
+    expect(publish).not.toHaveAttribute('title', expect.stringContaining('may act up to'))
   })
 })

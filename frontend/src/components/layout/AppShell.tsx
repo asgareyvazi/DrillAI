@@ -13,8 +13,9 @@ import { NavLink, Outlet, useParams } from 'react-router-dom'
 import { ApiError, isAbortError } from '../../api/client'
 import { drillingApi } from '../../api/endpoints'
 import { LOCALES, LOCALE_LABELS, useI18n, type Locale } from '../../i18n'
-import { useSession } from '../../stores/session'
+import { useSession, selectedRoleKeys } from '../../stores/session'
 import { Badge } from '../common'
+import { formatActionLevel } from '../../lib/format'
 
 export interface NavItem {
   to: string
@@ -57,10 +58,41 @@ function LocaleSwitch() {
   )
 }
 
+/**
+ * The identity the session is acting as, and the ceiling it may act up to.
+ *
+ * The list of roles to choose from is the server's (`development_presets` on `/platform/identity`),
+ * never a copy kept here: a frontend list drifts, and this one had — the backend advertises eight
+ * catalogued roles and the hard-coded list offered six, so an auditor, a data manager or an
+ * integrity engineer could not be exercised from the interface at all.
+ *
+ * The names come from the server's own catalogue (`available_roles`). They are the platform's names
+ * for its roles, so they are shown as the server wrote them rather than translated here; only the
+ * chrome around them is localised, including the marker that says these are development identities.
+ */
 function IdentityControls() {
   const { t } = useI18n()
-  const { devRoles, setDevRoles, unitSystem, setUnitSystem, knownRolePresets } = useSession()
+  const { devRoles, setDevRoles, unitSystem, setUnitSystem } = useSession()
   const tokenConfigured = Boolean(import.meta.env.VITE_API_TOKEN)
+  // The same query key the studio reads: one identity, one cached answer, shared.
+  const identity = useQuery({ queryKey: ['identity', devRoles], queryFn: ({ signal }) => drillingApi.identity(signal) })
+
+  const names = new Map((identity.data?.available_roles ?? []).map((role) => [role.key, role.name]))
+  const presets = identity.data?.development_presets ?? []
+  const selected = selectedRoleKeys(devRoles)
+  const label = (key: string) => {
+    const name = names.get(key)
+    return name ? `${name} · ${key}` : key
+  }
+  // The selection is always offered, even when the server's list is missing or does not contain it:
+  // a `<select>` whose value has no option renders the wrong thing, and the current identity is a
+  // fact about this session whatever the last read returned.
+  const options = presets.includes(devRoles) ? presets : [devRoles, ...presets]
+  const ceiling = identity.data?.max_action_level
+  const roleNames = (identity.data?.roles ?? [])
+    .map((role) => role.name)
+    .join(', ')
+
   return (
     <div className="flex flex-wrap items-center gap-3">
       <label className="flex items-center gap-1.5 text-xs">
@@ -75,22 +107,44 @@ function IdentityControls() {
         </select>
       </label>
       {tokenConfigured ? (
-        <Badge tone="ok">bearer token configured</Badge>
+        <Badge tone="ok">{t('roles.bearerConfigured')}</Badge>
       ) : (
         <label className="flex items-center gap-1.5 text-xs" title={t('roles.note')}>
           <span className="text-graphite-500">{t('roles.title')}</span>
           <select
             value={devRoles}
             onChange={(event) => setDevRoles(event.target.value)}
+            data-testid="shell-role-switch"
             className="rounded border border-graphite-300 bg-white px-1.5 py-1 dark:border-graphite-700 dark:bg-graphite-900"
           >
-            {knownRolePresets.map((preset) => (
-              <option key={preset.key} value={preset.key}>
-                {preset.label}
+            {options.map((key) => (
+              <option key={key} value={key}>
+                {key === devRoles && selected.length > 1
+                  ? `${selected.map((one) => names.get(one) ?? one).join(' + ')} · ${t('roles.development')}`
+                  : `${label(key)} · ${t('roles.development')}`}
               </option>
             ))}
           </select>
         </label>
+      )}
+      {/*
+        What the server says this identity is, and how far it may act. Both are the server's values:
+        a role list the interface invented, or a ceiling it guessed, would be a second truth about
+        authorization sitting next to the one that is enforced.
+      */}
+      {identity.data && (
+        <span
+          className="text-[11px] text-graphite-500"
+          data-testid="shell-identity"
+          data-ceiling={ceiling}
+        >
+          {roleNames || t('roles.none')} · {formatActionLevel(ceiling)}
+        </span>
+      )}
+      {identity.error && !tokenConfigured && (
+        <span className="text-[11px] text-warning" data-testid="roles-not-read">
+          {t('roles.notRead')}
+        </span>
       )}
       <LocaleSwitch />
     </div>

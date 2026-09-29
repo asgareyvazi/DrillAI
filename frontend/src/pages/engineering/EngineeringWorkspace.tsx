@@ -30,6 +30,7 @@ import {
   Value,
 } from '../../components/common'
 import { useI18n } from '../../i18n'
+import { useActionGate } from '../../hooks/useActionGate'
 import { formatDateTime, formatValidationStatus } from '../../lib/format'
 import { useSession } from '../../stores/session'
 
@@ -116,6 +117,17 @@ function EngineRunner({ engine, wellId, wellboreId, sectionId, scope }: {
   const [parseError, setParseError] = useState<string | null>(null)
   const [result, setResult] = useState<EngineRunEnvelope | null>(null)
   const [showEvidence, setShowEvidence] = useState(false)
+  /*
+   * Running an engine is the L2 action `engine.run`, and the server checks two things: the ceiling of
+   * the identity, then the permission. The gate reads both from the server, so the button can say
+   * which one is missing before it is pressed instead of leaving the operator to read a 403.
+   *
+   * The button is withheld when the gate is not `ready` — including when the answer could not be read —
+   * but "withheld" is not "refused": the tooltip and the note below say which situation it is, and a
+   * failed read never becomes a statement about somebody's account. Nothing here decides anything: the
+   * request itself is still authorized server-side.
+   */
+  const gate = useActionGate('engine.run')
 
   const required = useMemo(() => {
     const schema = engine.input_schema as { required?: string[] }
@@ -167,6 +179,7 @@ function EngineRunner({ engine, wellId, wellboreId, sectionId, scope }: {
           <textarea
             value={raw}
             onChange={(event) => setRaw(event.target.value)}
+            data-testid="engine-inputs"
             spellCheck={false}
             rows={14}
             className="w-full rounded border border-graphite-300 bg-graphite-50 p-2 font-mono text-[11px] dark:border-graphite-700 dark:bg-graphite-950"
@@ -232,9 +245,21 @@ function EngineRunner({ engine, wellId, wellboreId, sectionId, scope }: {
       {parseError && <p className="text-xs text-danger">Invalid JSON: {parseError}</p>}
       {run.error && <ErrorState error={run.error} />}
 
-      <Button variant="primary" onClick={submit} disabled={run.isPending}>
+      <Button
+        variant="primary"
+        onClick={submit}
+        disabled={run.isPending || gate.suggestDisabled}
+        title={gate.reason || t('engineering.runEngineHint')}
+        data-testid="engine-run"
+        data-gate-state={gate.state}
+      >
         {t('engineering.runEngine')}
       </Button>
+      {gate.state !== 'ready' && (
+        <p data-testid="engine-run-gate" className="text-xs text-graphite-600 dark:text-graphite-300">
+          {gate.reason}
+        </p>
+      )}
       {run.isPending && <Loading />}
 
       {result && (

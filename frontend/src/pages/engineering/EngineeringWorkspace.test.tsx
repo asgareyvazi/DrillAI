@@ -14,6 +14,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../../api/client'
+import { engineRunEnvelope } from '../../api/engineRun'
 import { drillingApi } from '../../api/endpoints'
 import { I18nProvider } from '../../i18n'
 import EngineeringWorkspace from './EngineeringWorkspace'
@@ -26,6 +27,8 @@ vi.mock('../../api/endpoints', () => ({
     wellEngineRuns: vi.fn(),
     runEngine: vi.fn(),
     dependencies: vi.fn(),
+    identity: vi.fn(),
+    actions: vi.fn(),
   },
   platformApi: {},
   workflowApi: {},
@@ -81,6 +84,139 @@ beforeEach(() => {
   vi.clearAllMocks()
   api.listEngines.mockResolvedValue({ items: [engine], total: 1, limit: 100, offset: 0 } as never)
   api.wellEngineRuns.mockResolvedValue({ items: [], total: 0, limit: 50, offset: 0 } as never)
+  api.listWellbores.mockResolvedValue({ items: [], total: 0, limit: 100, offset: 0 } as never)
+  // The action catalogue as the server serves it: `engine.run` is registered at L2 and requires the
+  // permission of the same name.
+  api.actions.mockResolvedValue({
+    items: [{ key: 'engine.run', level: 'L2', description: 'run an engine', permission: 'engine.run' }],
+    total: 1,
+    levels: {},
+  } as never)
+  api.identity.mockResolvedValue(identity({ permissions: ['engine.*'], ceiling: 'L2' }) as never)
+})
+
+function identity({
+  permissions,
+  ceiling,
+  roles = ['engineer'],
+}: {
+  permissions: string[]
+  ceiling: string
+  roles?: string[]
+}) {
+  return {
+    principal_id: 'usr_dev',
+    principal_kind: 'user',
+    role_keys: roles,
+    roles: [],
+    available_roles: [],
+    permissions,
+    max_action_level: ceiling,
+    auth_enabled: false,
+    identity_source: 'development_header',
+    development_presets: [],
+    locale: 'en',
+    note: '',
+  }
+}
+
+/**
+ * The engine runner's capability gate.
+ *
+ * Running an engine is the L2 action `engine.run`. Two different refusals arrive the same way — a 403 —
+ * and they are not the same fact: the identity may not act at that level at all, or it may act at that
+ * level and not hold the permission. `authorize()` checks the ceiling first, so the ceiling is what a
+ * person has to be told about first; asking for a permission that would not help is the defect these
+ * tests exist to prevent.
+ */
+describe('the engine run gate', () => {
+  it('offers the run when the ceiling and the permission both allow it', async () => {
+    renderWorkspace()
+    await openEngine()
+
+    const run = await screen.findByTestId('engine-run')
+    await waitFor(() => expect(run).toHaveAttribute('data-gate-state', 'ready'))
+    expect(run).toBeEnabled()
+    expect(screen.queryByTestId('engine-run-gate')).toBeNull()
+  })
+
+  it('withholds the run and names the ceiling when the identity may not act at that level', async () => {
+    // A viewer: an L0 ceiling. `authorize()` refuses on the ceiling and returns `{required_level,
+    // ceiling}`; the screen must say that rather than claim a missing permission.
+    api.identity.mockResolvedValue(identity({ permissions: ['engine.*'], ceiling: 'L0' }) as never)
+    renderWorkspace()
+    await openEngine()
+
+    const run = await screen.findByTestId('engine-run')
+    await waitFor(() => expect(run).toHaveAttribute('data-gate-state', 'level-below'))
+    expect(run).toBeDisabled()
+    expect(screen.getByTestId('engine-run-gate')).toHaveTextContent(/up to L0/)
+    expect(screen.getByTestId('engine-run-gate')).toHaveTextContent(/L2/)
+    expect(screen.getByTestId('engine-run-gate')).not.toHaveTextContent(/does not hold/)
+  })
+
+  it('withholds the run and names the permission when the ceiling is sufficient and the permission is not held', async () => {
+    // An administrator: L4 ceiling, no `engine.run` permission. The server refuses on the permission,
+    // and asking for a higher ceiling would change nothing.
+    api.identity.mockResolvedValue(
+      identity({ permissions: ['admin.**', '*.read'], ceiling: 'L4', roles: ['admin'] }) as never,
+    )
+    renderWorkspace()
+    await openEngine()
+
+    const run = await screen.findByTestId('engine-run')
+    await waitFor(() => expect(run).toHaveAttribute('data-gate-state', 'no-permission'))
+    expect(run).toBeDisabled()
+    expect(screen.getByTestId('engine-run-gate')).toHaveTextContent(/does not hold 'engine.run'/)
+    expect(screen.getByTestId('engine-run-gate')).toHaveTextContent(/admin/)
+    expect(screen.getByTestId('engine-run-gate')).not.toHaveTextContent(/up to L/)
+  })
+
+  it('renders the result of a successful run rather than crashing on the body it was sent', async () => {
+    // The live run's body calls the result `result` and the violations `violations`; the panel reads
+    // them as `outputs` and `constraint_violations`. Reading the first as the second threw
+    // `undefined.length` on a *successful* run, and the page replaced a real result with an error
+    // boundary. The body below is the server's own, and the mapper is the one the endpoint uses.
+    const serverBody = {
+      engine_key: 'hydraulics',
+      engine_version: '1.0.0',
+      result: { ecd_kg_m3: 1250, flow_rate_l_s: 32 },
+      is_feasible: true,
+      warnings: ['annular velocity below the recommended range'],
+      violations: [{ code: 'ecd_below_pore_pressure' }],
+      assumptions: ['steady-state flow'],
+      limitations: ['no surge modelling'],
+      engine_run_id: 'ege_1',
+      inputs_hash: 'a'.repeat(40),
+      outputs_hash: 'b'.repeat(40),
+      engine: { key: 'hydraulics', version: '1.0.0', validation_status: 'validated' },
+    }
+    api.runEngine.mockImplementation(async () => engineRunEnvelope(serverBody))
+
+    renderWorkspace()
+    await openEngine()
+    const run = await screen.findByTestId('engine-run')
+    await waitFor(() => expect(run).toBeEnabled())
+    await userEvent.click(run)
+
+    // The result the server computed, with the engine and version that produced it.
+    await waitFor(() => expect(screen.getByText(/hydraulics@1\.0\.0/)).toBeInTheDocument())
+    expect(screen.getByText(/1,250|1250/)).toBeInTheDocument()
+    expect(screen.getByText(/annular velocity below the recommended range/)).toBeInTheDocument()
+    expect(screen.getByText(/ecd_below_pore_pressure/)).toBeInTheDocument()
+  })
+
+  it('claims nothing about the identity when the permissions could not be read', async () => {
+    api.identity.mockRejectedValue(new ApiError(500, 'platform.internal_error', 'boom'))
+    renderWorkspace()
+    await openEngine()
+
+    const run = await screen.findByTestId('engine-run')
+    await waitFor(() => expect(run).toHaveAttribute('data-gate-state', 'unknown'))
+    expect(run).toBeDisabled()
+    expect(screen.getByTestId('engine-run-gate')).toHaveTextContent(/could not be read/)
+    expect(screen.getByTestId('engine-run-gate')).not.toHaveTextContent(/does not hold/)
+  })
 })
 
 describe('the engine workspace scope', () => {

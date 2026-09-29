@@ -41,6 +41,11 @@ export const ROLES = {
   engineer: 'engineer',
   viewer: 'viewer',
   supervisor: 'drilling_supervisor',
+  // The remaining catalogued roles. They are here because the switcher offers the server's
+  // `development_presets`, and a journey that cannot name a role cannot check that it is offered.
+  integrityEngineer: 'integrity_engineer',
+  dataManager: 'data_manager',
+  auditor: 'auditor',
   // The decider in the approval journeys: a different principal than the one that starts the run,
   // because the server refuses a decision taken by the requester.
   wellManager: 'well_manager',
@@ -48,6 +53,24 @@ export const ROLES = {
 } as const
 
 export type RoleKey = keyof typeof ROLES
+
+/**
+ * Every role the backend catalogues, in the order the development presets list them.
+ *
+ * A journey walks this list rather than a subset it happens to use: the defect this guards against is
+ * a frontend list that had drifted from the server's, leaving catalogued roles unreachable from the
+ * interface. A role added to the backend shows up here as a failing journey, which is the point.
+ */
+export const CATALOGUED_ROLES: RoleKey[] = [
+  'viewer',
+  'engineer',
+  'supervisor',
+  'integrityEngineer',
+  'wellManager',
+  'dataManager',
+  'auditor',
+  'admin',
+]
 
 let cached: E2EFixtures | null = null
 
