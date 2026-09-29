@@ -87,6 +87,7 @@ export const en = {
     hintForbidden: 'This identity does not hold the permission this action requires.',
     hintNotFound: 'It may have been removed, or the link may be out of date.',
     hintConflict: 'Reload to see the current state before deciding again.',
+    reloadState: 'Reload the current state',
     hintServer: 'Nothing is wrong with your input — the server failed on its side.',
     hintTimeout: 'The server was still working when the deadline passed.',
     hintMalformed: 'The page and the API disagree about the response contract.',

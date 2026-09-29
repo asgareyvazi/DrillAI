@@ -21,7 +21,17 @@
  *      the API reports.
  */
 
-import { apiGet, apiPost, selectRole, test, expect, waitForLoaded, fixtures } from './fixtures'
+import {
+  apiGet,
+  apiPost,
+  clearPendingApproval,
+  fixtures,
+  selectRole,
+  startRunFromStudio,
+  test,
+  expect,
+  waitForLoaded,
+} from './fixtures'
 import type { Page } from '@playwright/test'
 
 type RunEventRow = { id: string; run_id: string; seq: number; type: string; message: string | null }
@@ -76,18 +86,6 @@ async function observeStreamSockets(page: Page): Promise<ObservedSocket[]> {
   return observed
 }
 
-async function startRunFromStudio(page: Page, workflowId: string, wellId: string): Promise<string> {
-  await page.goto(`/workflows?workflow=${workflowId}`)
-  await waitForLoaded(page)
-  await selectRole(page, 'supervisor')
-  await page.getByLabel('Run context').selectOption(wellId)
-  await page.getByRole('button', { name: 'Start run' }).click()
-  await expect(page).toHaveURL(/\/runs\?run=/)
-  const runId = new URL(page.url()).searchParams.get('run')
-  expect(runId, 'the studio must navigate to the run it started').toBeTruthy()
-  return runId as string
-}
-
 function streamCursor(url: string): number {
   return Number(new URL(url).searchParams.get('after_seq') ?? '-1')
 }
@@ -110,23 +108,6 @@ async function displayedSequences(page: Page): Promise<string[]> {
 
 function envelopeEvents(request: Parameters<typeof apiGet>[1], runId: string, role: Parameters<typeof apiGet>[2]) {
   return apiGet<RunEnvelope>(request, `/runs/${runId}`, role)
-}
-
-/**
- * Approve the run's gate so the journey leaves no pending approval behind.
- *
- * The suite shares one seeded database, and an approval left pending is not inert: it appears in the
- * inbox the next journey asserts on. A test that changes shared state cleans up after itself.
- */
-async function clearPendingApproval(
-  request: Parameters<typeof apiGet>[1],
-  runId: string,
-  note: string,
-): Promise<void> {
-  const envelope = await envelopeEvents(request, runId, 'supervisor')
-  const pending = envelope.pending_approval
-  if (envelope.run.status !== 'waiting_approval' || !pending) return
-  await apiPost(request, `/approvals/${pending.id}/decide`, { decision: 'approved', note, resume: true }, 'wellManager')
 }
 
 test.describe('run monitor: live events over the real socket', () => {

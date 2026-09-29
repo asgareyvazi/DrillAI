@@ -121,6 +121,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # filesystem backend and would silently lose every blob for the in-memory one.
     app.state.blob_store = blob_store_from_settings(settings)
 
+    if settings.e2e_faults:
+        # Registered *first*, which makes it the innermost layer: a faulted response still travels
+        # out through compression, CORS and the correlation middleware. That ordering is the whole
+        # point — a response injected past the CORS layer would be blocked by the browser and read
+        # as a network failure, and one injected past the correlation middleware would carry no
+        # request id, which is exactly the detail the error contract promises.
+        from drillai.api.routers import faults
+
+        app.add_middleware(faults.FaultInjectorMiddleware)
+
     app.add_middleware(GZipMiddleware, minimum_size=1024)
     app.add_middleware(
         CORSMiddleware,

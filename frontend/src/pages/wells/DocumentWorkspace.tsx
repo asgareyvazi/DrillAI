@@ -20,6 +20,7 @@ import {
   Button,
   Card,
   EmptyState,
+  ErrorState,
   Field,
   Json,
   Loading,
@@ -155,7 +156,9 @@ export default function DocumentWorkspace() {
       setSearchParams({ document: result.document.id })
       queryClient.invalidateQueries({ queryKey: ['documents', id] })
     },
-    onError: (error) => setMessage(error instanceof Error ? error.message : String(error)),
+    // The failure is rendered as a classified error state, not folded into the same string channel as
+    // the success notice: "the uploaded file is empty" and "the backend is unreachable" are different
+    // statements and the operator has to be able to tell them apart.
   })
 
   const process = useMutation({
@@ -224,6 +227,7 @@ export default function DocumentWorkspace() {
               }}
             />
             {upload.isPending && <Loading label="Uploading and ingesting…" />}
+            {upload.error && <ErrorState error={upload.error} />}
             {message && <p className="text-[11px] text-graphite-600 dark:text-graphite-300">{message}</p>}
           </div>
 

@@ -1,26 +1,13 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { QueryClientProvider } from '@tanstack/react-query'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
-import { setIdentity, shouldRetryRequest } from './api/client'
+import { setIdentity } from './api/client'
+import { queryClient } from './api/queryClient'
 import { App } from './App'
 import { I18nProvider } from './i18n'
 import { useSession } from './stores/session'
 import './styles.css'
-
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      // Engineering data is expensive to recompute server-side and cheap to hold: keep it fresh for
-      // a minute and do not retry a request the server explicitly refused.
-      staleTime: 30_000,
-      refetchOnWindowFocus: false,
-      // Classified once, in the API client, and shared with the retry button — so the automatic
-      // behaviour and the manual one can never disagree about whether asking again could help.
-      retry: shouldRetryRequest,
-    },
-  },
-})
 
 // The identity header is set from the session store before the first render, and updated whenever
 // the user switches identity. A configured token always wins over the development header.

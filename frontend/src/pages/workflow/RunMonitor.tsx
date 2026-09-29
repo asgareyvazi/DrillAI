@@ -133,6 +133,22 @@ function ApprovalCard({ approval, onDecided }: { approval: ApprovalRow; onDecide
     },
   })
 
+  /**
+   * Re-read the record after a refusal that was about its current state.
+   *
+   * A 409 means this card is behind the server — somebody else decided while it was open. Sending the
+   * decision again cannot change that (the answer already exists), so the error state offers the one
+   * action that can help: fetch the truth and show the decision that was actually recorded. It is
+   * deliberately a control the operator presses, not a silent rewrite of the screen under them.
+   */
+  const reconcile = () => {
+    void queryClient.invalidateQueries({ queryKey: ['approvals'] })
+    if (approval.run_id) {
+      void queryClient.invalidateQueries({ queryKey: ['run-approvals', approval.run_id] })
+      void queryClient.invalidateQueries({ queryKey: ['run', approval.run_id] })
+    }
+  }
+
   const pending = approval.status === 'pending'
   const noteIsEmpty = note.trim() === ''
 
@@ -280,7 +296,7 @@ function ApprovalCard({ approval, onDecided }: { approval: ApprovalRow; onDecide
               </Button>
             </div>
             <p className="text-xs text-graphite-500">{t('workflow.rejectionNeedsReason')}</p>
-            {decide.error && <ErrorState error={decide.error} />}
+            {decide.error && <ErrorState error={decide.error} onRetry={reconcile} />}
           </div>
         ) : (
           <dl className="grid grid-cols-1 gap-3 text-xs sm:grid-cols-3">

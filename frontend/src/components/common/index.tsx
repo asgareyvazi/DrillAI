@@ -227,7 +227,12 @@ export function ErrorState({
   const detail = apiError && Object.keys(apiError.details).length > 0 ? apiError.details : null
   const detailText = detail ? JSON.stringify(detail, null, 2) : null
   const rendered = detailText && detailText.length > DETAIL_LIMIT ? `${detailText.slice(0, DETAIL_LIMIT)}…` : detailText
+  // Two different offers. Retrying is for failures that might not repeat (a deadline, an outage, a
+  // server fault). A conflict is not one of those — the same request will be refused again — but the
+  // screen *is* out of date, so the offer is to read the current state, and only when the caller has
+  // something to re-read.
   const retryable = onRetry !== undefined && canRetry(error)
+  const reconcilable = onRetry !== undefined && !retryable && kind === 'conflict'
 
   return (
     <div
@@ -255,6 +260,13 @@ export function ErrorState({
         <div className="mt-3">
           <Button size="sm" onClick={onRetry}>
             {t('common.retry')}
+          </Button>
+        </div>
+      )}
+      {reconcilable && (
+        <div className="mt-3">
+          <Button size="sm" data-testid="error-reconcile" onClick={onRetry}>
+            {t('errors.reloadState')}
           </Button>
         </div>
       )}

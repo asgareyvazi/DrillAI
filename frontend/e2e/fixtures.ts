@@ -16,6 +16,26 @@ import type { E2EFixtures } from './global-setup'
 const here = path.dirname(fileURLToPath(import.meta.url))
 const FIXTURES_PATH = path.join(path.resolve(here, '..'), '.e2e', 'fixtures.json')
 
+/**
+ * The seeded workflow and well, as the server under test reports them.
+ *
+ * The main suite can read `.e2e/fixtures.json` because its API is the one the runner seeded. The
+ * bundles that run beside it — the fault-injection stack and the authentication-enabled stack — have
+ * their own databases, so their journeys ask the API they are talking to instead of trusting a file
+ * that belongs to a different server.
+ */
+export async function seededIds(
+  request: APIRequestContext,
+): Promise<{ workflowId: string; wellId: string }> {
+  const workflows = await apiGet<{ items: { id: string; name: string }[] }>(request, '/workflows', 'engineer')
+  const wells = await apiGet<{ items: { id: string; name: string }[] }>(request, '/wells', 'engineer')
+  const workflow = workflows.items.find((row) => row.name === 'Daily Drilling Intelligence')
+  const well = wells.items.find((row) => row.name.startsWith('SYNTH-DEMO-01'))
+  expect(workflow, 'the seed must have produced the drilling workflow').toBeTruthy()
+  expect(well, 'the seed must have produced the synthetic well').toBeTruthy()
+  return { workflowId: workflow?.id as string, wellId: well?.id as string }
+}
+
 /** Development identity presets. The E2E API runs with authentication disabled; see start-api.mjs. */
 export const ROLES = {
   engineer: 'engineer',
@@ -135,4 +155,61 @@ export async function selectUnits(page: Page, units: 'si' | 'oilfield'): Promise
  */
 export function cardWithText(page: Page, text: string): Locator {
   return page.locator('div').filter({ hasText: text }).last()
+}
+
+/**
+ * Start a run of a workflow from the studio, the way an operator does, and return its id.
+ *
+ * The studio owns the identity switch to the supervisor (the role that may run a workflow), the well
+ * it is run against, and the navigation to the run: a journey that started a run some other way would
+ * be testing a path no user has.
+ */
+export async function startRunFromStudio(page: Page, workflowId: string, wellId: string): Promise<string> {
+  await page.goto(`/workflows?workflow=${workflowId}`)
+  await waitForLoaded(page)
+  await selectRole(page, 'supervisor')
+  await page.getByLabel('Run context').selectOption(wellId)
+  await page.getByRole('button', { name: 'Start run' }).click()
+  await expect(page).toHaveURL(/\/runs\?run=/)
+  const runId = new URL(page.url()).searchParams.get('run')
+  expect(runId, 'the studio must navigate to the run it started').toBeTruthy()
+  return runId as string
+}
+
+/**
+ * Approve a run's gate so a journey leaves no pending approval behind.
+ *
+ * The suite shares one seeded database, and an approval left pending is not inert: it appears in the
+ * inbox the next journey asserts on. A test that changes shared state cleans up after itself.
+ */
+export async function clearPendingApproval(
+  request: APIRequestContext,
+  runId: string,
+  note: string,
+): Promise<void> {
+  const envelope = await apiGet<{ run: { status: string }; pending_approval?: { id: string } | null }>(
+    request,
+    `/runs/${runId}`,
+    'supervisor',
+  )
+  const pending = envelope.pending_approval
+  if (envelope.run.status !== 'waiting_approval' || !pending) return
+  await apiPost(
+    request,
+    `/approvals/${pending.id}/decide`,
+    { decision: 'approved', note, resume: true },
+    'wellManager',
+  )
+}
+
+/**
+ * The console errors the *application* produced.
+ *
+ * A browser logs every response with a failing status, and every aborted connection, as a console
+ * error by itself — on the stacks that produce those on purpose, that line is the harness talking,
+ * not the product. Anything else (a React error, an unhandled rejection, a thrown exception) still
+ * counts, which is what the check is for.
+ */
+export function appConsoleErrors(errors: string[]): string[] {
+  return errors.filter((text) => !/Failed to load resource/.test(text))
 }

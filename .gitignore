@@ -45,6 +45,8 @@ node_modules/
 frontend/dist/
 frontend/coverage/
 frontend/.e2e/
+# The fault-injection and authentication-enabled stacks, which keep their own databases.
+frontend/.e2e-*/
 frontend/test-results/
 frontend/playwright-report/
 frontend/playwright/.cache/

@@ -288,6 +288,32 @@ describe('run monitor: a run waiting for a human', () => {
     expect(body).not.toHaveProperty('comment')
   })
 
+  it('shows a refused decision as a conflict, and re-reads the record only when the approver asks', async () => {
+    // Somebody else decided first: the server refuses the second decision with a conflict, which is
+    // not a failure of the screen — the screen is simply behind.
+    api.decideApproval.mockRejectedValue(
+      new ApiError(409, 'platform.conflict', 'the approval has already been decided', {
+        status: 'approved',
+      }),
+    )
+    renderMonitor(url)
+
+    const approve = await screen.findByTestId('approval-approve')
+    const readsBefore = api.listApprovals.mock.calls.length
+    await userEvent.click(approve)
+
+    const state = await screen.findByTestId('error-state')
+    expect(state).toHaveAttribute('data-error-kind', 'conflict')
+    // No blind retry of a decision that already exists, and no silent rewrite of the page either:
+    // the record is re-read because the approver asked for it.
+    expect(screen.queryByRole('button', { name: /^retry$/i })).toBeNull()
+    expect(api.listApprovals.mock.calls.length).toBe(readsBefore)
+
+    await userEvent.click(screen.getByTestId('error-reconcile'))
+    await waitFor(() => expect(api.listApprovals.mock.calls.length).toBeGreaterThan(readsBefore))
+    await waitFor(() => expect(api.getRun.mock.calls.length).toBeGreaterThan(1))
+  })
+
   it('requires a reason before a rejection can be recorded', async () => {
     renderMonitor(url)
     const reject = await screen.findByTestId('approval-reject')

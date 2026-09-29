@@ -21,6 +21,8 @@ What is pinned here is what the client is allowed to rely on:
 
 from __future__ import annotations
 
+import json
+
 import httpx
 import pytest
 from tests.api.conftest import headers
@@ -418,6 +420,69 @@ async def test_an_unhandled_fault_route_goes_through_the_real_error_handler(tmp_
 
     await application.state.database.dispose()
     reset_settings_cache()
+
+
+async def test_an_armed_fault_fails_a_real_endpoint_through_the_real_handlers(tmp_path, monkeypatch):
+    """The injector the browser journeys use: a rule, a real endpoint, the real error contract."""
+    from drillai.api.app import create_app
+    from drillai.api.routers import faults
+    from drillai.core.config import get_settings, reset_settings_cache
+    from drillai.db.models import Base
+
+    monkeypatch.setenv("DRILLAI_ENVIRONMENT", "test")
+    monkeypatch.setenv("DRILLAI_AUTH_ENABLED", "false")
+    monkeypatch.setenv("DRILLAI_E2E_FAULTS", "true")
+    monkeypatch.setenv("DRILLAI_BLOB_BACKEND", "memory")
+    monkeypatch.setenv("DRILLAI_DATABASE_URL", f"sqlite+aiosqlite:///{tmp_path}/armed.db")
+    reset_settings_cache()
+    application = create_app(get_settings())
+    async with application.state.database.engine.begin() as connection:
+        await connection.run_sync(Base.metadata.create_all)
+
+    try:
+        async with _client_that_returns_errors(application) as http:
+            healthy = await http.get("/api/v1/wells", headers=headers())
+            assert healthy.status_code == 200
+
+            # An injected malformed body leaves through the same layers as a real one: it carries the
+            # correlation id the middleware adds and the content type it claims, and the body is not
+            # JSON. A response injected *outside* those layers would be blocked by the browser and
+            # read as a network failure instead — the exact confusion this checkpoint is about.
+            armed = await http.post(
+                "/api/v1/__faults/arm",
+                json={"method": "GET", "path": "/api/v1/projects", "mode": "malformed"},
+            )
+            assert armed.status_code == 200, armed.text
+            unreadable = await http.get("/api/v1/projects", headers=headers())
+            assert unreadable.status_code == 200
+            assert unreadable.headers["content-type"].startswith("application/json")
+            assert unreadable.headers["x-request-id"]
+            assert unreadable.headers["x-response-time-ms"]
+            with pytest.raises(json.JSONDecodeError):
+                json.loads(unreadable.text)
+            await http.post("/api/v1/__faults/disarm")
+
+            # The same mechanism can fail a real endpoint, and the answer is produced by the
+            # application's own generic error handler: same envelope, same correlation id.
+            await http.post(
+                "/api/v1/__faults/arm",
+                json={"method": "GET", "path": "/api/v1/wells", "mode": "unhandled"},
+            )
+            failed = await http.get("/api/v1/wells", headers=headers())
+            assert failed.status_code == 500, failed.text
+            error = _envelope(failed)
+            assert error["code"] == "platform.internal_error"
+            assert error["trace_id"] == failed.headers["x-request-id"]
+
+            # Something that does not match the rule is served normally, and disarming restores it.
+            assert (await http.get("/api/v1/projects", headers=headers())).status_code == 200
+            assert (await http.post("/api/v1/__faults/disarm")).status_code == 200
+            assert (await http.get("/api/v1/wells", headers=headers())).status_code == 200
+            assert faults.armed_rules() == []
+    finally:
+        faults.disarm_all()
+        await application.state.database.dispose()
+        reset_settings_cache()
 
 
 def test_fault_injection_cannot_be_enabled_in_production(monkeypatch):

@@ -191,6 +191,30 @@ describe('<ErrorState>', () => {
     }
   })
 
+  it('offers to re-read the current state for a conflict, instead of a retry that cannot help', async () => {
+    const onRetry = vi.fn()
+    renderWithI18n(
+      <ErrorState
+        error={new ApiError(409, 'platform.conflict', 'the approval has already been decided')}
+        onRetry={onRetry}
+      />,
+    )
+
+    expect(screen.getByRole('alert')).toHaveAttribute('data-error-kind', 'conflict')
+    // Sending the same request again would be refused again, so there is no retry...
+    expect(screen.queryByRole('button', { name: /retry/i })).toBeNull()
+    // ...but the screen is out of date, and reading the record that exists is a real way forward.
+    await userEvent.click(screen.getByTestId('error-reconcile'))
+    expect(onRetry).toHaveBeenCalledTimes(1)
+  })
+
+  it('offers no re-read when the caller has nothing to re-read', () => {
+    renderWithI18n(<ErrorState error={new ApiError(409, 'platform.conflict', 'stale')} />)
+
+    expect(screen.queryByTestId('error-reconcile')).toBeNull()
+    expect(screen.queryByRole('button')).toBeNull()
+  })
+
   it('renders nothing at all for a cancelled request unless the caller asks for it', () => {
     const { container, unmount } = renderWithI18n(<ErrorState error={ApiError.cancelled('/runs/run_a')} />)
     expect(container).toBeEmptyDOMElement()
