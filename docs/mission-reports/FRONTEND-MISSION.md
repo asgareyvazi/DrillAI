@@ -660,7 +660,7 @@ yet, so no checkpoint-5 verdict is stated here.**
 | A — identity and permissions | the four states of a refused action (permission missing · permission present but ceiling insufficient · sufficient · approval required) rendered from the server's own answer, the dev identity switch terminating the old socket, and the identity's cached answers being rejected on a switch | `bc25b1f` (22 files, +1513/−91) | Vitest **261 passed** in 22 files · Playwright **45 passed** / 0 failed · `npm run build` **268.38 kB (gzip 72.80)** · backend **397 passed, 2 skipped** · `ruff check .` clean |
 | B — context and deep links | unknown `?workflow=` / `?document=` / `?run=`, a document belonging to another well, and a failed (non-404) detail read: each named for what it is, none of them rendered as an outage, and the run cursor reset when the run in the address changes | `583f80a` (8 files, +386/−13) | new spec `e2e/context-deeplinks.spec.ts` **6 passed**; suite **51 journeys passed** / 0 failed · Vitest **262 passed** in 22 files · `tsc -b --noEmit` clean · `eslint .` clean |
 | C — RTL | one technical-string rule (`[dir='rtl'] .font-mono { direction: ltr; unicode-bidi: isolate }`), `Json` rendered `dir="ltr"`, a stable `locale-switch` handle, and the workflow canvas left to the direction `@xyflow/react`'s own stylesheet sets | `51a5bb4` (5 files, +220/−1) | new spec `e2e/rtl.spec.ts` **4 passed**; suite 55 journeys passed (with B) · Vitest **262 passed** in 22 files · `tsc` and `eslint` clean · build **271.25 kB (gzip 73.64)** |
-| D — accessibility primitives | table rows as controls, `Tabs` owning its panel, `Drawer`'s focus lifecycle, and one polite live region for run events | `be2f0cf` (14 files, +1116/−33) | Vitest **275 passed** in 23 files · Playwright **61 passed** / 0 failed · `tsc -b --noEmit` clean · `eslint .` clean · build **274.82 kB (gzip 74.88)** · backend **397 passed, 2 skipped** · `ruff check .` clean · `alembic check` (after `alembic upgrade head`): "No new upgrade operations detected" |
+| D — accessibility primitives | table rows as controls, `Tabs` owning its panel, `Drawer`'s focus lifecycle, and one polite live region for run events | published as `609e19f` (14 files, +1116/−33) — originally committed as `be2f0cf`, which environment reset 14 destroyed before it could be pushed (see the publication table) | Vitest **275 passed** in 23 files · Playwright **61 passed** / 0 failed · `tsc -b --noEmit` clean · `eslint .` clean · build **274.82 kB (gzip 74.88)** · backend **397 passed, 2 skipped** · `ruff check .` clean · `alembic check` (after `alembic upgrade head`): "No new upgrade operations detected". The browser suite was run at this content before the reset; the same journeys, plus batch E's, were re-run together at `3141439` (65 passed), and Vitest/eslint/tsc were re-run at `609e19f` itself |
 | E — integrated certification | three journeys that cross the areas against each other, plus one more accessibility guard, and the full gate re-run at the certification commit | `7b1c110`, `3141439` (2 files, +330/−2) | Playwright **65 passed / 0 failed** · Vitest **275 passed** in 23 files · `tsc` clean · `eslint .` clean · build **274.82 kB (gzip 74.88)** · backend **397 passed, 2 skipped** · `ruff check .` clean · `alembic check`: "No new upgrade operations detected" |
 
 #### What each batch actually asserts
@@ -1146,9 +1146,12 @@ automated** and are therefore not claimed.
    `e1db229` (the last eight silent reads), `4edff04`/`1584880` (journeys that can fail),
    `d9cefaf` (the health badge and the dead-code audit), `9626647`/`1f68671`/`0297fd7` (three
    preconditions that were hopes). All of them are published and verified on the remote (§5.2).
-3. **Checkpoint 5 — permissions, context, RTL, accessibility**: the real role catalogue against
-   backend authority, deep links and reload context, query-key scoping, Persian/RTL across the five
-   surfaces, and keyboard/`aria` assertions on the real journeys.
+3. ~~**Checkpoint 5 — permissions, context, RTL, accessibility**~~ **Done and verified** at the
+   source/test commit `3141439`, in seven commits: `bc25b1f` (identity and permissions), `583f80a`
+   (context and deep links), `51a5bb4` (RTL), `609e19f` (accessibility primitives), `7b1c110` and
+   `3141439` (the integrated certification), plus the report commits. Every criterion is answered in §2
+   and every commit is published; the push failure that happened mid-checkpoint and its resolution are
+   recorded there too.
 4. **Checkpoint 6 — CI and certification**: `.github/workflows/` running install → typecheck → lint →
    unit → build → backend tests → backend lint → migration check → real-stack E2E with no ignored
    failures, then the full certification from a clean checkout.
@@ -1234,9 +1237,9 @@ status — exactly `MISSION CLOSED — VERIFIED` or `MISSION BLOCKED — NOT COM
 the eleven failure classifications are distinct and proven in a real browser (A–J), the eight audited
 reads are truthful, three weak journey preconditions were rebuilt and the mutations that prove them were
 re-run, the cleanup is audited, and every intended commit is on the remote with `git ls-remote` equal to
-the local tip (§5.2). The mission as a whole is unchanged: **MISSION IN PROGRESS — NOT COMPLETE**, with
-checkpoint 5 (permissions, context, RTL, accessibility) and checkpoint 6 (CI and the final certification)
-outstanding.
+the local tip (§5.2). Checkpoint 5 was outstanding when this paragraph was written and has since been
+delivered and certified (§2, *Checkpoint 5*); checkpoint 6 (CI and the final certification) remains, so
+the mission as a whole is still **MISSION IN PROGRESS — NOT COMPLETE**.
 
 Provenance, stated separately because they are different things:
 
