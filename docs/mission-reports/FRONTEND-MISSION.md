@@ -1,6 +1,12 @@
 # Frontend Mission — Drilling Intelligence Workspace
 
-**Status: CHECKPOINT 4 — VERIFIED · MISSION IN PROGRESS — NOT COMPLETE.**
+**Status: CHECKPOINT 5 — VERIFIED · CHECKPOINT 4 — VERIFIED · MISSION IN PROGRESS — NOT COMPLETE.**
+
+> Checkpoint 5 (permissions and identity, context and deep links, RTL, accessibility) is complete and
+> published: batches A–E, certified at the source/test commit `3141439`, with the acceptance criteria
+> listed one by one in §2 and the full gate re-run at that commit. The mission itself is not closed —
+> the closing brief's nine-section report and CI certification are not part of this checkpoint — so the
+> mission statement below stays **IN PROGRESS — NOT COMPLETE**, and nothing here claims otherwise.
 
 This file is the durable record of the mission. It lives in Git on purpose: a future session must be
 able to resume from the repository alone, without the chat that produced it. Every checkpoint below
@@ -26,14 +32,16 @@ state "current commit" without saying which of these it means.
 | Checkpoint 3 report commits | `79ed0bc`, `d43f069`, `6e5e318` | documentation only |
 | Checkpoint 4 commits | `3d719f0`, `572cc2c`, `bb15c60`, `e21530a`, `e1db229` | the error model, the backend contract and fault injector, the approval read, the browser matrix, the last eight silent reads |
 | Checkpoint 4 completion commits | `4edff04`, `1584880`, `d9cefaf`, `9626647`, `1f68671`, `0297fd7` | journeys that can fail, the health badge and the dead-code audit, and three journeys whose preconditions are now facts |
-| Last source (implementation) commit | `d9cefaf` | the last commit that changed product code |
-| Last test-producing commit | `0297fd7` | the commit the unit, browser and backend numbers in §3 were produced at |
-| Local HEAD | the commit that carries this row | report-only; the source/test commits are `d9cefaf` / `0297fd7` |
-| Final documentation commit | `8f859ca` | the checkpoint-4 certification (counts, journeys, mutations, gate); the report-only commits above it only name or correct that record |
-| Remote HEAD | the commit that carries this row | one report-only commit above `8f859ca`; `git ls-remote --heads origin arena/01a0dca0-drillai` is the authority |
-| Publication state | — | **PUSHED AND VERIFIED** — local HEAD == remote HEAD, 0 unpushed commits |
+| Last source (implementation) commit | `609e19f` | the last commit that changed product code (checkpoint 5, batch D) |
+| Last test-producing commit | `3141439` | the commit the unit, browser and backend numbers in §3, §3.1 were produced at (checkpoint 5, batch E) |
+| Checkpoint 4 certification | `8f859ca` | the durable record of checkpoint 4: counts, journeys, mutation table, git gate |
+| Checkpoint 5 commits | `bc25b1f`, `583f80a`, `51a5bb4`, `609e19f`, `7b1c110`, `3141439` | identity and permissions · context and deep links · RTL · accessibility primitives · the integrated certification |
+| Local HEAD | the commit carrying this row | the report for checkpoint 5; the source/test commit the numbers were produced at is `3141439` |
+| Remote HEAD | the commit carrying this row | `git ls-remote --heads origin arena/01a0dca0-drillai` is the authority |
+| Publication state | — | **PUSHED AND VERIFIED** — every commit of this checkpoint is on the remote; a push failure occurred mid-checkpoint (see the publication table in §2) and was resolved, and the failure itself is recorded rather than dropped |
 | Working tree | — | clean (`git status --porcelain` empty); no untracked files |
-| Checkpoint 4 status | — | `CHECKPOINT 4 — VERIFIED` (source/test commit `0297fd7`, report commit is the remote tip) |
+| Checkpoint 4 status | — | `CHECKPOINT 4 — VERIFIED` (source/test commit `0297fd7`) |
+| Checkpoint 5 status | — | **`CHECKPOINT 5 — VERIFIED`** (source/test commit `3141439`; criteria listed in §2) |
 
 An earlier revision of this file described the state at `c9c0005`; the header above is the state at
 the current local commit, which is also the remote HEAD.
@@ -638,10 +646,219 @@ because two of the three were only reachable inside a full run: each had passed 
 
 ---
 
+### Checkpoint 5 — permissions, context, RTL and accessibility
+
+The brief for this checkpoint is one product-level problem stated in four areas, and its premise is that
+identity, permission, action level, deep links, context, locale, direction, focus, keyboard operation and
+live data are correctness properties rather than polish. It is delivered as five batches, each committed
+and published on its own. **Batches A–C are published; Batch D is committed locally and its push is
+blocked by an invalid GitHub token (below). Batch E — the integrated certification — has not been run
+yet, so no checkpoint-5 verdict is stated here.**
+
+| Batch | What it changed | Commit | Gate at that commit |
+| --- | --- | --- | --- |
+| A — identity and permissions | the four states of a refused action (permission missing · permission present but ceiling insufficient · sufficient · approval required) rendered from the server's own answer, the dev identity switch terminating the old socket, and the identity's cached answers being rejected on a switch | `bc25b1f` (22 files, +1513/−91) | Vitest **261 passed** in 22 files · Playwright **45 passed** / 0 failed · `npm run build` **268.38 kB (gzip 72.80)** · backend **397 passed, 2 skipped** · `ruff check .` clean |
+| B — context and deep links | unknown `?workflow=` / `?document=` / `?run=`, a document belonging to another well, and a failed (non-404) detail read: each named for what it is, none of them rendered as an outage, and the run cursor reset when the run in the address changes | `583f80a` (8 files, +386/−13) | new spec `e2e/context-deeplinks.spec.ts` **6 passed**; suite **51 journeys passed** / 0 failed · Vitest **262 passed** in 22 files · `tsc -b --noEmit` clean · `eslint .` clean |
+| C — RTL | one technical-string rule (`[dir='rtl'] .font-mono { direction: ltr; unicode-bidi: isolate }`), `Json` rendered `dir="ltr"`, a stable `locale-switch` handle, and the workflow canvas left to the direction `@xyflow/react`'s own stylesheet sets | `51a5bb4` (5 files, +220/−1) | new spec `e2e/rtl.spec.ts` **4 passed**; suite 55 journeys passed (with B) · Vitest **262 passed** in 22 files · `tsc` and `eslint` clean · build **271.25 kB (gzip 73.64)** |
+| D — accessibility primitives | table rows as controls, `Tabs` owning its panel, `Drawer`'s focus lifecycle, and one polite live region for run events | `be2f0cf` (14 files, +1116/−33) | Vitest **275 passed** in 23 files · Playwright **61 passed** / 0 failed · `tsc -b --noEmit` clean · `eslint .` clean · build **274.82 kB (gzip 74.88)** · backend **397 passed, 2 skipped** · `ruff check .` clean · `alembic check` (after `alembic upgrade head`): "No new upgrade operations detected" |
+| E — integrated certification | three journeys that cross the areas against each other, plus one more accessibility guard, and the full gate re-run at the certification commit | `7b1c110`, `3141439` (2 files, +330/−2) | Playwright **65 passed / 0 failed** · Vitest **275 passed** in 23 files · `tsc` clean · `eslint .` clean · build **274.82 kB (gzip 74.88)** · backend **397 passed, 2 skipped** · `ruff check .` clean · `alembic check`: "No new upgrade operations detected" |
+
+#### What each batch actually asserts
+
+**A — the four states a refused action can be in.** The interface never grants authority and never keeps
+a second copy of the role catalogue: it renders the server's answer. A missing permission, a permission
+that is present but above the identity's level ceiling, a sufficient identity, and an action that is
+allowed but requires approval are four different surfaces, not one "denied" path. Switching identity ends
+the previous principal's WebSocket, discards that identity's cached answers and refetches — with no full
+page reload, because a reload would hide exactly the state that leaked.
+
+**B — context is never invented, and a mismatch fails safely.** The URL's well and a record's own
+`well_id` are compared before the record is shown; a run scope is historical and is displayed as the
+server recorded it rather than re-interpreted through the current page's context; a workflow is not
+well-bound, because `workflow.well_id` does not exist. A 404 is an answer (`ApiError.status === 404`, so
+"no retry button"), while any other failure of the same read is a rendered `ErrorState` with a retry.
+
+**C — direction is more than `dir="rtl"`.** Persisted values, identifiers and signed quantities stay in
+their own direction and keep their sign; engineering numbers are compared against the engine's answer
+after digit mapping rather than against a translation; the graph's geometry is byte-identical between
+locales because the canvas library pins its own direction — asserted, not assumed. A `dir="ltr"` wrapper
+added defensively to the canvas was removed again after the mutation that deleted it did **not** fail any
+journey, and the dependency's own rule (`@xyflow/react@12.12.0`, `dist/style.css:4`) was recorded instead.
+
+**D — keyboard and assistive technology.** The critical journey is walkable without a mouse: a tab group
+is entered once and moved through with arrow keys whose meaning follows the reading direction (in Persian
+the next tab is to the left), `Home`/`End` work, a table row that opens a record is focusable and
+activates on `Enter` and `Space` without scrolling, and the row that is open says so through
+`aria-current`. The evidence drawer makes its `aria-modal` claim true — focus moves in, Tab cycles inside
+(reading the focusable set at the moment of the key press, so a control that appears while it is open is
+reachable), `Escape` closes, and focus returns to the opener. Run events are announced once per burst by a
+polite region that never takes focus, never scrolls, and — when the resumption removes the button the
+operator just pressed — hands focus to the badge that reports the outcome instead of dropping it on the
+document body. A sweep of the accessibility tree over five screens found one unnamed control (a progress
+bar), which is now labelled by the label drawn above it.
+
+#### Mutation certification (checkpoint 5)
+
+Each mutation was applied to the working tree, run, observed to fail, and reverted; the tree was then
+verified byte-identical to its pre-mutation content. A mutation that does not fail its guard means the
+guard is decorative, and two were handled that way rather than reported as passing.
+
+| # | Mutation | Guard | Result |
+| --- | --- | --- | --- |
+| M1 | `resetQueries` → `invalidateQueries` on identity switch | identity E2E | failed, restored |
+| M2 | `resetQueries` → `clear` | identity E2E | failed, restored |
+| M3 | evaluate permission presence before the level ceiling | identity E2E | failed, restored |
+| M4 | send the action as a raw `POST` without the client's authorization path | identity E2E | failed, restored |
+| M5 | remove the run-cursor reset (`cursorRunRef`) | `useRunEventStream.test.tsx` — "starts a different run at that run's own cursor" | failed (`after_seq=4` vs `after_seq=1`), restored |
+| M6 | remove `[dir='rtl'] .font-mono` | `e2e/rtl.spec.ts` | failed (direction resolved `rtl`), restored |
+| M7 | remove the canvas `dir="ltr"` wrapper | `e2e/rtl.spec.ts` | **did not fail** — the wrapper was inert, so it was deleted and the library's own rule documented |
+| M8 | remove `dir="ltr"` from `Json` | `e2e/rtl.spec.ts` | failed (`null`), restored |
+| M9 | remove the table row's tab stop | `a11y.test.tsx` and the browser journey | failed in both, restored |
+| M10 | make the tab arrows ignore the reading direction | `a11y.test.tsx` (RTL case) and the Persian browser journey | failed in both, restored |
+| M11 | drop `aria-controls` from the tabs | `a11y.test.tsx` | failed, restored |
+| M12 | announce the log a screen opens onto (history as news) | `RunMonitor.test.tsx` | failed after the guard was strengthened (below), restored |
+| M13 | count a burst by its newest event only | `RunMonitor.test.tsx` | failed, restored |
+| M14 | remove the dialog's focus restore | `a11y.test.tsx` and the browser journey | failed in both, restored |
+| M15 | give every table row a key derived from `Date.now()` (remounting the table on each render) | the refresh journey in `e2e/a11y.spec.ts` | **did not fail the first version of the guard** (an unchanged poll re-renders nothing, so there was nothing to break) — the journey now forces a real change into the list, and the mutation fails: "the row survived the refresh as the same node"; restored byte-identical |
+
+Two of these changed the code rather than the confidence in it, which is the point of running them:
+
+* **M7 deleted a line.** The canvas wrapper could not be made to fail any journey because
+  `@xyflow/react` sets `direction: ltr` on `.react-flow` itself. Rather than keep an attribute whose only
+  effect was to look like a safeguard, it was removed and the journey now asserts the *resolved*
+  direction.
+* **M12 and M13 found defects in the live region, not in the test.** The coalescing window was originally
+  cleared and re-armed on every effect run, so the REST reconcile that follows a burst — a re-render
+  carrying no new event — cancelled the announcement that was about to describe it; and the burst count
+  looked only at the newest event, under-reporting the common case where several events arrive in one
+  render. The window is now opened by the first event of a burst and closed by a timer, and the count is
+  taken from the log's own sequence numbers. The first version of M12's guard also passed when it should
+  not have, because the assertion ran before the window could close; the guard now waits past the window,
+  and the mutation fails — a guard that cannot fail is not a guard.
+
+#### Batch E — the areas certified against each other
+
+Per-area specs cannot see the gaps between areas: a refusal explained only in one locale, a deep link
+that survives a reload only in one direction, a keyboard journey that stops working once the page is
+right-to-left. `e2e/checkpoint5.spec.ts` (three journeys) exercises them together against the real
+backend:
+
+1. **identity + context + direction**: a run started from the studio and opened while the interface is
+   Persian — the run in the address is the run on screen, the scope shown is compared with the API's own
+   envelope rather than with the page, every visible monospace string resolves LTR, the ASCII mapping of
+   the page carries the id the API returned, and a reload reproduces all of it, still RTL. The event log
+   is then compared against the server's events for that run.
+2. **identity + direction**: a refusal read by someone whose interface is Persian — the explanation
+   carries the action level and ceiling the *server* reports for the same identity and the same request
+   (an L0 viewer refused an L2 action), the level codes are not translated, switching to the supervisor
+   changes the control's state **in place with zero main-frame navigations** while the locale stays
+   Persian, and the request the button would send is authorised by the server rather than merely drawn
+   as authorised.
+3. **context + accessibility**: a deep link naming a document that belongs to another well — refused in
+   the page's own words and naming both ids, present in the accessibility tree (`ariaSnapshot`), the
+   document's own title absent from the page, and no Retry offered for an answer that will not change.
+
+Two defects were found by building this batch, and both were fixed rather than worked around:
+
+* **`selectRole` could not switch identity in Persian.** The helper looked the control up by its label
+  ("Acting as"), which is translated, so a Persian user's own action was untestable. It now uses the
+  control's `shell-role-switch` handle, the same in both locales.
+* **A focus-stability guard that could not fail.** The first version of the "a refresh does not move the
+  reader's focus" journey waited seven seconds and asserted the focused row was still focused. The
+  mutation that should have broken it — a row key derived from `Date.now()`, which remounts the table on
+  every render — did **not** fail it, because React Query's structural sharing returns the same object
+  for an unchanged poll, so nothing re-rendered. The journey now starts a run behind the page's back so
+  the refresh genuinely changes the list, and the mutation fails (`the row survived the refresh as the
+  same node`), first, before being restored to a byte-identical file.
+
+#### The client holds no second copy of the authority (checked, not assumed)
+
+The rule is that the backend is the only authorization authority and the interface must not keep a
+second role catalogue. Checked against the tree rather than asserted in prose:
+
+* no role key appears in frontend production code — `grep -rn "drilling_supervisor\|integrity_engineer\|
+  well_manager\|data_manager" src` matches a comment in `src/stores/session.ts` and nothing else; the
+  other matches are test fixtures;
+* the identity switcher's options are the server's `development_presets` (journey: the offered options
+  equal the server's list, `+1` for the session's own echo) and the ceiling shown is the server's
+  `max_action_level` for every catalogued role;
+* `src/lib/permissions.ts` implements the *pattern* semantics (`*`, `.*`, `.**`) so the interface does
+  not offer an action certain to be refused; it grants nothing, protects no route, and is asserted
+  against the server's own behaviour in the journeys;
+* the only level-keyed table on the client is `ACTION_LEVEL_LABELS` in `src/lib/format.ts`, which maps a
+  server value (`L3`) to its label (`L3 · propose`) and a rank for comparison — presentation of the
+  server's value, not a source of authority.
+
+#### Publication state, in the order it happened
+
+| # | Event | Evidence |
+| --- | --- | --- |
+| 1 | Batches A, B and C pushed and verified | `git ls-remote` at each batch: `bc25b1f`, `583f80a`, `51a5bb4` |
+| 2 | Batch D committed locally; **push failed** | `fatal: could not read Username for 'https://github.com': terminal prompts disabled`; `gh auth status`: the `GH_TOKEN` token is no longer valid |
+| 3 | The remote was read without credentials | `GET https://api.github.com/repos/asgareyvazi/DrillAI/branches/arena/01a0dca0-drillai` → `"sha": "51a5bb4a0645d8a004b72d7fe01244c026a27bf0"`, parent `583f80a` — so the remote was exactly at batch C, and the local stale `refs/remotes/origin/…` (`bc25b1f`) was **not** evidence of anything |
+| 4 | Environment reset **14** destroyed the local history again | repository rewound to the grafted base `bfa066b`; working tree intact (Batch D and the report edits), toolchain gone |
+| 5 | Recovered by the proven sequence | working tree archived first (`/tmp/prereset14/worktree.tar`, 316 entries) → `git fetch --depth=200` → `git update-ref refs/remotes/origin/… FETCH_HEAD` → `git reset --mixed FETCH_HEAD` (**never** `--hard`); `git status` then showed exactly the content of the lost commits and nothing else |
+| 6 | Batch D re-created and **pushed** | `609e19f` (the original local `be2f0cf` was never published); `git ls-remote` → `609e19f09ecd5b4bf82098ef09d18e061c2b8f2a` |
+| 7 | Batches E pushed | `7b1c110`, `3141439`; remote verified with `git ls-remote` after each |
+
+The re-created commit says so in its own message. Content that was never published is re-created, never
+renamed: the report names the original SHA (`be2f0cf`) as unreachable and the new one (`609e19f`) as the
+published fact.
+
+#### Checkpoint 5 — the acceptance criteria, one by one
+
+| # | Criterion | Where it is proven |
+| --- | --- | --- |
+| 1 | The backend is the sole authority; the UI grants nothing | Batch E journey 2 (the server authorises the very request the screen reports as ready); the client-holds-no-catalogue check above |
+| 2 | No second role catalogue | switcher options == server `development_presets` (+1 echo); no role key in production code |
+| 3 | Action level ≠ permission: four distinct states | missing permission (`no-permission`, names the permission and the role), ceiling insufficient (`level-below`, names both levels), sufficient (`ready`, and the server runs it), approval required (the run monitor's pending-approval card, the blocked resume, and the approval inbox journeys) |
+| 4 | Identity switching: old socket terminated, old answers rejected, refetch, no reload | the two identity journeys (socket count and request identity), and Batch E journey 2's zero main-frame navigations |
+| 5 | Query keys scoped only where the response varies | the approval read is scoped to the run (`scopes the approval read to the run being shown`); Batch B audited every `queryKey` in the tree |
+| 6 | Context never invented; mismatch fails safely | cross-well document refused with both ids named; unknown workflow/document/run each named for what it is; the run's scope is the server's recorded scope |
+| 7 | Run scope is historical; workflows are not well-bound | `shows the scope the run was started against, naming what was not returned`; the well-free workflow journey |
+| 8 | RTL is more than `dir="rtl"` | the four RTL journeys (layout, numerals, technical strings, graph geometry) plus Batch E journey 1 |
+| 9 | Engineering numbers stay numerically correct | the NPT total equals the API after digit mapping; the ASCII mapping of the page carries the API's id |
+| 10 | React Flow graph semantics never mirrored | node transforms byte-identical between locales, asserted on the resolved direction the library itself sets |
+| 11 | Keyboard-only operation of the critical journey | Batch D journeys 1–4 and 6, and the component tests |
+| 12 | Real focus management, no focus theft | the drawer's focus lifecycle; the deliberate hand-over after resuming; the refresh journey (a real re-render leaves the reader where they were) |
+| 13 | Live regions that are not noisy | one polite, atomic region per burst, silent for history, never focused, asserted at 600 ms coalescing |
+| 14 | Native semantics before ARIA | the arrow-key journey operates real buttons and their panel; the unnamed-control sweep over five screens (which found and fixed one unnamed progress bar) |
+| 15 | Real browser, real backend, real database; fixtures seeded | every journey above; the fixture ids come from the seed, and the numbers are read from the API rather than pasted |
+| 16 | Mutations that fail and are restored | M1–M15 in the mutation table — including two that changed the code (M7, and the M15 correction) and one that exposed a guard which could not fail |
+| 17 | Commits published and verified | the publication table above; `git ls-remote` equals the local tip |
+
+**CHECKPOINT 5 — VERIFIED** at the source/test commit `3141439` (the commit the numbers in the batch
+table were produced at). The mission is not closed: the nine-section final report and the CI
+certification of the closing brief are not part of this checkpoint, so the mission statement remains
+**MISSION IN PROGRESS — NOT COMPLETE**.
+
+---
+
 ## 3. Test results
 
 Every row below was produced by running the command shown, at the commit named in the row. Exact
 counts, no rounding, and nothing is reported as "all good".
+
+### At `3141439` (Checkpoint 5) — the certification commit
+
+Measured on the working tree at `3141439e90e9ac38897dd4cd9a6527ba30dcd033`, after the last source or test change of this checkpoint and
+with no later edit. Every command below was run at that state; nothing here is inferred.
+
+| Command | Result |
+| --- | --- |
+| `npm run typecheck` (`tsc -b --noEmit`) | clean, no output |
+| `npx eslint .` | clean |
+| `npx vitest run` | **275 passed** in **23 files**, 0 failed, 0 skipped |
+| `npm run build` | `dist/assets/index-BRM9qJCU.js` **274.82 kB** (gzip **74.88 kB**), built in 3.78 s |
+| `npm run e2e` | **65 passed / 0 failed** (3.6 m), including the 7 accessibility journeys and the 3 integrated checkpoint-5 journeys |
+| `python -m pytest` (backend) | **397 passed, 2 skipped, 0 failed** in 187.71 s |
+| `ruff check .` (backend) | clean — "All checks passed!" |
+| `alembic check` (after `alembic upgrade head`) | "No new upgrade operations detected" |
+
+Journey counts by area, at this commit: identity and permissions **7**, context and deep links **6**,
+RTL **4**, accessibility **7**, checkpoint-5 integrated **3**; the remainder are the checkpoints 1–4
+journeys, unchanged. The full suite is one command, so all 65 ran together against the same seeded
+database.
 
 ### At `0297fd7` (Checkpoint 4) — the final source/test commit
 
