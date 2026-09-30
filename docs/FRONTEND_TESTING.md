@@ -122,6 +122,13 @@ interception in the suite, no canned JSON standing in for a response, and no fak
 The synthetic seed fixtures are the exception that proves the rule: they are created *by the
 application*, and the browser still talks to the real backend about them.
 
+Two exceptions exist at the socket level, and they are named here because an absolute claim would be
+false: `run-events.spec.ts` wraps the stream in a pass-through relay (`routeWebSocket` →
+`connectToServer()`) so a journey can drop the transport at a moment it chooses, and
+`error-matrix.spec.ts` stalls one screen's stream the same way so that a stale screen stays stale. In
+both, the frames the page renders are the ones the real server sent — one relays them, the other
+withholds them; neither invents one, and no HTTP response is replaced anywhere in the suite.
+
 ### What the suite asserts about itself
 
 Synthesised values are never compared with literals: a spec reads the number from the API and compares
@@ -146,7 +153,13 @@ checkout → provenance → Python 3.11 + Node 22 (npm cache)
 
 Each required gate is its own step, so a red run names the gate that failed. There is no
 `continue-on-error`, no `|| true`, and no `if: always()` outside the artifact step: a required failure
-fails the job and skips what follows. This was certified, not assumed — a temporary probe commit
+fails the job and skips what follows.
+
+The three testing gates also write the counts their command printed into the run's summary, so a green
+claim can be checked against the run itself — including from an environment whose network cannot reach
+GitHub's log blob storage (`actions/runs/<id>/jobs` carries the step conclusions; the commit's check
+runs carry the summary). The pipelines use `set -o pipefail`, so the command's exit status remains the
+step's: the summary is written only after the gate has actually passed. This was certified, not assumed — a temporary probe commit
 failed the backend gate on purpose and the run went red, skipped the backend lint, migration and
 end-to-end steps, and collected no artifacts; it was removed in the following commit
 (see `docs/mission-reports/FRONTEND-MISSION.md`, §CP6).

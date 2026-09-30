@@ -112,8 +112,11 @@ The end-to-end suite is 13 spec files across three deployments of the same produ
 identity, deterministic fault injection, and authentication enabled — covering the cockpit,
 documents and evidence, the workflow studio lifecycle, the run monitor with approvals, the durable
 run-event WebSocket, the failure matrix, permissions and identity, deep links and context, RTL, and
-keyboard/assistive-technology behaviour. Nothing is intercepted in the browser: the specs drive the
-real UI, the real API and a real seeded database.
+keyboard/assistive-technology behaviour. HTTP is never intercepted anywhere — no spec calls
+`page.route()`, and the failures a healthy server cannot produce come from the application's own
+config-guarded injector. The only browser-level interception is two socket-level relays in the run-event
+journeys, which exist so a spec can state exactly when a live stream failed: they forward to the real
+backend and fabricate no frames.
 
 CI runs that whole sequence on every push to `arena/01a0dca0-drillai` (`.github/workflows/ci.yml`):
 install → frontend typecheck, lint, tests, build → backend tests (with PostgreSQL), lint, migration

@@ -35,7 +35,9 @@ backend decision: authorization, action levels, approval requirements and every 
 the server's answers, rendered. No fabricated numbers: missing, zero, unavailable, failed and pending
 are five distinct states, and each is rendered as what it is. No mocked acceptance path: the
 end-to-end layer drives a real browser, a real API and a real seeded database, and the fault journeys
-inject their faults through the real ASGI stack rather than intercepting the network.
+inject their faults through the real ASGI stack. HTTP is never intercepted in any spec; the only
+browser-level interception in the suite is two socket-level relays in the run-event journeys, which
+forward to the real backend so a spec can state when a transport failed, and which fabricate no frame.
 
 **Final state, in the five different things a reader must not confuse:**
 
@@ -672,7 +674,9 @@ apart, and the label comes from the catalogue in both locales.
 
 Nothing here is mocked: the page issues ordinary requests, and a second instance of the same API —
 same application, same database schema, fault endpoints enabled by configuration and refused in
-production — answers them badly or not at all. The second frontend build differs only in
+production — answers them badly or not at all. (One journey in this spec does stall a single screen's
+live stream at the socket level; it is disclosed in the audit table under *Route interception*, and it
+withholds frames rather than inventing any.) The second frontend build differs only in
 `VITE_API_TIMEOUT_MS=3000`, so a deadline is reachable inside a journey.
 
 | # | Journey | Spec | What it proves |
@@ -1321,10 +1325,25 @@ gh api repos/asgareyvazi/DrillAI/actions/runs/<id> --jq '{sha: .head_sha, conclu
 gh api repos/asgareyvazi/DrillAI/actions/runs/<id>/jobs --jq '.jobs[0].steps[] | {name, conclusion}'
 ```
 
-Raw step logs are not quoted in this report: the sandbox that produced it cannot reach GitHub's log
-blob storage (`gh run view --log` returns an empty body), so the evidence here is the runs' own
-metadata — conclusions per step, per SHA — which is what GitHub keeps attached to the commit. A reader
-can open any run above and see the same thing.
+**Why the evidence above is metadata rather than log text, and what was done about it.** GitHub serves
+raw step logs from Azure blob storage (`*.blob.core.windows.net`), which the environment that produced
+this report cannot reach: the signed URLs are issued correctly — so authentication is fine — but the
+fetch fails at the TLS layer (`OpenSSL SSL_connect: SSL_ERROR_SYSCALL`) while `github.com` itself
+answers normally. Substituting a local run for the CI one is not evidence, so the pipeline was changed
+so that it publishes the counts where they *are* reachable: each of the three testing gates now tees its
+output and writes the tail — the pass/skip counts, the suite totals — into the run summary, which
+GitHub serves from `api.github.com` and which can therefore be read back and quoted:
+
+```bash
+gh api repos/asgareyvazi/DrillAI/actions/runs/<id>/jobs --jq '.jobs[0].steps[] | {name, conclusion}'
+gh api repos/asgareyvazi/DrillAI/commits/<sha>/check-runs --jq '.check_runs[] | {name, conclusion, summary: .output.summary}'
+```
+
+That change is a strengthening, not a relaxation: the pipelines use `set -o pipefail`, so a gate's own
+exit status is still the step's, and the summary is written only after the gate has succeeded (verified
+both ways in a `bash -e` shell, and re-certified in CI by a deliberate failure probe — §3 *CP6*). A
+reviewer with a browser can, as always, read the full logs on the run page; what changed is that the
+claim in this report no longer depends on it.
 
 ---
 
@@ -1388,6 +1407,7 @@ stopped being true when checkpoint 6 began, and all six were corrected in `f8abc
 | Limitations: "only journey 1", "no CI workflow file" | real limitations: partial Persian coverage, no deployment assets, unexercised integration adapters, Chromium-only browser suite | `docs/FRONTEND.md` |
 | "Journeys still to automate" (ten numbered items) | the same ten areas, each named with the spec that covers it, plus the three deployments and what only each one can prove | `docs/FRONTEND_TESTING.md` |
 | The suite section named only `well-cockpit.spec.ts` | all 13 spec files, with journey counts | `docs/FRONTEND_TESTING.md` |
+| "Nothing is intercepted in the browser"; "Nothing, in this layer" | HTTP is never intercepted anywhere, and the two socket-level relays in the run-event journeys are named, with what they relay and what they refuse to fabricate | `README.md`, `docs/FRONTEND_TESTING.md`, §1 |
 
 Nothing was added to the documentation that was not executed at `f8abc10`, and no historical statement
 was rewritten to look prescient: where an earlier revision of this report described a smaller suite,
