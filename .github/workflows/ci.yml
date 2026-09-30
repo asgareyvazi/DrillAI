@@ -15,7 +15,8 @@
 # deployments actually ran tests and the suite finished clean; the unit gate fails on a skip. That
 # matters because GitHub serves raw logs from Azure blob storage, which some networks cannot reach:
 # what stays readable everywhere — including through the API — is the step's own conclusion, so a green
-# step has to mean the property held. The counts are also written to the run summary for humans who
+# step has to mean the property held. Each gate therefore normalises the ANSI escapes the runner adds
+# before parsing: the first version of this did not, and refused a run that had in fact passed. The counts are also written to the run summary for humans who
 # open the run, and `set -o pipefail` keeps each command's exit status as the step's.
 #
 # The end-to-end suite is the real stack: the real FastAPI service on a freshly seeded SQLite
@@ -124,7 +125,11 @@ jobs:
         run: |
           set -o pipefail
           npm test 2>&1 | tee "$RUNNER_TEMP/frontend-tests.log"
-          if ! summary="$(grep -E '^ *Tests +' "$RUNNER_TEMP/frontend-tests.log" | tail -n 1)"; then
+          # The runner enables colour, which wraps the lines these gates parse in ANSI escapes.
+          # Normalise first, or a gate refuses a run that in fact passed — which is how this was found.
+          plain="$RUNNER_TEMP/frontend-tests.plain"
+          sed -e $'s/\x1b\\[[0-9;]*[a-zA-Z]//g' "$RUNNER_TEMP/frontend-tests.log" > "$plain"
+          if ! summary="$(grep -E '^ *Tests +' "$plain" | tail -n 1)"; then
             echo "::error::the unit test run printed no result line"
             exit 1
           fi
@@ -153,7 +158,11 @@ jobs:
         run: |
           set -o pipefail
           .venv/bin/python -m pytest 2>&1 | tee "$RUNNER_TEMP/backend-tests.log"
-          summary="$(tail -n 1 "$RUNNER_TEMP/backend-tests.log")"
+          # The runner enables colour, which wraps the lines these gates parse in ANSI escapes.
+          # Normalise first, or a gate refuses a run that in fact passed — which is how this was found.
+          plain="$RUNNER_TEMP/backend-tests.plain"
+          sed -e $'s/\x1b\\[[0-9;]*[a-zA-Z]//g' "$RUNNER_TEMP/backend-tests.log" > "$plain"
+          summary="$(tail -n 1 "$plain")"
           echo "result: $summary"
           case "$summary" in
             *skipped*) echo "::error::the suite skipped tests; the PostgreSQL integration tests must execute"; exit 1 ;;
@@ -202,16 +211,20 @@ jobs:
         run: |
           set -o pipefail
           npm run e2e 2>&1 | tee "$RUNNER_TEMP/e2e.log"
+          # The runner enables colour, which wraps the lines these gates parse in ANSI escapes.
+          # Normalise first, or a gate refuses a run that in fact passed — which is how this was found.
+          plain="$RUNNER_TEMP/e2e.plain"
+          sed -e $'s/\x1b\\[[0-9;]*[a-zA-Z]//g' "$RUNNER_TEMP/e2e.log" > "$plain"
           # Every deployment must have run tests — a suite that quietly lost a project is not the
           # suite this step certifies — and the run must have finished with no failure, no flake and
           # no skip.
           for project in chromium chromium-faults chromium-auth; do
-            if ! grep -q "\[$project\]" "$RUNNER_TEMP/e2e.log"; then
+            if ! grep -q "\[$project\]" "$plain"; then
               echo "::error::$project ran no test"
               exit 1
             fi
           done
-          if ! summary="$(grep -E '^ *[0-9]+ (passed|failed|flaky|skipped)' "$RUNNER_TEMP/e2e.log" | tail -n 1)"; then
+          if ! summary="$(grep -E '^ *[0-9]+ (passed|failed|flaky|skipped)' "$plain" | tail -n 1)"; then
             echo "::error::the end-to-end run printed no result line"
             exit 1
           fi

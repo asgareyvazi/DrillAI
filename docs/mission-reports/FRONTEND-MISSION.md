@@ -1014,7 +1014,9 @@ finished with no failure, flake or skip; the unit gate fails on a skip. This was
 backend gate had been running `pytest -q` on top of a `pyproject.toml` that already sets `-q`, and the
 doubled flag suppresses pytest's summary line entirely, so the log showed dots rather than counts (§5).
 Each assertion was validated against the real output of its command and against a falsified log
-reproducing the exact false-certification case.
+reproducing the exact false-certification case; the first run of these gates on the runner went red
+because the runner colours its output, and the fix (normalising ANSI escapes before parsing) plus that
+red run are recorded in §5.
 
 **What CI does not do.** It does not deploy, it does not push, it does not publish generated source, and
 the only artifact it uploads is Playwright evidence (report, traces, screenshots, logs), kept 14 days
@@ -1312,6 +1314,7 @@ the SHA in its `head_sha`; a local reproduction of the pipeline is not substitut
 | [36688766862](https://github.com/asgareyvazi/DrillAI/actions/runs/36688766862) | `f24ef86` | **success** | 6 m 53 s | the probe removed; green again |
 | [36689824630](https://github.com/asgareyvazi/DrillAI/actions/runs/36689824630) | `f8abc10` | **success** | 6 m 57 s | the pipeline on the reconciled documentation |
 | [36713831111](https://github.com/asgareyvazi/DrillAI/actions/runs/36713831111) | `faaf861` | **success** | 7 m 50 s | the pipeline on the commit that made the evidence readable and corrected the overclaims |
+| [36716452435](https://github.com/asgareyvazi/DrillAI/actions/runs/36716452435) | `7d15640` | **failure** | 0 m 41 s | the self-asserting gates' first run: the unit gate refused a run that had passed, because the runner colours its output (below) |
 | the commit carrying this row | the remote tip | **success** | — | the final run: a push runs on the tip, and the run attached to that SHA is the closed certificate |
 
 The `success` runs executed every required step green, including the end-to-end suite in all three
@@ -1369,6 +1372,19 @@ Each gate's script was extracted from the committed YAML and executed as the run
 The third row is the one worth keeping: it is not a simulation. The switch was simply absent from the
 shell, the real suite really did skip the two PostgreSQL tests, and the gate really did refuse the run
 — which is precisely the false certification this checkpoint has to rule out.
+
+**And then CI found a defect in the gate itself, which is worth recording rather than tidying away.**
+The first push of these gates (run 36716452435 at `7d15640`) went red at the unit step while the suite
+itself passed: GitHub's runner enables colour, so Vitest's result line arrives wrapped in ANSI escapes
+— `\x1b[2m      Tests \x1b[22m\x1b[32m275 passed\x1b[39m` — and the gate's anchor `^ *Tests` cannot
+match a line that begins with an escape sequence. Locally the same script passed, because a piped,
+non-CI run disables colour; the runner does not. The diagnosis did not need the (unreachable) log: the
+step's own `::error::` annotation said *the unit test run printed no result line*, which is readable
+through the API. Each gate now normalises ANSI escapes into a `.plain` copy before parsing — the
+committed fix — and the whole matrix was re-run with colour forced on: the unit gate passes under
+`CI=true`, the end-to-end and backend gates pass against colour-injected logs, and the skip case still
+fails. The red run is left in the table above: a pipeline whose gates cannot fail is not a pipeline,
+and neither is one whose failures are quietly dropped from its own record.
 This closed a real hole rather than decorating one: the backend gate used to run `pytest -q` on top of
 a `pyproject.toml` that already sets `-q`, and the doubled flag suppresses pytest's summary line
 entirely, so a reader of the log saw progress dots and no counts at all. It now runs `pytest` (the

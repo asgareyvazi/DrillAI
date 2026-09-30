@@ -162,7 +162,9 @@ unless all three deployments ran tests and the run finished with no failure, fla
 gate fails on a skip. This matters because GitHub serves raw logs from Azure blob storage, which some
 networks cannot reach: the step's conclusion stays readable through the API everywhere, so a green step
 has to mean the property held. The counts are written to the run summary as well, for anyone who opens
-the run, and `set -o pipefail` keeps each command's exit status as the step's. This was certified, not assumed — a temporary probe commit
+the run, and `set -o pipefail` keeps each command's exit status as the step's. Each gate normalises the
+ANSI escapes the runner adds before it parses anything: the first version did not, and refused a run
+that had in fact passed. This was certified, not assumed — a temporary probe commit
 failed the backend gate on purpose and the run went red, skipped the backend lint, migration and
 end-to-end steps, and collected no artifacts; it was removed in the following commit
 (see `docs/mission-reports/FRONTEND-MISSION.md`, §CP6).
