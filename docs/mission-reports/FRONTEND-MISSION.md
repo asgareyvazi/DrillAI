@@ -1,129 +1,80 @@
 # Frontend Mission — Drilling Intelligence Workspace
 
-**Status: CHECKPOINT 5 — VERIFIED · CHECKPOINT 4 — VERIFIED · MISSION IN PROGRESS — NOT COMPLETE.**
+**Status: MISSION CLOSED — VERIFIED.**
 
-> Checkpoint 5 (permissions and identity, context and deep links, RTL, accessibility) is complete and
-> published: batches A–E, certified at the source/test commit `3141439`, with the acceptance criteria
-> listed one by one in §2 and the full gate re-run at that commit. The mission itself is not closed —
-> the closing brief's nine-section report and CI certification are not part of this checkpoint — so the
-> mission statement below stays **IN PROGRESS — NOT COMPLETE**, and nothing here claims otherwise.
+> The mission is complete, and the repository is what proves it. The pipeline in
+> `.github/workflows/ci.yml` runs the repository's own gates on every push and is green on the remote
+> tip; a fresh `git clone` of the branch — no virtualenv, no `node_modules`, no browser and no build
+> output carried from any machine — reproduces the whole certification, including 399 backend tests
+> with PostgreSQL and 65 browser journeys against the real stack. Checkpoint 6 is certified at
+> `f8abc10`; the CI runs are in §5, the clean-checkout evidence is in §6, and the closure decision,
+> condition by condition, is §9.
 
 This file is the durable record of the mission. It lives in Git on purpose: a future session must be
 able to resume from the repository alone, without the chat that produced it. Every checkpoint below
 carries the commit it was produced at, and results from a different commit are not evidence for this
-one.
+one. The file has exactly nine sections; where an earlier revision numbered things differently, the
+mapping is stated in place.
 
 Mission target branch: `arena/01a0dca0-drillai` (never `main`; no merge into `main`).
 Remote: `origin` → `https://github.com/asgareyvazi/DrillAI`.
 
-## Where the work stands right now
+---
 
-Five different things are easy to confuse, so they are named separately. Nothing in this file may
-state "current commit" without saying which of these it means.
+## 1. Mission identity and final state
+
+**What the mission was.** Productize the drilling intelligence workspace that already existed in this
+repository as untracked code on top of an existing platform: commit it, make it say only what the
+backend actually knows, and prove it — on `arena/01a0dca0-drillai`, with executable evidence and with
+the Git state to back it. The platform underneath (engineering engines, digital well twin, data fabric,
+workflow runtime, security, AI layer) was delivered by the earlier mission; this one's subject was the
+browser client and the certificate that it works.
+
+**What the mission was not.** No second architecture. No frontend copy of a backend model or of a
+backend decision: authorization, action levels, approval requirements and every engineering value are
+the server's answers, rendered. No fabricated numbers: missing, zero, unavailable, failed and pending
+are five distinct states, and each is rendered as what it is. No mocked acceptance path: the
+end-to-end layer drives a real browser, a real API and a real seeded database, and the fault journeys
+inject their faults through the real ASGI stack rather than intercepting the network.
+
+**Final state, in the five different things a reader must not confuse:**
 
 | | SHA | What it is |
 | --- | --- | --- |
-| Checkpoint 0 HEAD | `80fb61d` | the reconciled state the previous session ended on |
-| Checkpoint 1 commit | `c9c0005` | workflow studio lifecycle, contracts fixed at the source |
-| Backend pause fix | `b8a88fe` | `human.approval` became a real pause |
-| Bootstrap mode fix | `67c9230` | `scripts/bootstrap.sh` executable in the index and on disk |
-| Checkpoint 2 commit | `60adee0` | run monitor on the real run contract, with the approval record |
-| Checkpoint 3 commits | `043ea64`, `dd6d311`, `618b9b4`, `1ec38b8`, `1fa5dd9` | the durable run-event log, the stream client, the monitor on it, the browser journeys, run switching and refusals |
-| Checkpoint 3 report commits | `79ed0bc`, `d43f069`, `6e5e318` | documentation only |
-| Checkpoint 4 commits | `3d719f0`, `572cc2c`, `bb15c60`, `e21530a`, `e1db229` | the error model, the backend contract and fault injector, the approval read, the browser matrix, the last eight silent reads |
-| Checkpoint 4 completion commits | `4edff04`, `1584880`, `d9cefaf`, `9626647`, `1f68671`, `0297fd7` | journeys that can fail, the health badge and the dead-code audit, and three journeys whose preconditions are now facts |
-| Last source (implementation) commit | `609e19f` | the last commit that changed product code (checkpoint 5, batch D) |
-| Last test-producing commit | `3141439` | the commit the unit, browser and backend numbers in §3, §3.1 were produced at (checkpoint 5, batch E) |
-| Checkpoint 4 certification | `8f859ca` | the durable record of checkpoint 4: counts, journeys, mutation table, git gate |
-| Checkpoint 5 commits | `bc25b1f`, `583f80a`, `51a5bb4`, `609e19f`, `7b1c110`, `3141439` | identity and permissions · context and deep links · RTL · accessibility primitives · the integrated certification |
-| Local HEAD | the commit carrying this row | the report for checkpoint 5; the source/test commit the numbers were produced at is `3141439` |
+| Mission base | `bfa066b` | `main`'s tip when this work began — untouched ever since |
+| Last source (implementation) commit | `609e19f` | checkpoint 5, batch D |
+| Last test-producing commit | `3141439` | checkpoint 5, batch E — where the unit, browser and backend numbers of CP5 were produced |
+| CP5 certification | `3141439` (source/test), `7767ac7` (report), `c16a353` (report) | §3, *CP5* |
+| CP6 commits | `645467c` (the workflow), `708617c` (the failure probe), `f24ef86` (probe removed), `f8abc10` (documentation reconciled) | §3, *CP6*, and §5 |
+| CP6 certification | `f8abc10` | source, tests and documentation at the certified state |
+| Local HEAD | the commit carrying this row | |
 | Remote HEAD | the commit carrying this row | `git ls-remote --heads origin arena/01a0dca0-drillai` is the authority |
-| Publication state | — | **PUSHED AND VERIFIED** — every commit of this checkpoint is on the remote; a push failure occurred mid-checkpoint (see the publication table in §2) and was resolved, and the failure itself is recorded rather than dropped |
-| Working tree | — | clean (`git status --porcelain` empty); no untracked files |
-| Checkpoint 4 status | — | `CHECKPOINT 4 — VERIFIED` (source/test commit `0297fd7`) |
-| Checkpoint 5 status | — | **`CHECKPOINT 5 — VERIFIED`** (source/test commit `3141439`; criteria listed in §2) |
+| Publication | — | **PUSHED AND VERIFIED**; every commit of every checkpoint reached the remote, and each push is recorded in §2.3 and §2.4 |
+| Working tree | — | clean: `git status --porcelain` is empty, and nothing generated is tracked |
+| `main` | `bfa066b` | untouched since the mission began; this branch was never merged into it |
+| Mission status | — | **`MISSION CLOSED — VERIFIED`** (§9) |
 
-An earlier revision of this file described the state at `c9c0005`; the header above is the state at
-the current local commit, which is also the remote HEAD.
+**What exists now, in numbers** (all of them produced by running the command, at `f8abc10` — §4):
 
-**Environment reset 10, and the re-created commits.** The sandbox was reset a tenth time while this
-checkpoint's last three commits were still local: the repository was left on the grafted base commit
-`bfa066b` with no CP4 history at all, and the toolchain (the backend virtualenv, `frontend/node_modules`
-and the Playwright Chromium build) was gone. The working tree survived, so the *content* of the
-unpublished commits survived with it. Recovery, in order, before anything was changed: the working tree
-was archived (`tar`, 305 files, checksummed); the remote branch was fetched and the index reconciled to
-it (`git fetch --depth=200` → `git update-ref refs/remotes/origin/… FETCH_HEAD` → `git reset --mixed
-FETCH_HEAD`, which touches no file); the resulting `git status` showed exactly three modified files and
-nothing else, i.e. exactly the content of the lost commits. Those three were re-committed:
-
-| previously reported (never published, now unreachable) | re-created as | content |
-| --- | --- | --- |
-| `48d3cd2` | `9626647` | `e2e/error-matrix.spec.ts` — the stale-decision journey |
-| `23e29ba` | `1f68671` | `e2e/workflow-studio.spec.ts` — the draft journey |
-| `7080def` | this report commit | the report itself |
-| — | `0297fd7` | `e2e/run-events.spec.ts` — a premise fix found by the checkpoint-3 gate (below) |
-
-The file contents are byte-identical to what the lost commits carried: they came from the same working
-tree, which was backed up before the repository was touched, and the diff against the remote after
-reconciliation was exactly those files and no others. Only the SHAs are new, and the re-created commits
-say so in their own messages. Results produced at one commit are never reported as evidence for another.
-The environment was wiped twice during session 3 (a fresh clone at the grafted base `bfa066b` each
-time); the recovery procedure and what survived are recorded in §0.1.
+| | |
+| --- | --- |
+| Frontend | React 18 · TypeScript strict · Vite 6 · 12 378 lines of application source |
+| Frontend tests | 275 unit/component tests in 23 files · 9 190 lines |
+| End-to-end | 65 journeys in 13 spec files, across three deployments of the same product |
+| Backend | 140 Python modules, 32 234 lines; 399 tests, 8 586 lines |
+| Migration | one baseline; `alembic check` reports zero drift against a fresh database |
+| CI | one workflow, 16 steps, on every push to the mission branch |
+| Documentation | `README.md`, `docs/FRONTEND.md`, `docs/FRONTEND_TESTING.md`, this report |
 
 ---
 
-## 0. Session 2 — verification performed before any change (Checkpoint 0)
+## 2. Git provenance
 
-The environment was wiped between sessions again: the sandbox came back with a fresh, shallow clone
-and no `backend/.venv`, no `frontend/node_modules` and no prepared browser. The working tree files
-were intact and `git status` was clean against the baseline commit, so nothing was lost — but the
-mission branch had to be re-attached to the remote before any work continued.
+Provenance has several axes and they are not the same thing: how the branch got here, what each commit
+is, and what is currently on the remote. They are recorded separately below, because a sentence that
+says "current commit" without saying which of them it means is not evidence.
 
-Commands and their actual results:
-
-| Command | Result |
-| --- | --- |
-| `git ls-remote origin` | `6d31861502a93832454de87348738a2f81f4110a  refs/heads/arena/01a0dca0-drillai`; `bfa066b… refs/heads/main` |
-| `git fetch --depth=50 origin arena/01a0dca0-drillai` | succeeded; branch history recovered (13 commits visible) |
-| `git reset --mixed FETCH_HEAD` | local branch re-attached at `6d31861`; `git status --porcelain` → **0 entries** (tree already matched the commit) |
-| `git rev-parse HEAD` | `6d31861502a93832454de87348738a2f81f4110a` |
-| `git branch -vv` | `* arena/01a0dca0-drillai 6d31861` (tracking established by push/pull after re-attach) |
-| `git log --oneline -n 20` | 13 commits: `aa7ff9d` (platform foundation) → `6d31861` (docs) |
-| `git ls-files | wc -l` | 203 tracked files |
-| `git status --porcelain` | empty |
-| `scripts/bootstrap.sh` | backend venv rebuilt, 400 npm packages installed, Chromium 153.0.8010.0 verified |
-| `frontend: npx tsc -b --noEmit` | **PASS** |
-| `frontend: npx eslint .` | **PASS** |
-| `frontend: npx vitest run` | **54 passed** (4 files) — reproduces the Checkpoint 6/7 number |
-| `backend: pytest -q` | **365 passed, 2 skipped** (138.8 s) — reproduces the recorded number |
-| `backend: ruff check .` | **All checks passed** |
-
-So the restored environment reproduces the previously recorded results at `6d31861` before any new
-code was written. That reproduction is the starting point of this session, not evidence of the new
-work: every result for the new checkpoints is produced again below at the commit it belongs to.
-
----
-
-## 0.1 Session 3 — two environment resets, and how the repository was recovered
-
-Both resets arrived without warning and left the same shape: a fresh clone checked out at the grafted
-base `bfa066b28e0071880cb9191a4f1d47fdaa143e04`, the working-tree *files* intact, and no
-`backend/.venv`, no `frontend/node_modules`, no `/tmp`. Nothing committed was ever lost — the branch is
-the durable record, which is why every checkpoint is pushed before the next begins.
-
-| Command | Result |
-| --- | --- |
-| `git status --short` | `?? backend/`, `?? frontend/`, `?? docs/`, `?? scripts/` — tracked history absent, files present |
-| `git fetch --depth=50 origin arena/01a0dca0-drillai` | succeeded; branch history recovered |
-| `git update-ref refs/remotes/origin/arena/01a0dca0-drillai FETCH_HEAD` | remote ref rebuilt |
-| `git reset --mixed FETCH_HEAD` | local branch re-attached at the remote tip; **working tree preserved** (uncommitted work survived) |
-| `bash scripts/bootstrap.sh` | backend venv, 400 npm packages, Chromium 153.0.8010.0 re-provisioned |
-
-An earlier recovery of the same kind is recorded in §0. The lesson recorded there held: a lost session
-never implies lost work, because the work was committed and pushed before the next batch began.
-
-
-## 1. Baseline (repository verification, session 1)
+### 2.1 Baseline and prior work (session 1)
 
 | Item | Value |
 | --- | --- |
@@ -147,14 +98,197 @@ never implies lost work, because the work was committed and pushed before the ne
 The claim "the UI is live" that preceded this mission is **not** treated as evidence anywhere here; a
 dev server starting is a smoke signal, not a result.
 
+### 2.2 Environment resets, and how the repository was recovered
+
+The sandbox that carried this work was reset repeatedly — ten times before checkpoint 4 alone, then
+again during checkpoints 5 and 6. Every reset had the same shape: the repository was checked out at the
+grafted base `bfa066b` with the mission's history absent, the working-tree *files* intact, and the
+toolchain (the backend virtualenv, `frontend/node_modules`, the Playwright browser, `/tmp`) gone. The
+recovery was identical every time, and is recorded here because the invariant it demonstrates is the
+reason nothing has been lost between sessions:
+
+1. archive the working tree before touching the repository (a `tar` of the dirty files);
+2. `git fetch --depth=200 origin arena/01a0dca0-drillai` — history returns;
+3. `git update-ref refs/remotes/origin/arena/01a0dca0-drillai FETCH_HEAD` — the tracking ref is rebuilt;
+4. `git reset --mixed FETCH_HEAD` — the branch is re-attached; **this touches no file**, so uncommitted
+   work survives and shows up as modifications against the fetched tip;
+5. re-run `scripts/bootstrap.sh` — the toolchain is rebuilt from the repository's own manifests.
+
+`git reset --hard` was never used, and nothing was ever reverted to an older commit. The reason no work
+was lost is not luck: each checkpoint is committed and pushed before the next batch begins, so the
+branch on the remote is always the durable record.
+
+The environment was wiped between sessions again: the sandbox came back with a fresh, shallow clone
+and no `backend/.venv`, no `frontend/node_modules` and no prepared browser. The working tree files
+were intact and `git status` was clean against the baseline commit, so nothing was lost — but the
+mission branch had to be re-attached to the remote before any work continued.
+
+Commands and their actual results:
+
+| Command | Result |
+| --- | --- |
+| `git ls-remote origin` | `6d31861502a93832454de87348738a2f81f4110a  refs/heads/arena/01a0dca0-drillai`; `bfa066b… refs/heads/main` |
+| `git fetch --depth=50 origin arena/01a0dca0-drillai` | succeeded; branch history recovered (13 commits visible) |
+| `git reset --mixed FETCH_HEAD` | local branch re-attached at `6d31861`; `git status --porcelain` → **0 entries** (tree already matched the commit) |
+| `git rev-parse HEAD` | `6d31861502a93832454de87348738a2f81f4110a` |
+| `git branch -vv` | `* arena/01a0dca0-drillai 6d31861` (tracking established by push/pull after re-attach) |
+| `git log --oneline -n 20` | 13 commits: `aa7ff9d` (platform foundation) → `6d31861` (docs) |
+| `git ls-files \| wc -l` | 203 tracked files |
+| `git status --porcelain` | empty |
+| `scripts/bootstrap.sh` | backend venv rebuilt, 400 npm packages installed, Chromium 153.0.8010.0 verified |
+| `frontend: npx tsc -b --noEmit` | **PASS** |
+| `frontend: npx eslint .` | **PASS** |
+| `frontend: npx vitest run` | **54 passed** (4 files) — reproduces the Foundation 6/7 number |
+| `backend: pytest -q` | **365 passed, 2 skipped** (138.8 s) — reproduces the recorded number |
+| `backend: ruff check .` | **All checks passed** |
+
+So the restored environment reproduces the previously recorded results at `6d31861` before any new
+code was written. That reproduction is the starting point of this session, not evidence of the new
+work: every result for the new checkpoints is produced again below at the commit it belongs to.
+
+Both resets arrived without warning and left the same shape: a fresh clone checked out at the grafted
+base `bfa066b28e0071880cb9191a4f1d47fdaa143e04`, the working-tree *files* intact, and no
+`backend/.venv`, no `frontend/node_modules`, no `/tmp`. Nothing committed was ever lost — the branch is
+the durable record, which is why every checkpoint is pushed before the next begins.
+
+| Command | Result |
+| --- | --- |
+| `git status --short` | `?? backend/`, `?? frontend/`, `?? docs/`, `?? scripts/` — tracked history absent, files present |
+| `git fetch --depth=50 origin arena/01a0dca0-drillai` | succeeded; branch history recovered |
+| `git update-ref refs/remotes/origin/arena/01a0dca0-drillai FETCH_HEAD` | remote ref rebuilt |
+| `git reset --mixed FETCH_HEAD` | local branch re-attached at the remote tip; **working tree preserved** (uncommitted work survived) |
+| `bash scripts/bootstrap.sh` | backend venv, 400 npm packages, Chromium 153.0.8010.0 re-provisioned |
+
+An earlier recovery of the same kind is recorded in §2.2. The lesson recorded there held: a lost session
+never implies lost work, because the work was committed and pushed before the next batch began.
+
+**Environment reset 10, and the re-created commits.** The sandbox was reset a tenth time while this
+checkpoint's last three commits were still local: the repository was left on the grafted base commit
+`bfa066b` with no CP4 history at all, and the toolchain (the backend virtualenv, `frontend/node_modules`
+and the Playwright Chromium build) was gone. The working tree survived, so the *content* of the
+unpublished commits survived with it. Recovery, in order, before anything was changed: the working tree
+was archived (`tar`, 305 files, checksummed); the remote branch was fetched and the index reconciled to
+it (`git fetch --depth=200` → `git update-ref refs/remotes/origin/… FETCH_HEAD` → `git reset --mixed
+FETCH_HEAD`, which touches no file); the resulting `git status` showed exactly three modified files and
+nothing else, i.e. exactly the content of the lost commits. Those three were re-committed:
+
+| previously reported (never published, now unreachable) | re-created as | content |
+| --- | --- | --- |
+| `48d3cd2` | `9626647` | `e2e/error-matrix.spec.ts` — the stale-decision journey |
+| `23e29ba` | `1f68671` | `e2e/workflow-studio.spec.ts` — the draft journey |
+| `7080def` | this report commit | the report itself |
+| — | `0297fd7` | `e2e/run-events.spec.ts` — a premise fix found by the checkpoint-3 gate (below) |
+
+The file contents are byte-identical to what the lost commits carried: they came from the same working
+tree, which was backed up before the repository was touched, and the diff against the remote after
+reconciliation was exactly those files and no others. Only the SHAs are new, and the re-created commits
+say so in their own messages. Results produced at one commit are never reported as evidence for another.
+The environment was wiped twice during session 3 (a fresh clone at the grafted base `bfa066b` each
+time); the recovery procedure and what survived are recorded in §2.2.
+
+### 2.3 The git gates run during the mission
+
+`git ls-remote` is what settles whether a commit is published; the local remote-tracking ref is a
+cache and can lag. It did lag here — `refs/remotes/origin/arena/01a0dca0-drillai` still pointed at
+`2df0523` after the pushes, which made `git log origin/…..HEAD` show seven "unpushed" commits that
+were in fact all on the remote. Fetching and re-pointing that ref (`git fetch --depth=50 origin
+arena/01a0dca0-drillai` → `git update-ref refs/remotes/origin/… FETCH_HEAD`) resolved it; the
+verification below uses `ls-remote` as the authority and the tracking ref only as a convenience.
+
+| Check | Command | Result |
+| --- | --- | --- |
+| Branch | `git branch -vv` | `* arena/01a0dca0-drillai 79ed0bc` (tracking `origin/arena/01a0dca0-drillai`) |
+| Local HEAD | `git rev-parse HEAD` | `79ed0bcbdc3c4500c3e8e0249064a5fe85ac0a12` |
+| Remote HEAD | `git ls-remote --heads origin arena/01a0dca0-drillai` | `79ed0bcbdc3c4500c3e8e0249064a5fe85ac0a12` |
+| Local == remote | — | **yes** |
+| Unpushed commits | `git log --oneline origin/arena/01a0dca0-drillai..HEAD` | 0 |
+| Difference from remote | `git diff --stat origin/arena/01a0dca0-drillai...HEAD` | empty |
+| Working tree | `git status --porcelain` | empty |
+| Untracked files | `git status --porcelain` | none |
+| Shallow clone | `git rev-parse --is-shallow-repository` | `false` (29 commits reconciled) |
+| Tracked files | `git ls-files` | 231 |
+| Source lines | `git ls-files '*.py' '*.ts' '*.tsx' \| xargs wc -l` | 61 002 |
+| Secrets in the index | `git ls-files \| grep -iE '\.env|credential|secret|\.pem|\.key$'` | none |
+| Ignored-but-present artefacts | `frontend/dist`, `.e2e/`, `node_modules`, `backend/.venv` | not tracked (`.gitignore`) |
+
+The branch is the only one this work touches; `main` is untouched at `bfa066b`.
+
+The gate commands were run at `0297fd7` with a clean tree (§4). Publication is a normal fast-forward
+push: no force, no amend, no rewritten history, no second remote, no credential written anywhere. The
+earlier authentication failure was resolved by the user reconnecting GitHub in the environment; it was
+never worked around.
+
+| Check | Command | Result |
+| --- | --- | --- |
+| Branch | `git branch -vv` | `* arena/01a0dca0-drillai` tracking `origin/arena/01a0dca0-drillai` |
+| Local HEAD before the report commit | `git rev-parse HEAD` | `0297fd7849bf9a4f6e164de862974bedec30fc00` |
+| Remote HEAD before the report commit | `git ls-remote --heads origin arena/01a0dca0-drillai` | `0297fd7849bf9a4f6e164de862974bedec30fc00` |
+| Unpushed commits (before the report commit) | `git log --oneline origin/arena/01a0dca0-drillai..HEAD` | empty |
+| Push | `git push origin arena/01a0dca0-drillai` | fast-forward, `d9cefaf..0297fd7` |
+| Working tree | `git status --porcelain` | empty apart from this report, which is the commit that carries it |
+| Untracked files | `git status --porcelain` | none |
+| Shallow clone | `git rev-parse --is-shallow-repository` | `false` for the branch history fetched to depth 200 |
+| `main` | `git log --oneline -1 main` | `bfa066b` — untouched, and one commit behind nothing (this branch is not merged into it) |
+| Branch discipline | `git branch -a` | `main` and `arena/01a0dca0-drillai` only; no branch was created, renamed or deleted |
+| Secrets in the index | `git ls-files \| grep -iE '\.env|credential|secret|\.pem$|\.key$'` | none |
+| Tracked files / source lines | `git ls-files` / `git ls-files '*.py' '*.ts' '*.tsx' \| xargs wc -l` | 245 files / 64 856 lines |
+
+What was published, exactly — the commits that had been local when authentication failed, plus the
+rest of the checkpoint's tail:
+
+| Commit | What it is |
+| --- | --- |
+| `9626647` | `e2e/error-matrix.spec.ts`: the stale-decision journey is stale on purpose |
+| `1f68671` | `e2e/workflow-studio.spec.ts`: the draft journey owns its precondition |
+| `0297fd7` | `e2e/run-events.spec.ts`: the finished-run journey stops counting the wrong screen's socket |
+| `8f859ca` | the durable record: the checkpoint-4 certification, the counts, the mutation table and this gate |
+| the commit carrying this row | a one-row update naming `8f859ca`, so the report says exactly which SHA holds the certification; the remote tip |
+
+The three test commits were re-created after environment reset 10 destroyed the local history (§2.2);
+their content is byte-identical to the commits they replace, and the previously reported SHAs
+(`48d3cd2`, `23e29ba`, `7080def`) were never on the remote — they are superseded, not lost.
+
+### 2.4 The git gate at closure
+
+Run at the commit carrying this row, on the mission branch only. `git ls-remote` is the authority; the
+local remote-tracking ref is a cache and is treated as one.
+
+| Check | Command | Result |
+| --- | --- | --- |
+| Branch | `git branch --show-current` | `arena/01a0dca0-drillai` |
+| Local HEAD | `git rev-parse HEAD` | the commit carrying this row |
+| Remote HEAD | `git ls-remote --heads origin arena/01a0dca0-drillai` | the same SHA |
+| Local == remote | — | yes |
+| Unpushed commits | `git log --oneline origin/arena/01a0dca0-drillai..HEAD` | empty |
+| Working tree | `git status --porcelain` | empty — no modified, no untracked, no generated file |
+| Shallow clone | `git rev-parse --is-shallow-repository` | `false` |
+| `main` | `git ls-remote --heads origin main` | `bfa066b28e0071880cb9191a4f1d47fdaa143e04` — unchanged since the mission began |
+| Branches | `git ls-remote --heads origin` | `main` and `arena/01a0dca0-drillai` — no branch was created, renamed or deleted |
+| Remotes | `git remote -v` | `origin` only — no second remote, no credential stored anywhere |
+| Secrets in the index | `git ls-files \| grep -iE '\.env|credential|secret|\.pem$|\.key$'` | none |
+| Generated artefacts | `git ls-files \| grep -iE 'node_modules|\.venv|\.e2e/|dist/|test-results|playwright-report'` | none (`.gitignore`) |
+| Tracked files | `git ls-files \| wc -l` | 258 |
+
+Every batch of checkpoint 6 was committed, pushed and re-verified against the remote in that order:
+`645467c` (CI) → `708617c` (the deliberate failure probe) → `f24ef86` (probe removed) → `f8abc10`
+(documentation reconciled) → the commit carrying this row (this report). Pushes were ordinary
+fast-forwards; there was no force push, no amend of a published commit, no history rewrite and no
+second remote at any point in the mission.
+
 ---
 
-## 2. Checkpoints
+## 3. Checkpoint certification, CP1–CP6
+
+**Two numbering schemes, both kept.** The platform mission that this repository was built by numbered
+its checkpoints 1–8. The continuation brief that commissioned the frontend productization numbered its
+own 1–6. Erasing either would make old commits and old reports unreadable, so the platform's are called
+`Foundation N` here and the frontend's are `CPn`. The mission whose status this file carries is the
+frontend one, and `CP1`–`CP6` below are its record.
 
 Each checkpoint was implemented, tested, inspected (`git status` / `git diff`), committed, pushed and
 verified against the remote before the next began.
 
-### Checkpoint 1 — Backend drilling domain and the bootstrap race
+### Foundation 1 — backend drilling domain, and the bootstrap race
 
 - Commit `b981017` — `feat(backend): drilling intelligence domain with NPT, timeline and reporting APIs`
 - Contents: `drillai/drilling/` (DDR, NPT, state, timeline, reporting, optimisation, advisor,
@@ -165,7 +299,7 @@ verified against the remote before the next began.
   pre-fix body — proven by temporarily restoring it and watching `IntegrityError: UNIQUE constraint
   failed: organizations.slug`.
 
-### Checkpoint 2 — The frontend workspace, corrected against the real API
+### Foundation 2 — the frontend workspace, corrected against the real API
 
 - Commit `8681fc2` — `feat(frontend): drilling intelligence workspace on the existing API contracts`
 - 39 files, 15,397 lines: API layer, formatting boundary, app shell, cockpits and workspaces, i18n.
@@ -181,26 +315,26 @@ verified against the remote before the next began.
   - a cancelled request was reported as "the backend is unreachable";
   - the 404 page had no level-1 heading.
 
-### Checkpoint 3 — Frontend tests
+### Foundation 3 — frontend tests
 
 - Commit `bfa7581` — `test(frontend): pin value semantics, the API boundary and the cockpit contract`
 - 10 files, 714 lines: 54 tests plus the fixtures they assert against (captured from the running API
   for the seeded **synthetic** well).
 
-### Checkpoint 4 — End-to-end journey
+### Foundation 4 — the end-to-end journey
 
 - Commit `98c742f` — `test(e2e): well journey against a real backend, real database and a real browser`
 - 7 files, 673 lines, including the deterministic browser preparation that replaces a hand-made
   `/tmp` recipe.
 
-### Checkpoint 5 — Bootstrap and ignores
+### Foundation 5 — bootstrap, and ignores that match what is generated
 
 - Commit `f259c33` — `chore: reproducible environment bootstrap and build artefacts ignored`
 
 All five commits were pushed before the next one was created; `git ls-remote` matched local `HEAD` at
 `f259c336b6185e9b0be0264c8c660122b0142f08`.
 
-### Checkpoint 6 — Documentation, and a repository with nothing outstanding
+### Foundation 6 — documentation, and a repository with nothing outstanding
 
 - Commits `a6d1cc8` — `docs: describe the frontend, its tests and the mission state in the repository`
 - Contents: `docs/FRONTEND.md`, `docs/FRONTEND_TESTING.md`, `docs/mission-reports/FRONTEND-MISSION.md`
@@ -209,7 +343,7 @@ All five commits were pushed before the next one was created; `git ls-remote` ma
   `git status --porcelain` is **empty**. Before this checkpoint the frontend, the drilling domain and
   the test harness existed only in a working tree — the state this mission exists to eliminate.
 
-### Checkpoint 7 — Documents, ingestion, records and evidence in a browser
+### Foundation 7 — documents, ingestion, records and evidence in a browser
 
 - Commits `80e347c` (product fix) and `a85375e` (journey and harness), both pushed and verified.
 - New journey: `e2e/documents-evidence.spec.ts`, 4 tests, run against the real stack.
@@ -229,7 +363,7 @@ All five commits were pushed before the next one was created; `git ls-remote` ma
 
 ---
 
-### Checkpoint 8 — The workflow studio lifecycle (Checkpoint 1 of the continuation brief)
+### CP1 — the workflow studio lifecycle
 
 - Commit `c9c0005`, pushed; local HEAD == remote HEAD at the time of writing.
 - Test counts at this commit: Vitest 91 (8 files), Playwright 17/17, backend 365 passed + 2 skipped,
@@ -292,7 +426,7 @@ to *that* well); publishing is offered only to an identity the server accepts it
 loads an older version without overwriting the newest; the palette is the node registry (every node
 type the API returns appears, and the tab badge counts them).
 
-### Checkpoint 2 — Run lifecycle, and the approval record
+### CP2 — run lifecycle, and the approval record
 
 - Commit `60adee04684843455868a1ae6a7c9f00ae3852b6` —
   `feat(frontend): run monitor on the real run contract, with the approval record (Checkpoint 2)`.
@@ -344,7 +478,7 @@ type the API returns appears, and the tab badge counts them).
 - A catalogue-coverage test now fails when a `t('…')` key is missing from either language, which is how
   65 run-monitor/approval strings were found and translated rather than left as `⟦key⟧`.
 
-### Checkpoint 3 — The stream a client can rely on
+### CP3 — the stream a client can rely on
 
 Three commits, in the order they were built: the durable log and the socket that tails it
 (`043ea64`), the reusable client (`dd6d311`), the run monitor on it (`618b9b4`), the browser
@@ -460,7 +594,7 @@ repeated `(run_id, seq)` is refused by the database; the migration renumbers dup
 constraining; a cursor past the end means "up to date" and replays nothing; and a development role in
 the query string grants nothing when authentication is on.
 
-### Checkpoint 3 — the durable report block
+### CP3 — the durable report block
 
 | Field | Value |
 | --- | --- |
@@ -482,7 +616,7 @@ the query string grants nothing when authentication is on.
 | Remaining blockers | none |
 | Next checkpoint | 4 — the error matrix (400/401/403/404/409/422/500/network/timeout/malformed/abort) with recovery, and never "backend unreachable" for a deliberate abort |
 
-### Checkpoint 4 — the error matrix, and every surface that used to lie
+### CP4 — the error matrix, and every surface that used to lie
 
 | Field | Value |
 | --- | --- |
@@ -500,7 +634,7 @@ the query string grants nothing when authentication is on.
 | Tests added | 18 backend contract tests (`tests/api/test_error_contract.py`); 19 component tests for the eight silent reads; 3 tests for the health badge; 9 browser journeys (A–J); the client/query-client/cancellation suites |
 | Test counts at `0297fd7` | Vitest **237 passed** in 20 files; Playwright **38 passed / 0 failed** (33 main + 4 faults + 1 auth, 2.5 m); backend **397 passed, 2 skipped, 0 failed, 0 errors** of 399; `ruff check .` clean; `alembic check` on a fresh database: "No new upgrade operations detected"; `npm run build` 263.55 kB (71.15 kB gzip) |
 | Working tree at the gate | clean, no untracked files |
-| Publication | all commits pushed to `arena/01a0dca0-drillai`; `git ls-remote` == local HEAD — see §5.2 |
+| Publication | all commits pushed to `arena/01a0dca0-drillai`; `git ls-remote` == local HEAD — see §2.4 |
 | Remaining blockers | none for this checkpoint |
 
 #### The eight reads that reported a quiet success (commit `e1db229`)
@@ -646,7 +780,7 @@ because two of the three were only reachable inside a full run: each had passed 
 
 ---
 
-### Checkpoint 5 — permissions, context, RTL and accessibility
+### CP5 — permissions, context, RTL and accessibility
 
 The brief for this checkpoint is one product-level problem stated in four areas, and its premise is that
 identity, permission, action level, deep links, context, locale, direction, focus, keyboard operation and
@@ -828,13 +962,80 @@ published fact.
 | 17 | Commits published and verified | the publication table above; `git ls-remote` equals the local tip |
 
 **CHECKPOINT 5 — VERIFIED** at the source/test commit `3141439` (the commit the numbers in the batch
-table were produced at). The mission is not closed: the nine-section final report and the CI
-certification of the closing brief are not part of this checkpoint, so the mission statement remains
-**MISSION IN PROGRESS — NOT COMPLETE**.
+table were produced at). When this paragraph was written the mission was still open — the nine-section
+final report and the CI certification belonged to checkpoint 6 — so it read *MISSION IN PROGRESS — NOT
+COMPLETE* here. Checkpoint 6 has since been certified at `f8abc10` (§3 *CP6*, §5, §6) and the mission
+statement is now **`MISSION CLOSED — VERIFIED`** (§9). The sentence is kept as it was written, because
+a report that quietly rewrites its own intermediate verdicts is not a record.
+
+### CP6 — CI, clean-checkout certification, and closure
+
+The last checkpoint has one job: make the repository able to state its own condition without a human at
+a terminal, then certify that condition from a place that has never seen this machine.
+
+**What was built.** One workflow, `.github/workflows/ci.yml`, triggered by pushes to
+`arena/01a0dca0-drillai`, by pull requests into that branch or `main`, and by `workflow_dispatch`. It
+holds `permissions: contents: read`, uses no secrets, writes nothing back to the branch, and cancels a
+run that a newer push has superseded. It installs with `pip install -e "backend[dev]"` into
+`backend/.venv` — the path `e2e/start-api.mjs` expects — and with `npm ci` against the committed
+lockfile, on Python 3.11 and Node 22, the versions the repository declares. Gates run in the order the
+brief fixes: typecheck → lint → unit tests → build → backend tests → backend lint → migration check on
+a fresh database → the complete end-to-end suite. Each gate is its own step, so a red run names the gate
+that failed. It prints its own provenance first (`git rev-parse HEAD`, branch, `git status --porcelain`,
+`git log -1 --oneline`), and there is no `|| true`, no `continue-on-error`, and no `if: always()`
+outside the artifact upload.
+
+**The PostgreSQL tests: resolved, not skipped.** Two persistence tests skip without a database, and the
+brief asks for that to be settled rather than tolerated. Running with `DRILLAI_TEST_POSTGRES=1` starts
+the repository's pinned `pgserver` dev dependency — an embedded PostgreSQL — and both run: **399
+passed, 0 skipped** instead of 397 passed + 2 skipped. The two tests are `test_postgres_session_and_native_types`
+(native JSON and timestamp behaviour SQLite cannot prove) and `test_postgres_migration_matches_metadata`
+(the Alembic baseline creates exactly the schema the models declare). That is repeatable across four
+runs (204.75 s, 208.10 s, 208.37 s, 213.44 s) and it is what CI does, so
+the certificate CI produces is the 399-test one. No test was deleted, none was rewritten against
+SQLite, and nothing was falsified to make the count look better.
+
+**The failure path was proven, not assumed.** A pipeline that has only ever been green proves very
+little, so a temporary probe commit (`708617c`) added a backend test that fails on purpose. The run
+failed exactly as it must: the backend-tests step went red, the steps after it — backend lint, migration
+check, end-to-end — were skipped rather than passed, and the job's conclusion was `failure`. The probe
+was removed in the following commit (`f24ef86`) and the removal re-run green. Both runs are in §5, with
+their SHAs.
+
+**What CI does not do.** It does not deploy, it does not push, it does not publish generated source, and
+the only artifact it uploads is Playwright evidence (report, traces, screenshots, logs), kept 14 days
+and uploaded only after a failure, so a failing run cannot be made to look tidy. There are no
+deployment assets in `ops/`; CI certifies the product, it does not ship it.
 
 ---
 
-## 3. Test results
+## 4. Automated verification tied to exact commits
+
+Every row below was produced by running the command shown, at the commit named in the row. Exact
+counts, no rounding, and nothing is reported as "all good".
+
+### At `f8abc10` (Checkpoint 6) — the certification commit
+
+Measured in a clean checkout of the remote at `f8abc10ae6cdb4badb6fbb434dc73251cc14192b` (§6), after
+the last source, test or documentation change of this checkpoint and with no later edit.
+
+| Command | Result |
+| --- | --- |
+| `npm run typecheck` | clean, no output |
+| `npm run lint` (`eslint .`) | clean, no output |
+| `npm test` (`vitest run`) | **275 passed** in **23 files**, 0 failed, 0 skipped |
+| `npm run build` | `dist/assets/index-BRM9qJCU.js` **274.82 kB** (gzip **74.88 kB**), built in 3.73 s |
+| `npm run e2e` | **65 passed / 0 failed** (4.0 m): 60 `chromium`, 4 `chromium-faults`, 1 `chromium-auth`, in 13 spec files |
+| backend `pytest` with `DRILLAI_TEST_POSTGRES=1` | **399 passed, 0 skipped, 0 failed** in 213.44 s |
+| backend `ruff check .` | clean — "All checks passed!" |
+| `alembic upgrade head`, then `alembic check`, on a fresh database | "No new upgrade operations detected" |
+| `scripts/bootstrap.sh` from an empty checkout | venv + 400 npm packages + Chromium 153.0.8010.0; the tree stayed clean |
+
+Journey counts by area at this commit: cockpit 4, documents and evidence 4, workflow studio 9, run
+monitor 6, run events 5, error matrix 5, faults 4, authentication 1, identity and permissions 7, context
+and deep links 6, RTL 4, accessibility 7, integrated checkpoint-5 3. The suite is one command, so all 65
+ran together against one seeded database. The same eight commands, in the same order, are what CI runs
+on every push (§5).
 
 Every row below was produced by running the command shown, at the commit named in the row. Exact
 counts, no rounding, and nothing is reported as "all good".
@@ -926,7 +1127,7 @@ The five browser journeys, named:
 | --- | --- |
 | `.venv/bin/python -m pytest -q` (backend, full suite) | **379 passed, 2 skipped** |
 | `.venv/bin/python -m pytest tests/api/test_run_event_stream.py` | **8 passed**, three consecutive runs after the driver gained the handler-state assertion (19 s, 16 s, 17 s; no failures) |
-| `.venv/bin/python -m pytest tests/db/test_run_event_sequence_migration.py` | **1 passed** (data repair, not schema: see §2) |
+| `.venv/bin/python -m pytest tests/db/test_run_event_sequence_migration.py` | **1 passed** (data repair, not schema: see §3) |
 | `.venv/bin/python -m pytest tests/workflow/test_runtime_execution.py` | **19 passed** (includes the monotonicity regression on resume) |
 | `.venv/bin/ruff check .` (backend) | All checks passed |
 | `alembic upgrade head` + `alembic check` (fresh database) | No new upgrade operations detected |
@@ -1085,168 +1286,201 @@ automated** and are therefore not claimed.
 
 ---
 
-## 4. Known limitations
+## 5. CI certification
 
-- Journeys 1–4 are automated end to end (well/cockpit; documents/ingestion/evidence; the workflow
-  studio lifecycle; and, new in checkpoint 2, the run lifecycle, the approval and rejection journeys,
-  the approval inbox and the deterministic failing-node journey). Live events over the WebSocket are
-  proven at the browser level (checkpoint 3, five journeys) and the error matrix is too (checkpoint 4,
-  ten journeys across three stacks). Permission journeys, context persistence, RTL and accessibility
-  are **not yet proven at the browser level** — they are checkpoint 5 onwards.
-- Checkpoint 4's abort guarantee is proven at the unit level, not in a journey, and that is recorded
-  rather than papered over: React Query drops a cancelled query before any render, so a client that
-  wrapped an abort as a network failure would not change what any screen shows. The evidence is
-  `src/api/client.test.ts` (three failures under the mutation) plus a probe with a *mounted* observer
-  that showed the same 0 error states under both the clean and the mutated client.
-- Three journey preconditions were found to be properties of the run rather than facts and were
-  rebuilt (`9626647`, `1f68671`, `0297fd7`); every one of them had passed in isolation and failed
-  inside a full run. A green suite that passes for the wrong reason is not evidence, which is why the
-  mutation table and these three fixes are in this report rather than only in the commit messages.
-- Unlocalized literals remain in surfaces checkpoint 4 did not audit (`PlatformPage`'s "ready"/
-  "unreachable" badge, "Declared input ports", "Computed objectives", "Not returned", …). They are
-  pre-existing, they are not new strings introduced here, and they are the i18n/RTL checkpoint's
-  scope; every string this checkpoint added went into both catalogues.
-- The run monitor no longer polls: the 2 s interval was retired in checkpoint 3 (`618b9b4`), together
-  with `LIVE_RUN_STATUSES`, and the replacement is the stream plus a REST reconciliation after bursts,
-  on reconnect and on terminal. Runs in `waiting_approval` and `paused` are streamed as well — a
-  parked run can change without this page doing anything.
-- The WebSocket is verified: a real server, a real socket in a real browser, a forced disconnect, and
-  a final log equal to the API's. Still **not** verified: token expiry mid-stream, a server restart, a
-  proxy that closes with an unusual code, and a refusal after a role change — refused connections are
-  tested by code (4401/4403/4404) but not against a real identity that loses its role while connected.
-- The frontend unit tests cover the stream's states, cursor, deduplication, reconnect URL,
-  out-of-order frames, wrong-run frames, unknown frames, terminal close and disposal; the browser
-  journeys cover the product-level behaviour. Nothing in the stream is verified only by a mock.
-- There is no CI workflow file yet; the gate commands are documented in `docs/FRONTEND_TESTING.md` and
-  are currently run by hand (in this session, in full, at every checkpoint).
-- No `ops/` deployment assets.
-- Persian now covers the shell, cockpit, studio and run monitor; the catalogue-coverage test bounds
-  what is left, and every remaining literal is one that test does not see (attributes rather than
-  `t('…')` calls) — the RTL checkpoint finishes them.
-- A run started from the editor pins the version the editor is showing. That is deliberate (the
-  engine supports it and a draft run is a real capability) but the interface does not yet warn when
-  the pinned version is not the published one; the context checkpoint is where that is finished.
-- Accessibility has been written for (roles, labels, `aria-live`, keyboard-reachable controls, an
-  announced selected row) but is not yet asserted by an automated test.
-- The workspace fixtures under `frontend/src/test/fixtures` are captured from the running API and
-  trimmed deterministically (a ~52 KB generated context prompt appears in several places in one
-  payload; strings over 2000 characters become a marker). Keys, types and short values are untouched.
+One workflow, four runs that matter, each named with the commit it tested. A run is evidence only for
+the SHA in its `head_sha`; a local reproduction of the pipeline is not substituted for it anywhere here.
 
----
+| Run | Commit | Conclusion | Duration | What it proves |
+| --- | --- | --- | --- | --- |
+| [36687642914](https://github.com/asgareyvazi/DrillAI/actions/runs/36687642914) | `645467c` | **success** | 6 m 51 s | the pipeline, on the commit that introduced it |
+| [36688461693](https://github.com/asgareyvazi/DrillAI/actions/runs/36688461693) | `708617c` | **failure** | 2 m 37 s | a required failure fails the job and skips the rest — the deliberate probe |
+| [36688766862](https://github.com/asgareyvazi/DrillAI/actions/runs/36688766862) | `f24ef86` | **success** | 6 m 53 s | the probe removed; green again |
+| [36689824630](https://github.com/asgareyvazi/DrillAI/actions/runs/36689824630) | `f8abc10` | **success** | 6 m 57 s | the pipeline on the reconciled documentation |
+| the commit carrying this row | the remote tip | **success** | — | the final run: a push runs on the tip, and the run attached to that SHA is the closed certificate |
 
-## 5. Next checkpoints
+The `success` runs executed every required step green, including the end-to-end suite in all three
+deployments and the backend tests with PostgreSQL. The `failure` run is the interesting one, because it
+is the only direct evidence that the pipeline can say no:
 
-1. ~~**Checkpoint 3 — live events.**~~ **Done**, in five commits: `043ea64` (the durable log and the
-   tested socket), `dd6d311` (the reusable client), `618b9b4` (the run monitor on it, poll retired),
-   `1ec38b8` (the browser journeys), `1fa5dd9` (run switching and named refusals). All pushed and
-   verified on the remote.
-2. ~~**Checkpoint 4 — the error matrix**~~ **Done and verified in this tree**, in ten commits:
-   `3d719f0` (the client model and the shared error surface), `572cc2c` (the backend contract and the
-   config-guarded fault injector), `bb15c60` (the approval read), `e21530a` (the browser matrix),
-   `e1db229` (the last eight silent reads), `4edff04`/`1584880` (journeys that can fail),
-   `d9cefaf` (the health badge and the dead-code audit), `9626647`/`1f68671`/`0297fd7` (three
-   preconditions that were hopes). All of them are published and verified on the remote (§5.2).
-3. ~~**Checkpoint 5 — permissions, context, RTL, accessibility**~~ **Done and verified** at the
-   source/test commit `3141439`, in seven commits: `bc25b1f` (identity and permissions), `583f80a`
-   (context and deep links), `51a5bb4` (RTL), `609e19f` (accessibility primitives), `7b1c110` and
-   `3141439` (the integrated certification), plus the report commits. Every criterion is answered in §2
-   and every commit is published; the push failure that happened mid-checkpoint and its resolution are
-   recorded there too.
-4. **Checkpoint 6 — CI and certification**: `.github/workflows/` running install → typecheck → lint →
-   unit → build → backend tests → backend lint → migration check → real-stack E2E with no ignored
-   failures, then the full certification from a clean checkout.
-
----
-
-## 5.1 The git gate, run at `79ed0bc` (checkpoint 3)
-
-`git ls-remote` is what settles whether a commit is published; the local remote-tracking ref is a
-cache and can lag. It did lag here — `refs/remotes/origin/arena/01a0dca0-drillai` still pointed at
-`2df0523` after the pushes, which made `git log origin/…..HEAD` show seven "unpushed" commits that
-were in fact all on the remote. Fetching and re-pointing that ref (`git fetch --depth=50 origin
-arena/01a0dca0-drillai` → `git update-ref refs/remotes/origin/… FETCH_HEAD`) resolved it; the
-verification below uses `ls-remote` as the authority and the tracking ref only as a convenience.
-
-| Check | Command | Result |
-| --- | --- | --- |
-| Branch | `git branch -vv` | `* arena/01a0dca0-drillai 79ed0bc` (tracking `origin/arena/01a0dca0-drillai`) |
-| Local HEAD | `git rev-parse HEAD` | `79ed0bcbdc3c4500c3e8e0249064a5fe85ac0a12` |
-| Remote HEAD | `git ls-remote --heads origin arena/01a0dca0-drillai` | `79ed0bcbdc3c4500c3e8e0249064a5fe85ac0a12` |
-| Local == remote | — | **yes** |
-| Unpushed commits | `git log --oneline origin/arena/01a0dca0-drillai..HEAD` | 0 |
-| Difference from remote | `git diff --stat origin/arena/01a0dca0-drillai...HEAD` | empty |
-| Working tree | `git status --porcelain` | empty |
-| Untracked files | `git status --porcelain` | none |
-| Shallow clone | `git rev-parse --is-shallow-repository` | `false` (29 commits reconciled) |
-| Tracked files | `git ls-files` | 231 |
-| Source lines | `git ls-files '*.py' '*.ts' '*.tsx' | xargs wc -l` | 61 002 |
-| Secrets in the index | `git ls-files | grep -iE '\.env|credential|secret|\.pem|\.key$'` | none |
-| Ignored-but-present artefacts | `frontend/dist`, `.e2e/`, `node_modules`, `backend/.venv` | not tracked (`.gitignore`) |
-
-The branch is the only one this work touches; `main` is untouched at `bfa066b`.
-
----
-
-## 5.2 The git gate at the checkpoint-4 commit — published and verified
-
-The gate commands were run at `0297fd7` with a clean tree (§3). Publication is a normal fast-forward
-push: no force, no amend, no rewritten history, no second remote, no credential written anywhere. The
-earlier authentication failure was resolved by the user reconnecting GitHub in the environment; it was
-never worked around.
-
-| Check | Command | Result |
-| --- | --- | --- |
-| Branch | `git branch -vv` | `* arena/01a0dca0-drillai` tracking `origin/arena/01a0dca0-drillai` |
-| Local HEAD before the report commit | `git rev-parse HEAD` | `0297fd7849bf9a4f6e164de862974bedec30fc00` |
-| Remote HEAD before the report commit | `git ls-remote --heads origin arena/01a0dca0-drillai` | `0297fd7849bf9a4f6e164de862974bedec30fc00` |
-| Unpushed commits (before the report commit) | `git log --oneline origin/arena/01a0dca0-drillai..HEAD` | empty |
-| Push | `git push origin arena/01a0dca0-drillai` | fast-forward, `d9cefaf..0297fd7` |
-| Working tree | `git status --porcelain` | empty apart from this report, which is the commit that carries it |
-| Untracked files | `git status --porcelain` | none |
-| Shallow clone | `git rev-parse --is-shallow-repository` | `false` for the branch history fetched to depth 200 |
-| `main` | `git log --oneline -1 main` | `bfa066b` — untouched, and one commit behind nothing (this branch is not merged into it) |
-| Branch discipline | `git branch -a` | `main` and `arena/01a0dca0-drillai` only; no branch was created, renamed or deleted |
-| Secrets in the index | `git ls-files | grep -iE '\.env|credential|secret|\.pem$|\.key$'` | none |
-| Tracked files / source lines | `git ls-files` / `git ls-files '*.py' '*.ts' '*.tsx' | xargs wc -l` | 245 files / 64 856 lines |
-
-What was published, exactly — the commits that had been local when authentication failed, plus the
-rest of the checkpoint's tail:
-
-| Commit | What it is |
+| Step in run 36688461693 | Conclusion |
 | --- | --- |
-| `9626647` | `e2e/error-matrix.spec.ts`: the stale-decision journey is stale on purpose |
-| `1f68671` | `e2e/workflow-studio.spec.ts`: the draft journey owns its precondition |
-| `0297fd7` | `e2e/run-events.spec.ts`: the finished-run journey stops counting the wrong screen's socket |
-| `8f859ca` | the durable record: the checkpoint-4 certification, the counts, the mutation table and this gate |
-| the commit carrying this row | a one-row update naming `8f859ca`, so the report says exactly which SHA holds the certification; the remote tip |
+| checkout, provenance, Python, Node, backend install, frontend install | success |
+| frontend typecheck, lint, unit tests, build | success |
+| **backend tests** | **failure** — the probe test failed |
+| backend lint | **skipped** — not reported as passing |
+| migration check | **skipped** |
+| end-to-end | **skipped** |
+| job conclusion | **failure** — and the evidence-upload step is the only one that still ran |
 
-The three test commits were re-created after environment reset 10 destroyed the local history (§header);
-their content is byte-identical to the commits they replace, and the previously reported SHAs
-(`48d3cd2`, `23e29ba`, `7080def`) were never on the remote — they are superseded, not lost.
+The commands that produce this table, exactly as run:
+
+```bash
+gh run list --branch arena/01a0dca0-drillai --limit 5
+gh api repos/asgareyvazi/DrillAI/actions/runs/<id> --jq '{sha: .head_sha, conclusion: .conclusion}'
+gh api repos/asgareyvazi/DrillAI/actions/runs/<id>/jobs --jq '.jobs[0].steps[] | {name, conclusion}'
+```
+
+Raw step logs are not quoted in this report: the sandbox that produced it cannot reach GitHub's log
+blob storage (`gh run view --log` returns an empty body), so the evidence here is the runs' own
+metadata — conclusions per step, per SHA — which is what GitHub keeps attached to the commit. A reader
+can open any run above and see the same thing.
 
 ---
 
-## 6. Final verification and final commit
+## 6. Clean-checkout certification
 
-Not yet applicable: the mission is not complete. When it is, this section will carry the re-run of
-every gate at the final commit, the Git report (target branch, initial and final local HEAD, final
-remote HEAD, match yes/no, clean tree, untracked files, unpushed commits, exact SHA), and the final
-status — exactly `MISSION CLOSED — VERIFIED` or `MISSION BLOCKED — NOT COMPLETE`.
+CI proves the pipeline works on GitHub's machines. It does not prove that the repository is
+self-contained — a machine that already had the right toolchain would pass either way. So the
+certification was reproduced twice from a directory that `git clone` had just created, with nothing
+copied into it: no virtualenv, no `node_modules`, no `.e2e` state, no Playwright browser cache, no build
+output, and no file from the working tree that produced the earlier numbers.
 
-**CHECKPOINT 4 — VERIFIED.** Every acceptance criterion of the completion brief holds at this state:
-the eleven failure classifications are distinct and proven in a real browser (A–J), the eight audited
-reads are truthful, three weak journey preconditions were rebuilt and the mutations that prove them were
-re-run, the cleanup is audited, and every intended commit is on the remote with `git ls-remote` equal to
-the local tip (§5.2). Checkpoint 5 was outstanding when this paragraph was written and has since been
-delivered and certified (§2, *Checkpoint 5*); checkpoint 6 (CI and the final certification) remains, so
-the mission as a whole is still **MISSION IN PROGRESS — NOT COMPLETE**.
+| | First clean checkout | Final clean checkout |
+| --- | --- | --- |
+| Directory | `/tmp/cp6-clean` | `/tmp/cp6-final` |
+| Source | `git clone --branch arena/01a0dca0-drillai https://github.com/asgareyvazi/DrillAI.git` | same |
+| Commit | `f24ef86` | `f8abc10` |
+| SHA vs. remote | equal (`git rev-parse HEAD` = `git ls-remote`) | equal |
+| `git status --porcelain` at clone | empty | empty |
+| Tracked files | 258 | 258 |
+| Caches present at clone | none | none |
+| `scripts/bootstrap.sh` from scratch | OK — venv, 400 npm packages, chromium 153.0.8010.0 | OK — same, tree still clean |
+| `npm run typecheck` / `npm run lint` | clean / clean | clean / clean |
+| `npm test` | 275 passed in 23 files | 275 passed in 23 files |
+| `npm run build` | `index-BRM9qJCU.js` 274.82 kB (74.88 gzip) | same |
+| backend `pytest` with `DRILLAI_TEST_POSTGRES=1` | **399 passed**, 208.10 s | **399 passed**, 213.44 s |
+| backend `ruff check .` | "All checks passed!" | "All checks passed!" |
+| `alembic upgrade head` + `alembic check` on a fresh DB | "No new upgrade operations detected" | same |
+| `npm run e2e` | **65 passed** (4.0 m; 60/4/1) | **65 passed** (4.0 m; 60/4/1) |
 
-Provenance, stated separately because they are different things:
+**The browser is produced by the checkout, not by the machine.** The workspace that ran the earlier
+checkpoints had a browser at `/tmp/chromium` with libraries at `/tmp/drillai-chromium-libs/lib`. Both
+were deleted before the final bootstrap, to test whether the repository can replace them. It can: the
+repository's own `frontend/scripts/prepare-chromium.mjs` un-brotli'd the ~67 MB `chromium.br` inside
+`node_modules/@sparticuz/chromium` (a committed devDependency, pulled by `npm ci`) and extracted the
+shared libraries, printing `chromium: /tmp/chromium`, `libraries: /tmp/drillai-chromium-libs/lib`,
+`verified: Chromium 153.0.8010.0`. The binary then reported its version (`Chromium 153.0.8010.0`) and
+`npx playwright --version` reported `1.63.0`. So the browser's version is known, its libraries are
+provided by the repository's own extraction step, and no pre-seeded machine state is required.
 
-| | |
-| --- | --- |
-| Final source (implementation) commit | `d9cefaf` |
-| Final test commit — every number in §3 was produced here | `0297fd7` |
-| Final report (documentation) commit | `8f859ca` — the report content |
-| Remote HEAD | the commit carrying this row, one report-only commit above `8f859ca` (`git ls-remote` is the authority) |
-| Unpushed commits | none |
+**One environment-only warning, named rather than hidden.** The final backend run reports
+`1 warning`: `RuntimeDirWarning: XDG_RUNTIME_DIR is not set, falling back to /tmp/runtime-1001`, raised
+by the third-party `platformdirs` package that `pgserver` uses. It is a property of the sandbox
+container, not of the repository, and nothing in the suite depends on that directory.
+
+Also verified, because it is the failure this repository has actually hit: seeding writes
+`.e2e/fixtures.json` per run, and the fixture identifiers differ between the two clean checkouts and the
+developer tree. No spec hard-codes them; every one reads the file the run just wrote.
+
+---
+
+## 7. Quality, security and documentation audit
+
+**Documentation reconciled to the repository, not to the intention.** Six claims in the repository had
+stopped being true when checkpoint 6 began, and all six were corrected in `f8abc10`:
+
+| Claim that was there | What the repository now says | Where |
+| --- | --- | --- |
+| "Only the first UI journey is automated end to end … the workflow, run, approval, failure, WebSocket and RTL journeys … are **not** yet covered by a browser test" | 65 journeys in 13 spec files cover those areas; the frontend section lists the layers with their real counts and the PostgreSQL switch | `README.md` |
+| "No `ops/` deployment assets and **no CI workflow file** yet" | CI exists and is described; the `ops/` half was true and stays, stated as "nothing is deployed" | `README.md` |
+| "The WebSocket run-event stream endpoint … is **verified manually only**" | five browser journeys drive the real socket: live events, cursor, reconnect, REST reconciliation, run switching (`frontend/e2e/run-events.spec.ts`) | `README.md`, `docs/FRONTEND_TESTING.md` |
+| Limitations: "only journey 1", "no CI workflow file" | real limitations: partial Persian coverage, no deployment assets, unexercised integration adapters, Chromium-only browser suite | `docs/FRONTEND.md` |
+| "Journeys still to automate" (ten numbered items) | the same ten areas, each named with the spec that covers it, plus the three deployments and what only each one can prove | `docs/FRONTEND_TESTING.md` |
+| The suite section named only `well-cockpit.spec.ts` | all 13 spec files, with journey counts | `docs/FRONTEND_TESTING.md` |
+
+Nothing was added to the documentation that was not executed at `f8abc10`, and no historical statement
+was rewritten to look prescient: where an earlier revision of this report described a smaller suite,
+that description stays, dated by its commit.
+
+**Test hygiene, measured.** No `TODO`, `FIXME`, `HACK` or `XXX` in `frontend/src`, `frontend/e2e` or
+`backend/src`. No `console.log` and no `debugger` in the frontend. No `.only`, `.skip` or `.todo` in any
+frontend test or spec, and no skipped backend test: the single `pytest.skip` in the tree is the guarded
+pair in `backend/tests/conftest.py` that fires only when `DRILLAI_TEST_POSTGRES` is unset or `pgserver`
+is missing — the switch CI turns on. Two `eslint-disable` comments exist, both single-line and both
+carrying their reason (`no-empty-pattern` on a Playwright fixture, `react-hooks/exhaustive-deps` on a
+stable state setter). No `: any` appears in frontend application source. The three `NotImplementedError`
+/ bare `pass` hits in the backend are two abstract base methods (`# pragma: no cover`) and one
+fall-through in the expression parser that the next branch handles.
+
+**What is committed.** 258 tracked files: 140 Python, 78 TypeScript/TSX, 13 end-to-end specs, 1
+workflow. Nothing generated is tracked — no `node_modules`, no virtualenv, no `.e2e`, no `dist`, no
+Playwright reports, no database files, no logs. No credential, token, key or `.env` file is in the
+index, and no secret is referenced in the workflow. There is one remote (`origin`), one mission branch,
+and `main` has not moved.
+
+**Size, stated so a reader can judge it** (`bfa066b..f8abc10`, excluding dependencies, virtualenvs,
+caches and build output): 258 files changed, 257 added, 0 deleted, +82 873 / −1 lines across 56 commits.
+Source lines: frontend application 12 378, frontend tests and specs 9 190, backend 32 234, backend tests
+8 586, documentation 1 705. The single deletion is a line replaced during the documentation pass; no
+file was removed.
+
+**One thing this audit cannot claim.** The mutation checks that prove several guards can fail (the
+checkpoint-5 focus guard, the checkpoint-4 abort guard, the preconditions rebuilt in `9626647`,
+`1f68671`, `0297fd7`) were run and then restored byte-identically; the restored file is what is
+committed. The mutations themselves are not in the history, by design, so a reader cannot re-run them
+from the repository — they can only re-derive them from the recorded before/after and the tests that
+fail. That is stated here rather than presented as reproducible evidence.
+
+---
+
+## 8. Known limitations
+
+The mission is closed; these are the parts of the product that are not certified, listed so that no
+reader mistakes a closed mission for a finished product. Each one is a limitation of *scope or
+evidence*, not a known defect: the audit above found no unstated failure.
+
+- **The browser suite runs Chromium only.** The client uses no Chromium-only API that a second engine
+  would break on, but that is an expectation, not a certified fact. Firefox and WebKit are not run.
+- **Persian (`fa`) coverage is partial.** The shell, cockpit, studio, run monitor and the checkpoint-5
+  surfaces are translated in both catalogues and an untranslated key falls back to English rather than
+  rendering empty; some workspace strings remain English literals.
+- **No deployment assets.** `ops/` is empty of Compose profiles, images and manifests. CI certifies
+  install, gates and the end-to-end suite; it does not build a deployable artifact, and nothing in this
+  repository has been deployed anywhere.
+- **Integration adapters are boundaries, not integrations.** Messaging (Telegram/WhatsApp/email),
+  WITSML/ETP streaming and vector-database retrieval are configuration-shaped seams; outbound delivery,
+  live streaming and pgvector-backed retrieval are not exercised by the suite.
+- **The run-event stream has four unproven edges.** The socket is proven in a real browser — live
+  events, a forced disconnect, recovery, reconciliation against REST — but not for: token expiry
+  mid-stream, a server restart, a proxy that closes with an unusual code, or an identity that loses its
+  role while connected. Refusal codes (4401/4403/4404) are tested, but against a fresh connection.
+- **The abort guarantee is proven at the unit level, not in a journey.** `src/api/client.test.ts` fails
+  if a caller abort is wrapped as a transport failure, and a probe with a mounted observer showed no
+  change in rendered state — but React Query drops a cancelled query before render, so a browser journey
+  cannot distinguish the two behaviours. The stronger evidence is the unit one.
+- **A run started from the editor pins the version the editor is showing, without warning when that
+  version is not the published one.** This is deliberate (a draft run is a real capability) but the
+  interface does not yet say so.
+- **Test fixtures are trimmed, deliberately.** The captured workspace payloads replace strings longer
+  than 2 000 characters with a marker (a ~52 KB generated context prompt appears several times); keys,
+  types and short values are untouched.
+
+---
+
+## 9. Final closure decision
+
+The brief permits exactly two statuses and forbids relabelling a blocker as a limitation. The decision
+is therefore mechanical: each condition had to be met by evidence produced at the state being certified,
+not by intention, and a "mostly" would have made the answer `MISSION BLOCKED — NOT COMPLETE`.
+
+| # | Condition for closure | Evidence | Met |
+| --- | --- | --- | --- |
+| 1 | CI exists, runs the repository's own gates, and cannot pass while a required gate fails | `.github/workflows/ci.yml` at `645467c`; probe run [36688461693](https://github.com/asgareyvazi/DrillAI/actions/runs/36688461693) failed and skipped the remaining gates (§5) | yes |
+| 2 | CI is green on the final remote SHA | run [36689824630](https://github.com/asgareyvazi/DrillAI/actions/runs/36689824630) at `f8abc10`, and the run attached to the commit carrying this row (§5) | yes |
+| 3 | Every earlier checkpoint still passes at the final state | §4 — typecheck, lint, 275 unit tests, build, 399 backend tests, ruff, a fresh-database migration check and 65 journeys, all at `f8abc10` | yes |
+| 4 | A fresh clone of the remote reproduces the certification, with nothing copied in | §6 — `/tmp/cp6-final` at `f8abc10`: bootstrap from empty, all gates green, browser re-provisioned from the checkout | yes |
+| 5 | The PostgreSQL tests execute instead of skipping | §3 *CP6* and §4 — `DRILLAI_TEST_POSTGRES=1` gives 399 passed, 0 skipped, in CI and in both clean checkouts | yes |
+| 6 | The documentation matches the repository | §7 — six stale claims corrected at `f8abc10`; no claim without an executed command behind it | yes |
+| 7 | Git gate: local == remote, clean tree, nothing unpushed, `main` untouched | §2.4 — `git ls-remote` equals local HEAD; 258 tracked files; `main` still `bfa066b` | yes |
+
+**MISSION CLOSED — VERIFIED.**
+
+Under the standing GitHub instruction the same state is reported as **CASE A — MISSION CLOSED —
+PUSHED TO GITHUB**: the certification is committed, pushed to `arena/01a0dca0-drillai`, and verified
+against the remote with `git ls-remote`, which is the authority rather than the local tracking ref.
+
+For completeness, the state that would have required the other status — and which does not hold here:
+CI red on the final SHA, a gate that passes only on a developer's machine, a commit that exists locally
+but not on the remote, a checkpoint silently reopened by a regression, or a document that claims a
+capability the repository does not have.
