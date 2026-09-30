@@ -26,6 +26,7 @@
 
 import {
   apiGet,
+  clearPendingApproval,
   appConsoleErrors,
   expect,
   fixtures,
@@ -68,9 +69,17 @@ test.describe('context, deep links and reloads', () => {
     const envelope = await apiGet<RunEnvelope>(request, `/runs/${runId}`, 'engineer')
     await expect(page.getByTestId('run-scope')).toContainText(envelope.run.well_id ?? '')
     expect(appConsoleErrors(consoleErrors)).toEqual([])
+
+    // The suite shares one seeded database, and an approval left pending is not inert: it appears in
+    // the inbox a later journey asserts on. A journey that starts runs closes the gates it opened.
+    await clearPendingApproval(request, runId, 'e2e context journey: closed to leave the seeded state clean')
   })
 
-  test('switching the run in the address re-reads that run, live', async ({ page, request, wellId }) => {
+  test('switching the run in the address re-reads that run, live', async ({
+    page,
+    request,
+    wellId,
+  }) => {
     const workflowId = fixtures().workflow_id
     const first = await startRunFromStudio(page, workflowId, wellId)
     const second = await startRunFromStudio(page, workflowId, wellId)
@@ -110,6 +119,11 @@ test.describe('context, deep links and reloads', () => {
     // Every sequence the server holds for this run is on screen. The list is the run's log, not a
     // mixture with the run that was open a moment ago.
     expect(fromApi.filter((seq) => !rendered.includes(seq))).toEqual([])
+
+    // Both runs this journey started are closed, so the shared approval inbox is as it was found.
+    for (const runId of [first, second]) {
+      await clearPendingApproval(request, runId, 'e2e context journey: closed to leave the seeded state clean')
+    }
   })
 
   test('a document that belongs to another well is not shown as this well’s', async ({

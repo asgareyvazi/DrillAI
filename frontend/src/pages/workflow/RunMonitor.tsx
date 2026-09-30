@@ -13,7 +13,7 @@
  */
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { drillingApi } from '../../api/endpoints'
 import type { ApprovalRow, NodeRunState, RunDetail, RunEvent, RunSummary } from '../../api/types'
@@ -524,6 +524,88 @@ function EventLog({ events }: { events: RunEvent[] }) {
   )
 }
 
+/**
+ * What to say out loud about a run that is producing events.
+ *
+ * The event log is the wrong thing to announce: a run emits tens of events within seconds, and a live
+ * region bound to the log would read the whole list, once per event, over whatever the operator is
+ * doing. The announcement is therefore a *summary* — how many events arrived and which one came last
+ * — and it is coalesced, because the polite queue is read when it stops changing. One sentence per
+ * burst is information; thirty sentences are noise.
+ *
+ * `role="status"` with `aria-live="polite"` is used rather than `alert`: a run progressing is not an
+ * emergency, and an assertive region would interrupt the sentence a screen-reader user was reading.
+ * Nothing here takes focus, and nothing scrolls: the log grows quietly beside the reader.
+ *
+ * The coalescing window is opened by the *first* event of a burst and closes `ANNOUNCE_WINDOW_MS`
+ * later, whatever happens in between. That detail is not cosmetic. The monitor re-reads the run after a
+ * burst (and on every reconnect), so the event list is re-rendered with the same contents and a new
+ * array identity; a window that restarted — or that was cleared and re-armed — on every render would
+ * be cancelled by the very reconciliation that follows the events it was about to describe, and the
+ * announcement would silently never arrive. A fixed window cannot be starved by a re-render that
+ * carries no news, and it bounds how long a reader waits for a sentence.
+ */
+const ANNOUNCE_WINDOW_MS = 600
+
+function useEventAnnouncement(events: RunEvent[]): string {
+  const { t } = useI18n()
+  const [announcement, setAnnouncement] = useState('')
+  const lastSeq = useRef<number | null>(null)
+  const pending = useRef<RunEvent[]>([])
+  const timer = useRef<number | null>(null)
+
+  const flush = useCallback(() => {
+    timer.current = null
+    const arrived = pending.current
+    pending.current = []
+    const latest = arrived[arrived.length - 1]
+    if (!latest) return
+    const detail = latest.message ?? latest.type
+    setAnnouncement(
+      arrived.length > 1
+        ? t('workflow.eventsArrived', { count: arrived.length, latest: detail })
+        : t('workflow.eventArrived', { latest: detail }),
+    )
+  }, [t])
+
+  useEffect(() => {
+    const ordered = [...events].sort((a, b) => (a.seq ?? 0) - (b.seq ?? 0))
+    const newest = ordered[ordered.length - 1]
+    if (!newest) return
+    if (lastSeq.current === null) {
+      // The first log a screen sees is history, not news: a run opened from the list is not announced.
+      lastSeq.current = newest.seq ?? 0
+      return
+    }
+    /*
+     * Everything past the last sequence this screen has seen arrived just now — however the frames
+     * were batched. Counting only the newest would under-report a burst that React delivered in one
+     * render, which is the common case: the socket pushes several events and the screen re-renders
+     * once. `seq` is the log's own ordering, so this is the log's answer, not a guess from timing.
+     */
+    const seen = lastSeq.current
+    const fresh = ordered.filter((event) => (event.seq ?? 0) > seen)
+    if (fresh.length === 0) return
+    for (const event of fresh) lastSeq.current = Math.max(lastSeq.current, event.seq ?? 0)
+    pending.current.push(...fresh)
+    // A burst is described once, by the event that opened it: later events join the same sentence
+    // instead of re-arming the clock, and an unrelated re-render does not touch the clock at all.
+    if (timer.current !== null) return
+    timer.current = window.setTimeout(flush, ANNOUNCE_WINDOW_MS)
+  }, [events, flush])
+
+  // Nothing is announced after the screen is gone, and no timer outlives it.
+  useEffect(
+    () => () => {
+      if (timer.current !== null) window.clearTimeout(timer.current)
+      timer.current = null
+    },
+    [],
+  )
+
+  return announcement
+}
+
 function RunDetailView({ runId }: { runId: string }) {
   const { t } = useI18n()
   const [tab, setTab] = useState('nodes')
@@ -544,6 +626,7 @@ function RunDetailView({ runId }: { runId: string }) {
     runStatus: detail.data?.run.status,
     restEvents: detail.data?.events,
   })
+  const announcement = useEventAnnouncement(detail.data?.events ?? [])
 
   // The run's approval record, whatever state it is in. The envelope carries a *pending* approval,
   // because that is what the run is blocked on; the decision that unblocked it is a separate row, so
@@ -555,6 +638,16 @@ function RunDetailView({ runId }: { runId: string }) {
   })
   const decidedApprovals = (approvals.data?.items ?? []).filter((row) => row.status !== 'pending')
 
+  /*
+   * Where focus goes when the resume button removes itself.
+   *
+   * Resuming makes the run no longer resumable, so the control the operator just pressed disappears
+   * from the page. If nothing is done, focus falls to the document body and a keyboard user is dropped
+   * at the top of the page with no indication of what happened. The run's status badge is what reports
+   * the outcome, so focus is moved there — deliberately, once, in response to the operator's own
+   * action, and never anywhere else on this page.
+   */
+  const statusRef = useRef<HTMLSpanElement | null>(null)
   const resume = useMutation({
     mutationFn: (approvalId: string | null | undefined) =>
       drillingApi.resumeRun(runId, approvalId ?? undefined),
@@ -562,6 +655,7 @@ function RunDetailView({ runId }: { runId: string }) {
       setNotice(`${t('workflow.resumedAs')} ${formatStatus(run.status)}`)
       void detail.refetch()
       void approvals.refetch()
+      statusRef.current?.focus()
     },
   })
 
@@ -577,9 +671,15 @@ function RunDetailView({ runId }: { runId: string }) {
               } · ${data.run.trigger_type} · started ${formatDateTime(data.run.started_at)}`}
               actions={
                 <>
-                  <Badge tone={runStatusTone(data.run.status)} data-testid="run-status">
-                    {formatStatus(data.run.status)}
-                  </Badge>
+                  <span
+                    ref={statusRef}
+                    tabIndex={-1}
+                    className="inline-flex rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-signal"
+                  >
+                    <Badge tone={runStatusTone(data.run.status)} data-testid="run-status">
+                      {formatStatus(data.run.status)}
+                    </Badge>
+                  </span>
                   {data.run.is_dry_run && <Badge tone="info">{t('workflow.dryRun')}</Badge>}
                   <StreamStatusBadge status={stream.status} received={stream.diagnostics.received} />
                   {data.run.duration_ms !== null && data.run.duration_ms !== undefined && (
@@ -604,6 +704,13 @@ function RunDetailView({ runId }: { runId: string }) {
               }
             >
               <div className="space-y-3">
+                {/*
+                  The one live region on the page: a sentence about what has just arrived, replacing
+                  itself rather than accumulating. Nothing focuses it and nothing scrolls to it.
+                */}
+                <span role="status" aria-live="polite" aria-atomic="true" data-testid="run-announcement">
+                  {announcement}
+                </span>
                 {(data.run.status === 'waiting_approval' || data.run.status === 'paused') && (
                   <p
                     data-testid="run-awaiting-approval"
@@ -720,7 +827,7 @@ function RunDetailView({ runId }: { runId: string }) {
               ]}
               active={tab}
               onChange={setTab}
-            />
+            >
 
             {tab === 'nodes' && (
               <Card title={t('workflow.nodeRuns')} subtitle={t('workflow.eachExecution')}>
@@ -798,6 +905,7 @@ function RunDetailView({ runId }: { runId: string }) {
                 </Card>
               </div>
             )}
+            </Tabs>
           </>
         )}
       </Async>
@@ -859,7 +967,7 @@ export default function RunMonitor() {
         ]}
         active={tab}
         onChange={setTab}
-      />
+      >
 
       {tab === 'runs' && (
         <>
@@ -980,6 +1088,8 @@ export default function RunMonitor() {
           </Async>
         </Card>
       )}
+
+      </Tabs>
 
       {runs.isLoading && <Loading />}
     </div>

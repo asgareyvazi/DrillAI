@@ -525,6 +525,90 @@ describe('run monitor: the live event stream', () => {
   })
 })
 
+describe('run monitor: the live announcement', () => {
+  /** A run event as the socket delivers one. */
+  function frame(runId: string, seq: number, message: string) {
+    return {
+      kind: 'message',
+      message: {
+        type: 'run_event',
+        event: { id: `evt_${seq}`, run_id: runId, seq, type: 'node.started', message, at: '2026-01-01T00:00:00Z' },
+      },
+    }
+  }
+
+  const announcement = () => screen.getByTestId('run-announcement')
+  /** The socket the monitor opened, as the test's stand-in for the server. */
+  const streamFor = () =>
+    streamControls.instances[streamControls.instances.length - 1] as unknown as {
+      frame: (decode: unknown) => void
+    }
+
+  it('does not announce the log a screen opens onto: history is not news', async () => {
+    api.getRun.mockResolvedValue({ ...succeeded, run: { ...succeeded.run, status: 'running' } })
+    renderMonitor('/runs?run=run_1')
+    await screen.findByTestId('run-status')
+
+    // The run arrived with events already recorded. A reader opening a monitor has not missed them,
+    // and reading the whole back catalogue aloud would make the region useless.
+    expect(announcement()).toHaveTextContent('')
+
+    /*
+     * And it stays silent. The assertion above is taken before the coalescing window could close, so on
+     * its own it would also pass if history were queued and announced a moment later — which is exactly
+     * the mistake being guarded against. Waiting past the window is what makes this a test of the
+     * property rather than of the test's own speed.
+     */
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 900))
+    })
+    expect(announcement()).toHaveTextContent('')
+  })
+
+  it('announces events that arrive while the screen is open, once per burst', async () => {
+    const live: RunDetail = { ...succeeded, run: { ...succeeded.run, status: 'running' } }
+    api.getRun.mockResolvedValue(live)
+    renderMonitor('/runs?run=run_1')
+    await screen.findByTestId('run-status')
+    const stream = streamFor()
+
+    // Three events in one burst: one sentence, naming how many and what the latest was — not three.
+    act(() => {
+      stream.frame(frame(live.run.id, 900, 'npt_summary started'))
+      stream.frame(frame(live.run.id, 901, 'npt_summary finished'))
+      stream.frame(frame(live.run.id, 902, 'daily_report queued'))
+    })
+
+    await waitFor(() => expect(announcement()).toHaveTextContent(/3 new run events/i))
+    expect(announcement()).toHaveTextContent('daily_report queued')
+    // Polite and atomic: read when it settles, and never interrupting what is being read.
+    expect(announcement()).toHaveAttribute('aria-live', 'polite')
+    expect(announcement()).toHaveAttribute('aria-atomic', 'true')
+
+    // A later, separate event is its own sentence.
+    act(() => stream.frame(frame(live.run.id, 903, 'daily_report finished')))
+    await waitFor(() => expect(announcement()).toHaveTextContent(/new run event: daily_report finished/i))
+    expect(announcement()).not.toHaveTextContent(/2 new run events/i)
+  })
+
+  it('announces without taking focus and without being focusable', async () => {
+    const live: RunDetail = { ...succeeded, run: { ...succeeded.run, status: 'running' } }
+    api.getRun.mockResolvedValue(live)
+    renderMonitor('/runs?run=run_1')
+    await screen.findByTestId('run-status')
+    const stream = streamFor()
+
+    // Focus the deep-linkable control the reader is on, then let events arrive.
+    const row = screen.getByTestId('run-status')
+    row.focus()
+    act(() => stream.frame(frame(live.run.id, 910, 'well_state started')))
+    await waitFor(() => expect(announcement()).toHaveTextContent(/new run event/i))
+
+    expect(announcement()).not.toHaveFocus()
+    expect(announcement()).not.toHaveAttribute('tabindex')
+  })
+})
+
 describe('run monitor: when the read fails', () => {
   it('shows a deep link to a run that does not exist as "not found", not as an outage', async () => {
     api.getRun.mockRejectedValue(new ApiError(404, 'platform.not_found', "run 'run_missing' not found"))

@@ -379,7 +379,7 @@ export default function DocumentWorkspace() {
                 </div>
               </Card>
 
-              <Tabs tabs={documentTabs} active={tab} onChange={setTab} />
+              <Tabs tabs={documentTabs} active={tab} onChange={setTab}>
 
               {tab === 'overview' && (
                 <Card title={t('documents.extractedRecords')}>
@@ -509,6 +509,7 @@ export default function DocumentWorkspace() {
                   {report && <ProcessingReportView report={report} />}
                 </Card>
               )}
+              </Tabs>
             </>
           )}
         </div>

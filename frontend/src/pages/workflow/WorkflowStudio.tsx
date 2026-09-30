@@ -1076,7 +1076,7 @@ export default function WorkflowStudio() {
         ]}
         active={tab}
         onChange={setTab}
-      />
+      >
 
       {tab === 'studio' && (
         <Async query={workflows}>
@@ -1132,6 +1132,7 @@ export default function WorkflowStudio() {
       )}
 
       {create.isPending && <Loading />}
+      </Tabs>
     </div>
   )
 }

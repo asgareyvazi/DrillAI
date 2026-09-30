@@ -277,7 +277,7 @@ export default function OptimisationWorkspace() {
         ]}
         active={tab}
         onChange={setTab}
-      />
+      >
 
       {tab === 'run' && (
         <div className="grid gap-3 xl:grid-cols-[1fr_1fr]">
@@ -566,6 +566,7 @@ export default function OptimisationWorkspace() {
           </Async>
         </Card>
       )}
+      </Tabs>
     </div>
   )
 }

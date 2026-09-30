@@ -8,7 +8,7 @@
  */
 
 import clsx from 'clsx'
-import { useId, type ReactNode } from 'react'
+import { useEffect, useId, useRef, type ReactNode } from 'react'
 import { ApiError, canRetry, isAbortError } from '../../api/client'
 import { useI18n } from '../../i18n'
 import { formatValue } from '../../lib/format'
@@ -396,6 +396,13 @@ export function ProgressBar({
   basis?: string | null
 }) {
   const { locale } = useI18n()
+  /*
+   * The bar is named by the label that is drawn above it, through `aria-labelledby` rather than a
+   * copied `aria-label`: the label is a node, not a string, and a second copy of it would be a second
+   * thing to keep in step. A progress bar a screen reader reports as "progress bar 70%" has not said
+   * what is 70% complete.
+   */
+  const labelId = `${useId().replace(/[^a-zA-Z0-9_-]/g, '')}-progress-label`
   if (percent === null) {
     return (
       <div className="text-xs text-graphite-500">
@@ -407,13 +414,16 @@ export function ProgressBar({
   return (
     <div>
       <div className="flex items-baseline justify-between text-xs">
-        <span className="text-graphite-600 dark:text-graphite-300">{label}</span>
+        <span id={labelId} className="text-graphite-600 dark:text-graphite-300">
+          {label}
+        </span>
         <span className="font-mono">
           {new Intl.NumberFormat(locale === 'fa' ? 'fa-IR' : 'en-US', { maximumFractionDigits: 1 }).format(clamped)}%
         </span>
       </div>
       <div
         role="progressbar"
+        aria-labelledby={labelId}
         aria-valuenow={Math.round(clamped)}
         aria-valuemin={0}
         aria-valuemax={100}
@@ -507,6 +517,27 @@ export function Table<T>({
             <tr
               key={rowKey(row, index)}
               onClick={onRowClick ? () => onRowClick(row) : undefined}
+              /*
+               * A row a user can click is a control, and a control that can only be reached with a
+               * mouse is not reachable. The keyboard contract is the one every button has: the row
+               * takes focus, `Enter` activates it, and `Space` activates it without scrolling the
+               * page out from under the reader. The activation is the *same* handler the click uses,
+               * so the two paths cannot diverge.
+               *
+               * `aria-current` states which record is open for assistive technology the same way it
+               * states it visually — colour alone would carry it for sighted users only.
+               */
+              tabIndex={onRowClick ? 0 : undefined}
+              onKeyDown={
+                onRowClick
+                  ? (event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault()
+                        onRowClick(row)
+                      }
+                    }
+                  : undefined
+              }
               aria-current={isRowActive?.(row) ? 'true' : undefined}
               className={clsx(
                 'border-b border-graphite-100 last:border-0 dark:border-graphite-800',
@@ -534,34 +565,148 @@ export function Tabs({
   tabs,
   active,
   onChange,
+  children,
 }: {
   tabs: Array<{ key: string; label: ReactNode; badge?: ReactNode }>
   active: string
   onChange: (key: string) => void
+  /**
+   * The content of the tabs, passed as children so the group owns the panel.
+   *
+   * A tab that says `aria-controls="…-panel-catalogue"` is only telling the truth if an element with
+   * that id exists; rendering the panel here is what guarantees the two halves of the relationship
+   * are always in step, whichever tab happens to be selected. Pages keep their own conditional
+   * rendering inside (`{tab === 'x' && …}`), so nothing about how a tab decides what to show changes.
+   */
+  children?: ReactNode
 }) {
+  const { direction } = useI18n()
+  /*
+   * `useId()` returns a value containing colons (`:r1:`), which is a legal HTML id and an illegal CSS
+   * identifier — `document.querySelector('#:r1:-panel-x')` throws. An id that cannot be looked up is
+   * an id a test, a style rule or a `document.getElementById` in a support session cannot use, so the
+   * punctuation is removed once here.
+   */
+  const id = `tabs-${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`
+  const refs = useRef<Array<HTMLButtonElement | null>>([])
+  const activeIndex = Math.max(
+    0,
+    tabs.findIndex((tab) => tab.key === active),
+  )
+
+  /**
+   * Keyboard navigation, as the tab pattern defines it.
+   *
+   * Which arrow means "next" is a question about the *reading direction*, not about the keyboard: in
+   * a right-to-left page the tab after this one is drawn to the left, so `ArrowLeft` moves forward.
+   * Answering with the physical key would make the control move the wrong way for every Persian user.
+   * `ArrowRight` therefore means "previous" when the document is RTL — the browser reports the
+   * direction the page is actually rendered in, and this reads it.
+   */
+  const step = (from: number, delta: number) => {
+    if (tabs.length === 0) return
+    const next = (from + delta + tabs.length) % tabs.length
+    const target = tabs[next]
+    if (!target) return
+    onChange(target.key)
+    refs.current[next]?.focus()
+  }
+
+  const onKeyDown = (event: React.KeyboardEvent, index: number) => {
+    const forward = direction === 'rtl' ? 'ArrowLeft' : 'ArrowRight'
+    const backward = direction === 'rtl' ? 'ArrowRight' : 'ArrowLeft'
+    if (event.key === forward) {
+      event.preventDefault()
+      step(index, 1)
+    } else if (event.key === backward) {
+      event.preventDefault()
+      step(index, -1)
+    } else if (event.key === 'Home') {
+      event.preventDefault()
+      step(0, 0)
+    } else if (event.key === 'End') {
+      event.preventDefault()
+      step(tabs.length - 1, 0)
+    }
+  }
+
   return (
-    <div role="tablist" className="flex flex-wrap gap-1 border-b border-graphite-200 pb-1 dark:border-graphite-800">
-      {tabs.map((tab) => (
-        <button
-          key={tab.key}
-          role="tab"
-          aria-selected={active === tab.key}
-          onClick={() => onChange(tab.key)}
-          className={clsx(
-            'inline-flex items-center gap-1.5 rounded-t px-3 py-1.5 text-sm transition',
-            active === tab.key
-              ? 'border-b-2 border-signal font-semibold text-signal-deep dark:text-signal-light'
-              : 'text-graphite-600 hover:bg-graphite-50 dark:text-graphite-300 dark:hover:bg-graphite-800',
-          )}
+    <>
+      <div
+        role="tablist"
+        className="flex flex-wrap gap-1 border-b border-graphite-200 pb-1 dark:border-graphite-800"
+      >
+        {tabs.map((tab, index) => (
+          <button
+            key={tab.key}
+            ref={(node) => {
+              refs.current[index] = node
+            }}
+            id={`${id}-tab-${tab.key}`}
+            role="tab"
+            aria-selected={active === tab.key}
+            /*
+             * Only the selected tab is in the tab order, which is what the pattern asks for: the group
+             * is entered once with `Tab`, and moved through with the arrow keys. Every tab also names
+             * the panel it controls, so a screen reader can announce the relationship and jump to it.
+             */
+            aria-controls={`${id}-panel-${tab.key}`}
+            tabIndex={index === activeIndex ? 0 : -1}
+            onKeyDown={(event) => onKeyDown(event, index)}
+            onClick={() => onChange(tab.key)}
+            className={clsx(
+              'inline-flex items-center gap-1.5 rounded-t px-3 py-1.5 text-sm transition',
+              active === tab.key
+                ? 'border-b-2 border-signal font-semibold text-signal-deep dark:text-signal-light'
+                : 'text-graphite-600 hover:bg-graphite-50 dark:text-graphite-300 dark:hover:bg-graphite-800',
+            )}
         >
-          {tab.label}
-          {tab.badge}
-        </button>
-      ))}
-    </div>
+              {tab.label}
+              {tab.badge}
+            </button>
+          ))}
+      </div>
+      {children !== undefined && (
+        /*
+         * The panel the selected tab controls: it names the tab that labels it, and it is focusable
+         * for the case a panel holds no control of its own — a panel a keyboard user cannot enter is
+         * content a keyboard user cannot reach.
+         */
+        <div
+          role="tabpanel"
+          id={`${id}-panel-${active}`}
+          aria-labelledby={`${id}-tab-${active}`}
+          tabIndex={0}
+          className="focus-visible:outline focus-visible:outline-2 focus-visible:outline-signal"
+        >
+          {children}
+        </div>
+      )}
+    </>
   )
 }
 
+/**
+ * A panel that takes over the screen until it is dismissed.
+ *
+ * `role="dialog"` and `aria-modal="true"` are a *claim*: they tell assistive technology that the rest
+ * of the page is inert. A claim like that has to be true, and it is only true if the keyboard follows
+ * it — so the drawer does the three things that make it so, and does them in this order:
+ *
+ * 1. **Move focus in.** On open, focus goes to the first thing worth focusing inside the panel: the
+ *    first control it contains, or the panel itself when it has none. A dialog that opens while focus
+ *    stays on the page behind it is a dialog a keyboard user has to hunt for.
+ * 2. **Keep focus in.** `Tab` and `Shift+Tab` cycle within the panel rather than walking out into the
+ *    page that the dialog has just declared inert. The focusable set is read from the document at the
+ *    moment of the key press (not from a list captured at open time), so the panel's own contents —
+ *    a retry button that appears, a filter that disappears — stay reachable.
+ * 3. **Hand focus back.** On close, focus returns to whatever opened it, which is where the reader
+ *    was: dropping focus onto the document body sends a keyboard user back to the top of the page.
+ *
+ * `Escape` closes. The backdrop is a real, labelled button so that a pointer can dismiss the panel by
+ * clicking outside it; it is deliberately outside the focus trap, because a keyboard user already has
+ * the close button and `Escape`, and tabbing onto a full-screen "Close" would be a trap of its own.
+ */
 export function Drawer({
   open,
   title,
@@ -577,6 +722,75 @@ export function Drawer({
 }) {
   const { t } = useI18n()
   const labelId = useId()
+  const panelRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    if (!open) return
+    // Where focus was before the panel opened, so it can be handed back on close.
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    const panel = panelRef.current
+
+    /*
+     * The panel's focusable controls, as they are *now*.
+     *
+     * Visibility is asked of the element itself (`checkVisibility`) rather than inferred from
+     * `offsetParent`: `offsetParent` is a layout property, and a dialog's behaviour must not depend on
+     * whether the environment has laid the page out — a trap that finds nothing because the test
+     * renderer has no layout would silently move focus to the panel instead of to its first control.
+     */
+    const isVisible = (element: HTMLElement): boolean => {
+      if (typeof element.checkVisibility === 'function') return element.checkVisibility()
+      // A laid-out element occupies space; a `display: none` one does not. When the environment has no
+      // layout at all (a component test), the question cannot be answered, and the element is taken at
+      // face value — silently dropping it would move focus to the panel instead of its first control.
+      if (element.getClientRects().length > 0) return true
+      return element.hidden !== true && element.style.display !== 'none'
+    }
+    const focusable = (): HTMLElement[] => {
+      if (!panel) return []
+      const selector =
+        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      return Array.from(panel.querySelectorAll<HTMLElement>(selector)).filter(isVisible)
+    }
+
+    // 1. Focus moves in: the first control, or the panel itself when there is none.
+    const first = focusable()[0]
+    ;(first ?? panel)?.focus()
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.stopPropagation()
+        onClose()
+        return
+      }
+      if (event.key !== 'Tab') return
+      const controls = focusable()
+      if (controls.length === 0) {
+        // Nothing to cycle through: keep the panel itself focused rather than letting Tab escape.
+        event.preventDefault()
+        panel?.focus()
+        return
+      }
+      const firstControl = controls[0] as HTMLElement
+      const lastControl = controls[controls.length - 1] as HTMLElement
+      const active = document.activeElement
+      if (event.shiftKey && (active === firstControl || active === panel)) {
+        event.preventDefault()
+        lastControl.focus()
+      } else if (!event.shiftKey && active === lastControl) {
+        event.preventDefault()
+        firstControl.focus()
+      }
+    }
+
+    document.addEventListener('keydown', onKeyDown, true)
+    return () => {
+      document.removeEventListener('keydown', onKeyDown, true)
+      // 3. Focus goes back to the control that opened the panel.
+      if (opener && document.contains(opener)) opener.focus()
+    }
+  }, [open, onClose])
+
   if (!open) return null
   return (
     <div className="fixed inset-0 z-40 flex" role="dialog" aria-modal="true" aria-labelledby={labelId}>
@@ -587,6 +801,8 @@ export function Drawer({
         className="flex-1 bg-graphite-950/40"
       />
       <aside
+        ref={panelRef}
+        tabIndex={-1}
         className={clsx(
           'flex h-full flex-col overflow-hidden border-s border-graphite-200 bg-white shadow-xl dark:border-graphite-800 dark:bg-graphite-950',
           wide ? 'w-full max-w-2xl' : 'w-full max-w-md',

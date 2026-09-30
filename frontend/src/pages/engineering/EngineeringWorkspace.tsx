@@ -515,7 +515,7 @@ export default function EngineeringWorkspace() {
         ]}
         active={tab}
         onChange={setTab}
-      />
+      >
 
       {tab === 'catalogue' && (
         <div className="grid gap-3 lg:grid-cols-[300px_1fr]">
@@ -638,6 +638,7 @@ export default function EngineeringWorkspace() {
           </Async>
         </Card>
       )}
+      </Tabs>
     </div>
   )
 }

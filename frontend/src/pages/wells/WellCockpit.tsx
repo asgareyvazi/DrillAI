@@ -517,7 +517,7 @@ export default function WellCockpit() {
         }
       />
 
-      <Tabs tabs={tabs} active={tab} onChange={setTab} />
+      <Tabs tabs={tabs} active={tab} onChange={setTab}>
 
       {tab === 'overview' && (
         <Async query={state}>
@@ -756,6 +756,8 @@ export default function WellCockpit() {
           )}
         </Async>
       )}
+
+      </Tabs>
 
       <EvidencePanel
         open={evidenceSubject !== null}

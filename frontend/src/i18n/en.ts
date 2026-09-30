@@ -369,6 +369,8 @@ export const en = {
     notRun: 'did not run',
     error: 'Error',
     noEvents: 'No event has been recorded.',
+        eventArrived: 'New run event: {latest}',
+        eventsArrived: '{count} new run events; latest: {latest}',
     eventsSubtitle: 'The runtime\'s own log, in the order the server recorded it.',
     streamLive: 'Live',
     streamConnecting: 'Connecting…',

@@ -366,6 +366,8 @@ export const fa = {
     notRun: 'اجرا نشد',
     error: 'خطا',
     noEvents: 'هیچ رخدادی ثبت نشده است.',
+        eventArrived: 'رویداد جدید اجرا: {latest}',
+        eventsArrived: '{count} رویداد جدید اجرا؛ آخرین: {latest}',
     eventsSubtitle: 'رخدادنگار خود موتور اجرا، به همان ترتیبی که سرور ثبت کرده است.',
     streamLive: 'زنده',
     streamConnecting: 'در حال اتصال…',

@@ -51,7 +51,7 @@ export default function LibraryPage() {
         ]}
         active={tab}
         onChange={setTab}
-      />
+      >
 
       {tab === 'engines' && (
         <Card title={t('library.engines')} subtitle="validation status is a per-engine declaration, not a marketing claim">
@@ -309,6 +309,7 @@ export default function LibraryPage() {
           </Async>
         </Card>
       )}
+      </Tabs>
     </div>
   )
 }
