@@ -158,9 +158,13 @@ export async function waitForLoaded(page: Page): Promise<void> {
  * The option values are the *dev role strings* the app will send as `X-Dev-Roles`, which is what
  * `ROLES` maps a short role name to — 'supervisor' is the identity `drilling_supervisor`, not a role
  * literally called 'supervisor'.
+ *
+ * The control is found by its test handle, not by its label: the label is translated, so a journey
+ * that switches identity while the interface is Persian — which is a thing a Persian user does — would
+ * fail to find the control at all with a label lookup. The handle is the same in both locales.
  */
 export async function selectRole(page: Page, role: RoleKey): Promise<void> {
-  const select = page.getByLabel('Acting as')
+  const select = page.getByTestId('shell-role-switch')
   const value = ROLES[role]
   await select.selectOption(value)
   await expect(select).toHaveValue(value)
