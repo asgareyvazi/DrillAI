@@ -9,10 +9,14 @@
 # turns a failing gate into a passing one. Each required step is its own step, so a red run names the
 # gate that failed instead of hiding it inside a shell script.
 #
-# Each testing gate also writes its own result — the counts its command printed — into the run summary,
-# so the evidence for a green claim can be read back through the API (`actions/runs/<id>/jobs` and the
-# commit's check runs) without depending on the raw log. The pipelines use `set -o pipefail`, so a gate
-# that fails fails the step: the summary is written only after the command has succeeded.
+# Each testing gate certifies its own result rather than trusting its inputs. The backend gate fails if
+# the suite skipped anything (`DRILLAI_TEST_POSTGRES=1` is only evidence if the PostgreSQL tests ran)
+# and if the postgres-marked tests are no longer collected; the end-to-end gate fails unless all three
+# deployments actually ran tests and the suite finished clean; the unit gate fails on a skip. That
+# matters because GitHub serves raw logs from Azure blob storage, which some networks cannot reach:
+# what stays readable everywhere — including through the API — is the step's own conclusion, so a green
+# step has to mean the property held. The counts are also written to the run summary for humans who
+# open the run, and `set -o pipefail` keeps each command's exit status as the step's.
 #
 # The end-to-end suite is the real stack: the real FastAPI service on a freshly seeded SQLite
 # database, the real Vite server, and a real browser — three of them, in fact, because the suite runs
@@ -113,18 +117,27 @@ jobs:
         working-directory: frontend
         run: npm run lint
 
-      # The result of each testing gate is also written to the run's summary, so the evidence is
-      # readable through the API rather than only in the raw log. `pipefail` keeps the gate's own exit
-      # status as the step's: the summary is written only when the command actually succeeded.
+      # A skipped unit test is not a pass: the gate reads its own result line and fails on one, so a
+      # green step means the whole suite ran.
       - name: Frontend unit and component tests
         working-directory: frontend
         run: |
           set -o pipefail
           npm test 2>&1 | tee "$RUNNER_TEMP/frontend-tests.log"
+          if ! summary="$(grep -E '^ *Tests +' "$RUNNER_TEMP/frontend-tests.log" | tail -n 1)"; then
+            echo "::error::the unit test run printed no result line"
+            exit 1
+          fi
+          echo "result: $summary"
+          case "$summary" in
+            *skipped*) echo "::error::unit tests were skipped: $summary"; exit 1 ;;
+            *passed*) ;;
+            *) echo "::error::no pass summary was printed: $summary"; exit 1 ;;
+          esac
           {
             echo '### Frontend unit and component tests'
             echo '```'
-            tail -n 4 "$RUNNER_TEMP/frontend-tests.log"
+            echo "$summary"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -133,17 +146,35 @@ jobs:
         run: npm run build
 
       # ------------------------------------------------------------------ backend gates
-      # The pass/skip counts land in the summary as well: `DRILLAI_TEST_POSTGRES=1` is only evidence
-      # if the two PostgreSQL tests are reported as executed rather than skipped.
+      # No `-q` on the command line: `pyproject.toml` already sets it, and a second one suppresses the
+      # summary line entirely — which is exactly the line this gate certifies from.
       - name: Backend tests (SQLite + embedded PostgreSQL)
         working-directory: backend
         run: |
           set -o pipefail
-          .venv/bin/python -m pytest -q 2>&1 | tee "$RUNNER_TEMP/backend-tests.log"
+          .venv/bin/python -m pytest 2>&1 | tee "$RUNNER_TEMP/backend-tests.log"
+          summary="$(tail -n 1 "$RUNNER_TEMP/backend-tests.log")"
+          echo "result: $summary"
+          case "$summary" in
+            *skipped*) echo "::error::the suite skipped tests; the PostgreSQL integration tests must execute"; exit 1 ;;
+            *passed*) ;;
+            *) echo "::error::no pass summary was printed: $summary"; exit 1 ;;
+          esac
+          if ! collected="$(.venv/bin/python -m pytest -m postgres --collect-only 2>&1 | tail -n 1)"; then
+            echo "::error::could not collect the postgres-marked tests"
+            exit 1
+          fi
+          echo "postgres-marked: $collected"
+          marked="$(printf '%s' "$collected" | sed -n 's/^\([0-9][0-9]*\)\/.*/\1/p')"
+          if [ -z "$marked" ] || [ "$marked" -lt 2 ]; then
+            echo "::error::the postgres-marked tests are no longer collected: $collected"
+            exit 1
+          fi
           {
             echo '### Backend tests (DRILLAI_TEST_POSTGRES=1)'
             echo '```'
-            tail -n 3 "$RUNNER_TEMP/backend-tests.log"
+            echo "$summary"
+            echo "$collected"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -171,10 +202,29 @@ jobs:
         run: |
           set -o pipefail
           npm run e2e 2>&1 | tee "$RUNNER_TEMP/e2e.log"
+          # Every deployment must have run tests — a suite that quietly lost a project is not the
+          # suite this step certifies — and the run must have finished with no failure, no flake and
+          # no skip.
+          for project in chromium chromium-faults chromium-auth; do
+            if ! grep -q "\[$project\]" "$RUNNER_TEMP/e2e.log"; then
+              echo "::error::$project ran no test"
+              exit 1
+            fi
+          done
+          if ! summary="$(grep -E '^ *[0-9]+ (passed|failed|flaky|skipped)' "$RUNNER_TEMP/e2e.log" | tail -n 1)"; then
+            echo "::error::the end-to-end run printed no result line"
+            exit 1
+          fi
+          echo "result: $summary"
+          case "$summary" in
+            *skipped*|*failed*|*flaky*) echo "::error::the suite did not run clean: $summary"; exit 1 ;;
+            *passed*) ;;
+            *) echo "::error::no pass summary was printed: $summary"; exit 1 ;;
+          esac
           {
             echo '### End-to-end suite (main, faults and auth stacks)'
             echo '```'
-            tail -n 6 "$RUNNER_TEMP/e2e.log"
+            echo "$summary"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 

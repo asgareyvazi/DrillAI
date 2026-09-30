@@ -155,11 +155,14 @@ Each required gate is its own step, so a red run names the gate that failed. The
 `continue-on-error`, no `|| true`, and no `if: always()` outside the artifact step: a required failure
 fails the job and skips what follows.
 
-The three testing gates also write the counts their command printed into the run's summary, so a green
-claim can be checked against the run itself — including from an environment whose network cannot reach
-GitHub's log blob storage (`actions/runs/<id>/jobs` carries the step conclusions; the commit's check
-runs carry the summary). The pipelines use `set -o pipefail`, so the command's exit status remains the
-step's: the summary is written only after the gate has actually passed. This was certified, not assumed — a temporary probe commit
+The three testing gates **certify their own results** rather than trusting their inputs. The backend
+gate fails if the suite reports any skip (`DRILLAI_TEST_POSTGRES=1` is only evidence if the PostgreSQL
+tests actually ran) and if the postgres-marked tests are no longer collected; the end-to-end gate fails
+unless all three deployments ran tests and the run finished with no failure, flake or skip; the unit
+gate fails on a skip. This matters because GitHub serves raw logs from Azure blob storage, which some
+networks cannot reach: the step's conclusion stays readable through the API everywhere, so a green step
+has to mean the property held. The counts are written to the run summary as well, for anyone who opens
+the run, and `set -o pipefail` keeps each command's exit status as the step's. This was certified, not assumed — a temporary probe commit
 failed the backend gate on purpose and the run went red, skipped the backend lint, migration and
 end-to-end steps, and collected no artifacts; it was removed in the following commit
 (see `docs/mission-reports/FRONTEND-MISSION.md`, §CP6).

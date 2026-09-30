@@ -1006,6 +1006,16 @@ check, end-to-end — were skipped rather than passed, and the job's conclusion 
 was removed in the following commit (`f24ef86`) and the removal re-run green. Both runs are in §5, with
 their SHAs.
 
+**The gates certify their own results.** Each testing step reads the output of the command it ran and
+fails on anything that would make a green step a false statement: the backend gate fails on a skip (so
+`DRILLAI_TEST_POSTGRES=1` cannot quietly do nothing) and fails if the postgres-marked tests are no
+longer collected; the end-to-end gate fails unless all three deployments ran tests and the suite
+finished with no failure, flake or skip; the unit gate fails on a skip. This was not decoration — the
+backend gate had been running `pytest -q` on top of a `pyproject.toml` that already sets `-q`, and the
+doubled flag suppresses pytest's summary line entirely, so the log showed dots rather than counts (§5).
+Each assertion was validated against the real output of its command and against a falsified log
+reproducing the exact false-certification case.
+
 **What CI does not do.** It does not deploy, it does not push, it does not publish generated source, and
 the only artifact it uploads is Playwright evidence (report, traces, screenshots, logs), kept 14 days
 and uploaded only after a failure, so a failing run cannot be made to look tidy. There are no
@@ -1301,6 +1311,7 @@ the SHA in its `head_sha`; a local reproduction of the pipeline is not substitut
 | [36688461693](https://github.com/asgareyvazi/DrillAI/actions/runs/36688461693) | `708617c` | **failure** | 2 m 37 s | a required failure fails the job and skips the rest — the deliberate probe |
 | [36688766862](https://github.com/asgareyvazi/DrillAI/actions/runs/36688766862) | `f24ef86` | **success** | 6 m 53 s | the probe removed; green again |
 | [36689824630](https://github.com/asgareyvazi/DrillAI/actions/runs/36689824630) | `f8abc10` | **success** | 6 m 57 s | the pipeline on the reconciled documentation |
+| [36713831111](https://github.com/asgareyvazi/DrillAI/actions/runs/36713831111) | `faaf861` | **success** | 7 m 50 s | the pipeline on the commit that made the evidence readable and corrected the overclaims |
 | the commit carrying this row | the remote tip | **success** | — | the final run: a push runs on the tip, and the run attached to that SHA is the closed certificate |
 
 The `success` runs executed every required step green, including the end-to-end suite in all three
@@ -1325,25 +1336,48 @@ gh api repos/asgareyvazi/DrillAI/actions/runs/<id> --jq '{sha: .head_sha, conclu
 gh api repos/asgareyvazi/DrillAI/actions/runs/<id>/jobs --jq '.jobs[0].steps[] | {name, conclusion}'
 ```
 
-**Why the evidence above is metadata rather than log text, and what was done about it.** GitHub serves
-raw step logs from Azure blob storage (`*.blob.core.windows.net`), which the environment that produced
-this report cannot reach: the signed URLs are issued correctly — so authentication is fine — but the
+**Why this report certifies from step conclusions rather than from log text.** GitHub serves raw step
+logs from Azure blob storage (`*.blob.core.windows.net`), which the environment that produced this
+report cannot reach: the signed URLs are issued correctly — so the authentication is fine — but the
 fetch fails at the TLS layer (`OpenSSL SSL_connect: SSL_ERROR_SYSCALL`) while `github.com` itself
-answers normally. Substituting a local run for the CI one is not evidence, so the pipeline was changed
-so that it publishes the counts where they *are* reachable: each of the three testing gates now tees its
-output and writes the tail — the pass/skip counts, the suite totals — into the run summary, which
-GitHub serves from `api.github.com` and which can therefore be read back and quoted:
+answers normally. The step *summaries* are not exposed by the API either (checked: the check-run for a
+green job carries `output.summary` empty), so neither route makes a log reachable from here.
 
-```bash
-gh api repos/asgareyvazi/DrillAI/actions/runs/<id>/jobs --jq '.jobs[0].steps[] | {name, conclusion}'
-gh api repos/asgareyvazi/DrillAI/commits/<sha>/check-runs --jq '.check_runs[] | {name, conclusion, summary: .output.summary}'
-```
+Substituting a local run for the CI one would not be evidence, and neither would inferring execution
+from the YAML. So the gates were changed to make the conclusion itself sufficient: each of the three
+testing gates now **asserts the property it certifies**, so that a green step means the property held
+rather than that a command was launched.
 
-That change is a strengthening, not a relaxation: the pipelines use `set -o pipefail`, so a gate's own
-exit status is still the step's, and the summary is written only after the gate has succeeded (verified
-both ways in a `bash -e` shell, and re-certified in CI by a deliberate failure probe — §3 *CP6*). A
-reviewer with a browser can, as always, read the full logs on the run page; what changed is that the
-claim in this report no longer depends on it.
+| Gate | What a green step now proves |
+| --- | --- |
+| Frontend unit and component tests | the result line was printed and contains no `skipped` |
+| Backend tests | the final count line contains no `skipped` — i.e. the two PostgreSQL tests ran, not skipped — and `-m postgres --collect-only` still collects ≥ 2 tests |
+| End-to-end suite | all three deployments ran tests (`[chromium]`, `[chromium-faults]`, `[chromium-auth]`) and the run finished with no failure, no flake and no skip |
+
+Each gate's script was extracted from the committed YAML and executed as the runner executes it
+(`bash -e`), against the real command's real output. Both directions hold:
+
+| Gate body, real output | Result |
+| --- | --- |
+| frontend unit gate, real Vitest run | exit 0, `Tests  275 passed (275)` |
+| backend gate, real suite **with** `DRILLAI_TEST_POSTGRES=1` | exit 0, `399 passed`, `2/399 tests collected` |
+| backend gate, same body, switch **not** set | **exit 1** — the suite printed `397 passed, 2 skipped` and the gate refused to certify it: `::error::the suite skipped tests; the PostgreSQL integration tests must execute` |
+| end-to-end gate, real clean log | exit 0, `65 passed` |
+| end-to-end gate, log with the auth deployment removed | **exit 1**, `::error::chromium-auth ran no test` |
+| backend gate, log falsified to `397 passed, 2 skipped` | **exit 1**, same refusal |
+
+The third row is the one worth keeping: it is not a simulation. The switch was simply absent from the
+shell, the real suite really did skip the two PostgreSQL tests, and the gate really did refuse the run
+— which is precisely the false certification this checkpoint has to rule out.
+This closed a real hole rather than decorating one: the backend gate used to run `pytest -q` on top of
+a `pyproject.toml` that already sets `-q`, and the doubled flag suppresses pytest's summary line
+entirely, so a reader of the log saw progress dots and no counts at all. It now runs `pytest` (the
+project's own verbosity) and certifies from the line it prints.
+
+The counts are written to the run summary as well, for a reviewer who opens the run in a browser, and
+`set -o pipefail` keeps every command's exit status as the step's. What remains is honest: the full log
+text is not quoted in this report, and a reader who wants it needs a network that can reach GitHub's
+log storage.
 
 ---
 
@@ -1355,23 +1389,33 @@ certification was reproduced twice from a directory that `git clone` had just cr
 copied into it: no virtualenv, no `node_modules`, no `.e2e` state, no Playwright browser cache, no build
 output, and no file from the working tree that produced the earlier numbers.
 
-| | First clean checkout | Final clean checkout |
-| --- | --- | --- |
-| Directory | `/tmp/cp6-clean` | `/tmp/cp6-final` |
-| Source | `git clone --branch arena/01a0dca0-drillai https://github.com/asgareyvazi/DrillAI.git` | same |
-| Commit | `f24ef86` | `f8abc10` |
-| SHA vs. remote | equal (`git rev-parse HEAD` = `git ls-remote`) | equal |
-| `git status --porcelain` at clone | empty | empty |
-| Tracked files | 258 | 258 |
-| Caches present at clone | none | none |
-| `scripts/bootstrap.sh` from scratch | OK — venv, 400 npm packages, chromium 153.0.8010.0 | OK — same, tree still clean |
-| `npm run typecheck` / `npm run lint` | clean / clean | clean / clean |
-| `npm test` | 275 passed in 23 files | 275 passed in 23 files |
-| `npm run build` | `index-BRM9qJCU.js` 274.82 kB (74.88 gzip) | same |
-| backend `pytest` with `DRILLAI_TEST_POSTGRES=1` | **399 passed**, 208.10 s | **399 passed**, 213.44 s |
-| backend `ruff check .` | "All checks passed!" | "All checks passed!" |
-| `alembic upgrade head` + `alembic check` on a fresh DB | "No new upgrade operations detected" | same |
-| `npm run e2e` | **65 passed** (4.0 m; 60/4/1) | **65 passed** (4.0 m; 60/4/1) |
+| | Clean checkout 1 | Clean checkout 2 | Certification at `faaf861` |
+| --- | --- | --- | --- |
+| Directory | `/tmp/cp6-clean` | `/tmp/cp6-final` | `/tmp/drillai-cp6-final-cert` |
+| Source | `git clone --branch arena/01a0dca0-drillai https://github.com/asgareyvazi/DrillAI.git` | same | same |
+| Commit | `f24ef86` | `f8abc10` | `faaf861` |
+| SHA vs. remote | equal (`git rev-parse HEAD` = `git ls-remote`) | equal | equal |
+| `git status --porcelain` at clone | empty | empty | empty |
+| Tracked files | 258 | 258 | 258 |
+| Caches present at clone | none | none | none |
+| `scripts/bootstrap.sh` from scratch | OK — venv, 400 npm packages, chromium 153.0.8010.0 | OK — same, tree still clean | OK — 31.7 s, chromium re-provisioned after the browser was deleted |
+| `npm run typecheck` / `npm run lint` | clean / clean | clean / clean | clean / clean |
+| `npm test` | 275 passed in 23 files | 275 passed in 23 files | 275 passed in 23 files |
+| `npm run build` | `index-BRM9qJCU.js` 274.82 kB (74.88 gzip) | same | same |
+| backend `pytest` with `DRILLAI_TEST_POSTGRES=1` | **399 passed**, 208.10 s | **399 passed**, 213.44 s | **399 passed**, 0 skipped, 167.51 s |
+| backend `ruff check .` | "All checks passed!" | "All checks passed!" | "All checks passed!" |
+| `alembic upgrade head` + `alembic check` on a fresh DB | "No new upgrade operations detected" | same | same |
+| `npm run e2e` | **65 passed** (4.0 m; 60/4/1) | **65 passed** (4.0 m; 60/4/1) | **65 passed** (3.4 m; 60/4/1, 13 spec files) |
+| Tree after the gates | clean | clean | clean — every artefact ignored (`.venv`, `node_modules`, `.e2e`, caches, `dist`) |
+
+The third column was produced the way §9 describes: a directory that did not exist, a fresh `git clone`,
+the browser deleted before bootstrapping so the repository had to re-provision it, and no file copied in
+from any earlier tree.
+
+§5's last row and §9's condition 2 are about the commit that carries this report, and they are verified
+after it is pushed — the run attached to that SHA is the authority, and the same clean-checkout
+procedure is repeated at it. A report cannot name its own CI run before it exists; what it can do is say
+exactly where to look, and that is what those two rows do.
 
 **The browser is produced by the checkout, not by the machine.** The workspace that ran the earlier
 checkpoints had a browser at `/tmp/chromium` with libraries at `/tmp/drillai-chromium-libs/lib`. Both
