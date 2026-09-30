@@ -82,10 +82,14 @@ unit in the header and another in a table.
 
 ## Known limitations
 
-- Only journey 1 (well → cockpit → documents → evidence) has an end-to-end Playwright spec so far;
-  workflow, run, approval, WebSocket, failure and RTL/accessibility journeys are not yet automated
-  (they are listed in `FRONTEND_TESTING.md`).
-- Persian (`fa`) translations cover the shell and the primary cockpit strings, not every string in
-  every workspace.
-- No `ops/` deployment assets and no CI workflow file yet; the same commands are run locally and are
-  documented in `FRONTEND_TESTING.md`.
+- Persian (`fa`) translations cover the shell and the primary surfaces, not every string in every
+  workspace; an untranslated key falls back to English through the catalogue mechanism rather than
+  rendering an empty string.
+- No `ops/` deployment assets (Compose profile, image build, deployment manifest). CI certifies the
+  product — install, gates and the real end-to-end suite — but does not deploy it.
+- Integration adapters for messaging, WITSML/ETP and vector databases are configuration-shaped
+  boundaries; the test suite does not exercise outbound delivery, live streaming or pgvector-backed
+  retrieval.
+- The end-to-end suite is a browser suite, not a cross-browser one: it runs Chromium. The client uses
+  no Chromium-only API that a second engine would break on, but that is an expectation, not a
+  certified fact.

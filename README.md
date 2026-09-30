@@ -56,6 +56,10 @@ backend/.venv/bin/python scripts/smoke_e2e.py   # end-to-end smoke, no network a
 digital twin → RAG → workflow runtime → engineering engine → LLM router → recommendation, including
 the L4 approval (suspend/resume) path.
 
+**PostgreSQL note.** `alembic check` must run against a database that has been upgraded first, or it
+reports "Target database is not up to date" — which is the check working, not failing. CI always
+creates a fresh database for it (`${{ runner.temp }}`), never reuses a developer's.
+
 ## Status
 
 Implemented and covered by tests (backend):
@@ -83,19 +87,46 @@ Implemented and covered by tests (backend):
 Frontend status: the workspace is implemented and committed under `frontend/` — well list and
 cockpit (state, NPT, timeline, twin, audit, missing data), document workspace, engineering and
 optimisation workspaces, advisor and reports, workflow studio, run monitor, library and platform
-pages, in English and Persian. `docs/FRONTEND.md` describes the boundaries it holds to and
-`docs/FRONTEND_TESTING.md` lists what is verified and what is not.
+pages, in English and Persian. It holds no authority of its own: permissions, action levels and
+approval requirements are the server's answers, rendered. `docs/FRONTEND.md` describes the boundaries
+it holds to and `docs/FRONTEND_TESTING.md` lists what is verified and how.
+
+### How the repository verifies itself
+
+| Layer | Command | Scope |
+| --- | --- | --- |
+| Frontend types | `cd frontend && npm run typecheck` | strict TypeScript over app, tests and specs |
+| Frontend lint | `cd frontend && npm run lint` | unused code, `any`, React rules |
+| Frontend unit/component | `cd frontend && npm test` | 275 tests in 23 files |
+| Frontend build | `cd frontend && npm run build` | `tsc -b` plus the production Vite build |
+| Backend tests | `cd backend && .venv/bin/python -m pytest` | 399 tests, of which 2 run against a real PostgreSQL |
+| Backend lint | `cd backend && .venv/bin/python -m ruff check .` | style and import hygiene |
+| Migrations | `cd backend && .venv/bin/python -m alembic upgrade head && .venv/bin/python -m alembic check` | no model/migration drift, against a fresh database |
+| End-to-end | `cd frontend && npm run e2e` | 65 browser journeys against the real stack |
+
+Set `DRILLAI_TEST_POSTGRES=1` to run the PostgreSQL-backed persistence tests through the repository's
+own embedded PostgreSQL (`pgserver`); without it they skip, and the suite reports
+**397 passed, 2 skipped** rather than **399 passed**.
+
+The end-to-end suite is 13 spec files across three deployments of the same product — development
+identity, deterministic fault injection, and authentication enabled — covering the cockpit,
+documents and evidence, the workflow studio lifecycle, the run monitor with approvals, the durable
+run-event WebSocket, the failure matrix, permissions and identity, deep links and context, RTL, and
+keyboard/assistive-technology behaviour. Nothing is intercepted in the browser: the specs drive the
+real UI, the real API and a real seeded database.
+
+CI runs that whole sequence on every push to `arena/01a0dca0-drillai` (`.github/workflows/ci.yml`):
+install → frontend typecheck, lint, tests, build → backend tests (with PostgreSQL), lint, migration
+check → the complete end-to-end suite, with Playwright evidence uploaded only when a run has failed.
+Every required gate is a separate step that fails the job; there is no `continue-on-error` and no
+`|| true` in the pipeline.
 
 Not implemented yet (do not assume otherwise):
 
-- **Only the first UI journey is automated end to end.** The well → cockpit → documents → evidence
-  journey runs in a browser against the real backend (`frontend/e2e/well-cockpit.spec.ts`); the
-  workflow, run, approval, failure, WebSocket and RTL journeys are listed in
-  `docs/FRONTEND_TESTING.md` and are **not** yet covered by a browser test.
-- **No `ops/` deployment assets and no CI workflow file** yet; the same commands run locally are
-  documented in `docs/FRONTEND_TESTING.md`.
-- The WebSocket run-event stream endpoint exists but is **verified manually only** — the automated
-  stream test was removed because it hung the suite rather than test the stream.
+- **No `ops/` deployment assets.** There is no Compose profile, image build or deployment manifest in
+  the repository; CI certifies the product, it does not deploy it.
 - Integration adapters for messaging (Telegram/WhatsApp/email), WITSML/ETP and vector databases are
   configuration-shaped boundaries; outbound delivery, live WITSML/ETP streaming and pgvector-backed
   retrieval are not exercised by the test suite.
+- Persian (`fa`) translations cover the shell and the primary surfaces rather than every string in
+  every workspace; untranslated keys fall back to English through the catalogue mechanism.
