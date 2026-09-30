@@ -359,6 +359,81 @@ test.describe('keyboard and assistive-technology behaviour', () => {
     }
   })
 
+  test('a refresh nobody asked for does not move the reader’s focus', async ({
+    page,
+    request,
+    wellId,
+  }) => {
+    /*
+     * The run list refreshes on its own every five seconds. A refresh that re-renders is fine; a
+     * refresh that moves focus is not, because it takes the reader somewhere they did not go — and a
+     * refresh that replaces the focused node moves focus without anybody deciding to.
+     *
+     * Two real runs are started so there are rows to focus, and the comparison is about the *identity*
+     * of the focused element (it is tagged before the wait), not about where focus happens to be.
+     */
+    const workflowId = fixtures().workflow_id
+    const runs = [
+      await startRunFromStudio(page, workflowId, wellId),
+      await startRunFromStudio(page, workflowId, wellId),
+    ]
+    try {
+      // The list without a run open is the surface that polls.
+      await page.goto('/runs')
+      await waitForLoaded(page)
+      const row = page.getByRole('row').filter({ hasText: runs[0] as string }).first()
+      await expect(row).toBeVisible()
+      await row.focus()
+      await expect(row).toBeFocused()
+      await row.evaluate((element) => {
+        ;(element as HTMLElement).dataset.focusProbe = 'before-refresh'
+      })
+
+      /*
+       * Now make the refresh *carry something*. A poll that returns byte-identical data does not
+       * re-render at all (React Query's structural sharing hands back the same object), so waiting
+       * quietly would prove very little. A new run started behind the page's back is a change the list
+       * has to render — and rendering it must not take focus away from the row the reader is on.
+       */
+      const thirdRun = await apiPost<{ id: string }>(
+        request,
+        `/workflows/${workflowId}/runs`,
+        { well_id: wellId, trigger_type: 'manual' },
+        'supervisor',
+      )
+      runs.push(thirdRun.id)
+      await expect(page.getByRole('row').filter({ hasText: thirdRun.id })).toBeVisible({
+        timeout: 20_000,
+      })
+
+      const probe = await page.evaluate(() => {
+        const active = document.activeElement as HTMLElement | null
+        const tagged = document.querySelector('[data-focus-probe="before-refresh"]')
+        return {
+          stillTagged: active !== null && active === tagged,
+          activeTag: active?.dataset.focusProbe ?? null,
+          taggedStillInDocument: tagged !== null,
+        }
+      })
+      expect(probe.taggedStillInDocument, 'the row survived the refresh as the same node').toBe(true)
+      // The refresh did something: the new row is on screen, so the assertions above are about a list
+      // that actually re-rendered.
+      await expect(page.getByRole('row').filter({ hasText: runs[2] as string })).toBeVisible()
+      expect(probe.activeTag, 'the row the reader was on is still the focused element').toBe(
+        'before-refresh',
+      )
+      expect(probe.stillTagged).toBe(true)
+    } finally {
+      for (const runId of runs) {
+        await clearPendingApproval(
+          request,
+          runId,
+          'e2e a11y journey: closed to leave the seeded state clean',
+        )
+      }
+    }
+  })
+
   test('no interactive control on the critical screens is nameless', async ({ page, wellId }) => {
     for (const path of [
       `/wells/${wellId}/cockpit`,
