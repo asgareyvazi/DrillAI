@@ -35,7 +35,7 @@ async def _project_and_well(client: httpx.AsyncClient) -> tuple[str, str]:
     assert project.status_code == 201, project.text
     well = await client.post(
         "/api/v1/wells",
-        json={"project_id": project.json()["id"], "name": "NF-ERROR", "well_type": "development"},
+        json={"project_id": project.json()["id"], "name": "NF-ERROR", "well_type": "development_producer"},
         headers=headers(),
     )
     assert well.status_code == 201, well.text

@@ -73,6 +73,7 @@ ROLE_CATALOGUE: tuple[Role, ...] = (
         description="Read-only access to wells, documents, context and results.",
         permissions=(
             "well.read",
+            "field.read",
             "project.read",
             "document.read",
             "evidence.read",
@@ -92,6 +93,7 @@ ROLE_CATALOGUE: tuple[Role, ...] = (
         description="Full read access plus running engines, drafting scenarios and advising.",
         permissions=(
             "well.*",
+            "field.*",
             "project.read",
             "document.*",
             "evidence.*",
@@ -120,6 +122,7 @@ ROLE_CATALOGUE: tuple[Role, ...] = (
         description="Advises, drafts and proposes changes to the drilling program; approves L4 execution.",
         permissions=(
             "well.*",
+            "field.*",
             "project.read",
             "document.*",
             "evidence.*",
@@ -150,6 +153,7 @@ ROLE_CATALOGUE: tuple[Role, ...] = (
         description="Barrier, verification and certification authority (L3 proposal rights).",
         permissions=(
             "well.*",
+            "field.*",
             "document.*",
             "evidence.*",
             "context.read",
@@ -175,6 +179,7 @@ ROLE_CATALOGUE: tuple[Role, ...] = (
             "ingestion.*",
             "context.read",
             "well.read",
+            "field.read",
             "project.read",
             "dashboard.read",
             "registry.read",
@@ -242,7 +247,9 @@ def principal_from_roles(
     scopes: tuple[str, ...] = (),
 ) -> Principal:
     """Compose a principal from role assignments: permissions union, ceiling = highest role."""
-    ceiling = max((role.max_action_level for role in roles), key=lambda level: level.rank, default=ActionLevel.OBSERVE)
+    ceiling = max(
+        (role.max_action_level for role in roles), key=lambda level: level.rank, default=ActionLevel.OBSERVE
+    )
     return Principal(
         id=principal_id,
         kind=kind,

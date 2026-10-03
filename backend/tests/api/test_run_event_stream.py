@@ -69,7 +69,7 @@ async def seed_gate_run(client, *, key: str) -> tuple[str, str]:
     assert project.status_code == 201, project.text
     well = await client.post(
         "/api/v1/wells",
-        json={"project_id": project.json()["id"], "name": "WS-1", "well_type": "development"},
+        json={"project_id": project.json()["id"], "name": "WS-1", "well_type": "development_producer"},
         headers=headers(),
     )
     assert well.status_code == 201, well.text

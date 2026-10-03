@@ -31,7 +31,7 @@ async def _create_project_and_well(client, name: str = "Valhall development") ->
     project_id = project.json()["id"]
     well = await client.post(
         "/api/v1/wells",
-        json={"project_id": project_id, "name": "VAL-1", "well_type": "development"},
+        json={"project_id": project_id, "name": "VAL-1", "well_type": "development_producer"},
         headers=headers(),
     )
     assert well.status_code == 201, well.text
@@ -73,7 +73,7 @@ async def test_wellbore_and_section_hierarchy(client):
     _, well_id = await _create_project_and_well(client)
     wellbore = await client.post(
         f"/api/v1/wells/{well_id}/wellbores",
-        json={"name": "Main", "purpose": "production", "planned_td_md_si": 3200.0},
+        json={"name": "Main", "purpose": "original", "planned_td_md_si": 3200.0},
         headers=headers(),
     )
     assert wellbore.status_code == 201
@@ -116,7 +116,7 @@ async def test_document_upload_ingestion_evidence_and_provenance(client):
     wellbore_id = wellbore.json()["id"]
     section = await client.post(
         f"/api/v1/wellbores/{wellbore_id}/sections",
-        json={"sequence": 1, "name": '8-1/2" section', "kind=": "intermediate", "kind": "intermediate"},
+        json={"sequence": 1, "name": '8-1/2" section', "kind": "intermediate"},
         headers=headers(),
     )
     section_id = section.json()["id"]
@@ -568,21 +568,27 @@ async def test_a_run_records_the_scope_it_was_started_with(client):
     project_id, well_a = await _create_project_and_well(client, name="Scope project")
     well_b = await client.post(
         "/api/v1/wells",
-        json={"project_id": project_id, "name": "VAL-2", "well_type": "development"},
+        json={"project_id": project_id, "name": "VAL-2", "well_type": "development_producer"},
         headers=headers(),
     )
     assert well_b.status_code == 201, well_b.text
     well_b_id = well_b.json()["id"]
     wellbore = await client.post(
         f"/api/v1/wells/{well_a}/wellbores",
-        json={"name": "VAL-1 12.25in", "hole_size_in": 12.25},
+        json={"name": "VAL-1 12.25in"},
         headers=headers(),
     )
     assert wellbore.status_code == 201, wellbore.text
     wellbore_id = wellbore.json()["id"]
     section = await client.post(
         f"/api/v1/wellbores/{wellbore_id}/sections",
-        json={"sequence": 1, "name": "12.25in section", "kind": "surface", "hole_size_in": 12.25},
+        json={
+            "sequence": 1,
+            "name": "12.25in section",
+            "kind": "surface",
+            "hole_diameter_si": 0.31115,
+            "hole_diameter_nominal": '12-1/4"',
+        },
         headers=headers(),
     )
     assert section.status_code == 201, section.text

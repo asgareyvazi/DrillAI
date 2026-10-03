@@ -12,6 +12,7 @@ from __future__ import annotations
 import contextlib
 import time
 from collections.abc import AsyncIterator
+from typing import Any
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -71,6 +72,34 @@ def _warm_registries() -> dict[str, int]:
         "context_sections": len(registered_section_keys()),
         "extractors": len(extractor_catalogue()),
     }
+
+
+def _jsonable_issues(errors: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Pydantic's validation issues, reduced to the plain shapes a client can act on.
+
+    The raw list is not always serialisable: a custom validator that raises puts the exception object
+    itself in ``ctx``, and ``input`` carries whatever the caller sent (a bytes field, a datetime). An
+    error response that cannot be encoded is a validation failure reported as a server error, which is
+    the one thing the error contract exists to prevent. ``type``, ``loc`` and ``msg`` are kept exactly
+    as Pydantic reported them; everything else is stringified.
+    """
+    issues: list[dict[str, Any]] = []
+    for error in errors:
+        issue: dict[str, Any] = {
+            "type": error.get("type"),
+            "loc": list(error.get("loc", ())),
+            "msg": error.get("msg"),
+        }
+        context = error.get("ctx")
+        if context:
+            issue["ctx"] = {key: str(value) for key, value in context.items()}
+        raw = error.get("input")
+        if raw is None or isinstance(raw, (str, int, float, bool)):
+            issue["input"] = raw
+        else:
+            issue["input"] = repr(raw)[:200]
+        issues.append(issue)
+    return issues
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -229,7 +258,7 @@ def _install_error_handlers(app: FastAPI) -> None:
                     "code": "platform.validation_failed",
                     "message": "request payload failed validation",
                     "retryable": False,
-                    "details": {"issues": exc.errors()},
+                    "details": {"issues": _jsonable_issues(exc.errors())},
                     "trace_id": _request_id(request),
                 }
             },

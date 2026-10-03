@@ -71,7 +71,7 @@ async def _well_with_report(client, *, process: bool = True) -> dict[str, str]:
     well = (
         await client.post(
             "/api/v1/wells",
-            json={"project_id": project["id"], "name": "NF-12", "well_type": "development"},
+            json={"project_id": project["id"], "name": "NF-12", "well_type": "development_producer"},
             headers=headers(),
         )
     ).json()
@@ -91,7 +91,11 @@ async def _well_with_report(client, *, process: bool = True) -> dict[str, str]:
                 "hole_diameter_si": 0.2159,
                 "planned_top_md_si": 2400.0,
                 "planned_bottom_md_si": 3200.0,
-                "is_planned_only": False,
+                # A section that was drilled records how far it was drilled. `is_planned_only` used to
+                # be sent here instead, which made the record claim a hole depth nobody had written
+                # down; it is derived from these two values now.
+                "actual_top_md_si": 2400.0,
+                "actual_bottom_md_si": 3200.0,
             },
             headers=headers(),
         )

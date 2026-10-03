@@ -10,16 +10,21 @@ from __future__ import annotations
 import datetime as dt
 from typing import Any
 
+from drillai.assets.vocabulary import SECTION_NUMBER_SEMANTICS
+
 __all__ = [
     "approval_out",
+    "audit_log_out",
     "document_out",
     "engine_run_out",
     "evidence_out",
     "extracted_record_out",
+    "field_out",
     "ingestion_job_out",
     "node_run_out",
     "project_out",
     "recommendation_out",
+    "rig_out",
     "run_event_out",
     "run_out",
     "section_out",
@@ -47,48 +52,148 @@ def project_out(row: Any) -> dict[str, Any]:
         "status": row.status,
         "phase": row.phase,
         "description": row.description,
+        # `updated_at` is part of the contract because two people can open the same master-data form:
+        # a client sends back the version it read, and the server refuses the write if the row moved
+        # underneath it. Without the column there is nothing to be stale *against*.
         "created_at": _iso(row.created_at),
+        "updated_at": _iso(row.updated_at),
     }
 
 
 def well_out(row: Any) -> dict[str, Any]:
+    """One well, with every classified field the master-data contract exposes.
+
+    The rules behind this shape: identifiers a person may search by are present (`uwi`,
+    `api_number`, `name`); the location and datum block is present because a depth without a datum is
+    not a depth; `field_id` and `rig_id` are present because they are the two references a well
+    carries; and ``attributes`` — the free-form JSON bag — is deliberately *not* exposed. Nothing
+    permanent is stored there, and offering it would create a second, unvalidated way to hold master
+    data that the columns already model.
+    """
     return {
         "id": row.id,
         "project_id": row.project_id,
+        "field_id": row.field_id,
         "name": row.name,
         "uwi": row.uwi,
+        "api_number": row.api_number,
         "well_type": row.well_type,
         "status": row.status,
         "spud_date": _iso(row.spud_date),
+        "release_date": _iso(row.release_date),
         "operator": row.operator,
+        "rig_id": row.rig_id,
         "is_offshore": row.is_offshore,
+        "surface_lat": row.surface_lat,
+        "surface_lon": row.surface_lon,
         "kb_elevation_si": row.kb_elevation_si,
+        "ground_elevation_si": row.ground_elevation_si,
+        "water_depth_si": row.water_depth_si,
+        "elevation_datum": row.elevation_datum,
+        "slot": row.slot,
+        "pad_name": row.pad_name,
         "total_depth_planned_si": row.total_depth_planned_si,
         "twin_state": row.twin_state,
         "objectives": row.objectives,
         "target_formations": list(row.target_formations or []),
         "tags": list(row.tags or []),
+        "created_at": _iso(row.created_at),
+        "updated_at": _iso(row.updated_at),
+    }
+
+
+def field_out(row: Any) -> dict[str, Any]:
+    """A field, including the aliases that make it findable under the names people use for it."""
+    return {
+        "id": row.id,
+        "project_id": row.project_id,
+        "name": row.name,
+        "aliases": list(row.aliases or []),
+        "country": row.country,
+        "basin": row.basin,
+        "water_depth_si": row.water_depth_si,
+        "centroid_lat": row.centroid_lat,
+        "centroid_lon": row.centroid_lon,
+        "status": row.status,
+        "notes": row.notes,
+        "created_at": _iso(row.created_at),
+        "updated_at": _iso(row.updated_at),
+    }
+
+
+def rig_out(row: Any) -> dict[str, Any]:
+    """A rig, as reference data: enough to choose one and to see whether it is already working."""
+    return {
+        "id": row.id,
+        "name": row.name,
+        "contractor": row.contractor,
+        "rig_type": row.rig_type,
+        "status": row.status,
+        "country": row.country,
+        "current_well_id": row.current_well_id,
+    }
+
+
+def audit_log_out(row: Any) -> dict[str, Any]:
+    """One governance-ledger entry: who did what, to which record, and what changed."""
+    return {
+        "id": row.id,
+        "occurred_at": _iso(row.occurred_at),
+        "actor_kind": row.actor_kind,
+        "actor_id": row.actor_id,
+        "actor_display": row.actor_display,
+        "action": row.action,
+        "action_level": row.action_level,
+        "resource_kind": row.resource_kind,
+        "resource_id": row.resource_id,
+        "outcome": row.outcome,
+        "permission_decision": dict(row.permission_decision or {}),
+        "details": dict(row.details or {}),
+        "before": dict(row.before or {}),
+        "after": dict(row.after or {}),
+        "request_id": row.request_id,
     }
 
 
 def wellbore_out(row: Any) -> dict[str, Any]:
+    """One wellbore.
+
+    ``parent_wellbore_id`` is exposed because lineage is structured data and a client that cannot see
+    the parent cannot draw the branch; ``datum`` is exposed because every depth on the wellbore is
+    relative to it. Which wellbore is *current* is stated twice on purpose — ``is_active`` says the
+    well's own answer, and the well carries ``active_wellbore_id`` when the structure is read — because
+    "the hole being drilled" has to be unambiguous from either direction.
+    """
     return {
         "id": row.id,
         "well_id": row.well_id,
         "name": row.name,
         "purpose": row.purpose,
         "sequence": row.sequence,
+        "parent_wellbore_id": row.parent_wellbore_id,
         "status": row.status,
         "is_active": row.is_active,
+        "datum": row.datum,
+        "kickoff_md_si": row.kickoff_md_si,
         "planned_td_md_si": row.planned_td_md_si,
         "planned_td_tvd_si": row.planned_td_tvd_si,
         "actual_td_md_si": row.actual_td_md_si,
         "actual_td_tvd_si": row.actual_td_tvd_si,
-        "kickoff_md_si": row.kickoff_md_si,
+        "created_at": _iso(row.created_at),
+        "updated_at": _iso(row.updated_at),
     }
 
 
 def section_out(row: Any) -> dict[str, Any]:
+    """One hole section, with every number labelled by what it *is*.
+
+    The ``semantics`` map is the part that matters. A section carries plan depths, as-drilled
+    measurements, an interpretation read off a leak-off test and the current position of the bit, and
+    all four are metres. The classification comes from the server (``SECTION_NUMBER_SEMANTICS``) rather
+    than from a client guessing by column name, so that "planned bottom" can never be rendered in the
+    place of "current depth": a client that wants a current depth asks for ``current_md_si`` and sees
+    ``null`` when nobody has recorded one, instead of borrowing the plan's number for it.
+    """
     return {
         "id": row.id,
         "wellbore_id": row.wellbore_id,
@@ -103,12 +208,28 @@ def section_out(row: Any) -> dict[str, Any]:
         "actual_top_md_si": row.actual_top_md_si,
         "actual_bottom_md_si": row.actual_bottom_md_si,
         "current_md_si": row.current_md_si,
+        "casing_od_si": row.casing_od_si,
         "casing_od_nominal": row.casing_od_nominal,
+        "casing_weight_si": row.casing_weight_si,
+        "casing_grade": row.casing_grade,
+        "casing_connection": row.casing_connection,
+        "casing_top_md_si": row.casing_top_md_si,
         "casing_shoe_md_si": row.casing_shoe_md_si,
+        "cement_top_md_si": row.cement_top_md_si,
+        "cement_planned_top_md_si": row.cement_planned_top_md_si,
         "mud_weight_si": row.mud_weight_si,
+        "mud_weight_min_si": row.mud_weight_min_si,
+        "mud_weight_max_si": row.mud_weight_max_si,
         "pore_pressure_gradient_si": row.pore_pressure_gradient_si,
         "fracture_gradient_si": row.fracture_gradient_si,
+        "collapse_gradient_si": row.collapse_gradient_si,
+        "lot_fit_equivalent_mw_si": row.lot_fit_equivalent_mw_si,
+        "pressure_source": row.pressure_source,
         "is_planned_only": row.is_planned_only,
+        "notes": row.notes,
+        "semantics": {key: kind for key, kind in SECTION_NUMBER_SEMANTICS.items() if hasattr(row, key)},
+        "created_at": _iso(row.created_at),
+        "updated_at": _iso(row.updated_at),
     }
 
 

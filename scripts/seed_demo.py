@@ -323,7 +323,7 @@ async def seed(database_url: str, *, reset: bool, blob_dir: pathlib.Path) -> dic
                     json_body={
                         "project_id": project["id"],
                         "name": "SYNTH-DEMO-01 (synthetic data)",
-                        "well_type": "development",
+                        "well_type": "development_producer",
                         "operator": "DrillAI (synthetic)",
                         "total_depth_planned_si": 3200.0,
                         "objectives": "Exercise the DDR → state → NPT → engines → recommendation chain.",
@@ -337,7 +337,7 @@ async def seed(database_url: str, *, reset: bool, blob_dir: pathlib.Path) -> dic
                     f"/wells/{well['id']}/wellbores",
                     json_body={
                         "name": "Main bore",
-                        "purpose": "production",
+                        "purpose": "original",
                         "sequence": 1,
                         "planned_td_md_si": 3200.0,
                         "planned_td_tvd_si": 2980.0,
@@ -356,7 +356,10 @@ async def seed(database_url: str, *, reset: bool, blob_dir: pathlib.Path) -> dic
                         "hole_diameter_si": 0.2159,
                         "planned_top_md_si": 2400.0,
                         "planned_bottom_md_si": 3200.0,
-                        "is_planned_only": False,
+                        # The fixture's section is drilled to its planned depth, so the as-drilled
+                        # geometry is recorded rather than asserted by a flag.
+                        "actual_top_md_si": 2400.0,
+                        "actual_bottom_md_si": 3200.0,
                     },
                 )
             )
