@@ -114,20 +114,34 @@ def upgrade() -> None:
     )
 
     # 3. one active hole per well: keep the lowest sequence's claim, clear the rest
+    #
+    # The flags are compared as booleans rather than as `1`, and the statement is built from a
+    # lightweight table rather than written as literal SQL. SQLite stores booleans as integers and is
+    # happy either way; PostgreSQL types `is_active` as a real boolean and refuses `boolean = integer`
+    # outright — which is how this migration failed on PostgreSQL the first time it was run there.
+    wellbores = sa.table(
+        "wellbores",
+        sa.column("id", sa.String),
+        sa.column("well_id", sa.String),
+        sa.column("sequence", sa.Integer),
+        sa.column("is_active", sa.Boolean),
+    )
+    other = wellbores.alias("other")
     connection.execute(
-        sa.text(
-            """
-            UPDATE wellbores AS target
-            SET is_active = 0
-            WHERE is_active = 1
-              AND EXISTS (
-                  SELECT 1 FROM wellbores AS other
-                  WHERE other.well_id = target.well_id
-                    AND other.is_active = 1
-                    AND (other.sequence, other.id) < (target.sequence, target.id)
-              )
-            """
+        sa.update(wellbores)
+        .where(
+            wellbores.c.is_active.is_(True),
+            sa.exists(
+                sa.select(sa.literal(1))
+                .select_from(other)
+                .where(
+                    other.c.well_id == wellbores.c.well_id,
+                    other.c.is_active.is_(True),
+                    sa.tuple_(other.c.sequence, other.c.id) < sa.tuple_(wellbores.c.sequence, wellbores.c.id),
+                )
+            ),
         )
+        .values(is_active=False)
     )
 
     # 4. identity uniqueness, then the constraints

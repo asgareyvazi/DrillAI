@@ -26,7 +26,16 @@ target_metadata = Base.metadata
 
 
 def _database_url() -> str:
-    return get_settings().sqlalchemy_url()
+    """The database the migrations run against.
+
+    Application settings by default, because migrations and the running service must never point at
+    different databases. An explicit ``sqlalchemy.url`` on the Alembic configuration wins over them —
+    which is how a caller can drive the whole chain against a database of its own choosing (the
+    PostgreSQL migration test does exactly this) without exporting an environment variable that every
+    other component in the process would then share.
+    """
+    configured = context.config.get_main_option("sqlalchemy.url") or ""
+    return configured if configured.strip() else get_settings().sqlalchemy_url()
 
 
 def run_migrations_offline() -> None:
@@ -36,7 +45,7 @@ def run_migrations_offline() -> None:
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
         compare_type=True,
-        render_as_batch=context.config.get_main_option("sqlalchemy.url", "").startswith("sqlite"),
+        render_as_batch=_database_url().startswith("sqlite"),
     )
     with context.begin_transaction():
         context.run_migrations()
