@@ -18,7 +18,7 @@ from __future__ import annotations
 import datetime as dt
 from decimal import Decimal
 
-from sqlalchemy import Boolean, Float, ForeignKey, String, UniqueConstraint
+from sqlalchemy import Boolean, Float, ForeignKey, Index, String, UniqueConstraint, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from drillai.db.base import (
@@ -33,6 +33,9 @@ from drillai.db.base import (
     UtcDateTime,
 )
 
+# The canonical vocabulary. These tuples are the single definition — `assets/vocabulary.py` imports
+# them and is the only place that validates against them, so a value cannot drift from the schema
+# without the validation drifting with it.
 WELL_TYPES = (
     "exploration",
     "appraisal",
@@ -96,8 +99,11 @@ class Project(Base, IdMixin, TimestampMixin, OrgScopedMixin):
 class Field(Base, IdMixin, TimestampMixin, OrgScopedMixin):
     __tablename__ = "fields"
     id_prefix = "fld"
+    __table_args__ = (UniqueConstraint("project_id", "name"),)
 
-    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    project_id: Mapped[str] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     name: Mapped[str] = mapped_column(String(200), nullable=False, index=True)
     aliases: Mapped[list] = mapped_column(JsonType, default=list, nullable=False)
     country: Mapped[str | None] = mapped_column(String(80))
@@ -137,9 +143,33 @@ class Well(Base, IdMixin, TimestampMixin, OrgScopedMixin):
 
     __tablename__ = "wells"
     id_prefix = "wel"
-    __table_args__ = (UniqueConstraint("project_id", "name"),)
+    __table_args__ = (
+        UniqueConstraint("project_id", "name"),
+        # A UWI identifies one well, and an API number identifies one well. Both columns were indexed
+        # but not constrained, so the same regulator identifier could be attached to two wells. Partial
+        # indexes because both are genuinely optional: many wells have neither recorded yet, and
+        # `UNIQUE` would then refuse the second well with no UWI at all.
+        Index(
+            "uq_wells_org_uwi",
+            "org_id",
+            "uwi",
+            unique=True,
+            sqlite_where=text("uwi IS NOT NULL"),
+            postgresql_where=text("uwi IS NOT NULL"),
+        ),
+        Index(
+            "uq_wells_org_api_number",
+            "org_id",
+            "api_number",
+            unique=True,
+            sqlite_where=text("api_number IS NOT NULL"),
+            postgresql_where=text("api_number IS NOT NULL"),
+        ),
+    )
 
-    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    project_id: Mapped[str] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     field_id: Mapped[str | None] = mapped_column(ForeignKey("fields.id", ondelete="SET NULL"), index=True)
     name: Mapped[str] = mapped_column(String(200), nullable=False, index=True)
     uwi: Mapped[str | None] = mapped_column(String(80), index=True)
@@ -162,7 +192,10 @@ class Well(Base, IdMixin, TimestampMixin, OrgScopedMixin):
     operator: Mapped[str | None] = mapped_column(String(200))
     total_depth_planned_si: Mapped[float | None] = mapped_column(Float)
     twin_state: Mapped[str] = mapped_column(
-        String(32), default="planned", nullable=False, comment="planned|drilling|completed|production|abandoned"
+        String(32),
+        default="planned",
+        nullable=False,
+        comment="planned|drilling|completed|production|abandoned",
     )
     objectives: Mapped[str | None] = mapped_column(TextType)
     target_formations: Mapped[list] = mapped_column(JsonType, default=list, nullable=False)
@@ -180,12 +213,33 @@ class Well(Base, IdMixin, TimestampMixin, OrgScopedMixin):
 class Wellbore(Base, IdMixin, TimestampMixin, OrgScopedMixin):
     __tablename__ = "wellbores"
     id_prefix = "wlb"
+    __table_args__ = (
+        # Two wellbores cannot occupy the same position in one well. Nothing enforced this, so a well
+        # could hold two rows both claiming to be number one and the ordering the API returns was
+        # whatever the database happened to give back.
+        UniqueConstraint("well_id", "sequence"),
+        # Exactly one hole per well is the one being drilled. A partial index is what makes that a
+        # database fact rather than a convention the create path tried to remember: `is_active` was
+        # derived from `sequence == 1`, so a well with a second wellbore could silently report two
+        # active holes, or none.
+        Index(
+            "uq_wellbores_active_per_well",
+            "well_id",
+            unique=True,
+            sqlite_where=text("is_active = 1"),
+            postgresql_where=text("is_active"),
+        ),
+    )
 
-    well_id: Mapped[str] = mapped_column(ForeignKey("wells.id", ondelete="CASCADE"), nullable=False, index=True)
+    well_id: Mapped[str] = mapped_column(
+        ForeignKey("wells.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     name: Mapped[str] = mapped_column(String(120), nullable=False)
     purpose: Mapped[str] = mapped_column(String(40), default="original", nullable=False)
     sequence: Mapped[int] = mapped_column(default=1, nullable=False)
-    parent_wellbore_id: Mapped[str | None] = mapped_column(ForeignKey("wellbores.id", ondelete="SET NULL"), index=True)
+    parent_wellbore_id: Mapped[str | None] = mapped_column(
+        ForeignKey("wellbores.id", ondelete="SET NULL"), index=True
+    )
     status: Mapped[str] = mapped_column(String(40), default="planned", nullable=False)
     kickoff_md_si: Mapped[float | None] = mapped_column(Float)
     planned_td_md_si: Mapped[float | None] = mapped_column(Float)
@@ -235,7 +289,9 @@ class WellFormationMarker(Base, IdMixin, CreatedAtMixin, OrgScopedMixin):
     __tablename__ = "well_formation_markers"
     id_prefix = "wfm"
 
-    wellbore_id: Mapped[str] = mapped_column(ForeignKey("wellbores.id", ondelete="CASCADE"), nullable=False, index=True)
+    wellbore_id: Mapped[str] = mapped_column(
+        ForeignKey("wellbores.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     formation_id: Mapped[str] = mapped_column(ForeignKey("formations.id"), nullable=False, index=True)
     kind: Mapped[str] = mapped_column(String(24), default="top", nullable=False)
     md_si: Mapped[float | None] = mapped_column(Float)
@@ -261,7 +317,9 @@ class WellSection(Base, IdMixin, TimestampMixin, OrgScopedMixin):
     id_prefix = "sec"
     __table_args__ = (UniqueConstraint("wellbore_id", "sequence"),)
 
-    wellbore_id: Mapped[str] = mapped_column(ForeignKey("wellbores.id", ondelete="CASCADE"), nullable=False, index=True)
+    wellbore_id: Mapped[str] = mapped_column(
+        ForeignKey("wellbores.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     sequence: Mapped[int] = mapped_column(default=1, nullable=False)
     name: Mapped[str] = mapped_column(String(120), nullable=False)
     kind: Mapped[str] = mapped_column(String(40), default="intermediate", nullable=False)
@@ -307,7 +365,9 @@ class Trajectory(Base, IdMixin, TimestampMixin, OrgScopedMixin):
     __tablename__ = "trajectories"
     id_prefix = "trj"
 
-    wellbore_id: Mapped[str] = mapped_column(ForeignKey("wellbores.id", ondelete="CASCADE"), nullable=False, index=True)
+    wellbore_id: Mapped[str] = mapped_column(
+        ForeignKey("wellbores.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     name: Mapped[str] = mapped_column(String(160), nullable=False)
     kind: Mapped[str] = mapped_column(String(40), default="plan", nullable=False, index=True)
     version: Mapped[int] = mapped_column(default=1, nullable=False)
