@@ -334,6 +334,15 @@ export interface RequestOptions {
    * the contract this address promised, which is a protocol problem — not an outage.
    */
   validate?: (payload: unknown) => string | null
+  /**
+   * The key that makes a mutation safe to retry.
+   *
+   * Sent as `Idempotency-Key`. The caller chooses it once per *submission* and reuses it across
+   * retries, so a create whose response was lost returns the original record instead of writing a
+   * second one. It is an option here, rather than a header a caller assembles, because the header
+   * name and the decision to send one at all belong to the transport boundary.
+   */
+  idempotencyKey?: string
 }
 
 function buildQuery(query: RequestOptions['query']): string {
@@ -421,6 +430,7 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
   const headers: Record<string, string> = { Accept: 'application/json' }
   if (identity.token) headers.Authorization = `Bearer ${identity.token}`
   else if (identity.devRoles) headers['X-Dev-Roles'] = identity.devRoles
+  if (options.idempotencyKey) headers['Idempotency-Key'] = options.idempotencyKey
 
   const init: RequestInit = {
     method: options.method ?? 'GET',
@@ -590,6 +600,14 @@ export const api = {
     request<T>(path, { ...options, method: 'POST', body }),
   put: <T>(path: string, body?: unknown, options: Omit<RequestOptions, 'method' | 'body'> = {}) =>
     request<T>(path, { ...options, method: 'PUT', body }),
+  /**
+   * A partial edit.
+   *
+   * PATCH rather than PUT because an edit of one field must not resend — and therefore must not risk
+   * silently reverting — every other field the form happened not to render.
+   */
+  patch: <T>(path: string, body?: unknown, options: Omit<RequestOptions, 'method' | 'body'> = {}) =>
+    request<T>(path, { ...options, method: 'PATCH', body }),
   /** Multipart upload through the same boundary, so it inherits the timeout and the error contract. */
   upload: <T>(path: string, form: FormData, options: Omit<RequestOptions, 'method' | 'body'> = {}) =>
     request<T>(path, { ...options, method: 'POST', form }),

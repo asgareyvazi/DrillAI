@@ -49,7 +49,7 @@ function renderShell(path: string) {
 const wellPayload = {
   id: 'wel_1',
   name: 'SYNTH-DEMO-01 (synthetic data)',
-  well_type: 'development',
+  well_type: 'development_producer',
   status: 'planned',
   operator: 'DrillAI (synthetic)',
 }

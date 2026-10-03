@@ -26,6 +26,7 @@ import type {
   AuditTrail,
   ContextBundle,
   DdrProcessingReport,
+  AuditLogEntry,
   DocumentRow,
   DocumentDetail,
   DocumentProvenance,
@@ -35,6 +36,7 @@ import type {
   EngineRunListItem,
   EvidenceItem,
   EvidenceSummary,
+  Field,
   ImpactReport,
   NodeRunState,
   RunDetail,
@@ -53,6 +55,7 @@ import type {
   ProviderCatalogue,
   RecommendationRow,
   Report,
+  Rig,
   ReportKind,
   RunEvent,
   RunSummary,
@@ -61,7 +64,10 @@ import type {
   UnitCatalogue,
   Well,
   WellSection,
+  WellStructure,
   Wellbore,
+  WellboreLineage,
+  WithTransitions,
   Workflow,
   WorkflowDetail,
   WorkflowVersionSaved,
@@ -72,6 +78,31 @@ import type {
 } from './types'
 
 const enc = encodeURIComponent
+
+/**
+ * The idempotency header for a mutation.
+ *
+ * The key is generated once per form submission by the caller and reused across retries, so a create
+ * whose response was lost can be safely sent again: the server returns the original result rather than
+ * performing the write twice.
+ */
+function idempotencyHeader(key?: string): { idempotencyKey?: string } {
+  return key ? { idempotencyKey: key } : {}
+}
+
+export interface ProjectCreatePayload {
+  name: string
+  code?: string | null
+  operator?: string | null
+  country?: string | null
+  basin?: string | null
+  phase?: string | null
+  description?: string | null
+}
+
+export interface ProjectUpdatePayload extends Partial<ProjectCreatePayload> {
+  expected_updated_at?: string | null
+}
 
 export interface OptimisePayload {
   parameters: Array<Record<string, unknown>>
@@ -85,14 +116,230 @@ export interface OptimisePayload {
   persist_recommendation?: boolean
 }
 
+/**
+ * What a create sends for a well.
+ *
+ * `status` and `twin_state` are absent on purpose: a well is created planned and moves by transition,
+ * and twin state is written by the twin. The service refuses both, so offering them here would be a
+ * contract this client cannot honour.
+ */
+export interface WellCreatePayload {
+  project_id: string
+  name: string
+  field_id?: string | null
+  uwi?: string | null
+  api_number?: string | null
+  well_type?: string
+  operator?: string | null
+  rig_id?: string | null
+  is_offshore?: boolean
+  surface_lat?: number | null
+  surface_lon?: number | null
+  kb_elevation_si?: number | null
+  ground_elevation_si?: number | null
+  water_depth_si?: number | null
+  elevation_datum?: string
+  slot?: string | null
+  pad_name?: string | null
+  total_depth_planned_si?: number | null
+  spud_date?: string | null
+  objectives?: string | null
+  target_formations?: string[]
+  tags?: string[]
+}
+
+/** A partial edit. `expected_updated_at` is the version the form was rendered from. */
+export interface WellUpdatePayload extends Partial<Omit<WellCreatePayload, 'project_id'>> {
+  /** A well is released when the rig moves off it; the API records it separately from the spud date. */
+  release_date?: string | null
+  reason?: string | null
+  expected_updated_at?: string | null
+}
+
+export interface FieldCreatePayload {
+  project_id: string
+  name: string
+  country?: string | null
+  basin?: string | null
+  water_depth_si?: number | null
+  centroid_lat?: number | null
+  centroid_lon?: number | null
+  notes?: string | null
+  aliases?: string[]
+}
+
+export interface FieldUpdatePayload extends Partial<Omit<FieldCreatePayload, 'project_id'>> {
+  expected_updated_at?: string | null
+}
+
+export interface WellboreCreatePayload {
+  name: string
+  purpose?: string
+  sequence?: number
+  parent_wellbore_id?: string | null
+  planned_td_md_si?: number | null
+  planned_td_tvd_si?: number | null
+  kickoff_md_si?: number | null
+  datum?: string
+}
+
+export interface WellboreUpdatePayload {
+  name?: string
+  purpose?: string
+  parent_wellbore_id?: string | null
+  planned_td_md_si?: number | null
+  planned_td_tvd_si?: number | null
+  actual_td_md_si?: number | null
+  actual_td_tvd_si?: number | null
+  kickoff_md_si?: number | null
+  datum?: string
+  reason?: string | null
+  expected_updated_at?: string | null
+}
+
+export interface SectionCreatePayload {
+  sequence: number
+  name: string
+  kind?: string
+  hole_diameter_nominal?: string | null
+  hole_diameter_si?: number | null
+  planned_top_md_si?: number | null
+  planned_bottom_md_si?: number | null
+  actual_top_md_si?: number | null
+  actual_bottom_md_si?: number | null
+  current_md_si?: number | null
+}
+
+/** A plan revision, or a recorded as-drilled measurement. `is_planned_only` is derived, not sent. */
+export interface SectionUpdatePayload {
+  name?: string
+  kind?: string
+  hole_diameter_si?: number | null
+  hole_diameter_nominal?: string | null
+  planned_top_md_si?: number | null
+  planned_bottom_md_si?: number | null
+  actual_top_md_si?: number | null
+  actual_bottom_md_si?: number | null
+  current_md_si?: number | null
+  casing_od_si?: number | null
+  casing_od_nominal?: string | null
+  casing_weight_si?: number | null
+  casing_grade?: string | null
+  casing_connection?: string | null
+  casing_top_md_si?: number | null
+  casing_shoe_md_si?: number | null
+  cement_top_md_si?: number | null
+  cement_planned_top_md_si?: number | null
+  mud_weight_si?: number | null
+  mud_weight_min_si?: number | null
+  mud_weight_max_si?: number | null
+  pore_pressure_gradient_si?: number | null
+  fracture_gradient_si?: number | null
+  collapse_gradient_si?: number | null
+  lot_fit_equivalent_mw_si?: number | null
+  pressure_source?: string | null
+  notes?: string | null
+  expected_updated_at?: string | null
+}
+
 export const drillingApi = {
   // ------------------------------------------------------------------ assets
-  listWells: (params: { project_id?: string; limit?: number; offset?: number } = {}, signal?: AbortSignal) =>
-    api.get<Page<Well>>('/wells', { query: params, signal, validate: expect.paged() }),
+  listWells: (
+    params: { project_id?: string; field_id?: string; q?: string; limit?: number; offset?: number } = {},
+    signal?: AbortSignal,
+  ) => api.get<Page<Well>>('/wells', { query: params, signal, validate: expect.paged() }),
   getWell: (wellId: string, signal?: AbortSignal) => api.get<Well & { wellbores: Wellbore[] }>(`/wells/${enc(wellId)}`, { signal }),
+  /**
+   * Create a well.
+   *
+   * The idempotency key is passed in by the caller and is stable for the life of one form submission:
+   * a create that timed out on the way back must not become a second well when the operator retries.
+   */
+  createWell: (payload: WellCreatePayload, idempotencyKey?: string) =>
+    api.post<Well & WithTransitions>('/wells', payload, idempotencyHeader(idempotencyKey)),
+  updateWell: (wellId: string, payload: WellUpdatePayload, idempotencyKey?: string) =>
+    api.patch<Well & WithTransitions>(`/wells/${enc(wellId)}`, payload, idempotencyHeader(idempotencyKey)),
+  /**
+   * Transition a well's lifecycle.
+   *
+   * The target is checked against the server's transition table — the screen offers only the states
+   * the server listed in `allowed_transitions`, so this cannot become a client-side life-cycle model.
+   */
+  transitionWell: (wellId: string, body: { target: string; reason?: string | null }, idempotencyKey?: string) =>
+    api.post<Well & WithTransitions>(`/wells/${enc(wellId)}/lifecycle`, body, idempotencyHeader(idempotencyKey)),
+  assignRig: (
+    wellId: string,
+    body: { rig_id: string | null; reason?: string | null },
+    idempotencyKey?: string,
+  ) => api.post<Well>(`/wells/${enc(wellId)}/rig`, body, idempotencyHeader(idempotencyKey)),
+  wellAuditLog: (wellId: string, params: { limit?: number; offset?: number } = {}, signal?: AbortSignal) =>
+    api.get<Page<AuditLogEntry>>(`/wells/${enc(wellId)}/audit-log`, { query: params, signal, validate: expect.paged() }),
+  wellStructure: (wellId: string, signal?: AbortSignal) =>
+    api.get<WellStructure>(`/wells/${enc(wellId)}/structure`, { signal, validate: expect.object('well') }),
+  listFields: (
+    params: { project_id?: string; q?: string; limit?: number; offset?: number } = {},
+    signal?: AbortSignal,
+  ) => api.get<Page<Field>>('/fields', { query: params, signal, validate: expect.paged() }),
+  createField: (payload: FieldCreatePayload, idempotencyKey?: string) =>
+    api.post<Field>('/fields', payload, idempotencyHeader(idempotencyKey)),
+  updateField: (fieldId: string, payload: FieldUpdatePayload, idempotencyKey?: string) =>
+    api.patch<Field>(`/fields/${enc(fieldId)}`, payload, idempotencyHeader(idempotencyKey)),
+  listRigs: (signal?: AbortSignal) => api.get<Page<Rig>>('/rigs', { signal, validate: expect.paged() }),
   listWellbores: (wellId: string, signal?: AbortSignal) => api.get<Page<Wellbore>>(`/wells/${enc(wellId)}/wellbores`, { signal, validate: expect.paged() }),
+  /** Create a wellbore in a well. A sidetrack must name its parent; the server checks the lineage. */
+  createWellbore: (wellId: string, payload: WellboreCreatePayload, idempotencyKey?: string) =>
+    api.post<Wellbore & WithTransitions>(`/wells/${enc(wellId)}/wellbores`, payload, idempotencyHeader(idempotencyKey)),
+  getWellbore: (wellboreId: string, signal?: AbortSignal) =>
+    api.get<Wellbore & WithTransitions>(`/wellbores/${enc(wellboreId)}`, { signal }),
+  updateWellbore: (wellboreId: string, payload: WellboreUpdatePayload, idempotencyKey?: string) =>
+    api.patch<Wellbore & WithTransitions>(
+      `/wellbores/${enc(wellboreId)}`,
+      payload,
+      idempotencyHeader(idempotencyKey),
+    ),
+  /** Make this the hole being drilled. Activation is explicit; it is never a side effect of a create. */
+  activateWellbore: (wellboreId: string, idempotencyKey?: string) =>
+    api.post<Wellbore & WithTransitions>(
+      `/wellbores/${enc(wellboreId)}/activate`,
+      undefined,
+      idempotencyHeader(idempotencyKey),
+    ),
+  transitionWellbore: (
+    wellboreId: string,
+    body: { target: string; reason?: string | null },
+    idempotencyKey?: string,
+  ) => api.post<Wellbore & WithTransitions>(`/wellbores/${enc(wellboreId)}/lifecycle`, body, idempotencyHeader(idempotencyKey)),
+  wellboreLineage: (wellboreId: string, signal?: AbortSignal) =>
+    api.get<WellboreLineage>(`/wellbores/${enc(wellboreId)}/lineage`, { signal, validate: expect.object('items') }),
   listSections: (wellboreId: string, signal?: AbortSignal) => api.get<Page<WellSection>>(`/wellbores/${enc(wellboreId)}/sections`, { signal, validate: expect.paged() }),
+  createSection: (wellboreId: string, payload: SectionCreatePayload, idempotencyKey?: string) =>
+    api.post<WellSection & WithTransitions>(
+      `/wellbores/${enc(wellboreId)}/sections`,
+      payload,
+      idempotencyHeader(idempotencyKey),
+    ),
+  updateSection: (wellboreId: string, sectionId: string, payload: SectionUpdatePayload, idempotencyKey?: string) =>
+    api.patch<WellSection & WithTransitions>(
+      `/wellbores/${enc(wellboreId)}/sections/${enc(sectionId)}`,
+      payload,
+      idempotencyHeader(idempotencyKey),
+    ),
+  transitionSection: (
+    wellboreId: string,
+    sectionId: string,
+    body: { target: string; reason?: string | null },
+    idempotencyKey?: string,
+  ) =>
+    api.post<WellSection & WithTransitions>(
+      `/wellbores/${enc(wellboreId)}/sections/${enc(sectionId)}/lifecycle`,
+      body,
+      idempotencyHeader(idempotencyKey),
+    ),
   listProjects: (signal?: AbortSignal) => api.get<Page<Project>>('/projects', { signal, validate: expect.paged() }),
+  createProject: (payload: ProjectCreatePayload, idempotencyKey?: string) =>
+    api.post<Project>('/projects', payload, idempotencyHeader(idempotencyKey)),
+  updateProject: (projectId: string, payload: ProjectUpdatePayload, idempotencyKey?: string) =>
+    api.patch<Project>(`/projects/${enc(projectId)}`, payload, idempotencyHeader(idempotencyKey)),
 
   // ------------------------------------------------------------------ cockpit
   wellState: (wellId: string, signal?: AbortSignal) =>

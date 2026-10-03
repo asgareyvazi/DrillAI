@@ -11,6 +11,7 @@ import { Navigate, Route, Routes, useLocation, useParams } from 'react-router-do
 import { AppShell } from './components/layout/AppShell'
 import { Button, ErrorState } from './components/common'
 import WellList from './pages/wells/WellList'
+import MasterDataWorkspace from './pages/master-data/MasterDataWorkspace'
 import WellCockpit from './pages/wells/WellCockpit'
 import DocumentWorkspace from './pages/wells/DocumentWorkspace'
 import EngineeringWorkspace from './pages/engineering/EngineeringWorkspace'
@@ -82,6 +83,14 @@ export function App() {
           element={
             <PageErrorBoundary>
               <WellList />
+            </PageErrorBoundary>
+          }
+        />
+        <Route
+          path="/master-data"
+          element={
+            <PageErrorBoundary>
+              <MasterDataWorkspace />
             </PageErrorBoundary>
           }
         />

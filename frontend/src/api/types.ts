@@ -31,34 +31,123 @@ export interface FieldProvenance {
 
 // --------------------------------------------------------------------------- assets
 
+/**
+ * The canonical well vocabularies, as the server defines them.
+ *
+ * These are unions rather than `string` because the vocabulary is a *contract*: `development` is a
+ * word the platform deliberately does not use (`assets/vocabulary.py`), and a well type that is not
+ * one of these is a server bug or a schema drift, not a value a screen should render.
+ */
+export type WellType =
+  | 'exploration'
+  | 'appraisal'
+  | 'development_producer'
+  | 'development_injector'
+  | 'observation'
+  | 'water_source'
+  | 'disposal'
+  | 'sidetrack'
+  | 'reentry'
+
+export type WellStatus =
+  | 'planned'
+  | 'permitting'
+  | 'drilling'
+  | 'completing'
+  | 'producing'
+  | 'shut_in'
+  | 'intervention'
+  | 'suspended'
+  | 'abandoned'
+  | 'p&a'
+
+export type WellborePurpose =
+  | 'original'
+  | 'sidetrack'
+  | 'bypass'
+  | 'reentry'
+  | 'reamed'
+  | 'pilot'
+  | 'contingency'
+
+export type WellboreStatus = 'planned' | 'drilling' | 'suspended' | 'abandoned'
+export type SectionStatus = 'planned' | 'drilling' | 'drilled' | 'abandoned'
+export type SectionKind =
+  | 'conductor'
+  | 'surface'
+  | 'intermediate'
+  | 'production'
+  | 'liner'
+  | 'tieback'
+  | 'open_hole'
+  | 'rathole'
+
+export type ElevationDatum = 'rkb' | 'msl' | 'gl' | 'cf' | 'derrick_floor'
+
+/** What a recorded section number *is*. The server classifies each one; the UI never guesses. */
+export type SectionNumberSemantics = 'plan' | 'actual' | 'computed' | 'interpreted' | 'progress'
+
+/**
+ * One well, as the master-data contract exposes it.
+ *
+ * `field_id` and `rig_id` are the two references a well carries; the location and datum block is
+ * present because a depth without a datum is not a depth. The free-form `attributes` bag the row also
+ * has is deliberately absent: nothing permanent lives there, and offering it would be a second,
+ * unvalidated way to hold master data the columns already model.
+ */
 export interface Well {
   id: string
   project_id: string | null
+  field_id: string | null
   name: string
   uwi: string | null
-  well_type: string
-  status: string
+  api_number: string | null
+  well_type: WellType
+  status: WellStatus
   spud_date: string | null
+  release_date: string | null
   operator: string | null
+  rig_id: string | null
   is_offshore: boolean
+  surface_lat: number | null
+  surface_lon: number | null
   kb_elevation_si: number | null
+  ground_elevation_si: number | null
+  water_depth_si: number | null
+  elevation_datum: ElevationDatum
+  slot: string | null
+  pad_name: string | null
   total_depth_planned_si: number | null
   twin_state: string
   objectives: string | null
-  target_formations: Array<Record<string, unknown>>
+  target_formations: string[]
   tags: string[]
+  created_at?: string
+  /**
+   * The version a client read. It is sent back on an edit so the server can refuse a write that would
+   * overwrite somebody else's; without it there is nothing for a stale write to be stale against.
+   */
+  updated_at?: string
 }
 
 export interface Wellbore {
   id: string
   well_id: string
   name: string
-  purpose?: string | null
+  purpose: WellborePurpose
   sequence: number
-  status: string
+  /** The hole this one was drilled from. Lineage is structured; it is never inferred from a name. */
+  parent_wellbore_id: string | null
+  status: WellboreStatus
+  is_active: boolean
+  datum: ElevationDatum
+  kickoff_md_si: number | null
   planned_td_md_si: number | null
   planned_td_tvd_si: number | null
-  is_active?: boolean
+  actual_td_md_si: number | null
+  actual_td_tvd_si: number | null
+  created_at?: string
+  updated_at?: string
 }
 
 export interface WellSection {
@@ -66,21 +155,118 @@ export interface WellSection {
   wellbore_id: string
   sequence: number
   name: string
-  kind: string
-  status: string
+  kind: SectionKind
+  status: SectionStatus
   hole_diameter_si: number | null
   hole_diameter_nominal: string | null
   planned_top_md_si: number | null
   planned_bottom_md_si: number | null
   actual_top_md_si: number | null
   actual_bottom_md_si: number | null
+  /**
+   * Where the hole is *now* — and `null` when nobody has recorded one. A planned bottom is never
+   * substituted for it: an un-drilled section has no current depth, and saying otherwise is the most
+   * misleading thing a depth readout can do.
+   */
   current_md_si: number | null
+  casing_od_si: number | null
   casing_od_nominal: string | null
+  casing_weight_si: number | null
+  casing_grade: string | null
+  casing_connection: string | null
+  casing_top_md_si: number | null
   casing_shoe_md_si: number | null
+  cement_top_md_si: number | null
+  cement_planned_top_md_si: number | null
   mud_weight_si: number | null
+  mud_weight_min_si: number | null
+  mud_weight_max_si: number | null
   pore_pressure_gradient_si: number | null
   fracture_gradient_si: number | null
+  collapse_gradient_si: number | null
+  lot_fit_equivalent_mw_si: number | null
+  pressure_source: string | null
   is_planned_only: boolean
+  notes: string | null
+  /** Which recorded number is a plan, which is measured, which is interpreted. Sent by the server. */
+  semantics: Partial<Record<string, SectionNumberSemantics>>
+  created_at?: string
+  updated_at?: string
+}
+
+/** A field: master data one level above the well, and one below the project. */
+export interface Field {
+  id: string
+  project_id: string
+  name: string
+  aliases: string[]
+  country: string | null
+  basin: string | null
+  water_depth_si: number | null
+  centroid_lat: number | null
+  centroid_lon: number | null
+  status: string
+  notes: string | null
+  created_at?: string
+  updated_at?: string
+}
+
+/** A rig, as reference data: enough to choose one and to see whether it is already working. */
+export interface Rig {
+  id: string
+  name: string
+  contractor: string | null
+  rig_type: string | null
+  status: string
+  country: string | null
+  current_well_id: string | null
+}
+
+/** One governance-ledger entry: who did what, to which record, and what changed. */
+export interface AuditLogEntry {
+  id: string
+  occurred_at: string | null
+  actor_kind: string
+  actor_id: string | null
+  actor_display: string | null
+  action: string
+  action_level: string
+  resource_kind: string
+  resource_id: string | null
+  outcome: string
+  permission_decision: Record<string, unknown>
+  details: Record<string, unknown>
+  before: Record<string, unknown>
+  after: Record<string, unknown>
+  request_id: string | null
+}
+
+/**
+ * The states a resource may legally move to next, as the server computes them.
+ *
+ * The menu a screen renders comes from this list rather than from a second copy of the transition
+ * table in the frontend — the drift that produces a button the API refuses.
+ */
+export interface WithTransitions {
+  allowed_transitions?: string[]
+}
+
+export interface WellboreLineage {
+  items: Array<Wellbore & WithTransitions>
+  total: number
+  root_id: string
+  wellbore_id: string
+}
+
+export interface WellStructure {
+  well: Well & WithTransitions & { active_wellbore_id: string | null }
+  field: Field | null
+  rig: Rig | null
+  wellbores: Array<
+    Wellbore & WithTransitions & { sections: WellSection[]; counts: Record<string, number> }
+  >
+  /** How much context hangs off the well in total, per kind. */
+  counts: Record<string, number>
 }
 
 export interface Project {

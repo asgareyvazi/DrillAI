@@ -26,6 +26,7 @@ export interface NavItem {
 
 export const NAV_ITEMS: NavItem[] = [
   { to: '/wells', labelKey: 'nav.wells', scope: 'global' },
+  { to: '/master-data', labelKey: 'nav.masterData', scope: 'global' },
   { to: '/wells/:wellId/cockpit', labelKey: 'nav.cockpit', scope: 'well' },
   { to: '/wells/:wellId/documents', labelKey: 'nav.documents', scope: 'well' },
   { to: '/wells/:wellId/engineering', labelKey: 'nav.engineering', scope: 'well' },

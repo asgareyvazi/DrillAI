@@ -114,6 +114,50 @@ export async function apiPost<T>(
 }
 
 /**
+ * A mutation that a journey expects to be *refused*.
+ *
+ * `apiPost`/`apiPatch` assert success because a journey that expects a write to work should fail loudly
+ * when it does not. This one is the opposite: it sends the request and returns what the server said,
+ * including the taxonomy code — which is how a journey proves that a refusal came from the backend
+ * rather than from a button the frontend chose to disable.
+ */
+export async function apiAttempt(
+  request: APIRequestContext,
+  method: 'POST' | 'PATCH',
+  pathname: string,
+  options: { body?: unknown; role?: RoleKey; headers?: Record<string, string> } = {},
+): Promise<{ status: number; code: string | null; retryable: boolean | null; message: string | null }> {
+  const response = await request.fetch(`/api/v1${pathname}`, {
+    method,
+    headers: { 'X-Dev-Roles': ROLES[options.role ?? 'engineer'], ...(options.headers ?? {}) },
+    data: options.body,
+  })
+  const payload = (await response.json().catch(() => null)) as
+    | { error?: { code?: string; retryable?: boolean; message?: string } }
+    | null
+  return {
+    status: response.status(),
+    code: payload?.error?.code ?? null,
+    retryable: payload?.error?.retryable ?? null,
+    message: payload?.error?.message ?? null,
+  }
+}
+
+export async function apiPatch<T>(
+  request: APIRequestContext,
+  pathname: string,
+  body: unknown,
+  role: RoleKey = 'engineer',
+): Promise<T> {
+  const response = await request.patch(`/api/v1${pathname}`, {
+    headers: { 'X-Dev-Roles': ROLES[role] },
+    data: body,
+  })
+  expect(response.ok(), `PATCH /api/v1${pathname} -> ${response.status()}`).toBeTruthy()
+  return (await response.json()) as T
+}
+
+/**
  * The suite's own `test`, extended with the two things every journey needs.
  *
  * `consoleErrors` exists because a page that renders its values while throwing in the background is
