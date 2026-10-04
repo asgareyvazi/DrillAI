@@ -6,11 +6,15 @@ openpyxl workbook, delimited text) so the parsers are exercised for real rather 
 
 from __future__ import annotations
 
-import io
-
 import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from tests.fixtures.documents_bytes import (
+    docx_bytes,
+    minimal_pdf,
+    scanned_pdf,
+    xlsx_bytes,
+)
 
 from drillai.core.errors import IngestionError, UnsupportedFormat
 from drillai.db.models import (
@@ -27,100 +31,6 @@ from drillai.db.models import (
 )
 from drillai.ingestion.parsers import parse_bytes
 from drillai.ingestion.pipeline import IngestionPipeline, build_chunks, normalize_text
-
-# --------------------------------------------------------------------------- fixtures
-
-
-def minimal_pdf(lines: list[str] | None = None) -> bytes:
-    """A valid, uncompressed one-page PDF (pypdf extracts the text)."""
-    body = lines or [
-        "Daily Drilling Report",
-        "Well: NF-12",
-        "Rig: Rig 42",
-        "Mud Weight: 9.2 ppg",
-        "Plastic Viscosity: 18 cp",
-        "Bit Depth: 1500 m",
-        "Hole Depth: 1502 m",
-    ]
-    content = ("BT /F1 12 Tf 72 720 Td 14 TL\n" + "\n".join(f"({line}) Tj T*" for line in body) + "\nET").encode()
-    objects = [
-        b"<< /Type /Catalog /Pages 2 0 R >>",
-        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>",
-        b"<< /Length " + str(len(content)).encode() + b" >>\nstream\n" + content + b"\nendstream",
-        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
-    ]
-    out = bytearray(b"%PDF-1.4\n")
-    offsets = []
-    for index, obj in enumerate(objects, start=1):
-        offsets.append(len(out))
-        out += f"{index} 0 obj\n".encode() + obj + b"\nendobj\n"
-    xref_position = len(out)
-    out += f"xref\n0 {len(objects) + 1}\n".encode() + b"0000000000 65535 f \n"
-    for offset in offsets:
-        out += f"{offset:010d} 00000 n \n".encode()
-    out += f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\nstartxref\n{xref_position}\n%%EOF\n".encode()
-    return bytes(out)
-
-
-def scanned_pdf() -> bytes:
-    """A PDF whose page has no text operators (stands in for a scan)."""
-    content = b"0.5 0.5 0.5 rg 100 100 200 200 re f"
-    objects = [
-        b"<< /Type /Catalog /Pages 2 0 R >>",
-        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R >>",
-        b"<< /Length " + str(len(content)).encode() + b" >>\nstream\n" + content + b"\nendstream",
-    ]
-    out = bytearray(b"%PDF-1.4\n")
-    offsets = []
-    for index, obj in enumerate(objects, start=1):
-        offsets.append(len(out))
-        out += f"{index} 0 obj\n".encode() + obj + b"\nendobj\n"
-    xref_position = len(out)
-    out += f"xref\n0 {len(objects) + 1}\n".encode() + b"0000000000 65535 f \n"
-    for offset in offsets:
-        out += f"{offset:010d} 00000 n \n".encode()
-    out += f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\nstartxref\n{xref_position}\n%%EOF\n".encode()
-    return bytes(out)
-
-
-def docx_bytes() -> bytes:
-    import docx
-
-    document = docx.Document()
-    document.add_heading("Drilling Program - NF-12", level=1)
-    document.add_paragraph("Well: NF-12")
-    document.add_paragraph("Rig: Rig 42")
-    table = document.add_table(rows=3, cols=4)
-    header = ["MD (m)", "Inclination (deg)", "Azimuth (deg)", "Toolface"]
-    for index, value in enumerate(header):
-        table.rows[0].cells[index].text = value
-    rows = [["0", "0.0", "0.0", "-"], ["500", "1.5", "45.0", "20"]]
-    for row_index, values in enumerate(rows, start=1):
-        for column, value in enumerate(values):
-            table.rows[row_index].cells[column].text = value
-    buffer = io.BytesIO()
-    document.save(buffer)
-    return buffer.getvalue()
-
-
-def xlsx_bytes() -> bytes:
-    import openpyxl
-
-    workbook = openpyxl.Workbook()
-    sheet = workbook.active
-    sheet.title = "Mud Check"
-    rows = [
-        ["Time", "Mud Weight (ppg)", "Funnel Viscosity (s)", "PV (cp)", "YP (lb/100ft2)"],
-        ["06:00", 9.2, 45, 18, 12],
-        ["12:00", 9.4, 48, 20, 14],
-    ]
-    for row in rows:
-        sheet.append(row)
-    buffer = io.BytesIO()
-    workbook.save(buffer)
-    return buffer.getvalue()
 
 
 @pytest.fixture
@@ -212,7 +122,10 @@ async def test_pdf_ingestion_creates_full_provenance_chain(session, context):
     document = outcome.document
     assert document is not None
     assert outcome.job.status == "succeeded"
-    assert document.status == "ingested"
+    # `extracted` is the canonical name for "the machine has read this and nothing was reported
+    # incomplete". It replaced `ingested`, which appeared in no vocabulary — see
+    # `documents/lifecycle.py` for the whole mapping.
+    assert document.status == "extracted"
     assert document.doc_type == "ddr"
     assert document.well_name_text == "NF-12"
     assert document.rig_name_text == "Rig 42"
@@ -241,7 +154,9 @@ async def test_pdf_ingestion_creates_full_provenance_chain(session, context):
     mud = next(record for record in records if record.record_type == "mud_properties")
     assert mud.payload["mud_weight"] == pytest.approx(9.2)
     assert mud.unit_context.get("mud_weight") == "ppg"
-    assert mud.validation_state == "unvalidated"  # extraction is never auto-validated
+    # A machine wrote this and nothing has checked it yet: `extracted`, not `unvalidated` (which was
+    # never a declared state) and not `validated` (which would claim a check that did not happen).
+    assert mud.validation_state == "extracted"
     depth = next(record for record in records if record.record_type == "depth_reading")
     assert depth.payload["bit_depth_si"] == pytest.approx(1500.0)
 
@@ -302,7 +217,12 @@ async def test_scanned_document_records_ocr_requirement(session, context):
     assert outcome.document is not None
     assert outcome.document.ocr_required is True
     assert any("OCR" in warning for warning in outcome.job.warnings)
-    assert outcome.document.status in {"parsed", "ingested"}
+    # A scanned PDF parses to a page with no text, so nothing could be extracted. That is an
+    # incomplete read and the status now says so; the old values here (`parsed`, `ingested`) were
+    # aliases for "finished" that could not distinguish it from a complete extraction.
+    assert outcome.document.status == "partially_extracted"
+    # The job still reports its own outcome separately: the run did what it was asked to do.
+    assert outcome.job.status == "partial"
 
 
 async def test_empty_file_is_refused(session, context):

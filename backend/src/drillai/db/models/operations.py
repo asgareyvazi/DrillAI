@@ -71,7 +71,27 @@ OPERATION_KINDS = (
     "other",
 )
 OPERATION_PHASES = ("planning", "preparation", "executing", "completed", "suspended", "cancelled")
+#: ``status`` is the work item's own condition, one level finer than the phase: a planned operation
+#: can be ``planned`` or ``ready``, an executed one ``in_progress`` or ``completed``.
+OPERATION_STATUSES = ("planned", "ready", "in_progress", "completed", "suspended", "cancelled")
 OPERATION_CLASSES = ("plan", "actual", "forecast")
+
+#: What a recorded row came from. A connector's reading and an operator's entry are different
+#: evidence, and ``source`` (free-form) is kept for the specific system that supplied it.
+SOURCE_KINDS = ("manual", "ddr_promotion", "import", "connector", "integration", "system")
+
+#: Who established an event's cause: the report said so, a person concluded it afterwards, or nobody
+#: has. An inferred cause must never render like a recorded one.
+CAUSE_BASES = ("recorded", "inferred", "unknown")
+
+#: Whether a classification came off the document or was derived by the platform.
+CLASSIFICATION_SOURCES = ("recorded", "derived", "unclassified")
+
+#: The life cycle of an event. An ``open`` event is work; a ``closed`` one is history. ``cancelled``
+#: exists because an event raised in error has to be retired without deleting the row that proves it
+#: was raised.
+EVENT_STATUSES = ("open", "acknowledged", "investigating", "closed", "cancelled")
+EVENT_SEVERITIES = ("low", "medium", "high", "critical")
 
 EVENT_KINDS = (
     "incident",
@@ -161,6 +181,17 @@ class Operation(Base, IdMixin, TimestampMixin, OrgScopedMixin):
     source_document_id: Mapped[str | None] = mapped_column(String(64), index=True)
     data_quality: Mapped[str] = mapped_column(String(24), default="unverified", nullable=False)
     remarks: Mapped[str | None] = mapped_column(TextType)
+    #: Which extracted record this row was promoted from, and the fingerprint that identifies the
+    #: promotion. Both are columns because re-processing a DDR asks "has this already been promoted?"
+    #: once per record, and answering it by loading every operation of the well and scanning JSON is
+    #: the difference between an index lookup and a table scan that grows with the well's history.
+    source_record_id: Mapped[str | None] = mapped_column(String(64), index=True)
+    promotion_fingerprint: Mapped[str | None] = mapped_column(String(64), index=True)
+    #: Whether the value came from a document, a person, or a connector — the reader-facing form of
+    #: ``source``, kept separate so an import can be told from an entry without parsing a string.
+    source_kind: Mapped[str] = mapped_column(
+        String(24), default="manual", nullable=False, index=True
+    )
     attributes: Mapped[dict] = mapped_column(JsonType, default=dict, nullable=False)
     is_demo_fixture: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
 
@@ -219,6 +250,18 @@ class Event(Base, IdMixin, TimestampMixin, OrgScopedMixin):
     source: Mapped[str] = mapped_column(String(32), default="manual", nullable=False)
     source_document_id: Mapped[str | None] = mapped_column(String(64), index=True)
     evidence_ref: Mapped[str | None] = mapped_column(String(64), index=True)
+    #: The record this event was promoted from, and the promotion fingerprint — see ``Operation``.
+    source_record_id: Mapped[str | None] = mapped_column(String(64), index=True)
+    promotion_fingerprint: Mapped[str | None] = mapped_column(String(64), index=True)
+    source_kind: Mapped[str] = mapped_column(
+        String(24), default="manual", nullable=False, index=True
+    )
+    #: Who established the cause, and how sure they were that it is established. An LLM-written root
+    #: cause and an operator-confirmed one are different claims; without this they render identically.
+    cause_basis: Mapped[str] = mapped_column(String(24), default="unknown", nullable=False)
+    #: Reported versus derived classification, so a category the platform inferred is never presented
+    #: as one a person recorded.
+    classification_source: Mapped[str] = mapped_column(String(24), default="recorded", nullable=False)
     tags: Mapped[list] = mapped_column(JsonType, default=list, nullable=False)
     attributes: Mapped[dict] = mapped_column(JsonType, default=dict, nullable=False)
     is_demo_fixture: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)

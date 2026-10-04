@@ -77,6 +77,10 @@ ROLE_CATALOGUE: tuple[Role, ...] = (
             "project.read",
             "document.read",
             "evidence.read",
+            # Operations and events are well data a reader is entitled to see: the timeline, the NPT
+            # account and the source of a twin value all read from them. Read only — the writes are
+            # DRAFT-level actions this role's ceiling (OBSERVE) refuses at authorization time.
+            "operation.read",
             "context.read",
             "engine.read",
             "workflow.read",
@@ -97,6 +101,9 @@ ROLE_CATALOGUE: tuple[Role, ...] = (
             "project.read",
             "document.*",
             "evidence.*",
+            # Recording and correcting operations is what an engineer does with a daily report;
+            # the action level for every operation.* write is DRAFT, which this role may reach.
+            "operation.*",
             "context.read",
             "engine.*",
             "workflow.read",
@@ -133,7 +140,11 @@ ROLE_CATALOGUE: tuple[Role, ...] = (
             "recommendation.*",
             "offset.*",
             "optimization.*",
-            "operations.*",
+            # The pattern read "operations.*" — plural, matching nothing, since every permission and
+            # every action in this area is named in the singular (`operation.read`, `operation.create`).
+            # It looked like the drilling supervisor could record operations and in fact granted no such
+            # thing.
+            "operation.*",
             "dashboard.*",
             "action:**",
             "registry.read",

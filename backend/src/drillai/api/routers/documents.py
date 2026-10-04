@@ -27,22 +27,18 @@ from drillai.api.serializers import (
 from drillai.core.config import get_settings
 from drillai.core.errors import NotFound, ValidationFailed
 from drillai.db.models import (
+    DOC_TYPES,
     Document,
     DocumentChunk,
     DocumentRegion,
     EvidenceLink,
     ExtractedRecord,
     IngestionJob,
-    Well,
-    Wellbore,
-    WellSection,
 )
+from drillai.documents.scope import DocumentScope, DocumentScopeResolver
 from drillai.security.actions import authorize
 
 router = APIRouter(tags=["documents"])
-
-#: Extraction methods a record can come from; kept in one place so the detail view can explain it.
-EXTRACTION_METHODS = ("parser", "table", "figure", "regex", "layout", "manual", "import")
 
 
 @router.get("/documents", summary="List documents")
@@ -82,16 +78,25 @@ async def upload_document(
     wellbore_id: Annotated[str | None, Form()] = None,
     section_id: Annotated[str | None, Form()] = None,
     project_id: Annotated[str | None, Form()] = None,
+    operation_id: Annotated[str | None, Form()] = None,
     doc_type: Annotated[str | None, Form()] = None,
+    revision: Annotated[str | None, Form()] = None,
     title: Annotated[str | None, Form()] = None,
     period_start: Annotated[dt.datetime | None, Form()] = None,
     period_end: Annotated[dt.datetime | None, Form()] = None,
 ) -> dict[str, Any]:
     """Ingest one uploaded file into the data fabric.
 
-    The scope (well / wellbore / section) is written onto the document *and* inherited by every
-    chunk and extracted record, which is what allows later retrieval and context assembly to be
-    scoped to a hole section rather than to a well as a whole.
+    The scope (project / well / wellbore / section / operation) is resolved once, against the caller's
+    organization, before anything is read from the upload — so a scope the caller may not use is
+    refused before the file is stored, and a scope whose parts disagree is refused rather than
+    corrected. The resolved scope is written onto the document and inherited by every chunk and
+    extracted record, which is what allows retrieval and context assembly to be scoped to a hole
+    section rather than to a well as a whole.
+
+    The same bytes uploaded against a *different* scope produce a second logical document sharing one
+    stored artefact: a report filed against the wrong well has to be correctable. The same bytes
+    against the same scope at the same revision return the document that already exists.
     """
     authorize(auth.principal, "document.ingest")
     if period_start and period_end and period_end < period_start:
@@ -105,41 +110,25 @@ async def upload_document(
             "upload exceeds the configured limit",
             details={"bytes": len(data), "limit": settings.max_upload_bytes},
         )
-    if well_id is not None:
-        well = (
-            await session.execute(
-                select(Well).where(Well.id == well_id, Well.org_id == auth.org_id)
-            )
-        ).scalar_one_or_none()
-        if well is None:
-            raise NotFound(f"well {well_id!r} not found")
-        project_id = project_id or well.project_id
-    if wellbore_id is not None:
-        wellbore = (
-            await session.execute(select(Wellbore).where(Wellbore.id == wellbore_id))
-        ).scalar_one_or_none()
-        if wellbore is None:
-            raise NotFound(f"wellbore {wellbore_id!r} not found")
-        well_id = well_id or wellbore.well_id
-        project_id = project_id or (
-            await session.execute(select(Well.project_id).where(Well.id == wellbore.well_id))
-        ).scalar_one_or_none()
-    if section_id is not None:
-        section = (
-            await session.execute(select(WellSection).where(WellSection.id == section_id))
-        ).scalar_one_or_none()
-        if section is None:
-            raise NotFound(f"section {section_id!r} not found")
-        wellbore_id = wellbore_id or section.wellbore_id
-        if wellbore_id != section.wellbore_id:
-            raise ValidationFailed(
-                "section_id does not belong to the supplied wellbore_id",
-                details={"section_id": section_id, "wellbore_id": wellbore_id},
-            )
-        if well_id is None:
-            well_id = (
-                await session.execute(select(Wellbore.well_id).where(Wellbore.id == section.wellbore_id))
-            ).scalar_one_or_none()
+    if doc_type is not None and doc_type not in DOC_TYPES:
+        raise ValidationFailed(
+            "doc_type is not a recognised document type",
+            details={"field": "doc_type", "value": doc_type, "allowed": sorted(DOC_TYPES)},
+        )
+
+    # One resolver, one place where the hierarchy is checked. It filters every lookup by the caller's
+    # organization and refuses a scope whose parts disagree — neither of which the inline version did
+    # for wellbore and section, which is how a tenant could attach a document to another tenant's
+    # hole (reproduced against the running API before this was written).
+    scope = await DocumentScopeResolver(session, auth.org_id or "").resolve(
+        DocumentScope(
+            project_id=project_id,
+            well_id=well_id,
+            wellbore_id=wellbore_id,
+            section_id=section_id,
+            operation_id=operation_id,
+        )
+    )
 
     from drillai.ingestion.pipeline import IngestionPipeline
 
@@ -148,12 +137,14 @@ async def upload_document(
         data,
         filename=file.filename or "upload.bin",
         content_type=file.content_type,
-        project_id=project_id,
-        well_id=well_id,
-        wellbore_id=wellbore_id,
-        section_id=section_id,
+        project_id=scope.project_id,
+        well_id=scope.well_id,
+        wellbore_id=scope.wellbore_id,
+        section_id=scope.section_id,
+        operation_id=scope.operation_id,
         doc_type=doc_type,
         title=title,
+        revision=revision,
         period_start=period_start,
         period_end=period_end,
         trigger="upload",
@@ -164,6 +155,17 @@ async def upload_document(
         "job": _job_payload(outcome),
         "record_ids": list(outcome.record_ids),
         "evidence_link_ids": list(outcome.evidence_link_ids),
+        # What the platform attached this document to, and which parts of that the caller supplied.
+        # A client that named only a section gets a document with a wellbore, a well and a project it
+        # never mentioned, and can see that this is what happened.
+        "scope": {
+            **scope.as_dict(),
+            "supplied": list(scope.supplied),
+            "derived": list(scope.derived),
+            "chain": list(scope.chain),
+            "notes": list(scope.notes),
+            "reused_existing": outcome.reused_existing,
+        },
     }
 
 
@@ -211,6 +213,9 @@ async def get_document(
                 "id": chunk.id,
                 "chunk_index": chunk.chunk_index,
                 "page_number": chunk.page_number,
+                # The chunk→region link, which is what makes the text of a chunk traceable to a place
+                # on a page. It was populated by nothing before this, so every chunk pointed at null.
+                "region_id": chunk.region_id,
                 "kind": chunk.kind,
                 "text": chunk.text,
                 "token_estimate": chunk.token_estimate,

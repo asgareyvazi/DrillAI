@@ -536,6 +536,15 @@ export interface DocumentRow {
   }
   has_tables: boolean
   has_figures: boolean
+  /** A scan or image-only PDF: extraction produced nothing until OCR runs. */
+  ocr_required: boolean
+  /**
+   * The stored bytes this document was read from. Two documents may share one artifact — the same
+   * report filed against two wells — which is why identity is per document, not per file.
+   */
+  raw_artifact_id: string | null
+  /** Content-derived identity: sha256 of the bytes, scope, type and revision, in that order. */
+  logical_key: string | null
   is_demo_fixture: boolean
   created_at: string
 }
@@ -558,7 +567,12 @@ export interface ExtractionRecord {
   method: string | null
   method_version: string | null
   confidence: number | null
+  /** `extracted` (a machine wrote it), `rule_validated`, `human_validated`, `rejected`, `superseded`. */
   validation_state: string
+  /** True when the extractor could not tell which region the value came from; `region_id` is null. */
+  region_unknown: boolean
+  /** Which named rule accepted the row, when a rule did. Null for machine-only extraction. */
+  validation_rule: string | null
   quality_flags: string[]
   unit_context: Record<string, string>
   promoted_to_kind: string | null
@@ -571,6 +585,8 @@ export interface DocumentChunk {
   chunk_index: number
   kind: string
   page_number: number | null
+  /** The region of the page this chunk was cut from — the link that makes its text traceable. */
+  region_id: string | null
   section_id: string | null
   depth_from_si: number | null
   depth_to_si: number | null
@@ -643,7 +659,13 @@ export interface EvidenceItem {
   relevance: number | null
   weight: number | null
   method: string | null
+  /**
+   * Mechanical, not semantic: the excerpt was found in the text it claims to come from. The check
+   * that produced it — `region_text`, `page_text`, `mismatch` or `unavailable` — is reported
+   * alongside, because "not verified" and "could not be checked" are different failures.
+   */
   quote_verified: boolean
+  quote_check: string | null
   created_at: string
 }
 

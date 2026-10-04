@@ -63,6 +63,14 @@ DOC_TYPES = (
     "image_or_scan",
     "other",
 )
+#: The states a document may be in. Declared here, with the column it constrains, and imported by
+#: ``drillai.documents.lifecycle``, which owns the *rules* between them (transitions, and which
+#: outcome of a pipeline produces which state). One tuple, one name, two readers.
+#:
+#: ``partially_extracted`` exists because "the machine read this" and "the machine read all of this"
+#: are different claims, and the platform could previously make only the first: a document whose
+#: extractors half-failed was stored as ``parsed``/``ingested``, values that appeared in no declared
+#: vocabulary at all.
 DOC_STATUSES = ("uploaded", "extracting", "extracted", "partially_extracted", "failed", "validated", "archived")
 REGION_KINDS = (
     "text",
@@ -104,7 +112,15 @@ RECORD_TYPES = (
     "general",
 )
 EXTRACTION_METHODS = ("rule", "template", "table_parse", "layout_model", "llm", "ocr", "manual", "connector", "import")
+#: The states an extracted record may be in. ``extracted`` is what a machine wrote; ``rule_validated``
+#: is a deterministic rule having accepted it; ``human_validated`` is a person having accepted it.
+#: ``unvalidated`` was written by the ingestion pipeline and is not here, because it meant nothing that
+#: ``extracted`` does not mean and no rule could act on the difference.
 VALIDATION_STATES = ("extracted", "rule_validated", "human_validated", "rejected", "superseded")
+#: How an ingestion *attempt* ended — the job's outcome, not the document's state. ``skipped_duplicate``
+#: is its own value rather than a success, because the caller asked to ingest something and the
+#: platform stored no new bytes.
+INGESTION_JOB_STATUSES = ("queued", "running", "succeeded", "partial", "failed", "skipped_duplicate")
 
 EVIDENCE_KINDS = (
     "document_region",
@@ -194,6 +210,11 @@ class Document(Base, IdMixin, TimestampMixin, OrgScopedMixin):
     has_figures: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     ocr_required: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_demo_fixture: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
+    #: The identity of the *logical* document: same bytes attached to the same scope with the same
+    #: revision is the same document, and uploading it twice must not create a second one. It is a
+    #: column rather than an entry in ``attributes`` because the dedup decision is a query, and a
+    #: query over a JSON blob cannot be indexed.
+    logical_key: Mapped[str | None] = mapped_column(String(80), index=True)
     attributes: Mapped[dict] = mapped_column(JsonType, default=dict, nullable=False)
 
     pages: Mapped[list[DocumentPage]] = relationship(
@@ -335,7 +356,15 @@ class ExtractedRecord(Base, IdMixin, CreatedAtMixin, OrgScopedMixin):
     validated_by: Mapped[str | None] = mapped_column(String(64))
     validated_at: Mapped[dt.datetime | None] = mapped_column(UtcDateTime)
     validation_notes: Mapped[str | None] = mapped_column(TextType)
+    #: Which named rule accepted this record, when a rule did. ``rule_validated`` on its own says a
+    #: rule ran; it does not say which, which is not enough to re-derive the decision or to explain it
+    #: to a person reviewing the row.
+    validation_rule: Mapped[str | None] = mapped_column(String(60))
     fingerprint: Mapped[str | None] = mapped_column(String(64), index=True)
+    #: Set by the resolver when the extractor could not say which region a value came from. It is a
+    #: column as well as a quality flag because "this record has page-level provenance only" is the
+    #: question a reviewer actually asks, and answering it by scanning a JSON array is a table scan.
+    region_unknown: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     unit_context: Mapped[dict] = mapped_column(
         JsonType, default=dict, nullable=False, comment="original units per field for replay/QA"
     )
@@ -375,6 +404,11 @@ class EvidenceLink(Base, IdMixin, CreatedAtMixin, OrgScopedMixin):
     quote_verified: Mapped[bool] = mapped_column(
         Boolean, default=False, nullable=False, comment="excerpt was verified to occur in the source region"
     )
+    #: How the quote verification was carried out, so a verified flag can be explained rather than
+    #: trusted: ``region_text`` (matched against the stored region), ``page_text`` (no region, matched
+    #: against the page) or ``unavailable`` (no source text to match against — the flag is then False
+    #: and this says why rather than leaving it to be guessed).
+    quote_check: Mapped[str | None] = mapped_column(String(24))
     created_by: Mapped[str | None] = mapped_column(String(64))
     attributes: Mapped[dict] = mapped_column(JsonType, default=dict, nullable=False)
 

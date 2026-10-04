@@ -17,11 +17,13 @@ __all__ = [
     "audit_log_out",
     "document_out",
     "engine_run_out",
+    "event_out",
     "evidence_out",
     "extracted_record_out",
     "field_out",
     "ingestion_job_out",
     "node_run_out",
+    "operation_out",
     "project_out",
     "recommendation_out",
     "rig_out",
@@ -253,6 +255,15 @@ def document_out(row: Any) -> dict[str, Any]:
         "extraction_summary": row.extraction_summary,
         "has_tables": row.has_tables,
         "has_figures": row.has_figures,
+        # A client cannot show "this document still needs OCR before anything can be read from it"
+        # without knowing it, and the ingestion summary is not the place for a fact that outlives the
+        # run that discovered it.
+        "ocr_required": row.ocr_required,
+        # The artefact, not the document: two documents may share one. Exposing the id is what lets a
+        # client see that the same bytes are filed against two wells, instead of deducing it from an
+        # absence of information.
+        "raw_artifact_id": row.raw_artifact_id,
+        "logical_key": row.logical_key,
         "is_demo_fixture": row.is_demo_fixture,
         "created_at": _iso(row.created_at),
     }
@@ -295,6 +306,12 @@ def extracted_record_out(row: Any) -> dict[str, Any]:
         "method_version": row.method_version,
         "confidence": row.confidence,
         "validation_state": row.validation_state,
+        # True when the extractor could not determine which region of the page the value came from.
+        # `region_id` is then null — deliberately, rather than pointing at whichever region happened
+        # to be nearby — and this flag is what tells a reader that the gap is known instead of
+        # leaving them to guess from an absence.
+        "region_unknown": row.region_unknown,
+        "validation_rule": row.validation_rule,
         # Where this record ended up. The document → record → domain-object chain is the product's
         # evidence story; without the promotion target the UI could only say "extracted", not
         # "this row became operation opr_… on this well".
@@ -323,7 +340,10 @@ def evidence_out(row: Any) -> dict[str, Any]:
         "relevance": row.relevance,
         "weight": row.weight,
         "method": row.method,
+        # Mechanical, not semantic: the excerpt was found in the region text, the page text, or
+        # neither. `quote_check` records which of those was true.
         "quote_verified": row.quote_verified,
+        "quote_check": row.quote_check,
         "created_at": _iso(row.created_at),
     }
 
@@ -524,6 +544,107 @@ def engine_run_out(row: Any) -> dict[str, Any]:
         "node_run_id": row.node_run_id,
         "duration_ms": row.duration_ms,
         "created_at": _iso(row.created_at),
+    }
+
+
+def operation_out(row: Any) -> dict[str, Any]:
+    """One operation, with the fields that say *how* it is known and not only what it says.
+
+    ``data_quality``, ``source_kind`` and ``promotion_fingerprint`` are included on purpose. An
+    operation read from a report is not the same claim as one an engineer entered, and a client that
+    cannot see which it is will render them identically — the exact failure the platform's evidence
+    story exists to prevent.
+
+    ``is_planned`` is returned as a derived convenience so a client never has to re-derive "was this
+    done?" from the presence of dates: ``operation_class`` is the authority, and a plan is not history.
+    """
+    return {
+        "id": row.id,
+        "project_id": row.project_id,
+        "well_id": row.well_id,
+        "wellbore_id": row.wellbore_id,
+        "section_id": row.section_id,
+        "parent_operation_id": row.parent_operation_id,
+        "predecessor_operation_id": row.predecessor_operation_id,
+        "operation_class": row.operation_class,
+        "is_planned": row.operation_class in {"plan", "forecast"},
+        "sequence": row.sequence,
+        "code": row.code,
+        "name": row.name,
+        "kind": row.kind,
+        "phase": row.phase,
+        "status": row.status,
+        "planned_start": _iso(row.planned_start),
+        "planned_end": _iso(row.planned_end),
+        "actual_start": _iso(row.actual_start),
+        "actual_end": _iso(row.actual_end),
+        "planned_duration_hours": row.planned_duration_hours,
+        "actual_duration_hours": row.actual_duration_hours,
+        "depth_from_md_si": row.depth_from_md_si,
+        "depth_to_md_si": row.depth_to_md_si,
+        "hole_diameter_si": row.hole_diameter_si,
+        "is_productive": row.is_productive,
+        "npt_hours": row.npt_hours,
+        "invisible_lost_time_hours": row.invisible_lost_time_hours,
+        "cost_usd": float(row.cost_usd) if row.cost_usd is not None else None,
+        "source": row.source,
+        "source_kind": row.source_kind,
+        "source_document_id": row.source_document_id,
+        "source_record_id": row.source_record_id,
+        "promotion_fingerprint": row.promotion_fingerprint,
+        "data_quality": row.data_quality,
+        "remarks": row.remarks,
+        "is_demo_fixture": row.is_demo_fixture,
+        "created_at": _iso(row.created_at),
+        "updated_at": _iso(row.updated_at),
+    }
+
+
+def event_out(row: Any) -> dict[str, Any]:
+    """One event, keeping "what happened" separate from "how it is accounted for".
+
+    ``kind`` is the event; ``npt_category`` and ``npt_hours`` are its accounting; ``cause_basis`` says
+    who established the cause. The three are returned separately so no client can render an inferred
+    cause as a recorded one, or charge an observation to NPT because it has a category.
+    """
+    return {
+        "id": row.id,
+        "project_id": row.project_id,
+        "well_id": row.well_id,
+        "wellbore_id": row.wellbore_id,
+        "section_id": row.section_id,
+        "operation_id": row.operation_id,
+        "kind": row.kind,
+        "category": row.category,
+        "title": row.title,
+        "description": row.description,
+        "occurred_at": _iso(row.occurred_at),
+        "ended_at": _iso(row.ended_at),
+        "duration_hours": row.duration_hours,
+        "depth_md_si": row.depth_md_si,
+        "depth_tvd_si": row.depth_tvd_si,
+        "severity": row.severity,
+        "status": row.status,
+        "is_npt": row.is_npt,
+        "npt_code": row.npt_code,
+        "npt_category": row.npt_category,
+        "npt_hours": row.npt_hours,
+        "cost_usd": float(row.cost_usd) if row.cost_usd is not None else None,
+        "root_cause": row.root_cause,
+        "cause_basis": row.cause_basis,
+        "classification_source": row.classification_source,
+        "immediate_action": row.immediate_action,
+        "corrective_action": row.corrective_action,
+        "source": row.source,
+        "source_kind": row.source_kind,
+        "source_document_id": row.source_document_id,
+        "source_record_id": row.source_record_id,
+        "promotion_fingerprint": row.promotion_fingerprint,
+        "evidence_ref": row.evidence_ref,
+        "tags": list(row.tags or []),
+        "is_demo_fixture": row.is_demo_fixture,
+        "created_at": _iso(row.created_at),
+        "updated_at": _iso(row.updated_at),
     }
 
 

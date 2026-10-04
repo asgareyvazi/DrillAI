@@ -41,6 +41,7 @@ from drillai.db.models import (
     Wellbore,
     WellSection,
 )
+from drillai.documents.lifecycle import VALIDATED_STATES
 
 #: How a "next operation" conclusion was reached. Kept as an explicit enum-like tuple so the
 #: UI and the advisor can render the difference instead of flattening plan and guess together.
@@ -448,7 +449,7 @@ class WellStateService:
                     source="extracted_record:parameter_set",
                     source_id=record.id,
                     observed_at=record.observed_at or record.created_at,
-                    quality="extracted" if record.validation_state != "validated" else "validated",
+                    quality="validated" if record.validation_state in VALIDATED_STATES else "extracted",
                     evidence_ref=record.id,
                     note=f"extracted from document {document_id} "
                     f"(method {record.method}, confidence {record.confidence})",

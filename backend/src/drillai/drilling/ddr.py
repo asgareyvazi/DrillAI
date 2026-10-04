@@ -71,6 +71,12 @@ PROMOTION_MAP: dict[str, str] = {
 #: Records below this confidence are never promoted without human review.
 MIN_PROMOTION_CONFIDENCE = 0.6
 
+#: The rule that a promoted record has passed:
+#: confidence at or above :data:`MIN_PROMOTION_CONFIDENCE`, a recognisable kind, and a structured row
+#: actually produced. Promotion is itself the check, which is why a promoted record is
+#: ``rule_validated`` and not ``human_validated`` — nobody has looked at it yet.
+PROMOTION_RULE = "promotion_rules_v1"
+
 #: Labels in a ``parameter_set`` that are safe to write into the twin as drilling parameters.
 #: Anything not on this list stays as evidence — an unlabelled number is not a measurement.
 KNOWN_PARAMETER_LABELS: dict[str, str] = {
@@ -235,15 +241,38 @@ class DdrProcessor:
         raw = f"{document_id}:{record.record_type}:{record.fingerprint or record.id}"
         return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:32]
 
-    async def _existing_fingerprints(self, model: Any, well_id: str | None) -> set[str]:
-        """Fingerprints already promoted, so re-processing never duplicates rows."""
-        stmt = select(model).where(model.org_id == self.org_id)
-        if well_id is not None:
-            stmt = stmt.where(model.well_id == well_id)
-        rows = (await self.session.execute(stmt)).scalars().all()
+    async def _existing_fingerprints(self, model: Any, document_id: str) -> set[str]:
+        """Fingerprints already promoted **from this document**, so re-processing it duplicates nothing.
+
+        Two things were wrong with the previous version, and both are about the same query.
+
+        It loaded *every* operation (or event) on the well and scanned their ``attributes`` JSON in
+        Python to collect fingerprints — an unbounded read that grew with the well's history rather
+        than with the document being processed. A well with fifty thousand operation rows re-read all
+        of them to reprocess one daily report. The fingerprint is now a first-class indexed column
+        (see the migration) and the read is a single indexed lookup.
+
+        And the scope was wrong. It filtered by ``well_id`` alone, but the fingerprint is derived from
+        *the document and the record*, so a fingerprint can only have been written by a promotion of the
+        same document. Asking for the whole well's rows meant every promotion compared its rows against
+        rows that could never match — and, worse, that two documents' rows were pooled together, so a
+        fingerprint collision across documents would have been read as "already promoted" and the
+        second document's row silently dropped instead of created.
+
+        Rows written before the column existed are still honoured: the legacy ``attributes`` key is
+        consulted, but only for rows this document produced, so the compatibility read is bounded by
+        the document rather than by the well.
+        """
+        stmt = select(model.id, model.promotion_fingerprint, model.attributes).where(
+            model.org_id == self.org_id,
+            model.source_document_id == document_id,
+        )
+        rows = (await self.session.execute(stmt)).all()
         found: set[str] = set()
-        for row in rows:
-            for key, value in (row.attributes or {}).items():
+        for _id, promotion_fingerprint, attributes in rows:
+            if isinstance(promotion_fingerprint, str) and promotion_fingerprint:
+                found.add(promotion_fingerprint)
+            for key, value in (attributes or {}).items():
                 if key in {"extraction_fingerprint", "promotion_fingerprint"} and isinstance(value, str):
                     found.add(value)
         return found
@@ -306,7 +335,7 @@ class DdrProcessor:
                 "the document carries no report date, so promoted operations have no start time; "
                 "operation sequencing is preserved but the timeline cannot place them"
             )
-        existing = await self._existing_fingerprints(Operation, document.well_id)
+        existing = await self._existing_fingerprints(Operation, document.id)
         by_fingerprint: dict[str, Operation] = {}
         last: Operation | None = None
         # A DDR time breakdown is an ordered list of durations, not a list of absolute timestamps.
@@ -403,11 +432,18 @@ class DdrProcessor:
                 depth_to_md_si=payload.get("depth_md_si"),
                 is_productive=True,
                 npt_hours=None,
+                # `source_kind` is the first-class column; `source` keeps its legacy value for readers
+                # that still ask for it, but the new field is what the platform queries.
                 source="report",
+                source_kind="ddr_promotion",
                 source_document_id=document.id,
+                source_record_id=record.id,
+                promotion_fingerprint=fingerprint,
                 data_quality="extracted",
                 remarks=text[:2000] or None,
                 attributes={
+                    # Kept for rows written by earlier versions of this processor: the column is the
+                    # identity now, and the JSON key is read only as a fallback.
                     "promotion_fingerprint": fingerprint,
                     "classification": classification.to_dict(),
                     "extractor": record.method,
@@ -436,7 +472,14 @@ class DdrProcessor:
             )
             record.promoted_to_kind = "operation"
             record.promoted_to_id = operation.id
-            record.validation_state = "validated" if record.confidence and record.confidence >= 0.7 else "extracted"
+            # Every record that reaches here passed the same gate: it cleared
+            # MIN_PROMOTION_CONFIDENCE and became a structured row. There used to be a second,
+            # undocumented threshold of 0.7 on this line that *also* decided the validation state, so
+            # two records promoted by the same rule were filed as differently-validated depending on a
+            # number nothing else in the platform used. The state now follows the decision that was
+            # actually made.
+            record.validation_state = "rule_validated"
+            record.validation_rule = PROMOTION_RULE
             report.records_promoted.append(record.id)
             report.operations_created.append(operation.id)
             report.operations_hours += operation.actual_duration_hours or 0.0
@@ -456,7 +499,7 @@ class DdrProcessor:
         """Detect NPT in any record whose text carries an NPT signal."""
         await ensure_standard_npt_codes(self.session, self.org_id)
         report_date = self._report_date(document, records)
-        existing = await self._existing_fingerprints(Event, document.well_id)
+        existing = await self._existing_fingerprints(Event, document.id)
         for record in records:
             text = self._record_text(record)
             if not text.strip():
@@ -504,12 +547,27 @@ class DdrProcessor:
                 depth_tvd_si=record.depth_tvd_si,
                 severity="high" if classification.label in {"well_control", "stuck_pipe"} else "medium",
                 npt_hours=float(hours) if hours else None,
-                root_cause=text[:2000] or None,
+                # **Deliberately no root cause.** The text below is the record's own words and it is
+                # stored as the description; writing the same string into `root_cause` asserted a
+                # causal claim the report never made. Neither the extractors nor the classifier
+                # identify a cause, so the field stays empty with `cause_basis="unknown"` — a reader
+                # then sees "nobody has established why", which is true, instead of a sentence that
+                # reads like the report's diagnosis. `npt.summarise` and the timeline both fall back to
+                # the description, so nothing downstream loses the text.
+                root_cause=None,
+                cause_basis="unknown",
                 immediate_action=None,
                 corrective_action=None,
                 status="open",
                 source="report",
+                source_kind="ddr_promotion",
                 source_document_id=document.id,
+                source_record_id=record.id,
+                promotion_fingerprint=fingerprint,
+                # The event's category came from the *content* of the report, classified by rules over
+                # its text, so its provenance is "derived" — not "recorded", which would claim the
+                # report itself stated the category.
+                classification_source="derived",
                 tags=["auto_classified", "ddr"],
                 attributes={
                     "promotion_fingerprint": fingerprint,
@@ -764,7 +822,26 @@ class DdrProcessor:
                 source_document_id=document.id,
                 is_current=True,
                 created_by=self.actor_id or "ddr_processor",
-                validation="unvalidated",
+                # ``Trajectory.validation`` is a JSON *object* consumed as a validation report
+                # (``api/routers/workflows.py::_validation_payload`` reads ``issues`` from it, and
+                # ``context/builder.py`` hands it to clients as one). This wrote the bare string
+                # "unvalidated" into it, so any client reading a report got a string where the shape
+                # promises an object. The honest report for a trajectory transcribed from a paper
+                # report and not independently checked is a warning: nothing has been found wrong
+                # because nothing has been checked, and ``is_valid`` follows that same rule.
+                validation={
+                    "is_valid": True,
+                    "issues": [
+                        {
+                            "severity": "warning",
+                            "code": "not_independently_validated",
+                            "message": (
+                                "stations transcribed from a report; positional accuracy depends on "
+                                "the survey programme and has not been independently verified"
+                            ),
+                        }
+                    ],
+                },
                 notes=(
                     "stations transcribed from a report; positional accuracy depends on the survey "
                     "programme and has not been independently verified"

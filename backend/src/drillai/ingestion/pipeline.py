@@ -3,17 +3,24 @@
 One method, :meth:`IngestionPipeline.ingest`, executes the whole chain and writes an
 ``IngestionJob`` row describing exactly what happened. The order matters:
 
-1. **hash and deduplicate** — the same bytes are one blob and one raw artefact (a re-uploaded
-   DDR must not create a second document);
+1. **hash, then decide identity** — the same bytes are one blob and one raw artefact; whether they
+   become a *new document* depends on the scope they are filed against, not on the bytes alone
+   (``documents.identity``). The same report filed against two wells is two documents sharing one
+   artefact, and re-filing it against the same well returns the document that already exists;
 2. **parse** — format parser produces pages and regions (tables keep their grid and coordinates);
-3. **chunk** — retrievable passages with coordinates, depth and period metadata attached, so
-   retrieval can filter by well, section, depth or date rather than relying on embeddings alone;
+3. **chunk** — retrievable passages carrying the id of the region they came from, plus coordinates,
+   depth and period metadata, so retrieval can filter by well, section, depth or date rather than
+   relying on embeddings alone;
 4. **extract** — deterministic extractors produce typed records (numbers, never prose);
-5. **link evidence** — every record gets an :class:`EvidenceLink` back to the exact page/region,
-   and the document is linked to the well it belongs to;
+5. **link provenance** — every record carries its page *and its region* where the extractor could
+   name one, every record gets an :class:`EvidenceLink` back to that source with the quote checked
+   against the text it claims to quote, and the document is linked to the well it belongs to;
 6. **record the job** — status, statistics, extractor versions, warnings and errors. A failed
    ingestion leaves the raw artefact and the job row behind (evidence is never lost), and the
    document is marked ``failed`` with the reason.
+
+The status written onto the document is computed by ``documents.lifecycle.plan_document_status``
+rather than chosen here, so "extracted" is never claimed while an extractor is known to have failed.
 
 The pipeline is synchronous in-process. It is written so that a worker/queue can call the same
 method later: no request-scoped state is used, and the caller owns the transaction.
@@ -43,6 +50,9 @@ from drillai.db.models import (
     IngestionJob,
     RawArtifact,
 )
+from drillai.documents.identity import find_logical_document, logical_key
+from drillai.documents.lifecycle import plan_document_status
+from drillai.documents.quotes import verify_quote
 from drillai.ingestion.extractors import ExtractedRecordDraft, extract, extractor_catalogue
 from drillai.ingestion.parsers import ParsedDocument, guess_doc_type, parse_bytes
 from drillai.ingestion.storage import BlobStore, compute_sha256
@@ -186,6 +196,9 @@ class IngestionPipeline:
         operation_id: str | None = None,
         doc_type: str | None = None,
         title: str | None = None,
+        #: The revision printed on the document. Part of the logical identity: a revised report is a
+        #: new document rather than an overwrite of the one it revises.
+        revision: str | None = None,
         period_start: dt.datetime | None = None,
         period_end: dt.datetime | None = None,
         trigger: str = "upload",
@@ -211,6 +224,7 @@ class IngestionPipeline:
                 operation_id=operation_id,
                 doc_type=doc_type,
                 title=title,
+                revision=revision,
                 period_start=period_start,
                 period_end=period_end,
                 trigger=trigger,
@@ -259,15 +273,23 @@ class IngestionPipeline:
                 select(RawArtifact).where(RawArtifact.org_id == self.org_id, RawArtifact.sha256 == digest).limit(1)
             )
         ).scalars().first()
-        if existing is not None:
-            # Same bytes: reuse the artefact, and reuse the document if one points at it already.
-            existing_document = (
-                await self.session.execute(
-                    select(Document)
-                    .where(Document.raw_artifact_id == existing.id, Document.org_id == self.org_id)
-                    .limit(1)
-                )
-            ).scalars().first()
+
+        # The bytes are one artefact; the *document* is only a repeat if the scope, type and revision
+        # match too. Keying the repeat on the bytes alone returned another well's document — see
+        # `documents.identity`, which explains the four cases this has to tell apart.
+        fingerprint = logical_key(
+            content_sha256=digest,
+            section_id=section_id,
+            wellbore_id=wellbore_id,
+            well_id=well_id,
+            project_id=project_id,
+            doc_type=kwargs.get("doc_type"),
+            revision=kwargs.get("revision"),
+        )
+        if existing is not None and fingerprint is not None:
+            existing_document = await find_logical_document(
+                self.session, org_id=self.org_id, logical_key_value=fingerprint
+            )
             if existing_document is not None:
                 job = await self._record_job(
                     raw=existing,
@@ -275,7 +297,10 @@ class IngestionPipeline:
                     status="skipped_duplicate",
                     started=started,
                     stats={"deduplicated": 1},
-                    warnings=["identical content was already ingested; no new document was created"],
+                    warnings=[
+                        "identical content was already filed against this scope; "
+                        "no new document was created"
+                    ],
                     trigger=trigger,
                     triggered_by=triggered_by,
                     trace_id=trace_id,
@@ -312,9 +337,13 @@ class IngestionPipeline:
             raw_artifact_id=raw.id,
             doc_type=kwargs.get("doc_type") or "other",
             title=kwargs.get("title") or filename,
+            revision=kwargs.get("revision"),
             period_start=kwargs.get("period_start"),
             period_end=kwargs.get("period_end"),
-            status="parsing",
+            # A document that is being read is *extracting* — the canonical name for that state. The
+            # old value here was `parsing`, which the model's own vocabulary did not contain.
+            status="extracting",
+            logical_key=fingerprint,
             checksum=digest,
             language=None,
         )
@@ -353,11 +382,17 @@ class IngestionPipeline:
         doc_type = document.doc_type if document.doc_type != "other" else guess_doc_type(parsed, filename)
         document.doc_type = doc_type
 
-        pages, regions = await self._persist_structure(document, parsed)
-        chunk_count = await self._persist_chunks(document, parsed, doc_type=doc_type)
+        pages, regions, region_ids = await self._persist_structure(document, parsed)
+        chunk_count = await self._persist_chunks(
+            document, parsed, doc_type=doc_type, region_ids=region_ids
+        )
         drafts, extraction_warnings = extract(parsed, doc_type=doc_type)
         record_ids, evidence_ids = await self._persist_records(
-            document, drafts, parsed=parsed, link_to_well=kwargs.get("link_to_well", True)
+            document,
+            drafts,
+            parsed=parsed,
+            region_ids=region_ids,
+            link_to_well=kwargs.get("link_to_well", True),
         )
         await self._merge_document_metadata(document, parsed, drafts)
 
@@ -365,6 +400,10 @@ class IngestionPipeline:
         if parsed.metadata.get("ocr_required"):
             document.ocr_required = True
             warnings.append("document has no extractable text: OCR is required before extraction can run")
+        # An extractor that raised is counted, not merely warned about: "one of four extractors
+        # failed" is the difference between a complete document and a partial one, and the number is
+        # what makes the partial status checkable rather than a judgement call.
+        extractor_failures = sum(1 for warning in extraction_warnings if " failed: " in warning)
         outcome = IngestionOutcome(
             job=job,
             document=document,
@@ -377,17 +416,54 @@ class IngestionPipeline:
             region_count=regions,
             chunk_count=chunk_count,
         )
-        document.status = "ingested" if record_ids or chunk_count else "parsed"
-        document.extraction_summary = {**outcome.stats, "extractors": self.extractor_versions, "doc_type": doc_type}
+        document.status = plan_document_status(
+            parsed=True,
+            has_records=bool(record_ids),
+            has_chunks=bool(chunk_count),
+            warnings=warnings,
+            extractor_failures=extractor_failures,
+            ocr_required=bool(parsed.metadata.get("ocr_required")),
+        )
+        document.extraction_summary = {
+            **outcome.stats,
+            "extractors": self.extractor_versions,
+            "doc_type": doc_type,
+            # The reconciliation block: a caller can check that the document's status follows from
+            # these numbers instead of taking it on trust.
+            "extractor_failures": extractor_failures,
+            "warnings": len(warnings),
+            "region_linked_records": sum(1 for record in drafts if record.region_index is not None),
+        }
+        # The job's own outcome is separate from the document's state: partial extraction is a
+        # *successful* run that produced an incomplete record, and calling it "failed" would lose
+        # that the pipeline did exactly what it was asked.
         await self._finish_job(
-            job, started, status="succeeded", stats=outcome.stats, warnings=warnings, error=None
+            job,
+            started,
+            status="partial" if document.status == "partially_extracted" else "succeeded",
+            stats=outcome.stats,
+            warnings=warnings,
+            error=None,
         )
         return outcome
 
     # ------------------------------------------------------------------ steps
 
-    async def _persist_structure(self, document: Document, parsed: ParsedDocument) -> tuple[int, int]:
+    async def _persist_structure(
+        self, document: Document, parsed: ParsedDocument
+    ) -> tuple[int, int, dict[tuple[int, int], str]]:
+        """Write pages and regions, returning the map that lets a value point back at its source.
+
+        The map is keyed by ``(page_number, order_index)`` because that is what the parsers and
+        extractors speak in: an :class:`ExtractedRecordDraft` carries the region's order index on its
+        page, and the database needs the region's primary key. Building the translation here — where
+        the region rows are actually created — is what stops the pipeline from having to look a region
+        up again later, and is what was missing when ``region_id`` was written as ``NULL``.
+        """
         page_rows: dict[int, DocumentPage] = {}
+        region_ids: dict[tuple[int, int], str] = {}
+        page_text: dict[int, str] = {}
+        self._region_text: dict[str, str] = {}
         region_count = 0
         for page in parsed.pages:
             row = DocumentPage(
@@ -406,6 +482,7 @@ class IngestionPipeline:
             self.session.add(row)
             await self.session.flush()
             page_rows[page.page_number] = row
+            page_text[page.page_number] = page.text or ""
             for region in page.regions:
                 region_row = DocumentRegion(
                     org_id=self.org_id,
@@ -423,13 +500,35 @@ class IngestionPipeline:
                 )
                 self.session.add(region_row)
                 region_count += 1
+                await self.session.flush()
+                region_ids[(page.page_number, region.order_index)] = region_row.id
+                if region.text is not None:
+                    self._region_text[region_row.id] = region.text
         document.page_count = len(parsed.pages)
         document.has_tables = any(page.has_tables for page in parsed.pages)
         document.has_figures = any(page.has_figures for page in parsed.pages)
         await self.session.flush()
-        return len(parsed.pages), region_count
+        # The page texts travel with the map so quote verification does not re-read the pages it just
+        # wrote.
+        self._page_text = page_text
+        return len(parsed.pages), region_count, region_ids
 
-    async def _persist_chunks(self, document: Document, parsed: ParsedDocument, *, doc_type: str) -> int:
+    async def _persist_chunks(
+        self,
+        document: Document,
+        parsed: ParsedDocument,
+        *,
+        doc_type: str,
+        region_ids: dict[tuple[int, int], str],
+    ) -> int:
+        """One chunk per region, carrying that region's id.
+
+        Every chunk here is built from exactly one region — the loop is over regions — so the linkage
+        is unambiguous and there is no need for a many-to-many model: a chunk that spanned two regions
+        would have to answer "which one?", and today it does not span two. When a chunker that merges
+        regions arrives, the primary region is the honest answer and this is where that decision will
+        live.
+        """
         chunk_index = 0
         for page in parsed.pages:
             region_by_index = {region.order_index: region for region in page.regions}
@@ -437,10 +536,14 @@ class IngestionPipeline:
                 if region.kind not in {"text", "table"} or not (region.text or region.table):
                     continue
                 text = region.text or _table_to_text(region.table)
-                for draft in build_chunks(text, page_number=page.page_number, region_id=None, kind=region.kind):
+                source_region_id = region_ids.get((page.page_number, region.order_index))
+                for draft in build_chunks(
+                    text, page_number=page.page_number, region_id=source_region_id, kind=region.kind
+                ):
                     row = DocumentChunk(
                         org_id=self.org_id,
                         document_id=document.id,
+                        region_id=source_region_id,
                         page_number=page.page_number,
                         chunk_index=chunk_index,
                         text=draft.text,
@@ -468,17 +571,31 @@ class IngestionPipeline:
         drafts: list[ExtractedRecordDraft],
         *,
         parsed: ParsedDocument,
+        region_ids: dict[tuple[int, int], str],
         link_to_well: bool,
     ) -> tuple[list[str], list[str]]:
-        """Persist extracted records and the evidence link that anchors each one to its page."""
+        """Persist extracted records and the evidence link that anchors each one to its source.
+
+        Where the extractor named a region, the record and its evidence link carry that region's id.
+        Where it could not — some extractors read the page as a whole rather than a region — the record
+        is marked ``region_unknown`` instead of being given a plausible-looking region it did not come
+        from. A fabricated region is worse than an absent one: it survives review, because it looks
+        exactly like a real one.
+        """
         ids: list[str] = []
         evidence_ids: list[str] = []
         for draft in drafts:
             fingerprint = _record_fingerprint(document.id, draft)
+            region_id = (
+                region_ids.get((draft.page_number, draft.region_index))
+                if draft.region_index is not None
+                else None
+            )
             record = ExtractedRecord(
                 org_id=self.org_id,
                 document_id=document.id,
-                region_id=None,
+                region_id=region_id,
+                region_unknown=region_id is None,
                 page_number=draft.page_number,
                 project_id=document.project_id,
                 well_id=document.well_id,
@@ -495,7 +612,9 @@ class IngestionPipeline:
                 method=draft.method,
                 method_version=draft.method_version,
                 confidence=draft.confidence,
-                validation_state="unvalidated",
+                # "A machine wrote this and nothing has checked it." The old value here was
+                # `unvalidated`, which appears in no vocabulary — see `documents.lifecycle`.
+                validation_state="extracted",
                 fingerprint=fingerprint,
                 unit_context=draft.unit_context,
                 quality_flags=draft.quality_flags,
@@ -504,33 +623,58 @@ class IngestionPipeline:
             await self.session.flush()
             ids.append(record.id)
             if link_to_well or document.well_id:
+                excerpt = (draft.excerpt or "")[:2000] or None
+                region_text, page_text = self._quote_sources(region_id, draft.page_number)
+                verified, quote_check = verify_quote(
+                    excerpt=excerpt, region_text=region_text, page_text=page_text
+                )
                 link = EvidenceLink(
                         org_id=self.org_id,
                         subject_kind=f"extracted_record.{draft.record_type}",
                         subject_id=record.id,
-                        evidence_kind="document_page",
-                        evidence_id=document.raw_artifact_id or document.id,
+                        evidence_kind="document_region" if region_id else "document_page",
+                        evidence_id=region_id or document.raw_artifact_id or document.id,
                         document_id=document.id,
+                        region_id=region_id,
                         page_number=draft.page_number,
                         well_id=document.well_id,
                         locator={
                             "page": draft.page_number,
+                            "region_id": region_id,
                             "region_order": draft.region_index,
                             "parser": parsed.parser,
                             "record_type": draft.record_type,
+                            # Says whether the quote was checked against the region or only against
+                            # the page, so a reader never has to infer the precision of the locator.
+                            "precision": "region" if region_id else "page",
                         },
-                        excerpt=(draft.excerpt or "")[:2000] or None,
+                        excerpt=excerpt,
                         confidence=draft.confidence,
                         relevance=1.0,
                         weight=1.0,
                         method=draft.method,
-                        quote_verified=False,
+                        quote_verified=verified,
+                        quote_check=quote_check,
                     )
                 self.session.add(link)
                 await self.session.flush()
                 evidence_ids.append(link.id)
         await self.session.flush()
         return ids, evidence_ids
+
+    def _quote_sources(self, region_id: str | None, page_number: int) -> tuple[str | None, str | None]:
+        """The texts an excerpt is checked against: the region first, the page as the fallback.
+
+        Both are the strings this same request just wrote, held on the pipeline instance rather than
+        re-read from the database, so verification costs no extra query. The region text is returned
+        as ``None`` when there is no region, which is what makes the verifier fall back to the page and
+        record that it did.
+        """
+        page_text = getattr(self, "_page_text", {}).get(page_number)
+        if region_id is None:
+            return None, page_text
+        region_text = getattr(self, "_region_text", {}).get(region_id)
+        return region_text, page_text
 
     async def _merge_document_metadata(
         self, document: Document, parsed: ParsedDocument, drafts: list[ExtractedRecordDraft]

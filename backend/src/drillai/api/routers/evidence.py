@@ -112,8 +112,16 @@ async def get_evidence(
         raise NotFound(f"evidence link {evidence_id!r} not found")
     payload: dict[str, Any] = {"evidence": evidence_out(link)}
     if link.document_id:
+        # Every traversal below is organization-scoped, and the scoping matters even though the link
+        # itself was already checked. The link names its subjects by **identifier**, and an identifier
+        # in a row the caller can read is not proof that the row it points at is the caller's: a link
+        # whose `region_id` was written from another tenant's document would have been followed here
+        # without complaint, and the excerpt handed to the caller. The whole traversal was unscoped
+        # before CP8; only the first lookup was not.
         document = (
-            await session.execute(select(Document).where(Document.id == link.document_id))
+            await session.execute(
+                select(Document).where(Document.id == link.document_id, Document.org_id == auth.org_id)
+            )
         ).scalar_one_or_none()
         payload["document"] = (
             {
@@ -129,7 +137,16 @@ async def get_evidence(
         )
         if link.region_id:
             region = (
-                await session.execute(select(DocumentRegion).where(DocumentRegion.id == link.region_id))
+                await session.execute(
+                    select(DocumentRegion).where(
+                        DocumentRegion.id == link.region_id,
+                        DocumentRegion.org_id == auth.org_id,
+                        # …and it must belong to the document the link names. A region of another
+                        # document in the same organization is a different kind of wrong: the excerpt
+                        # would be real, and from somewhere else.
+                        DocumentRegion.document_id == link.document_id,
+                    )
+                )
             ).scalar_one_or_none()
             payload["region"] = (
                 {
@@ -147,7 +164,13 @@ async def get_evidence(
             )
         if link.subject_kind.startswith("extracted_record"):
             record = (
-                await session.execute(select(ExtractedRecord).where(ExtractedRecord.id == link.subject_id))
+                await session.execute(
+                    select(ExtractedRecord).where(
+                        ExtractedRecord.id == link.subject_id,
+                        ExtractedRecord.org_id == auth.org_id,
+                        ExtractedRecord.document_id == link.document_id,
+                    )
+                )
             ).scalar_one_or_none()
             payload["subject_record"] = (
                 {
