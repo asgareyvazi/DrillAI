@@ -23,16 +23,21 @@ binary in environments that provide one.
 
 ### PostgreSQL-backed tests
 
-Two persistence tests (`tests/db/test_persistence.py`) assert against a real PostgreSQL: JSON and
-timestamp behaviour that SQLite cannot prove, and that the Alembic baseline creates exactly the schema
-the models declare. They skip unless the repository's own embedded PostgreSQL is switched on:
+Three tests assert against a real PostgreSQL: two in `tests/db/test_persistence.py` (JSON and
+timestamp behaviour SQLite cannot prove, and that the Alembic baseline creates exactly the schema the
+models declare) and one in `tests/db/test_migrations_postgres.py` that applies the whole migration chain
+to head, checks for drift, reverses and re-applies the asset-identity revision, and asserts a database
+already holding two wells with one regulator identifier is refused with the offending rows named. That
+last one exists because the revision failed on PostgreSQL and passed on SQLite — a boolean column
+compared to `1` — so the dialect that accepts such a comparison is not the dialect that may certify it.
+They skip unless the repository's own embedded PostgreSQL is switched on:
 
 ```bash
 cd backend && DRILLAI_TEST_POSTGRES=1 .venv/bin/python -m pytest
 ```
 
-With it, the suite reports **399 passed**; without it, **397 passed, 2 skipped**. CI runs them (the
-`pgserver` dev dependency is already in `backend/pyproject.toml`), so the certificate is the 399-test
+With it, the suite reports **527 passed**; without it, **524 passed, 3 skipped**. CI runs them (the
+`pgserver` dev dependency is already in `backend/pyproject.toml`), so the certificate is the 527-test
 one. Nothing is replaced with SQLite to make them pass, and the tests are never deleted.
 
 ## Unit and component tests
@@ -94,7 +99,7 @@ third of the suite, so all three projects run.
 
 ### The journeys
 
-65 journeys in 13 spec files. The list is the coverage; the counts are what the suite reports.
+68 journeys in 14 spec files. The list is the coverage; the counts are what the suite reports.
 
 | Spec | Journeys | Covers |
 | --- | --- | --- |
@@ -111,6 +116,7 @@ third of the suite, so all three projects run.
 | `rtl.spec.ts` | 4 | Persian layout, numerals that still equal the API's numbers, mixed-direction identifiers, graph geometry |
 | `a11y.spec.ts` | 7 | keyboard-only operation, tab/table/dialog primitives, the live region during a real resumption, focus stability across a refresh, and a nameless-control sweep |
 | `checkpoint5.spec.ts` | 3 | the four areas against each other: a run deep-linked in Persian, a refusal in Persian that changes identity in place, a cross-well document in the accessibility tree |
+| `master-data.spec.ts` | 3 | the asset spine end to end: project → field → well → wellbore → section, then rename, move, transition, sidetrack and activate with every id and the attached document preserved; the refusals (a viewer's 403, a stale write's 409, the lineage rules); and well creation from the interface read back from the server |
 
 ### What is mocked, and where
 

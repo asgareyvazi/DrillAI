@@ -1,1 +1,1321 @@
-{"entries":[{"kind":"document","id":"doc_01M3HF7RYSJ6HEH35BCEKF1X3N","at":"2026-03-15T00:00:00+00:00","end_at":"2026-03-16T00:00:00+00:00","title":"Daily Drilling Report 2026-03-15 (SYNTHETIC)","summary":"ddr · status ingested · 8 records · 1 chunks","status":"ingested","category":"ddr","operation_id":null,"section_id":null,"depth_md_si":null,"duration_hours":null,"severity":null,"npt":false,"npt_hours":null,"evidence_refs":[],"document_id":"doc_01M3HF7RYSJ6HEH35BCEKF1X3N","links":{"document":"/#/documents/doc_01M3HF7RYSJ6HEH35BCEKF1X3N"},"attributes":{"page_count":1,"ocr_required":false,"extraction_summary":{"pages":1,"regions":1,"chunks":1,"records":8,"evidence_links":8,"extractors":{"report_header":"1.0.0","operations_table":"1.0.0","mud_properties":"1.0.0","depth_readings":"1.0.0","survey_table":"1.0.0","casing_cement":"1.0.0","label_values":"1.0.0"},"doc_type":"ddr"},"revision":null}},{"kind":"operation","id":"opr_01M3HF7S07XE2PXHTGA4JW5NA0","at":"2026-03-15T00:00:00+00:00","end_at":"2026-03-15T08:30:00+00:00","title":"Drilling ahead 8-1/2 in section","summary":"1 | Drilling ahead 8-1/2 in section | DRL | 8.5 | 2410 | Drilling ahead from 2350 m to 2410 m at 120 rpm","status":"completed","category":"actual:drilling","operation_id":"opr_01M3HF7S07XE2PXHTGA4JW5NA0","section_id":"sec_01M3HF7RY0FMS5RBM38CMVKE4E","depth_md_si":2350.0,"duration_hours":8.5,"severity":null,"npt":false,"npt_hours":null,"evidence_refs":[],"document_id":"doc_01M3HF7RYSJ6HEH35BCEKF1X3N","links":{},"attributes":{"sequence":1,"phase":"completed","is_productive":true,"planned_duration_hours":null,"data_quality":"extracted","source":"report"}},{"kind":"operation","id":"opr_01M3HF7S0AHMK9J6SECF93QA77","at":"2026-03-15T08:30:00+00:00","end_at":"2026-03-15T09:00:00+00:00","title":"Made connection","summary":"2 | Made connection | CONN | 0.5 | 2410 | Connection at 2410 m","status":"completed","category":"actual:connection","operation_id":"opr_01M3HF7S0AHMK9J6SECF93QA77","section_id":"sec_01M3HF7RY0FMS5RBM38CMVKE4E","depth_md_si":2410.0,"duration_hours":0.5,"severity":null,"npt":false,"npt_hours":null,"evidence_refs":[],"document_id":"doc_01M3HF7RYSJ6HEH35BCEKF1X3N","links":{},"attributes":{"sequence":2,"phase":"completed","is_productive":true,"planned_duration_hours":null,"data_quality":"extracted","source":"report"}},{"kind":"event","id":"evn_01M3HF7S0V61430K4JJV1BDVQG","at":"2026-03-15T09:00:00+00:00","end_at":"2026-03-15T15:00:00+00:00","title":"Stuck Pipe reported in Daily Drilling Report 2026-03-15 (SYNTHETIC)","summary":"3 | Stuck pipe while POOH | STUCK | 6.0 | 2408 | Stuck pipe at 2408 m; jarring attempted; worked free after 6 hours","status":"open","category":"stuck_pipe","operation_id":"opr_01M3HF7S0C1S7V2GVS6JZW5GRV","section_id":"sec_01M3HF7RY0FMS5RBM38CMVKE4E","depth_md_si":2408.0,"duration_hours":6.0,"severity":"high","npt":true,"npt_hours":6.0,"evidence_refs":[],"document_id":"doc_01M3HF7RYSJ6HEH35BCEKF1X3N","links":{},"attributes":{"kind":"npt","npt_code":"STUCK_PIPE","immediate_action":null,"corrective_action":null}},{"kind":"operation","id":"opr_01M3HF7S0C1S7V2GVS6JZW5GRV","at":"2026-03-15T09:00:00+00:00","end_at":"2026-03-15T15:00:00+00:00","title":"Stuck pipe while POOH","summary":"3 | Stuck pipe while POOH | STUCK | 6.0 | 2408 | Stuck pipe at 2408 m; jarring attempted; worked free after 6 hours","status":"completed","category":"actual:jarring","operation_id":"opr_01M3HF7S0C1S7V2GVS6JZW5GRV","section_id":"sec_01M3HF7RY0FMS5RBM38CMVKE4E","depth_md_si":2408.0,"duration_hours":6.0,"severity":null,"npt":true,"npt_hours":6.0,"evidence_refs":[],"document_id":"doc_01M3HF7RYSJ6HEH35BCEKF1X3N","links":{},"attributes":{"sequence":3,"phase":"completed","is_productive":false,"planned_duration_hours":null,"data_quality":"extracted","source":"report"}},{"kind":"event","id":"evn_01M3HF7S0XZHYF4083E5JP15R1","at":"2026-03-15T15:00:00+00:00","end_at":"2026-03-15T17:30:00+00:00","title":"Lost Circulation reported in Daily Drilling Report 2026-03-15 (SYNTHETIC)","summary":"4 | Lost circulation | LC | 2.5 | 2412 | Lost circulation 15 bbl/hr; LCM pill pumped","status":"open","category":"lost_circulation","operation_id":"opr_01M3HF7S0EQ5Q0C925K6YD4610","section_id":"sec_01M3HF7RY0FMS5RBM38CMVKE4E","depth_md_si":null,"duration_hours":2.5,"severity":"medium","npt":true,"npt_hours":2.5,"evidence_refs":[],"document_id":"doc_01M3HF7RYSJ6HEH35BCEKF1X3N","links":{},"attributes":{"kind":"npt","npt_code":"LOST_CIRC","immediate_action":null,"corrective_action":null}},{"kind":"operation","id":"opr_01M3HF7S0EQ5Q0C925K6YD4610","at":"2026-03-15T15:00:00+00:00","end_at":"2026-03-15T17:30:00+00:00","title":"Lost circulation","summary":"4 | Lost circulation | LC | 2.5 | 2412 | Lost circulation 15 bbl/hr; LCM pill pumped","status":"completed","category":"actual:circulating","operation_id":"opr_01M3HF7S0EQ5Q0C925K6YD4610","section_id":"sec_01M3HF7RY0FMS5RBM38CMVKE4E","depth_md_si":null,"duration_hours":2.5,"severity":null,"npt":true,"npt_hours":2.5,"evidence_refs":[],"document_id":"doc_01M3HF7RYSJ6HEH35BCEKF1X3N","links":{},"attributes":{"sequence":4,"phase":"completed","is_productive":false,"planned_duration_hours":null,"data_quality":"extracted","source":"report"}},{"kind":"operation","id":"opr_01M3HF7S0GPXZG67QZJ59QV71Z","at":"2026-03-15T17:30:00+00:00","end_at":"2026-03-15T18:30:00+00:00","title":"Circulating and conditioning mud","summary":"5 | Circulating and conditioning mud | CIRC | 1.0 | 2412 | Bottoms up and mud conditioning","status":"completed","category":"actual:mud_conditioning","operation_id":"opr_01M3HF7S0GPXZG67QZJ59QV71Z","section_id":"sec_01M3HF7RY0FMS5RBM38CMVKE4E","depth_md_si":null,"duration_hours":1.0,"severity":null,"npt":false,"npt_hours":null,"evidence_refs":[],"document_id":"doc_01M3HF7RYSJ6HEH35BCEKF1X3N","links":{},"attributes":{"sequence":5,"phase":"completed","is_productive":true,"planned_duration_hours":null,"data_quality":"extracted","source":"report"}},{"kind":"document","id":"doc_01M3HF7S1KJB6CV295Y5JYQ9EW","at":"2026-03-16T00:00:00+00:00","end_at":"2026-03-17T00:00:00+00:00","title":"Daily Drilling Report 2026-03-16 (SYNTHETIC, narrative)","summary":"ddr · status ingested · 3 records · 1 chunks","status":"ingested","category":"ddr","operation_id":null,"section_id":null,"depth_md_si":null,"duration_hours":null,"severity":null,"npt":false,"npt_hours":null,"evidence_refs":[],"document_id":"doc_01M3HF7S1KJB6CV295Y5JYQ9EW","links":{"document":"/#/documents/doc_01M3HF7S1KJB6CV295Y5JYQ9EW"},"attributes":{"page_count":1,"ocr_required":false,"extraction_summary":{"pages":1,"regions":1,"chunks":1,"records":3,"evidence_links":3,"extractors":{"report_header":"1.0.0","operations_table":"1.0.0","mud_properties":"1.0.0","depth_readings":"1.0.0","survey_table":"1.0.0","casing_cement":"1.0.0","label_values":"1.0.0"},"doc_type":"ddr"},"revision":null}},{"kind":"engine_run","id":"eng_01M3HF7S2FAMZ0ZF0GD2SCP2W9","at":"2026-09-27T13:00:29.647908+00:00","end_at":null,"title":"hydraulics.laminar v1.2.0","summary":"status succeeded · 3 warnings","status":"succeeded","category":"Hydraulics Pack","operation_id":null,"section_id":"sec_01M3HF7RY0FMS5RBM38CMVKE4E","depth_md_si":null,"duration_hours":null,"severity":"warning","npt":false,"npt_hours":null,"evidence_refs":["eng_01M3HF7S2FAMZ0ZF0GD2SCP2W9"],"document_id":null,"links":{"engine_run":"/#/engineering/runs/eng_01M3HF7S2FAMZ0ZF0GD2SCP2W9"},"attributes":{"engine_key":"hydraulics.laminar","engine_version":"1.2.0","is_feasible":true,"duration_ms":null,"triggered_by":"api","workflow_run_id":null,"inputs_hash":"9786180d4191f1ad4d914f84b305d4d27c15475ba5cccf207aaa6f6ffaa85e91"}},{"kind":"engine_run","id":"eng_01M3HF7S2XKFFGMNVXQNP3WQ21","at":"2026-09-27T13:00:29.661459+00:00","end_at":null,"title":"hydraulics.laminar v1.2.0","summary":"status succeeded · 3 warnings","status":"succeeded","category":"Hydraulics Pack","operation_id":null,"section_id":null,"depth_md_si":null,"duration_hours":null,"severity":"warning","npt":false,"npt_hours":null,"evidence_refs":["eng_01M3HF7S2XKFFGMNVXQNP3WQ21"],"document_id":null,"links":{"engine_run":"/#/engineering/runs/eng_01M3HF7S2XKFFGMNVXQNP3WQ21"},"attributes":{"engine_key":"hydraulics.laminar","engine_version":"1.2.0","is_feasible":true,"duration_ms":null,"triggered_by":"optimisation","workflow_run_id":null,"inputs_hash":"fb43d8b67810c3f250f9f6a84727dd3039f443a1c277f17e69e0a039cb0c0ece"}},{"kind":"engine_run","id":"eng_01M3HF7S2YZMEEHC93TMY68754","at":"2026-09-27T13:00:29.662817+00:00","end_at":null,"title":"hydraulics.laminar v1.2.0","summary":"status succeeded · 3 warnings","status":"succeeded","category":"Hydraulics Pack","operation_id":null,"section_id":null,"depth_md_si":null,"duration_hours":null,"severity":"warning","npt":false,"npt_hours":null,"evidence_refs":["eng_01M3HF7S2YZMEEHC93TMY68754"],"document_id":null,"links":{"engine_run":"/#/engineering/runs/eng_01M3HF7S2YZMEEHC93TMY68754"},"attributes":{"engine_key":"hydraulics.laminar","engine_version":"1.2.0","is_feasible":true,"duration_ms":null,"triggered_by":"optimisation","workflow_run_id":null,"inputs_hash":"fb43d8b67810c3f250f9f6a84727dd3039f443a1c277f17e69e0a039cb0c0ece"}},{"kind":"engine_run","id":"eng_01M3HF7S2Z5G18P0AFKCN3MJXG","at":"2026-09-27T13:00:29.664010+00:00","end_at":null,"title":"hydraulics.laminar v1.2.0","summary":"status succeeded · 3 warnings","status":"succeeded","category":"Hydraulics Pack","operation_id":null,"section_id":null,"depth_md_si":null,"duration_hours":null,"severity":"warning","npt":false,"npt_hours":null,"evidence_refs":["eng_01M3HF7S2Z5G18P0AFKCN3MJXG"],"document_id":null,"links":{"engine_run":"/#/engineering/runs/eng_01M3HF7S2Z5G18P0AFKCN3MJXG"},"attributes":{"engine_key":"hydraulics.laminar","engine_version":"1.2.0","is_feasible":true,"duration_ms":null,"triggered_by":"optimisation","workflow_run_id":null,"inputs_hash":"fb43d8b67810c3f250f9f6a84727dd3039f443a1c277f17e69e0a039cb0c0ece"}},{"kind":"engine_run","id":"eng_01M3HF7S310BAC5KQ0GQ30PA5X","at":"2026-09-27T13:00:29.665301+00:00","end_at":null,"title":"hydraulics.laminar v1.2.0","summary":"status succeeded · 3 warnings","status":"succeeded","category":"Hydraulics Pack","operation_id":null,"section_id":null,"depth_md_si":null,"duration_hours":null,"severity":"warning","npt":false,"npt_hours":null,"evidence_refs":["eng_01M3HF7S310BAC5KQ0GQ30PA5X"],"document_id":null,"links":{"engine_run":"/#/engineering/runs/eng_01M3HF7S310BAC5KQ0GQ30PA5X"},"attributes":{"engine_key":"hydraulics.laminar","engine_version":"1.2.0","is_feasible":true,"duration_ms":null,"triggered_by":"optimisation","workflow_run_id":null,"inputs_hash":"e91738bf0957c34d575baf946d4ea47e24b62ae0f7d4e493078e4db08865a009"}},{"kind":"engine_run","id":"eng_01M3HF7S32D3AKAHKGCEA45HVE","at":"2026-09-27T13:00:29.666441+00:00","end_at":null,"title":"hydraulics.laminar v1.2.0","summary":"status succeeded · 3 warnings","status":"succeeded","category":"Hydraulics Pack","operation_id":null,"section_id":null,"depth_md_si":null,"duration_hours":null,"severity":"warning","npt":false,"npt_hours":null,"evidence_refs":["eng_01M3HF7S32D3AKAHKGCEA45HVE"],"document_id":null,"links":{"engine_run":"/#/engineering/runs/eng_01M3HF7S32D3AKAHKGCEA45HVE"},"attributes":{"engine_key":"hydraulics.laminar","engine_version":"1.2.0","is_feasible":true,"duration_ms":null,"triggered_by":"optimisation","workflow_run_id":null,"inputs_hash":"e91738bf0957c34d575baf946d4ea47e24b62ae0f7d4e493078e4db08865a009"}},{"kind":"engine_run","id":"eng_01M3HF7S332REWV6FANP4KPN6X","at":"2026-09-27T13:00:29.667612+00:00","end_at":null,"title":"hydraulics.laminar v1.2.0","summary":"status succeeded · 3 warnings","status":"succeeded","category":"Hydraulics Pack","operation_id":null,"section_id":null,"depth_md_si":null,"duration_hours":null,"severity":"warning","npt":false,"npt_hours":null,"evidence_refs":["eng_01M3HF7S332REWV6FANP4KPN6X"],"document_id":null,"links":{"engine_run":"/#/engineering/runs/eng_01M3HF7S332REWV6FANP4KPN6X"},"attributes":{"engine_key":"hydraulics.laminar","engine_version":"1.2.0","is_feasible":true,"duration_ms":null,"triggered_by":"optimisation","workflow_run_id":null,"inputs_hash":"e91738bf0957c34d575baf946d4ea47e24b62ae0f7d4e493078e4db08865a009"}},{"kind":"engine_run","id":"eng_01M3HF7S342F91CT46Y6BR5XF0","at":"2026-09-27T13:00:29.668791+00:00","end_at":null,"title":"hydraulics.laminar v1.2.0","summary":"status succeeded · 3 warnings","status":"succeeded","category":"Hydraulics Pack","operation_id":null,"section_id":null,"depth_md_si":null,"duration_hours":null,"severity":"warning","npt":false,"npt_hours":null,"evidence_refs":["eng_01M3HF7S342F91CT46Y6BR5XF0"],"document_id":null,"links":{"engine_run":"/#/engineering/runs/eng_01M3HF7S342F91CT46Y6BR5XF0"},"attributes":{"engine_key":"hydraulics.laminar","engine_version":"1.2.0","is_feasible":true,"duration_ms":null,"triggered_by":"optimisation","workflow_run_id":null,"inputs_hash":"9786180d4191f1ad4d914f84b305d4d27c15475ba5cccf207aaa6f6ffaa85e91"}},{"kind":"engine_run","id":"eng_01M3HF7S366HG6C1K1GNF5S626","at":"2026-09-27T13:00:29.670261+00:00","end_at":null,"title":"hydraulics.laminar v1.2.0","summary":"status succeeded · 3 warnings","status":"succeeded","category":"Hydraulics Pack","operation_id":null,"section_id":null,"depth_md_si":null,"duration_hours":null,"severity":"warning","npt":false,"npt_hours":null,"evidence_refs":["eng_01M3HF7S366HG6C1K1GNF5S626"],"document_id":null,"links":{"engine_run":"/#/engineering/runs/eng_01M3HF7S366HG6C1K1GNF5S626"},"attributes":{"engine_key":"hydraulics.laminar","engine_version":"1.2.0","is_feasible":true,"duration_ms":null,"triggered_by":"optimisation","workflow_run_id":null,"inputs_hash":"9786180d4191f1ad4d914f84b305d4d27c15475ba5cccf207aaa6f6ffaa85e91"}},{"kind":"engine_run","id":"eng_01M3HF7S38P45XYM3HY0YPEYJS","at":"2026-09-27T13:00:29.672058+00:00","end_at":null,"title":"hydraulics.laminar v1.2.0","summary":"status succeeded · 3 warnings","status":"succeeded","category":"Hydraulics Pack","operation_id":null,"section_id":null,"depth_md_si":null,"duration_hours":null,"severity":"warning","npt":false,"npt_hours":null,"evidence_refs":["eng_01M3HF7S38P45XYM3HY0YPEYJS"],"document_id":null,"links":{"engine_run":"/#/engineering/runs/eng_01M3HF7S38P45XYM3HY0YPEYJS"},"attributes":{"engine_key":"hydraulics.laminar","engine_version":"1.2.0","is_feasible":true,"duration_ms":null,"triggered_by":"optimisation","workflow_run_id":null,"inputs_hash":"9786180d4191f1ad4d914f84b305d4d27c15475ba5cccf207aaa6f6ffaa85e91"}},{"kind":"engine_run","id":"eng_01M3HF7S3975K33PMJ3EQW96QV","at":"2026-09-27T13:00:29.673918+00:00","end_at":null,"title":"hydraulics.laminar v1.2.0","summary":"status succeeded · 3 warnings","status":"succeeded","category":"Hydraulics Pack","operation_id":null,"section_id":null,"depth_md_si":null,"duration_hours":null,"severity":"warning","npt":false,"npt_hours":null,"evidence_refs":["eng_01M3HF7S3975K33PMJ3EQW96QV"],"document_id":null,"links":{"engine_run":"/#/engineering/runs/eng_01M3HF7S3975K33PMJ3EQW96QV"},"attributes":{"engine_key":"hydraulics.laminar","engine_version":"1.2.0","is_feasible":true,"duration_ms":null,"triggered_by":"optimisation","workflow_run_id":null,"inputs_hash":"6f66645fd546ab80001f4ef84b44343d0b948ee7810b8c4809b11adafd54bdad"}},{"kind":"engine_run","id":"eng_01M3HF7S3BYCC6SVZNKWMGZ1HN","at":"2026-09-27T13:00:29.675888+00:00","end_at":null,"title":"hydraulics.laminar v1.2.0","summary":"status succeeded · 3 warnings","status":"succeeded","category":"Hydraulics Pack","operation_id":null,"section_id":null,"depth_md_si":null,"duration_hours":null,"severity":"warning","npt":false,"npt_hours":null,"evidence_refs":["eng_01M3HF7S3BYCC6SVZNKWMGZ1HN"],"document_id":null,"links":{"engine_run":"/#/engineering/runs/eng_01M3HF7S3BYCC6SVZNKWMGZ1HN"},"attributes":{"engine_key":"hydraulics.laminar","engine_version":"1.2.0","is_feasible":true,"duration_ms":null,"triggered_by":"optimisation","workflow_run_id":null,"inputs_hash":"6f66645fd546ab80001f4ef84b44343d0b948ee7810b8c4809b11adafd54bdad"}},{"kind":"engine_run","id":"eng_01M3HF7S3D0BZ914W5CSC24DCK","at":"2026-09-27T13:00:29.677492+00:00","end_at":null,"title":"hydraulics.laminar v1.2.0","summary":"status succeeded · 3 warnings","status":"succeeded","category":"Hydraulics Pack","operation_id":null,"section_id":null,"depth_md_si":null,"duration_hours":null,"severity":"warning","npt":false,"npt_hours":null,"evidence_refs":["eng_01M3HF7S3D0BZ914W5CSC24DCK"],"document_id":null,"links":{"engine_run":"/#/engineering/runs/eng_01M3HF7S3D0BZ914W5CSC24DCK"},"attributes":{"engine_key":"hydraulics.laminar","engine_version":"1.2.0","is_feasible":true,"duration_ms":null,"triggered_by":"optimisation","workflow_run_id":null,"inputs_hash":"6f66645fd546ab80001f4ef84b44343d0b948ee7810b8c4809b11adafd54bdad"}},{"kind":"engine_run","id":"eng_01M3HF7S3E3W84HQMNWF5DNTE2","at":"2026-09-27T13:00:29.678848+00:00","end_at":null,"title":"hydraulics.laminar v1.2.0","summary":"status succeeded · 3 warnings","status":"succeeded","category":"Hydraulics Pack","operation_id":null,"section_id":null,"depth_md_si":null,"duration_hours":null,"severity":"warning","npt":false,"npt_hours":null,"evidence_refs":["eng_01M3HF7S3E3W84HQMNWF5DNTE2"],"document_id":null,"links":{"engine_run":"/#/engineering/runs/eng_01M3HF7S3E3W84HQMNWF5DNTE2"},"attributes":{"engine_key":"hydraulics.laminar","engine_version":"1.2.0","is_feasible":true,"duration_ms":null,"triggered_by":"optimisation","workflow_run_id":null,"inputs_hash":"0d2a27bae8277539678fe31ef4a965d66e8564f676485410a54586d3786543e6"}},{"kind":"engine_run","id":"eng_01M3HF7S3G1GVDPWWFM86DF6MH","at":"2026-09-27T13:00:29.680107+00:00","end_at":null,"title":"hydraulics.laminar v1.2.0","summary":"status succeeded · 3 warnings","status":"succeeded","category":"Hydraulics Pack","operation_id":null,"section_id":null,"depth_md_si":null,"duration_hours":null,"severity":"warning","npt":false,"npt_hours":null,"evidence_refs":["eng_01M3HF7S3G1GVDPWWFM86DF6MH"],"document_id":null,"links":{"engine_run":"/#/engineering/runs/eng_01M3HF7S3G1GVDPWWFM86DF6MH"},"attributes":{"engine_key":"hydraulics.laminar","engine_version":"1.2.0","is_feasible":true,"duration_ms":null,"triggered_by":"optimisation","workflow_run_id":null,"inputs_hash":"0d2a27bae8277539678fe31ef4a965d66e8564f676485410a54586d3786543e6"}},{"kind":"engine_run","id":"eng_01M3HF7S3HN5BFTNAW9DV9NV43","at":"2026-09-27T13:00:29.681232+00:00","end_at":null,"title":"hydraulics.laminar v1.2.0","summary":"status succeeded · 3 warnings","status":"succeeded","category":"Hydraulics Pack","operation_id":null,"section_id":null,"depth_md_si":null,"duration_hours":null,"severity":"warning","npt":false,"npt_hours":null,"evidence_refs":["eng_01M3HF7S3HN5BFTNAW9DV9NV43"],"document_id":null,"links":{"engine_run":"/#/engineering/runs/eng_01M3HF7S3HN5BFTNAW9DV9NV43"},"attributes":{"engine_key":"hydraulics.laminar","engine_version":"1.2.0","is_feasible":true,"duration_ms":null,"triggered_by":"optimisation","workflow_run_id":null,"inputs_hash":"0d2a27bae8277539678fe31ef4a965d66e8564f676485410a54586d3786543e6"}},{"kind":"recommendation","id":"rcm_01M3HF7S5NQN0R6R258ZV65MSP","at":"2026-09-27T13:00:29.749618+00:00","end_at":null,"title":"Drilling parameters — Synthetic demo: flow rate and mud weight sweep","summary":"Recommended drilling parameters for SYNTH-DEMO-01 (synthetic data): flow_rate_si = 0.025, mud_weight_si = 1220.0","status":"proposed","category":"drilling:parameter_window","operation_id":null,"section_id":null,"depth_md_si":null,"duration_hours":null,"severity":null,"npt":false,"npt_hours":null,"evidence_refs":["eng_01M3HF7S2XKFFGMNVXQNP3WQ21","eng_01M3HF7S2YZMEEHC93TMY68754","eng_01M3HF7S2Z5G18P0AFKCN3MJXG","eng_01M3HF7S310BAC5KQ0GQ30PA5X","eng_01M3HF7S32D3AKAHKGCEA45HVE","eng_01M3HF7S332REWV6FANP4KPN6X","eng_01M3HF7S342F91CT46Y6BR5XF0","eng_01M3HF7S366HG6C1K1GNF5S626","eng_01M3HF7S38P45XYM3HY0YPEYJS","eng_01M3HF7S3975K33PMJ3EQW96QV","eng_01M3HF7S3BYCC6SVZNKWMGZ1HN","eng_01M3HF7S3D0BZ914W5CSC24DCK","eng_01M3HF7S3E3W84HQMNWF5DNTE2","eng_01M3HF7S3G1GVDPWWFM86DF6MH","eng_01M3HF7S3HN5BFTNAW9DV9NV43"],"document_id":null,"links":{},"attributes":{"action_level":"L2","confidence":null,"confidence_basis":"deterministic engine evaluation of the candidate set; no field trial has been run and no ROP model exists, so performance gain is not claimed","data_quality":"computed","why_not":[{"candidate":"c0001","candidate_id":"cnd_01M3HF7S3NVEGHTF6XFT19C0C3","kind":"trade_off","reason":"on the Pareto frontier: better on at least one objective and worse on another, so the choice is a trade-off","comparison":{"annular_velocity_m_s":{"candidate":1.0442,"recommended":1.0442,"sense":"maximize"},"ecd_margin_si":{"candidate":280.781,"recommended":280.781,"sense":"maximize"},"spp_utilisation":{"candidate":0.1896,"recommended":0.1896,"sense":"minimize"}}},{"candidate":"c0002","candidate_id":"cnd_01M3HF7S3NP1AR5X1D627B8ZTG","kind":"trade_off","reason":"on the Pareto frontier: better on at least one objective and worse on another, so the choice is a trade-off","comparison":{"annular_velocity_m_s":{"candidate":1.0442,"recommended":1.0442,"sense":"maximize"},"ecd_margin_si":{"candidate":280.781,"recommended":280.781,"sense":"maximize"},"spp_utilisation":{"candidate":0.1896,"recommended":0.1896,"sense":"minimize"}}},{"candidate":"c0003","candidate_id":"cnd_01M3HF7S3NFEFK1Z3XPWS0V3E6","kind":"trade_off","reason":"on the Pareto frontier: better on at least one objective and worse on another, so the choice is a trade-off","comparison":{"annular_velocity_m_s":{"candidate":1.253,"recommended":1.0442,"sense":"maximize"},"ecd_margin_si":{"candidate":277.814,"recommended":280.781,"sense":"maximize"},"spp_utilisation":{"candidate":0.2325,"recommended":0.1896,"sense":"minimize"}}},{"candidate":"c0004","candidate_id":"cnd_01M3HF7S3NFA6WYECTM3PVDM4G","kind":"trade_off","reason":"on the Pareto frontier: better on at least one objective and worse on another, so the choice is a trade-off","comparison":{"annular_velocity_m_s":{"candidate":1.253,"recommended":1.0442,"sense":"maximize"},"ecd_margin_si":{"candidate":277.814,"recommended":280.781,"sense":"maximize"},"spp_utilisation":{"candidate":0.2325,"recommended":0.1896,"sense":"minimize"}}},{"candidate":"c0005","candidate_id":"cnd_01M3HF7S3NT84F5XE4CNX2Q7F7","kind":"trade_off","reason":"on the Pareto frontier: better on at least one objective and worse on another, so the choice is a trade-off","comparison":{"annular_velocity_m_s":{"candidate":1.253,"recommended":1.0442,"sense":"maximize"},"ecd_margin_si":{"candidate":277.814,"recommended":280.781,"sense":"maximize"},"spp_utilisation":{"candidate":0.2325,"recommended":0.1896,"sense":"minimize"}}},{"candidate":"c0006","candidate_id":"cnd_01M3HF7S3NAC12NJCAWM3S6J0W","kind":"trade_off","reason":"on the Pareto frontier: better on at least one objective and worse on another, so the choice is a trade-off","comparison":{"annular_velocity_m_s":{"candidate":1.4619,"recommended":1.0442,"sense":"maximize"},"ecd_margin_si":{"candidate":274.95,"recommended":280.781,"sense":"maximize"},"spp_utilisation":{"candidate":0.2821,"recommended":0.1896,"sense":"minimize"}}},{"candidate":"c0007","candidate_id":"cnd_01M3HF7S3NSME7GK384K896PAH","kind":"trade_off","reason":"on the Pareto frontier: better on at least one objective and worse on another, so the choice is a trade-off","comparison":{"annular_velocity_m_s":{"candidate":1.4619,"recommended":1.0442,"sense":"maximize"},"ecd_margin_si":{"candidate":274.95,"recommended":280.781,"sense":"maximize"},"spp_utilisation":{"candidate":0.2821,"recommended":0.1896,"sense":"minimize"}}},{"candidate":"c0008","candidate_id":"cnd_01M3HF7S3NZAP59KX24AWQQC12","kind":"trade_off","reason":"on the Pareto frontier: better on at least one objective and worse on another, so the choice is a trade-off","comparison":{"annular_velocity_m_s":{"candidate":1.4619,"recommended":1.0442,"sense":"maximize"},"ecd_margin_si":{"candidate":274.95,"recommended":280.781,"sense":"maximize"},"spp_utilisation":{"candidate":0.2821,"recommended":0.1896,"sense":"minimize"}}},{"candidate":"c0009","candidate_id":"cnd_01M3HF7S3NGFJYN9J0SPCAZH8T","kind":"trade_off","reason":"on the Pareto frontier: better on at least one objective and worse on another, so the choice is a trade-off","comparison":{"annular_velocity_m_s":{"candidate":1.6707,"recommended":1.0442,"sense":"maximize"},"ecd_margin_si":{"candidate":272.163,"recommended":280.781,"sense":"maximize"},"spp_utilisation":{"candidate":0.3383,"recommended":0.1896,"sense":"minimize"}}},{"candidate":"c0010","candidate_id":"cnd_01M3HF7S3N15K3PM4CVZA7M146","kind":"dominated","reason":"feasible but ranked below the recommended candidate on the objective set","comparison":{"annular_velocity_m_s":{"candidate":1.6707,"recommended":1.0442,"sense":"maximize"},"ecd_margin_si":{"candidate":272.163,"recommended":280.781,"sense":"maximize"},"spp_utilisation":{"candidate":0.3383,"recommended":0.1896,"sense":"minimize"}}},{"candidate":"c0011","candidate_id":"cnd_01M3HF7S3NMF7CKXQPKKW9BAMM","kind":"dominated","reason":"feasible but ranked below the recommended candidate on the objective set","comparison":{"annular_velocity_m_s":{"candidate":1.6707,"recommended":1.0442,"sense":"maximize"},"ecd_margin_si":{"candidate":272.163,"recommended":280.781,"sense":"maximize"},"spp_utilisation":{"candidate":0.3383,"recommended":0.1896,"sense":"minimize"}}},{"candidate":"c0012","candidate_id":"cnd_01M3HF7S3N4D5CH8GQZ9BZRMJ1","kind":"dominated","reason":"feasible but ranked below the recommended candidate on the objective set","comparison":{"annular_velocity_m_s":{"candidate":1.8795,"recommended":1.0442,"sense":"maximize"},"ecd_margin_si":{"candidate":269.438,"recommended":280.781,"sense":"maximize"},"spp_utilisation":{"candidate":0.4012,"recommended":0.1896,"sense":"minimize"}}},{"candidate":"c0013","candidate_id":"cnd_01M3HF7S3N3SX35QZ0SQPSGZ3N","kind":"dominated","reason":"feasible but ranked below the recommended candidate on the objective set","comparison":{"annular_velocity_m_s":{"candidate":1.8795,"recommended":1.0442,"sense":"maximize"},"ecd_margin_si":{"candidate":269.438,"recommended":280.781,"sense":"maximize"},"spp_utilisation":{"candidate":0.4012,"recommended":0.1896,"sense":"minimize"}}},{"candidate":"c0014","candidate_id":"cnd_01M3HF7S3NCET0SXVRVAGPW510","kind":"dominated","reason":"feasible but ranked below the recommended candidate on the objective set","comparison":{"annular_velocity_m_s":{"candidate":1.8795,"recommended":1.0442,"sense":"maximize"},"ecd_margin_si":{"candidate":269.438,"recommended":280.781,"sense":"maximize"},"spp_utilisation":{"candidate":0.4012,"recommended":0.1896,"sense":"minimize"}}}],"created_by_kind":"engine","workflow_run_id":null}}],"count":26,"kinds_available":["operation","event","document","engine_run","recommendation","twin_change","approval"]}
+{
+  "entries": [
+    {
+      "kind": "document",
+      "id": "doc_01M40H92SKSX1ZJBJNK9D2GY72",
+      "at": "2026-03-15T00:00:00+00:00",
+      "end_at": "2026-03-16T00:00:00+00:00",
+      "title": "Daily Drilling Report 2026-03-15 (SYNTHETIC)",
+      "summary": "ddr · status ingested · 8 records · 1 chunks",
+      "status": "ingested",
+      "category": "ddr",
+      "operation_id": null,
+      "section_id": null,
+      "depth_md_si": null,
+      "duration_hours": null,
+      "severity": null,
+      "npt": false,
+      "npt_hours": null,
+      "evidence_refs": [],
+      "document_id": "doc_01M40H92SKSX1ZJBJNK9D2GY72",
+      "links": {
+        "document": "/#/documents/doc_01M40H92SKSX1ZJBJNK9D2GY72"
+      },
+      "attributes": {
+        "page_count": 1,
+        "ocr_required": false,
+        "extraction_summary": {
+          "pages": 1,
+          "regions": 1,
+          "chunks": 1,
+          "records": 8,
+          "evidence_links": 8,
+          "extractors": {
+            "report_header": "1.0.0",
+            "operations_table": "1.0.0",
+            "mud_properties": "1.0.0",
+            "depth_readings": "1.0.0",
+            "survey_table": "1.0.0",
+            "casing_cement": "1.0.0",
+            "label_values": "1.0.0"
+          },
+          "doc_type": "ddr"
+        },
+        "revision": null
+      }
+    },
+    {
+      "kind": "operation",
+      "id": "opr_01M40H92W0F0CAAXCTVWNMCEAB",
+      "at": "2026-03-15T00:00:00+00:00",
+      "end_at": "2026-03-15T08:30:00+00:00",
+      "title": "Drilling ahead 8-1/2 in section",
+      "summary": "1 | Drilling ahead 8-1/2 in section | DRL | 8.5 | 2410 | Drilling ahead from 2350 m to 2410 m at 120 rpm",
+      "status": "completed",
+      "category": "actual:drilling",
+      "operation_id": "opr_01M40H92W0F0CAAXCTVWNMCEAB",
+      "section_id": "sec_01M40H92M479MEHETJTMZVESGT",
+      "depth_md_si": 2350.0,
+      "duration_hours": 8.5,
+      "severity": null,
+      "npt": false,
+      "npt_hours": null,
+      "evidence_refs": [],
+      "document_id": "doc_01M40H92SKSX1ZJBJNK9D2GY72",
+      "links": {},
+      "attributes": {
+        "sequence": 1,
+        "phase": "completed",
+        "is_productive": true,
+        "planned_duration_hours": null,
+        "data_quality": "extracted",
+        "source": "report"
+      }
+    },
+    {
+      "kind": "operation",
+      "id": "opr_01M40H92W3G3B9R2NQJTV95AKQ",
+      "at": "2026-03-15T08:30:00+00:00",
+      "end_at": "2026-03-15T09:00:00+00:00",
+      "title": "Made connection",
+      "summary": "2 | Made connection | CONN | 0.5 | 2410 | Connection at 2410 m",
+      "status": "completed",
+      "category": "actual:connection",
+      "operation_id": "opr_01M40H92W3G3B9R2NQJTV95AKQ",
+      "section_id": "sec_01M40H92M479MEHETJTMZVESGT",
+      "depth_md_si": 2410.0,
+      "duration_hours": 0.5,
+      "severity": null,
+      "npt": false,
+      "npt_hours": null,
+      "evidence_refs": [],
+      "document_id": "doc_01M40H92SKSX1ZJBJNK9D2GY72",
+      "links": {},
+      "attributes": {
+        "sequence": 2,
+        "phase": "completed",
+        "is_productive": true,
+        "planned_duration_hours": null,
+        "data_quality": "extracted",
+        "source": "report"
+      }
+    },
+    {
+      "kind": "event",
+      "id": "evn_01M40H92WKYZM5952EB43YPYM1",
+      "at": "2026-03-15T09:00:00+00:00",
+      "end_at": "2026-03-15T15:00:00+00:00",
+      "title": "Stuck Pipe reported in Daily Drilling Report 2026-03-15 (SYNTHETIC)",
+      "summary": "3 | Stuck pipe while POOH | STUCK | 6.0 | 2408 | Stuck pipe at 2408 m; jarring attempted; worked free after 6 hours",
+      "status": "open",
+      "category": "stuck_pipe",
+      "operation_id": "opr_01M40H92W5X3SZ35JK56HVAH9C",
+      "section_id": "sec_01M40H92M479MEHETJTMZVESGT",
+      "depth_md_si": 2408.0,
+      "duration_hours": 6.0,
+      "severity": "high",
+      "npt": true,
+      "npt_hours": 6.0,
+      "evidence_refs": [],
+      "document_id": "doc_01M40H92SKSX1ZJBJNK9D2GY72",
+      "links": {},
+      "attributes": {
+        "kind": "npt",
+        "npt_code": "STUCK_PIPE",
+        "immediate_action": null,
+        "corrective_action": null
+      }
+    },
+    {
+      "kind": "operation",
+      "id": "opr_01M40H92W5X3SZ35JK56HVAH9C",
+      "at": "2026-03-15T09:00:00+00:00",
+      "end_at": "2026-03-15T15:00:00+00:00",
+      "title": "Stuck pipe while POOH",
+      "summary": "3 | Stuck pipe while POOH | STUCK | 6.0 | 2408 | Stuck pipe at 2408 m; jarring attempted; worked free after 6 hours",
+      "status": "completed",
+      "category": "actual:jarring",
+      "operation_id": "opr_01M40H92W5X3SZ35JK56HVAH9C",
+      "section_id": "sec_01M40H92M479MEHETJTMZVESGT",
+      "depth_md_si": 2408.0,
+      "duration_hours": 6.0,
+      "severity": null,
+      "npt": true,
+      "npt_hours": 6.0,
+      "evidence_refs": [],
+      "document_id": "doc_01M40H92SKSX1ZJBJNK9D2GY72",
+      "links": {},
+      "attributes": {
+        "sequence": 3,
+        "phase": "completed",
+        "is_productive": false,
+        "planned_duration_hours": null,
+        "data_quality": "extracted",
+        "source": "report"
+      }
+    },
+    {
+      "kind": "event",
+      "id": "evn_01M40H92WP43K13KJZS9QP7R74",
+      "at": "2026-03-15T15:00:00+00:00",
+      "end_at": "2026-03-15T17:30:00+00:00",
+      "title": "Lost Circulation reported in Daily Drilling Report 2026-03-15 (SYNTHETIC)",
+      "summary": "4 | Lost circulation | LC | 2.5 | 2412 | Lost circulation 15 bbl/hr; LCM pill pumped",
+      "status": "open",
+      "category": "lost_circulation",
+      "operation_id": "opr_01M40H92W7HJNJSVF2EC085ADH",
+      "section_id": "sec_01M40H92M479MEHETJTMZVESGT",
+      "depth_md_si": null,
+      "duration_hours": 2.5,
+      "severity": "medium",
+      "npt": true,
+      "npt_hours": 2.5,
+      "evidence_refs": [],
+      "document_id": "doc_01M40H92SKSX1ZJBJNK9D2GY72",
+      "links": {},
+      "attributes": {
+        "kind": "npt",
+        "npt_code": "LOST_CIRC",
+        "immediate_action": null,
+        "corrective_action": null
+      }
+    },
+    {
+      "kind": "operation",
+      "id": "opr_01M40H92W7HJNJSVF2EC085ADH",
+      "at": "2026-03-15T15:00:00+00:00",
+      "end_at": "2026-03-15T17:30:00+00:00",
+      "title": "Lost circulation",
+      "summary": "4 | Lost circulation | LC | 2.5 | 2412 | Lost circulation 15 bbl/hr; LCM pill pumped",
+      "status": "completed",
+      "category": "actual:circulating",
+      "operation_id": "opr_01M40H92W7HJNJSVF2EC085ADH",
+      "section_id": "sec_01M40H92M479MEHETJTMZVESGT",
+      "depth_md_si": null,
+      "duration_hours": 2.5,
+      "severity": null,
+      "npt": true,
+      "npt_hours": 2.5,
+      "evidence_refs": [],
+      "document_id": "doc_01M40H92SKSX1ZJBJNK9D2GY72",
+      "links": {},
+      "attributes": {
+        "sequence": 4,
+        "phase": "completed",
+        "is_productive": false,
+        "planned_duration_hours": null,
+        "data_quality": "extracted",
+        "source": "report"
+      }
+    },
+    {
+      "kind": "operation",
+      "id": "opr_01M40H92W830BFM268BK5JQJ2H",
+      "at": "2026-03-15T17:30:00+00:00",
+      "end_at": "2026-03-15T18:30:00+00:00",
+      "title": "Circulating and conditioning mud",
+      "summary": "5 | Circulating and conditioning mud | CIRC | 1.0 | 2412 | Bottoms up and mud conditioning",
+      "status": "completed",
+      "category": "actual:mud_conditioning",
+      "operation_id": "opr_01M40H92W830BFM268BK5JQJ2H",
+      "section_id": "sec_01M40H92M479MEHETJTMZVESGT",
+      "depth_md_si": null,
+      "duration_hours": 1.0,
+      "severity": null,
+      "npt": false,
+      "npt_hours": null,
+      "evidence_refs": [],
+      "document_id": "doc_01M40H92SKSX1ZJBJNK9D2GY72",
+      "links": {},
+      "attributes": {
+        "sequence": 5,
+        "phase": "completed",
+        "is_productive": true,
+        "planned_duration_hours": null,
+        "data_quality": "extracted",
+        "source": "report"
+      }
+    },
+    {
+      "kind": "document",
+      "id": "doc_01M40H92XGM6RYRAT310H2CSM9",
+      "at": "2026-03-16T00:00:00+00:00",
+      "end_at": "2026-03-17T00:00:00+00:00",
+      "title": "Daily Drilling Report 2026-03-16 (SYNTHETIC, narrative)",
+      "summary": "ddr · status ingested · 3 records · 1 chunks",
+      "status": "ingested",
+      "category": "ddr",
+      "operation_id": null,
+      "section_id": null,
+      "depth_md_si": null,
+      "duration_hours": null,
+      "severity": null,
+      "npt": false,
+      "npt_hours": null,
+      "evidence_refs": [],
+      "document_id": "doc_01M40H92XGM6RYRAT310H2CSM9",
+      "links": {
+        "document": "/#/documents/doc_01M40H92XGM6RYRAT310H2CSM9"
+      },
+      "attributes": {
+        "page_count": 1,
+        "ocr_required": false,
+        "extraction_summary": {
+          "pages": 1,
+          "regions": 1,
+          "chunks": 1,
+          "records": 3,
+          "evidence_links": 3,
+          "extractors": {
+            "report_header": "1.0.0",
+            "operations_table": "1.0.0",
+            "mud_properties": "1.0.0",
+            "depth_readings": "1.0.0",
+            "survey_table": "1.0.0",
+            "casing_cement": "1.0.0",
+            "label_values": "1.0.0"
+          },
+          "doc_type": "ddr"
+        },
+        "revision": null
+      }
+    },
+    {
+      "kind": "twin_change",
+      "id": "chg_01M40H92K1W7NKBH9B34NK9TXE",
+      "at": "2026-10-03T09:24:45.791575+00:00",
+      "end_at": null,
+      "title": "well · created",
+      "summary": "well created",
+      "status": "created",
+      "category": "well",
+      "operation_id": null,
+      "section_id": null,
+      "depth_md_si": null,
+      "duration_hours": null,
+      "severity": null,
+      "npt": false,
+      "npt_hours": null,
+      "evidence_refs": [
+        "req_01M40H92JEKKETMJM3PRE57SAN"
+      ],
+      "document_id": null,
+      "links": {},
+      "attributes": {
+        "subject_id": "wel_01M40H92JVZ0J8X5C9AV72GP55",
+        "version": null,
+        "field_paths": [
+          "well"
+        ],
+        "actor_kind": "user",
+        "actor_id": "usr_dev_admin_drilling_supervisor",
+        "source": "api",
+        "workflow_run_id": null,
+        "approval_id": null,
+        "impact": {}
+      }
+    },
+    {
+      "kind": "twin_change",
+      "id": "chg_01M40H92KJ5RK5F9VCDEFN7G5G",
+      "at": "2026-10-03T09:24:45.809903+00:00",
+      "end_at": null,
+      "title": "wellbore · created",
+      "summary": "wellbore created",
+      "status": "created",
+      "category": "wellbore",
+      "operation_id": null,
+      "section_id": null,
+      "depth_md_si": null,
+      "duration_hours": null,
+      "severity": null,
+      "npt": false,
+      "npt_hours": null,
+      "evidence_refs": [
+        "req_01M40H92K5G5QVYB0D756B5TWZ"
+      ],
+      "document_id": null,
+      "links": {},
+      "attributes": {
+        "subject_id": "wlb_01M40H92KERJF41N2Q3JSK0MGR",
+        "version": null,
+        "field_paths": [
+          "name",
+          "purpose",
+          "sequence",
+          "parent_wellbore_id"
+        ],
+        "actor_kind": "user",
+        "actor_id": "usr_dev_admin_drilling_supervisor",
+        "source": "api",
+        "workflow_run_id": null,
+        "approval_id": null,
+        "impact": {}
+      }
+    },
+    {
+      "kind": "twin_change",
+      "id": "chg_01M40H92RM42HMGJPGT9Q4X1C7",
+      "at": "2026-10-03T09:24:45.971929+00:00",
+      "end_at": null,
+      "title": "section · created",
+      "summary": "section created",
+      "status": "created",
+      "category": "section",
+      "operation_id": null,
+      "section_id": null,
+      "depth_md_si": null,
+      "duration_hours": null,
+      "severity": null,
+      "npt": false,
+      "npt_hours": null,
+      "evidence_refs": [
+        "req_01M40H92KNF382A616MC9VG87J"
+      ],
+      "document_id": null,
+      "links": {},
+      "attributes": {
+        "subject_id": "sec_01M40H92M479MEHETJTMZVESGT",
+        "version": null,
+        "field_paths": [
+          "sequence",
+          "name",
+          "kind"
+        ],
+        "actor_kind": "user",
+        "actor_id": "usr_dev_admin_drilling_supervisor",
+        "source": "api",
+        "workflow_run_id": null,
+        "approval_id": null,
+        "impact": {}
+      }
+    },
+    {
+      "kind": "engine_run",
+      "id": "eng_01M40H92YZP70GMCR3VXS0D4PG",
+      "at": "2026-10-03T09:24:46.175725+00:00",
+      "end_at": null,
+      "title": "hydraulics.laminar v1.2.0",
+      "summary": "status succeeded · 3 warnings",
+      "status": "succeeded",
+      "category": "Hydraulics Pack",
+      "operation_id": null,
+      "section_id": "sec_01M40H92M479MEHETJTMZVESGT",
+      "depth_md_si": null,
+      "duration_hours": null,
+      "severity": "warning",
+      "npt": false,
+      "npt_hours": null,
+      "evidence_refs": [
+        "eng_01M40H92YZP70GMCR3VXS0D4PG"
+      ],
+      "document_id": null,
+      "links": {
+        "engine_run": "/#/engineering/runs/eng_01M40H92YZP70GMCR3VXS0D4PG"
+      },
+      "attributes": {
+        "engine_key": "hydraulics.laminar",
+        "engine_version": "1.2.0",
+        "is_feasible": true,
+        "duration_ms": null,
+        "triggered_by": "api",
+        "workflow_run_id": null,
+        "inputs_hash": "9786180d4191f1ad4d914f84b305d4d27c15475ba5cccf207aaa6f6ffaa85e91"
+      }
+    },
+    {
+      "kind": "engine_run",
+      "id": "eng_01M40H92ZH4X2ND7Y8YXD2270A",
+      "at": "2026-10-03T09:24:46.193528+00:00",
+      "end_at": null,
+      "title": "hydraulics.laminar v1.2.0",
+      "summary": "status succeeded · 3 warnings",
+      "status": "succeeded",
+      "category": "Hydraulics Pack",
+      "operation_id": null,
+      "section_id": null,
+      "depth_md_si": null,
+      "duration_hours": null,
+      "severity": "warning",
+      "npt": false,
+      "npt_hours": null,
+      "evidence_refs": [
+        "eng_01M40H92ZH4X2ND7Y8YXD2270A"
+      ],
+      "document_id": null,
+      "links": {
+        "engine_run": "/#/engineering/runs/eng_01M40H92ZH4X2ND7Y8YXD2270A"
+      },
+      "attributes": {
+        "engine_key": "hydraulics.laminar",
+        "engine_version": "1.2.0",
+        "is_feasible": true,
+        "duration_ms": null,
+        "triggered_by": "optimisation",
+        "workflow_run_id": null,
+        "inputs_hash": "fb43d8b67810c3f250f9f6a84727dd3039f443a1c277f17e69e0a039cb0c0ece"
+      }
+    },
+    {
+      "kind": "engine_run",
+      "id": "eng_01M40H92ZK84F6ERBHPKYQ0ARB",
+      "at": "2026-10-03T09:24:46.195463+00:00",
+      "end_at": null,
+      "title": "hydraulics.laminar v1.2.0",
+      "summary": "status succeeded · 3 warnings",
+      "status": "succeeded",
+      "category": "Hydraulics Pack",
+      "operation_id": null,
+      "section_id": null,
+      "depth_md_si": null,
+      "duration_hours": null,
+      "severity": "warning",
+      "npt": false,
+      "npt_hours": null,
+      "evidence_refs": [
+        "eng_01M40H92ZK84F6ERBHPKYQ0ARB"
+      ],
+      "document_id": null,
+      "links": {
+        "engine_run": "/#/engineering/runs/eng_01M40H92ZK84F6ERBHPKYQ0ARB"
+      },
+      "attributes": {
+        "engine_key": "hydraulics.laminar",
+        "engine_version": "1.2.0",
+        "is_feasible": true,
+        "duration_ms": null,
+        "triggered_by": "optimisation",
+        "workflow_run_id": null,
+        "inputs_hash": "fb43d8b67810c3f250f9f6a84727dd3039f443a1c277f17e69e0a039cb0c0ece"
+      }
+    },
+    {
+      "kind": "engine_run",
+      "id": "eng_01M40H92ZMRPWRCZ2MQXV8Z8M8",
+      "at": "2026-10-03T09:24:46.196943+00:00",
+      "end_at": null,
+      "title": "hydraulics.laminar v1.2.0",
+      "summary": "status succeeded · 3 warnings",
+      "status": "succeeded",
+      "category": "Hydraulics Pack",
+      "operation_id": null,
+      "section_id": null,
+      "depth_md_si": null,
+      "duration_hours": null,
+      "severity": "warning",
+      "npt": false,
+      "npt_hours": null,
+      "evidence_refs": [
+        "eng_01M40H92ZMRPWRCZ2MQXV8Z8M8"
+      ],
+      "document_id": null,
+      "links": {
+        "engine_run": "/#/engineering/runs/eng_01M40H92ZMRPWRCZ2MQXV8Z8M8"
+      },
+      "attributes": {
+        "engine_key": "hydraulics.laminar",
+        "engine_version": "1.2.0",
+        "is_feasible": true,
+        "duration_ms": null,
+        "triggered_by": "optimisation",
+        "workflow_run_id": null,
+        "inputs_hash": "fb43d8b67810c3f250f9f6a84727dd3039f443a1c277f17e69e0a039cb0c0ece"
+      }
+    },
+    {
+      "kind": "engine_run",
+      "id": "eng_01M40H92ZPY0P1V7F52J6DF9EV",
+      "at": "2026-10-03T09:24:46.198475+00:00",
+      "end_at": null,
+      "title": "hydraulics.laminar v1.2.0",
+      "summary": "status succeeded · 3 warnings",
+      "status": "succeeded",
+      "category": "Hydraulics Pack",
+      "operation_id": null,
+      "section_id": null,
+      "depth_md_si": null,
+      "duration_hours": null,
+      "severity": "warning",
+      "npt": false,
+      "npt_hours": null,
+      "evidence_refs": [
+        "eng_01M40H92ZPY0P1V7F52J6DF9EV"
+      ],
+      "document_id": null,
+      "links": {
+        "engine_run": "/#/engineering/runs/eng_01M40H92ZPY0P1V7F52J6DF9EV"
+      },
+      "attributes": {
+        "engine_key": "hydraulics.laminar",
+        "engine_version": "1.2.0",
+        "is_feasible": true,
+        "duration_ms": null,
+        "triggered_by": "optimisation",
+        "workflow_run_id": null,
+        "inputs_hash": "e91738bf0957c34d575baf946d4ea47e24b62ae0f7d4e493078e4db08865a009"
+      }
+    },
+    {
+      "kind": "engine_run",
+      "id": "eng_01M40H92ZQS1CHHA73793XH4QJ",
+      "at": "2026-10-03T09:24:46.199828+00:00",
+      "end_at": null,
+      "title": "hydraulics.laminar v1.2.0",
+      "summary": "status succeeded · 3 warnings",
+      "status": "succeeded",
+      "category": "Hydraulics Pack",
+      "operation_id": null,
+      "section_id": null,
+      "depth_md_si": null,
+      "duration_hours": null,
+      "severity": "warning",
+      "npt": false,
+      "npt_hours": null,
+      "evidence_refs": [
+        "eng_01M40H92ZQS1CHHA73793XH4QJ"
+      ],
+      "document_id": null,
+      "links": {
+        "engine_run": "/#/engineering/runs/eng_01M40H92ZQS1CHHA73793XH4QJ"
+      },
+      "attributes": {
+        "engine_key": "hydraulics.laminar",
+        "engine_version": "1.2.0",
+        "is_feasible": true,
+        "duration_ms": null,
+        "triggered_by": "optimisation",
+        "workflow_run_id": null,
+        "inputs_hash": "e91738bf0957c34d575baf946d4ea47e24b62ae0f7d4e493078e4db08865a009"
+      }
+    },
+    {
+      "kind": "engine_run",
+      "id": "eng_01M40H92ZSRMCYKKFA7V7YNKNE",
+      "at": "2026-10-03T09:24:46.201106+00:00",
+      "end_at": null,
+      "title": "hydraulics.laminar v1.2.0",
+      "summary": "status succeeded · 3 warnings",
+      "status": "succeeded",
+      "category": "Hydraulics Pack",
+      "operation_id": null,
+      "section_id": null,
+      "depth_md_si": null,
+      "duration_hours": null,
+      "severity": "warning",
+      "npt": false,
+      "npt_hours": null,
+      "evidence_refs": [
+        "eng_01M40H92ZSRMCYKKFA7V7YNKNE"
+      ],
+      "document_id": null,
+      "links": {
+        "engine_run": "/#/engineering/runs/eng_01M40H92ZSRMCYKKFA7V7YNKNE"
+      },
+      "attributes": {
+        "engine_key": "hydraulics.laminar",
+        "engine_version": "1.2.0",
+        "is_feasible": true,
+        "duration_ms": null,
+        "triggered_by": "optimisation",
+        "workflow_run_id": null,
+        "inputs_hash": "e91738bf0957c34d575baf946d4ea47e24b62ae0f7d4e493078e4db08865a009"
+      }
+    },
+    {
+      "kind": "engine_run",
+      "id": "eng_01M40H92ZTW3D0Z3BAGM0RWZAR",
+      "at": "2026-10-03T09:24:46.202526+00:00",
+      "end_at": null,
+      "title": "hydraulics.laminar v1.2.0",
+      "summary": "status succeeded · 3 warnings",
+      "status": "succeeded",
+      "category": "Hydraulics Pack",
+      "operation_id": null,
+      "section_id": null,
+      "depth_md_si": null,
+      "duration_hours": null,
+      "severity": "warning",
+      "npt": false,
+      "npt_hours": null,
+      "evidence_refs": [
+        "eng_01M40H92ZTW3D0Z3BAGM0RWZAR"
+      ],
+      "document_id": null,
+      "links": {
+        "engine_run": "/#/engineering/runs/eng_01M40H92ZTW3D0Z3BAGM0RWZAR"
+      },
+      "attributes": {
+        "engine_key": "hydraulics.laminar",
+        "engine_version": "1.2.0",
+        "is_feasible": true,
+        "duration_ms": null,
+        "triggered_by": "optimisation",
+        "workflow_run_id": null,
+        "inputs_hash": "9786180d4191f1ad4d914f84b305d4d27c15475ba5cccf207aaa6f6ffaa85e91"
+      }
+    },
+    {
+      "kind": "engine_run",
+      "id": "eng_01M40H92ZVHWD6YY1NY52J3JRS",
+      "at": "2026-10-03T09:24:46.203809+00:00",
+      "end_at": null,
+      "title": "hydraulics.laminar v1.2.0",
+      "summary": "status succeeded · 3 warnings",
+      "status": "succeeded",
+      "category": "Hydraulics Pack",
+      "operation_id": null,
+      "section_id": null,
+      "depth_md_si": null,
+      "duration_hours": null,
+      "severity": "warning",
+      "npt": false,
+      "npt_hours": null,
+      "evidence_refs": [
+        "eng_01M40H92ZVHWD6YY1NY52J3JRS"
+      ],
+      "document_id": null,
+      "links": {
+        "engine_run": "/#/engineering/runs/eng_01M40H92ZVHWD6YY1NY52J3JRS"
+      },
+      "attributes": {
+        "engine_key": "hydraulics.laminar",
+        "engine_version": "1.2.0",
+        "is_feasible": true,
+        "duration_ms": null,
+        "triggered_by": "optimisation",
+        "workflow_run_id": null,
+        "inputs_hash": "9786180d4191f1ad4d914f84b305d4d27c15475ba5cccf207aaa6f6ffaa85e91"
+      }
+    },
+    {
+      "kind": "engine_run",
+      "id": "eng_01M40H92ZXYF952CJB8BPDS1ZK",
+      "at": "2026-10-03T09:24:46.205095+00:00",
+      "end_at": null,
+      "title": "hydraulics.laminar v1.2.0",
+      "summary": "status succeeded · 3 warnings",
+      "status": "succeeded",
+      "category": "Hydraulics Pack",
+      "operation_id": null,
+      "section_id": null,
+      "depth_md_si": null,
+      "duration_hours": null,
+      "severity": "warning",
+      "npt": false,
+      "npt_hours": null,
+      "evidence_refs": [
+        "eng_01M40H92ZXYF952CJB8BPDS1ZK"
+      ],
+      "document_id": null,
+      "links": {
+        "engine_run": "/#/engineering/runs/eng_01M40H92ZXYF952CJB8BPDS1ZK"
+      },
+      "attributes": {
+        "engine_key": "hydraulics.laminar",
+        "engine_version": "1.2.0",
+        "is_feasible": true,
+        "duration_ms": null,
+        "triggered_by": "optimisation",
+        "workflow_run_id": null,
+        "inputs_hash": "9786180d4191f1ad4d914f84b305d4d27c15475ba5cccf207aaa6f6ffaa85e91"
+      }
+    },
+    {
+      "kind": "engine_run",
+      "id": "eng_01M40H9301W1S41S5E5MMQVKDT",
+      "at": "2026-10-03T09:24:46.210029+00:00",
+      "end_at": null,
+      "title": "hydraulics.laminar v1.2.0",
+      "summary": "status succeeded · 3 warnings",
+      "status": "succeeded",
+      "category": "Hydraulics Pack",
+      "operation_id": null,
+      "section_id": null,
+      "depth_md_si": null,
+      "duration_hours": null,
+      "severity": "warning",
+      "npt": false,
+      "npt_hours": null,
+      "evidence_refs": [
+        "eng_01M40H9301W1S41S5E5MMQVKDT"
+      ],
+      "document_id": null,
+      "links": {
+        "engine_run": "/#/engineering/runs/eng_01M40H9301W1S41S5E5MMQVKDT"
+      },
+      "attributes": {
+        "engine_key": "hydraulics.laminar",
+        "engine_version": "1.2.0",
+        "is_feasible": true,
+        "duration_ms": null,
+        "triggered_by": "optimisation",
+        "workflow_run_id": null,
+        "inputs_hash": "6f66645fd546ab80001f4ef84b44343d0b948ee7810b8c4809b11adafd54bdad"
+      }
+    },
+    {
+      "kind": "engine_run",
+      "id": "eng_01M40H9303761HP46PKMAMP87B",
+      "at": "2026-10-03T09:24:46.212009+00:00",
+      "end_at": null,
+      "title": "hydraulics.laminar v1.2.0",
+      "summary": "status succeeded · 3 warnings",
+      "status": "succeeded",
+      "category": "Hydraulics Pack",
+      "operation_id": null,
+      "section_id": null,
+      "depth_md_si": null,
+      "duration_hours": null,
+      "severity": "warning",
+      "npt": false,
+      "npt_hours": null,
+      "evidence_refs": [
+        "eng_01M40H9303761HP46PKMAMP87B"
+      ],
+      "document_id": null,
+      "links": {
+        "engine_run": "/#/engineering/runs/eng_01M40H9303761HP46PKMAMP87B"
+      },
+      "attributes": {
+        "engine_key": "hydraulics.laminar",
+        "engine_version": "1.2.0",
+        "is_feasible": true,
+        "duration_ms": null,
+        "triggered_by": "optimisation",
+        "workflow_run_id": null,
+        "inputs_hash": "6f66645fd546ab80001f4ef84b44343d0b948ee7810b8c4809b11adafd54bdad"
+      }
+    },
+    {
+      "kind": "engine_run",
+      "id": "eng_01M40H9306TQS4VHPWPQSSXHWC",
+      "at": "2026-10-03T09:24:46.214076+00:00",
+      "end_at": null,
+      "title": "hydraulics.laminar v1.2.0",
+      "summary": "status succeeded · 3 warnings",
+      "status": "succeeded",
+      "category": "Hydraulics Pack",
+      "operation_id": null,
+      "section_id": null,
+      "depth_md_si": null,
+      "duration_hours": null,
+      "severity": "warning",
+      "npt": false,
+      "npt_hours": null,
+      "evidence_refs": [
+        "eng_01M40H9306TQS4VHPWPQSSXHWC"
+      ],
+      "document_id": null,
+      "links": {
+        "engine_run": "/#/engineering/runs/eng_01M40H9306TQS4VHPWPQSSXHWC"
+      },
+      "attributes": {
+        "engine_key": "hydraulics.laminar",
+        "engine_version": "1.2.0",
+        "is_feasible": true,
+        "duration_ms": null,
+        "triggered_by": "optimisation",
+        "workflow_run_id": null,
+        "inputs_hash": "6f66645fd546ab80001f4ef84b44343d0b948ee7810b8c4809b11adafd54bdad"
+      }
+    },
+    {
+      "kind": "engine_run",
+      "id": "eng_01M40H9308WNBJTCH0MTAWNB6Z",
+      "at": "2026-10-03T09:24:46.216545+00:00",
+      "end_at": null,
+      "title": "hydraulics.laminar v1.2.0",
+      "summary": "status succeeded · 3 warnings",
+      "status": "succeeded",
+      "category": "Hydraulics Pack",
+      "operation_id": null,
+      "section_id": null,
+      "depth_md_si": null,
+      "duration_hours": null,
+      "severity": "warning",
+      "npt": false,
+      "npt_hours": null,
+      "evidence_refs": [
+        "eng_01M40H9308WNBJTCH0MTAWNB6Z"
+      ],
+      "document_id": null,
+      "links": {
+        "engine_run": "/#/engineering/runs/eng_01M40H9308WNBJTCH0MTAWNB6Z"
+      },
+      "attributes": {
+        "engine_key": "hydraulics.laminar",
+        "engine_version": "1.2.0",
+        "is_feasible": true,
+        "duration_ms": null,
+        "triggered_by": "optimisation",
+        "workflow_run_id": null,
+        "inputs_hash": "0d2a27bae8277539678fe31ef4a965d66e8564f676485410a54586d3786543e6"
+      }
+    },
+    {
+      "kind": "engine_run",
+      "id": "eng_01M40H930AY04KKGDSPB7DEV3J",
+      "at": "2026-10-03T09:24:46.218659+00:00",
+      "end_at": null,
+      "title": "hydraulics.laminar v1.2.0",
+      "summary": "status succeeded · 3 warnings",
+      "status": "succeeded",
+      "category": "Hydraulics Pack",
+      "operation_id": null,
+      "section_id": null,
+      "depth_md_si": null,
+      "duration_hours": null,
+      "severity": "warning",
+      "npt": false,
+      "npt_hours": null,
+      "evidence_refs": [
+        "eng_01M40H930AY04KKGDSPB7DEV3J"
+      ],
+      "document_id": null,
+      "links": {
+        "engine_run": "/#/engineering/runs/eng_01M40H930AY04KKGDSPB7DEV3J"
+      },
+      "attributes": {
+        "engine_key": "hydraulics.laminar",
+        "engine_version": "1.2.0",
+        "is_feasible": true,
+        "duration_ms": null,
+        "triggered_by": "optimisation",
+        "workflow_run_id": null,
+        "inputs_hash": "0d2a27bae8277539678fe31ef4a965d66e8564f676485410a54586d3786543e6"
+      }
+    },
+    {
+      "kind": "engine_run",
+      "id": "eng_01M40H930C6KGZ2NTXZAG22X2C",
+      "at": "2026-10-03T09:24:46.220792+00:00",
+      "end_at": null,
+      "title": "hydraulics.laminar v1.2.0",
+      "summary": "status succeeded · 3 warnings",
+      "status": "succeeded",
+      "category": "Hydraulics Pack",
+      "operation_id": null,
+      "section_id": null,
+      "depth_md_si": null,
+      "duration_hours": null,
+      "severity": "warning",
+      "npt": false,
+      "npt_hours": null,
+      "evidence_refs": [
+        "eng_01M40H930C6KGZ2NTXZAG22X2C"
+      ],
+      "document_id": null,
+      "links": {
+        "engine_run": "/#/engineering/runs/eng_01M40H930C6KGZ2NTXZAG22X2C"
+      },
+      "attributes": {
+        "engine_key": "hydraulics.laminar",
+        "engine_version": "1.2.0",
+        "is_feasible": true,
+        "duration_ms": null,
+        "triggered_by": "optimisation",
+        "workflow_run_id": null,
+        "inputs_hash": "0d2a27bae8277539678fe31ef4a965d66e8564f676485410a54586d3786543e6"
+      }
+    },
+    {
+      "kind": "recommendation",
+      "id": "rcm_01M40H9317C5W91MB3H2ZP7NFD",
+      "at": "2026-10-03T09:24:46.247613+00:00",
+      "end_at": null,
+      "title": "Drilling parameters — Synthetic demo: flow rate and mud weight sweep",
+      "summary": "Recommended drilling parameters for SYNTH-DEMO-01 (synthetic data): flow_rate_si = 0.025, mud_weight_si = 1220.0",
+      "status": "proposed",
+      "category": "drilling:parameter_window",
+      "operation_id": null,
+      "section_id": null,
+      "depth_md_si": null,
+      "duration_hours": null,
+      "severity": null,
+      "npt": false,
+      "npt_hours": null,
+      "evidence_refs": [
+        "eng_01M40H92ZH4X2ND7Y8YXD2270A",
+        "eng_01M40H92ZK84F6ERBHPKYQ0ARB",
+        "eng_01M40H92ZMRPWRCZ2MQXV8Z8M8",
+        "eng_01M40H92ZPY0P1V7F52J6DF9EV",
+        "eng_01M40H92ZQS1CHHA73793XH4QJ",
+        "⟪trimmed: 10 more entries⟫"
+      ],
+      "document_id": null,
+      "links": {},
+      "attributes": {
+        "action_level": "L2",
+        "confidence": null,
+        "confidence_basis": "deterministic engine evaluation of the candidate set; no field trial has been run and no ROP model exists, so performance gain is not claimed",
+        "data_quality": "computed",
+        "why_not": [
+          {
+            "candidate": "c0001",
+            "candidate_id": "cnd_01M40H930NCMYC3DQ4XMVXYHKF",
+            "kind": "trade_off",
+            "reason": "on the Pareto frontier: better on at least one objective and worse on another, so the choice is a trade-off",
+            "comparison": {
+              "annular_velocity_m_s": {
+                "candidate": 1.0442,
+                "recommended": 1.0442,
+                "sense": "maximize"
+              },
+              "ecd_margin_si": {
+                "candidate": 280.781,
+                "recommended": 280.781,
+                "sense": "maximize"
+              },
+              "spp_utilisation": {
+                "candidate": 0.1896,
+                "recommended": 0.1896,
+                "sense": "minimize"
+              }
+            }
+          },
+          {
+            "candidate": "c0002",
+            "candidate_id": "cnd_01M40H930N3HP5SBCK4SSTK9QT",
+            "kind": "trade_off",
+            "reason": "on the Pareto frontier: better on at least one objective and worse on another, so the choice is a trade-off",
+            "comparison": {
+              "annular_velocity_m_s": {
+                "candidate": 1.0442,
+                "recommended": 1.0442,
+                "sense": "maximize"
+              },
+              "ecd_margin_si": {
+                "candidate": 280.781,
+                "recommended": 280.781,
+                "sense": "maximize"
+              },
+              "spp_utilisation": {
+                "candidate": 0.1896,
+                "recommended": 0.1896,
+                "sense": "minimize"
+              }
+            }
+          },
+          {
+            "candidate": "c0003",
+            "candidate_id": "cnd_01M40H930NJP9NSTR2KEFWDPAS",
+            "kind": "trade_off",
+            "reason": "on the Pareto frontier: better on at least one objective and worse on another, so the choice is a trade-off",
+            "comparison": {
+              "annular_velocity_m_s": {
+                "candidate": 1.253,
+                "recommended": 1.0442,
+                "sense": "maximize"
+              },
+              "ecd_margin_si": {
+                "candidate": 277.814,
+                "recommended": 280.781,
+                "sense": "maximize"
+              },
+              "spp_utilisation": {
+                "candidate": 0.2325,
+                "recommended": 0.1896,
+                "sense": "minimize"
+              }
+            }
+          },
+          {
+            "candidate": "c0004",
+            "candidate_id": "cnd_01M40H930NY8C7MDYHK9BS1FZJ",
+            "kind": "trade_off",
+            "reason": "on the Pareto frontier: better on at least one objective and worse on another, so the choice is a trade-off",
+            "comparison": {
+              "annular_velocity_m_s": {
+                "candidate": 1.253,
+                "recommended": 1.0442,
+                "sense": "maximize"
+              },
+              "ecd_margin_si": {
+                "candidate": 277.814,
+                "recommended": 280.781,
+                "sense": "maximize"
+              },
+              "spp_utilisation": {
+                "candidate": 0.2325,
+                "recommended": 0.1896,
+                "sense": "minimize"
+              }
+            }
+          },
+          {
+            "candidate": "c0005",
+            "candidate_id": "cnd_01M40H930NGTCKGDNJKTXPH695",
+            "kind": "trade_off",
+            "reason": "on the Pareto frontier: better on at least one objective and worse on another, so the choice is a trade-off",
+            "comparison": {
+              "annular_velocity_m_s": {
+                "candidate": 1.253,
+                "recommended": 1.0442,
+                "sense": "maximize"
+              },
+              "ecd_margin_si": {
+                "candidate": 277.814,
+                "recommended": 280.781,
+                "sense": "maximize"
+              },
+              "spp_utilisation": {
+                "candidate": 0.2325,
+                "recommended": 0.1896,
+                "sense": "minimize"
+              }
+            }
+          },
+          {
+            "candidate": "c0006",
+            "candidate_id": "cnd_01M40H930NKBBPHAP9JN07DCJ0",
+            "kind": "trade_off",
+            "reason": "on the Pareto frontier: better on at least one objective and worse on another, so the choice is a trade-off",
+            "comparison": {
+              "annular_velocity_m_s": {
+                "candidate": 1.4619,
+                "recommended": 1.0442,
+                "sense": "maximize"
+              },
+              "ecd_margin_si": {
+                "candidate": 274.95,
+                "recommended": 280.781,
+                "sense": "maximize"
+              },
+              "spp_utilisation": {
+                "candidate": 0.2821,
+                "recommended": 0.1896,
+                "sense": "minimize"
+              }
+            }
+          },
+          {
+            "candidate": "c0007",
+            "candidate_id": "cnd_01M40H930NKZS8J52518XCA4PK",
+            "kind": "trade_off",
+            "reason": "on the Pareto frontier: better on at least one objective and worse on another, so the choice is a trade-off",
+            "comparison": {
+              "annular_velocity_m_s": {
+                "candidate": 1.4619,
+                "recommended": 1.0442,
+                "sense": "maximize"
+              },
+              "ecd_margin_si": {
+                "candidate": 274.95,
+                "recommended": 280.781,
+                "sense": "maximize"
+              },
+              "spp_utilisation": {
+                "candidate": 0.2821,
+                "recommended": 0.1896,
+                "sense": "minimize"
+              }
+            }
+          },
+          {
+            "candidate": "c0008",
+            "candidate_id": "cnd_01M40H930NZR5H6DDY34K5R3CB",
+            "kind": "trade_off",
+            "reason": "on the Pareto frontier: better on at least one objective and worse on another, so the choice is a trade-off",
+            "comparison": {
+              "annular_velocity_m_s": {
+                "candidate": 1.4619,
+                "recommended": 1.0442,
+                "sense": "maximize"
+              },
+              "ecd_margin_si": {
+                "candidate": 274.95,
+                "recommended": 280.781,
+                "sense": "maximize"
+              },
+              "spp_utilisation": {
+                "candidate": 0.2821,
+                "recommended": 0.1896,
+                "sense": "minimize"
+              }
+            }
+          },
+          {
+            "candidate": "c0009",
+            "candidate_id": "cnd_01M40H930NNE8TTGKPY07T7S14",
+            "kind": "trade_off",
+            "reason": "on the Pareto frontier: better on at least one objective and worse on another, so the choice is a trade-off",
+            "comparison": {
+              "annular_velocity_m_s": {
+                "candidate": 1.6707,
+                "recommended": 1.0442,
+                "sense": "maximize"
+              },
+              "ecd_margin_si": {
+                "candidate": 272.163,
+                "recommended": 280.781,
+                "sense": "maximize"
+              },
+              "spp_utilisation": {
+                "candidate": 0.3383,
+                "recommended": 0.1896,
+                "sense": "minimize"
+              }
+            }
+          },
+          {
+            "candidate": "c0010",
+            "candidate_id": "cnd_01M40H930NTRCDH5CWSQGVP5J8",
+            "kind": "dominated",
+            "reason": "feasible but ranked below the recommended candidate on the objective set",
+            "comparison": {
+              "annular_velocity_m_s": {
+                "candidate": 1.6707,
+                "recommended": 1.0442,
+                "sense": "maximize"
+              },
+              "ecd_margin_si": {
+                "candidate": 272.163,
+                "recommended": 280.781,
+                "sense": "maximize"
+              },
+              "spp_utilisation": {
+                "candidate": 0.3383,
+                "recommended": 0.1896,
+                "sense": "minimize"
+              }
+            }
+          },
+          {
+            "candidate": "c0011",
+            "candidate_id": "cnd_01M40H930NK6GFP71R0ZCQMWWF",
+            "kind": "dominated",
+            "reason": "feasible but ranked below the recommended candidate on the objective set",
+            "comparison": {
+              "annular_velocity_m_s": {
+                "candidate": 1.6707,
+                "recommended": 1.0442,
+                "sense": "maximize"
+              },
+              "ecd_margin_si": {
+                "candidate": 272.163,
+                "recommended": 280.781,
+                "sense": "maximize"
+              },
+              "spp_utilisation": {
+                "candidate": 0.3383,
+                "recommended": 0.1896,
+                "sense": "minimize"
+              }
+            }
+          },
+          {
+            "candidate": "c0012",
+            "candidate_id": "cnd_01M40H930N2AW0ZENV3QXT30RX",
+            "kind": "dominated",
+            "reason": "feasible but ranked below the recommended candidate on the objective set",
+            "comparison": {
+              "annular_velocity_m_s": {
+                "candidate": 1.8795,
+                "recommended": 1.0442,
+                "sense": "maximize"
+              },
+              "ecd_margin_si": {
+                "candidate": 269.438,
+                "recommended": 280.781,
+                "sense": "maximize"
+              },
+              "spp_utilisation": {
+                "candidate": 0.4012,
+                "recommended": 0.1896,
+                "sense": "minimize"
+              }
+            }
+          },
+          {
+            "candidate": "c0013",
+            "candidate_id": "cnd_01M40H930NGQCDQC0E7E9ETQ9D",
+            "kind": "dominated",
+            "reason": "feasible but ranked below the recommended candidate on the objective set",
+            "comparison": {
+              "annular_velocity_m_s": {
+                "candidate": 1.8795,
+                "recommended": 1.0442,
+                "sense": "maximize"
+              },
+              "ecd_margin_si": {
+                "candidate": 269.438,
+                "recommended": 280.781,
+                "sense": "maximize"
+              },
+              "spp_utilisation": {
+                "candidate": 0.4012,
+                "recommended": 0.1896,
+                "sense": "minimize"
+              }
+            }
+          },
+          {
+            "candidate": "c0014",
+            "candidate_id": "cnd_01M40H930N2C725TCGZEVAYX32",
+            "kind": "dominated",
+            "reason": "feasible but ranked below the recommended candidate on the objective set",
+            "comparison": {
+              "annular_velocity_m_s": {
+                "candidate": 1.8795,
+                "recommended": 1.0442,
+                "sense": "maximize"
+              },
+              "ecd_margin_si": {
+                "candidate": 269.438,
+                "recommended": 280.781,
+                "sense": "maximize"
+              },
+              "spp_utilisation": {
+                "candidate": 0.4012,
+                "recommended": 0.1896,
+                "sense": "minimize"
+              }
+            }
+          }
+        ],
+        "created_by_kind": "engine",
+        "workflow_run_id": null
+      }
+    },
+    {
+      "kind": "approval",
+      "id": "apr_01M40H95D4WM1RV0B0ECPCPJKQ",
+      "at": "2026-10-03T09:24:48.675141+00:00",
+      "end_at": null,
+      "title": "Approve the daily drilling intelligence summary",
+      "summary": "Review the computed state and NPT attribution before the report is issued.",
+      "status": "pending",
+      "category": "workflow_node",
+      "operation_id": null,
+      "section_id": null,
+      "depth_md_si": null,
+      "duration_hours": null,
+      "severity": null,
+      "npt": false,
+      "npt_hours": null,
+      "evidence_refs": [],
+      "document_id": null,
+      "links": {
+        "approval": "/#/runs?approval=apr_01M40H95D4WM1RV0B0ECPCPJKQ"
+      },
+      "attributes": {
+        "action_level": "L3",
+        "required_role": "approver",
+        "requested_by": "usr_dev_drilling_supervisor",
+        "decided_by": null,
+        "run_id": "run_01M40H957NM05Z3XJ0SA04SQV0",
+        "node_id": "approve_plan",
+        "proposed_action": "{\"action_level\": \"L3\", \"node_id\": \"approve_plan\", \"node_type\": \"human.approval\"}"
+      }
+    }
+  ],
+  "count": 30,
+  "kinds_available": [
+    "operation",
+    "event",
+    "document",
+    "engine_run",
+    "recommendation",
+    "⟪trimmed: 2 more entries⟫"
+  ]
+}

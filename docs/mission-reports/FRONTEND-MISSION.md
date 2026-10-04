@@ -10,6 +10,10 @@
 > `f8abc10`; the CI runs are in §5, the clean-checkout evidence is in §6, and the closure decision,
 > condition by condition, is §9.
 
+**Checkpoint 7** — well master data, identity, lineage and the asset contract — is published on the
+same branch at `23c394a` (§3 *CP7*, §4, §8). It extends the platform the closed mission above certifies,
+and every gate named in the closure table was re-measured at its tip.
+
 This file is the durable record of the mission. It lives in Git on purpose: a future session must be
 able to resume from the repository alone, without the chat that produced it. Every checkpoint below
 carries the commit it was produced at, and results from a different commit are not evidence for this
@@ -1023,12 +1027,185 @@ the only artifact it uploads is Playwright evidence (report, traces, screenshots
 and uploaded only after a failure, so a failing run cannot be made to look tidy. There are no
 deployment assets in `ops/`; CI certifies the product, it does not ship it.
 
+### CP7 — well master data, identity, lineage and the asset contract
+
+Checkpoint 6 certified the client against the platform. Checkpoint 7 turns the spine that platform
+was built around — organization → project → field → well → wellbore → section, with operations,
+documents, evidence, twin and the engineering surfaces hanging off it — into something a person can
+actually curate, and something the rest of the product can trust. The reason it is a checkpoint at all
+is that the spine was, until now, only half real: the tables existed and the cockpit read them, but the
+platform could not guarantee that a well's identity was well-formed, that a wellbore's parent was a
+wellbore of the same well, or that a section's planned bottom was not being handed to a client as the
+current depth.
+
+**What the audit found, before any code was written.** Each finding below was reproduced against the
+running API or read from the file named, not inferred from a name.
+
+- **The vocabulary existed and governed nothing.** `WELL_TYPES` and `WELLBORE_PURPOSES` were declared
+  in `db/models/asset.py` and enforced at no boundary. The create endpoint accepted any string, so a
+  client could write `well_type="not_a_real_type"` and read it back as a success.
+- **The defaults were not members of the vocabulary.** `well_type="development"` and
+  `purpose="production"` — neither value is in its own vocabulary. Five captured fixtures repeated the
+  first, which is how a wrong default becomes a wrong client.
+- **`PATCH` and `PUT` on a well returned 405.** There was no update path at all: a misspelled well name
+  was permanent.
+- **The life-cycle endpoints did not exist.** Well status was a column nothing could change through the
+  API, and `AuditLog` had no writer anywhere in the codebase, so nothing that happened to an asset was
+  recorded.
+- **Lineage was a field nobody checked.** `parent_wellbore_id` was accepted and ignored; a wellbore
+  could name itself, name a wellbore of another well, or form a cycle.
+- **`/fields` and `/rigs` returned 404.** Field was a string on a well, not an entity; rigs could be
+  referenced without existing.
+
+**§5 — the canonical vocabulary, decided first.** The brief forbids adding `development` to the enum
+unless the audit proves the product needs it. It does not, and the audit says why: the value appears in
+exactly two places — the old create default and the fixtures that were copied from that default — and
+in no reader, no engine, no document and no report. The canonical set is the nine well types the schema
+already declared (`exploration`, `appraisal`, `development_producer`, `development_injector`,
+`observation`, `water_source`, `disposal`, `sidetrack`, `reentry`); a development well is a
+`development_producer` or a `development_injector`, and the platform now says so. The same audit ran
+across the whole vocabulary surface and produced four new canonical tuples — four wellbore statuses,
+four section statuses (both derived from values the product already reads, not invented), and sixteen
+labelled section numbers — plus four defaults that are members of their vocabulary by construction.
+Every value entering the database passes through `canonical_choice`, which names the field, the
+rejected value and the accepted set in its error, so a caller who sends `development` is told what the
+platform calls that well. The drift is closed at the source: the migration repairs existing rows, and
+every captured fixture was regenerated from the server rather than edited, so the four run payloads and
+the cockpit payload now carry `development_producer` because the server sent it — and the capture script
+was extended to write the whole `frontend/src/test/fixtures` directory, cockpit payloads included, so
+the next recapture does not leave half the directory behind.
+
+**What is editable, per field.** Each identity field was classified rather than exposed, because
+"editable" and "immutable" are product decisions with consequences. The identifier (`well.id`) and the
+owning organization are immutable — they are what documents, evidence, operations, twin state and
+every historical record point at, and a rename must leave all of them intact (§23). The regulator
+identifier is editable but unique within the organization, and lowering it to a duplicate is refused
+with the conflicting well named. The field a well belongs to is checked against the well's own project
+and organization on create *and* on update, so a well cannot be moved into another tenant's field or
+into a field of a project it does not belong to. Rig references are checked against rigs that exist in
+the same organization. Coordinates, the datum, and the business dates are stored and returned
+separately from anything derived, so a client can tell what was recorded from what was computed.
+
+**The life cycle is a service, not a column.** Ten well statuses with `p&a` terminal, four wellbore
+statuses, and one transition table per entity, live in the domain layer
+(`assets/lifecycle.py`) — the router carries no rules of its own. A transition is validated against the
+table, recorded in `AuditLog` with its reason, and returned to the client alongside the transitions the
+server will accept next, so the interface renders a menu the server published rather than a copy of the
+rules. `planned → abandoned` exists because plans are cancelled; `drilling → planned` does not exist
+because time does not run backwards.
+
+**Lineage is structured, never guessed.** A sidetrack is a wellbore whose recorded parent is a
+wellbore of the same well, created through the lineage endpoint with a purpose from the canonical set.
+Self-parenting, cross-well parenting, cross-organization parenting and cycles are each refused with a
+distinct error, and a duplicate sequence within the well is refused rather than silently renumbered.
+Activation moves the well's active wellbore and is audited; the count of active wellbores is governed
+per well, and the client is told which one is active instead of being left to infer it.
+
+**Plan, actual, computed, interpreted.** `SECTION_NUMBER_SEMANTICS` labels all sixteen recorded section
+numbers as exactly one of those classes, and the serializer returns the label. `planned_bottom_md_si`
+and `current_md_si` are therefore never interchangeable, and the current depth is `null` for a
+section that has not been drilled — the client renders "no current depth" instead of back-filling the
+plan (proven in the browser journey, which asserts the planned 3 400 m value is *absent* from the page
+rather than formatted differently). Plan revisions never overwrite as-drilled values.
+
+**Mutations: authorization, audit, idempotency, stale writes.** Every mutating asset route resolves an
+action from the existing catalogue (`security/catalog.py`, now 43 actions, `unreachable=[]`), enforces
+it through the existing `authorize()`, and either replays a stored response or reserves an idempotency
+key before touching the database — a retried rename cannot be applied twice. Updates carry
+`expected_updated_at`; a stale value is refused with `409 platform.conflict` and `retryable=false`,
+which is the difference between "somebody else changed this, reload" and "try again". Every write
+appends to the existing `AuditLog` with the actor, the action, the before and after, and the reason
+where one was given; `session.add(...)` alone is never the mutation. Tenant scoping is checked on read
+and write, including for guessed identifiers.
+
+**The migration repairs, and was proven on PostgreSQL.** `c4a91e0d7b52` adds the identity columns and
+indexes, installs the uniqueness scopes the real query patterns need, and repairs the legacy
+vocabulary. It refuses, rather than guesses, when a database already contains two wells sharing a
+regulator identifier, and names the offending wells in the error. On PostgreSQL its first form failed
+outright — the repair compared a boolean column to `1`, which SQLite accepts and PostgreSQL rejects
+with `operator does not exist: boolean = integer`. The comparison is now built from a lightweight table
+with boolean binds; the chain is verified on SQLite (fresh upgrade, no drift, round trip) and on a real
+PostgreSQL, and that PostgreSQL proof now lives in the test suite as
+`tests/db/test_migrations_postgres.py`, so the dialect cannot silently regress: it applies the whole
+chain to head, checks for drift, reverses and re-applies the revision, and matches the refusal message
+against the rows that really exist.
+
+**The intermediate commit ran CI red, and the reason is worth recording.** `cd07b1c` — the model,
+vocabulary, services and migration — went red in CI at the backend-tests step. The log could not be
+retrieved from this sandbox (GitHub's signed log storage returns `EOF`), so the failure was diagnosed by
+reproducing the commit: the tree was extracted to a scratch directory and its tests run against it, and
+the failure reproduced exactly —
+
+```
+sqlalchemy.exc.IntegrityError: (sqlite3.IntegrityError) UNIQUE constraint failed: wellbores.well_id
+INSERT INTO wellbores (..., is_active, ...) VALUES (..., 1, ...)
+```
+
+The model had just installed a partial unique index (`uq_wellbores_active_per_well`, `well_id` where
+`is_active`) to make "one hole per well is the one being drilled" a database fact. The *old* write path
+was still in place at that commit, and it derived activation from the caller's input
+(`is_active=payload.sequence == 1`), so a second hole created at the default sequence claimed to be
+active and the database refused it. Batch 2 replaced that path with the service, which activates the
+first hole to exist and makes every later one active only through an explicit, audited call. The
+failure was therefore the new invariant doing its job against a write path that had not been replaced
+yet — a sequencing mistake in how the batches were split, not a wrong invariant, and the fix is the
+service rather than a weaker constraint. `9804014` and `23c394a` are green in CI; the run attached to
+`41be468` was cancelled by the next push, so the tip's green run is the authority (§4).
+
+**The workspace.** `/master-data` is where the spine is curated: well identity with the version it was
+read from, the life-cycle menu the server published, wellbore lineage with activation, sections that
+never print a plan as a measurement, fields with their project scope, and the governance ledger for the
+selected well. Search, project and field scope, the selected well and the selected tab live in the URL,
+so a reload opens the same page. Well List is now the entry point — server-side search and filtering, a
+create form, and a per-row link — and it distinguishes an empty fleet from an empty search result from a
+failed read. `api/types.ts` mirrors the contract with unions rather than `string`, so `development`
+cannot be typed into a screen; every asset call goes through `api/endpoints.ts`, and the only new
+transport concept is the idempotency key the caller generates once per submission.
+
+---
 ---
 
 ## 4. Automated verification tied to exact commits
 
 Every row below was produced by running the command shown, at the commit named in the row. Exact
 counts, no rounding, and nothing is reported as "all good".
+
+### At `23c394a` (Checkpoint 7) — the asset commit
+
+Measured at the branch tip `23c394a3846002580ec1d39da89adc5f4296a2ba`, whose working tree is clean and
+whose remote ref carries the same SHA. The backend suite was run first, in the same tree the frontend
+suite then ran in; both were run against the committed source, with no later edit.
+
+| Command | Result |
+| --- | --- |
+| `npm run typecheck` (`tsc -p tsconfig.app.json`) | clean, no output |
+| `npm run lint` (`eslint src --max-warnings=0`) | clean, no output |
+| `npm test` (`vitest run`) | **285 passed** in **24 files**, 0 failed, 0 skipped |
+| `npm run build` | `dist/assets/index-iv8StkKv.js` **338.53 kB** (gzip **89.54 kB**), CSS 37.30 kB, built in 3.36 s |
+| `npm run e2e` | **68 passed / 0 failed** (4.4 m on the re-run, 3.7 m on the first): 63 `chromium`, 4 `chromium-faults`, 1 `chromium-auth`, in 14 spec files |
+| backend `pytest` with `DRILLAI_TEST_POSTGRES=1` | **527 passed, 0 skipped, 0 failed** in 337.33 s (re-run; 354.94 s on the first run) |
+| backend `pytest` without it | **524 passed, 3 skipped, 0 failed** in 291.25 s — the three are the PostgreSQL-backed ones |
+| backend `ruff check .` | clean — "All checks passed!" |
+| `alembic upgrade head`, `alembic check`, downgrade + re-upgrade, on PostgreSQL | covered by the suite above (`tests/db/test_migrations_postgres.py`, 2 tests) and by the standalone proof recorded in §3 *CP7* |
+
+The battery was run twice: once at the branch tip as the checkpoint's certification, and again after an
+environment reset destroyed the toolchain and rewound the local history (recovered by fetching the
+remote, never by discarding work). Both runs produced the same counts — 285 unit tests, 68 journeys, 527
+backend tests — which is the reproducibility claim this checkpoint can actually make, since the second
+run provisioned its own virtualenv, `node_modules` and browser from the committed lockfiles and scripts.
+
+The checkpoint's own tests, by file: `tests/assets/test_asset_domain.py` **31**,
+`tests/assets/test_asset_service.py` **42**, `tests/api/test_assets_api.py` **53**,
+`tests/db/test_migrations_postgres.py` **2**, `frontend/src/pages/master-data/MasterDataWorkspace.test.tsx`
+**10**, `frontend/e2e/master-data.spec.ts` **3** journeys. The end-to-end suite grew from 65 to 68
+journeys; no earlier journey was removed, skipped or weakened, and the 527-test backend count is the
+399 of checkpoint 6 plus this checkpoint's 128.
+
+CI on the branch, by commit: `cd07b1c` **failed** at the backend-tests step (§3 *CP7* — reproduced,
+diagnosed, and fixed by the service in `9804014`), `9804014` **success** (run `37110186230`), `41be468`
+**cancelled** (superseded by the next push), and the tip `23c394a` **success** (run `37112183461`,
+8 m 24 s). The red run is reported rather than omitted: a checkpoint whose intermediate commit failed is
+a checkpoint whose final commit is green for a reason that can be read.
 
 ### At `f8abc10` (Checkpoint 6) — the certification commit
 
@@ -1508,7 +1685,8 @@ fail. That is stated here rather than presented as reproducible evidence.
 
 The mission is closed; these are the parts of the product that are not certified, listed so that no
 reader mistakes a closed mission for a finished product. Each one is a limitation of *scope or
-evidence*, not a known defect: the audit above found no unstated failure.
+evidence*, not a known defect: the audit above found no unstated failure. The last eight entries were
+measured at checkpoint 7 (`23c394a`).
 
 - **The browser suite runs Chromium only.** The client uses no Chromium-only API that a second engine
   would break on, but that is an expectation, not a certified fact. Firefox and WebKit are not run.
@@ -1535,6 +1713,33 @@ evidence*, not a known defect: the audit above found no unstated failure.
 - **Test fixtures are trimmed, deliberately.** The captured workspace payloads replace strings longer
   than 2 000 characters with a marker (a ~52 KB generated context prompt appears several times); keys,
   types and short values are untouched.
+- **The master-data workspace curates fields, wells, wellbores and sections — not the whole spine.**
+  Projects can be created and edited through the API and are selected and scoped in the workspace, but
+  the workspace does not edit a project's own master data. `GET /rigs` exists and a well's rig is
+  validated against it, but this checkpoint adds no way to create or edit a rig, and organizations have
+  no interface at all. The brief's §46/§47 keep this mission out of the adjacent systems.
+- **Well aliases are not modelled, because the audit found no evidence for them.** The brief allowed an
+  explicit searchable alias model *only* on real evidence; nothing in the repository — no reader, no
+  document, no workflow — refers to a well by anything other than its name, its regulator identifier or
+  its field, and search covers exactly those three.
+- **The governance ledger in the interface is scoped to one well.** `GET /wells/{well_id}/audit-log` is
+  the only ledger endpoint; there is no organization-wide audit browser in this checkpoint.
+- **The workspace computes no depth of its own.** It shows the recorded plan and the recorded as-drilled
+  values, each labelled with which it is, and it renders an explicit "no current depth" rather than a
+  planned bottom. Current depth, progress and variance remain the cockpit's and the engines' answers;
+  the master-data screen does not derive them.
+- **No map or survey view.** Coordinates and the elevation datum are edited as numbers.
+- **One active wellbore per well, by decision rather than by omission.** Every reader in the repository
+  takes the first active wellbore (`drilling/state.py`, the context builder, the well-structure
+  endpoint), so a second active hole would be ambiguous today. Activation is transactional and audited;
+  the rule lives in one place, so it can be revisited if a real dual-active need appears.
+- **No delete path exists for a well, wellbore, section or field.** That is historical immutability
+  taken literally: identifiers that documents, evidence, operations and twin state point at survive, a
+  correction is an audited edit with a reason, and no route can remove the record.
+- **Persian wording has no native-speaker review.** Every new string exists in both catalogues — the
+  i18n gates fail otherwise, and the catalogue gate refuses a Persian value identical to its English
+  one — and identifiers, UWI, API numbers and raw ids stay left-to-right in both; the phrasing itself
+  is the author's.
 
 ---
 
@@ -1555,6 +1760,12 @@ not by intention, and a "mostly" would have made the answer `MISSION BLOCKED —
 | 7 | Git gate: local == remote, clean tree, nothing unpushed, `main` untouched | §2.4 — `git ls-remote` equals local HEAD; 258 tracked files; `main` still `bfa066b` | yes |
 
 **MISSION CLOSED — VERIFIED.**
+
+Re-measured at checkpoint 7 (`23c394a`, §4): condition 3 holds at the current tip — typecheck, lint, 285
+unit tests, a production build, 527 backend tests with PostgreSQL (0 skipped), `ruff check .`, the
+migration chain on SQLite *and* PostgreSQL, and 68 browser journeys. Conditions 1 and 2 are re-established
+by the green CI run `37112183461` at that SHA. Condition 7 holds unchanged: `git ls-remote` equals local
+HEAD and `main` is still `bfa066b`.
 
 Under the standing GitHub instruction the same state is reported as **CASE A — MISSION CLOSED —
 PUSHED TO GITHUB**: the certification is committed, pushed to `arena/01a0dca0-drillai`, and verified

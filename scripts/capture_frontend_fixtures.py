@@ -1,4 +1,8 @@
-"""Capture the frontend's run-monitor fixtures from a real API.
+"""Capture the frontend's API fixtures from a real API.
+
+Everything under ``frontend/src/test/fixtures`` is written here — the well cockpit's payloads and the
+run-monitor and approval payloads — because the README of that directory says so, and a capture path
+the README promises but the script does not implement is a fixture that quietly goes stale by hand.
 
 Run from the repository root:
 
@@ -155,6 +159,13 @@ def main() -> int:
         run_id, approval_id = started[1]["id"], started[1]["pending_approval_id"]
 
         captured = {
+            # The well cockpit's payloads. Captured before the run so the fixtures describe the well
+            # as it is at the start of the synthetic day the run belongs to.
+            "well-state.json": call("GET", f"/wells/{well_id}/state")[1],
+            "well-npt.json": call("GET", f"/wells/{well_id}/npt")[1],
+            "well-timeline.json": call("GET", f"/wells/{well_id}/timeline")[1],
+            "well-twin.json": call("GET", f"/wells/{well_id}/twin")[1],
+            "well-audit.json": call("GET", f"/wells/{well_id}/audit")[1],
             "run-waiting-approval.json": call("GET", f"/runs/{run_id}")[1],
             "approval-pending.json": call("GET", f"/approvals/{approval_id}")[1],
             "approvals-list.json": call("GET", "/approvals?status=pending")[1],
