@@ -60,6 +60,27 @@ forward to the real backend so a spec can state when a transport failed, and whi
 | `main` | `bfa066b` | untouched since the mission began; this branch was never merged into it |
 | Mission status | — | **`MISSION CLOSED — VERIFIED`** (§9) |
 
+**Checkpoint 7, the state now.** Everything above this line describes checkpoint 6, which remains
+certified exactly where it was certified. The current branch tip is:
+
+| | SHA | What it is |
+| --- | --- | --- |
+| CP7 commits | `cd07b1c` (model, vocabulary, lifecycle, identity guards, services, migration), `9804014` (API, authorization, audit, idempotency, tests), `41be468` (the migration's PostgreSQL failure and its test), `23c394a` (workspace, API mirrors, journeys), `0c797e1` (fixtures recaptured, documentation) | §3 *CP7*, §4 |
+| Local HEAD | `0c797e1` | `git rev-parse HEAD` |
+| Remote HEAD | `0c797e1` | `git ls-remote --heads origin arena/01a0dca0-drillai` — the authority |
+| CI at the tip | run [37179922563](https://github.com/asgareyvazi/DrillAI/actions/runs/37179922563) — **success**, 6 m 8 s | §5 |
+| Working tree | clean (`git status --porcelain` empty), one remote, `main` still `bfa066b` | §2, §9 |
+
+| | At `0c797e1` |
+| --- | --- |
+| Tracked files | 280 |
+| Source lines (`*.py`, `*.ts`, `*.tsx`) | 78 637 |
+| Frontend application source | 28 777 lines |
+| Frontend tests | 285 in 24 files |
+| End-to-end | 68 journeys in 14 spec files, three deployments |
+| Backend | 110 modules; 527 tests, 10 667 lines of tests |
+| Secrets in the index | none |
+
 **What exists now, in numbers** (all of them produced by running the command, at `f8abc10` — §4):
 
 | | |
@@ -283,7 +304,7 @@ second remote at any point in the mission.
 
 ---
 
-## 3. Checkpoint certification, CP1–CP6
+## 3. Checkpoint certification, CP1–CP7
 
 **Two numbering schemes, both kept.** The platform mission that this repository was built by numbered
 its checkpoints 1–8. The continuation brief that commissioned the frontend productization numbered its
@@ -1203,8 +1224,8 @@ journeys; no earlier journey was removed, skipped or weakened, and the 527-test 
 
 CI on the branch, by commit: `cd07b1c` **failed** at the backend-tests step (§3 *CP7* — reproduced,
 diagnosed, and fixed by the service in `9804014`), `9804014` **success** (run `37110186230`), `41be468`
-**cancelled** (superseded by the next push), and the tip `23c394a` **success** (run `37112183461`,
-8 m 24 s). The red run is reported rather than omitted: a checkpoint whose intermediate commit failed is
+**cancelled** (superseded by the next push), `23c394a` **success** (run `37112183461`, 8 m 24 s), and the
+tip `0c797e1` **success** (run `37179922563`, 6 m 8 s). The red run is reported rather than omitted: a checkpoint whose intermediate commit failed is
 a checkpoint whose final commit is green for a reason that can be read.
 
 ### At `f8abc10` (Checkpoint 6) — the certification commit
