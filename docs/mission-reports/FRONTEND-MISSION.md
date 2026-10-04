@@ -66,9 +66,9 @@ certified exactly where it was certified. The current branch tip is:
 | | SHA | What it is |
 | --- | --- | --- |
 | CP7 commits | `cd07b1c` (model, vocabulary, lifecycle, identity guards, services, migration), `9804014` (API, authorization, audit, idempotency, tests), `41be468` (the migration's PostgreSQL failure and its test), `23c394a` (workspace, API mirrors, journeys), `0c797e1` (fixtures recaptured, documentation) | §3 *CP7*, §4 |
-| Local HEAD | `0c797e1` | `git rev-parse HEAD` |
-| Remote HEAD | `0c797e1` | `git ls-remote --heads origin arena/01a0dca0-drillai` — the authority |
-| CI at the tip | run [37179922563](https://github.com/asgareyvazi/DrillAI/actions/runs/37179922563) — **success**, 6 m 8 s | §5 |
+| Local HEAD | the commit carrying this row | `git rev-parse HEAD` |
+| Remote HEAD | the commit carrying this row (`0c797e1` before this documentation edit) | `git ls-remote --heads origin arena/01a0dca0-drillai` — the authority |
+| CI at the tip | run [37179922563](https://github.com/asgareyvazi/DrillAI/actions/runs/37179922563) at `0c797e1` — **success**, 6 m 8 s; the run attached to this documentation commit follows it in §5 | §5 |
 | Working tree | clean (`git status --porcelain` empty), one remote, `main` still `bfa066b` | §2, §9 |
 
 | | At `0c797e1` |
