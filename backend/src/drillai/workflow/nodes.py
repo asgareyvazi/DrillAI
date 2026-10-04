@@ -795,7 +795,7 @@ async def _process_ddr(context: NodeContext, config: BaseModel) -> NodeOutcome:
             )
         document_id = row.id
         resolved_from = "latest_ddr_for_well"
-    processor = DdrProcessor(context.session, context.org_id, actor_id=context.principal.id)
+    processor = DdrProcessor(context.session, context.org_id, principal=context.principal)
     report = await processor.process(document_id, dry_run=cfg.dry_run or context.dry_run)
     payload = report.to_dict()
     return NodeOutcome(

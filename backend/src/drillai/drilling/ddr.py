@@ -38,6 +38,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from drillai.core.audit import record_audit
 from drillai.core.errors import NotFound
 from drillai.db.models import (
     Document,
@@ -54,6 +55,7 @@ from drillai.drilling.classifiers import (
     classify_operation_kind,
     ensure_standard_npt_codes,
 )
+from drillai.security.actions import Principal
 from drillai.twin.aspects import StateKind
 from drillai.twin.service import AspectRevision, TwinService
 
@@ -174,9 +176,17 @@ class ProcessingReport:
 class DdrProcessor:
     """Promotes an ingested DDR into structured drilling data."""
 
-    def __init__(self, session: AsyncSession, org_id: str, *, actor_id: str | None = None) -> None:
+    def __init__(
+        self,
+        session: AsyncSession,
+        org_id: str,
+        *,
+        principal: Principal | None = None,
+        actor_id: str | None = None,
+    ) -> None:
         self.session = session
         self.org_id = org_id
+        self._principal = principal
         self.actor_id = actor_id
         self.twin = TwinService(session, org_id=org_id)
 
@@ -458,6 +468,10 @@ class DdrProcessor:
             self.session.add(operation)
             await self.session.flush()
             by_fingerprint[fingerprint] = operation
+            # Accumulated before the dry-run branch: the preview reports the same hours the real run
+            # will report. Skipping it here made a dry run claim five operations and no time at all —
+            # the one number a reviewer reads the preview for.
+            report.operations_hours += operation.actual_duration_hours or 0.0
             if dry_run:
                 report.operations_created.append(operation.id)
                 last = operation
@@ -482,7 +496,6 @@ class DdrProcessor:
             record.validation_rule = PROMOTION_RULE
             report.records_promoted.append(record.id)
             report.operations_created.append(operation.id)
-            report.operations_hours += operation.actual_duration_hours or 0.0
             last = operation
             next_sequence += 1
         return by_fingerprint
@@ -949,12 +962,41 @@ class DdrProcessor:
                         }
                     )
             if dry_run:
+                # Nothing was written, so nothing is recorded as having been written. A dry run that
+                # left a ledger entry behind would make the ledger claim a promotion that never
+                # happened.
                 await self.session.rollback()
             else:
                 document.attributes = {
                     **(document.attributes or {}),
                     "ddr_processing": report.to_dict(),
                 }
+                await self.session.flush()
+                # One entry for the run, not one per promoted row: the run is the act a person
+                # authorised, and every row it created carries `source_document_id` +
+                # `source_record_id` + `promotion_fingerprint`, which is how the entry is traced to
+                # them. Per-row entries would also make a 400-row report write 400 ledger rows.
+                await record_audit(
+                    self.session,
+                    org_id=self.org_id,
+                    action="document.process",
+                    resource_kind="document",
+                    resource_id=document.id,
+                    principal=self._principal,
+                    project_id=document.project_id,
+                    well_id=document.well_id,
+                    details={
+                        "doc_type": effective_type,
+                        "operations_created": len(report.operations_created),
+                        "operations_linked": len(report.operations_linked),
+                        "events_created": len(report.events_created),
+                        "records_promoted": len(report.records_promoted),
+                        "records_needing_review": len(report.records_needing_review),
+                        "twin_aspects": len(report.twin_aspects),
+                        "npt_hours_classified": round(report.npt_hours_classified, 3),
+                        "promotion_rule": PROMOTION_RULE,
+                    },
+                )
                 await self.session.flush()
         except Exception:
             if dry_run:

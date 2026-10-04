@@ -28,12 +28,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from drillai.api.deps import AuthContext, OptionalFilter, get_db, require
 from drillai.api.serializers import event_out, evidence_out, operation_out
-from drillai.core.errors import ValidationFailed
 from drillai.core.idempotency import complete, replay_or_reserve
 from drillai.documents.scope import DocumentScope
 from drillai.operations.events import STATUS_TRANSITIONS as EVENT_TRANSITIONS
 from drillai.operations.events import EventService
-from drillai.operations.service import MUTABLE_FIELDS as OPERATION_MUTABLE_FIELDS
 from drillai.operations.service import STATUS_TRANSITIONS as OPERATION_TRANSITIONS
 from drillai.operations.service import OperationService
 from drillai.security.actions import authorize
@@ -78,7 +76,6 @@ class OperationCreate(BaseModel):
     source_kind: str = "manual"
     source_document_id: str | None = None
     source_record_id: str | None = None
-    evidence_ref: str | None = None
 
     def scope(self) -> DocumentScope:
         return DocumentScope(
@@ -89,7 +86,13 @@ class OperationCreate(BaseModel):
         )
 
     def fields(self) -> dict[str, Any]:
-        """Everything that becomes a column, minus the parts the service takes by name."""
+        """Everything that becomes a column, minus the parts the service takes by name.
+
+        Provenance is taken by name on purpose: an operation cites the document it was read from and
+        the record inside it, and both are checked against the caller's organization before the row is
+        written. A free-form ``evidence_ref`` here would be a second, unchecked way into the evidence
+        graph.
+        """
         taken = {
             "project_id",
             "well_id",
@@ -106,7 +109,6 @@ class OperationCreate(BaseModel):
             "source_kind",
             "source_document_id",
             "source_record_id",
-            "evidence_ref",
         }
         return {key: value for key, value in self.model_dump().items() if key not in taken}
 
@@ -119,12 +121,12 @@ class OperationPatch(BaseModel):
     changes: dict[str, Any] = Field(min_length=1)
 
     def validated_changes(self) -> dict[str, Any]:
-        unknown = set(self.changes) - OPERATION_MUTABLE_FIELDS
-        if unknown:
-            raise ValidationFailed(
-                "one or more fields cannot be changed",
-                details={"fields": sorted(unknown), "allowed": sorted(OPERATION_MUTABLE_FIELDS)},
-            )
+        """The caller's changes, unexamined.
+
+        Field ownership is checked in the service, which also knows *who owns* each field and reports
+        that. Checking here as well would mean two answers to the same question, and the one the caller
+        sees would depend on which ran first — the router's, which cannot name the owner.
+        """
         return self.changes
 
 
@@ -190,6 +192,11 @@ class EventCreate(BaseModel):
         )
 
     def fields(self) -> dict[str, Any]:
+        """Everything that becomes a column, minus the parts the service takes by name.
+
+        ``npt_category`` and ``is_npt`` are taken by name because the service decides whether a
+        category implies NPT hours — keeping them in both places would let the two answers disagree.
+        """
         taken = {
             "project_id",
             "well_id",
@@ -207,6 +214,8 @@ class EventCreate(BaseModel):
             "source_document_id",
             "source_record_id",
             "evidence_ref",
+            "npt_category",
+            "is_npt",
         }
         return {key: value for key, value in self.model_dump().items() if key not in taken}
 
@@ -220,11 +229,11 @@ class EventPatch(BaseModel):
 
 
 def _operation_service(session: AsyncSession, auth: AuthContext) -> OperationService:
-    return OperationService(session, auth.org_id or "", actor_id=auth.principal.id)
+    return OperationService(session, auth.org_id or "", principal=auth.principal)
 
 
 def _event_service(session: AsyncSession, auth: AuthContext) -> EventService:
-    return EventService(session, auth.org_id or "", actor_id=auth.principal.id)
+    return EventService(session, auth.org_id or "", principal=auth.principal)
 
 
 async def _replay(
@@ -321,7 +330,6 @@ async def create_operation(
         source_kind=payload.source_kind,
         source_document_id=payload.source_document_id,
         source_record_id=payload.source_record_id,
-        evidence_ref=payload.evidence_ref,
         **payload.fields(),
     )
     return await _remember(

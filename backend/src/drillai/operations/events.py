@@ -51,6 +51,7 @@ from drillai.db.models import (
     Operation,
 )
 from drillai.documents.scope import DocumentScope, DocumentScopeResolver
+from drillai.security.actions import Principal
 
 #: Events that are still work. Everything else is history.
 OPEN_STATUSES: tuple[str, ...] = ("open", "acknowledged", "investigating")
@@ -101,10 +102,31 @@ class ChangeRecord:
 class EventService:
     """Reads and writes for ``events``. Every method is organization-scoped."""
 
-    def __init__(self, session: AsyncSession, org_id: str, *, actor_id: str | None = None) -> None:
+    def __init__(
+        self,
+        session: AsyncSession,
+        org_id: str,
+        *,
+        principal: Principal | None = None,
+        actor_id: str | None = None,
+    ) -> None:
         self.session = session
         self.org_id = org_id
+        # The ledger records a *principal*, not an id: it resolves the role and the action level from
+        # it at write time, so a row can never claim to have been written by someone it was not. The
+        # id-only constructor argument is kept for callers that have no principal (a workflow step
+        # acting for the organization), and is deliberately turned into a principal with no roles
+        # rather than being trusted to name one.
+        self._principal_value = principal
         self.actor_id = actor_id
+
+    def _principal(self) -> Principal | None:
+        if self._principal_value is not None:
+            return self._principal_value
+        if self.actor_id is None:
+            return None
+        return Principal(id=self.actor_id, org_id=self.org_id)
+
 
     # ------------------------------------------------------------------ reads
 
@@ -208,7 +230,12 @@ class EventService:
                 "npt_category is not recognised",
                 details={"field": "npt_category", "value": npt_category, "allowed": list(NPT_CATEGORIES)},
             )
-        self._check_cause_basis(cause_basis, fields)
+        self._check_cause_basis(
+            cause_basis,
+            fields,
+            source_kind=source_kind,
+            cited=bool(evidence_ref or source_record_id),
+        )
         if (
             fields.get("ended_at") is not None
             and occurred_at is not None
@@ -262,10 +289,10 @@ class EventService:
         await record_audit(
             self.session,
             org_id=self.org_id,
-            actor_id=self.actor_id,
+            principal=self._principal(),
             action="event.create",
-            subject_kind="event",
-            subject_id=event.id,
+            resource_kind="event",
+            resource_id=event.id,
             details={
                 "well_id": event.well_id,
                 "kind": kind,
@@ -327,10 +354,10 @@ class EventService:
         await record_audit(
             self.session,
             org_id=self.org_id,
-            actor_id=self.actor_id,
+            principal=self._principal(),
             action="event.update",
-            subject_kind="event",
-            subject_id=event.id,
+            resource_kind="event",
+            resource_id=event.id,
             details={
                 "reason": reason,
                 "cause_basis": event.cause_basis,
@@ -383,10 +410,10 @@ class EventService:
         await record_audit(
             self.session,
             org_id=self.org_id,
-            actor_id=self.actor_id,
+            principal=self._principal(),
             action="event.transition",
-            subject_kind="event",
-            subject_id=event.id,
+            resource_kind="event",
+            resource_id=event.id,
             details={"from": before, "to": status, "reason": reason},
         )
         return event
@@ -412,10 +439,10 @@ class EventService:
         await record_audit(
             self.session,
             org_id=self.org_id,
-            actor_id=self.actor_id,
+            principal=self._principal(),
             action="event.link_document",
-            subject_kind="event",
-            subject_id=event.id,
+            resource_kind="event",
+            resource_id=event.id,
             details={"before": before, "after": document_id},
         )
         return event
@@ -447,7 +474,13 @@ class EventService:
                 raise ValidationFailed(f"{field} is required", details={"field": field})
 
     def _check_cause_basis(
-        self, basis: str, fields: dict[str, Any], *, existing: Event | None = None
+        self,
+        basis: str,
+        fields: dict[str, Any],
+        *,
+        source_kind: str | None = None,
+        cited: bool = False,
+        existing: Event | None = None,
     ) -> None:
         """A cause may not be stored as ``recorded`` unless the document actually said it.
 
@@ -456,7 +489,9 @@ class EventService:
         event to have come from a document or from a person who was there. A platform that let any
         caller assert ``recorded`` would make the label worthless.
         """
-        asserts_cause = any(fields.get(field) for field in CAUSE_FIELDS)
+        asserts_cause = any(fields.get(field) for field in CAUSE_FIELDS) or (
+            existing is not None and any(getattr(existing, field) for field in CAUSE_FIELDS)
+        )
         if not asserts_cause and basis != "recorded":
             return
         if basis == "recorded":
@@ -464,8 +499,9 @@ class EventService:
                 fields.get("source_document_id")
                 or (existing is not None and existing.source_document_id)
             )
+            declared = source_kind or fields.get("source_kind")
             stated_by_person = (existing is not None and existing.source_kind == "manual") or (
-                fields.get("source_kind") == "manual" and existing is None
+                declared == "manual"
             )
             if from_document or stated_by_person:
                 return
@@ -473,14 +509,16 @@ class EventService:
                 "a cause recorded as 'recorded' must come from a document or from a person who reported it",
                 details={
                     "cause_basis": basis,
-                    "source_kind": fields.get("source_kind"),
+                    "source_kind": declared,
                     "hint": "use cause_basis='inferred' and cite the evidence, or leave it 'unknown'",
                 },
             )
-        cited = bool(fields.get("evidence_ref") or fields.get("source_record_id")) or (
-            existing is not None and bool(existing.evidence_ref or existing.source_record_id)
+        has_citation = (
+            cited
+            or bool(fields.get("evidence_ref") or fields.get("source_record_id"))
+            or (existing is not None and bool(existing.evidence_ref or existing.source_record_id))
         )
-        if basis == "inferred" and not cited:
+        if basis == "inferred" and not has_citation:
             raise ValidationFailed(
                 "an inferred cause must cite the evidence it was inferred from",
                 details={

@@ -49,6 +49,7 @@ from drillai.db.models import (
     Operation,
 )
 from drillai.documents.scope import DocumentScope, DocumentScopeResolver
+from drillai.security.actions import Principal
 
 #: Statuses from which no further work happens. A row here is history.
 TERMINAL_STATUSES: frozenset[str] = frozenset({"completed", "cancelled"})
@@ -119,10 +120,31 @@ def _status_transition_error(operation: Operation, target: str) -> ValidationFai
 class OperationService:
     """Reads and writes for ``operations``. Every method is organization-scoped."""
 
-    def __init__(self, session: AsyncSession, org_id: str, *, actor_id: str | None = None) -> None:
+    def __init__(
+        self,
+        session: AsyncSession,
+        org_id: str,
+        *,
+        principal: Principal | None = None,
+        actor_id: str | None = None,
+    ) -> None:
         self.session = session
         self.org_id = org_id
+        # The ledger records a *principal*, not an id: it resolves the role and the action level from
+        # it at write time, so a row can never claim to have been written by someone it was not. The
+        # id-only constructor argument is kept for callers that have no principal (a workflow step
+        # acting for the organization), and is deliberately turned into a principal with no roles
+        # rather than being trusted to name one.
+        self._principal_value = principal
         self.actor_id = actor_id
+
+    def _principal(self) -> Principal | None:
+        if self._principal_value is not None:
+            return self._principal_value
+        if self.actor_id is None:
+            return None
+        return Principal(id=self.actor_id, org_id=self.org_id)
+
 
     # ------------------------------------------------------------------ reads
 
@@ -222,7 +244,6 @@ class OperationService:
         source_kind: str = "manual",
         source_document_id: str | None = None,
         source_record_id: str | None = None,
-        evidence_ref: str | None = None,
         **fields: Any,
     ) -> Operation:
         """Create one operation, after checking its scope, its class and its position in the chain."""
@@ -294,7 +315,6 @@ class OperationService:
             source="manual" if source_kind == "manual" else source_kind,
             source_document_id=source_document_id,
             source_record_id=source_record_id,
-            evidence_ref=evidence_ref,
             **fields,
         )
         self.session.add(operation)
@@ -302,10 +322,10 @@ class OperationService:
         await record_audit(
             self.session,
             org_id=self.org_id,
-            actor_id=self.actor_id,
+            principal=self._principal(),
             action="operation.create",
-            subject_kind="operation",
-            subject_id=operation.id,
+            resource_kind="operation",
+            resource_id=operation.id,
             details={
                 "well_id": well_id,
                 "wellbore_id": wellbore_id,
@@ -329,11 +349,14 @@ class OperationService:
         self._require(reason=reason)
         operation = await self.get(operation_id)
         self._check_expected_version(operation, expected_updated_at)
-        if operation.status in TERMINAL_STATUSES and operation.operation_class != "plan":
-            # History is corrected by superseding it, not by editing it. A completed operation's
-            # numbers are what the reports and the twin were built from.
+        if operation.status == "cancelled":
+            # A cancelled operation is closed history: it was abandoned, and revising its numbers
+            # afterwards would make the reason for abandoning it unreadable. A *completed* operation,
+            # by contrast, is exactly where transcription mistakes land, and correcting one is what
+            # this method is for — the version check, the mandatory reason and the before/after ledger
+            # entry are what make the correction accountable rather than a silent overwrite.
             raise Conflict(
-                f"operation {operation_id!r} is {operation.status!r} and cannot be edited",
+                f"operation {operation_id!r} was cancelled and cannot be edited",
                 details={"operation_id": operation_id, "status": operation.status},
             )
         unknown = set(changes) - MUTABLE_FIELDS
@@ -343,7 +366,11 @@ class OperationService:
                 details={
                     "fields": sorted(unknown),
                     "allowed": sorted(MUTABLE_FIELDS),
-                    "hint": "operation_class and status move through their own endpoints",
+                    "owned_by": {
+                        field: "the transition endpoint" if field == "status" else "the record's class"
+                        for field in unknown
+                        if field in {"status", "operation_class"}
+                    },
                 },
             )
         if not changes:
@@ -371,10 +398,10 @@ class OperationService:
         await record_audit(
             self.session,
             org_id=self.org_id,
-            actor_id=self.actor_id,
+            principal=self._principal(),
             action="operation.update",
-            subject_kind="operation",
-            subject_id=operation.id,
+            resource_kind="operation",
+            resource_id=operation.id,
             details={"reason": reason, "changes": [record.as_dict() for record in records]},
         )
         return operation, records
@@ -415,10 +442,10 @@ class OperationService:
         await record_audit(
             self.session,
             org_id=self.org_id,
-            actor_id=self.actor_id,
+            principal=self._principal(),
             action="operation.transition",
-            subject_kind="operation",
-            subject_id=operation.id,
+            resource_kind="operation",
+            resource_id=operation.id,
             details={"from": before, "to": status, "reason": reason},
         )
         return operation
@@ -441,10 +468,10 @@ class OperationService:
         await record_audit(
             self.session,
             org_id=self.org_id,
-            actor_id=self.actor_id,
+            principal=self._principal(),
             action="operation.link_predecessor",
-            subject_kind="operation",
-            subject_id=operation.id,
+            resource_kind="operation",
+            resource_id=operation.id,
             details={"before": before, "after": predecessor_operation_id},
         )
         return operation
@@ -482,10 +509,10 @@ class OperationService:
         await record_audit(
             self.session,
             org_id=self.org_id,
-            actor_id=self.actor_id,
+            principal=self._principal(),
             action="operation.link_document",
-            subject_kind="operation",
-            subject_id=operation.id,
+            resource_kind="operation",
+            resource_id=operation.id,
             details={"before": before, "after": document_id},
         )
         return operation

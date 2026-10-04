@@ -179,7 +179,7 @@ async def process_document(
         approval_id=None,
         context={"document_id": document_id},
     )
-    processor = DdrProcessor(session, auth.org_id, actor_id=auth.principal.id)
+    processor = DdrProcessor(session, auth.org_id, principal=auth.principal)
     report = await processor.process(payload.document_id or document_id, dry_run=payload.dry_run)
     return {"processing": report.to_dict()}
 

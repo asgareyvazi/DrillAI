@@ -1,4 +1,4 @@
-"""Fixtures for the document-domain suite: see :mod:`tests.fixtures.fabric`."""
+"""Fixtures for the operations and events suites: see :mod:`tests.fixtures.fabric`."""
 
 from __future__ import annotations
 
