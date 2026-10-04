@@ -1130,7 +1130,9 @@ plan (proven in the browser journey, which asserts the planned 3 400 m value is 
 rather than formatted differently). Plan revisions never overwrite as-drilled values.
 
 **Mutations: authorization, audit, idempotency, stale writes.** Every mutating asset route resolves an
-action from the existing catalogue (`security/catalog.py`, now 43 actions, `unreachable=[]`), enforces
+action from the existing catalogue (`security/catalog.py`: 43 platform actions, plus the three the AI
+layer registers as tools — 46 in a running application, and the reachability test asserts every one of
+them is grantable by some role), enforces
 it through the existing `authorize()`, and either replays a stored response or reserves an idempotency
 key before touching the database — a retried rename cannot be applied twice. Updates carry
 `expected_updated_at`; a stale value is refused with `409 platform.conflict` and `retryable=false`,
@@ -1757,6 +1759,20 @@ measured at checkpoint 7 (`23c394a`).
 - **No delete path exists for a well, wellbore, section or field.** That is historical immutability
   taken literally: identifiers that documents, evidence, operations and twin state point at survive, a
   correction is an audited edit with a reason, and no route can remove the record.
+- **One backend test is sensitive to extreme CPU starvation, and that is recorded rather than tuned
+  away.** On the two-vCPU sandbox, a full backend run executed *while the browser suite was running on
+  the same two cores* failed once in `test_the_socket_tails_the_durable_log_and_closes_when_the_run_ends`
+  (run-event WebSocket); the same command passed on four other full runs, including immediately before
+  and after that one, and the test passed 12 of 12 consecutive isolated runs. The WebSocket fixture
+  allows 10 s for each frame, and CPU starvation is the only condition in which it was observed. The
+  timeout was deliberately **not** raised: a stalled stream is exactly what that bound exists to catch,
+  and inflating it to hide a scheduling artefact would also hide the defect. CI runs the suite on a
+  runner with the browser suite sequential after it, and has not shown it — five green runs on this
+  branch including the tip.
+- **The well-structure read is bounded, not single-query.** `GET /wells/{id}/structure` issues one
+  sections query per wellbore (a well has one to three) rather than one query with a join, which the
+  endpoint documents in place. It is O(wellbores), not O(rows), and no list endpoint in the asset
+  surface queries per row.
 - **Persian wording has no native-speaker review.** Every new string exists in both catalogues — the
   i18n gates fail otherwise, and the catalogue gate refuses a Persian value identical to its English
   one — and identifiers, UWI, API numbers and raw ids stay left-to-right in both; the phrasing itself
