@@ -24,7 +24,12 @@ from drillai.drilling.npt import NptService
 from drillai.drilling.optimisation import COMPUTED_OBJECTIVES, NOT_EVALUATED, DrillingOptimisationService
 from drillai.drilling.reporting import REPORT_KINDS, ReportingService
 from drillai.drilling.state import KPI_CHANNELS, WellStateService
-from drillai.drilling.timeline import TIMELINE_KINDS, TimelineService
+from drillai.drilling.timeline import (
+    TIMELINE_KINDS,
+    TimelineService,
+    encode_cursor,
+    parse_cursor,
+)
 from drillai.security.actions import authorize
 
 router = APIRouter(tags=["drilling"])
@@ -102,7 +107,18 @@ async def well_timeline(
     since: dt.datetime | None = None,
     until: dt.datetime | None = None,
     limit: int = Query(default=500, ge=1, le=2000),
+    cursor: Annotated[
+        str | None,
+        Query(description="keyset position: pass back next_cursor from the previous page"),
+    ] = None,
 ) -> dict[str, Any]:
+    """One page of the merged timeline, ordered by time, then kind, then id.
+
+    Paging is by cursor rather than by offset: the ordering key travels with the request, so a page
+    cannot skip or repeat an entry when rows are written between two requests. ``next_cursor`` is
+    returned whenever a full page came back — it says "ask again", not "there is certainly more",
+    and a short page means the end.
+    """
     unknown = [kind for kind in (kinds or []) if kind not in TIMELINE_KINDS]
     if unknown:
         from drillai.core.errors import ValidationFailed
@@ -110,13 +126,15 @@ async def well_timeline(
         raise ValidationFailed(
             "unknown timeline kinds", details={"unknown": unknown, "known": list(TIMELINE_KINDS)}
         )
+    after = parse_cursor(cursor) if cursor else None
     entries = await TimelineService(session, auth.org_id).build(
-        well_id, since=since, until=until, kinds=kinds, limit=limit
+        well_id, since=since, until=until, kinds=kinds, limit=limit, after=after
     )
     return {
         "entries": [entry.to_dict() for entry in entries],
         "count": len(entries),
         "kinds_available": list(TIMELINE_KINDS),
+        "next_cursor": encode_cursor(entries[-1]) if len(entries) == limit else None,
     }
 
 
@@ -127,9 +145,26 @@ async def well_npt(
     auth: Annotated[AuthContext, Depends(require("well.read"))],
     basis: str = Query(default="events", pattern="^(events|operations)$"),
     include_offsets: bool = True,
+    section_id: Annotated[str | None, Query(description="scope the accounting to one hole section")] = None,
+    operation_id: Annotated[str | None, Query(description="scope the accounting to one operation")] = None,
+    since: dt.datetime | None = None,
+    until: dt.datetime | None = None,
+    case_limit: int = Query(default=500, ge=1, le=2000, description="maximum evidence rows returned"),
 ) -> dict[str, Any]:
+    """NPT for a well, scoped if asked.
+
+    Totals and breakdowns are computed over the whole scope by the database; the ``cases`` list is the
+    evidence behind them and is bounded, with ``cases_truncated`` saying when it was cut.
+    """
     summary = await NptService(session, auth.org_id).summarise(
-        well_id, basis=basis, include_offsets=include_offsets
+        well_id,
+        basis=basis,
+        include_offsets=include_offsets,
+        section_id=section_id,
+        operation_id=operation_id,
+        since=since,
+        until=until,
+        case_limit=case_limit,
     )
     return {"npt": summary.to_dict()}
 

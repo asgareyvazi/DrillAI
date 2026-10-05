@@ -20,10 +20,11 @@ import datetime as dt
 from dataclasses import dataclass, field
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import and_, extract, func, select
+from sqlalchemy import case as sql_case
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from drillai.core.errors import ValidationFailed
+from drillai.core.errors import NotFound, ValidationFailed
 from drillai.db.models import Event, NptCode, OffsetCandidate, Operation, Well
 
 #: Which recorded source a reported total is built from.
@@ -137,6 +138,9 @@ class NptSummary:
     unknown_controllability_hours: float = 0.0
     offset_comparison: dict[str, Any] | None = None
     notes: list[str] = field(default_factory=list)
+    #: Whether ``cases`` is a bounded prefix of everything that matched, rather than all of it.
+    cases_truncated: bool = False
+    case_limit: int = 500
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -156,6 +160,8 @@ class NptSummary:
             # reported as unknown, and the three buckets always add up to the total.
             "unknown_controllability_hours": round(self.unknown_controllability_hours, 3),
             "cases": [case.to_dict() for case in self.cases],
+            "cases_truncated": self.cases_truncated,
+            "case_limit": self.case_limit,
             "by_category": [row.to_dict() for row in self.by_category],
             "by_code": [row.to_dict() for row in self.by_code],
             "by_section": [row.to_dict() for row in self.by_section],
@@ -202,19 +208,58 @@ class NptService:
         ).scalars().all()
         return {row.code: row for row in rows}
 
-    async def events_for_well(self, well_id: str) -> list[NptEvent]:
+    def _event_filters(
+        self,
+        well_id: str,
+        *,
+        section_id: str | None = None,
+        operation_id: str | None = None,
+        since: dt.datetime | None = None,
+        until: dt.datetime | None = None,
+    ) -> list[Any]:
+        """The scope of an NPT question, written once so the cases and the aggregates agree."""
+        clauses: list[Any] = [
+            Event.org_id == self.org_id,
+            Event.well_id == well_id,
+            Event.is_npt.is_(True),
+        ]
+        if section_id is not None:
+            clauses.append(Event.section_id == section_id)
+        if operation_id is not None:
+            clauses.append(Event.operation_id == operation_id)
+        if since is not None:
+            clauses.append(Event.occurred_at >= since)
+        if until is not None:
+            clauses.append(Event.occurred_at <= until)
+        return clauses
+
+    async def events_for_well(
+        self,
+        well_id: str,
+        *,
+        section_id: str | None = None,
+        operation_id: str | None = None,
+        since: dt.datetime | None = None,
+        until: dt.datetime | None = None,
+        limit: int | None = None,
+    ) -> list[NptEvent]:
         codes = await self._code_map()
-        rows = list(
-            (
-                await self.session.execute(
-                    select(Event)
-                    .where(Event.org_id == self.org_id, Event.well_id == well_id, Event.is_npt.is_(True))
-                    .order_by(Event.occurred_at)
+        stmt = (
+            select(Event)
+            .where(
+                *self._event_filters(
+                    well_id,
+                    section_id=section_id,
+                    operation_id=operation_id,
+                    since=since,
+                    until=until,
                 )
             )
-            .scalars()
-            .all()
+            .order_by(Event.occurred_at)
         )
+        if limit is not None:
+            stmt = stmt.limit(limit)
+        rows = list((await self.session.execute(stmt)).scalars().all())
         cases: list[NptEvent] = []
         for row in rows:
             hours = float(row.npt_hours or row.duration_hours or 0.0)
@@ -244,22 +289,59 @@ class NptService:
             )
         return cases
 
-    async def operations_with_npt(self, well_id: str) -> list[NptEvent]:
-        rows = list(
-            (
-                await self.session.execute(
-                    select(Operation)
-                    .where(
-                        Operation.org_id == self.org_id,
-                        Operation.well_id == well_id,
-                        Operation.npt_hours.is_not(None),
-                    )
-                    .order_by(Operation.actual_start)
+    def _operation_filters(
+        self,
+        well_id: str,
+        *,
+        section_id: str | None = None,
+        operation_id: str | None = None,
+        since: dt.datetime | None = None,
+        until: dt.datetime | None = None,
+    ) -> list[Any]:
+        started = func.coalesce(Operation.actual_start, Operation.planned_start)
+        clauses: list[Any] = [
+            Operation.org_id == self.org_id,
+            Operation.well_id == well_id,
+            # A zero-hour roll-up is "no loss booked here", not an NPT occurrence: keeping it would
+            # inflate the occurrence count and put an empty row in the evidence list.
+            Operation.npt_hours > 0,
+        ]
+        if section_id is not None:
+            clauses.append(Operation.section_id == section_id)
+        if operation_id is not None:
+            clauses.append(Operation.id == operation_id)
+        if since is not None:
+            clauses.append(started >= since)
+        if until is not None:
+            clauses.append(started <= until)
+        return clauses
+
+    async def operations_with_npt(
+        self,
+        well_id: str,
+        *,
+        section_id: str | None = None,
+        operation_id: str | None = None,
+        since: dt.datetime | None = None,
+        until: dt.datetime | None = None,
+        limit: int | None = None,
+    ) -> list[NptEvent]:
+        stmt = (
+            select(Operation)
+            .where(
+                *self._operation_filters(
+                    well_id,
+                    section_id=section_id,
+                    operation_id=operation_id,
+                    since=since,
+                    until=until,
                 )
             )
-            .scalars()
-            .all()
+            .order_by(Operation.actual_start)
         )
+        if limit is not None:
+            stmt = stmt.limit(limit)
+        rows = list((await self.session.execute(stmt)).scalars().all())
         cases: list[NptEvent] = []
         for row in rows:
             hours = float(row.npt_hours or 0.0)
@@ -292,6 +374,160 @@ class NptService:
                 )
             )
         return cases
+
+    async def _event_aggregates(self, clauses: list[Any]) -> dict[str, Any]:
+        """Every grouped number for the events basis, computed by the database.
+
+        The previous version read every NPT row on the well into Python and built the buckets there:
+        the answer was right, but the work grew with the well's history while the request stayed the
+        same size. These are five grouped queries with a bounded result — one row per category, code,
+        section, operation and month — and the sums come back already summed.
+        """
+        hours = func.coalesce(Event.npt_hours, Event.duration_hours, 0.0)
+        controllable = NptCode.is_operator_controllable
+        code_join = and_(NptCode.org_id == Event.org_id, NptCode.code == Event.npt_code)
+        category = func.coalesce(Event.npt_category, NptCode.category, "unclassified")
+
+        async def grouped(key_expr: Any, label_expr: Any, *extra_group: Any) -> list[tuple]:
+            stmt = (
+                select(
+                    key_expr,
+                    label_expr,
+                    func.sum(hours),
+                    func.count(),
+                    func.max(controllable),
+                )
+                .select_from(Event)
+                .outerjoin(NptCode, code_join)
+                .where(*clauses)
+                .group_by(key_expr, label_expr, *extra_group)
+                .order_by(func.sum(hours).desc())
+            )
+            rows = (await self.session.execute(stmt)).all()
+            return [(str(row[0]), str(row[1]), float(row[2] or 0.0), int(row[3]), row[4]) for row in rows]
+
+        # An event row carrying `is_npt` is an NPT occurrence whatever its hours: the flag is the
+        # recorder's claim, and an event that reports no loss is still part of the record. (An
+        # operation roll-up is the other way round — its column *is* the quantity, so a zero there
+        # means "nothing booked" and is not counted.) The totals exclude nothing either way: a
+        # zero-hour row adds zero.
+        totals = (
+            await self.session.execute(
+                select(
+                    func.sum(hours),
+                    func.count(),
+                    func.sum(sql_case((controllable.is_(True), hours), else_=0.0)),
+                    func.sum(sql_case((controllable.is_(False), hours), else_=0.0)),
+                    func.sum(
+                        sql_case(
+                            (
+                                and_(
+                                    controllable.is_not(True),
+                                    controllable.is_not(False),
+                                ),
+                                hours,
+                            ),
+                            else_=0.0,
+                        )
+                    ),
+                )
+                .select_from(Event)
+                .outerjoin(NptCode, code_join)
+                .where(*clauses)
+            )
+        ).one()
+
+        months = (
+            await self.session.execute(
+                select(
+                    extract("year", Event.occurred_at),
+                    extract("month", Event.occurred_at),
+                    func.sum(hours),
+                )
+                .where(*clauses, Event.occurred_at.is_not(None))
+                .group_by(extract("year", Event.occurred_at), extract("month", Event.occurred_at))
+                .order_by(extract("year", Event.occurred_at), extract("month", Event.occurred_at))
+            )
+        ).all()
+        return {
+            "hours": float(totals[0] or 0.0),
+            "count": int(totals[1] or 0),
+            "controllable": float(totals[2] or 0.0),
+            "uncontrollable": float(totals[3] or 0.0),
+            "unknown": float(totals[4] or 0.0),
+            "by_category": await grouped(category, category),
+            "by_code": await grouped(
+                func.coalesce(Event.npt_code, "unclassified"), func.coalesce(Event.npt_code, "unclassified")
+            ),
+            "by_section": await grouped(
+                func.coalesce(Event.section_id, "not-sectioned"),
+                func.coalesce(Event.section_id, "not-sectioned"),
+            ),
+            "by_operation": await grouped(
+                func.coalesce(Event.operation_id, "not-operation-scoped"),
+                func.coalesce(Event.operation_id, "not-operation-scoped"),
+            ),
+            "by_month": [
+                {"month": f"{int(year):04d}-{int(month):02d}", "hours": round(float(total or 0.0), 3)}
+                for year, month, total in months
+            ],
+        }
+
+    async def _operation_aggregates(self, clauses: list[Any]) -> dict[str, Any]:
+        """The same groups for the operations basis, where the category is the row's own claim."""
+        hours = Operation.npt_hours
+        started = func.coalesce(Operation.actual_start, Operation.planned_start)
+
+        async def grouped(key_expr: Any, label_expr: Any) -> list[tuple]:
+            stmt = (
+                select(key_expr, label_expr, func.sum(hours), func.count())
+                .where(*clauses)
+                .group_by(key_expr, label_expr)
+                .order_by(func.sum(hours).desc())
+            )
+            rows = (await self.session.execute(stmt)).all()
+            return [
+                (str(row[0]), str(row[1] or row[0]), float(row[2] or 0.0), int(row[3]), None) for row in rows
+            ]
+
+        totals = (
+            await self.session.execute(select(func.sum(hours), func.count()).where(*clauses))
+        ).one()
+        months = (
+            await self.session.execute(
+                select(extract("year", started), extract("month", started), func.sum(hours))
+                .where(*clauses)
+                .group_by(extract("year", started), extract("month", started))
+                .order_by(extract("year", started), extract("month", started))
+            )
+        ).all()
+        hours_total = float(totals[0] or 0.0)
+        by_category = await grouped(
+            func.coalesce(Operation.code, "unclassified"), func.coalesce(Operation.code, "unclassified")
+        )
+        return {
+            "hours": hours_total,
+            "count": int(totals[1] or 0),
+            # An operation row's own roll-up carries no controllability judgement, so every hour is
+            # reported as unknown rather than being split into buckets nobody established.
+            "controllable": 0.0,
+            "uncontrollable": 0.0,
+            "unknown": hours_total,
+            # On this basis the row *is* the operation, so its code is the closest thing to a
+            # category the platform has — and where there is none the bucket says so.
+            "by_category": by_category,
+            "by_code": by_category,
+            "by_section": await grouped(
+                func.coalesce(Operation.section_id, "not-sectioned"),
+                func.coalesce(Operation.section_id, "not-sectioned"),
+            ),
+            "by_operation": await grouped(Operation.id, Operation.name),
+            "by_month": [
+                {"month": f"{int(year):04d}-{int(month):02d}", "hours": round(float(value or 0.0), 3)}
+                for year, month, value in months
+                if year is not None and month is not None
+            ],
+        }
 
     async def _offset_comparison(self, well: Well, total_hours: float) -> dict[str, Any] | None:
         """Compare against offset wells already analysed for this well — never fabricated."""
@@ -335,8 +571,23 @@ class NptService:
         }
 
     async def summarise(
-        self, well_id: str, *, basis: str = "events", include_offsets: bool = True
+        self,
+        well_id: str,
+        *,
+        basis: str = "events",
+        include_offsets: bool = True,
+        section_id: str | None = None,
+        operation_id: str | None = None,
+        since: dt.datetime | None = None,
+        until: dt.datetime | None = None,
+        case_limit: int = 500,
     ) -> NptSummary:
+        """NPT for one well, optionally scoped to a section or an operation.
+
+        The totals and every breakdown are computed by the database over the same scope; ``cases`` is
+        the evidence list behind them and is bounded, with ``cases_truncated`` saying when it was cut
+        so a client never reads a short list as a complete one.
+        """
         if basis not in NPT_BASES:
             raise ValidationFailed(
                 f"unknown NPT basis {basis!r}",
@@ -347,92 +598,86 @@ class NptService:
                 select(Well).where(Well.id == well_id, Well.org_id == self.org_id)
             )
         ).scalar_one_or_none()
-        cases = await self.events_for_well(well_id)
-        operation_cases = await self.operations_with_npt(well_id)
-        hours_events = sum(case.hours for case in cases)
-        hours_operations = sum(case.hours for case in operation_cases)
+        if well is None:
+            # Not "a well with no NPT": a well this caller cannot see. Returning a zero summary made
+            # a foreign well indistinguishable from a well that had a clean month.
+            raise NotFound("well not found", details={"well_id": well_id})
+        event_clauses = self._event_filters(
+            well_id, section_id=section_id, operation_id=operation_id, since=since, until=until
+        )
+        operation_clauses = self._operation_filters(
+            well_id, section_id=section_id, operation_id=operation_id, since=since, until=until
+        )
+        event_totals = await self._event_aggregates(event_clauses)
+        operation_totals = await self._operation_aggregates(operation_clauses)
+        hours_events = event_totals["hours"]
+        hours_operations = operation_totals["hours"]
 
-        productive = (
-            await self.session.execute(
-                select(Operation).where(
-                    Operation.org_id == self.org_id,
-                    Operation.well_id == well_id,
-                    Operation.operation_class == "actual",
-                    Operation.is_productive.is_(True),
+        productive_hours = float(
+            (
+                await self.session.execute(
+                    select(func.sum(Operation.actual_duration_hours)).where(
+                        Operation.org_id == self.org_id,
+                        Operation.well_id == well_id,
+                        Operation.operation_class == "actual",
+                        Operation.is_productive.is_(True),
+                    )
                 )
-            )
-        ).scalars().all()
-        productive_hours = sum(float(row.actual_duration_hours or 0.0) for row in productive)
+            ).scalar_one_or_none()
+            or 0.0
+        )
+
+        cases = await self.events_for_well(
+            well_id,
+            section_id=section_id,
+            operation_id=operation_id,
+            since=since,
+            until=until,
+            limit=case_limit,
+        )
+        operation_cases = await self.operations_with_npt(
+            well_id,
+            section_id=section_id,
+            operation_id=operation_id,
+            since=since,
+            until=until,
+            limit=case_limit,
+        )
         selected = cases if basis == "events" else operation_cases
+        totals = event_totals if basis == "events" else operation_totals
         total = hours_events if basis == "events" else hours_operations
         measured = productive_hours + total
+        # The occurrence count comes from the aggregates, not from the page of cases: a bounded list
+        # must not shrink a number that describes the whole scope.
+        occurrences = int(totals["count"])
+        truncated = occurrences > len(selected)
 
-        category_rows: dict[str, tuple[str, str, float, int, bool | None]] = {}
-        code_rows: dict[str, tuple[str, str, float, int, bool | None]] = {}
-        section_rows: dict[str, tuple[str, str, float, int, bool | None]] = {}
-        operation_rows: dict[str, tuple[str, str, float, int, bool | None]] = {}
-        month_rows: dict[str, float] = {}
-        for case in selected:
-            entry = category_rows.get(
-                case.category,
-                (case.category, case.category.replace("_", " "), 0.0, 0, case.operator_controllable),
-            )
-            category_rows[case.category] = (
-                entry[0],
-                entry[1],
-                entry[2] + case.hours,
-                entry[3] + 1,
-                entry[4] if entry[4] is not None else case.operator_controllable,
-            )
-            code_key = case.code or "unclassified"
-            code_entry = code_rows.get(code_key, (code_key, code_key, 0.0, 0, case.operator_controllable))
-            code_rows[code_key] = (
-                code_entry[0],
-                code_entry[1],
-                code_entry[2] + case.hours,
-                code_entry[3] + 1,
-                code_entry[4],
-            )
-            section_key = case.section_id or "not-sectioned"
-            section_entry = section_rows.get(
-                section_key, (section_key, section_key, 0.0, 0, None)
-            )
-            section_rows[section_key] = (
-                section_entry[0],
-                section_entry[1],
-                section_entry[2] + case.hours,
-                section_entry[3] + 1,
-                None,
-            )
-            operation_key = case.operation_id or "not-operation-scoped"
-            op_entry = operation_rows.get(
-                operation_key, (operation_key, operation_key, 0.0, 0, None)
-            )
-            operation_rows[operation_key] = (
-                op_entry[0],
-                op_entry[1],
-                op_entry[2] + case.hours,
-                op_entry[3] + 1,
-                None,
-            )
-            if case.started_at is not None:
-                month = case.started_at.strftime("%Y-%m")
-                month_rows[month] = month_rows.get(month, 0.0) + case.hours
-
+        category_rows = [tuple(row) for row in totals["by_category"]]
         for category in STANDARD_CATEGORIES:
-            category_rows.setdefault(category, (category, category.replace("_", " "), 0.0, 0, None))
+            if not any(row[0] == category for row in category_rows):
+                category_rows.append((category, category.replace("_", " "), 0.0, 0, None))
 
         notes: list[str] = []
+        if any(scoped is not None for scoped in (section_id, operation_id, since, until)):
+            notes.append(
+                "the summary is scoped: totals and breakdowns cover only the selected "
+                "section/operation and time window, not the whole well"
+            )
+        if truncated:
+            notes.append(
+                f"the case list is bounded to {case_limit} rows; totals and breakdowns are computed "
+                "over every matching row"
+            )
         if basis == "events" and hours_operations > hours_events + 0.01:
             notes.append(
                 "operations carry more NPT hours than events: part of the recorded NPT is not "
                 "broken down into events, so the by-category picture is incomplete"
             )
-        if any(case.classification_source == "unclassified" for case in selected):
-            unclassified = sum(case.hours for case in selected if case.classification_source == "unclassified")
+        if any(case.classification_source == "unclassified" for case in selected) or (
+            basis == "events" and not selected and hours_events > 0
+        ):
             notes.append(
-                f"{round(unclassified, 2)} h of NPT carries no NPT code; categories are therefore "
-                "a lower bound"
+                "part of the recorded NPT carries no NPT code; categories are therefore a lower bound"
             )
         notes.append(
             "NPT hours come from recorded events/operations only. Absent records mean absent hours, "
@@ -444,31 +689,25 @@ class NptService:
             basis=basis,
             hours_events=hours_events,
             hours_operations=hours_operations,
-            event_count=len(selected),
+            event_count=occurrences,
             measured_hours_total=measured,
             percent_of_well_time=(100.0 * total / measured) if measured > 0 else None,
             by_hours=total,
             cases=sorted(selected, key=lambda case: -case.hours),
-            by_category=_pareto(list(category_rows.values())),
-            by_code=_pareto(list(code_rows.values())),
-            by_section=_pareto(list(section_rows.values())),
-            by_operation=_pareto(list(operation_rows.values())),
-            by_month=[
-                {"month": month, "hours": round(hours, 3)} for month, hours in sorted(month_rows.items())
-            ],
-            controllable_hours=sum(
-                case.hours for case in selected if case.operator_controllable is True
-            ),
-            uncontrollable_hours=sum(
-                case.hours for case in selected if case.operator_controllable is False
-            ),
-            unknown_controllability_hours=sum(
-                case.hours for case in selected if case.operator_controllable is None
-            ),
+            by_category=_pareto(list(category_rows)),
+            by_code=_pareto([tuple(row) for row in totals["by_code"]]),
+            by_section=_pareto([tuple(row) for row in totals["by_section"]]),
+            by_operation=_pareto([tuple(row) for row in totals["by_operation"]]),
+            by_month=list(totals["by_month"]),
+            controllable_hours=totals["controllable"],
+            uncontrollable_hours=totals["uncontrollable"],
+            unknown_controllability_hours=totals["unknown"],
             offset_comparison=(
                 await self._offset_comparison(well, total) if include_offsets and well is not None else None
             ),
             notes=notes,
+            cases_truncated=truncated,
+            case_limit=case_limit,
         )
 
     async def well_ids_with_npt(self, *, limit: int = 200) -> list[str]:

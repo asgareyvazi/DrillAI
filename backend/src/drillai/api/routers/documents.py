@@ -176,7 +176,15 @@ async def get_document(
     auth: Annotated[AuthContext, Depends(require("document.read"))],
     include_chunks: bool = Query(default=True),
     include_records: bool = Query(default=True),
+    include_regions: bool = Query(default=True),
     chunk_limit: int = Query(default=50, ge=1, le=500),
+    region_limit: int = Query(default=100, ge=1, le=500),
+    record_limit: int = Query(default=200, ge=1, le=1000),
+    record_offset: int = Query(default=0, ge=0),
+    record_after: Annotated[
+        str | None, Query(description="keyset position: pass back next_record_cursor")
+    ] = None,
+    evidence_limit: int = Query(default=200, ge=1, le=1000),
 ) -> dict[str, Any]:
     document = (
         await session.execute(
@@ -199,6 +207,29 @@ async def get_document(
         )
     ).scalar_one()
     payload["region_count"] = regions
+    if include_regions:
+        region_rows = (
+            await session.execute(
+                select(DocumentRegion)
+                .where(DocumentRegion.document_id == document_id)
+                .order_by(DocumentRegion.page_number, DocumentRegion.id)
+                .limit(region_limit)
+            )
+        ).scalars().all()
+        payload["regions"] = [
+            {
+                "id": region.id,
+                "page_number": region.page_number,
+                "kind": region.kind,
+                "bbox": region.bbox,
+                # Bounded like the provenance endpoint: a region's text is evidence, not a payload.
+                "text": (region.text or "")[:2000],
+                "attributes": region.attributes,
+            }
+            for region in region_rows
+        ]
+        payload["regions_returned"] = len(region_rows)
+        payload["regions_truncated"] = regions > len(region_rows)
     if include_chunks:
         chunks = (
             await session.execute(
@@ -226,23 +257,55 @@ async def get_document(
             for chunk in chunks
         ]
     if include_records:
-        records = (
+        record_total = (
             await session.execute(
-                select(ExtractedRecord)
+                select(func.count())
+                .select_from(ExtractedRecord)
                 .where(ExtractedRecord.document_id == document_id)
-                .order_by(ExtractedRecord.created_at)
             )
-        ).scalars().all()
+        ).scalar_one()
+        statement = (
+            select(ExtractedRecord)
+            .where(ExtractedRecord.document_id == document_id)
+            # Ordered by id, which is time-sortable, so the page is stable and the cursor can be a
+            # record id rather than a computed offset that shifts when rows are written.
+            .order_by(ExtractedRecord.id)
+            .limit(record_limit)
+        )
+        if record_after:
+            await _require_record_cursor(session, document_id, record_after)
+            statement = statement.where(ExtractedRecord.id > record_after)
+        else:
+            statement = statement.offset(record_offset)
+        records = (await session.execute(statement)).scalars().all()
         payload["records"] = [extracted_record_out(row) for row in records]
+        payload["record_count"] = record_total
+        payload["records_returned"] = len(records)
+        payload["records_truncated"] = record_total > record_offset + len(records)
+        # The cursor is the last id on this page: pass it back as ``record_after`` for the next one.
+        payload["next_record_cursor"] = records[-1].id if len(records) == record_limit else None
+    evidence_total = (
+        await session.execute(
+            select(func.count()).select_from(EvidenceLink).where(EvidenceLink.document_id == document_id)
+        )
+    ).scalar_one()
     links = (
         await session.execute(
             select(EvidenceLink)
             .where(EvidenceLink.document_id == document_id)
-            .order_by(EvidenceLink.created_at)
-            .limit(200)
+            .order_by(EvidenceLink.id)
+            .limit(evidence_limit)
         )
     ).scalars().all()
     payload["evidence_links"] = [evidence_out(row) for row in links]
+    payload["evidence_count"] = evidence_total
+    payload["evidence_truncated"] = evidence_total > len(links)
+    payload["limits"] = {
+        "chunks": chunk_limit,
+        "regions": region_limit,
+        "records": record_limit,
+        "evidence": evidence_limit,
+    }
     return payload
 
 
@@ -277,11 +340,18 @@ async def document_provenance(
     document_id: str,
     session: Annotated[AsyncSession, Depends(get_db)],
     auth: Annotated[AuthContext, Depends(require("evidence.read"))],
+    limit: int = Query(default=200, ge=1, le=1000),
+    cursor: Annotated[
+        str | None,
+        Query(description="keyset position: pass back next_cursor from the previous page"),
+    ] = None,
 ) -> dict[str, Any]:
     """The provenance chain for one document: what was extracted, by which method, from where.
 
     This is the "fact → document → page → region → extraction method → confidence → validation"
-    chain in one response, so a reviewer never has to reconstruct it from five endpoints.
+    chain in one response, so a reviewer never has to reconstruct it from five endpoints. The chain
+    is a page of extracted records in id order — the same order the document detail lists them — and
+    each page resolves only the regions it references.
     """
     document = (
         await session.execute(
@@ -290,17 +360,41 @@ async def document_provenance(
     ).scalar_one_or_none()
     if document is None:
         raise NotFound(f"document {document_id!r} not found")
-    records = (
+    total = (
         await session.execute(
-            select(ExtractedRecord).where(ExtractedRecord.document_id == document_id)
+            select(func.count())
+            .select_from(ExtractedRecord)
+            .where(ExtractedRecord.document_id == document_id)
         )
-    ).scalars().all()
+    ).scalar_one()
+    if cursor:
+        await _require_record_cursor(session, document_id, cursor)
+    statement = (
+        select(ExtractedRecord)
+        .where(ExtractedRecord.document_id == document_id)
+        .order_by(ExtractedRecord.id)
+        .limit(limit)
+    )
+    if cursor:
+        statement = statement.where(ExtractedRecord.id > cursor)
+    records = list((await session.execute(statement)).scalars().all())
+    wanted = {record.region_id for record in records if record.region_id}
     regions = (
-        await session.execute(
-            select(DocumentRegion).where(DocumentRegion.document_id == document_id).limit(500)
+        list(
+            (
+                await session.execute(
+                    select(DocumentRegion).where(DocumentRegion.id.in_(wanted))
+                )
+            ).scalars().all()
         )
-    ).scalars().all()
-    region_index = {region.id: region for region in regions}
+        if wanted
+        else []
+    )
+    # The region must belong to this document; a record pointing at another document's region would
+    # otherwise leak that region's text through this response.
+    region_index = {
+        region.id: region for region in regions if region.document_id == document_id
+    }
     chain = []
     for record in records:
         region = region_index.get(record.region_id) if record.region_id else None
@@ -331,8 +425,11 @@ async def document_provenance(
         "document_id": document_id,
         "extraction_summary": document.extraction_summary or {},
         "chain": chain,
-        "region_count": len(regions),
-        "record_count": len(records),
+        "regions_returned": len(region_index),
+        "record_count": total,
+        "records_returned": len(records),
+        "next_cursor": records[-1].id if len(records) == limit else None,
+        "chain_truncated": total > len(records),
     }
 
 
@@ -371,11 +468,12 @@ async def download_document(
     if not store.exists(artifact.blob_key):
         raise NotFound("the stored original is no longer available in the blob backend")
     data = store.get(artifact.blob_key)
-    filename = artifact.original_filename or f"{document.id}.bin"
     return Response(
         content=data,
         media_type=artifact.content_type or "application/octet-stream",
-        headers={"Content-Disposition": f'inline; filename="{filename}"'},
+        headers={
+            "Content-Disposition": _content_disposition(artifact.original_filename, document.id)
+        },
     )
 
 
@@ -406,6 +504,48 @@ async def document_permissions(
         "note": "permissions are patterns; the answer above uses the same matcher as the action gate",
         "permission_count": len(auth.principal.permissions),
     }
+
+
+async def _require_record_cursor(session: AsyncSession, document_id: str, cursor: str) -> None:
+    """A cursor must name a record of *this* document, or it is refused.
+
+    An opaque string compared with ``>`` is not a cursor: whether it returns the first page, the last
+    page or everything depends on how it happens to sort. Refusing it means a client that passes the
+    wrong token is told so, instead of being handed a page that looks like a valid answer.
+    """
+    found = (
+        await session.execute(
+            select(ExtractedRecord.id).where(
+                ExtractedRecord.id == cursor, ExtractedRecord.document_id == document_id
+            )
+        )
+    ).scalar_one_or_none()
+    if found is None:
+        raise ValidationFailed(
+            "cursor does not name an extracted record of this document",
+            details={"document_id": document_id, "hint": "pass back next_cursor unchanged"},
+        )
+
+
+_HEADER_UNSAFE = {chr(code) for code in range(0x20)} | {"\x7f", '"', "\\"}
+
+
+def _content_disposition(filename: str | None, fallback: str) -> str:
+    """A ``Content-Disposition`` that cannot be turned into a second header or an unending string.
+
+    The uploaded filename is attacker-controlled. Interpolating it directly let a name containing a
+    quote end the quoted string and start header parameters, and a newline could split the response
+    into a second header — response splitting. Control characters and quotes are dropped from the
+    ASCII form, the name is bounded, and the original is carried in the RFC 5987 ``filename*`` form
+    (percent-encoded) so a non-ASCII name still arrives intact.
+    """
+    from urllib.parse import quote
+
+    name = (filename or "").strip() or f"{fallback}.bin"
+    safe = "".join(character for character in name if character not in _HEADER_UNSAFE)
+    safe = safe.replace(";", "_")[:150] or f"{fallback}.bin"
+    encoded = quote(name, safe="")
+    return f"inline; filename=\"{safe}\"; filename*=UTF-8''{encoded}"
 
 
 def _job_payload(outcome: Any) -> dict[str, Any]:

@@ -22,13 +22,16 @@ always renders the same timeline.
 
 from __future__ import annotations
 
+import base64
 import datetime as dt
+import json
 from dataclasses import dataclass, field
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from drillai.core.errors import NotFound
 from drillai.db.models import (
     ApprovalRequest,
     ChangeRecord,
@@ -37,7 +40,91 @@ from drillai.db.models import (
     Event,
     Operation,
     Recommendation,
+    Well,
 )
+
+
+def sort_key(entry: Any) -> tuple[bool, dt.datetime, str, str]:
+    """The merged order, written once and used for both sorting and the cursor.
+
+    Entries with no time sort last: an undated document is not older than 1970, it is simply undated,
+    and placing it at the start of a well's history would be a claim the data does not make.
+    """
+    return (
+        entry.at is None,
+        entry.at or dt.datetime.min.replace(tzinfo=dt.UTC),
+        entry.kind,
+        entry.id,
+    )
+
+
+def encode_cursor(entry: Any) -> str:
+    """The keyset position of ``entry``: its ordering key, in a form a client can pass back."""
+    payload = {
+        "at": entry.at.isoformat() if entry.at else None,
+        "kind": entry.kind,
+        "id": entry.id,
+    }
+    raw = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    return base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
+
+
+def parse_cursor(token: str) -> tuple[dt.datetime | None, str, str]:
+    """Decode a cursor, refusing anything that is not one rather than starting from the beginning."""
+    from drillai.core.errors import ValidationFailed
+
+    try:
+        padded = token + "=" * (-len(token) % 4)
+        payload = json.loads(base64.urlsafe_b64decode(padded.encode("ascii")).decode("utf-8"))
+        at = payload["at"]
+        kind = payload["kind"]
+        identifier = payload["id"]
+    except Exception as exc:
+        raise ValidationFailed(
+            "cursor is not a timeline cursor",
+            details={"hint": "pass back the next_cursor from the previous page unchanged"},
+        ) from exc
+    if not isinstance(kind, str) or not isinstance(identifier, str) or kind not in TIMELINE_KINDS:
+        raise ValidationFailed(
+            "cursor names a timeline kind that does not exist",
+            details={"known": list(TIMELINE_KINDS)},
+        )
+    if at is not None and not isinstance(at, str):
+        raise ValidationFailed("cursor carries a malformed timestamp")
+    moment = dt.datetime.fromisoformat(at) if at else None
+    if moment is not None and moment.tzinfo is None:
+        raise ValidationFailed("cursor carries a timestamp without a timezone")
+    return moment, kind, identifier
+
+
+def _after_condition(
+    at_column: Any, id_column: Any, kind: str, after: tuple[dt.datetime | None, str, str] | None
+) -> Any | None:
+    """SQL for "this row ranks after the cursor", within one stream.
+
+    Each stream has a single kind, so the ``(kind, id)`` half of the ordering key collapses to
+    constants here — which is what keeps the comparison in SQL instead of in a loaded list.
+    """
+    from sqlalchemy import and_, false, or_
+
+    if after is None:
+        return None
+    at, after_kind, after_id = after
+    if at is None:
+        # The cursor is already in the undated tail; only later undated rows of later streams remain.
+        if kind > after_kind:
+            return at_column.is_(None)
+        if kind < after_kind:
+            return false()
+        return and_(at_column.is_(None), id_column > after_id)
+    clause = at_column > at
+    if kind > after_kind:
+        # Undated rows of a later stream, and same-instant rows, both rank after the cursor.
+        clause = or_(clause, at_column.is_(None), at_column == at)
+    elif kind == after_kind:
+        clause = or_(clause, and_(at_column == at, id_column > after_id))
+    return clause
+
 
 TIMELINE_KINDS = (
     "operation",
@@ -101,6 +188,38 @@ class TimelineService:
         self.session = session
         self.org_id = org_id
 
+    async def _stream(
+        self,
+        model: Any,
+        at_column: Any,
+        kind: str,
+        *,
+        well_id: str,
+        since: dt.datetime | None,
+        until: dt.datetime | None,
+        after: tuple[dt.datetime | None, str, str] | None,
+        limit: int,
+    ) -> list[Any]:
+        """One stream, filtered, ordered and truncated in SQL.
+
+        The time window, the keyset position and the page size are all in the query. The previous
+        version loaded every row of every stream for the well and then filtered, sorted and cut the
+        list in Python: a page of 500 meant reading the well's whole history, and the cost of a
+        timeline request grew with the well rather than with the page.
+        """
+        stmt = select(model).where(model.org_id == self.org_id, model.well_id == well_id)
+        if since is not None:
+            # An undated row is not "since" anything: the previous behaviour dropped it when a window
+            # was given, and dropping it in SQL keeps the same answer.
+            stmt = stmt.where(at_column.is_not(None), at_column >= since)
+        if until is not None:
+            stmt = stmt.where(at_column.is_not(None), at_column <= until)
+        condition = _after_condition(at_column, model.id, kind, after)
+        if condition is not None:
+            stmt = stmt.where(condition)
+        stmt = stmt.order_by(at_column.is_(None), at_column.asc(), model.id.asc()).limit(limit)
+        return list((await self.session.execute(stmt)).scalars().all())
+
     async def build(
         self,
         well_id: str,
@@ -109,16 +228,42 @@ class TimelineService:
         until: dt.datetime | None = None,
         kinds: list[str] | None = None,
         limit: int = 500,
+        after: tuple[dt.datetime | None, str, str] | None = None,
     ) -> list[TimelineEntry]:
+        """The merged timeline, one page at a time.
+
+        Each stream contributes at most ``limit`` rows — enough for a global top-``limit``, because a
+        row beyond the first ``limit`` of its own stream is already preceded, inside that stream, by
+        ``limit`` rows that outrank it.
+        """
+        exists = (
+            await self.session.execute(
+                select(Well.id).where(Well.id == well_id, Well.org_id == self.org_id)
+            )
+        ).scalar_one_or_none()
+        if exists is None:
+            # An empty timeline is a statement about a well that exists and has nothing on it. For a
+            # well this caller cannot see, the honest answer is that it is not here.
+            raise NotFound("well not found", details={"well_id": well_id})
         wanted = set(kinds or TIMELINE_KINDS)
         entries: list[TimelineEntry] = []
+        stream = lambda model, column, kind: self._stream(  # noqa: E731 - local shorthand
+            model,
+            column,
+            kind,
+            well_id=well_id,
+            since=since,
+            until=until,
+            after=after,
+            limit=limit,
+        )
 
         if "operation" in wanted:
-            rows = (
-                await self.session.execute(
-                    select(Operation).where(Operation.org_id == self.org_id, Operation.well_id == well_id)
-                )
-            ).scalars().all()
+            rows = await stream(
+                Operation,
+                func.coalesce(Operation.actual_start, Operation.planned_start),
+                "operation",
+            )
             for row in rows:
                 started = row.actual_start or row.planned_start
                 entries.append(
@@ -158,11 +303,7 @@ class TimelineService:
                 )
 
         if "event" in wanted:
-            rows = (
-                await self.session.execute(
-                    select(Event).where(Event.org_id == self.org_id, Event.well_id == well_id)
-                )
-            ).scalars().all()
+            rows = await stream(Event, Event.occurred_at, "event")
             for row in rows:
                 entries.append(
                     TimelineEntry(
@@ -193,11 +334,9 @@ class TimelineService:
                 )
 
         if "document" in wanted:
-            rows = (
-                await self.session.execute(
-                    select(Document).where(Document.org_id == self.org_id, Document.well_id == well_id)
-                )
-            ).scalars().all()
+            rows = await stream(
+                Document, func.coalesce(Document.period_start, Document.created_at), "document"
+            )
             for row in rows:
                 summary = row.extraction_summary or {}
                 entries.append(
@@ -226,11 +365,9 @@ class TimelineService:
                 )
 
         if "engine_run" in wanted:
-            rows = (
-                await self.session.execute(
-                    select(EngineRun).where(EngineRun.org_id == self.org_id, EngineRun.well_id == well_id)
-                )
-            ).scalars().all()
+            rows = await stream(
+                EngineRun, func.coalesce(EngineRun.finished_at, EngineRun.started_at), "engine_run"
+            )
             for row in rows:
                 entries.append(
                     TimelineEntry(
@@ -265,13 +402,7 @@ class TimelineService:
                 )
 
         if "recommendation" in wanted:
-            rows = (
-                await self.session.execute(
-                    select(Recommendation).where(
-                        Recommendation.org_id == self.org_id, Recommendation.well_id == well_id
-                    )
-                )
-            ).scalars().all()
+            rows = await stream(Recommendation, Recommendation.created_at, "recommendation")
             for row in rows:
                 entries.append(
                     TimelineEntry(
@@ -299,13 +430,7 @@ class TimelineService:
                 )
 
         if "twin_change" in wanted:
-            rows = (
-                await self.session.execute(
-                    select(ChangeRecord).where(
-                        ChangeRecord.org_id == self.org_id, ChangeRecord.well_id == well_id
-                    )
-                )
-            ).scalars().all()
+            rows = await stream(ChangeRecord, ChangeRecord.occurred_at, "twin_change")
             for row in rows:
                 entries.append(
                     TimelineEntry(
@@ -334,13 +459,7 @@ class TimelineService:
                 )
 
         if "approval" in wanted:
-            rows = (
-                await self.session.execute(
-                    select(ApprovalRequest).where(
-                        ApprovalRequest.org_id == self.org_id, ApprovalRequest.well_id == well_id
-                    )
-                )
-            ).scalars().all()
+            rows = await stream(ApprovalRequest, ApprovalRequest.requested_at, "approval")
             for row in rows:
                 entries.append(
                     TimelineEntry(
@@ -367,11 +486,5 @@ class TimelineService:
                     )
                 )
 
-        filtered = [
-            entry
-            for entry in entries
-            if (since is None or (entry.at is not None and entry.at >= since))
-            and (until is None or (entry.at is not None and entry.at <= until))
-        ]
-        filtered.sort(key=lambda entry: (entry.at is None, entry.at or dt.datetime.min.replace(tzinfo=dt.UTC), entry.kind, entry.id))
-        return filtered[:limit]
+        entries.sort(key=sort_key)
+        return entries[:limit]
