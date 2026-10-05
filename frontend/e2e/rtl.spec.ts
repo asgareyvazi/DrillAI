@@ -150,6 +150,35 @@ test.describe('the Persian interface', () => {
     expect((await payload.innerText()).trim().startsWith('{') || (await payload.innerText()).includes('{')).toBe(true)
   })
 
+  test('keeps the operational record readable in Persian, with its identifiers LTR', async ({
+    page,
+    request,
+    wellId,
+  }) => {
+    // The number the screen must show is the API's own: the actual hours of a promoted operation,
+    // read here so the assertion cannot pass on a typed-in value.
+    const operations = await apiGet<{
+      items: { name: string; actual_duration_hours: number | null }[]
+    }>(request, `/operations?well_id=${wellId}&limit=20`, 'engineer')
+    const recorded = operations.items.find((row) => row.actual_duration_hours !== null)
+    expect(recorded, 'the seeded day has an actual operation').toBeTruthy()
+
+    await page.goto(`/wells/${wellId}/operations`)
+    await waitForLoaded(page)
+    await switchToPersian(page)
+    await waitForLoaded(page)
+
+    const mainText = await page.locator('main').innerText()
+    expect(/[\u0600-\u06FF]/.test(mainText), 'the workspace renders Persian chrome').toBe(true)
+    expect(asciiDigits(mainText)).toContain(String(recorded?.actual_duration_hours))
+
+    // Identifiers keep their own direction under the RTL paragraph: the timeline's monospace
+    // timestamps are technical strings, not sentences.
+    await page.goto(`/wells/${wellId}/operations?tab=timeline`)
+    await waitForLoaded(page)
+    expect(await resolvedDirection(page, '[data-testid="timeline-entries"] .font-mono')).toBe('ltr')
+  })
+
   test('does not mirror the workflow graph', async ({ page }) => {
     const url = `/workflows?workflow=${fixtures().workflow_id}`
 

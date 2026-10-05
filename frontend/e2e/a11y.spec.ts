@@ -438,6 +438,10 @@ test.describe('keyboard and assistive-technology behaviour', () => {
     for (const path of [
       `/wells/${wellId}/cockpit`,
       `/wells/${wellId}/engineering`,
+      // The operational record and the documents behind it: a workspace a reader cannot operate by
+      // keyboard or hear named is not an operational workspace.
+      `/wells/${wellId}/operations`,
+      `/wells/${wellId}/documents`,
       '/runs',
       '/workflows',
       '/platform',
