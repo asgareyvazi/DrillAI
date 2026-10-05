@@ -166,6 +166,12 @@ def main() -> int:
             "well-timeline.json": call("GET", f"/wells/{well_id}/timeline")[1],
             "well-twin.json": call("GET", f"/wells/{well_id}/twin")[1],
             "well-audit.json": call("GET", f"/wells/{well_id}/audit")[1],
+            # The operational workspace's payloads. The limits are the ones the fixtures were
+            # reviewed at: 25 timeline entries is under the seeded well's 30, so `next_cursor` is
+            # populated and the tests exercise the "more entries follow" state from a real page.
+            "operations-list.json": call("GET", f"/operations?well_id={well_id}&limit=20")[1],
+            "events-list.json": call("GET", f"/events?well_id={well_id}&limit=20")[1],
+            "operations-timeline.json": call("GET", f"/wells/{well_id}/timeline?limit=25")[1],
             "run-waiting-approval.json": call("GET", f"/runs/{run_id}")[1],
             "approval-pending.json": call("GET", f"/approvals/{approval_id}")[1],
             "approvals-list.json": call("GET", "/approvals?status=pending")[1],
@@ -189,6 +195,13 @@ def main() -> int:
         captured["run-succeeded.json"] = call("GET", f"/runs/{run_id}")[1]
         captured["approvals-list-any.json"] = call("GET", "/approvals?status=any")[1]
 
+        # A fixture written from a refusal would look like a contract and describe nothing. Every
+        # capture above must have come back as a 200 with a body; anything else stops the run.
+        for name, payload in captured.items():
+            if payload is None:
+                print(f"{name} was not captured (the request failed)", file=sys.stderr)
+                return 1
+
         for name, payload in captured.items():
             (OUT / name).write_text(
                 json.dumps(trim(payload), indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
@@ -202,6 +215,9 @@ def main() -> int:
                         "waiting": captured["run-waiting-approval.json"]["run"]["status"],
                         "final": captured["run-succeeded.json"]["run"]["status"],
                     },
+                    "operations": captured["operations-list.json"]["total"],
+                    "events": captured["events-list.json"]["total"],
+                    "timeline_entries": captured["operations-timeline.json"]["count"],
                     "written": {name: (OUT / name).stat().st_size for name in captured},
                 },
                 indent=2,

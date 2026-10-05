@@ -1,8 +1,8 @@
 {
-  "well_id": "wel_01M40H92JVZ0J8X5C9AV72GP55",
+  "well_id": "wel_01M458C0VYGW0V474PS7T1FH86",
   "engine_runs": [
     {
-      "id": "eng_01M40H930C6KGZ2NTXZAG22X2C",
+      "id": "eng_01M458C162F2MDXJ98WNRAF52J",
       "engine_key": "hydraulics.laminar",
       "engine_version": "1.2.0",
       "status": "succeeded",
@@ -10,10 +10,10 @@
       "inputs_hash": "0d2a27bae8277539678fe31ef4a965d66e8564f676485410a54586d3786543e6",
       "outputs_hash": "777afa88858e59b6339f835eb22cd744a05370b06c543fce168bacdd9ede9160",
       "triggered_by": "optimisation",
-      "created_at": "2026-10-03T09:24:46.221252+00:00"
+      "created_at": "2026-10-05T05:25:17.635043+00:00"
     },
     {
-      "id": "eng_01M40H930AY04KKGDSPB7DEV3J",
+      "id": "eng_01M458C16006SBJWD32VBB66A5",
       "engine_key": "hydraulics.laminar",
       "engine_version": "1.2.0",
       "status": "succeeded",
@@ -21,10 +21,10 @@
       "inputs_hash": "0d2a27bae8277539678fe31ef4a965d66e8564f676485410a54586d3786543e6",
       "outputs_hash": "777afa88858e59b6339f835eb22cd744a05370b06c543fce168bacdd9ede9160",
       "triggered_by": "optimisation",
-      "created_at": "2026-10-03T09:24:46.219228+00:00"
+      "created_at": "2026-10-05T05:25:17.633341+00:00"
     },
     {
-      "id": "eng_01M40H9308WNBJTCH0MTAWNB6Z",
+      "id": "eng_01M458C15ZQV28C92S46C5SGBT",
       "engine_key": "hydraulics.laminar",
       "engine_version": "1.2.0",
       "status": "succeeded",
@@ -32,10 +32,10 @@
       "inputs_hash": "0d2a27bae8277539678fe31ef4a965d66e8564f676485410a54586d3786543e6",
       "outputs_hash": "777afa88858e59b6339f835eb22cd744a05370b06c543fce168bacdd9ede9160",
       "triggered_by": "optimisation",
-      "created_at": "2026-10-03T09:24:46.216851+00:00"
+      "created_at": "2026-10-05T05:25:17.631662+00:00"
     },
     {
-      "id": "eng_01M40H9306TQS4VHPWPQSSXHWC",
+      "id": "eng_01M458C15XQEXDXBT6VAZVXMFC",
       "engine_key": "hydraulics.laminar",
       "engine_version": "1.2.0",
       "status": "succeeded",
@@ -43,10 +43,10 @@
       "inputs_hash": "6f66645fd546ab80001f4ef84b44343d0b948ee7810b8c4809b11adafd54bdad",
       "outputs_hash": "01e46c13d5073eac62616283f52d1666385954ec89cf0d9d12da4fe149200441",
       "triggered_by": "optimisation",
-      "created_at": "2026-10-03T09:24:46.214641+00:00"
+      "created_at": "2026-10-05T05:25:17.629954+00:00"
     },
     {
-      "id": "eng_01M40H9303761HP46PKMAMP87B",
+      "id": "eng_01M458C15V9K38QJGJE84F8Q82",
       "engine_key": "hydraulics.laminar",
       "engine_version": "1.2.0",
       "status": "succeeded",
@@ -54,10 +54,10 @@
       "inputs_hash": "6f66645fd546ab80001f4ef84b44343d0b948ee7810b8c4809b11adafd54bdad",
       "outputs_hash": "01e46c13d5073eac62616283f52d1666385954ec89cf0d9d12da4fe149200441",
       "triggered_by": "optimisation",
-      "created_at": "2026-10-03T09:24:46.212590+00:00"
+      "created_at": "2026-10-05T05:25:17.628174+00:00"
     },
     {
-      "id": "eng_01M40H9301W1S41S5E5MMQVKDT",
+      "id": "eng_01M458C15SXAZH7KCKTQ70TP6G",
       "engine_key": "hydraulics.laminar",
       "engine_version": "1.2.0",
       "status": "succeeded",
@@ -65,10 +65,10 @@
       "inputs_hash": "6f66645fd546ab80001f4ef84b44343d0b948ee7810b8c4809b11adafd54bdad",
       "outputs_hash": "01e46c13d5073eac62616283f52d1666385954ec89cf0d9d12da4fe149200441",
       "triggered_by": "optimisation",
-      "created_at": "2026-10-03T09:24:46.210393+00:00"
+      "created_at": "2026-10-05T05:25:17.626171+00:00"
     },
     {
-      "id": "eng_01M40H92ZXYF952CJB8BPDS1ZK",
+      "id": "eng_01M458C15RAHFJ9AC023HK6V4S",
       "engine_key": "hydraulics.laminar",
       "engine_version": "1.2.0",
       "status": "succeeded",
@@ -76,10 +76,10 @@
       "inputs_hash": "9786180d4191f1ad4d914f84b305d4d27c15475ba5cccf207aaa6f6ffaa85e91",
       "outputs_hash": "4ac91b4a53e3f91489b6b0645901efb6b6d70a367b0cbe4d7e971b7aafae9136",
       "triggered_by": "optimisation",
-      "created_at": "2026-10-03T09:24:46.205441+00:00"
+      "created_at": "2026-10-05T05:25:17.624713+00:00"
     },
     {
-      "id": "eng_01M40H92ZVHWD6YY1NY52J3JRS",
+      "id": "eng_01M458C15PHD42PTMWA8EZX7KY",
       "engine_key": "hydraulics.laminar",
       "engine_version": "1.2.0",
       "status": "succeeded",
@@ -87,10 +87,10 @@
       "inputs_hash": "9786180d4191f1ad4d914f84b305d4d27c15475ba5cccf207aaa6f6ffaa85e91",
       "outputs_hash": "4ac91b4a53e3f91489b6b0645901efb6b6d70a367b0cbe4d7e971b7aafae9136",
       "triggered_by": "optimisation",
-      "created_at": "2026-10-03T09:24:46.204098+00:00"
+      "created_at": "2026-10-05T05:25:17.623156+00:00"
     },
     {
-      "id": "eng_01M40H92ZTW3D0Z3BAGM0RWZAR",
+      "id": "eng_01M458C15NFGJM769FNJWM0B37",
       "engine_key": "hydraulics.laminar",
       "engine_version": "1.2.0",
       "status": "succeeded",
@@ -98,10 +98,10 @@
       "inputs_hash": "9786180d4191f1ad4d914f84b305d4d27c15475ba5cccf207aaa6f6ffaa85e91",
       "outputs_hash": "4ac91b4a53e3f91489b6b0645901efb6b6d70a367b0cbe4d7e971b7aafae9136",
       "triggered_by": "optimisation",
-      "created_at": "2026-10-03T09:24:46.202820+00:00"
+      "created_at": "2026-10-05T05:25:17.621678+00:00"
     },
     {
-      "id": "eng_01M40H92ZSRMCYKKFA7V7YNKNE",
+      "id": "eng_01M458C15KJANBZ9W414PFFZ7B",
       "engine_key": "hydraulics.laminar",
       "engine_version": "1.2.0",
       "status": "succeeded",
@@ -109,10 +109,10 @@
       "inputs_hash": "e91738bf0957c34d575baf946d4ea47e24b62ae0f7d4e493078e4db08865a009",
       "outputs_hash": "8eb0006211956bb95720e092e217f8a55dabb29afc89e5e7ffef223fc07b4b77",
       "triggered_by": "optimisation",
-      "created_at": "2026-10-03T09:24:46.201454+00:00"
+      "created_at": "2026-10-05T05:25:17.620062+00:00"
     },
     {
-      "id": "eng_01M40H92ZQS1CHHA73793XH4QJ",
+      "id": "eng_01M458C15JYYDVVNH1D9Y6M26W",
       "engine_key": "hydraulics.laminar",
       "engine_version": "1.2.0",
       "status": "succeeded",
@@ -120,10 +120,10 @@
       "inputs_hash": "e91738bf0957c34d575baf946d4ea47e24b62ae0f7d4e493078e4db08865a009",
       "outputs_hash": "8eb0006211956bb95720e092e217f8a55dabb29afc89e5e7ffef223fc07b4b77",
       "triggered_by": "optimisation",
-      "created_at": "2026-10-03T09:24:46.200114+00:00"
+      "created_at": "2026-10-05T05:25:17.618334+00:00"
     },
     {
-      "id": "eng_01M40H92ZPY0P1V7F52J6DF9EV",
+      "id": "eng_01M458C15GA5XRJ6TVQ6A9K9HS",
       "engine_key": "hydraulics.laminar",
       "engine_version": "1.2.0",
       "status": "succeeded",
@@ -131,10 +131,10 @@
       "inputs_hash": "e91738bf0957c34d575baf946d4ea47e24b62ae0f7d4e493078e4db08865a009",
       "outputs_hash": "8eb0006211956bb95720e092e217f8a55dabb29afc89e5e7ffef223fc07b4b77",
       "triggered_by": "optimisation",
-      "created_at": "2026-10-03T09:24:46.198787+00:00"
+      "created_at": "2026-10-05T05:25:17.616624+00:00"
     },
     {
-      "id": "eng_01M40H92ZMRPWRCZ2MQXV8Z8M8",
+      "id": "eng_01M458C15EME0GJAJKQHVKDE7Q",
       "engine_key": "hydraulics.laminar",
       "engine_version": "1.2.0",
       "status": "succeeded",
@@ -142,10 +142,10 @@
       "inputs_hash": "fb43d8b67810c3f250f9f6a84727dd3039f443a1c277f17e69e0a039cb0c0ece",
       "outputs_hash": "1c9015058c7a0670f986457d60677572e495d6b7ba0cb246b42def8da0aac974",
       "triggered_by": "optimisation",
-      "created_at": "2026-10-03T09:24:46.197357+00:00"
+      "created_at": "2026-10-05T05:25:17.614925+00:00"
     },
     {
-      "id": "eng_01M40H92ZK84F6ERBHPKYQ0ARB",
+      "id": "eng_01M458C15CE65VX5PRDBAQB81E",
       "engine_key": "hydraulics.laminar",
       "engine_version": "1.2.0",
       "status": "succeeded",
@@ -153,10 +153,10 @@
       "inputs_hash": "fb43d8b67810c3f250f9f6a84727dd3039f443a1c277f17e69e0a039cb0c0ece",
       "outputs_hash": "1c9015058c7a0670f986457d60677572e495d6b7ba0cb246b42def8da0aac974",
       "triggered_by": "optimisation",
-      "created_at": "2026-10-03T09:24:46.195766+00:00"
+      "created_at": "2026-10-05T05:25:17.612949+00:00"
     },
     {
-      "id": "eng_01M40H92ZH4X2ND7Y8YXD2270A",
+      "id": "eng_01M458C159ZT3W50JNJNJVVTKR",
       "engine_key": "hydraulics.laminar",
       "engine_version": "1.2.0",
       "status": "succeeded",
@@ -164,10 +164,10 @@
       "inputs_hash": "fb43d8b67810c3f250f9f6a84727dd3039f443a1c277f17e69e0a039cb0c0ece",
       "outputs_hash": "1c9015058c7a0670f986457d60677572e495d6b7ba0cb246b42def8da0aac974",
       "triggered_by": "optimisation",
-      "created_at": "2026-10-03T09:24:46.193957+00:00"
+      "created_at": "2026-10-05T05:25:17.610300+00:00"
     },
     {
-      "id": "eng_01M40H92YZP70GMCR3VXS0D4PG",
+      "id": "eng_01M458C14JD3WCFF1W93NDWM3B",
       "engine_key": "hydraulics.laminar",
       "engine_version": "1.2.0",
       "status": "succeeded",
@@ -175,60 +175,60 @@
       "inputs_hash": "9786180d4191f1ad4d914f84b305d4d27c15475ba5cccf207aaa6f6ffaa85e91",
       "outputs_hash": "4ac91b4a53e3f91489b6b0645901efb6b6d70a367b0cbe4d7e971b7aafae9136",
       "triggered_by": "api",
-      "created_at": "2026-10-03T09:24:46.177329+00:00"
+      "created_at": "2026-10-05T05:25:17.588228+00:00"
     }
   ],
   "workflow_runs": [
     {
-      "id": "run_01M40H957NM05Z3XJ0SA04SQV0",
+      "id": "run_01M458C4NRPS3WSKHQ32E7HSDR",
       "workflow_key": "daily-drilling-intelligence",
       "version": 1,
       "status": "waiting_approval",
       "initiated_by": "usr_dev_drilling_supervisor",
-      "started_at": "2026-10-03T09:24:48.498615+00:00",
-      "finished_at": "2026-10-03T09:24:48.683551+00:00"
+      "started_at": "2026-10-05T05:25:21.204280+00:00",
+      "finished_at": "2026-10-05T05:25:21.530924+00:00"
     }
   ],
   "node_runs": [
     {
-      "id": "nrn_01M40H95DAC0PXKGH4YVKJS0AY",
-      "run_id": "run_01M40H957NM05Z3XJ0SA04SQV0",
+      "id": "nrn_01M458C4ZSXY7A06EH5GD43C2P",
+      "run_id": "run_01M458C4NRPS3WSKHQ32E7HSDR",
       "node_id": "daily_report",
       "node_type": "output.report",
       "status": "skipped",
       "duration_ms": null
     },
     {
-      "id": "nrn_01M40H95D003DV7EG2X5Q70NK1",
-      "run_id": "run_01M40H957NM05Z3XJ0SA04SQV0",
+      "id": "nrn_01M458C4Z7V6PQE2FX89WTEKC5",
+      "run_id": "run_01M458C4NRPS3WSKHQ32E7HSDR",
       "node_id": "approve_plan",
       "node_type": "human.approval",
       "status": "waiting_approval",
-      "duration_ms": 1.0717929999373155
+      "duration_ms": 1.5722429999982523
     },
     {
-      "id": "nrn_01M40H959TFYF9V9V0DW6CX3GW",
-      "run_id": "run_01M40H957NM05Z3XJ0SA04SQV0",
+      "id": "nrn_01M458C4XCFGFPYT092ES9DPME",
+      "run_id": "run_01M458C4NRPS3WSKHQ32E7HSDR",
       "node_id": "npt_summary",
       "node_type": "drilling.npt_summary",
       "status": "succeeded",
-      "duration_ms": 98.09155199991437
+      "duration_ms": 52.404523000006975
     },
     {
-      "id": "nrn_01M40H95915BS58XKY8T3XF6JT",
-      "run_id": "run_01M40H957NM05Z3XJ0SA04SQV0",
+      "id": "nrn_01M458C4W3GTH9X8ESZXP3ZNM2",
+      "run_id": "run_01M458C4NRPS3WSKHQ32E7HSDR",
       "node_id": "well_state",
       "node_type": "drilling.well_state",
       "status": "succeeded",
-      "duration_ms": 20.72660400017412
+      "duration_ms": 33.57418600000983
     },
     {
-      "id": "nrn_01M40H957YCNZGDGZHP4XEH307",
-      "run_id": "run_01M40H957NM05Z3XJ0SA04SQV0",
+      "id": "nrn_01M458C4P88K1XWFCHM0EPFBW5",
+      "run_id": "run_01M458C4NRPS3WSKHQ32E7HSDR",
       "node_id": "load_context",
       "node_type": "data.load_context",
       "status": "succeeded",
-      "duration_ms": 28.391514000304596
+      "duration_ms": 175.0874160000251
     }
   ],
   "tool_calls": [],

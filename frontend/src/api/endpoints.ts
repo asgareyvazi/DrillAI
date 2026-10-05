@@ -43,6 +43,9 @@ import type {
   PlatformIdentity,
   NodeTypeCatalogue,
   NptSummary,
+  OperationRow,
+  EventRow,
+  TimelinePage,
   OptimisationExplanation,
   OptimisationObjectives,
   OptimisationResult,
@@ -59,7 +62,6 @@ import type {
   ReportKind,
   RunEvent,
   RunSummary,
-  TimelineEntry,
   TwinState,
   UnitCatalogue,
   Well,
@@ -347,12 +349,36 @@ export const drillingApi = {
       signal,
       validate: expect.object('state'),
     }),
-  wellTimeline: (wellId: string, params: { kinds?: string[]; limit?: number } = {}, signal?: AbortSignal) =>
-    api.get<{ entries: TimelineEntry[]; count: number; kinds_available: string[] }>(
-      `/wells/${enc(wellId)}/timeline`, 
-      { query: params, signal }),
-  wellNpt: (wellId: string, params: { basis?: string; include_offsets?: boolean } = {}, signal?: AbortSignal) =>
-    api.get<{ npt: NptSummary }>(`/wells/${enc(wellId)}/npt`, { query: params, signal }),
+  wellTimeline: (
+    wellId: string,
+    params: {
+      kinds?: string[]
+      limit?: number
+      /** The keyset position: pass back `next_cursor` from the previous page unchanged. */
+      cursor?: string
+      since?: string
+      until?: string
+    } = {},
+    signal?: AbortSignal,
+  ) =>
+    api.get<TimelinePage>(`/wells/${enc(wellId)}/timeline`, {
+      query: params,
+      signal,
+      validate: expect.object('entries'),
+    }),
+  wellNpt: (
+    wellId: string,
+    params: {
+      basis?: string
+      include_offsets?: boolean
+      section_id?: string
+      operation_id?: string
+      since?: string
+      until?: string
+      case_limit?: number
+    } = {},
+    signal?: AbortSignal,
+  ) => api.get<{ npt: NptSummary }>(`/wells/${enc(wellId)}/npt`, { query: params, signal }),
   wellKpis: (wellId: string, signal?: AbortSignal) =>
     api.get<{ kpis: Array<Record<string, unknown>>; present_count: number; total: number }>(
       `/wells/${enc(wellId)}/kpis`, { signal }),
@@ -364,6 +390,87 @@ export const drillingApi = {
     api.get<Page<RecommendationRow>>(`/wells/${enc(wellId)}/recommendations`, { signal, validate: expect.paged() }),
   wellEngineRuns: (wellId: string, params: { engine_key?: string; limit?: number } = {}, signal?: AbortSignal) =>
     api.get<Page<EngineRunListItem>>(`/wells/${enc(wellId)}/engine-runs`, { query: params, signal, validate: expect.paged() }),
+
+  // ------------------------------------------------------------------ operations & events
+  listOperations: (
+    params: {
+      well_id?: string
+      wellbore_id?: string
+      section_id?: string
+      operation_class?: string
+      status?: string
+      kind?: string
+      source_kind?: string
+      document_id?: string
+      limit?: number
+      offset?: number
+    } = {},
+    signal?: AbortSignal,
+  ) => api.get<Page<OperationRow>>('/operations', { query: params, signal, validate: expect.paged() }),
+  getOperation: (operationId: string, signal?: AbortSignal) =>
+    api.get<OperationRow>(`/operations/${enc(operationId)}`, { signal }),
+  updateOperation: (
+    operationId: string,
+    body: { expected_updated_at: string; reason: string; changes: Record<string, unknown> },
+    idempotencyKey?: string,
+  ) =>
+    api.patch<OperationRow & WithTransitions>(
+      `/operations/${enc(operationId)}`,
+      body,
+      idempotencyHeader(idempotencyKey),
+    ),
+  transitionOperation: (
+    operationId: string,
+    body: { status: string; reason?: string; expected_updated_at?: string },
+    idempotencyKey?: string,
+  ) =>
+    api.post<OperationRow & WithTransitions>(
+      `/operations/${enc(operationId)}/transition`,
+      body,
+      idempotencyHeader(idempotencyKey),
+    ),
+  linkOperationDocument: (operationId: string, body: { document_id: string }, idempotencyKey?: string) =>
+    api.post<OperationRow>(
+      `/operations/${enc(operationId)}/document`,
+      body,
+      idempotencyHeader(idempotencyKey),
+    ),
+  listEvents: (
+    params: {
+      well_id?: string
+      wellbore_id?: string
+      operation_id?: string
+      kind?: string
+      status?: string
+      severity?: string
+      npt_category?: string
+      source_kind?: string
+      is_npt?: boolean
+      document_id?: string
+      limit?: number
+      offset?: number
+    } = {},
+    signal?: AbortSignal,
+  ) => api.get<Page<EventRow>>('/events', { query: params, signal, validate: expect.paged() }),
+  getEvent: (eventId: string, signal?: AbortSignal) => api.get<EventRow>(`/events/${enc(eventId)}`, { signal }),
+  updateEvent: (
+    eventId: string,
+    body: { expected_updated_at: string; reason: string; changes: Record<string, unknown> },
+    idempotencyKey?: string,
+  ) =>
+    api.patch<EventRow & WithTransitions>(`/events/${enc(eventId)}`, body, idempotencyHeader(idempotencyKey)),
+  transitionEvent: (
+    eventId: string,
+    body: { status: string; reason?: string; expected_updated_at?: string },
+    idempotencyKey?: string,
+  ) =>
+    api.post<EventRow & WithTransitions>(
+      `/events/${enc(eventId)}/transition`,
+      body,
+      idempotencyHeader(idempotencyKey),
+    ),
+  linkEventDocument: (eventId: string, body: { document_id: string }, idempotencyKey?: string) =>
+    api.post<EventRow>(`/events/${enc(eventId)}/document`, body, idempotencyHeader(idempotencyKey)),
 
   // ------------------------------------------------------------------ documents & evidence
   listDocuments: (params: { well_id?: string; doc_type?: string } = {}, signal?: AbortSignal) =>

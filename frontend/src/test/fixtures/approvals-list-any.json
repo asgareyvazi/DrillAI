@@ -1,15 +1,15 @@
 {
   "items": [
     {
-      "id": "apr_01M40H95D4WM1RV0B0ECPCPJKQ",
+      "id": "apr_01M458C4ZFT6QCJGDZESF5MPQS",
       "kind": "workflow_node",
       "subject_kind": "workflow_node",
-      "subject_id": "run_01M40H957NM05Z3XJ0SA04SQV0:approve_plan",
-      "run_id": "run_01M40H957NM05Z3XJ0SA04SQV0",
-      "node_run_id": "nrn_01M40H95D003DV7EG2X5Q70NK1",
+      "subject_id": "run_01M458C4NRPS3WSKHQ32E7HSDR:approve_plan",
+      "run_id": "run_01M458C4NRPS3WSKHQ32E7HSDR",
+      "node_run_id": "nrn_01M458C4Z7V6PQE2FX89WTEKC5",
       "node_id": "approve_plan",
       "project_id": null,
-      "well_id": "wel_01M40H92JVZ0J8X5C9AV72GP55",
+      "well_id": "wel_01M458C0VYGW0V474PS7T1FH86",
       "title": "Approve the daily drilling intelligence summary",
       "description": "Review the computed state and NPT attribution before the report is issued.",
       "action_level": "L3",
@@ -32,11 +32,11 @@
       ],
       "required_role": "approver",
       "requested_by": "usr_dev_drilling_supervisor",
-      "requested_at": "2026-10-03T09:24:48.675141+00:00",
-      "expires_at": "2026-10-06T09:24:48.675144+00:00",
+      "requested_at": "2026-10-05T05:25:21.516713+00:00",
+      "expires_at": "2026-10-08T05:25:21.516716+00:00",
       "status": "approved",
       "decided_by": "usr_dev_well_manager",
-      "decided_at": "2026-10-03T09:24:48.791211+00:00",
+      "decided_at": "2026-10-05T05:25:21.735603+00:00",
       "decision_note": "Reviewed the NPT attribution against the DDR of 2026-03-15.",
       "overdue": false
     }

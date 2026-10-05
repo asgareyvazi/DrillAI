@@ -9,11 +9,11 @@
     "percent_of_well_time": 45.95,
     "by_hours": 8.5,
     "controllable_hours": 8.5,
-    "uncontrollable_hours": 0,
-    "unknown_controllability_hours": 0,
+    "uncontrollable_hours": 0.0,
+    "unknown_controllability_hours": 0.0,
     "cases": [
       {
-        "id": "evn_01M40H92WKYZM5952EB43YPYM1",
+        "id": "evn_01M458C11REP2WB7ZFSVT06N01",
         "source": "event",
         "title": "Stuck Pipe reported in Daily Drilling Report 2026-03-15 (SYNTHETIC)",
         "category": "stuck_pipe",
@@ -24,17 +24,17 @@
         "started_at": "2026-03-15T09:00:00+00:00",
         "ended_at": "2026-03-15T15:00:00+00:00",
         "depth_md_si": 2408.0,
-        "section_id": "sec_01M40H92M479MEHETJTMZVESGT",
-        "operation_id": "opr_01M40H92W5X3SZ35JK56HVAH9C",
+        "section_id": "sec_01M458C0XKP01Z7H6X77C7DEYK",
+        "operation_id": "opr_01M458C115WHQ74A910X97QPP1",
         "operator_controllable": true,
         "confidence": null,
         "classification_source": "recorded",
         "evidence_ref": null,
-        "document_id": "doc_01M40H92SKSX1ZJBJNK9D2GY72",
+        "document_id": "doc_01M458C0YRVZT3W5RKP2YCJH09",
         "note": null
       },
       {
-        "id": "evn_01M40H92WP43K13KJZS9QP7R74",
+        "id": "evn_01M458C11W1XRN5P9DAR7ENE0J",
         "source": "event",
         "title": "Lost Circulation reported in Daily Drilling Report 2026-03-15 (SYNTHETIC)",
         "category": "lost_circulation",
@@ -45,20 +45,22 @@
         "started_at": "2026-03-15T15:00:00+00:00",
         "ended_at": "2026-03-15T17:30:00+00:00",
         "depth_md_si": null,
-        "section_id": "sec_01M40H92M479MEHETJTMZVESGT",
-        "operation_id": "opr_01M40H92W7HJNJSVF2EC085ADH",
+        "section_id": "sec_01M458C0XKP01Z7H6X77C7DEYK",
+        "operation_id": "opr_01M458C117JZFKK7XC0TH5MKTM",
         "operator_controllable": true,
         "confidence": null,
         "classification_source": "recorded",
         "evidence_ref": null,
-        "document_id": "doc_01M40H92SKSX1ZJBJNK9D2GY72",
+        "document_id": "doc_01M458C0YRVZT3W5RKP2YCJH09",
         "note": null
       }
     ],
+    "cases_truncated": false,
+    "case_limit": 500,
     "by_category": [
       {
         "key": "stuck_pipe",
-        "label": "stuck pipe",
+        "label": "stuck_pipe",
         "hours": 6.0,
         "occurrences": 1,
         "percent_of_total": 70.59,
@@ -67,7 +69,7 @@
       },
       {
         "key": "lost_circulation",
-        "label": "lost circulation",
+        "label": "lost_circulation",
         "hours": 2.5,
         "occurrences": 1,
         "percent_of_total": 29.41,
@@ -178,33 +180,33 @@
     ],
     "by_section": [
       {
-        "key": "sec_01M40H92M479MEHETJTMZVESGT",
-        "label": "sec_01M40H92M479MEHETJTMZVESGT",
+        "key": "sec_01M458C0XKP01Z7H6X77C7DEYK",
+        "label": "sec_01M458C0XKP01Z7H6X77C7DEYK",
         "hours": 8.5,
         "occurrences": 2,
         "percent_of_total": 100.0,
         "cumulative_percent": 100.0,
-        "operator_controllable": null
+        "operator_controllable": true
       }
     ],
     "by_operation": [
       {
-        "key": "opr_01M40H92W5X3SZ35JK56HVAH9C",
-        "label": "opr_01M40H92W5X3SZ35JK56HVAH9C",
+        "key": "opr_01M458C115WHQ74A910X97QPP1",
+        "label": "opr_01M458C115WHQ74A910X97QPP1",
         "hours": 6.0,
         "occurrences": 1,
         "percent_of_total": 70.59,
         "cumulative_percent": 70.59,
-        "operator_controllable": null
+        "operator_controllable": true
       },
       {
-        "key": "opr_01M40H92W7HJNJSVF2EC085ADH",
-        "label": "opr_01M40H92W7HJNJSVF2EC085ADH",
+        "key": "opr_01M458C117JZFKK7XC0TH5MKTM",
+        "label": "opr_01M458C117JZFKK7XC0TH5MKTM",
         "hours": 2.5,
         "occurrences": 1,
         "percent_of_total": 29.41,
         "cumulative_percent": 100.0,
-        "operator_controllable": null
+        "operator_controllable": true
       }
     ],
     "by_month": [

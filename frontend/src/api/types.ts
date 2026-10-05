@@ -507,6 +507,117 @@ export interface TimelineEntry {
   attributes?: Record<string, unknown>
 }
 
+// --------------------------------------------------------------------------- operations & events
+
+/**
+ * One operation, as the operations API serialises it.
+ *
+ * `is_planned` is derived by the backend (`operation_class` is the authority), and the provenance
+ * fields are part of the contract on purpose: a promoted operation is not the same claim as one a
+ * person entered, and a screen that cannot tell them apart renders them identically.
+ */
+export interface OperationRow {
+  id: string
+  project_id: string | null
+  well_id: string | null
+  wellbore_id: string | null
+  section_id: string | null
+  parent_operation_id: string | null
+  predecessor_operation_id: string | null
+  operation_class: string
+  is_planned: boolean
+  sequence: number
+  code: string | null
+  name: string
+  kind: string
+  phase: string
+  status: string
+  planned_start: string | null
+  planned_end: string | null
+  actual_start: string | null
+  actual_end: string | null
+  planned_duration_hours: number | null
+  actual_duration_hours: number | null
+  depth_from_md_si: number | null
+  depth_to_md_si: number | null
+  hole_diameter_si: number | null
+  is_productive: boolean | null
+  npt_hours: number | null
+  invisible_lost_time_hours: number | null
+  cost_usd: number | null
+  source: string | null
+  source_kind: string | null
+  source_document_id: string | null
+  source_record_id: string | null
+  promotion_fingerprint: string | null
+  data_quality: string | null
+  remarks: string | null
+  is_demo_fixture: boolean | null
+  created_at: string | null
+  updated_at: string | null
+  /** Statuses this operation may move to next. Empty means it is terminal. */
+  allowed_transitions: string[]
+  /** The before/after of the last correction, when the API returns one. */
+  changes?: Array<{ field: string; before: unknown; after: unknown }>
+}
+
+/**
+ * One event.
+ *
+ * `kind` is what happened; `npt_category` and `npt_hours` are how it is accounted for; `cause_basis`
+ * says who established the cause (`recorded`, `inferred`, `unknown`). They are separate fields
+ * because they are separate claims.
+ */
+export interface EventRow {
+  id: string
+  project_id: string | null
+  well_id: string | null
+  wellbore_id: string | null
+  section_id: string | null
+  operation_id: string | null
+  kind: string
+  category: string | null
+  title: string
+  description: string | null
+  occurred_at: string | null
+  ended_at: string | null
+  duration_hours: number | null
+  depth_md_si: number | null
+  depth_tvd_si: number | null
+  severity: string
+  status: string
+  is_npt: boolean
+  npt_code: string | null
+  npt_category: string | null
+  npt_hours: number | null
+  cost_usd: number | null
+  root_cause: string | null
+  cause_basis: string
+  classification_source: string
+  immediate_action: string | null
+  corrective_action: string | null
+  source: string | null
+  source_kind: string | null
+  source_document_id: string | null
+  source_record_id: string | null
+  promotion_fingerprint: string | null
+  evidence_ref: string | null
+  tags: string[]
+  is_demo_fixture: boolean | null
+  created_at: string | null
+  updated_at: string | null
+  allowed_transitions: string[]
+}
+
+/** A page of the merged timeline, with the keyset position of the next page when there is one. */
+export interface TimelinePage {
+  entries: TimelineEntry[]
+  count: number
+  kinds_available: string[]
+  /** `null` on a short page: the end of the timeline. Pass back unchanged to continue. */
+  next_cursor: string | null
+}
+
 // --------------------------------------------------------------------------- documents & evidence
 
 export interface DocumentRow {
@@ -678,31 +789,49 @@ export interface EvidenceSummary {
   limitations: string[]
 }
 
+/** A record that was deliberately *not* promoted, with the reason it was left alone. */
 export interface PromotionPlanRow {
-  kind: string
-  target: string
-  count: number
-  records: Array<Record<string, unknown>>
-  skipped?: Array<Record<string, unknown>>
-  reason?: string | null
+  record_id: string
+  record_type: string
+  reason: string
 }
 
+/**
+ * What a DDR promotion run did, exactly as the backend reports it.
+ *
+ * The identifiers are lists, not counts: `operations_created` names the rows that were written, so a
+ * reviewer can follow one to the operation it became. The counts are derived from those lists by the
+ * backend (`counts`) rather than recomputed here — two places computing the same number is how the
+ * two end up disagreeing.
+ */
 export interface DdrProcessingReport {
   document_id: string
   well_id: string | null
-  dry_run: boolean
-  report_date: string | null
   doc_type: string
-  operations_created: number
-  events_created: number
-  survey_stations: number
-  npt_events: number
-  npt_hours_classified: number
-  records_promoted: number
-  records_needing_review: number
-  twin_aspects_updated: string[]
+  dry_run: boolean
+  /** Ids of the operations written by this run; empty on a reprocess, which links instead. */
+  operations_created: string[]
+  /** Extracted records whose operations already existed: linked, not duplicated. */
+  operations_linked: string[]
+  events_created: string[]
+  /** The twin revisions the run wrote; a dry run marks each with `dry_run: "true"`. */
+  twin_aspects: Array<{ aspect: string; state_kind: string; id?: string; dry_run?: string }>
+  trajectory_stations_created: number
+  records_promoted: string[]
+  records_needing_review: string[]
   not_promoted: PromotionPlanRow[]
   warnings: string[]
+  npt_hours_classified: number
+  operations_hours: number
+  counts: {
+    operations: number
+    operations_linked: number
+    events: number
+    twin_aspects: number
+    trajectory_stations: number
+    promoted: number
+    needs_review: number
+  }
 }
 
 // --------------------------------------------------------------------------- engines

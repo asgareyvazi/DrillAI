@@ -38,19 +38,22 @@ function ProcessingReportView({ report }: { report: DdrProcessingReport }) {
       <div className="flex flex-wrap gap-2">
         <Badge tone={report.dry_run ? 'info' : 'ok'}>{report.dry_run ? 'dry run' : 'written'}</Badge>
         <Badge tone="neutral">{report.doc_type}</Badge>
-        {report.report_date && <Badge tone="neutral">report date {report.report_date}</Badge>}
-        <Badge tone="ok">{report.records_promoted} promoted</Badge>
-        {report.records_needing_review > 0 && (
-          <Badge tone="warning">{report.records_needing_review} need review</Badge>
+        <Badge tone="ok">{report.counts.promoted} promoted</Badge>
+        {report.counts.operations_linked > 0 && (
+          <Badge tone="info">{report.counts.operations_linked} already recorded — linked</Badge>
+        )}
+        {report.counts.needs_review > 0 && (
+          <Badge tone="warning">{report.counts.needs_review} need review</Badge>
         )}
       </div>
 
       <dl className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         {[
-          ['operations', report.operations_created],
-          ['events', report.events_created],
-          ['survey stations', report.survey_stations],
-          ['NPT events', report.npt_events],
+          ['operations', report.counts.operations],
+          ['events', report.counts.events],
+          ['survey stations', report.counts.trajectory_stations],
+          ['records promoted', report.counts.promoted],
+          ['operations hours', report.operations_hours],
           ['NPT hours', report.npt_hours_classified],
         ].map(([label, value]) => (
           <div key={String(label)} className="rounded-md border border-graphite-100 p-2 dark:border-graphite-800">
@@ -60,9 +63,10 @@ function ProcessingReportView({ report }: { report: DdrProcessingReport }) {
         ))}
       </dl>
 
-      {report.twin_aspects_updated.length > 0 && (
+      {report.twin_aspects.length > 0 && (
         <p className="text-xs text-graphite-600 dark:text-graphite-300">
-          twin aspects updated: {report.twin_aspects_updated.join(', ')}
+          twin aspects {report.dry_run ? 'that would change' : 'updated'}:{' '}
+          {report.twin_aspects.map((aspect) => aspect.aspect).join(', ')}
         </p>
       )}
 
@@ -86,12 +90,15 @@ function ProcessingReportView({ report }: { report: DdrProcessingReport }) {
           <p className="mb-1 text-xs font-medium">{t('documents.notPromoted')}</p>
           <Table
             rows={report.not_promoted}
-            rowKey={(row) => `${row.kind}-${row.target}`}
+            rowKey={(row) => row.record_id}
             columns={[
-              { key: 'kind', header: 'Kind', render: (row) => <Badge tone="neutral">{row.kind}</Badge> },
-              { key: 'target', header: 'Target', render: (row) => row.target },
-              { key: 'count', header: 'Count', render: (row) => row.count, align: 'end' },
-              { key: 'reason', header: 'Reason', render: (row) => row.reason ?? 'not stated' },
+              {
+                key: 'record_type',
+                header: 'Record',
+                render: (row) => <Badge tone="neutral">{row.record_type}</Badge>,
+              },
+              { key: 'record_id', header: 'Id', render: (row) => <code className="text-[11px]">{row.record_id}</code> },
+              { key: 'reason', header: 'Reason', render: (row) => row.reason },
             ]}
           />
           <p className="mt-1 text-[11px] text-graphite-500">

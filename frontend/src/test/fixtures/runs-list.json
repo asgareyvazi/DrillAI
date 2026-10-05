@@ -1,22 +1,22 @@
 {
   "items": [
     {
-      "id": "run_01M40H957NM05Z3XJ0SA04SQV0",
-      "workflow_id": "wfl_01M40H93281B4K5TZNZWFS9ANZ",
-      "workflow_version_id": "wfv_01M40H932RBEGTJMYZCE5XWSMN",
+      "id": "run_01M458C4NRPS3WSKHQ32E7HSDR",
+      "workflow_id": "wfl_01M458C17K2F5QXDEPQGXEGM28",
+      "workflow_version_id": "wfv_01M458C184ZJ5ECFS3SEMXK6RG",
       "workflow_key": "daily-drilling-intelligence",
       "version": 1,
       "status": "waiting_approval",
       "trigger_type": "manual",
       "project_id": null,
-      "well_id": "wel_01M40H92JVZ0J8X5C9AV72GP55",
+      "well_id": "wel_01M458C0VYGW0V474PS7T1FH86",
       "wellbore_id": null,
       "section_id": null,
       "operation_id": null,
       "context": {
         "scope": {
           "project_id": null,
-          "well_id": "wel_01M40H92JVZ0J8X5C9AV72GP55",
+          "well_id": "wel_01M458C0VYGW0V474PS7T1FH86",
           "wellbore_id": null,
           "section_id": null,
           "operation_id": null
@@ -27,7 +27,7 @@
       },
       "outputs": {
         "load_context": {
-          "bundle_id": "ctx_01M40H9580SKR6V3ZYJZW89GS0",
+          "bundle_id": "ctx_01M458C4PD4GMPBFNNW93DAP56",
           "sections": [
             {
               "key": "well_identity",
@@ -66,15 +66,15 @@
             }
           ],
           "item_count": 29,
-          "token_estimate": 22149,
+          "token_estimate": 22183,
           "omitted_sections": [],
-          "prompt_payload": "⟪trimmed: 52308 characters of generated context text⟫",
+          "prompt_payload": "⟪trimmed: 52382 characters of generated context text⟫",
           "summary": {
-            "bundle_id": "ctx_01M40H9580SKR6V3ZYJZW89GS0",
+            "bundle_id": "ctx_01M458C4PD4GMPBFNNW93DAP56",
             "scope": {
-              "org_id": "org_01M40H92H8H8HXJXBGY9H4SW0A",
+              "org_id": "org_01M458C0TCWCKZQMRKGKBV774Q",
               "project_id": null,
-              "well_id": "wel_01M40H92JVZ0J8X5C9AV72GP55",
+              "well_id": "wel_01M458C0VYGW0V474PS7T1FH86",
               "wellbore_id": null,
               "section_id": null,
               "operation_id": null,
@@ -87,9 +87,9 @@
             "purpose": "workflow",
             "unit_system": "si",
             "locale": "en",
-            "built_at": "2026-10-03T09:24:48.512856Z",
+            "built_at": "2026-10-05T05:25:21.229339Z",
             "twin_snapshot_id": null,
-            "token_estimate": 22149,
+            "token_estimate": 22183,
             "token_budget": 32000,
             "truncated": false,
             "assumptions": [],
@@ -104,7 +104,7 @@
               "dashboard.*",
               "document.*",
               "engine.*",
-              "⟪trimmed: 11 more entries⟫"
+              "⟪trimmed: 12 more entries⟫"
             ],
             "notes": [],
             "redactions": []
@@ -112,20 +112,20 @@
         },
         "well_state": {
           "well": {
-            "id": "wel_01M40H92JVZ0J8X5C9AV72GP55",
+            "id": "wel_01M458C0VYGW0V474PS7T1FH86",
             "name": "SYNTH-DEMO-01 (synthetic data)",
             "uwi": null,
             "status": "planned",
             "well_type": "development_producer",
             "operator": "DrillAI (synthetic)",
-            "project_id": "prj_01M40H92J5JBBATS0GAPC19YS7",
+            "project_id": "prj_01M458C0V0YYT46ZGA5KFZR1HH",
             "rig_id": null,
             "spud_date": null,
             "twin_state": "planned",
             "target_formations": []
           },
           "progress": {
-            "wellbore_id": "wlb_01M40H92KERJF41N2Q3JSK0MGR",
+            "wellbore_id": "wlb_01M458C0WS792A0KPZ3TKF3S5H",
             "wellbore_name": "Main bore",
             "current_md_si": 2460.0,
             "current_md_source": "well_sections.current_md_si",
@@ -136,7 +136,7 @@
             "percent_planned_depth": 76.88,
             "percent_basis": "current measured MD / planned TD",
             "current_section": {
-              "id": "sec_01M40H92M479MEHETJTMZVESGT",
+              "id": "sec_01M458C0XKP01Z7H6X77C7DEYK",
               "name": "8-1/2\" section",
               "kind": "production",
               "status": "planned",
@@ -155,7 +155,7 @@
           },
           "operation": {
             "current": {
-              "id": "opr_01M40H92W830BFM268BK5JQJ2H",
+              "id": "opr_01M458C11A8D6TSW8SMJJ9QC8N",
               "name": "Circulating and conditioning mud",
               "code": "CIRC",
               "kind": "mud_conditioning",
@@ -176,11 +176,11 @@
               "is_productive": true,
               "data_quality": "extracted",
               "source": "report",
-              "source_document_id": "doc_01M40H92SKSX1ZJBJNK9D2GY72",
+              "source_document_id": "doc_01M458C0YRVZT3W5RKP2YCJH09",
               "remarks": "5 | Circulating and conditioning mud | CIRC | 1.0 | 2412 | Bottoms up and mud conditioning"
             },
             "previous": {
-              "id": "opr_01M40H92W7HJNJSVF2EC085ADH",
+              "id": "opr_01M458C117JZFKK7XC0TH5MKTM",
               "name": "Lost circulation",
               "code": "LC",
               "kind": "circulating",
@@ -201,7 +201,7 @@
               "is_productive": false,
               "data_quality": "extracted",
               "source": "report",
-              "source_document_id": "doc_01M40H92SKSX1ZJBJNK9D2GY72",
+              "source_document_id": "doc_01M458C0YRVZT3W5RKP2YCJH09",
               "remarks": "4 | Lost circulation | LC | 2.5 | 2412 | Lost circulation 15 bbl/hr; LCM pill pumped"
             },
             "next": null,
@@ -210,7 +210,7 @@
             "current_basis": "recorded",
             "recent": [
               {
-                "id": "opr_01M40H92W0F0CAAXCTVWNMCEAB",
+                "id": "opr_01M458C10W6B2B6GXF1R4T8JCA",
                 "name": "Drilling ahead 8-1/2 in section",
                 "code": "DRL",
                 "kind": "drilling",
@@ -231,11 +231,11 @@
                 "is_productive": true,
                 "data_quality": "extracted",
                 "source": "report",
-                "source_document_id": "doc_01M40H92SKSX1ZJBJNK9D2GY72",
+                "source_document_id": "doc_01M458C0YRVZT3W5RKP2YCJH09",
                 "remarks": "1 | Drilling ahead 8-1/2 in section | DRL | 8.5 | 2410 | Drilling ahead from 2350 m to 2410 m at 120 rpm"
               },
               {
-                "id": "opr_01M40H92W3G3B9R2NQJTV95AKQ",
+                "id": "opr_01M458C1117EA8EETYJG59G1VC",
                 "name": "Made connection",
                 "code": "CONN",
                 "kind": "connection",
@@ -256,11 +256,11 @@
                 "is_productive": true,
                 "data_quality": "extracted",
                 "source": "report",
-                "source_document_id": "doc_01M40H92SKSX1ZJBJNK9D2GY72",
+                "source_document_id": "doc_01M458C0YRVZT3W5RKP2YCJH09",
                 "remarks": "2 | Made connection | CONN | 0.5 | 2410 | Connection at 2410 m"
               },
               {
-                "id": "opr_01M40H92W5X3SZ35JK56HVAH9C",
+                "id": "opr_01M458C115WHQ74A910X97QPP1",
                 "name": "Stuck pipe while POOH",
                 "code": "STUCK",
                 "kind": "jarring",
@@ -281,11 +281,11 @@
                 "is_productive": false,
                 "data_quality": "extracted",
                 "source": "report",
-                "source_document_id": "doc_01M40H92SKSX1ZJBJNK9D2GY72",
+                "source_document_id": "doc_01M458C0YRVZT3W5RKP2YCJH09",
                 "remarks": "3 | Stuck pipe while POOH | STUCK | 6.0 | 2408 | Stuck pipe at 2408 m; jarring attempted; worked free after 6 hours"
               },
               {
-                "id": "opr_01M40H92W7HJNJSVF2EC085ADH",
+                "id": "opr_01M458C117JZFKK7XC0TH5MKTM",
                 "name": "Lost circulation",
                 "code": "LC",
                 "kind": "circulating",
@@ -306,11 +306,11 @@
                 "is_productive": false,
                 "data_quality": "extracted",
                 "source": "report",
-                "source_document_id": "doc_01M40H92SKSX1ZJBJNK9D2GY72",
+                "source_document_id": "doc_01M458C0YRVZT3W5RKP2YCJH09",
                 "remarks": "4 | Lost circulation | LC | 2.5 | 2412 | Lost circulation 15 bbl/hr; LCM pill pumped"
               },
               {
-                "id": "opr_01M40H92W830BFM268BK5JQJ2H",
+                "id": "opr_01M458C11A8D6TSW8SMJJ9QC8N",
                 "name": "Circulating and conditioning mud",
                 "code": "CIRC",
                 "kind": "mud_conditioning",
@@ -331,7 +331,7 @@
                 "is_productive": true,
                 "data_quality": "extracted",
                 "source": "report",
-                "source_document_id": "doc_01M40H92SKSX1ZJBJNK9D2GY72",
+                "source_document_id": "doc_01M458C0YRVZT3W5RKP2YCJH09",
                 "remarks": "5 | Circulating and conditioning mud | CIRC | 1.0 | 2412 | Bottoms up and mud conditioning"
               }
             ]
@@ -343,11 +343,11 @@
               "value": 2150.0,
               "unit": "l/min",
               "source": "extracted_record:parameter_set",
-              "source_id": "rec_01M40H92XRCGM1PZDJCMHCKJ8R",
-              "observed_at": "2026-10-03T09:24:46.136943+00:00",
+              "source_id": "rec_01M458C13E8NE8E0AP5DG7WBSN",
+              "observed_at": "2026-10-05T05:25:17.550950+00:00",
               "quality": "extracted",
-              "evidence_ref": "rec_01M40H92XRCGM1PZDJCMHCKJ8R",
-              "note": "extracted from document doc_01M40H92XGM6RYRAT310H2CSM9 (method label_value, confidence 0.55)"
+              "evidence_ref": "rec_01M458C13E8NE8E0AP5DG7WBSN",
+              "note": "extracted from document doc_01M458C13510MDMRPPZMQB9XR5 (method label_value, confidence 0.55)"
             },
             {
               "key": "mud_weight",
@@ -355,11 +355,11 @@
               "value": 12.5,
               "unit": "ppg",
               "source": "extracted_record:parameter_set",
-              "source_id": "rec_01M40H92XRCGM1PZDJCMHCKJ8R",
-              "observed_at": "2026-10-03T09:24:46.136943+00:00",
+              "source_id": "rec_01M458C13E8NE8E0AP5DG7WBSN",
+              "observed_at": "2026-10-05T05:25:17.550950+00:00",
               "quality": "extracted",
-              "evidence_ref": "rec_01M40H92XRCGM1PZDJCMHCKJ8R",
-              "note": "extracted from document doc_01M40H92XGM6RYRAT310H2CSM9 (method label_value, confidence 0.55)"
+              "evidence_ref": "rec_01M458C13E8NE8E0AP5DG7WBSN",
+              "note": "extracted from document doc_01M458C13510MDMRPPZMQB9XR5 (method label_value, confidence 0.55)"
             },
             {
               "key": "rpm",
@@ -367,11 +367,11 @@
               "value": 125.0,
               "unit": "rpm",
               "source": "extracted_record:parameter_set",
-              "source_id": "rec_01M40H92XRCGM1PZDJCMHCKJ8R",
-              "observed_at": "2026-10-03T09:24:46.136943+00:00",
+              "source_id": "rec_01M458C13E8NE8E0AP5DG7WBSN",
+              "observed_at": "2026-10-05T05:25:17.550950+00:00",
               "quality": "extracted",
-              "evidence_ref": "rec_01M40H92XRCGM1PZDJCMHCKJ8R",
-              "note": "extracted from document doc_01M40H92XGM6RYRAT310H2CSM9 (method label_value, confidence 0.55)"
+              "evidence_ref": "rec_01M458C13E8NE8E0AP5DG7WBSN",
+              "note": "extracted from document doc_01M458C13510MDMRPPZMQB9XR5 (method label_value, confidence 0.55)"
             },
             {
               "key": "spp",
@@ -379,11 +379,11 @@
               "value": 2510.0,
               "unit": "psi",
               "source": "extracted_record:parameter_set",
-              "source_id": "rec_01M40H92XRCGM1PZDJCMHCKJ8R",
-              "observed_at": "2026-10-03T09:24:46.136943+00:00",
+              "source_id": "rec_01M458C13E8NE8E0AP5DG7WBSN",
+              "observed_at": "2026-10-05T05:25:17.550950+00:00",
               "quality": "extracted",
-              "evidence_ref": "rec_01M40H92XRCGM1PZDJCMHCKJ8R",
-              "note": "extracted from document doc_01M40H92XGM6RYRAT310H2CSM9 (method label_value, confidence 0.55)"
+              "evidence_ref": "rec_01M458C13E8NE8E0AP5DG7WBSN",
+              "note": "extracted from document doc_01M458C13510MDMRPPZMQB9XR5 (method label_value, confidence 0.55)"
             },
             {
               "key": "wob",
@@ -391,11 +391,11 @@
               "value": 19.0,
               "unit": "klbf",
               "source": "extracted_record:parameter_set",
-              "source_id": "rec_01M40H92XRCGM1PZDJCMHCKJ8R",
-              "observed_at": "2026-10-03T09:24:46.136943+00:00",
+              "source_id": "rec_01M458C13E8NE8E0AP5DG7WBSN",
+              "observed_at": "2026-10-05T05:25:17.550950+00:00",
               "quality": "extracted",
-              "evidence_ref": "rec_01M40H92XRCGM1PZDJCMHCKJ8R",
-              "note": "extracted from document doc_01M40H92XGM6RYRAT310H2CSM9 (method label_value, confidence 0.55)"
+              "evidence_ref": "rec_01M458C13E8NE8E0AP5DG7WBSN",
+              "note": "extracted from document doc_01M458C13510MDMRPPZMQB9XR5 (method label_value, confidence 0.55)"
             }
           ],
           "npt": {
@@ -441,7 +441,7 @@
           "by_category": [
             {
               "key": "stuck_pipe",
-              "label": "stuck pipe",
+              "label": "stuck_pipe",
               "hours": 6.0,
               "occurrences": 1,
               "percent_of_total": 70.59,
@@ -450,7 +450,7 @@
             },
             {
               "key": "lost_circulation",
-              "label": "lost circulation",
+              "label": "lost_circulation",
               "hours": 2.5,
               "occurrences": 1,
               "percent_of_total": 29.41,
@@ -513,7 +513,7 @@
             }
           ],
           "top_case": {
-            "id": "evn_01M40H92WKYZM5952EB43YPYM1",
+            "id": "evn_01M458C11REP2WB7ZFSVT06N01",
             "source": "event",
             "title": "Stuck Pipe reported in Daily Drilling Report 2026-03-15 (SYNTHETIC)",
             "category": "stuck_pipe",
@@ -524,13 +524,13 @@
             "started_at": "2026-03-15T09:00:00+00:00",
             "ended_at": "2026-03-15T15:00:00+00:00",
             "depth_md_si": 2408.0,
-            "section_id": "sec_01M40H92M479MEHETJTMZVESGT",
-            "operation_id": "opr_01M40H92W5X3SZ35JK56HVAH9C",
+            "section_id": "sec_01M458C0XKP01Z7H6X77C7DEYK",
+            "operation_id": "opr_01M458C115WHQ74A910X97QPP1",
             "operator_controllable": true,
             "confidence": null,
             "classification_source": "recorded",
             "evidence_ref": null,
-            "document_id": "doc_01M40H92SKSX1ZJBJNK9D2GY72",
+            "document_id": "doc_01M458C0YRVZT3W5RKP2YCJH09",
             "note": null
           },
           "controllable_hours": 8.5,
@@ -540,23 +540,23 @@
         }
       },
       "variables": {
-        "context_bundle_id": "ctx_01M40H9580SKR6V3ZYJZW89GS0",
-        "context_prompt": "⟪trimmed: 52308 characters of generated context text⟫"
+        "context_bundle_id": "ctx_01M458C4PD4GMPBFNNW93DAP56",
+        "context_prompt": "⟪trimmed: 52382 characters of generated context text⟫"
       },
-      "started_at": "2026-10-03T09:24:48.498615+00:00",
-      "finished_at": "2026-10-03T09:24:48.683551+00:00",
-      "duration_ms": 177.51373999999487,
+      "started_at": "2026-10-05T05:25:21.204280+00:00",
+      "finished_at": "2026-10-05T05:25:21.530924+00:00",
+      "duration_ms": 313.0465180000215,
       "step_count": 4,
       "error": null,
       "error_node_id": null,
       "cursor_node_id": "approve_plan",
-      "pending_approval_id": "apr_01M40H95D4WM1RV0B0ECPCPJKQ",
+      "pending_approval_id": "apr_01M458C4ZFT6QCJGDZESF5MPQS",
       "is_dry_run": false,
       "initiated_by": "usr_dev_drilling_supervisor",
       "approved_by": null,
       "metrics": {
         "steps": 4,
-        "duration_ms": 177.51373999999487
+        "duration_ms": 313.0465180000215
       }
     }
   ],

@@ -29,6 +29,7 @@ export const NAV_ITEMS: NavItem[] = [
   { to: '/master-data', labelKey: 'nav.masterData', scope: 'global' },
   { to: '/wells/:wellId/cockpit', labelKey: 'nav.cockpit', scope: 'well' },
   { to: '/wells/:wellId/documents', labelKey: 'nav.documents', scope: 'well' },
+  { to: '/wells/:wellId/operations', labelKey: 'nav.operations', scope: 'well' },
   { to: '/wells/:wellId/engineering', labelKey: 'nav.engineering', scope: 'well' },
   { to: '/wells/:wellId/optimisation', labelKey: 'nav.optimisation', scope: 'well' },
   { to: '/wells/:wellId/advisor', labelKey: 'nav.advisor', scope: 'well' },

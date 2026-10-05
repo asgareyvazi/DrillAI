@@ -16,12 +16,22 @@ hand-edited JSON file, which is how a fixture stops describing the server:
 | `well-timeline.json` | `GET /api/v1/wells/{well_id}/timeline` |
 | `well-twin.json` | `GET /api/v1/wells/{well_id}/twin` |
 | `well-audit.json` | `GET /api/v1/wells/{well_id}/audit` |
+| `operations-list.json` | `GET /api/v1/operations?well_id={well_id}&limit=20` |
+| `events-list.json` | `GET /api/v1/events?well_id={well_id}&limit=20` |
+| `operations-timeline.json` | `GET /api/v1/wells/{well_id}/timeline?limit=25` |
 | `run-waiting-approval.json` | `GET /api/v1/runs/{run_id}` while the run waits at `human.approval` |
 | `run-succeeded.json` | `GET /api/v1/runs/{run_id}` after the approval was decided and the run resumed |
 | `approval-pending.json` | `GET /api/v1/approvals/{approval_id}` before the decision |
 | `approvals-list.json` | `GET /api/v1/approvals?status=pending` |
 | `approvals-list-any.json` | `GET /api/v1/approvals?status=any` (the decided approval, with its note) |
 | `runs-list.json` | `GET /api/v1/runs?limit=50` |
+
+The three operational fixtures are captured with explicit limits — 20 operations, 20 events and a
+25-entry page of a 30-entry timeline — so the timeline fixture carries a real `next_cursor` and the
+component tests exercise the "more entries follow" state against a page the server actually paged.
+The operations and events captured are the ones the seeded synthetic daily report promotes: five
+operations and two NPT events, all promoted from the same document, so a component test can follow the
+provenance chain back to it.
 
 The run and approval fixtures are **trimmed deterministically** by the capture script: the seeded
 engineering context is delivered as a ~52 KB generated prompt string that appears in several places in
