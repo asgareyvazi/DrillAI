@@ -219,6 +219,28 @@ def test_role_catalogue_is_coherent():
         assert role.description
 
 
+def test_a_role_that_reads_operations_can_read_events():
+    """The operational record is one surface, so a role is not given half of it.
+
+    Operations and events answer one question — what happened on this well — and the workspace, the
+    timeline and the NPT account all render them together. The two record kinds are served by separate
+    endpoints, each gated on its own permission (`operation.read`, `event.read`), so a role with one
+    and not the other opens the page to an authorization error on a tab of its own record. That is
+    exactly what the role catalogue shipped: `operation.read` on the viewer, the engineer and the
+    drilling supervisor, and `event.read` on none of them — a supervisor who could not read the events
+    the shift had recorded. The test is written over the whole catalogue rather than the three keys,
+    because the next role added is the one that would repeat it.
+    """
+    from drillai.security.rbac import ROLE_CATALOGUE
+
+    half = [
+        role.key
+        for role in ROLE_CATALOGUE
+        if role.grants("operation.read") and not role.grants("event.read")
+    ]
+    assert half == []
+
+
 def test_engineer_cannot_cross_into_execution():
     engineer = principal_from_roles(principal_id="usr_1", org_id="org_1", roles=[SYSTEM_ROLES["engineer"]])
     assert engineer.max_action_level is ActionLevel.DRAFT

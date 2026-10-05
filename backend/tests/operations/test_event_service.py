@@ -18,7 +18,7 @@ import pytest
 from sqlalchemy import select
 from tests.fixtures.fabric import Fabric
 
-from drillai.db.models import AuditLog
+from drillai.db.models import ApiToken, AuditLog, Membership
 
 DDR_RECORD = {
     "title": "Kick while drilling the 12-1/4\" section",
@@ -593,3 +593,56 @@ async def test_events_are_never_deleted_by_the_service() -> None:
     ).read_text()
     assert "session.delete" not in source
     assert "DELETE FROM" not in source
+
+
+# --------------------------------------------------------------------------- the reader's role
+
+
+async def test_an_engineer_can_read_the_events_they_recorded(fabric: Fabric) -> None:
+    """The role that records the day's events has to be able to read them back.
+
+    This is the defect the role catalogue shipped: `event.read` was granted to the well manager and
+    nobody below, while `event.create` carries the `operation.write` permission an engineer holds. So
+    an engineer could write an event and then get a 403 reading the list it appeared in — and the
+    workspace's events tab, which is gated on `event.read`, was blank for every role that actually
+    worked on a well. The development header hides it, because its default identity is
+    `engineer,admin`; this test therefore mints a role-scoped token, like a real deployment would.
+    """
+    from drillai.security.passwords import new_api_token
+
+    recorded = (await _create(fabric, fabric.alpha, title="Recorded by the engineer")).json()
+
+    # The engineer's identity: the `engineer` role, in the same organization, with no admin.
+    async with fabric.session() as session:
+        membership = (
+            await session.execute(select(Membership).where(Membership.org_id == fabric.org_id(fabric.alpha)))
+        ).scalar_one()
+        membership.role_key = "engineer"
+        token, prefix, digest = new_api_token()
+        session.add(
+            ApiToken(
+                id="tok_engineer",
+                org_id=fabric.org_id(fabric.alpha),
+                user_id=membership.user_id,
+                name="engineer token",
+                token_prefix=prefix,
+                token_hash=digest,
+            )
+        )
+        await session.commit()
+
+    engineer = {"Authorization": f"Bearer {token}"}
+    listing = await fabric.http.get(
+        "/api/v1/events", params={"well_id": fabric.alpha.well_id}, headers=engineer
+    )
+    assert listing.status_code == 200, listing.text
+    assert [row["id"] for row in listing.json()["items"]] == [recorded["id"]]
+
+    single = await fabric.http.get(f"/api/v1/events/{recorded['id']}", headers=engineer)
+    assert single.status_code == 200, single.text
+    assert single.json()["title"] == "Recorded by the engineer"
+
+    operations = await fabric.http.get(
+        "/api/v1/operations", params={"well_id": fabric.alpha.well_id}, headers=engineer
+    )
+    assert operations.status_code == 200, operations.text

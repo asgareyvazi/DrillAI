@@ -80,7 +80,13 @@ ROLE_CATALOGUE: tuple[Role, ...] = (
             # Operations and events are well data a reader is entitled to see: the timeline, the NPT
             # account and the source of a twin value all read from them. Read only — the writes are
             # DRAFT-level actions this role's ceiling (OBSERVE) refuses at authorization time.
+            #
+            # Both are listed, and both are needed: the operational workspace reads the two record
+            # kinds through separate endpoints, each gated on its own permission, so a role holding
+            # only `operation.read` opens the page to an authorization error on the events tab. The
+            # same slip is what the note below about `operations.*` records.
             "operation.read",
+            "event.read",
             "context.read",
             "engine.read",
             "workflow.read",
@@ -103,7 +109,13 @@ ROLE_CATALOGUE: tuple[Role, ...] = (
             "evidence.*",
             # Recording and correcting operations is what an engineer does with a daily report;
             # the action level for every operation.* write is DRAFT, which this role may reach.
+            #
+            # The events endpoints are gated on `event.read` even for writes — the event actions in
+            # the catalogue carry the `operation.write` permission, and the read permission is the
+            # gate that decides whether the role sees the operational record at all. Without it the
+            # engineer who records the day's events cannot read them back.
             "operation.*",
+            "event.read",
             "context.read",
             "engine.*",
             "workflow.read",
@@ -145,6 +157,9 @@ ROLE_CATALOGUE: tuple[Role, ...] = (
             # It looked like the drilling supervisor could record operations and in fact granted no such
             # thing.
             "operation.*",
+            # Same read gate as the engineer's: the supervisor reviews the events the shift recorded,
+            # and `event.read` is the permission those endpoints check.
+            "event.read",
             "dashboard.*",
             "action:**",
             "registry.read",
