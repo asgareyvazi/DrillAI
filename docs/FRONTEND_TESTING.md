@@ -36,8 +36,8 @@ They skip unless the repository's own embedded PostgreSQL is switched on:
 cd backend && DRILLAI_TEST_POSTGRES=1 .venv/bin/python -m pytest
 ```
 
-With it, the suite reports **527 passed**; without it, **524 passed, 3 skipped**. CI runs them (the
-`pgserver` dev dependency is already in `backend/pyproject.toml`), so the certificate is the 527-test
+With it, the suite reports **709 passed**; without it, **706 passed, 3 skipped**. CI runs them (the
+`pgserver` dev dependency is already in `backend/pyproject.toml`), so the certificate is the 709-test
 one. Nothing is replaced with SQLite to make them pass, and the tests are never deleted.
 
 ## Unit and component tests
@@ -99,7 +99,7 @@ third of the suite, so all three projects run.
 
 ### The journeys
 
-68 journeys in 14 spec files. The list is the coverage; the counts are what the suite reports.
+74 journeys in 15 spec files. The list is the coverage; the counts are what the suite reports.
 
 | Spec | Journeys | Covers |
 | --- | --- | --- |
@@ -113,9 +113,10 @@ third of the suite, so all three projects run.
 | `error-auth.spec.ts` | 1 | an authentication-enabled deployment refusing the client |
 | `identity-permissions.spec.ts` | 7 | the role catalogue against backend authority, ceiling vs permission refusals, identity switching without a reload, socket termination on switch |
 | `context-deeplinks.spec.ts` | 6 | deep links and reload: run in the address, cross-well document, unknown document/workflow/run |
-| `rtl.spec.ts` | 4 | Persian layout, numerals that still equal the API's numbers, mixed-direction identifiers, graph geometry |
-| `a11y.spec.ts` | 7 | keyboard-only operation, tab/table/dialog primitives, the live region during a real resumption, focus stability across a refresh, and a nameless-control sweep |
+| `rtl.spec.ts` | 5 | Persian layout, numerals that still equal the API's numbers, mixed-direction identifiers, the operational record in Persian with its identifiers LTR, graph geometry |
+| `a11y.spec.ts` | 7 | keyboard-only operation, tab/table/dialog primitives, the live region during a real resumption, focus stability across a refresh, and a nameless-control sweep over every critical screen — the cockpit, engineering, the operational record, the documents behind it, runs, workflows and the platform |
 | `checkpoint5.spec.ts` | 3 | the four areas against each other: a run deep-linked in Persian, a refusal in Persian that changes identity in place, a cross-well document in the accessibility tree |
+| `operations-workspace.spec.ts` | 5 | the operational record: the operations the API lists, an operation's actual hours and the document it was promoted from (the link really opens it), the transitions the server allows and a terminal record offering none, an event's NPT charge from its own category and hours, and the merged timeline deep-linking to its source document |
 | `master-data.spec.ts` | 3 | the asset spine end to end: project → field → well → wellbore → section, then rename, move, transition, sidetrack and activate with every id and the attached document preserved; the refusals (a viewer's 403, a stale write's 409, the lineage rules); and well creation from the interface read back from the server |
 
 ### What is mocked, and where

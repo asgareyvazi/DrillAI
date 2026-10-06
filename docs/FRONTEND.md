@@ -43,7 +43,7 @@ src/
   components/  common (Card, Table, Value, Async, Badge, Tabs…), layout (AppShell), evidence (panel)
   i18n/        en.ts, fa.ts, index.tsx — one direction strategy, no per-page overrides
   lib/         format.ts — the single unit and number formatting boundary
-  pages/       wells/ (list, cockpit, documents), engineering/, workflow/, library/
+  pages/       wells/ (list, cockpit, documents, operations), engineering/, workflow/, library/
   stores/      session.ts — locale, unit system, acting identity, selected context
   test/        setup.ts, fixtures/ (payloads captured from the running API)
 ```
@@ -66,6 +66,15 @@ class of mistake fails in CI instead.
 computation and a pending one are five different things and are rendered as five different things:
 the label of the missing state plus the backend's own reason (`Value` + `formatValue`). A region that
 has no data says which data is missing and how to supply it (`missing[]` from the state payload).
+
+**A claim is rendered with what it rests on.** The operational record keeps three pairs apart that
+used to collapse into one: a plan is not an actual (`operation_class` decides, and the hours shown are
+the plan's or the actual's, never mixed), an event's kind is not its NPT charge (`is_npt`,
+`npt_category` and `npt_hours` are shown separately, and an event with no booked hours reads "not
+charged"), and an inferred cause is not a recorded one (`cause_basis` travels with the cause text,
+including `unknown` as its own claim). Transitions are the server's `allowed_transitions`; a terminal
+record offers none rather than showing buttons that would be refused. Every promoted row links back to
+the document it was read from, through the documents workspace's own deep link.
 
 **Server state vs. session state.** Anything the backend owns (wells, documents, twin, runs,
 approvals) lives in TanStack Query and is refetched, never mirrored into Zustand. Zustand holds only
