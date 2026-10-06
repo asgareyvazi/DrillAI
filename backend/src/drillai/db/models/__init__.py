@@ -106,9 +106,11 @@ from drillai.db.models.operations import (
     OPERATION_STATUSES,
     SOURCE_KINDS,
     Alert,
+    AlertRule,
     Event,
     NptCode,
     Operation,
+    OutboxEvent,
     TimeSeries,
     TimeSeriesPoint,
 )
@@ -174,7 +176,7 @@ ALL_MODELS = [
     # engineering artefacts & assurance
     Artifact, ArtifactVersion, Requirement, Standard, Risk, Lesson, ValidationFinding,
     # operations, events, measurements
-    Operation, NptCode, Event, TimeSeries, TimeSeriesPoint, Alert,
+    Operation, NptCode, Event, TimeSeries, TimeSeriesPoint, Alert, AlertRule, OutboxEvent,
     # tools, materials, services, readiness
     ServiceCompany, Service, CatalogItem, InventoryItem, EquipmentUnit, Certification,
     BomRequirement, ReadinessAssessment, ReadinessItem,
@@ -260,6 +262,7 @@ __all__ = [
     "WORKFLOW_STATUSES",
     "AgentRun",
     "Alert",
+    "AlertRule",
     "ApiToken",
     "ApprovalRequest",
     "Artifact",
@@ -308,6 +311,7 @@ __all__ = [
     "OptimizationRun",
     "Organization",
     "OutboundMessage",
+    "OutboxEvent",
     "PolicyBinding",
     "Project",
     "PromptTemplate",

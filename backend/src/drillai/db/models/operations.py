@@ -14,7 +14,7 @@ from __future__ import annotations
 import datetime as dt
 from decimal import Decimal
 
-from sqlalchemy import Boolean, Float, ForeignKey, String, UniqueConstraint
+from sqlalchemy import Boolean, Float, ForeignKey, Index, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from drillai.db.base import (
@@ -268,20 +268,38 @@ class Event(Base, IdMixin, TimestampMixin, OrgScopedMixin):
 
 
 class TimeSeries(Base, IdMixin, TimestampMixin, OrgScopedMixin):
-    """A named real-time or historical channel.
+    """A named channel on a well: one quantity, one unit, one source.
 
-    Values are always stored in canonical SI (``unit`` records the canonical unit) with
-    the originating unit kept in ``src_unit`` for provenance — the classic WITSML
-    mismatch (ft vs m, gpm vs L/min) is resolved once, at ingestion.
+    Values are always stored in the canonical unit for the channel's dimension (``unit`` records it,
+    and ``src_unit`` keeps the unit the source sent, for provenance) — the classic WITSML mismatch
+    (ft vs m, gpm vs L/min) is resolved once, here, at ingestion.
+
+    **Identity.** ``scope_token`` is the canonical identity of the *place* the channel measures:
+    ``well``, ``well``/``wellbore`` or ``well``/``wellbore``/``operation``, produced by
+    :func:`drillai.telemetry.identity.scope_token`. The unique constraint is over
+    ``(org_id, scope_token, channel_key, dimension)`` — so two wells may each have their own ``wob``,
+    a well-level ``depth_md`` and a wellbore-level ``depth_md`` may coexist, and the same key in two
+    dimensions is refused rather than silently reinterpreted. The well/wellbore/operation columns are
+    kept alongside it because every query filters on them and reading a scope out of a token in SQL
+    would be a string operation the database cannot index.
     """
 
     __tablename__ = "time_series"
     id_prefix = "tms"
-    __table_args__ = (UniqueConstraint("org_id", "channel_key"),)
+    __table_args__ = (
+        UniqueConstraint(
+            "org_id", "scope_token", "channel_key", "dimension", name="uq_time_series_identity"
+        ),
+        Index("ix_time_series_well_channel", "org_id", "well_id", "channel_key"),
+        Index("ix_time_series_bore_channel", "org_id", "wellbore_id", "channel_key"),
+    )
 
     well_id: Mapped[str | None] = mapped_column(String(64), index=True)
     wellbore_id: Mapped[str | None] = mapped_column(String(64), index=True)
     operation_id: Mapped[str | None] = mapped_column(String(64), index=True)
+    #: Canonical scope identity — see the class docstring. Populated on every write by the service and
+    #: backfilled by the migration; ``NULL`` only for rows written before this revision.
+    scope_token: Mapped[str] = mapped_column(String(200), index=True)
     asset_ref: Mapped[str | None] = mapped_column(String(120), comment="logical asset/channel owner")
     channel_key: Mapped[str] = mapped_column(String(160), nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(200), nullable=False)
@@ -300,20 +318,136 @@ class TimeSeries(Base, IdMixin, TimestampMixin, OrgScopedMixin):
 
 
 class TimeSeriesPoint(Base, IdMixin, CreatedAtMixin):
-    """A single measurement. Quality flags follow the WITSML/OSDU convention."""
+    """A single measurement.
+
+    Four instants exist in a telemetry system and only two of them are stored here, which is the
+    honest pair: ``ts`` is when the measurement was taken (the source time, and the axis of every
+    query), and ``received_at`` is when the platform accepted it. The difference between them is what
+    makes a *late* point recognisable — a reading from yesterday's connection, handed over this
+    morning, is late rather than wrong — and ``is_late``/``is_out_of_order`` record that judgement
+    instead of leaving a reader to infer it from a comparison every time.
+
+    **Identity.** Exactly one of ``source_point_id`` (the acquisition system's own identifier, when it
+    sends one) or ``fingerprint`` (a documented hash of series/instant/value/source, when it does not)
+    is set, and ``dedup_key`` is whichever it is, so the unique constraint
+    ``(series_id, dedup_key)`` enforces replay collapse in the database rather than in the service's
+    memory. A repeated point with a *different* value does not collapse: it is a distinct row and the
+    service reports the conflict (see the ingestion service).
+
+    Values are in the series' canonical unit. ``src_value``/``src_unit`` keep what arrived.
+    """
 
     __tablename__ = "time_series_points"
     id_prefix = "tsp"
+    __table_args__ = (
+        UniqueConstraint("series_id", "dedup_key", name="uq_time_series_point_identity"),
+        Index("ix_time_series_points_series_ts", "series_id", "ts"),
+        Index("ix_time_series_points_source_identity", "source_ref", "source_point_id"),
+    )
 
     series_id: Mapped[str] = mapped_column(
         ForeignKey("time_series.id", ondelete="CASCADE"), nullable=False, index=True
     )
     ts: Mapped[dt.datetime] = mapped_column(UtcDateTime, nullable=False, index=True)
+    received_at: Mapped[dt.datetime | None] = mapped_column(UtcDateTime, index=True)
     value: Mapped[float | None] = mapped_column(Float)
-    quality: Mapped[str] = mapped_column(String(16), default="good", nullable=False)
+    quality: Mapped[str] = mapped_column(String(16), default="good", nullable=False, index=True)
     sequence: Mapped[int | None] = mapped_column(IntType, comment="source sequence for gap detection")
     depth_md_si: Mapped[float | None] = mapped_column(Float)
+    source_point_id: Mapped[str | None] = mapped_column(String(160))
+    source_ref: Mapped[str | None] = mapped_column(String(200))
+    fingerprint: Mapped[str | None] = mapped_column(String(64))
+    dedup_key: Mapped[str] = mapped_column(String(160))
+    is_late: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    is_out_of_order: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    src_value: Mapped[float | None] = mapped_column(Float)
+    src_unit: Mapped[str | None] = mapped_column(String(40))
     attributes: Mapped[dict] = mapped_column(JsonType, default=dict, nullable=False)
+
+
+class AlertRule(Base, IdMixin, TimestampMixin, OrgScopedMixin):
+    """A deterministic condition on one channel.
+
+    This is *data*, never code: an operator (or a workflow) writes a comparison, a threshold and two
+    durations, and :mod:`drillai.telemetry.rules` evaluates them. There is no expression string, no
+    ``eval`` and no callable anywhere in the path — a rule that could execute code would turn alert
+    configuration into remote code execution, and a rule that an LLM writes would be an unfalsifiable
+    claim about a measured quantity.
+    """
+
+    __tablename__ = "alert_rules"
+    id_prefix = "arl"
+    __table_args__ = (
+        UniqueConstraint("org_id", "rule_key", name="uq_alert_rules_key"),
+        Index("ix_alert_rules_channel", "org_id", "channel_key"),
+    )
+
+    rule_key: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[str | None] = mapped_column(TextType)
+    #: What to watch. The rule resolves a channel by key within its scope at evaluation time rather
+    #: than pinning a series id, so replacing a sensor does not silently disarm a rule.
+    channel_key: Mapped[str] = mapped_column(String(160), nullable=False)
+    scope_token: Mapped[str | None] = mapped_column(String(200), index=True)
+    well_id: Mapped[str | None] = mapped_column(String(64), index=True)
+    wellbore_id: Mapped[str | None] = mapped_column(String(64), index=True)
+    operation_id: Mapped[str | None] = mapped_column(String(64), index=True)
+    #: Raise condition.
+    operator: Mapped[str] = mapped_column(String(8), nullable=False)
+    threshold: Mapped[float] = mapped_column(Float, nullable=False)
+    #: Clear condition. Defaults to the raise condition's opposite when not configured; may be set to a
+    #: *looser* value than the raise threshold, which is what hysteresis means.
+    clear_operator: Mapped[str | None] = mapped_column(String(8))
+    clear_threshold: Mapped[float | None] = mapped_column(Float)
+    #: The condition must hold continuously for this long before the alert is raised.
+    sustain_seconds: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    clear_sustain_seconds: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    #: After clearing, the rule stays quiet for this long. Prevents raise/clear/raise chatter.
+    cooldown_seconds: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    severity: Mapped[str] = mapped_column(String(16), default="medium", nullable=False)
+    is_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, index=True)
+    message: Mapped[str | None] = mapped_column(TextType)
+    attributes: Mapped[dict] = mapped_column(JsonType, default=dict, nullable=False)
+
+
+class OutboxEvent(Base, IdMixin, TimestampMixin, OrgScopedMixin):
+    """A domain event committed in the same transaction as the mutation that produced it.
+
+    The failure this exists to prevent is the asymmetric one: a row is written and the notification is
+    lost, or a notification is emitted and the transaction rolls back. Writing the event beside the
+    mutation makes "did this happen?" and "was it announced?" one question the database answers
+    atomically; publication then reads this table and moves a cursor over it.
+
+    ``sequence`` is per organization and strictly increasing, assigned in the writer's transaction, so a
+    consumer can detect a gap (``101, 102, 104`` means 103 was missed) instead of silently missing an
+    event. ``published_at`` records when a dispatcher last handled the row — a row with
+    ``published_at IS NULL`` is a fact the platform has not announced yet, which is exactly what a
+    reconnect needs to find.
+    """
+
+    __tablename__ = "outbox_events"
+    id_prefix = "obx"
+    __table_args__ = (
+        UniqueConstraint("org_id", "sequence", name="uq_outbox_events_sequence"),
+        Index("ix_outbox_events_well_sequence", "org_id", "well_id", "sequence"),
+        Index("ix_outbox_events_unpublished", "published_at", "sequence"),
+    )
+
+    event_type: Mapped[str] = mapped_column(String(60), nullable=False, index=True)
+    sequence: Mapped[int] = mapped_column(IntType, nullable=False)
+    subject_kind: Mapped[str] = mapped_column(String(40), nullable=False)
+    subject_id: Mapped[str | None] = mapped_column(String(64))
+    well_id: Mapped[str | None] = mapped_column(String(64), index=True)
+    wellbore_id: Mapped[str | None] = mapped_column(String(64), index=True)
+    operation_id: Mapped[str | None] = mapped_column(String(64), index=True)
+    occurred_at: Mapped[dt.datetime] = mapped_column(UtcDateTime, nullable=False, index=True)
+    published_at: Mapped[dt.datetime | None] = mapped_column(UtcDateTime)
+    #: The event's own schema version. A consumer that meets a version it does not know must be able to
+    #: say so rather than parse a payload whose meaning changed under it.
+    schema_version: Mapped[int] = mapped_column(IntType, default=1, nullable=False)
+    payload: Mapped[dict] = mapped_column(JsonType, default=dict, nullable=False)
+    trace_id: Mapped[str | None] = mapped_column(String(64))
+    actor: Mapped[str | None] = mapped_column(String(64))
 
 
 class Alert(Base, IdMixin, TimestampMixin, OrgScopedMixin):
@@ -347,4 +481,14 @@ class Alert(Base, IdMixin, TimestampMixin, OrgScopedMixin):
     cleared_at: Mapped[dt.datetime | None] = mapped_column(UtcDateTime)
     evidence_ref: Mapped[str | None] = mapped_column(String(64))
     notified_channels: Mapped[list] = mapped_column(JsonType, default=list, nullable=False)
+    #: The lineage a reader needs to answer "why was this raised?": which series and which point, in
+    #: which section, under which rule, with what the condition looked like when it cleared.
+    series_id: Mapped[str | None] = mapped_column(String(64), index=True)
+    source_point_id: Mapped[str | None] = mapped_column(String(64))
+    section_id: Mapped[str | None] = mapped_column(String(64), index=True)
+    rule_id: Mapped[str | None] = mapped_column(String(64), index=True)
+    sustained_seconds: Mapped[float | None] = mapped_column(Float)
+    clear_observed_value: Mapped[float | None] = mapped_column(Float)
+    observed_at: Mapped[dt.datetime | None] = mapped_column(UtcDateTime)
+    cancelled_reason: Mapped[str | None] = mapped_column(TextType)
     attributes: Mapped[dict] = mapped_column(JsonType, default=dict, nullable=False)
