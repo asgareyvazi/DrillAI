@@ -631,6 +631,11 @@ def event_out(row: Any) -> dict[str, Any]:
         "is_npt": row.is_npt,
         "npt_code": row.npt_code,
         "npt_category": row.npt_category,
+        # The spelling the source used, when it was not already canonical (CP9 unified the vocabulary and
+        # translates raw spellings on write). Returned explicitly so a reader can audit the translation
+        # instead of having to trust it; `null` means the value arrived canonical, which is the normal
+        # case for anything written since.
+        "npt_category_raw": (row.attributes or {}).get("npt_category_raw"),
         "npt_hours": row.npt_hours,
         "cost_usd": float(row.cost_usd) if row.cost_usd is not None else None,
         "root_cause": row.root_cause,

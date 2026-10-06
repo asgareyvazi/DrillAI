@@ -100,6 +100,7 @@ from drillai.db.models.operations import (
     EVENT_SEVERITIES,
     EVENT_STATUSES,
     NPT_CATEGORIES,
+    NPT_CATEGORY_ALIASES,
     OPERATION_CLASSES,
     OPERATION_KINDS,
     OPERATION_PHASES,
@@ -113,6 +114,7 @@ from drillai.db.models.operations import (
     OutboxEvent,
     TimeSeries,
     TimeSeriesPoint,
+    canonical_npt_category,
 )
 from drillai.db.models.optimization import (
     OPTIMIZATION_PROBLEMS,
@@ -227,6 +229,7 @@ __all__ = [
     "MESSAGE_ROLES",
     "NODE_RUN_STATUSES",
     "NPT_CATEGORIES",
+    "NPT_CATEGORY_ALIASES",
     "OPERATION_CLASSES",
     "OPERATION_KINDS",
     "OPERATION_PHASES",
@@ -353,4 +356,5 @@ __all__ = [
     "Workflow",
     "WorkflowRun",
     "WorkflowVersion",
+    "canonical_npt_category",
 ]

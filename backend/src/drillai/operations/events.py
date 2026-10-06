@@ -49,9 +49,14 @@ from drillai.db.models import (
     Event,
     EvidenceLink,
     Operation,
+    canonical_npt_category,
 )
 from drillai.documents.scope import DocumentScope, DocumentScopeResolver
 from drillai.security.actions import Principal
+
+#: The category that says "classified, and not a loss of time". Named here because the accounting rules
+#: read it: it is not one of the categories an NPT total may include.
+NOT_NPT = "not_npt"
 
 #: Events that are still work. Everything else is history.
 OPEN_STATUSES: tuple[str, ...] = ("open", "acknowledged", "investigating")
@@ -225,11 +230,27 @@ class EventService:
                     f"{field} is not recognised",
                     details={"field": field, "value": value, "allowed": list(allowed)},
                 )
-        if npt_category is not None and npt_category not in NPT_CATEGORIES:
-            raise ValidationFailed(
-                "npt_category is not recognised",
-                details={"field": "npt_category", "value": npt_category, "allowed": list(NPT_CATEGORIES)},
-            )
+        if npt_category is not None:
+            translated = canonical_npt_category(npt_category)
+            if translated not in NPT_CATEGORIES:
+                raise ValidationFailed(
+                    "npt_category is not recognised",
+                    details={"field": "npt_category", "value": npt_category, "allowed": list(NPT_CATEGORIES)},
+                )
+            if is_npt and translated == NOT_NPT:
+                raise ValidationFailed(
+                    "an event cannot be NPT and not_npt at the same time",
+                    details={"field": "is_npt", "value": True, "npt_category": NOT_NPT},
+                )
+            if translated != npt_category:
+                # A spelling the platform used to use, or one a connector sends. It is stored canonically
+                # so the reports group it with its synonyms, and the spelling it arrived in is kept in
+                # the row: a translation nobody can audit is indistinguishable from a guess.
+                fields.setdefault("attributes", {})
+                attributes = dict(fields["attributes"] or {})
+                attributes["npt_category_raw"] = npt_category
+                fields["attributes"] = attributes
+                npt_category = translated
         self._check_cause_basis(
             cause_basis,
             fields,
@@ -272,8 +293,14 @@ class EventService:
             occurred_at=occurred_at or dt.datetime.now(tz=dt.UTC),
             # ``is_npt`` is about accounting, ``kind`` is about what happened. A caller may state
             # either; neither is derived from the other, and a category without hours is not
-            # automatically NPT.
-            is_npt=bool(is_npt) if is_npt is not None else bool(npt_category and fields.get("npt_hours")),
+            # automatically NPT. ``not_npt`` is the vocabulary's way of saying "classified, and the
+            # answer is no": it makes the denial explicit, so it can never be counted as a loss of time
+            # merely because a category is present.
+            is_npt=(
+                bool(is_npt)
+                if is_npt is not None
+                else bool(npt_category and npt_category != NOT_NPT and fields.get("npt_hours"))
+            ),
             npt_category=npt_category,
             source_kind=source_kind,
             source="manual" if source_kind == "manual" else source_kind,

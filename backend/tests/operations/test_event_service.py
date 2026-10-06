@@ -115,7 +115,14 @@ async def test_npt_is_charged_with_hours_and_a_category(fabric: Fabric) -> None:
 
 
 async def test_a_category_without_hours_is_not_charged(fabric: Fabric) -> None:
-    """The category says how the loss *would* be booked; zero hours means there is no loss yet."""
+    """The category says how the loss *would* be booked; zero hours means there is no loss yet.
+
+    The category is sent in the legacy spelling on purpose: CP9 unified the NPT vocabulary, and this
+    asserts both halves of that change — the row is stored canonically (``hole_problems``, the spelling
+    the report charts by) and the spelling it arrived in is kept on the row, so the translation can be
+    audited rather than believed. The behaviour under test is unchanged: no hours, no charge.
+    """
+
     response = await _create(
         fabric,
         fabric.alpha,
@@ -125,7 +132,8 @@ async def test_a_category_without_hours_is_not_charged(fabric: Fabric) -> None:
     )
     assert response.status_code == 201, response.text
     body = response.json()
-    assert body["npt_category"] == "hole_problem"
+    assert body["npt_category"] == "hole_problems", "the row is canonical"
+    assert body["npt_category_raw"] == "hole_problem", "the input spelling is preserved and visible"
     assert body["is_npt"] is False
 
 

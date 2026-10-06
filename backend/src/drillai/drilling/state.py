@@ -34,14 +34,13 @@ from drillai.db.models import (
     Operation,
     Recommendation,
     Risk,
-    TimeSeries,
-    TimeSeriesPoint,
     TwinAspect,
     Well,
     Wellbore,
     WellSection,
 )
 from drillai.documents.lifecycle import VALIDATED_STATES
+from drillai.telemetry.service import TelemetryService
 
 #: How a "next operation" conclusion was reached. Kept as an explicit enum-like tuple so the
 #: UI and the advisor can render the difference instead of flattening plan and guess together.
@@ -66,6 +65,22 @@ KPI_CHANNELS: dict[str, str] = {
 
 
 @dataclass(frozen=True)
+class TelemetrySnapshot:
+    """What one bounded telemetry read says about a well: the measured values, and the channels that are
+    declared but silent.
+
+    The second list is the reason this type exists. "This channel exists and has never reported" is a
+    different fact from "this well has no such channel", and an operator debugging a feed needs to know
+    which one they are looking at. Collapsing the two into an empty list is how a broken acquisition path
+    looks exactly like a rig that was never instrumented.
+    """
+
+    measured: list[Measured]
+    silent_channels: list[str]
+    as_of: dt.datetime | None
+
+
+@dataclass(frozen=True)
 class Measured:
     """A single measured value with its provenance.
 
@@ -83,6 +98,14 @@ class Measured:
     quality: str = "unverified"
     evidence_ref: str | None = None
     note: str | None = None
+    #: Seconds since the value was measured, and the verdict drawn from it. A number on a dashboard
+    #: without these is a number a reader has to *assume* is current, which is how an operator ends up
+    #: acting on a reading from yesterday. ``freshness`` is one of ``fresh``/``stale``/``missing``/
+    #: ``unknown`` and is decided by the telemetry service, from configuration the browser is told as
+    #: well — see ``TelemetryService.freshness``.
+    age_seconds: float | None = None
+    freshness: str | None = None
+    received_at: dt.datetime | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -93,6 +116,9 @@ class Measured:
             "source": self.source,
             "source_id": self.source_id,
             "observed_at": self.observed_at.isoformat() if self.observed_at else None,
+            "received_at": self.received_at.isoformat() if self.received_at else None,
+            "age_seconds": self.age_seconds,
+            "freshness": self.freshness,
             "quality": self.quality,
             "evidence_ref": self.evidence_ref,
             "note": self.note,
@@ -379,41 +405,58 @@ class WellStateService:
 
     # ------------------------------------------------------------------ measured values
 
-    async def measured_values(self, well_id: str, *, limit_per_channel: int = 1) -> list[Measured]:
-        """Latest recorded value per KPI channel, from time series first, DDR records second."""
-        series = list(
-            (
-                await self.session.execute(
-                    select(TimeSeries).where(TimeSeries.org_id == self.org_id, TimeSeries.well_id == well_id)
-                )
-            )
-            .scalars()
-            .all()
-        )
+    async def measured_values(
+        self, well_id: str, *, limit_per_channel: int = 1, now: dt.datetime | None = None
+    ) -> list[Measured]:
+        """The measured KPI values only — see :meth:`telemetry_snapshot` for the full picture."""
+
+        snapshot = await self.telemetry_snapshot(well_id, now=now)
+        return snapshot.measured
+
+    async def telemetry_snapshot(self, well_id: str, *, now: dt.datetime | None = None) -> TelemetrySnapshot:
+        """Latest recorded value per KPI channel: one bounded read over telemetry, then documents.
+
+        The telemetry half is delegated to :class:`~drillai.telemetry.service.TelemetryService`, which
+        resolves the newest reading per channel with a single window statement over a bounded channel
+        set. The previous implementation selected every channel of the well and then ran a query per
+        channel with ``ORDER BY ts DESC LIMIT 1``: correct, unbounded, and — for the state page that is
+        opened first on every well — the slowest thing the cockpit did.
+
+        A channel with no measurement is simply absent from the telemetry half, and a channel whose
+        newest measurement is days old comes back marked ``stale`` with its age. Neither is silently
+        turned into a current value.
+        """
+
+        service = TelemetryService(self.session, self.org_id)
+        readings = await service.latest(well_id=well_id, limit=len(KPI_CHANNELS) or 1, now=now)
         measured: dict[str, Measured] = {}
-        for channel in series:
-            if channel.channel_key not in KPI_CHANNELS:
+        silent: list[str] = []
+        as_of: dt.datetime | None = None
+        for reading in readings:
+            if reading.channel_key not in KPI_CHANNELS:
                 continue
-            point = (
-                await self.session.execute(
-                    select(TimeSeriesPoint)
-                    .where(TimeSeriesPoint.series_id == channel.id)
-                    .order_by(TimeSeriesPoint.ts.desc())
-                    .limit(limit_per_channel)
-                )
-            ).scalars().first()
-            if point is None:
+            if reading.value is None:
+                silent.append(reading.channel_key)
                 continue
-            measured[channel.channel_key] = Measured(
-                key=channel.channel_key,
-                label=KPI_CHANNELS[channel.channel_key],
-                value=float(point.value),
-                unit=channel.unit,
-                source=f"time_series:{channel.channel_key}",
-                source_id=channel.id,
-                observed_at=point.ts,
-                quality=point.quality or "unverified",
-                note="latest recorded point on the channel",
+            if reading.observed_at is not None and (as_of is None or reading.observed_at > as_of):
+                as_of = reading.observed_at
+            measured[reading.channel_key] = Measured(
+                key=reading.channel_key,
+                label=KPI_CHANNELS[reading.channel_key],
+                value=float(reading.value),
+                unit=reading.unit,
+                source=f"time_series:{reading.channel_key}",
+                source_id=reading.channel_id,
+                observed_at=reading.observed_at,
+                received_at=reading.received_at,
+                age_seconds=reading.age_seconds,
+                freshness=reading.freshness,
+                quality=reading.quality or "unverified",
+                note=(
+                    "latest recorded point on the channel"
+                    if reading.freshness == "fresh"
+                    else f"latest recorded point on the channel ({reading.freshness})"
+                ),
             )
 
         # Fall back to structured parameters extracted from the most recent document (usually the
@@ -451,10 +494,19 @@ class WellStateService:
                     observed_at=record.observed_at or record.created_at,
                     quality="validated" if record.validation_state in VALIDATED_STATES else "extracted",
                     evidence_ref=record.id,
-                    note=f"extracted from document {document_id} "
+                    # A number read out of a document has an extraction provenance, not a measurement
+                    # timeline: it is honest about *when it was read*, not about when it was true. Calling
+                    # it fresh would put a value from an unknown shift beside a live sensor reading, so it
+                    # is ``unknown`` — a fourth state, distinct from both ``fresh`` and ``stale``.
+                    freshness="unknown",
+                    note=f"from a document record, so its age is unknown; extracted from document {document_id} "
                     f"(method {record.method}, confidence {record.confidence})",
                 )
-        return sorted(measured.values(), key=lambda item: item.key)
+        return TelemetrySnapshot(
+            measured=sorted(measured.values(), key=lambda item: item.key),
+            silent_channels=sorted(silent),
+            as_of=as_of,
+        )
 
     # ------------------------------------------------------------------ risks / recommendations
 
@@ -514,6 +566,7 @@ class WellStateService:
         window: OperationsWindow,
         measured: list[Measured],
         documents: dict[str, int],
+        silent_channels: list[str] | None = None,
     ) -> list[MissingData]:
         """Everything the platform wanted and did not get. Never silently substituted."""
         missing: list[MissingData] = []
@@ -554,8 +607,26 @@ class WellStateService:
                     how_to_supply="POST /api/v1/documents (multipart upload)",
                 )
             )
+        # A channel that is declared but has never reported is a *different* gap from a channel that does
+        # not exist, and it is the more urgent one: the acquisition path is broken somewhere between the
+        # sensor and the platform.
+        for key in silent_channels or []:
+            missing.append(
+                MissingData(
+                    key=f"kpi.{key}.never_reported",
+                    description=f"The {KPI_CHANNELS.get(key, key)} channel is registered but has never reported",
+                    why_it_matters=(
+                        "A registered channel with no measurements means the feed is broken rather than "
+                        "absent: the rig is instrumented and the platform is not receiving"
+                    ),
+                    how_to_supply=(
+                        "Check the connector/adapter for this channel, then append the readings with "
+                        "POST /api/v1/timeseries/{series_id}/points"
+                    ),
+                )
+            )
         for key in ("rop", "wob", "rpm", "flow_rate"):
-            if key not in have_channels:
+            if key not in have_channels and key not in set(silent_channels or []):
                 missing.append(
                     MissingData(
                         key=f"kpi.{key}",
@@ -586,10 +657,21 @@ class WellStateService:
         operations = await self._operations(well_id)
         events = await self._events(well_id)
         aspects = await self._twin_aspects(well_id)
-        measured = await self.measured_values(well_id)
+        snapshot = await self.telemetry_snapshot(well_id)
+        measured = snapshot.measured
         window = self.operations_window(operations)
         documents = await self.document_counts(well_id)
         risks = await self.open_risks(well_id)
+
+        # When this answer was assembled, and how old the newest measurement in it is. A state payload
+        # without these is a snapshot a client has to *assume* is current; with them, a screen can say
+        # "as of 09:14" and the difference between a live well and a well whose feed stopped is visible
+        # in the data rather than in the reader's head.
+        generated_at = dt.datetime.now(tz=dt.UTC)
+        telemetry_as_of = snapshot.as_of
+        state_freshness, state_age = TelemetryService(self.session, self.org_id).freshness(
+            telemetry_as_of, now=generated_at
+        )
 
         npt_events = [event for event in events if event.is_npt]
         npt_hours = sum(float(event.npt_hours or event.duration_hours or 0.0) for event in npt_events)
@@ -623,6 +705,21 @@ class WellStateService:
                 "recent": [_operation_summary(op) for op in window.recent],
             },
             "measured": [item.to_dict() for item in measured],
+            # The state's own freshness contract. `generated_at` is when this answer was assembled;
+            # `as_of` is the newest measurement behind it — the difference between the two is how the
+            # platform says "this is what was recorded, and here is how old it is" instead of implying
+            # that an answer served now describes the well as it is now. Each value in `measured`
+            # carries its own freshness too, so one stale channel cannot hide behind a fresh one.
+            "telemetry": {
+                "generated_at": generated_at.isoformat(),
+                "as_of": telemetry_as_of.isoformat() if telemetry_as_of else None,
+                "age_seconds": state_age,
+                "freshness": state_freshness,
+                "note": (
+                    "as_of is the newest measurement behind this answer; a value whose channel has "
+                    "stopped reporting appears with freshness=stale and its age rather than as current"
+                ),
+            },
             "npt": {
                 "total_hours": round(npt_hours, 2),
                 "hours_from_operations": round(npt_from_operations, 2),
@@ -664,6 +761,7 @@ class WellStateService:
                     window=window,
                     measured=measured,
                     documents=documents,
+                    silent_channels=snapshot.silent_channels,
                 )
             ],
             "counts": {

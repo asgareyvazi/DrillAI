@@ -124,22 +124,85 @@ EVENT_KINDS = (
     "data_quality",
 )
 
+#: The *one* NPT category vocabulary. It is the list the event service validates against, the list the
+#: NPT report groups by and the list the classifier's codes are written in — deliberately the same list,
+#: because the platform had three.
+#:
+#: The three used to disagree: this tuple accepted ``kick_well_control``, ``hole_problem``,
+#: ``rig_equipment``, ``tool_failure``, ``unknown`` and ``not_npt``; ``drilling.npt`` presented
+#: ``well_control``, ``hole_problems``, ``surface_equipment``, ``downhole_tools`` and ``unclassified``
+#: as its chart buckets; and the content classifier emitted codes whose categories were in neither. A
+#: kick recorded by the classifier therefore produced a chart bucket nobody could match back to the
+#: event, and an event written with the report's spelling was refused by the validator. Exactly one
+#: spelling per meaning survives here, and everything else arrives through
+#: :data:`NPT_CATEGORY_ALIASES`.
+#:
+#: ``not_npt`` is part of the vocabulary because an event must be able to say "this was *not* a loss of
+#: time" explicitly rather than by omitting a category — a blank category and a denial are different
+#: statements, and the NPT reports count only what was classified.
 NPT_CATEGORIES = (
     "equipment_failure",
-    "tool_failure",
-    "wellbore_problem",
+    "surface_equipment",
+    "downhole_tools",
+    "hole_problems",
     "lost_circulation",
     "stuck_pipe",
-    "kick_well_control",
-    "hole_problem",
-    "rig_equipment",
+    "well_control",
     "third_party",
     "weather",
-    "logistics",
     "waiting",
-    "unknown",
+    "unclassified",
     "not_npt",
 )
+
+#: Raw spellings this platform has written or accepted, mapped to the canonical category above. The
+#: mapping exists so that data which already exists — and connectors that speak an older dialect — are
+#: *translated*, visibly and once, instead of being stored under a second spelling the reports cannot
+#: group. ``kick_well_control → well_control`` is the case that started this: a kick is well control,
+#: and two names for it split the very number the report exists to produce.
+NPT_CATEGORY_ALIASES = {
+    "kick_well_control": "well_control",
+    "kick": "well_control",
+    "well_control_loss": "well_control",
+    "hole_problem": "hole_problems",
+    "wellbore_problem": "hole_problems",
+    "wellbore_problems": "hole_problems",
+    "loss_circulation": "lost_circulation",
+    "lost_returns": "lost_circulation",
+    "tool_failure": "downhole_tools",
+    "downhole_tool_failure": "downhole_tools",
+    "rig_equipment": "equipment_failure",
+    "equipment_failures": "equipment_failure",
+    "surface_equipment_failure": "surface_equipment",
+    "logistics": "waiting",
+    "waiting_on_weather": "weather",
+    "third_party_time": "third_party",
+    "unknown": "unclassified",
+    "other": "unclassified",
+}
+
+
+def canonical_npt_category(value: str | None) -> str | None:
+    """Translate a category spelling to the canonical one.
+
+    Canonical values pass through unchanged; a known alias is translated; anything else is returned
+    *unchanged* so the caller can refuse it with the value in the message. Silently folding an unknown
+    spelling into "unclassified" would lose the only evidence that a connector is speaking a dialect
+    the platform does not know.
+    """
+
+    if value is None:
+        return None
+    text = value.strip().lower()
+    if text in NPT_CATEGORIES:
+        return text
+    return NPT_CATEGORY_ALIASES.get(text, text)
+
+
+def is_npt_category(value: str | None) -> bool:
+    """True when the value is canonical — a translation may be needed first, but nothing is guessed."""
+
+    return value is not None and value in NPT_CATEGORIES
 
 
 class Operation(Base, IdMixin, TimestampMixin, OrgScopedMixin):

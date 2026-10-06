@@ -50,11 +50,13 @@ from drillai.db.models import (
     TrajectoryStation,
     Well,
 )
+from drillai.documents.scope import DocumentScope
 from drillai.drilling.classifiers import (
     classify_npt,
     classify_operation_kind,
     ensure_standard_npt_codes,
 )
+from drillai.operations.service import OperationService
 from drillai.security.actions import Principal
 from drillai.twin.aspects import StateKind
 from drillai.twin.service import AspectRevision, TwinService
@@ -352,15 +354,6 @@ class DdrProcessor:
         # Replaying the durations forward from the report date rebuilds the shift's real timeline;
         # an explicit start time in the row wins over the cursor, because it is direct evidence.
         cursor = report_date
-        sequence = (
-            await self.session.execute(
-                select(Operation.sequence)
-                .where(Operation.org_id == self.org_id, Operation.well_id == document.well_id)
-                .order_by(Operation.sequence.desc())
-                .limit(1)
-            )
-        ).scalar_one_or_none()
-        next_sequence = int(sequence or 0) + 1
 
         for record in rows:
             fingerprint = self._fingerprint(document.id, record)
@@ -417,37 +410,40 @@ class DdrProcessor:
                     f"operation row {record.id} matched no registered activity signal; "
                     "recorded as 'unknown' rather than guessed"
                 )
-            operation = Operation(
-                org_id=self.org_id,
-                project_id=document.project_id,
-                well_id=document.well_id,
-                wellbore_id=document.wellbore_id,
-                section_id=document.section_id,
-                parent_operation_id=None,
-                predecessor_operation_id=last.id if last is not None else None,
-                operation_class="actual",
-                sequence=next_sequence,
-                code=str(payload.get("code"))[:60] if payload.get("code") else None,
+            # Promotion goes *through* the domain service rather than around it. The previous version
+            # built the row here and wrote `phase="current"`, which is not in the platform's phase
+            # vocabulary: the operation list, the state read-model and the twin all display it, and the
+            # service's own update path would have refused it. A bulk path that can write what the
+            # governed path rejects is a second, weaker definition of a valid operation — so there is
+            # only one definition now, and this is a caller of it.
+            #
+            # The status is what this code decides (a row with an end time is a completed operation;
+            # one without is still running), and the *phase* is derived by the service from that status.
+            # The sequence is allocated per wellbore by the service, inside this transaction, so a
+            # sidetrack's operations number from one again instead of continuing another hole's count.
+            operation = await OperationService(
+                self.session, self.org_id, actor_id="ddr_promotion"
+            ).create(
+                scope=DocumentScope(
+                    project_id=document.project_id,
+                    well_id=document.well_id,
+                    wellbore_id=document.wellbore_id,
+                    section_id=document.section_id,
+                ),
                 name=str(name)[:300],
+                operation_class="actual",
                 kind=kind,
-                phase="completed" if end is not None else "current",
                 status="completed" if end is not None else "in_progress",
-                planned_start=None,
-                planned_end=None,
-                actual_start=started,
-                actual_end=end,
-                planned_duration_hours=None,
-                actual_duration_hours=float(duration) if isinstance(duration, (int, float)) else None,
-                depth_from_md_si=None,
-                depth_to_md_si=payload.get("depth_md_si"),
-                is_productive=True,
-                npt_hours=None,
-                # `source_kind` is the first-class column; `source` keeps its legacy value for readers
-                # that still ask for it, but the new field is what the platform queries.
-                source="report",
+                predecessor_operation_id=last.id if last is not None else None,
                 source_kind="ddr_promotion",
                 source_document_id=document.id,
                 source_record_id=record.id,
+                code=str(payload.get("code"))[:60] if payload.get("code") else None,
+                actual_start=started,
+                actual_end=end,
+                actual_duration_hours=float(duration) if isinstance(duration, (int, float)) else None,
+                depth_to_md_si=payload.get("depth_md_si"),
+                is_productive=True,
                 promotion_fingerprint=fingerprint,
                 data_quality="extracted",
                 remarks=text[:2000] or None,
@@ -465,7 +461,6 @@ class DdrProcessor:
                     "row_index": payload.get("row_index"),
                 },
             )
-            self.session.add(operation)
             await self.session.flush()
             by_fingerprint[fingerprint] = operation
             # Accumulated before the dry-run branch: the preview reports the same hours the real run
@@ -475,7 +470,6 @@ class DdrProcessor:
             if dry_run:
                 report.operations_created.append(operation.id)
                 last = operation
-                next_sequence += 1
                 continue
             await self._link_evidence(
                 subject_kind="operation",
@@ -497,7 +491,6 @@ class DdrProcessor:
             report.records_promoted.append(record.id)
             report.operations_created.append(operation.id)
             last = operation
-            next_sequence += 1
         return by_fingerprint
 
     async def _promote_npt_events(

@@ -20,30 +20,53 @@ import datetime as dt
 from dataclasses import dataclass, field
 from typing import Any
 
-from sqlalchemy import and_, extract, func, select
-from sqlalchemy import case as sql_case
+from sqlalchemy import and_, case, extract, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from drillai.core.errors import NotFound, ValidationFailed
-from drillai.db.models import Event, NptCode, OffsetCandidate, Operation, Well
+from drillai.db.models import (
+    NPT_CATEGORY_ALIASES,
+    Event,
+    NptCode,
+    OffsetCandidate,
+    Operation,
+    Well,
+    canonical_npt_category,
+)
+from drillai.db.models.operations import NPT_CATEGORIES
 
 #: Which recorded source a reported total is built from.
 NPT_BASES = ("events", "operations")
 
-#: Categories the platform will present even when nothing was recorded, so that "no NPT in this
-#: category" is visible instead of the category simply disappearing from the chart.
-STANDARD_CATEGORIES = (
-    "equipment_failure",
-    "stuck_pipe",
-    "lost_circulation",
-    "well_control",
-    "hole_problems",
-    "waiting",
-    "weather",
-    "downhole_tools",
-    "surface_equipment",
-    "third_party",
-    "unclassified",
+#: The one category that is a denial rather than a loss, imported by name so the rule reads here too.
+NOT_NPT_CATEGORY = "not_npt"
+
+
+def canonical_category_sql(column: Any) -> Any:
+    """The canonical category of a stored value, translated *in SQL*.
+
+    Rows written before the vocabulary was unified — and rows a connector will write tomorrow — may carry
+    a raw spelling (``kick_well_control``). This expression translates them inside the GROUP BY, so a
+    legacy kick is counted with the canonical ``well_control`` instead of forming a bucket of one that no
+    chart legend knows about. It is generated from :data:`NPT_CATEGORY_ALIASES`, so mapping an alias once
+    reaches the aggregation: there is no second table of translations to keep in step, and nothing is
+    loaded into Python to be renamed there.
+    """
+
+    normalized = func.lower(func.trim(column))
+    aliases = [
+        (normalized == raw, canonical) for raw, canonical in NPT_CATEGORY_ALIASES.items()
+    ]
+    return case(*aliases, else_=normalized)
+
+#: The chart's categories: the canonical NPT vocabulary, minus ``not_npt``. Derived rather than
+#: re-declared — this tuple used to be its own list, and it disagreed with the vocabulary the event
+#: service validates against in five of its eleven values (``hole_problems`` vs ``hole_problem``,
+#: ``well_control`` vs ``kick_well_control``, ``unclassified`` vs ``unknown``, ``downhole_tools`` vs
+#: ``tool_failure``, ``surface_equipment`` vs ``rig_equipment``). A report whose buckets are spelled
+#: differently from the rows cannot show them, so the buckets *are* the rows' spelling.
+STANDARD_CATEGORIES = tuple(
+    category for category in NPT_CATEGORIES if category != NOT_NPT_CATEGORY
 )
 
 
@@ -270,7 +293,10 @@ class NptService:
                     id=row.id,
                     source="event",
                     title=row.title,
-                    category=(row.npt_category or (code.category if code else "unclassified")),
+                    category=(
+                        canonical_npt_category(row.npt_category)
+                        or (code.category if code else "unclassified")
+                    ),
                     subcategory=(code.subcategory if code else None),
                     code=row.npt_code,
                     cause=row.root_cause or row.description,
@@ -386,7 +412,7 @@ class NptService:
         hours = func.coalesce(Event.npt_hours, Event.duration_hours, 0.0)
         controllable = NptCode.is_operator_controllable
         code_join = and_(NptCode.org_id == Event.org_id, NptCode.code == Event.npt_code)
-        category = func.coalesce(Event.npt_category, NptCode.category, "unclassified")
+        category = func.coalesce(canonical_category_sql(Event.npt_category), NptCode.category, "unclassified")
 
         async def grouped(key_expr: Any, label_expr: Any, *extra_group: Any) -> list[tuple]:
             stmt = (
@@ -416,10 +442,10 @@ class NptService:
                 select(
                     func.sum(hours),
                     func.count(),
-                    func.sum(sql_case((controllable.is_(True), hours), else_=0.0)),
-                    func.sum(sql_case((controllable.is_(False), hours), else_=0.0)),
+                    func.sum(case((controllable.is_(True), hours), else_=0.0)),
+                    func.sum(case((controllable.is_(False), hours), else_=0.0)),
                     func.sum(
-                        sql_case(
+                        case(
                             (
                                 and_(
                                     controllable.is_not(True),
