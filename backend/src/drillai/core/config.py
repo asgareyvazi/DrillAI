@@ -86,6 +86,22 @@ class Settings(BaseSettings):
     #: Poll interval for the run-event WebSocket tail (the durable log stays the run_events table).
     run_event_stream_poll_seconds: float = 1.0
 
+    # --- telemetry freshness and lateness ---------------------------------------------------------
+    # The policy lives here, not in the client: the browser and the API must answer "is this value
+    # fresh?" the same way, and a threshold written into a React component is a second opinion that
+    # drifts from the server's. `fresh` up to this many seconds since the last measurement, `stale`
+    # beyond it; a value older than `stale_seconds` is only ever rendered as stale.
+    telemetry_fresh_seconds: float = 30.0
+    telemetry_stale_seconds: float = 300.0
+    # A measurement that arrives this long after it was taken is *late*: the reading may be perfectly
+    # good, but a client that treats it as the current value would be showing yesterday's number as
+    # today's.
+    telemetry_late_seconds: float = 120.0
+    # How many channels one latest-values read resolves, and how many points one page returns.
+    telemetry_max_latest_channels: int = 200
+    telemetry_max_window_points: int = 2000
+    telemetry_max_batch_points: int = 5000
+
     # ------------------------------------------------------------------ security
     auth_enabled: bool = True
     # Demo/dev bootstrap identity (never used when auth_enabled and a token is supplied).

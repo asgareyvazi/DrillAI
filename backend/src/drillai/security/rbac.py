@@ -87,6 +87,13 @@ ROLE_CATALOGUE: tuple[Role, ...] = (
             # same slip is what the note below about `operations.*` records.
             "operation.read",
             "event.read",
+            # The operational monitor is a *read* of the well: the current channel values, how old they
+            # are and which alerts are open. A viewer who may read the well may read what it is doing;
+            # the writes (recording a measurement, acknowledging an alert) are DRAFT-level actions this
+            # role's ceiling refuses at authorization time.
+            "timeseries.read",
+            "alert.read",
+            "live.read",
             "context.read",
             "engine.read",
             "workflow.read",
@@ -116,6 +123,12 @@ ROLE_CATALOGUE: tuple[Role, ...] = (
             # engineer who records the day's events cannot read them back.
             "operation.*",
             "event.read",
+            # Recording telemetry and answering its alerts: the action levels are DRAFT, which is this
+            # role's ceiling. `live.read` is separate from `timeseries.read` on purpose — a socket is a
+            # different entitlement from a query, and a role can be given one without the other.
+            "timeseries.*",
+            "alert.*",
+            "live.read",
             "context.read",
             "engine.*",
             "workflow.read",
@@ -160,6 +173,9 @@ ROLE_CATALOGUE: tuple[Role, ...] = (
             # Same read gate as the engineer's: the supervisor reviews the events the shift recorded,
             # and `event.read` is the permission those endpoints check.
             "event.read",
+            "timeseries.*",
+            "alert.*",
+            "live.read",
             "dashboard.*",
             "action:**",
             "registry.read",
@@ -191,6 +207,14 @@ ROLE_CATALOGUE: tuple[Role, ...] = (
             "dashboard.*",
             "action:integrity.verify",
             "registry.read",
+            # Well integrity *is* a question about measurements: a barrier is verified against the
+            # pressures and volumes a well actually reported, and a certification authority that cannot
+            # read them can only certify the paperwork. These three are the monitor's read surfaces,
+            # granted explicitly rather than through a wildcard — reading a channel is not appending one
+            # and not deciding an alert, both of which stay outside this role.
+            "timeseries.read",
+            "alert.read",
+            "live.read",
         ),
         max_action_level=ActionLevel.PROPOSE,
     ),
@@ -203,6 +227,11 @@ ROLE_CATALOGUE: tuple[Role, ...] = (
             "evidence.*",
             "catalog.*",
             "ingestion.*",
+            # Telemetry is ingestion: the data manager owns the acquisition boundary, and the alert
+            # *lifecycle* is not theirs — they read alerts and do not decide them.
+            "timeseries.*",
+            "alert.read",
+            "live.read",
             "context.read",
             "well.read",
             "field.read",

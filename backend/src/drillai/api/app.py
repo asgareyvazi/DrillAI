@@ -31,6 +31,7 @@ from drillai.api.routers import (
     platform,
     registry,
     runs,
+    timeseries,
     twin,
     workflows,
 )
@@ -182,6 +183,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(documents.router, prefix=prefix)
     app.include_router(evidence.router, prefix=prefix)
     app.include_router(operations.router, prefix=prefix)
+    app.include_router(timeseries.router, prefix=prefix)
     app.include_router(registry.router, prefix=prefix)
     app.include_router(workflows.router, prefix=prefix)
     app.include_router(runs.router, prefix=prefix)

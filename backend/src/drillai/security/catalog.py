@@ -33,6 +33,19 @@ PLATFORM_ACTIONS: tuple[tuple[str, ActionLevel, str, str], ...] = (
         "operation.read",
     ),
     ("event.read", ActionLevel.OBSERVE, "Read events: what happened on a well.", "operation.read"),
+    (
+        "timeseries.read",
+        ActionLevel.OBSERVE,
+        "Read telemetry channels, windows and latest values.",
+        "timeseries.read",
+    ),
+    ("alert.read", ActionLevel.OBSERVE, "Read alerts and their evidence.", "alert.read"),
+    (
+        "live.read",
+        ActionLevel.OBSERVE,
+        "Subscribe to the live operational feed for a well.",
+        "live.read",
+    ),
     ("run.read", ActionLevel.OBSERVE, "Inspect workflow runs, node runs and events.", "workflow.read"),
     (
         "rag.search",
@@ -193,8 +206,50 @@ PLATFORM_ACTIONS: tuple[tuple[str, ActionLevel, str, str], ...] = (
         "Attach the source document an event was reported in.",
         "operation.write",
     ),
+    (
+        "timeseries.create",
+        ActionLevel.DRAFT,
+        "Register a telemetry channel on a well, wellbore or operation.",
+        "timeseries.create",
+    ),
+    (
+        "timeseries.append",
+        ActionLevel.DRAFT,
+        "Append measurements to a channel.",
+        "timeseries.append",
+    ),
+    (
+        "alert.rule_manage",
+        ActionLevel.DRAFT,
+        "Define or edit a deterministic alert rule.",
+        "alert.manage",
+    ),
+    (
+        "alert.acknowledge",
+        ActionLevel.DRAFT,
+        "Acknowledge an alert: a person has seen it and owns the response.",
+        "alert.acknowledge",
+    ),
     ("workflow.draft", ActionLevel.DRAFT, "Draft or edit a workflow definition.", "workflow.draft"),
     ("scenario.create", ActionLevel.DRAFT, "Create a what-if scenario or twin snapshot.", "scenario.create"),
+    (
+        "alert.clear",
+        ActionLevel.DRAFT,
+        "Clear an alert: the condition it described no longer holds.",
+        "alert.clear",
+    ),
+    (
+        "alert.cancel",
+        ActionLevel.DRAFT,
+        "Cancel an alert: it is not worth acting on, with a reason.",
+        "alert.clear",
+    ),
+    (
+        "timeseries.manage",
+        ActionLevel.DRAFT,
+        "Retire or re-scope a telemetry channel.",
+        "timeseries.manage",
+    ),
     # --- propose -------------------------------------------------------------------------
     (
         "workflow.publish",

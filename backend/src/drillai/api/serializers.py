@@ -15,6 +15,7 @@ from drillai.assets.vocabulary import SECTION_NUMBER_SEMANTICS
 __all__ = [
     "approval_out",
     "audit_log_out",
+    "channel_out",
     "document_out",
     "engine_run_out",
     "event_out",
@@ -22,8 +23,10 @@ __all__ = [
     "extracted_record_out",
     "field_out",
     "ingestion_job_out",
+    "latest_reading_out",
     "node_run_out",
     "operation_out",
+    "point_out",
     "project_out",
     "recommendation_out",
     "rig_out",
@@ -673,4 +676,103 @@ def twin_aspect_out(row: Any) -> dict[str, Any]:
         "valid_from": _iso(row.valid_from),
         "valid_to": _iso(row.valid_to),
         "supersedes_id": row.supersedes_id,
+    }
+
+
+# --------------------------------------------------------------------------- telemetry
+
+
+def channel_out(row: Any, *, created: bool | None = None) -> dict[str, Any]:
+    """One telemetry channel.
+
+    ``scope`` is the token the platform's identity uses — ``well``, ``well/wellbore`` or
+    ``well/wellbore/operation`` — returned explicitly rather than left for a client to reconstruct from
+    three nullable ids, because a client that reconstructs identity will eventually reconstruct it
+    differently. ``created`` is present only on a create answer, where "I made this" and "this already
+    existed" are different facts about the same row.
+    """
+
+    payload = {
+        "id": row.id,
+        "well_id": row.well_id,
+        "wellbore_id": row.wellbore_id,
+        "operation_id": row.operation_id,
+        "scope": row.scope_token,
+        "channel_key": row.channel_key,
+        "name": row.name,
+        "dimension": row.dimension,
+        "unit": row.unit,
+        "source_unit": row.src_unit,
+        "description": row.description,
+        "is_realtime": row.is_realtime,
+        "source": row.source,
+        "source_ref": row.source_ref,
+        "sampling_hint_seconds": row.sampling_hint_seconds,
+        "first_ts": _iso(row.first_ts),
+        "last_ts": _iso(row.last_ts),
+        "point_count": row.point_count,
+        "created_at": _iso(row.created_at),
+        "updated_at": _iso(row.updated_at),
+    }
+    if created is not None:
+        payload["created"] = created
+    return payload
+
+
+def point_out(row: Any) -> dict[str, Any]:
+    """One measurement.
+
+    Four things travel with the value and none of them is optional: the instant it was measured, the
+    instant it was received, its quality, and whether it arrived late or out of order. ``value`` may be
+    ``null`` — a quality-only record is a real record ("the sensor reported nothing"), and rendering it
+    as a zero would invent a measurement.
+    """
+
+    return {
+        "id": row.id,
+        "channel_id": row.series_id,
+        "ts": _iso(row.ts),
+        "received_at": _iso(row.received_at),
+        "value": row.value,
+        "quality": row.quality,
+        "quality_flags": [
+            flag
+            for flag, present in (("late", row.is_late), ("out_of_order", row.is_out_of_order))
+            if present
+        ],
+        "sequence": row.sequence,
+        "depth_md_si": row.depth_md_si,
+        "source_point_id": row.source_point_id,
+        "source_ref": row.source_ref,
+        "identified_by": (row.attributes or {}).get("identified_by"),
+        "source_value": row.src_value,
+        "source_unit": row.src_unit,
+        "revisions": len((row.attributes or {}).get("revisions", [])),
+    }
+
+
+def latest_reading_out(reading: Any) -> dict[str, Any]:
+    """The newest value on one channel, with everything a screen must show beside it.
+
+    The shape is deliberate: ``value``, ``unit``, ``observed_at``, ``received_at``, ``quality`` and
+    ``freshness`` are one answer. A client that wanted only the number would have to ignore the rest on
+    purpose, which is the opposite of how a plausible-looking stale reading reaches a rig floor.
+    """
+
+    return {
+        "channel_id": reading.channel_id,
+        "channel_key": reading.channel_key,
+        "label": reading.label,
+        "dimension": reading.dimension,
+        "unit": reading.unit,
+        "value": reading.value,
+        "quality": reading.quality,
+        "quality_flags": list(reading.quality_flags),
+        "observed_at": _iso(reading.observed_at),
+        "received_at": _iso(reading.received_at),
+        "age_seconds": reading.age_seconds,
+        "freshness": reading.freshness,
+        "source": reading.source,
+        "source_ref": reading.source_ref,
+        "is_late": reading.is_late,
     }
