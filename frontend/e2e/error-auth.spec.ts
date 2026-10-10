@@ -59,6 +59,12 @@ test.describe('an authentication-enabled deployment', () => {
     await page.goto('/workflows')
     await expect(errorState(page)).toHaveAttribute('data-error-kind', 'unauthenticated')
 
+    // And the Well Cockpit Operational Monitor (`?tab=live`) surfaces 401 unauthenticated + ERROR
+    // stream transport state (4401 refusal) without claiming the backend is unreachable.
+    await page.goto('/wells/wel_unauth_probe/cockpit?tab=live')
+    await expect(errorState(page).first()).toHaveAttribute('data-error-kind', 'unauthenticated')
+    await expect(page.getByTestId('live-transport-state')).toHaveText(/ERROR/i)
+
     expect(appConsoleErrors(consoleErrors), `console errors: ${consoleErrors.join(' | ')}`).toEqual([])
   })
 })

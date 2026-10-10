@@ -302,8 +302,11 @@ async def stream_well_live(
             )
             if initial_gap is not None:
                 await websocket.send_json(initial_gap)
+    except WebSocketDisconnect:
+        return
     except Exception as exc:  # authentication/authorization failures close the socket
-        await websocket.close(code=4401, reason=f"not authorized: {exc}")
+        with contextlib.suppress(RuntimeError):
+            await websocket.close(code=4401, reason=f"not authorized: {exc}")
         return
 
     org_id = auth.org_id or ""
