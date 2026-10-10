@@ -9,13 +9,16 @@ and configuration endpoints support ``Idempotency-Key`` and optimistic concurren
 
 from __future__ import annotations
 
+from dataclasses import asdict
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, Header, Query
+from fastapi import APIRouter, Depends, Header, Query, Request
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from drillai.api.deps import AuthContext, OptionalFilter, get_db, require
+from drillai.core.clock import utc_now
+from drillai.core.errors import PermissionDenied, ValidationFailed
 from drillai.core.idempotency import complete, replay_or_reserve
 from drillai.security.actions import authorize
 from drillai.telemetry.connectors import (
@@ -75,6 +78,17 @@ class ConnectorPreviewRequest(BaseModel):
     sample_limit: int = Field(default=20, ge=1, le=50)
 
 
+class HarnessConfigureRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    protocol: str = Field(pattern="^(witsml|etp)$")
+    fault_mode: str | None = Field(default=None, max_length=64)
+    append_values: dict[str, float | None] | None = None
+    depth_md: float = Field(default=2500.0, ge=0.0, le=20000.0)
+    quality: str = Field(default="good", max_length=24)
+    reset_rows: bool = Field(default=False)
+
+
 @router.get("/connectors/profiles", summary="Supported telemetry connector protocol profiles")
 async def list_connector_profiles(
     _: Annotated[AuthContext, Depends(require("connector.read"))],
@@ -85,6 +99,50 @@ async def list_connector_profiles(
         "desired_states": list(CONNECTOR_DESIRED_STATES),
         "runtime_statuses": list(CONNECTOR_RUNTIME_STATUSES),
     }
+
+
+@router.post(
+    "/connectors/harness/ensure",
+    summary="Start or inspect non-production local WITSML SOAP and ETP WebSocket test servers",
+)
+async def ensure_protocol_harness(
+    request: Request,
+    auth: Annotated[AuthContext, Depends(require("connector.read"))],
+) -> dict[str, Any]:
+    authorize(auth.principal, "connector.manage")
+    harness = getattr(request.app.state, "protocol_harness", None)
+    if harness is None:
+        raise PermissionDenied(
+            "local protocol test harness is disabled in production",
+            details={"reason": "production_forbidden"},
+        )
+    return await harness.ensure_started()
+
+
+@router.post(
+    "/connectors/harness/configure",
+    summary="Configure fault modes or append test frames on the non-production local protocol harness",
+)
+async def configure_protocol_harness(
+    payload: HarnessConfigureRequest,
+    request: Request,
+    auth: Annotated[AuthContext, Depends(require("connector.read"))],
+) -> dict[str, Any]:
+    authorize(auth.principal, "connector.manage")
+    harness = getattr(request.app.state, "protocol_harness", None)
+    if harness is None:
+        raise PermissionDenied(
+            "local protocol test harness is disabled in production",
+            details={"reason": "production_forbidden"},
+        )
+    return await harness.configure(
+        protocol=payload.protocol,
+        fault_mode=payload.fault_mode,
+        append_values=payload.append_values,
+        depth_md=payload.depth_md,
+        quality=payload.quality,
+        reset_rows=payload.reset_rows,
+    )
 
 
 @router.get("/connectors", summary="List telemetry connectors")
@@ -278,6 +336,48 @@ async def disable_connector(
     idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key", max_length=160)] = None,
 ) -> dict[str, Any]:
     return await _run_transition(connector_id, "disable", payload, session, auth, idempotency_key)
+
+
+@router.post(
+    "/connectors/{connector_id}/poll",
+    summary="Execute an immediate fenced worker poll cycle for an enabled connector",
+)
+async def poll_connector_now(
+    connector_id: str,
+    request: Request,
+    session: Annotated[AsyncSession, Depends(get_db)],
+    auth: Annotated[AuthContext, Depends(require("connector.read"))],
+) -> dict[str, Any]:
+    authorize(auth.principal, "connector.control")
+    svc = _service(session, auth)
+    row = await svc.get(connector_id)
+    if not row.is_enabled or row.desired_state != "enabled":
+        raise ValidationFailed(
+            "connector must be started (desired_state='enabled') before polling",
+            details={"connector_id": connector_id, "desired_state": row.desired_state},
+        )
+    now = utc_now()
+    row.next_poll_at = now
+    if row.status == "failed":
+        row.status = "starting"
+        row.error_count = 0
+    row.lease_expires_at = None
+    await session.commit()
+
+    worker = request.app.state.connector_worker
+    claimed = await worker.claim_connector(connector_id, now=now)
+    if claimed is None:
+        raise ValidationFailed(
+            "connector could not be claimed by worker (already leased or not eligible)",
+            details={"connector_id": connector_id},
+        )
+    outcome = await worker.execute_claimed_poll(claimed)
+    session.expire_all()
+    updated = await svc.inspect(connector_id)
+    return {
+        "outcome": asdict(outcome),
+        "connector": updated,
+    }
 
 
 @router.get("/connectors/{connector_id}/runs", summary="Bounded connector run ledger")

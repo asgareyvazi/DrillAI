@@ -294,25 +294,45 @@ class Counter:
         return {"|".join(f"{k}={v}" for k, v in key): value for key, value in self._values.items()}
 
 
+MAX_HISTOGRAM_SAMPLES = 2000
+
+
 class Histogram:
     def __init__(self, name: str, description: str = "", labels: dict[str, str] | None = None) -> None:
         self.name = name
         self.description = description
         self.labels = labels or {}
         self._values: dict[tuple[tuple[str, str], ...], list[float]] = defaultdict(list)
+        self._counts: dict[tuple[tuple[str, str], ...], int] = defaultdict(int)
+        self._sums: dict[tuple[tuple[str, str], ...], float] = defaultdict(float)
+        self._mins: dict[tuple[tuple[str, str], ...], float] = {}
+        self._maxs: dict[tuple[tuple[str, str], ...], float] = {}
 
     def observe(self, value: float, **labels: str) -> None:
-        self._values[_label_key({**self.labels, **labels})].append(float(value))
+        fval = float(value)
+        key = _label_key({**self.labels, **labels})
+        bucket = self._values[key]
+        bucket.append(fval)
+        if len(bucket) > MAX_HISTOGRAM_SAMPLES:
+            del bucket[: len(bucket) - MAX_HISTOGRAM_SAMPLES]
+        self._counts[key] += 1
+        self._sums[key] += fval
+        if key not in self._mins or fval < self._mins[key]:
+            self._mins[key] = fval
+        if key not in self._maxs or fval > self._maxs[key]:
+            self._maxs[key] = fval
 
     def snapshot(self) -> dict[str, dict[str, float]]:
         out: dict[str, dict[str, float]] = {}
         for key, values in self._values.items():
+            if not values:
+                continue
             ordered = sorted(values)
             out["|".join(f"{k}={v}" for k, v in key)] = {
-                "count": float(len(ordered)),
-                "sum": float(sum(ordered)),
-                "min": ordered[0],
-                "max": ordered[-1],
+                "count": float(self._counts[key]),
+                "sum": float(self._sums[key]),
+                "min": float(self._mins[key]),
+                "max": float(self._maxs[key]),
                 "p50": ordered[len(ordered) // 2],
                 "p95": ordered[min(len(ordered) - 1, int(len(ordered) * 0.95))],
             }

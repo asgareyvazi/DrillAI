@@ -65,6 +65,7 @@ class WitsmlPollingAdapter:
         self._connected = False
         self._subscribed: set[str] = set()
         self._last_batch: WitsmlPollBatch | None = None
+        self._last_consumed_batch: WitsmlPollBatch | None = None
 
     @property
     def cursor(self) -> dict[str, Any]:
@@ -72,9 +73,11 @@ class WitsmlPollingAdapter:
 
     @property
     def last_batch(self) -> WitsmlPollBatch | None:
-        return self._last_batch
+        return self._last_batch or self._last_consumed_batch
 
     async def connect(self) -> None:
+        if self._connected and self._last_batch is not None:
+            return
         self._last_batch = await self._client.poll_log_batch(
             well_id=self._well_id or "well-probe",
             wellbore_id=self._wellbore_id,
@@ -125,6 +128,7 @@ class WitsmlPollingAdapter:
             await self.connect()
         if self._last_batch is not None:
             batch = self._last_batch
+            self._last_consumed_batch = batch
             self._last_batch = None
         else:
             batch = await self._client.poll_log_batch(
@@ -135,6 +139,7 @@ class WitsmlPollingAdapter:
                 watermark=self._cursor,
                 max_pages=int(self._config.get("max_pages_per_poll", 3)),
             )
+            self._last_consumed_batch = batch
         self._cursor = dict(batch.next_watermark)
         max_pts = int(self._config.get("max_points_per_poll", 250))
         frames = [

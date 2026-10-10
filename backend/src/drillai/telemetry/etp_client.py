@@ -64,6 +64,7 @@ class EtpSubscriptionAdapter:
         self._subscribed: set[str] = set()
         self._discovered_info: list[EtpChannelInfo] = []
         self._last_batch: EtpPollBatch | None = None
+        self._last_consumed_batch: EtpPollBatch | None = None
 
     @property
     def cursor(self) -> dict[str, Any]:
@@ -71,9 +72,11 @@ class EtpSubscriptionAdapter:
 
     @property
     def last_batch(self) -> EtpPollBatch | None:
-        return self._last_batch
+        return self._last_batch or self._last_consumed_batch
 
     async def connect(self) -> None:
+        if self._connected and self._last_batch is not None:
+            return
         max_pts = int(self._config.get("max_points_per_poll", 250))
         self._last_batch = await self._client.poll_subscription_batch(
             well_id=self._well_id or "well-probe",
@@ -124,6 +127,7 @@ class EtpSubscriptionAdapter:
         max_pts = int(self._config.get("max_points_per_poll", 250))
         if self._last_batch is not None:
             batch = self._last_batch
+            self._last_consumed_batch = batch
             self._last_batch = None
         else:
             batch = await self._client.poll_subscription_batch(
@@ -134,6 +138,7 @@ class EtpSubscriptionAdapter:
                 watermark=self._cursor,
                 max_frames=max_pts,
             )
+            self._last_consumed_batch = batch
             self._discovered_info = list(batch.discovered_channels)
         self._cursor = dict(batch.next_watermark)
         frames = [

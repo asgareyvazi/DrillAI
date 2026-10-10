@@ -145,8 +145,11 @@ class Settings(BaseSettings):
     etp_connector_enabled: bool = True
     connector_allow_loopback: bool = False
     connector_allowed_hosts: str = ""
+    connector_worker_enabled: bool = False
     connector_worker_lease_seconds: float = 30.0
     connector_worker_poll_seconds: float = 1.0
+    connector_worker_max_concurrency: int = 8
+    connector_run_retention_limit: int = 100
     connector_max_response_bytes: int = 5 * 1024 * 1024  # 5 MB per protocol response
     connector_request_timeout_seconds: float = 10.0
 

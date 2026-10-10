@@ -36,6 +36,7 @@ async def health(request: Request) -> dict[str, Any]:
 
 @router.get("/health/ready", summary="Readiness (checks dependencies)")
 async def readiness(
+    request: Request,
     database: Annotated[Database, Depends(get_database)],
     _: Annotated[Any, Depends(current_auth)],
 ) -> dict[str, Any]:
@@ -53,6 +54,17 @@ async def readiness(
     }
     checks["vector_backend"] = settings.vector_backend
     checks["blob_backend"] = settings.blob_backend
+    worker = getattr(request.app.state, "connector_worker", None)
+    checks["connector_worker"] = {
+        "in_process_enabled": settings.connector_worker_enabled,
+        "worker_id": getattr(worker, "worker_id", None),
+        "cycles_completed": getattr(worker, "cycles_completed", 0),
+        "last_cycle_at": (
+            worker.last_cycle_at.isoformat()
+            if worker and getattr(worker, "last_cycle_at", None)
+            else None
+        ),
+    }
     return {"status": "ok" if healthy else "degraded", "checks": checks}
 
 

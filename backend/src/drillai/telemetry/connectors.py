@@ -866,22 +866,25 @@ def compute_connector_health(
 
     if telemetry_summary is not None:
         data_freshness = str(telemetry_summary.get("freshness") or "missing")
-        has_low_quality = bool(telemetry_summary.get("has_low_quality", False))
+        has_low_quality = bool(
+            telemetry_summary.get("has_low_quality", False)
+            or (row.cursor or {}).get("last_batch_low_quality", False)
+        )
         trustworthy_channels = int(telemetry_summary.get("trustworthy_channels", 0))
     else:
-        has_low_quality = False
+        has_low_quality = bool((row.cursor or {}).get("last_batch_low_quality", False))
         trustworthy_channels = 0
         if last_ingest is None:
             data_freshness = "missing"
         elif (current - last_ingest).total_seconds() <= settings.telemetry_fresh_seconds:
             data_freshness = "fresh"
-            trustworthy_channels = 1
+            trustworthy_channels = 0 if has_low_quality else 1
         else:
             data_freshness = "stale"
 
-    if not row.is_enabled or row.desired_state == "disabled" or row.status == "disabled":
+    if row.desired_state == "disabled" or row.status == "disabled":
         health_state = "disabled"
-    elif row.desired_state == "stopped" or row.status == "stopped":
+    elif row.desired_state == "stopped" or row.status == "stopped" or not row.is_enabled:
         health_state = "stopped"
     elif row.status == "failed":
         health_state = "failed"
@@ -1079,6 +1082,56 @@ def connector_run_out(row: ConnectorRun) -> dict[str, Any]:
         "trace_id": row.trace_id,
         "details": dict(row.details or {}),
     }
+
+
+class ConnectorSyntheticAdapter(SyntheticAdapter):
+    """SyntheticAdapter wrapper that tracks connector watermark cursor state across worker polls."""
+
+    def __init__(
+        self,
+        channels: list[ChannelDescriptor],
+        plan: dict[str, list[tuple[float, float | None]]],
+        *,
+        start: dt.datetime,
+        quality: str = "good",
+        initial_cursor: dict[str, Any] | None = None,
+        connector_id: str = "synthetic",
+    ) -> None:
+        super().__init__(channels, plan, start=start, quality=quality)
+        self._connector_cursor: dict[str, Any] = dict(initial_cursor or {})
+        self._connector_id = connector_id
+
+    @property
+    def cursor(self) -> dict[str, Any]:
+        return dict(self._connector_cursor)
+
+    async def poll(self) -> list[Any]:
+        frames = list(await super().poll())
+        if frames:
+            step_index = int(self._connector_cursor.get("step_index", 0)) + 1
+            max_ts = max(f.ts for f in frames)
+            # Ensure unique source_point_id per connector poll step
+            rewritten = [
+                type(f)(
+                    channel_key=f.channel_key,
+                    ts=f.ts,
+                    value=f.value,
+                    unit=f.unit,
+                    quality=f.quality,
+                    source_point_id=f"synthetic:{self._connector_id}:{f.channel_key}:{step_index}",
+                    source_ref=f.source_ref,
+                    sequence=step_index,
+                    depth_md_si=f.depth_md_si,
+                )
+                for f in frames
+            ]
+            self._connector_cursor = {
+                "protocol": "synthetic.v1",
+                "step_index": step_index,
+                "cursor_timestamp": max_ts.isoformat(),
+            }
+            return rewritten
+        return frames
 
 
 class ConnectorService:
@@ -1716,33 +1769,43 @@ class ConnectorService:
                 plan_cfg = {
                     d.channel_key: [[0.0, 100.0], [5.0, 105.0]] for d in descriptors
                 }
+            step_index = int((row.cursor or {}).get("step_index", 0))
+            loop_plan = bool(cfg.get("loop", True))
+            start_iso = cfg.get("start_iso")
             parsed_plan: dict[str, list[tuple[float, float | None]]] = {}
             for ch_key, pts in plan_cfg.items():
                 key_norm = str(ch_key).strip().lower()
-                parsed_plan[key_norm] = [
+                entries = [
                     (float(pair[0]), float(pair[1]) if pair[1] is not None else None)
                     for pair in pts
                 ]
-            start_iso = cfg.get("start_iso")
+                if not entries:
+                    continue
+                if start_iso:
+                    # Pinned start_iso: slice by step_index
+                    parsed_plan[key_norm] = entries[step_index:] if not loop_plan else [
+                        entries[step_index % len(entries)]
+                    ]
+                else:
+                    # Live commissioning synthetic plan: emit current step at utc_now()
+                    chosen = (
+                        entries[step_index % len(entries)]
+                        if loop_plan
+                        else (entries[step_index] if step_index < len(entries) else None)
+                    )
+                    parsed_plan[key_norm] = [(0.0, chosen[1])] if chosen is not None else []
             start_dt = (
                 dt.datetime.fromisoformat(str(start_iso).replace("Z", "+00:00"))
                 if start_iso
-                else utc_now() - dt.timedelta(seconds=15)
+                else utc_now()
             )
-            # Offset plan entries if cursor has already advanced
-            last_offset = (row.cursor or {}).get("last_offset_seconds")
-            if last_offset is not None:
-                filtered_plan: dict[str, list[tuple[float, float | None]]] = {}
-                for k, entries in parsed_plan.items():
-                    filtered_plan[k] = [
-                        (off, val) for off, val in entries if float(off) > float(last_offset)
-                    ]
-                parsed_plan = filtered_plan
-            return SyntheticAdapter(
+            return ConnectorSyntheticAdapter(
                 descriptors,
                 parsed_plan,
                 start=start_dt,
                 quality=str(cfg.get("quality") or "good"),
+                initial_cursor=dict(row.cursor or {}),
+                connector_id=row.id,
             )
 
         if row.protocol_profile == "witsml.1.4.1.1.soap_http":
