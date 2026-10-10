@@ -10,7 +10,7 @@
 
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { drillingApi } from '../../api/endpoints'
 import type { AdvisorAnswer } from '../../api/types'
 import { EvidencePanel } from '../../components/evidence/EvidencePanel'
@@ -172,7 +172,9 @@ export default function AdvisorWorkspace() {
   const { t } = useI18n()
   const { wellId } = useParams<{ wellId: string }>()
   const id = wellId as string
-  const [question, setQuestion] = useState('where_are_we')
+  const [searchParams] = useSearchParams()
+  const linkedAlertId = searchParams.get('alert')
+  const [question, setQuestion] = useState(linkedAlertId ? 'what_went_wrong' : 'where_are_we')
   const [useLlm, setUseLlm] = useState(false)
   const [answer, setAnswer] = useState<AdvisorAnswer | null>(null)
   const [showEvidence, setShowEvidence] = useState(false)
@@ -189,6 +191,18 @@ export default function AdvisorWorkspace() {
         title={t('advisor.title')}
         description="Facts, calculations, evidence, inference, recommendation and unknown are separated on purpose: the advisor never blurs a record with a guess."
         breadcrumb={<Link to={`/wells/${id}/cockpit`}>{t('nav.cockpit')}</Link>}
+        actions={
+          linkedAlertId ? (
+            <Link
+              to={`/wells/${id}/cockpit?tab=live&alert=${encodeURIComponent(linkedAlertId)}`}
+              data-testid="advisor-linked-alert-badge"
+            >
+              <Badge tone="warning">
+                Alert context: <span dir="ltr">{linkedAlertId.slice(0, 8)}</span>
+              </Badge>
+            </Link>
+          ) : undefined
+        }
       />
 
       <Card title={t('advisor.question')}>

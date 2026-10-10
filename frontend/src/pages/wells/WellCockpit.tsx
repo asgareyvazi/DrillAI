@@ -7,9 +7,10 @@
  */
 
 import { useQuery } from '@tanstack/react-query'
-import { useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { drillingApi } from '../../api/endpoints'
+import { OperationalMonitor } from './OperationalMonitor'
 import type {
   DrillingState,
   NptSummary,
@@ -434,9 +435,21 @@ export default function WellCockpit() {
   const { locale } = useI18n()
   const { wellId } = useParams<{ wellId: string }>()
   const id = wellId as string
-  const [tab, setTab] = useState('overview')
+  const [searchParams] = useSearchParams()
+  const initialTab =
+    searchParams.get('tab') ?? (searchParams.get('alert') ? 'live' : 'overview')
+  const [tab, setTab] = useState(initialTab)
   const [evidenceSubject, setEvidenceSubject] = useState<{ kind: string; id: string } | null>(null)
   const [nptCause, setNptCause] = useState<string | null>(null)
+
+  useEffect(() => {
+    const requestedTab = searchParams.get('tab')
+    if (requestedTab) {
+      setTab(requestedTab)
+    } else if (searchParams.get('alert')) {
+      setTab('live')
+    }
+  }, [searchParams])
 
   const state = useQuery({ queryKey: ['well-state', id], queryFn: ({ signal }) => drillingApi.wellState(id, signal) })
   const timeline = useQuery({
@@ -470,6 +483,7 @@ export default function WellCockpit() {
 
   const tabs = [
     { key: 'overview', label: t('nav.cockpit') },
+    { key: 'live', label: t('liveMonitor.tabLabel') },
     { key: 'timeline', label: t('cockpit.timeline'), badge: timeline.data && <Badge tone="neutral">{timeline.data.count}</Badge> },
     {
       key: 'npt',
@@ -545,6 +559,10 @@ export default function WellCockpit() {
             </div>
           )}
         </Async>
+      )}
+
+      {tab === 'live' && (
+        <OperationalMonitor wellId={id} drillingState={state.data?.state ?? null} />
       )}
 
       {tab === 'timeline' && (

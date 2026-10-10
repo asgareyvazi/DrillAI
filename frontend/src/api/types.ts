@@ -1622,3 +1622,450 @@ export interface ContextBundle {
   truncated: boolean
   assumptions?: string[]
 }
+
+// --------------------------------------------------------------------------- telemetry & live operations
+
+export type TelemetryQuality = 'good' | 'suspect' | 'bad' | 'missing' | 'estimated'
+export type TelemetryFreshness = 'live' | 'stale' | 'missing'
+export type TrendDirection = 'rising' | 'falling' | 'flat' | 'insufficient_data'
+
+export interface TelemetryChannel {
+  id: string
+  well_id: string
+  wellbore_id: string | null
+  operation_id: string | null
+  channel_key: string
+  name: string
+  dimension: string
+  unit: string
+  src_unit: string | null
+  is_realtime: boolean
+  source: string
+  source_ref: string | null
+  description: string | null
+  sampling_hint_seconds: number | null
+  point_count: number
+  first_ts: string | null
+  last_ts: string | null
+  created?: boolean
+  created_at: string | null
+  updated_at: string | null
+}
+
+export interface TelemetryChannelCreatePayload {
+  well_id: string
+  wellbore_id?: string | null
+  operation_id?: string | null
+  channel_key: string
+  name: string
+  dimension: string
+  unit?: string | null
+  is_realtime?: boolean
+  source?: string
+  source_ref?: string | null
+  description?: string | null
+  sampling_hint_seconds?: number | null
+}
+
+export interface TelemetryPoint {
+  id: string
+  series_id: string
+  ts: string
+  received_at: string | null
+  value: number | null
+  src_value: number | null
+  src_unit: string | null
+  quality: TelemetryQuality | string
+  is_late: boolean
+  is_out_of_order: boolean
+  source_point_id: string | null
+  source_ref: string | null
+  sequence: number | null
+  depth_md_si: number | null
+  revisions: number
+}
+
+export interface TelemetryPointInput {
+  ts: string
+  value?: number | null
+  unit?: string | null
+  quality?: TelemetryQuality | string
+  source_point_id?: string | null
+  source_ref?: string | null
+  sequence?: number | null
+  depth_md_si?: number | null
+  received_at?: string | null
+}
+
+export interface TelemetryPointsBatchPayload {
+  points: TelemetryPointInput[]
+  source_ref?: string | null
+  default_unit?: string | null
+  on_conflict?: 'reject' | 'revise'
+}
+
+export interface TelemetryIngestReport {
+  channel_id: string
+  received: number
+  accepted: number
+  duplicates: number
+  rejected: number
+  late: number
+  out_of_order: number
+  revised: number
+  written: number
+  quality_counts: Record<string, number>
+  first_ts: string | null
+  last_ts: string | null
+  conflicts: string[]
+  rejections: Array<Record<string, unknown>>
+  alerts_raised: number
+  alerts_cleared: number
+  evaluation?: Record<string, unknown>
+  reconciled: boolean
+}
+
+export interface TelemetryWindowResponse {
+  channel_id?: string
+  unit?: string
+  channel?: TelemetryChannel
+  items: TelemetryPoint[]
+  total?: number
+  returned?: number
+  limit?: number
+  next_cursor?: string | null
+  count?: number
+  total_in_window?: number
+  truncated: boolean
+  downsampled?: boolean
+  window?: {
+    start: string | null
+    end: string | null
+    max_points: number
+  }
+}
+
+export interface TelemetryLatestReading {
+  channel_id: string
+  channel_key: string
+  label: string
+  dimension: string
+  unit: string
+  value: number | null
+  quality: TelemetryQuality | string
+  quality_flags: string[]
+  is_trustworthy: boolean
+  observed_at: string | null
+  received_at: string | null
+  age_seconds: number | null
+  freshness: TelemetryFreshness | string
+  source: string
+  source_ref: string | null
+  is_late: boolean
+}
+
+export interface WellLatestTelemetryResponse {
+  well_id: string
+  generated_at: string
+  items: TelemetryLatestReading[]
+  total: number
+  fresh_seconds: number
+  stale_seconds: number
+}
+
+export interface TelemetryTrend {
+  channel_id: string
+  channel_key: string
+  unit: string
+  direction: TrendDirection | string
+  delta: number | null
+  rate_per_minute: number | null
+  samples: number
+  window_seconds: number
+  first_ts: string | null
+  last_ts: string | null
+  first_value: number | null
+  last_value: number | null
+  min_value: number | null
+  max_value: number | null
+}
+
+export type AlertSeverity = 'low' | 'medium' | 'high' | 'critical'
+export type AlertStatus = 'raised' | 'acknowledged' | 'cleared' | 'cancelled'
+export type RuleOperator = 'gt' | 'gte' | 'lt' | 'lte' | 'eq' | 'neq'
+
+export interface AlertRule {
+  id: string
+  rule_key: string
+  name: string
+  description: string | null
+  channel_key: string
+  well_id: string | null
+  wellbore_id: string | null
+  operation_id: string | null
+  operator: RuleOperator | string
+  threshold: number
+  unit: string | null
+  clear_operator: RuleOperator | string
+  clear_threshold: number
+  clear_is_explicit: boolean
+  sustain_seconds: number
+  clear_sustain_seconds: number
+  cooldown_seconds: number
+  severity: AlertSeverity | string
+  enabled: boolean
+  created_at: string | null
+  updated_at: string | null
+}
+
+export interface AlertRuleCreatePayload {
+  rule_key: string
+  name: string
+  channel_key: string
+  operator: RuleOperator | string
+  threshold: number
+  unit?: string | null
+  severity?: AlertSeverity | string
+  well_id?: string | null
+  wellbore_id?: string | null
+  operation_id?: string | null
+  clear_operator?: RuleOperator | string | null
+  clear_threshold?: number | null
+  sustain_seconds?: number
+  clear_sustain_seconds?: number
+  cooldown_seconds?: number
+  description?: string | null
+  enabled?: boolean
+}
+
+export interface AlertRuleUpdatePayload {
+  expected_updated_at: string
+  reason?: string | null
+  name?: string | null
+  operator?: RuleOperator | string | null
+  threshold?: number | null
+  unit?: string | null
+  severity?: AlertSeverity | string | null
+  clear_operator?: RuleOperator | string | null
+  clear_threshold?: number | null
+  sustain_seconds?: number | null
+  clear_sustain_seconds?: number | null
+  cooldown_seconds?: number | null
+  description?: string | null
+  enabled?: boolean | null
+}
+
+export interface AlertObserved {
+  value: number | null
+  threshold: number | null
+  unit: string | null
+  declared_threshold: number | null
+  declared_unit: string | null
+  timestamp: string | null
+  sustained_seconds: number | null
+  clear_value: number | null
+}
+
+export interface AlertRow {
+  id: string
+  kind: string
+  severity: AlertSeverity | string
+  status: AlertStatus | string
+  title: string
+  description: string | null
+  action_level: ActionLevel
+  well_id: string
+  wellbore_id: string | null
+  operation_id: string | null
+  section_id: string | null
+  subject: { kind: string | null; id: string | null }
+  series_id: string | null
+  channel_key?: string | null
+  source_point_id: string | null
+  rule_id: string | null
+  rule_ref: string | null
+  observed: AlertObserved
+  raised_at: string | null
+  raised_by: string | null
+  acknowledged_at: string | null
+  acknowledged_by: string | null
+  cleared_at: string | null
+  cancelled_reason: string | null
+  reason: string | null
+  allowed_transitions: string[]
+  version: string | null
+  transitioned_at: string | null
+  evidence_url: string
+  created_at: string | null
+  updated_at: string | null
+}
+
+export interface AlertsPage extends Page<AlertRow> {
+  statuses: string[]
+  severities: string[]
+}
+
+export interface AlertEvidencePoint {
+  id: string
+  ts: string | null
+  value: number | null
+  quality: string
+  quality_flags?: string[]
+  is_late: boolean
+  is_out_of_order: boolean
+}
+
+export interface AlertTimelineEntry {
+  state: string
+  at: string | null
+  by: string | null
+  reason: string | null
+}
+
+export interface AlertAuditEntry {
+  id: string
+  action: string
+  actor_id: string | null
+  actor_kind: string | null
+  occurred_at: string | null
+  reason: string | null
+  before: Record<string, unknown>
+  after: Record<string, unknown>
+}
+
+export interface AlertEvidence {
+  alert: AlertRow
+  rule: AlertRule | null
+  rule_snapshot: Record<string, unknown> | null
+  evaluation?: Record<string, unknown> | null
+  observed: {
+    value: number | null
+    threshold: number | null
+    clear_observed_value: number | null
+    unit: string | null
+    observed_at: string | null
+    sustained_seconds: number | null
+    declared_threshold: number | null
+    declared_unit: string | null
+  }
+  provenance: {
+    series_id: string | null
+    channel_key?: string | null
+    dimension?: string | null
+    point_id: string | null
+    rule_id: string | null
+    rule_ref: string | null
+    well_id?: string | null
+    wellbore_id?: string | null
+    section_id: string | null
+    operation_id: string | null
+  }
+  points: AlertEvidencePoint[]
+  timeline: AlertTimelineEntry[]
+  audit_events?: AlertAuditEntry[]
+}
+
+export interface AlertEvaluationReport {
+  evaluation_id: string
+  well_id: string
+  mode: 'auto_ingest' | 'manual' | 'recovery' | string
+  trigger: string | null
+  evaluated_at: string | null
+  duration_ms: number
+  trace_id: string | null
+  channel_ids: string[]
+  evaluated: number
+  raised: number
+  cleared: number
+  held: number
+  suppressed_cooldown: number
+  already_open: number
+  insufficient_data: number
+  failed: number
+  channels_without_points: number
+  alerts: string[]
+  evaluations: Array<Record<string, unknown>>
+  failures: Array<Record<string, unknown>>
+  reconciled: boolean
+}
+
+export interface WellLiveSnapshot {
+  well_id: string
+  generated_at: string
+  telemetry_as_of: string | null
+  operation_as_of?: string | null
+  alerts_as_of: string | null
+  stream_position: number
+  cursor: string
+  latest: TelemetryLatestReading[]
+  trends: Record<string, TelemetryTrend>
+  alerts: AlertRow[]
+  freshness: Record<string, number>
+}
+
+export interface SyntheticChannelPlanPayload {
+  channel_key: string
+  name: string
+  dimension: string
+  unit: string
+  values: number[]
+  start?: string | null
+  step_seconds?: number
+  quality?: TelemetryQuality | string
+  source_prefix?: string
+}
+
+export interface SyntheticCommissionPayload {
+  wellbore_id?: string | null
+  operation_id?: string | null
+  channels: SyntheticChannelPlanPayload[]
+  subscribe?: string[] | null
+}
+
+export interface SyntheticCommissionResponse {
+  well_id: string
+  report: {
+    adapter: string
+    source: string
+    frames: number
+    polls: number
+    channels: string[]
+    channels_created: number
+    alerts_raised: number
+    alerts_cleared: number
+    totals: {
+      received: number
+      accepted: number
+      duplicates: number
+      rejected: number
+    }
+    per_channel: Record<string, TelemetryIngestReport>
+  }
+  health: {
+    adapter_key: string
+    source: string
+    well_id: string
+    status: string
+    is_live: boolean
+    polls_completed: number
+    frames_received: number
+    points_accepted: number
+    points_duplicates: number
+    points_rejected: number
+    alerts_raised: number
+    alerts_cleared: number
+    reconnect_count: number
+    consecutive_failures: number
+    backoff_seconds: number
+    started_at: string | null
+    stopped_at: string | null
+    last_poll_at: string | null
+    last_successful_poll_at: string | null
+    last_frame_at: string | null
+    last_successful_ingest_at: string | null
+    last_error: string | null
+    last_error_at: string | null
+    subscribed_channels: string[]
+  }
+}
+

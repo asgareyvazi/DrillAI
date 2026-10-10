@@ -22,6 +22,13 @@ import type {
   AdvisorAnswer,
   AdvisorQuestionCatalogue,
   AgentCatalogue,
+  AlertEvaluationReport,
+  AlertEvidence,
+  AlertRow,
+  AlertRule,
+  AlertRuleCreatePayload,
+  AlertRuleUpdatePayload,
+  AlertsPage,
   ApprovalRow,
   AuditTrail,
   ContextBundle,
@@ -58,6 +65,15 @@ import type {
   ProviderCatalogue,
   RecommendationRow,
   Report,
+  SyntheticCommissionPayload,
+  SyntheticCommissionResponse,
+  TelemetryChannel,
+  TelemetryChannelCreatePayload,
+  TelemetryIngestReport,
+  TelemetryPointsBatchPayload,
+  TelemetryWindowResponse,
+  WellLatestTelemetryResponse,
+  WellLiveSnapshot,
   Rig,
   ReportKind,
   RunEvent,
@@ -627,6 +643,161 @@ export const drillingApi = {
       `/approvals/${enc(approvalId)}/decide`,
       body,
     ),
+
+  // ------------------------------------------------------------------ telemetry & live operations
+  listTimeseries: (
+    params: {
+      well_id?: string
+      wellbore_id?: string
+      operation_id?: string
+      channel_key?: string
+      dimension?: string
+      is_realtime?: boolean
+      source?: string
+      limit?: number
+      offset?: number
+    } = {},
+    signal?: AbortSignal,
+  ) => api.get<Page<TelemetryChannel>>('/timeseries', { query: params, signal, validate: expect.paged() }),
+  createTimeseries: (body: TelemetryChannelCreatePayload, idempotencyKey?: string) =>
+    api.post<TelemetryChannel>('/timeseries', body, idempotencyHeader(idempotencyKey)),
+  getTimeseries: (seriesId: string, signal?: AbortSignal) =>
+    api.get<TelemetryChannel>(`/timeseries/${enc(seriesId)}`, { signal }),
+  getTimeseriesPoints: (
+    seriesId: string,
+    params: {
+      start?: string
+      end?: string
+      limit?: number
+      quality?: string
+      downsample?: boolean
+    } = {},
+    signal?: AbortSignal,
+  ) =>
+    api.get<TelemetryWindowResponse>(`/timeseries/${enc(seriesId)}/points`, {
+      query: params,
+      signal,
+      validate: expect.paged(),
+    }),
+  appendTimeseriesPoints: (
+    seriesId: string,
+    body: TelemetryPointsBatchPayload,
+    idempotencyKey?: string,
+  ) =>
+    api.post<TelemetryIngestReport>(
+      `/timeseries/${enc(seriesId)}/points`,
+      body,
+      idempotencyHeader(idempotencyKey),
+    ),
+  wellLatestTelemetry: (
+    wellId: string,
+    params: {
+      wellbore_id?: string
+      operation_id?: string
+      channel_key?: string[]
+      limit?: number
+    } = {},
+    signal?: AbortSignal,
+  ) =>
+    api.get<WellLatestTelemetryResponse>(`/wells/${enc(wellId)}/timeseries/latest`, {
+      query: params,
+      signal,
+      validate: expect.paged(),
+    }),
+  commissionSyntheticTelemetry: (
+    wellId: string,
+    body: SyntheticCommissionPayload,
+    idempotencyKey?: string,
+  ) =>
+    api.post<SyntheticCommissionResponse>(
+      `/wells/${enc(wellId)}/timeseries/commission-synthetic`,
+      body,
+      idempotencyHeader(idempotencyKey),
+    ),
+  wellLiveSnapshot: (wellId: string, signal?: AbortSignal) =>
+    api.get<WellLiveSnapshot>(`/wells/${enc(wellId)}/live/snapshot`, { signal }),
+
+  // ------------------------------------------------------------------ alert rules & alerts
+  listAlertRules: (
+    params: {
+      well_id?: string
+      channel_key?: string
+      enabled?: boolean
+      limit?: number
+      offset?: number
+    } = {},
+    signal?: AbortSignal,
+  ) => api.get<Page<AlertRule>>('/alert-rules', { query: params, signal, validate: expect.paged() }),
+  createAlertRule: (body: AlertRuleCreatePayload, idempotencyKey?: string) =>
+    api.post<AlertRule>('/alert-rules', body, idempotencyHeader(idempotencyKey)),
+  getAlertRule: (ruleId: string, signal?: AbortSignal) =>
+    api.get<AlertRule>(`/alert-rules/${enc(ruleId)}`, { signal }),
+  updateAlertRule: (ruleId: string, body: AlertRuleUpdatePayload, idempotencyKey?: string) =>
+    api.patch<AlertRule>(`/alert-rules/${enc(ruleId)}`, body, idempotencyHeader(idempotencyKey)),
+  listAlerts: (
+    params: {
+      well_id?: string
+      wellbore_id?: string
+      status?: string
+      severity?: string
+      rule_ref?: string
+      series_id?: string
+      since?: string
+      until?: string
+      limit?: number
+      offset?: number
+    } = {},
+    signal?: AbortSignal,
+  ) => api.get<AlertsPage>('/alerts', { query: params, signal, validate: expect.paged() }),
+  getAlert: (alertId: string, signal?: AbortSignal) =>
+    api.get<AlertRow>(`/alerts/${enc(alertId)}`, { signal }),
+  alertEvidence: (
+    alertId: string,
+    params: { points?: number } = {},
+    signal?: AbortSignal,
+  ) =>
+    api.get<AlertEvidence>(`/alerts/${enc(alertId)}/evidence`, {
+      query: params,
+      signal,
+      validate: expect.object('alert'),
+    }),
+  acknowledgeAlert: (
+    alertId: string,
+    body: { expected_updated_at: string; reason?: string | null },
+    idempotencyKey?: string,
+  ) =>
+    api.post<AlertRow>(
+      `/alerts/${enc(alertId)}/acknowledge`,
+      body,
+      idempotencyHeader(idempotencyKey),
+    ),
+  clearAlert: (
+    alertId: string,
+    body: { expected_updated_at: string; reason: string; observed_value?: number | null },
+    idempotencyKey?: string,
+  ) =>
+    api.post<AlertRow>(
+      `/alerts/${enc(alertId)}/clear`,
+      body,
+      idempotencyHeader(idempotencyKey),
+    ),
+  cancelAlert: (
+    alertId: string,
+    body: { expected_updated_at: string; reason: string },
+    idempotencyKey?: string,
+  ) =>
+    api.post<AlertRow>(
+      `/alerts/${enc(alertId)}/cancel`,
+      body,
+      idempotencyHeader(idempotencyKey),
+    ),
+  evaluateWellAlerts: (
+    wellId: string,
+    params: { channel_id?: string[]; mode?: 'manual' | 'recovery' } = {},
+  ) =>
+    api.post<AlertEvaluationReport>(`/wells/${enc(wellId)}/alerts/evaluate`, undefined, {
+      query: params,
+    }),
 
   // ------------------------------------------------------------------ platform & registry
   capabilities: (signal?: AbortSignal) => api.get<PlatformCapabilities>('/platform/capabilities', { signal }),
