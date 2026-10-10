@@ -1,14 +1,21 @@
-"""The live feed: the event backbone over a WebSocket, with a cursor instead of a handshake.
+"""The live feed: the event backbone over a WebSocket, with a well-scoped cursor.
 
-A client connects, is told where the stream currently ends, receives a bounded snapshot of the well it
-asked about, and then follows the sequence. Everything about the design follows from one decision: **the
-socket is a view of the outbox table, not a queue**. The database is the buffer, the sequence number is
-the cursor, and the socket is a tail. That is what makes the failure modes honest:
+A client connects, is told where the well's stream currently ends, receives a bounded snapshot of the
+well it asked about, and then follows the well's contiguous sequence (`well_sequence`). Everything about
+the design follows from one decision: **the socket is a view of the outbox table, not a queue**. The
+database is the buffer, the per-well sequence number (paired with a scope-validated cursor token) is the
+cursor, and the socket is a tail. That is what makes the failure modes honest:
 
 * a dropped connection loses the *stream*, never the history — reconnecting with the same
-  ``after_seq`` returns exactly the events missed, and asking twice returns the same page;
+  ``cursor`` (or ``after_seq``) returns exactly the events missed on that well, and asking twice returns
+  the same page;
+* events on other wells in the same organisation advance their own well sequences without inflating
+  this well's backlog, so high-rate telemetry on Well B never causes a false ``backlog_exceeded`` gap
+  or drops an alert on Well A;
+* a cursor belonging to another well or organisation is refused with an explicit ``gap`` frame
+  (`reason: "cursor_scope_mismatch"`) rather than silently skipping events;
 * a slow client cannot make the server hold an unbounded queue: each tick reads at most
-  ``live_stream_max_events_per_tick`` rows, and a client that has fallen further behind than
+  ``live_stream_max_events_per_tick`` rows, and a client that has fallen further behind on this well than
   ``live_stream_max_backlog`` is told so explicitly (a ``gap`` frame naming the range it lost) rather
   than being quietly skipped forward;
 * telemetry is **coalesced** — a hundred measurements a second would otherwise be a hundred frames a
@@ -35,9 +42,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from drillai.api.deps import AuthContext, current_auth
 from drillai.api.serializers import alert_out
 from drillai.core.clock import utc_now
+from drillai.core.errors import ValidationFailed
 from drillai.db.models import Well
 from drillai.telemetry.alerts import AlertService
-from drillai.telemetry.outbox import ENVELOPE_VERSION, envelope_of, events_since, stream_position
+from drillai.telemetry.outbox import (
+    ENVELOPE_VERSION,
+    STREAM_CURSOR_VERSION,
+    decode_stream_cursor,
+    encode_stream_cursor,
+    envelope_of,
+    events_since,
+    stream_position,
+    well_stream_sequence,
+)
 from drillai.telemetry.service import TelemetryService
 from drillai.telemetry.vocabulary import COALESCIBLE_EVENT_TYPES
 
@@ -45,13 +62,13 @@ router = APIRouter(tags=["live"])
 
 #: Frames a client can receive, documented in one place so the frontend and this file cannot drift:
 #:
-#: * ``stream_opened`` — hello: the stream position at connect, the schema version, the poll interval.
-#: * ``snapshot`` — bounded current state (latest readings, open alerts, freshness counts).
+#: * ``stream_opened`` — hello: the stream position at connect, the scoped cursor, the schema version, the poll interval.
+#: * ``snapshot`` — bounded current state (latest readings, open alerts, freshness counts, temporal as-of stamps).
 #: * ``event`` — one envelope that was not coalesced (alerts, operation changes, events).
 #: * ``telemetry`` — one frame folding N telemetry events, with ``omitted`` and ``resync``.
-#: * ``gap`` — the client asked for a range the server will not replay; names it and tells it to resync.
+#: * ``gap`` — the client asked for a range the server will not replay (or sent an invalid/foreign cursor); names it and tells it to resync.
 #: * ``heartbeat`` — the server's current position, so a client can notice a missed range.
-#: * ``stream_idle`` — long quiet period; the client may reconnect from ``last_seq``.
+#: * ``stream_idle`` — long quiet period; the client may reconnect from ``last_seq`` / ``cursor``.
 #: * ``stream_error`` — a server-side failure; the socket closes afterwards.
 FRAME_TYPES = (
     "stream_opened",
@@ -92,11 +109,7 @@ class _HeaderShim:
 
 
 async def _watch_client_disconnect(websocket: WebSocket) -> None:
-    """Return as soon as the client goes away, so an abandoned socket stops reading the stream.
-
-    A handler that only sends cannot notice a dropped browser until the next write succeeds-fails, which
-    on a quiet well may be minutes. Reading the socket is what makes the disconnect observable.
-    """
+    """Return as soon as the client goes away, so an abandoned socket stops reading the stream."""
 
     try:
         while True:
@@ -107,32 +120,38 @@ async def _watch_client_disconnect(websocket: WebSocket) -> None:
         return
 
 
-async def _snapshot(session: AsyncSession, auth: AuthContext, well_id: str) -> dict[str, Any]:
-    """A bounded picture of the well at connect: readings, open alerts and freshness counts.
-
-    The snapshot is a *head start*, not a substitute for the stream: it is taken at a position the hello
-    frame names, so any event the client receives afterwards is either already reflected here or newer
-    than this position. It is bounded on both sides (channels and alerts) because a monitor that opens a
-    well with two hundred channels should still paint immediately.
-    """
+async def _snapshot(
+    session: AsyncSession, auth: AuthContext, well_id: str, *, position: int
+) -> dict[str, Any]:
+    """A bounded picture of the well at connect: readings, open alerts and freshness counts."""
 
     _, _, _, _, alert_bound, channel_bound = _live_filters()
-    service = TelemetryService(session, auth.org_id or "")
+    org_id = auth.org_id or ""
+    service = TelemetryService(session, org_id)
     readings = await service.latest(well_id=well_id, limit=channel_bound)
-    alerts = await AlertService(session, auth.org_id or "").open_alerts(well_id=well_id, limit=alert_bound)
+    alerts = await AlertService(session, org_id).open_alerts(well_id=well_id, limit=alert_bound)
     freshness: dict[str, int] = {}
+    latest_ts = None
     for reading in readings:
         freshness[reading.freshness] = freshness.get(reading.freshness, 0) + 1
-    # The direction of travel comes from the same stored points the readings do, computed in two bounded
-    # statements. It is a description of measurements already taken — the frame says so explicitly
-    # (``is_prediction: false``), because a monitor that showed a slope as a forecast would be lying about
-    # what the platform knows.
+        if reading.observed_at is not None and (latest_ts is None or reading.observed_at > latest_ts):
+            latest_ts = reading.observed_at
+    alerts_ts = None
+    for row in alerts:
+        candidate = row.updated_at or row.raised_at
+        if candidate is not None and (alerts_ts is None or candidate > alerts_ts):
+            alerts_ts = candidate
     trends = await service.trends(
         well_id=well_id, channel_ids=[reading.channel_id for reading in readings]
     )
+    now_iso = utc_now().isoformat()
     return {
         "well_id": well_id,
-        "generated_at": utc_now().isoformat(),
+        "generated_at": now_iso,
+        "telemetry_as_of": latest_ts.isoformat() if latest_ts is not None else None,
+        "alerts_as_of": alerts_ts.isoformat() if alerts_ts is not None else now_iso,
+        "stream_position": position,
+        "cursor": encode_stream_cursor(org_id=org_id, well_id=well_id, sequence=position),
         "latest": [reading.to_dict() for reading in readings],
         "trends": {key: value.to_dict() for key, value in sorted(trends.items())},
         "alerts": [alert_out(row) for row in alerts],
@@ -141,8 +160,13 @@ async def _snapshot(session: AsyncSession, auth: AuthContext, well_id: str) -> d
 
 
 @router.websocket("/wells/{well_id}/live/stream")
-async def stream_well_live(websocket: WebSocket, well_id: str, after_seq: int = 0) -> None:
-    """Follow one well's events, resuming from ``after_seq``.
+async def stream_well_live(
+    websocket: WebSocket,
+    well_id: str,
+    after_seq: int = 0,
+    cursor: str | None = None,
+) -> None:
+    """Follow one well's events, resuming from ``cursor`` (or legacy ``after_seq``).
 
     Close codes: 4401 unauthenticated, 4403 ``live.read`` missing, 4404 the well is not in this
     organisation (or does not exist — the two are the same answer on purpose: an identifier must not be
@@ -153,6 +177,8 @@ async def stream_well_live(websocket: WebSocket, well_id: str, after_seq: int = 
     database = websocket.app.state.database
     token = websocket.query_params.get("token")
     dev_roles = websocket.headers.get("x-dev-roles") or websocket.query_params.get("dev_roles")
+    initial_gap: dict[str, Any] | None = None
+    effective_after_seq = after_seq
     try:
         async with database.session() as session:
             headers = {}
@@ -173,15 +199,60 @@ async def stream_well_live(websocket: WebSocket, well_id: str, after_seq: int = 
             if owned is None:
                 await websocket.close(code=4404, reason="well not found")
                 return
-            position = await stream_position(session, auth.org_id or "", well_id=well_id)
+            org_id = auth.org_id or ""
+            position = await stream_position(session, org_id, well_id=well_id)
+            head_cursor = encode_stream_cursor(org_id=org_id, well_id=well_id, sequence=position)
             poll_seconds, heartbeat_seconds, per_tick, backlog_bound, _, _ = _live_filters()
+
+            if cursor is not None:
+                try:
+                    decoded = decode_stream_cursor(
+                        cursor,
+                        expected_org_id=org_id,
+                        expected_well_id=well_id,
+                        require_well_scope=True,
+                    )
+                    effective_after_seq = decoded.sequence
+                except ValidationFailed as err:
+                    reason = str(err.details.get("reason") or "invalid_cursor")
+                    initial_gap = {
+                        "type": "gap",
+                        "reason": reason,
+                        "requested_cursor": cursor,
+                        "well_id": well_id,
+                        "position": position,
+                        "cursor": head_cursor,
+                        "resync": True,
+                        "details": err.details,
+                    }
+                    effective_after_seq = position
+            elif after_seq < 0:
+                initial_gap = {
+                    "type": "gap",
+                    "reason": "invalid_cursor",
+                    "requested_after": after_seq,
+                    "well_id": well_id,
+                    "position": position,
+                    "cursor": head_cursor,
+                    "resync": True,
+                }
+                effective_after_seq = position
+
             await websocket.send_json(
                 {
                     "type": "stream_opened",
                     "well_id": well_id,
                     "org_id": auth.org_id,
-                    "after_seq": after_seq,
+                    "after_seq": effective_after_seq,
                     "position": position,
+                    "cursor": head_cursor,
+                    "cursor_version": STREAM_CURSOR_VERSION,
+                    "cursor_scope": {
+                        "kind": "well",
+                        "org_id": auth.org_id,
+                        "well_id": well_id,
+                        "sequence_space": "well",
+                    },
                     "schema_version": ENVELOPE_VERSION,
                     "poll_seconds": poll_seconds,
                     "heartbeat_seconds": heartbeat_seconds,
@@ -190,12 +261,22 @@ async def stream_well_live(websocket: WebSocket, well_id: str, after_seq: int = 
                     "coalesced_types": sorted(COALESCIBLE_EVENT_TYPES),
                 }
             )
-            await websocket.send_json({"type": "snapshot", **_snapshot_payload(await _snapshot(session, auth, well_id))})
+            await websocket.send_json(
+                {
+                    "type": "snapshot",
+                    **_snapshot_payload(
+                        await _snapshot(session, auth, well_id, position=position)
+                    ),
+                }
+            )
+            if initial_gap is not None:
+                await websocket.send_json(initial_gap)
     except Exception as exc:  # authentication/authorization failures close the socket
         await websocket.close(code=4401, reason=f"not authorized: {exc}")
         return
 
-    sequence = max(0, after_seq)
+    org_id = auth.org_id or ""
+    sequence = max(0, effective_after_seq)
     idle_ticks = 0
     since_heartbeat = 0.0
     disconnect = asyncio.create_task(_watch_client_disconnect(websocket))
@@ -206,7 +287,10 @@ async def stream_well_live(websocket: WebSocket, well_id: str, after_seq: int = 
                 return
             since_heartbeat += poll_seconds
             async with database.session() as session:
-                position = await stream_position(session, auth.org_id or "", well_id=well_id)
+                position = await stream_position(session, org_id, well_id=well_id)
+                head_cursor = encode_stream_cursor(
+                    org_id=org_id, well_id=well_id, sequence=position
+                )
 
                 # A client that claims a cursor beyond the stream end is confused (a restored backup, a
                 # number from another well). Saying so is the only honest answer: silently sending
@@ -217,15 +301,18 @@ async def stream_well_live(websocket: WebSocket, well_id: str, after_seq: int = 
                             "type": "gap",
                             "reason": "cursor_ahead_of_stream",
                             "requested_after": sequence,
+                            "well_id": well_id,
                             "position": position,
+                            "cursor": head_cursor,
                             "resync": True,
                         }
                     )
                     sequence = position
 
-                # A client further behind than the backlog we agreed to replay is told the range it
-                # lost, by name, and continues from the end. This is the only place events are not
-                # delivered, and it is never silent.
+                # A client further behind than the backlog we agreed to replay on this well is told the
+                # range it lost, by name, and continues from the end. Because `position` and `sequence`
+                # are in this well's contiguous `well_sequence` space, events on other wells never
+                # inflate `position - sequence`.
                 if position - sequence > backlog_bound:
                     await websocket.send_json(
                         {
@@ -234,7 +321,9 @@ async def stream_well_live(websocket: WebSocket, well_id: str, after_seq: int = 
                             "from": sequence + 1,
                             "to": position,
                             "omitted": position - sequence,
+                            "well_id": well_id,
                             "position": position,
+                            "cursor": head_cursor,
                             "resync": True,
                         }
                     )
@@ -242,14 +331,16 @@ async def stream_well_live(websocket: WebSocket, well_id: str, after_seq: int = 
 
                 rows = await events_since(
                     session,
-                    auth.org_id or "",
+                    org_id,
                     after_sequence=sequence,
                     well_id=well_id,
                     limit=per_tick,
                 )
                 if rows:
                     idle_ticks = 0
-                    frames, sequence = _frames_for(rows, sequence)
+                    frames, sequence = _frames_for(
+                        rows, sequence, org_id=org_id, well_id=well_id
+                    )
                     for frame in frames:
                         await websocket.send_json(frame)
                 else:
@@ -260,13 +351,26 @@ async def stream_well_live(websocket: WebSocket, well_id: str, after_seq: int = 
                 await websocket.send_json(
                     {
                         "type": "heartbeat",
+                        "well_id": well_id,
                         "position": sequence,
                         "stream_position": position,
+                        "cursor": encode_stream_cursor(
+                            org_id=org_id, well_id=well_id, sequence=sequence
+                        ),
                         "server_time": utc_now().isoformat(),
                     }
                 )
             if idle_ticks > 300:  # ~5 minutes without activity: let the client reconnect
-                await websocket.send_json({"type": "stream_idle", "last_seq": sequence})
+                await websocket.send_json(
+                    {
+                        "type": "stream_idle",
+                        "well_id": well_id,
+                        "last_seq": sequence,
+                        "cursor": encode_stream_cursor(
+                            org_id=org_id, well_id=well_id, sequence=sequence
+                        ),
+                    }
+                )
                 idle_ticks = 0
     except WebSocketDisconnect:
         return
@@ -276,8 +380,6 @@ async def stream_well_live(websocket: WebSocket, well_id: str, after_seq: int = 
             await websocket.send_text(payload)
             await websocket.close(code=1011)
     finally:
-        # `asyncio.wait` returns the task's state instead of raising its cancellation, so the only
-        # cancellation that can leave this handler is a genuine cancellation of the handler itself.
         disconnect.cancel()
         with contextlib.suppress(Exception):
             await asyncio.wait({disconnect})
@@ -287,14 +389,14 @@ def _snapshot_payload(snapshot: dict[str, Any]) -> dict[str, Any]:
     return snapshot
 
 
-def _frames_for(rows: list[Any], sequence: int) -> tuple[list[dict[str, Any]], int]:
-    """Turn a page of stored events into frames, coalescing telemetry and nothing else.
-
-    The order of the page is the sequence order, and the frames preserve it: a client that applies them
-    in order sees the same history a reader of the table would. Telemetry rows are folded into one frame
-    *per contiguous run*, so an alert that arrives between two bursts of measurements is never moved
-    across it — which is what keeps \"the alert was raised after these 40 samples\" true.
-    """
+def _frames_for(
+    rows: list[Any],
+    sequence: int,
+    *,
+    org_id: str,
+    well_id: str,
+) -> tuple[list[dict[str, Any]], int]:
+    """Turn a page of stored events into frames, coalescing telemetry and nothing else."""
 
     frames: list[dict[str, Any]] = []
     telemetry_run: list[Any] = []
@@ -302,18 +404,24 @@ def _frames_for(rows: list[Any], sequence: int) -> tuple[list[dict[str, Any]], i
     def flush_telemetry() -> None:
         if not telemetry_run:
             return
-        payload = [envelope_of(row) for row in telemetry_run]
+        payload = [envelope_of(row, stream_well_id=well_id) for row in telemetry_run]
+        end_seq = int(payload[-1]["sequence"])
         frames.append(
             {
                 "type": "telemetry",
+                "well_id": well_id,
                 "from": payload[0]["sequence"],
-                "to": payload[-1]["sequence"],
+                "to": end_seq,
+                "cursor": encode_stream_cursor(
+                    org_id=org_id, well_id=well_id, sequence=end_seq
+                ),
                 "omitted": max(0, len(payload) - 1),
                 "count": len(payload),
                 "resync": len(payload) > 1,
                 "channels": [
                     {
                         "sequence": item["sequence"],
+                        "org_sequence": item.get("org_sequence"),
                         "channel_id": item["payload"].get("channel_id"),
                         "channel_key": item["payload"].get("channel_key"),
                         "accepted": item["payload"].get("accepted"),
@@ -328,11 +436,20 @@ def _frames_for(rows: list[Any], sequence: int) -> tuple[list[dict[str, Any]], i
         telemetry_run.clear()
 
     for row in rows:
-        sequence = max(sequence, int(row.sequence))
+        row_seq = well_stream_sequence(row)
+        sequence = max(sequence, row_seq)
         if row.event_type in COALESCIBLE_EVENT_TYPES:
             telemetry_run.append(row)
             continue
         flush_telemetry()
-        frames.append({"type": "event", "event": envelope_of(row)})
+        event_env = envelope_of(row, stream_well_id=well_id)
+        frames.append(
+            {
+                "type": "event",
+                "well_id": well_id,
+                "cursor": event_env["cursor"],
+                "event": event_env,
+            }
+        )
     flush_telemetry()
     return frames, sequence

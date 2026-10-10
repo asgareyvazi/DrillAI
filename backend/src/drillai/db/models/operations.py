@@ -497,6 +497,22 @@ class OutboxSequence(Base, TimestampMixin, OrgScopedMixin):
     last_sequence: Mapped[int] = mapped_column(IntType, default=0, nullable=False)
 
 
+class OutboxWellSequence(Base, TimestampMixin, OrgScopedMixin):
+    """The per-well counter behind ``outbox_events.well_sequence``.
+
+    ``OutboxSequence`` gives an organisation one total order across every well it operates. A well's
+    live stream (`GET /wells/{well_id}/live/stream`) needs a contiguous sequence of its own: if Well B
+    emits 1,500 events between two events on Well A, Well A's own backlog is one event, not 1,500.
+    Keeping one counter row per ``(org_id, well_id)`` makes each well stream gap-free on its own axis.
+    """
+
+    __tablename__ = "outbox_well_sequences"
+
+    org_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    well_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    last_sequence: Mapped[int] = mapped_column(IntType, default=0, nullable=False)
+
+
 class OutboxEvent(Base, IdMixin, TimestampMixin, OrgScopedMixin):
     """A domain event committed in the same transaction as the mutation that produced it.
 
@@ -505,23 +521,26 @@ class OutboxEvent(Base, IdMixin, TimestampMixin, OrgScopedMixin):
     mutation makes "did this happen?" and "was it announced?" one question the database answers
     atomically; publication then reads this table and moves a cursor over it.
 
-    ``sequence`` is per organization and strictly increasing, assigned in the writer's transaction, so a
-    consumer can detect a gap (``101, 102, 104`` means 103 was missed) instead of silently missing an
-    event. ``published_at`` records when a dispatcher last handled the row — a row with
-    ``published_at IS NULL`` is a fact the platform has not announced yet, which is exactly what a
-    reconnect needs to find.
+    ``sequence`` is per organization and strictly increasing; ``well_sequence`` is per ``(org_id, well_id)``
+    and strictly increasing for well-scoped events, so a well stream consumer can detect real gaps on
+    its well without mistaking activity on another well for a dropped range. ``published_at`` records
+    when a dispatcher last handled the row — a row with ``published_at IS NULL`` is a fact the platform
+    has not announced yet, which is exactly what a reconnect needs to find.
     """
 
     __tablename__ = "outbox_events"
     id_prefix = "obx"
     __table_args__ = (
         UniqueConstraint("org_id", "sequence", name="uq_outbox_events_sequence"),
+        UniqueConstraint("org_id", "well_id", "well_sequence", name="uq_outbox_events_well_sequence"),
         Index("ix_outbox_events_well_sequence", "org_id", "well_id", "sequence"),
+        Index("ix_outbox_events_well_stream", "org_id", "well_id", "well_sequence"),
         Index("ix_outbox_events_unpublished", "published_at", "sequence"),
     )
 
     event_type: Mapped[str] = mapped_column(String(60), nullable=False, index=True)
     sequence: Mapped[int] = mapped_column(IntType, nullable=False)
+    well_sequence: Mapped[int | None] = mapped_column(IntType)
     subject_kind: Mapped[str] = mapped_column(String(40), nullable=False)
     subject_id: Mapped[str | None] = mapped_column(String(64))
     well_id: Mapped[str | None] = mapped_column(String(64), index=True)

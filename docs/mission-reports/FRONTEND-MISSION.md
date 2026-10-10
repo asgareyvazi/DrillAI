@@ -1853,3 +1853,22 @@ The local work is ready to commit after the gates above. It must not be describe
 ### CP9 publication addendum (verified 2026-10-10)
 
 The local implementation was committed as `09bef033` and integrated with the fetched remote checkpoint history using a non-destructive merge commit `2f4c6a2`. Push succeeded to the mandated branch, and `git ls-remote origin refs/heads/arena/01a0dca0-drillai` returned `2f4c6a22d652ce3c81874ee8019767e50b182d7f`. The working tree is clean. GitHub Actions was queried after publication: the newest reported successful CI run is for the prior remote SHA `f430d334...`; no CI run for `2f4c6a2` was available at query time. Accordingly, CP9 local gates are green, publication is verified, and CI for the final SHA remains pending rather than claimed green.
+
+### CP9 CI verification correction and forensic audit record (2026-10-10)
+
+The historical CP9 block and addendum above are preserved verbatim as written before the final CI run completed. Subsequent GitHub Actions verification against the published CP9 tip establishes the following factual record:
+
+* **Published CP9 tip SHA:** `d6d186278e43cb00985326b7bd85703e72a5d80f` on `refs/heads/arena/01a0dca0-drillai` (`main` remained at `bfa066b28e0071880cb9191a4f1d47fdaa143e04`).
+* **Superseded intermediate run:** CI run `38030884737` on `2f4c6a22d652ce3c81874ee8019767e50b182d7f` was cancelled automatically by the workflow concurrency group (`ci-CI-refs/heads/arena/01a0dca0-drillai`) when `d6d186278e43cb00985326b7bd85703e72a5d80f` was pushed.
+* **Authoritative CP9 CI run:** [38030893780](https://github.com/asgareyvazi/DrillAI/actions/runs/38030893780) (job `114151434582`, `install, verify, and run the real end-to-end suite`), started `2026-10-10T06:25:48Z` and completed `2026-10-10T06:44:38Z` with conclusion `success`.
+* **Gates executed and passed in run `38030893780`:**
+  1. `Provenance` and toolchain recording (Python 3.11, Node 22).
+  2. `Frontend typecheck` (`npm run typecheck`).
+  3. `Frontend lint` (`npm run lint`).
+  4. `Frontend unit and component tests` (`npm test` with zero-skip enforcement).
+  5. `Frontend production build` (`npm run build`).
+  6. `Backend tests (SQLite + embedded PostgreSQL)` (`DRILLAI_TEST_POSTGRES=1`, zero-skip enforcement, and collection check for `@pytest.mark.postgres`).
+  7. `Backend lint` (`ruff check .`).
+  8. `Migration check (fresh database)` (`alembic upgrade head` and `alembic check` against a fresh SQLite database).
+  9. `End-to-end suite (main, faults and auth stacks)` (`npm run e2e` across `chromium`, `chromium-faults`, and `chromium-auth` with zero-skip/zero-flake enforcement).
+* **Forensic audit findings entering CP10:** Although CI run `38030893780` passed all repository gates at `d6d1862`, code inspection at the start of CP10 confirmed three gaps between the CP9 infrastructure and a complete live operational slice: (1) `outbox_events.sequence` was allocated only per organization while `GET /wells/{well_id}/live/stream` computed `position - sequence > backlog_bound` on the filtered well stream, allowing high-rate events on Well B to trigger a false `backlog_exceeded` gap on Well A; (2) telemetry ingestion emitted `telemetry.received` without automatically invoking rule evaluation unless `POST /wells/{well_id}/alerts/evaluate` was called; and (3) `WellCockpit.tsx` did not yet expose the live telemetry KPI strip, bounded telemetry chart, live WebSocket transport indicator, or governed alert workflow. CP10 addresses those items directly.

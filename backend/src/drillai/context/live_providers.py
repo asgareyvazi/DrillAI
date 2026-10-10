@@ -34,7 +34,7 @@ from drillai.context.model import ContextItem, ContextRequest, ContextSection
 from drillai.db.models import Well
 from drillai.drilling.state import WellStateService, _operation_summary
 from drillai.telemetry.alerts import AlertService
-from drillai.telemetry.outbox import events_since
+from drillai.telemetry.outbox import events_since, stream_position, well_stream_sequence
 from drillai.telemetry.service import TelemetryService
 
 __all__ = [
@@ -283,16 +283,20 @@ class RecentEventsProvider(SectionProvider):
         well = await _owned_well(session, request, section)
         if well is None:
             return section, []
+        bound = min(max(request.max_items_per_section, 1) * 2, 200)
+        head = await stream_position(session, request.scope.org_id, well_id=well.id)
         rows = await events_since(
             session,
             request.scope.org_id,
+            after_sequence=max(0, head - bound),
             well_id=well.id,
-            limit=min(max(request.max_items_per_section, 1) * 2, 200),
+            limit=bound,
         )
         if not rows:
             return _empty(section, "no event has been published for this well"), [well.id]
         # Newest first: the feed's order is a cursor, but a reader wants the most recent change at the top.
-        for row in sorted(rows, key=lambda item: item.sequence, reverse=True):
+        for row in sorted(rows, key=well_stream_sequence, reverse=True):
+            stream_seq = well_stream_sequence(row)
             section.items.append(
                 ContextItem(
                     kind="event",
@@ -301,7 +305,9 @@ class RecentEventsProvider(SectionProvider):
                     data={
                         "event_id": row.id,
                         "type": row.event_type,
-                        "sequence": row.sequence,
+                        "sequence": stream_seq,
+                        "org_sequence": row.sequence,
+                        "well_sequence": row.well_sequence,
                         "subject_kind": row.subject_kind,
                         "subject_id": row.subject_id,
                         "occurred_at": row.occurred_at.isoformat() if row.occurred_at else None,
@@ -314,7 +320,7 @@ class RecentEventsProvider(SectionProvider):
                     source_ids=[row.id] + ([row.well_id] if row.well_id else []),
                     observed_at=row.occurred_at,
                     received_at=row.published_at,
-                    notes=[f"stream sequence {row.sequence}"],
+                    notes=[f"stream sequence {stream_seq}"],
                 )
             )
         section.source_ids = [well.id]

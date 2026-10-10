@@ -25,7 +25,10 @@ from drillai.db.session import Database
 from drillai.telemetry.outbox import (
     ENVELOPE_VERSION,
     allocate_sequence,
+    allocate_well_sequence,
+    decode_stream_cursor,
     emit,
+    encode_stream_cursor,
     envelope_of,
     events_since,
     mark_published,
@@ -452,3 +455,213 @@ async def test_a_stored_event_survives_a_producer_that_never_publishes_it(sessio
     )
     assert len(pending) == 1
     assert await events_since(session, org_id, after_sequence=0) != [], "unpublished is still readable"
+
+
+# --------------------------------------------------------------------------- per-well stream sequence & scoped cursors
+
+
+async def test_interleaved_wells_keep_distinct_gap_free_well_sequences(session) -> None:
+    """Two wells in one organisation share the tenant sequence (`sequence`) while each well maintains
+    its own gap-free `well_sequence` (`1..N`). Activity on Well B never advances Well A's position."""
+
+    org_id, well_a = await _tenant(session)
+    well_b = "well_outbox_b"
+    session.add(
+        Well(
+            id=well_b,
+            org_id=org_id,
+            project_id="prj_outbox",
+            name="Outbox-2",
+            well_type="development",
+            elevation_datum="MSL",
+            is_offshore=False,
+            twin_state="none",
+            tags=[],
+            attributes={},
+            is_demo_fixture=False,
+        )
+    )
+    await session.flush()
+
+    ev_a1 = await emit(
+        session,
+        org_id=org_id,
+        type="telemetry.received",
+        subject_kind="time_series",
+        subject_id="tms_a",
+        well_id=well_a,
+        payload={"step": "a1"},
+    )
+    for index in range(15):
+        await emit(
+            session,
+            org_id=org_id,
+            type="telemetry.received",
+            subject_kind="time_series",
+            subject_id="tms_b",
+            well_id=well_b,
+            payload={"step": f"b{index + 1}"},
+        )
+    ev_a2 = await emit(
+        session,
+        org_id=org_id,
+        type="alert.raised",
+        subject_kind="alert",
+        subject_id="alt_a",
+        well_id=well_a,
+        payload={"step": "a2"},
+    )
+    await session.commit()
+
+    # Global organization sequence advanced across both wells (1 .. 17)
+    assert ev_a1.sequence == 1
+    assert ev_a2.sequence == 17
+    assert await stream_position(session, org_id) == 17
+
+    # Per-well sequence on Well A is contiguous (1, 2) despite 15 events on Well B
+    assert ev_a1.well_sequence == 1
+    assert ev_a2.well_sequence == 2
+    assert await stream_position(session, org_id, well_id=well_a) == 2
+    assert await stream_position(session, org_id, well_id=well_b) == 15
+
+    # Resuming Well A from well_sequence=1 yields only ev_a2
+    resumed_a = await events_since(session, org_id, after_sequence=1, well_id=well_a)
+    assert [row.id for row in resumed_a] == [ev_a2.id]
+    assert [row.well_sequence for row in resumed_a] == [2]
+
+
+async def test_scoped_stream_cursor_rejects_foreign_well_and_malformed_tokens(session) -> None:
+    """A cursor minted for Well B must be refused when presented on Well A's stream, even when Well B's
+    sequence number is smaller than Well A's current position."""
+
+    org_id, well_a = await _tenant(session)
+    well_b = "well_outbox_b"
+    session.add(
+        Well(
+            id=well_b,
+            org_id=org_id,
+            project_id="prj_outbox",
+            name="Outbox-2",
+            well_type="development",
+            elevation_datum="MSL",
+            is_offshore=False,
+            twin_state="none",
+            tags=[],
+            attributes={},
+            is_demo_fixture=False,
+        )
+    )
+    await session.flush()
+
+    for index in range(3):
+        await emit(
+            session,
+            org_id=org_id,
+            type="telemetry.received",
+            subject_kind="time_series",
+            subject_id="tms_a",
+            well_id=well_a,
+            payload={"n": index},
+        )
+    await emit(
+        session,
+        org_id=org_id,
+        type="telemetry.received",
+        subject_kind="time_series",
+        subject_id="tms_b",
+        well_id=well_b,
+        payload={"n": 0},
+    )
+    await session.commit()
+
+    cursor_a1 = encode_stream_cursor(org_id=org_id, well_id=well_a, sequence=1)
+    decoded = decode_stream_cursor(
+        cursor_a1, expected_org_id=org_id, expected_well_id=well_a, require_well_scope=True
+    )
+    assert decoded.sequence == 1 and decoded.well_id == well_a
+    rows_a = await events_since(session, org_id, cursor=cursor_a1, well_id=well_a)
+    assert [row.well_sequence for row in rows_a] == [2, 3]
+
+    # Cursor from Well B (sequence 1 <= Well A's position 3) must not silently skip Well A's event 1
+    cursor_b1 = encode_stream_cursor(org_id=org_id, well_id=well_b, sequence=1)
+    with pytest.raises(ValidationFailed) as mismatch:
+        await events_since(session, org_id, cursor=cursor_b1, well_id=well_a)
+    assert mismatch.value.details["reason"] == "cursor_scope_mismatch"
+    assert mismatch.value.details["expected_well_id"] == well_a
+    assert mismatch.value.details["cursor_well_id"] == well_b
+
+    # Organization-scoped cursor cannot be used as a well-scoped cursor
+    cursor_org = encode_stream_cursor(org_id=org_id, well_id=None, sequence=1)
+    with pytest.raises(ValidationFailed) as org_scope_err:
+        await events_since(session, org_id, cursor=cursor_org, well_id=well_a)
+    assert org_scope_err.value.details["reason"] == "cursor_scope_mismatch"
+
+    # Foreign organization cursor is rejected
+    cursor_foreign = encode_stream_cursor(org_id="org_other", well_id=well_a, sequence=1)
+    with pytest.raises(ValidationFailed) as foreign_err:
+        await events_since(session, org_id, cursor=cursor_foreign, well_id=well_a)
+    assert foreign_err.value.details["reason"] == "cursor_scope_mismatch"
+
+    # Malformed cursor and negative after_sequence are rejected
+    with pytest.raises(ValidationFailed) as corrupt_err:
+        await events_since(session, org_id, cursor="not-a-valid-cursor!", well_id=well_a)
+    assert corrupt_err.value.details["reason"] == "invalid_cursor"
+
+    with pytest.raises(ValidationFailed) as neg_err:
+        await events_since(session, org_id, after_sequence=-1, well_id=well_a)
+    assert neg_err.value.details["reason"] == "invalid_cursor"
+
+    assert await allocate_well_sequence(session, org_id, well_a) == 4
+
+
+async def test_concurrent_emitters_across_multiple_wells_preserve_both_orders(tmp_path) -> None:
+    """Concurrent writers across two wells in the same tenant produce a gap-free tenant sequence AND
+    a gap-free per-well sequence on each well without collisions or deadlocks."""
+
+    database = Database(f"sqlite+aiosqlite:///{tmp_path / 'outbox-multiwell-concurrency.db'}")
+    await database.create_all()
+    try:
+        async with database.session() as setup:
+            await _tenant(setup)
+            setup.add(
+                Well(
+                    id="well_outbox_2",
+                    org_id=ORG,
+                    project_id="prj_outbox",
+                    name="Outbox-2",
+                    well_type="development",
+                    elevation_datum="MSL",
+                    is_offshore=False,
+                    twin_state="none",
+                    tags=[],
+                    attributes={},
+                    is_demo_fixture=False,
+                )
+            )
+            await setup.commit()
+
+        async def emit_one(index: int) -> tuple[str, int, int | None]:
+            target_well = "well_outbox" if index % 2 == 0 else "well_outbox_2"
+            async with database.session() as writer:
+                ev = await emit(
+                    writer,
+                    org_id=ORG,
+                    type="telemetry.received",
+                    subject_kind="time_series",
+                    subject_id=f"tms_{index}",
+                    well_id=target_well,
+                    payload={"n": index},
+                )
+                await writer.commit()
+                return target_well, ev.sequence, ev.well_sequence
+
+        results = await asyncio.gather(*[emit_one(i) for i in range(8)])
+        org_seqs = sorted(seq for _, seq, _ in results)
+        well1_seqs = sorted(wseq for well, _, wseq in results if well == "well_outbox" and wseq is not None)
+        well2_seqs = sorted(wseq for well, _, wseq in results if well == "well_outbox_2" and wseq is not None)
+        assert org_seqs == [1, 2, 3, 4, 5, 6, 7, 8]
+        assert well1_seqs == [1, 2, 3, 4]
+        assert well2_seqs == [1, 2, 3, 4]
+    finally:
+        await database.dispose()
+

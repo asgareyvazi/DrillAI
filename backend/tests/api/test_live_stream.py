@@ -480,3 +480,163 @@ async def test_the_stream_is_scoped_to_its_well(client, websocket, db) -> None:
     async with db.session() as session:
         rows = list((await session.execute(select(Well.id).order_by(Well.id))).scalars())
     assert set(rows) >= {well_id, other_well_id}
+
+
+async def test_interleaved_activity_on_another_well_never_triggers_false_backlog_gap(
+    client, websocket, monkeypatch
+) -> None:
+    """P0 regression: Well B emitting many events (> live_stream_max_backlog) between two events on
+    Well A must not trigger a false `backlog_exceeded` gap or drop an alert on Well A."""
+
+    monkeypatch.setenv("DRILLAI_LIVE_STREAM_MAX_BACKLOG", "3")
+    reset_settings_cache()
+
+    well_a, series_a = await _well_with_channel(client, channel_key="spp", unit="psi")
+    _well_b, series_b = await _well_with_channel(client, channel_key="choke_pressure", unit="psi")
+    await _rule(client, well_a)
+
+    # Initial point on Well A so the client holds a non-zero cursor on Well A.
+    await _append(client, series_a, [{"ts": BASE_TS.isoformat(), "value": 3500.0, "unit": "psi"}])
+
+    async with websocket(f"{PREFIX}/wells/{well_a}/live/stream") as socket_a:
+        opened = await socket_a.receive()
+        assert opened["type"] == "stream_opened"
+        assert opened["cursor_scope"]["well_id"] == well_a
+        assert opened["cursor_scope"]["sequence_space"] == "well"
+        cursor_a = opened["position"]
+        assert cursor_a >= 1
+        await socket_a.receive()  # snapshot
+
+        # Emit 8 batches on Well B (far exceeding backlog_bound = 3 in global org sequence).
+        for idx in range(8):
+            await _append(
+                client,
+                series_b,
+                [
+                    {
+                        "ts": (BASE_TS + dt.timedelta(seconds=idx + 1)).isoformat(),
+                        "value": 100.0 + idx,
+                        "unit": "psi",
+                    }
+                ],
+            )
+
+        # Now breach the threshold on Well A and raise an alert.
+        await _append(
+            client,
+            series_a,
+            [
+                {
+                    "ts": (BASE_TS + dt.timedelta(seconds=30)).isoformat(),
+                    "value": 4500.0,
+                    "unit": "psi",
+                }
+            ],
+        )
+        await client.post(f"{PREFIX}/wells/{well_a}/alerts/evaluate", headers=headers("engineer"))
+
+        frames = await _read_until(
+            socket_a,
+            lambda frame: frame["type"] == "event" and frame["event"]["type"] == "alert.raised",
+        )
+
+    gap_frames = [frame for frame in frames if frame["type"] == "gap"]
+    assert gap_frames == [], f"false gap triggered by Well B activity: {gap_frames}"
+    alert_frame = next(
+        frame for frame in frames if frame["type"] == "event" and frame["event"]["type"] == "alert.raised"
+    )
+    assert alert_frame["event"]["well_id"] == well_a
+    assert alert_frame["event"]["sequence"] > cursor_a
+    assert alert_frame["event"]["org_sequence"] > alert_frame["event"]["sequence"]
+
+
+async def test_foreign_well_cursor_and_invalid_cursor_are_reported_as_gaps_not_silently_skipped(
+    client, websocket
+) -> None:
+    """Presenting a cursor from Well B on Well A's stream (even when Well B's sequence is smaller than
+    Well A's position) emits an explicit `cursor_scope_mismatch` gap and forces resync."""
+
+    well_a, series_a = await _well_with_channel(client, channel_key="spp", unit="psi")
+    well_b, series_b = await _well_with_channel(client, channel_key="choke_pressure", unit="psi")
+
+    for idx in range(3):
+        await _append(
+            client,
+            series_a,
+            [{"ts": (BASE_TS + dt.timedelta(seconds=idx)).isoformat(), "value": 3600.0 + idx, "unit": "psi"}],
+        )
+    await _append(client, series_b, [{"ts": BASE_TS.isoformat(), "value": 90.0, "unit": "psi"}])
+
+    async with websocket(f"{PREFIX}/wells/{well_b}/live/stream") as socket_b:
+        opened_b = await socket_b.receive()
+        cursor_from_well_b = opened_b["cursor"]
+        assert opened_b["position"] < 4
+
+    # Present Well B's cursor when connecting to Well A
+    async with websocket(
+        f"{PREFIX}/wells/{well_a}/live/stream", cursor=cursor_from_well_b
+    ) as socket_a:
+        await _read(socket_a, 2)  # stream_opened + snapshot
+        gap = await socket_a.receive()
+    assert gap["type"] == "gap"
+    assert gap["reason"] == "cursor_scope_mismatch"
+    assert gap["well_id"] == well_a
+    assert gap["resync"] is True
+    assert gap["details"]["expected_well_id"] == well_a
+    assert gap["details"]["cursor_well_id"] == well_b
+
+    # Present a corrupt cursor token
+    async with websocket(
+        f"{PREFIX}/wells/{well_a}/live/stream", cursor="corrupt_token"
+    ) as socket_bad:
+        await _read(socket_bad, 2)
+        bad_gap = await socket_bad.receive()
+    assert bad_gap["type"] == "gap"
+    assert bad_gap["reason"] == "invalid_cursor"
+    assert bad_gap["resync"] is True
+
+
+async def test_scoped_cursor_resumes_and_multiple_consumers_observe_deterministic_order(
+    client, websocket
+) -> None:
+    """Two simultaneous subscribers on the same well see identical sequence order, and reconnecting
+    with the opaque `cursor` token resumes without duplicates."""
+
+    well_id, series_id = await _well_with_channel(client)
+    await _rule(client, well_id)
+
+    async with (
+        websocket(f"{PREFIX}/wells/{well_id}/live/stream") as sub_one,
+        websocket(f"{PREFIX}/wells/{well_id}/live/stream") as sub_two,
+    ):
+        await _read(sub_one, 2)
+        await _read(sub_two, 2)
+
+        await _append(
+            client,
+            series_id,
+            [{"ts": BASE_TS.isoformat(), "value": 4250.0, "unit": "psi"}],
+        )
+        await client.post(f"{PREFIX}/wells/{well_id}/alerts/evaluate", headers=headers("engineer"))
+
+        frames_one = await _read_until(
+            sub_one, lambda frame: frame["type"] == "event" and frame["event"]["type"] == "alert.raised"
+        )
+        frames_two = await _read_until(
+            sub_two, lambda frame: frame["type"] == "event" and frame["event"]["type"] == "alert.raised"
+        )
+        assert _sequences(frames_one) == _sequences(frames_two)
+        resume_cursor = frames_one[-1]["cursor"]
+
+    # Emit one more batch while disconnected and resume via `cursor=`
+    await _append(
+        client,
+        series_id,
+        [{"ts": (BASE_TS + dt.timedelta(seconds=20)).isoformat(), "value": 4300.0, "unit": "psi"}],
+    )
+
+    async with websocket(f"{PREFIX}/wells/{well_id}/live/stream", cursor=resume_cursor) as resumed:
+        await _read(resumed, 2)
+        tail_frames = await _read_until(resumed, lambda frame: frame["type"] == "telemetry")
+    assert _sequences(tail_frames) == [max(_sequences(frames_one)) + 1]
+

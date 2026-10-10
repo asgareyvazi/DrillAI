@@ -233,3 +233,67 @@ def test_the_vocabulary_reverses_and_the_allocator_drops_on_downgrade(tmp_path) 
     _migrate(database_url, AFTER)
     assert _rows(database_url, "SELECT DISTINCT status FROM alerts") == [("raised",)]
     assert _rows(database_url, "SELECT org_id, last_sequence FROM outbox_sequences") == [("org_legacy", 1)]
+
+
+def test_per_well_outbox_sequence_migration_backfills_and_reverses_cleanly(tmp_path) -> None:
+    """Revision `a9d4e21b8c60` backfills per-well contiguous sequences (`well_sequence`) from
+    interleaved organization events, seeds `outbox_well_sequences`, and reverses cleanly."""
+
+    database_url = f"sqlite+aiosqlite:///{tmp_path}/well-seq-migration.db"
+    _migrate(database_url, AFTER)
+
+    engine = sa.create_engine(database_url.replace("+aiosqlite", ""))
+    now = dt.datetime(2026, 3, 15, 8, 0)
+    try:
+        with engine.begin() as connection:
+            connection.execute(
+                sa.text(
+                    "INSERT INTO organizations (id, slug, name, kind, timezone, default_unit_system, "
+                    "default_locale, settings, is_active, created_at, updated_at) VALUES ('org_m', "
+                    "'multi', 'Multi', 'operator', 'UTC', 'metric', 'en', '{}', 1, :now, :now)"
+                ),
+                {"now": now},
+            )
+            for seq, wid in ((1, "wel_a"), (2, "wel_b"), (3, "wel_b"), (4, "wel_a"), (5, None)):
+                connection.execute(
+                    sa.text(
+                        "INSERT INTO outbox_events (id, org_id, well_id, event_type, sequence, "
+                        "subject_kind, subject_id, occurred_at, payload, schema_version, "
+                        "created_at, updated_at) VALUES (:id, 'org_m', :wid, 'telemetry.received', "
+                        ":seq, 'time_series', 'tms_1', :now, '{}', 1, :now, :now)"
+                    ),
+                    {"id": f"obx_m_{seq}", "wid": wid, "seq": seq, "now": now},
+                )
+    finally:
+        engine.dispose()
+
+    _migrate(database_url, "a9d4e21b8c60")
+
+    events = _rows(
+        database_url,
+        "SELECT sequence, well_id, well_sequence FROM outbox_events ORDER BY sequence ASC",
+    )
+    assert events == [
+        (1, "wel_a", 1),
+        (2, "wel_b", 1),
+        (3, "wel_b", 2),
+        (4, "wel_a", 2),
+        (5, None, None),
+    ]
+    counters = _rows(
+        database_url,
+        "SELECT org_id, well_id, last_sequence FROM outbox_well_sequences ORDER BY well_id ASC",
+    )
+    assert counters == [("org_m", "wel_a", 2), ("org_m", "wel_b", 2)]
+
+    command.downgrade(_alembic_config(database_url), AFTER)
+    tables = [row[0] for row in _rows(database_url, "SELECT name FROM sqlite_master WHERE type='table'")]
+    assert "outbox_well_sequences" not in tables
+
+    _migrate(database_url, "a9d4e21b8c60")
+    counters_again = _rows(
+        database_url,
+        "SELECT org_id, well_id, last_sequence FROM outbox_well_sequences ORDER BY well_id ASC",
+    )
+    assert counters_again == [("org_m", "wel_a", 2), ("org_m", "wel_b", 2)]
+
