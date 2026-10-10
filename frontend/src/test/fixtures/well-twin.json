@@ -1,0 +1,174 @@
+{
+  "well_id": "wel_01M458C0VYGW0V474PS7T1FH86",
+  "twin_state": "planned",
+  "aspects": [
+    {
+      "id": "twn_01M458C140D46S8AZNJRVT7FSQ",
+      "well_id": "wel_01M458C0VYGW0V474PS7T1FH86",
+      "wellbore_id": null,
+      "section_id": null,
+      "aspect": "mud_program",
+      "state_kind": "actual",
+      "schema_key": "twin.mud",
+      "schema_version": 1,
+      "payload": {
+        "mud_weight": 12.5
+      },
+      "summary": "mud properties from Daily Drilling Report 2026-03-16 (SYNTHETIC, narrative)",
+      "confidence": 0.6,
+      "data_quality": "extracted",
+      "computed_at": "2026-10-05T05:25:17.566590+00:00",
+      "computed_by": "import",
+      "engine_run_id": null,
+      "source_refs": [
+        "doc_01M458C13510MDMRPPZMQB9XR5"
+      ],
+      "evidence_refs": [
+        "rec_01M458C13DWY83HGBXGVKNGK1P"
+      ],
+      "assumptions": [
+        "values are transcribed from the report; they are not laboratory-verified"
+      ],
+      "is_current": true,
+      "content_hash": "64f40791e149a9db7311e2124c287cafc38387d6a1ee25a09b16859f94d0f98e",
+      "valid_from": "2026-03-16T00:00:00+00:00",
+      "valid_to": null,
+      "supersedes_id": "twn_01M458C126K0XMDZYBX04HSR4A"
+    },
+    {
+      "id": "twn_01M458C1452F2Z2W0NR5S82G4G",
+      "well_id": "wel_01M458C0VYGW0V474PS7T1FH86",
+      "wellbore_id": null,
+      "section_id": null,
+      "aspect": "schedule",
+      "state_kind": "current",
+      "schema_key": "twin.schedule",
+      "schema_version": 1,
+      "payload": {
+        "drilling_parameters": {
+          "wob": 19.0,
+          "rpm": 125.0,
+          "flow_rate": 2150.0,
+          "spp": 2510.0,
+          "mud_weight": 12.5,
+          "depth_md_si": 2460.0
+        },
+        "unit_context": {
+          "wob": "klbf",
+          "rpm": "rpm",
+          "flow_rate": "l/min",
+          "spp": "psi",
+          "mud_weight": "ppg",
+          "depth_md_si": "m"
+        }
+      },
+      "summary": "drilling parameters reported in the latest document",
+      "confidence": null,
+      "data_quality": "extracted",
+      "computed_at": "2026-10-05T05:25:17.570557+00:00",
+      "computed_by": "import",
+      "engine_run_id": null,
+      "source_refs": [
+        "doc_01M458C13510MDMRPPZMQB9XR5"
+      ],
+      "evidence_refs": [
+        "rec_01M458C13E8NE8E0AP5DG7WBSN"
+      ],
+      "assumptions": [
+        "parameters are as reported on the rig floor; no sensor validation applied"
+      ],
+      "is_current": true,
+      "content_hash": "1d8c458a2bb25875e64fd121f5ed26b8a78d74a84e8cc1fc33387672ead22830",
+      "valid_from": null,
+      "valid_to": null,
+      "supersedes_id": "twn_01M458C12DRB558ZPZ2P6AR36C"
+    }
+  ],
+  "current_state": {
+    "mud_program": {
+      "actual": {
+        "id": "twn_01M458C140D46S8AZNJRVT7FSQ",
+        "well_id": "wel_01M458C0VYGW0V474PS7T1FH86",
+        "wellbore_id": null,
+        "section_id": null,
+        "aspect": "mud_program",
+        "state_kind": "actual",
+        "schema_key": "twin.mud",
+        "schema_version": 1,
+        "payload": {
+          "mud_weight": 12.5
+        },
+        "summary": "mud properties from Daily Drilling Report 2026-03-16 (SYNTHETIC, narrative)",
+        "confidence": 0.6,
+        "data_quality": "extracted",
+        "computed_at": "2026-10-05T05:25:17.566590+00:00",
+        "computed_by": "import",
+        "engine_run_id": null,
+        "source_refs": [
+          "doc_01M458C13510MDMRPPZMQB9XR5"
+        ],
+        "evidence_refs": [
+          "rec_01M458C13DWY83HGBXGVKNGK1P"
+        ],
+        "assumptions": [
+          "values are transcribed from the report; they are not laboratory-verified"
+        ],
+        "is_current": true,
+        "content_hash": "64f40791e149a9db7311e2124c287cafc38387d6a1ee25a09b16859f94d0f98e",
+        "valid_from": "2026-03-16T00:00:00+00:00",
+        "valid_to": null,
+        "supersedes_id": "twn_01M458C126K0XMDZYBX04HSR4A"
+      }
+    },
+    "schedule": {
+      "current": {
+        "id": "twn_01M458C1452F2Z2W0NR5S82G4G",
+        "well_id": "wel_01M458C0VYGW0V474PS7T1FH86",
+        "wellbore_id": null,
+        "section_id": null,
+        "aspect": "schedule",
+        "state_kind": "current",
+        "schema_key": "twin.schedule",
+        "schema_version": 1,
+        "payload": {
+          "drilling_parameters": {
+            "wob": 19.0,
+            "rpm": 125.0,
+            "flow_rate": 2150.0,
+            "spp": 2510.0,
+            "mud_weight": 12.5,
+            "depth_md_si": 2460.0
+          },
+          "unit_context": {
+            "wob": "klbf",
+            "rpm": "rpm",
+            "flow_rate": "l/min",
+            "spp": "psi",
+            "mud_weight": "ppg",
+            "depth_md_si": "m"
+          }
+        },
+        "summary": "drilling parameters reported in the latest document",
+        "confidence": null,
+        "data_quality": "extracted",
+        "computed_at": "2026-10-05T05:25:17.570557+00:00",
+        "computed_by": "import",
+        "engine_run_id": null,
+        "source_refs": [
+          "doc_01M458C13510MDMRPPZMQB9XR5"
+        ],
+        "evidence_refs": [
+          "rec_01M458C13E8NE8E0AP5DG7WBSN"
+        ],
+        "assumptions": [
+          "parameters are as reported on the rig floor; no sensor validation applied"
+        ],
+        "is_current": true,
+        "content_hash": "1d8c458a2bb25875e64fd121f5ed26b8a78d74a84e8cc1fc33387672ead22830",
+        "valid_from": null,
+        "valid_to": null,
+        "supersedes_id": "twn_01M458C12DRB558ZPZ2P6AR36C"
+      }
+    }
+  }
+}

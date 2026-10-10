@@ -1,0 +1,50 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light dark;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+/* Numeric columns and identifiers use a monospace face so digits line up: engineering tables are
+   read by comparing columns, and proportional digits make that harder. */
+.font-mono {
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * A monospace element is a *technical* string: an identifier, a key, a hash, a version, a unit-qualified
+ * number, or a JSON body. Those are read left to right in every locale — the platform's own values are
+ * not translated, and re-ordering the characters of `wel_01ABC` or `-5` would change what they mean.
+ *
+ * `unicode-bidi: isolate` keeps such a string from being reordered against the Persian sentence around
+ * it (and from reordering that sentence in turn): the two are separate directional runs, not one
+ * bidirectional paragraph. The explicit `direction` in an RTL document states the base direction of the
+ * string itself, so a version like `1.1.0` or a negative number keeps its leading digits and sign where
+ * they belong rather than at whichever end the paragraph direction would put them.
+ *
+ * Direction here is a property of the content's meaning, not of the page's style: this is the only
+ * place in the client where direction is asserted outside the document element, and it is asserted for
+ * every technical string at once instead of per page.
+ */
+[dir='rtl'] .font-mono {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+/* Keep the xyflow canvas legible in the dark theme. */
+.react-flow__attribution {
+  background: transparent;
+}
+.dark .react-flow__controls button,
+.dark .react-flow__minimap {
+  background-color: #1c212b;
+  color: #eceef2;
+  border-color: #3f4859;
+}

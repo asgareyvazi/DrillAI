@@ -1,0 +1,52 @@
+{
+  "name": "drillai-frontend",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "DrillAI Well Engineering Intelligence Platform \u2014 web client",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview --host 0.0.0.0",
+    "lint": "eslint .",
+    "typecheck": "tsc -b --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "e2e": "node scripts/run-e2e.mjs",
+    "browser:prepare": "node scripts/prepare-chromium.mjs"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "^5.62.7",
+    "@xyflow/react": "^12.3.5",
+    "clsx": "^2.1.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.28.0",
+    "zustand": "^5.0.2"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "@playwright/test": "^1.63.0",
+    "@sparticuz/chromium": "^153.0.0",
+    "@testing-library/dom": "^10.4.0",
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.1.0",
+    "@testing-library/user-event": "^14.5.2",
+    "@types/node": "^26.6.3",
+    "@types/react": "^18.3.14",
+    "@types/react-dom": "^18.3.2",
+    "@vitejs/plugin-react": "^4.3.4",
+    "autoprefixer": "^10.4.20",
+    "eslint": "^9.16.0",
+    "eslint-plugin-react-hooks": "^5.1.0",
+    "globals": "^17.12.0",
+    "jsdom": "^25.0.1",
+    "playwright-core": "^1.63.0",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.16",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.18.0",
+    "vite": "^6.0.3",
+    "vitest": "^2.1.8"
+  }
+}

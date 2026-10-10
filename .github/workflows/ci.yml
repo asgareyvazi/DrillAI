@@ -1,0 +1,256 @@
+# DrillAI — the certification pipeline.
+#
+# One workflow, because the repository has one definition of "verified": the same commands
+# `docs/FRONTEND_TESTING.md` documents and `scripts/bootstrap.sh` prepares. CI adds nothing to the
+# architecture — it runs the repository's own scripts, in the order a reviewer would, and fails when
+# any of them fails.
+#
+# What it is not: it never writes to the repository, never pushes, never uses a secret, and never
+# turns a failing gate into a passing one. Each required step is its own step, so a red run names the
+# gate that failed instead of hiding it inside a shell script.
+#
+# Each testing gate certifies its own result rather than trusting its inputs. The backend gate fails if
+# the suite skipped anything (`DRILLAI_TEST_POSTGRES=1` is only evidence if the PostgreSQL tests ran)
+# and if the postgres-marked tests are no longer collected; the end-to-end gate fails unless all three
+# deployments actually ran tests and the suite finished clean; the unit gate fails on a skip. That
+# matters because GitHub serves raw logs from Azure blob storage, which some networks cannot reach:
+# what stays readable everywhere — including through the API — is the step's own conclusion, so a green
+# step has to mean the property held. Each gate therefore normalises the ANSI escapes the runner adds
+# before parsing: the first version of this did not, and refused a run that had in fact passed. The counts are also written to the run summary for humans who
+# open the run, and `set -o pipefail` keeps each command's exit status as the step's.
+#
+# The end-to-end suite is the real stack: the real FastAPI service on a freshly seeded SQLite
+# database, the real Vite server, and a real browser — three of them, in fact, because the suite runs
+# in three deployments (development identity, fault injection, authentication enabled). Nothing is
+# intercepted in the browser; see `frontend/e2e/`.
+
+name: CI
+
+on:
+  push:
+    branches: [arena/01a0dca0-drillai]
+  pull_request:
+    branches: [arena/01a0dca0-drillai, main]
+  # Manual runs, so the pipeline can be re-certified at a chosen commit without pushing anything.
+  workflow_dispatch:
+
+# Read-only, and only what is used. The workflow publishes nothing back to the repository.
+permissions:
+  contents: read
+
+# Two certification runs on the same ref would fight over the same ports and the same `.e2e` database.
+# A superseded run is cancelled rather than allowed to race the newer one.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # The backend declares `requires-python = ">=3.11"`; CI certifies that baseline, not a newer one.
+  PYTHON_VERSION: '3.11'
+  # Node 22 LTS: the version this repository was last verified with (`.nvmrc`-less, so it is pinned
+  # here and printed in the log).
+  NODE_VERSION: '22'
+  # Embedded PostgreSQL (the `pgserver` dev dependency) so the two `postgres`-marked persistence
+  # tests run instead of skipping. They are skipped only when this is unset.
+  DRILLAI_TEST_POSTGRES: '1'
+
+jobs:
+  certification:
+    name: install, verify, and run the real end-to-end suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - name: Check out the commit under test
+        uses: actions/checkout@v7
+
+      # Provenance first, so every number in the log below is tied to a commit rather than to a
+      # branch name that has since moved.
+      - name: Provenance
+        run: |
+          echo "commit:  $(git rev-parse HEAD)"
+          echo "branch:  $(git branch --show-current)"
+          echo "subject: $(git log -1 --oneline)"
+          echo "dirty:"
+          git status --porcelain
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v7
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Set up Node ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Record the toolchain
+        run: |
+          python --version
+          python -m pip --version
+          node --version
+          npm --version
+
+      # ------------------------------------------------------------------ install
+      # The backend is installed exactly through the project metadata, into the same
+      # `backend/.venv` a developer gets from `scripts/bootstrap.sh` — the end-to-end suite starts the
+      # service with that interpreter (`frontend/e2e/start-api.mjs`), so the path is part of the
+      # contract, not a convenience.
+      - name: Install the backend (editable, dev extras)
+        run: |
+          python -m venv backend/.venv
+          backend/.venv/bin/python -m pip install --upgrade pip
+          backend/.venv/bin/python -m pip install -e "backend[dev]"
+
+      # The lockfile is authoritative: `npm ci` installs exactly what is committed and fails if the
+      # lockfile and the manifest disagree. It is never regenerated here.
+      - name: Install the frontend (npm ci)
+        working-directory: frontend
+        run: npm ci --no-audit --no-fund
+
+      # ------------------------------------------------------------------ frontend gates
+      - name: Frontend typecheck
+        working-directory: frontend
+        run: npm run typecheck
+
+      - name: Frontend lint
+        working-directory: frontend
+        run: npm run lint
+
+      # A skipped unit test is not a pass: the gate reads its own result line and fails on one, so a
+      # green step means the whole suite ran.
+      - name: Frontend unit and component tests
+        working-directory: frontend
+        run: |
+          set -o pipefail
+          npm test 2>&1 | tee "$RUNNER_TEMP/frontend-tests.log"
+          # The runner enables colour, which wraps the lines these gates parse in ANSI escapes.
+          # Normalise first, or a gate refuses a run that in fact passed — which is how this was found.
+          plain="$RUNNER_TEMP/frontend-tests.plain"
+          sed -e $'s/\x1b\\[[0-9;]*[a-zA-Z]//g' "$RUNNER_TEMP/frontend-tests.log" > "$plain"
+          if ! summary="$(grep -E '^ *Tests +' "$plain" | tail -n 1)"; then
+            echo "::error::the unit test run printed no result line"
+            exit 1
+          fi
+          echo "result: $summary"
+          case "$summary" in
+            *skipped*) echo "::error::unit tests were skipped: $summary"; exit 1 ;;
+            *passed*) ;;
+            *) echo "::error::no pass summary was printed: $summary"; exit 1 ;;
+          esac
+          {
+            echo '### Frontend unit and component tests'
+            echo '```'
+            echo "$summary"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Frontend production build
+        working-directory: frontend
+        run: npm run build
+
+      # ------------------------------------------------------------------ backend gates
+      # No `-q` on the command line: `pyproject.toml` already sets it, and a second one suppresses the
+      # summary line entirely — which is exactly the line this gate certifies from.
+      - name: Backend tests (SQLite + embedded PostgreSQL)
+        working-directory: backend
+        run: |
+          set -o pipefail
+          .venv/bin/python -m pytest 2>&1 | tee "$RUNNER_TEMP/backend-tests.log"
+          # The runner enables colour, which wraps the lines these gates parse in ANSI escapes.
+          # Normalise first, or a gate refuses a run that in fact passed — which is how this was found.
+          plain="$RUNNER_TEMP/backend-tests.plain"
+          sed -e $'s/\x1b\\[[0-9;]*[a-zA-Z]//g' "$RUNNER_TEMP/backend-tests.log" > "$plain"
+          summary="$(tail -n 1 "$plain")"
+          echo "result: $summary"
+          case "$summary" in
+            *skipped*) echo "::error::the suite skipped tests; the PostgreSQL integration tests must execute"; exit 1 ;;
+            *passed*) ;;
+            *) echo "::error::no pass summary was printed: $summary"; exit 1 ;;
+          esac
+          if ! collected="$(.venv/bin/python -m pytest -m postgres --collect-only 2>&1 | tail -n 1)"; then
+            echo "::error::could not collect the postgres-marked tests"
+            exit 1
+          fi
+          echo "postgres-marked: $collected"
+          marked="$(printf '%s' "$collected" | sed -n 's/^\([0-9][0-9]*\)\/.*/\1/p')"
+          if [ -z "$marked" ] || [ "$marked" -lt 2 ]; then
+            echo "::error::the postgres-marked tests are no longer collected: $collected"
+            exit 1
+          fi
+          {
+            echo '### Backend tests (DRILLAI_TEST_POSTGRES=1)'
+            echo '```'
+            echo "$summary"
+            echo "$collected"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Backend lint
+        working-directory: backend
+        run: .venv/bin/python -m ruff check .
+
+      # Migration verification runs against a database created for this step, never against a
+      # developer's database and never against one left over from an earlier run.
+      - name: Migration check (fresh database)
+        working-directory: backend
+        env:
+          DRILLAI_DATABASE_URL: sqlite+aiosqlite:///${{ runner.temp }}/ci-migration.db
+        run: |
+          rm -f "${{ runner.temp }}/ci-migration.db"
+          .venv/bin/python -m alembic upgrade head
+          .venv/bin/python -m alembic check
+
+      # ------------------------------------------------------------------ real-stack E2E
+      # `npm run e2e` is the repository's own wrapper: it resolves a browser, refuses ports held by a
+      # stale server, and lets Playwright start the API and the web server for all three deployments.
+      # The whole suite runs — main, faults and auth — not a subset.
+      - name: End-to-end suite (main, faults and auth stacks)
+        working-directory: frontend
+        run: |
+          set -o pipefail
+          npm run e2e 2>&1 | tee "$RUNNER_TEMP/e2e.log"
+          # The runner enables colour, which wraps the lines these gates parse in ANSI escapes.
+          # Normalise first, or a gate refuses a run that in fact passed — which is how this was found.
+          plain="$RUNNER_TEMP/e2e.plain"
+          sed -e $'s/\x1b\\[[0-9;]*[a-zA-Z]//g' "$RUNNER_TEMP/e2e.log" > "$plain"
+          # Every deployment must have run tests — a suite that quietly lost a project is not the
+          # suite this step certifies — and the run must have finished with no failure, no flake and
+          # no skip.
+          for project in chromium chromium-faults chromium-auth; do
+            if ! grep -q "\[$project\]" "$plain"; then
+              echo "::error::$project ran no test"
+              exit 1
+            fi
+          done
+          if ! summary="$(grep -E '^ *[0-9]+ (passed|failed|flaky|skipped)' "$plain" | tail -n 1)"; then
+            echo "::error::the end-to-end run printed no result line"
+            exit 1
+          fi
+          echo "result: $summary"
+          case "$summary" in
+            *skipped*|*failed*|*flaky*) echo "::error::the suite did not run clean: $summary"; exit 1 ;;
+            *passed*) ;;
+            *) echo "::error::no pass summary was printed: $summary"; exit 1 ;;
+          esac
+          {
+            echo '### End-to-end suite (main, faults and auth stacks)'
+            echo '```'
+            echo "$summary"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # ------------------------------------------------------------------ evidence on failure
+      # Artifacts are collected only when something failed, and collecting them does not change the
+      # outcome of the run: the step above has already failed the job.
+      - name: Upload Playwright evidence
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-evidence-${{ github.run_id }}
+          path: |
+            frontend/playwright-report/
+            frontend/test-results/
+          if-no-files-found: ignore
+          retention-days: 14

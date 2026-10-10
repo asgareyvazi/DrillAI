@@ -1,0 +1,839 @@
+{
+  "entries": [
+    {
+      "kind": "document",
+      "id": "doc_01M458C0YRVZT3W5RKP2YCJH09",
+      "at": "2026-03-15T00:00:00+00:00",
+      "end_at": "2026-03-16T00:00:00+00:00",
+      "title": "Daily Drilling Report 2026-03-15 (SYNTHETIC)",
+      "summary": "ddr · status extracted · 8 records · 1 chunks",
+      "status": "extracted",
+      "category": "ddr",
+      "operation_id": null,
+      "section_id": null,
+      "depth_md_si": null,
+      "duration_hours": null,
+      "severity": null,
+      "npt": false,
+      "npt_hours": null,
+      "evidence_refs": [],
+      "document_id": "doc_01M458C0YRVZT3W5RKP2YCJH09",
+      "links": {
+        "document": "/#/documents/doc_01M458C0YRVZT3W5RKP2YCJH09"
+      },
+      "attributes": {
+        "page_count": 1,
+        "ocr_required": false,
+        "extraction_summary": {
+          "pages": 1,
+          "regions": 1,
+          "chunks": 1,
+          "records": 8,
+          "evidence_links": 8,
+          "extractors": {
+            "report_header": "1.0.0",
+            "operations_table": "1.0.0",
+            "mud_properties": "1.0.0",
+            "depth_readings": "1.0.0",
+            "survey_table": "1.0.0",
+            "casing_cement": "1.0.0",
+            "label_values": "1.0.0"
+          },
+          "doc_type": "ddr",
+          "extractor_failures": 0,
+          "warnings": 0,
+          "region_linked_records": 6
+        },
+        "revision": null
+      }
+    },
+    {
+      "kind": "operation",
+      "id": "opr_01M458C10W6B2B6GXF1R4T8JCA",
+      "at": "2026-03-15T00:00:00+00:00",
+      "end_at": "2026-03-15T08:30:00+00:00",
+      "title": "Drilling ahead 8-1/2 in section",
+      "summary": "1 | Drilling ahead 8-1/2 in section | DRL | 8.5 | 2410 | Drilling ahead from 2350 m to 2410 m at 120 rpm",
+      "status": "completed",
+      "category": "actual:drilling",
+      "operation_id": "opr_01M458C10W6B2B6GXF1R4T8JCA",
+      "section_id": "sec_01M458C0XKP01Z7H6X77C7DEYK",
+      "depth_md_si": 2350.0,
+      "duration_hours": 8.5,
+      "severity": null,
+      "npt": false,
+      "npt_hours": null,
+      "evidence_refs": [],
+      "document_id": "doc_01M458C0YRVZT3W5RKP2YCJH09",
+      "links": {},
+      "attributes": {
+        "sequence": 1,
+        "phase": "completed",
+        "is_productive": true,
+        "planned_duration_hours": null,
+        "data_quality": "extracted",
+        "source": "report"
+      }
+    },
+    {
+      "kind": "operation",
+      "id": "opr_01M458C1117EA8EETYJG59G1VC",
+      "at": "2026-03-15T08:30:00+00:00",
+      "end_at": "2026-03-15T09:00:00+00:00",
+      "title": "Made connection",
+      "summary": "2 | Made connection | CONN | 0.5 | 2410 | Connection at 2410 m",
+      "status": "completed",
+      "category": "actual:connection",
+      "operation_id": "opr_01M458C1117EA8EETYJG59G1VC",
+      "section_id": "sec_01M458C0XKP01Z7H6X77C7DEYK",
+      "depth_md_si": 2410.0,
+      "duration_hours": 0.5,
+      "severity": null,
+      "npt": false,
+      "npt_hours": null,
+      "evidence_refs": [],
+      "document_id": "doc_01M458C0YRVZT3W5RKP2YCJH09",
+      "links": {},
+      "attributes": {
+        "sequence": 2,
+        "phase": "completed",
+        "is_productive": true,
+        "planned_duration_hours": null,
+        "data_quality": "extracted",
+        "source": "report"
+      }
+    },
+    {
+      "kind": "event",
+      "id": "evn_01M458C11REP2WB7ZFSVT06N01",
+      "at": "2026-03-15T09:00:00+00:00",
+      "end_at": "2026-03-15T15:00:00+00:00",
+      "title": "Stuck Pipe reported in Daily Drilling Report 2026-03-15 (SYNTHETIC)",
+      "summary": "3 | Stuck pipe while POOH | STUCK | 6.0 | 2408 | Stuck pipe at 2408 m; jarring attempted; worked free after 6 hours",
+      "status": "open",
+      "category": "stuck_pipe",
+      "operation_id": "opr_01M458C115WHQ74A910X97QPP1",
+      "section_id": "sec_01M458C0XKP01Z7H6X77C7DEYK",
+      "depth_md_si": 2408.0,
+      "duration_hours": 6.0,
+      "severity": "high",
+      "npt": true,
+      "npt_hours": 6.0,
+      "evidence_refs": [],
+      "document_id": "doc_01M458C0YRVZT3W5RKP2YCJH09",
+      "links": {},
+      "attributes": {
+        "kind": "npt",
+        "npt_code": "STUCK_PIPE",
+        "immediate_action": null,
+        "corrective_action": null
+      }
+    },
+    {
+      "kind": "operation",
+      "id": "opr_01M458C115WHQ74A910X97QPP1",
+      "at": "2026-03-15T09:00:00+00:00",
+      "end_at": "2026-03-15T15:00:00+00:00",
+      "title": "Stuck pipe while POOH",
+      "summary": "3 | Stuck pipe while POOH | STUCK | 6.0 | 2408 | Stuck pipe at 2408 m; jarring attempted; worked free after 6 hours",
+      "status": "completed",
+      "category": "actual:jarring",
+      "operation_id": "opr_01M458C115WHQ74A910X97QPP1",
+      "section_id": "sec_01M458C0XKP01Z7H6X77C7DEYK",
+      "depth_md_si": 2408.0,
+      "duration_hours": 6.0,
+      "severity": null,
+      "npt": true,
+      "npt_hours": 6.0,
+      "evidence_refs": [],
+      "document_id": "doc_01M458C0YRVZT3W5RKP2YCJH09",
+      "links": {},
+      "attributes": {
+        "sequence": 3,
+        "phase": "completed",
+        "is_productive": false,
+        "planned_duration_hours": null,
+        "data_quality": "extracted",
+        "source": "report"
+      }
+    },
+    {
+      "kind": "event",
+      "id": "evn_01M458C11W1XRN5P9DAR7ENE0J",
+      "at": "2026-03-15T15:00:00+00:00",
+      "end_at": "2026-03-15T17:30:00+00:00",
+      "title": "Lost Circulation reported in Daily Drilling Report 2026-03-15 (SYNTHETIC)",
+      "summary": "4 | Lost circulation | LC | 2.5 | 2412 | Lost circulation 15 bbl/hr; LCM pill pumped",
+      "status": "open",
+      "category": "lost_circulation",
+      "operation_id": "opr_01M458C117JZFKK7XC0TH5MKTM",
+      "section_id": "sec_01M458C0XKP01Z7H6X77C7DEYK",
+      "depth_md_si": null,
+      "duration_hours": 2.5,
+      "severity": "medium",
+      "npt": true,
+      "npt_hours": 2.5,
+      "evidence_refs": [],
+      "document_id": "doc_01M458C0YRVZT3W5RKP2YCJH09",
+      "links": {},
+      "attributes": {
+        "kind": "npt",
+        "npt_code": "LOST_CIRC",
+        "immediate_action": null,
+        "corrective_action": null
+      }
+    },
+    {
+      "kind": "operation",
+      "id": "opr_01M458C117JZFKK7XC0TH5MKTM",
+      "at": "2026-03-15T15:00:00+00:00",
+      "end_at": "2026-03-15T17:30:00+00:00",
+      "title": "Lost circulation",
+      "summary": "4 | Lost circulation | LC | 2.5 | 2412 | Lost circulation 15 bbl/hr; LCM pill pumped",
+      "status": "completed",
+      "category": "actual:circulating",
+      "operation_id": "opr_01M458C117JZFKK7XC0TH5MKTM",
+      "section_id": "sec_01M458C0XKP01Z7H6X77C7DEYK",
+      "depth_md_si": null,
+      "duration_hours": 2.5,
+      "severity": null,
+      "npt": true,
+      "npt_hours": 2.5,
+      "evidence_refs": [],
+      "document_id": "doc_01M458C0YRVZT3W5RKP2YCJH09",
+      "links": {},
+      "attributes": {
+        "sequence": 4,
+        "phase": "completed",
+        "is_productive": false,
+        "planned_duration_hours": null,
+        "data_quality": "extracted",
+        "source": "report"
+      }
+    },
+    {
+      "kind": "operation",
+      "id": "opr_01M458C11A8D6TSW8SMJJ9QC8N",
+      "at": "2026-03-15T17:30:00+00:00",
+      "end_at": "2026-03-15T18:30:00+00:00",
+      "title": "Circulating and conditioning mud",
+      "summary": "5 | Circulating and conditioning mud | CIRC | 1.0 | 2412 | Bottoms up and mud conditioning",
+      "status": "completed",
+      "category": "actual:mud_conditioning",
+      "operation_id": "opr_01M458C11A8D6TSW8SMJJ9QC8N",
+      "section_id": "sec_01M458C0XKP01Z7H6X77C7DEYK",
+      "depth_md_si": null,
+      "duration_hours": 1.0,
+      "severity": null,
+      "npt": false,
+      "npt_hours": null,
+      "evidence_refs": [],
+      "document_id": "doc_01M458C0YRVZT3W5RKP2YCJH09",
+      "links": {},
+      "attributes": {
+        "sequence": 5,
+        "phase": "completed",
+        "is_productive": true,
+        "planned_duration_hours": null,
+        "data_quality": "extracted",
+        "source": "report"
+      }
+    },
+    {
+      "kind": "document",
+      "id": "doc_01M458C13510MDMRPPZMQB9XR5",
+      "at": "2026-03-16T00:00:00+00:00",
+      "end_at": "2026-03-17T00:00:00+00:00",
+      "title": "Daily Drilling Report 2026-03-16 (SYNTHETIC, narrative)",
+      "summary": "ddr · status extracted · 3 records · 1 chunks",
+      "status": "extracted",
+      "category": "ddr",
+      "operation_id": null,
+      "section_id": null,
+      "depth_md_si": null,
+      "duration_hours": null,
+      "severity": null,
+      "npt": false,
+      "npt_hours": null,
+      "evidence_refs": [],
+      "document_id": "doc_01M458C13510MDMRPPZMQB9XR5",
+      "links": {
+        "document": "/#/documents/doc_01M458C13510MDMRPPZMQB9XR5"
+      },
+      "attributes": {
+        "page_count": 1,
+        "ocr_required": false,
+        "extraction_summary": {
+          "pages": 1,
+          "regions": 1,
+          "chunks": 1,
+          "records": 3,
+          "evidence_links": 3,
+          "extractors": {
+            "report_header": "1.0.0",
+            "operations_table": "1.0.0",
+            "mud_properties": "1.0.0",
+            "depth_readings": "1.0.0",
+            "survey_table": "1.0.0",
+            "casing_cement": "1.0.0",
+            "label_values": "1.0.0"
+          },
+          "doc_type": "ddr",
+          "extractor_failures": 0,
+          "warnings": 0,
+          "region_linked_records": 1
+        },
+        "revision": null
+      }
+    },
+    {
+      "kind": "twin_change",
+      "id": "chg_01M458C0W6258S4ZCX6RGTYQZD",
+      "at": "2026-10-05T05:25:17.316214+00:00",
+      "end_at": null,
+      "title": "well · created",
+      "summary": "well created",
+      "status": "created",
+      "category": "well",
+      "operation_id": null,
+      "section_id": null,
+      "depth_md_si": null,
+      "duration_hours": null,
+      "severity": null,
+      "npt": false,
+      "npt_hours": null,
+      "evidence_refs": [
+        "req_01M458C0VAP4TW2N5EJ2CKW6TY"
+      ],
+      "document_id": null,
+      "links": {},
+      "attributes": {
+        "subject_id": "wel_01M458C0VYGW0V474PS7T1FH86",
+        "version": null,
+        "field_paths": [
+          "well"
+        ],
+        "actor_kind": "user",
+        "actor_id": "usr_dev_admin_drilling_supervisor",
+        "source": "api",
+        "workflow_run_id": null,
+        "approval_id": null,
+        "impact": {}
+      }
+    },
+    {
+      "kind": "twin_change",
+      "id": "chg_01M458C0WY44MQD2TTTSKTX1DN",
+      "at": "2026-10-05T05:25:17.341942+00:00",
+      "end_at": null,
+      "title": "wellbore · created",
+      "summary": "wellbore created",
+      "status": "created",
+      "category": "wellbore",
+      "operation_id": null,
+      "section_id": null,
+      "depth_md_si": null,
+      "duration_hours": null,
+      "severity": null,
+      "npt": false,
+      "npt_hours": null,
+      "evidence_refs": [
+        "req_01M458C0WCP7TMHYZ6KZ8NQCB2"
+      ],
+      "document_id": null,
+      "links": {},
+      "attributes": {
+        "subject_id": "wlb_01M458C0WS792A0KPZ3TKF3S5H",
+        "version": null,
+        "field_paths": [
+          "name",
+          "purpose",
+          "sequence",
+          "parent_wellbore_id"
+        ],
+        "actor_kind": "user",
+        "actor_id": "usr_dev_admin_drilling_supervisor",
+        "source": "api",
+        "workflow_run_id": null,
+        "approval_id": null,
+        "impact": {}
+      }
+    },
+    {
+      "kind": "twin_change",
+      "id": "chg_01M458C0XT5J9BJVHQV71V5CG4",
+      "at": "2026-10-05T05:25:17.370200+00:00",
+      "end_at": null,
+      "title": "section · created",
+      "summary": "section created",
+      "status": "created",
+      "category": "section",
+      "operation_id": null,
+      "section_id": null,
+      "depth_md_si": null,
+      "duration_hours": null,
+      "severity": null,
+      "npt": false,
+      "npt_hours": null,
+      "evidence_refs": [
+        "req_01M458C0X3XYCH2N59MARV4BJN"
+      ],
+      "document_id": null,
+      "links": {},
+      "attributes": {
+        "subject_id": "sec_01M458C0XKP01Z7H6X77C7DEYK",
+        "version": null,
+        "field_paths": [
+          "sequence",
+          "name",
+          "kind"
+        ],
+        "actor_kind": "user",
+        "actor_id": "usr_dev_admin_drilling_supervisor",
+        "source": "api",
+        "workflow_run_id": null,
+        "approval_id": null,
+        "impact": {}
+      }
+    },
+    {
+      "kind": "engine_run",
+      "id": "eng_01M458C14JD3WCFF1W93NDWM3B",
+      "at": "2026-10-05T05:25:17.586336+00:00",
+      "end_at": null,
+      "title": "hydraulics.laminar v1.2.0",
+      "summary": "status succeeded · 3 warnings",
+      "status": "succeeded",
+      "category": "Hydraulics Pack",
+      "operation_id": null,
+      "section_id": "sec_01M458C0XKP01Z7H6X77C7DEYK",
+      "depth_md_si": null,
+      "duration_hours": null,
+      "severity": "warning",
+      "npt": false,
+      "npt_hours": null,
+      "evidence_refs": [
+        "eng_01M458C14JD3WCFF1W93NDWM3B"
+      ],
+      "document_id": null,
+      "links": {
+        "engine_run": "/#/engineering/runs/eng_01M458C14JD3WCFF1W93NDWM3B"
+      },
+      "attributes": {
+        "engine_key": "hydraulics.laminar",
+        "engine_version": "1.2.0",
+        "is_feasible": true,
+        "duration_ms": null,
+        "triggered_by": "api",
+        "workflow_run_id": null,
+        "inputs_hash": "9786180d4191f1ad4d914f84b305d4d27c15475ba5cccf207aaa6f6ffaa85e91"
+      }
+    },
+    {
+      "kind": "engine_run",
+      "id": "eng_01M458C159ZT3W50JNJNJVVTKR",
+      "at": "2026-10-05T05:25:17.609713+00:00",
+      "end_at": null,
+      "title": "hydraulics.laminar v1.2.0",
+      "summary": "status succeeded · 3 warnings",
+      "status": "succeeded",
+      "category": "Hydraulics Pack",
+      "operation_id": null,
+      "section_id": null,
+      "depth_md_si": null,
+      "duration_hours": null,
+      "severity": "warning",
+      "npt": false,
+      "npt_hours": null,
+      "evidence_refs": [
+        "eng_01M458C159ZT3W50JNJNJVVTKR"
+      ],
+      "document_id": null,
+      "links": {
+        "engine_run": "/#/engineering/runs/eng_01M458C159ZT3W50JNJNJVVTKR"
+      },
+      "attributes": {
+        "engine_key": "hydraulics.laminar",
+        "engine_version": "1.2.0",
+        "is_feasible": true,
+        "duration_ms": null,
+        "triggered_by": "optimisation",
+        "workflow_run_id": null,
+        "inputs_hash": "fb43d8b67810c3f250f9f6a84727dd3039f443a1c277f17e69e0a039cb0c0ece"
+      }
+    },
+    {
+      "kind": "engine_run",
+      "id": "eng_01M458C15CE65VX5PRDBAQB81E",
+      "at": "2026-10-05T05:25:17.612488+00:00",
+      "end_at": null,
+      "title": "hydraulics.laminar v1.2.0",
+      "summary": "status succeeded · 3 warnings",
+      "status": "succeeded",
+      "category": "Hydraulics Pack",
+      "operation_id": null,
+      "section_id": null,
+      "depth_md_si": null,
+      "duration_hours": null,
+      "severity": "warning",
+      "npt": false,
+      "npt_hours": null,
+      "evidence_refs": [
+        "eng_01M458C15CE65VX5PRDBAQB81E"
+      ],
+      "document_id": null,
+      "links": {
+        "engine_run": "/#/engineering/runs/eng_01M458C15CE65VX5PRDBAQB81E"
+      },
+      "attributes": {
+        "engine_key": "hydraulics.laminar",
+        "engine_version": "1.2.0",
+        "is_feasible": true,
+        "duration_ms": null,
+        "triggered_by": "optimisation",
+        "workflow_run_id": null,
+        "inputs_hash": "fb43d8b67810c3f250f9f6a84727dd3039f443a1c277f17e69e0a039cb0c0ece"
+      }
+    },
+    {
+      "kind": "engine_run",
+      "id": "eng_01M458C15EME0GJAJKQHVKDE7Q",
+      "at": "2026-10-05T05:25:17.614515+00:00",
+      "end_at": null,
+      "title": "hydraulics.laminar v1.2.0",
+      "summary": "status succeeded · 3 warnings",
+      "status": "succeeded",
+      "category": "Hydraulics Pack",
+      "operation_id": null,
+      "section_id": null,
+      "depth_md_si": null,
+      "duration_hours": null,
+      "severity": "warning",
+      "npt": false,
+      "npt_hours": null,
+      "evidence_refs": [
+        "eng_01M458C15EME0GJAJKQHVKDE7Q"
+      ],
+      "document_id": null,
+      "links": {
+        "engine_run": "/#/engineering/runs/eng_01M458C15EME0GJAJKQHVKDE7Q"
+      },
+      "attributes": {
+        "engine_key": "hydraulics.laminar",
+        "engine_version": "1.2.0",
+        "is_feasible": true,
+        "duration_ms": null,
+        "triggered_by": "optimisation",
+        "workflow_run_id": null,
+        "inputs_hash": "fb43d8b67810c3f250f9f6a84727dd3039f443a1c277f17e69e0a039cb0c0ece"
+      }
+    },
+    {
+      "kind": "engine_run",
+      "id": "eng_01M458C15GA5XRJ6TVQ6A9K9HS",
+      "at": "2026-10-05T05:25:17.616252+00:00",
+      "end_at": null,
+      "title": "hydraulics.laminar v1.2.0",
+      "summary": "status succeeded · 3 warnings",
+      "status": "succeeded",
+      "category": "Hydraulics Pack",
+      "operation_id": null,
+      "section_id": null,
+      "depth_md_si": null,
+      "duration_hours": null,
+      "severity": "warning",
+      "npt": false,
+      "npt_hours": null,
+      "evidence_refs": [
+        "eng_01M458C15GA5XRJ6TVQ6A9K9HS"
+      ],
+      "document_id": null,
+      "links": {
+        "engine_run": "/#/engineering/runs/eng_01M458C15GA5XRJ6TVQ6A9K9HS"
+      },
+      "attributes": {
+        "engine_key": "hydraulics.laminar",
+        "engine_version": "1.2.0",
+        "is_feasible": true,
+        "duration_ms": null,
+        "triggered_by": "optimisation",
+        "workflow_run_id": null,
+        "inputs_hash": "e91738bf0957c34d575baf946d4ea47e24b62ae0f7d4e493078e4db08865a009"
+      }
+    },
+    {
+      "kind": "engine_run",
+      "id": "eng_01M458C15JYYDVVNH1D9Y6M26W",
+      "at": "2026-10-05T05:25:17.618034+00:00",
+      "end_at": null,
+      "title": "hydraulics.laminar v1.2.0",
+      "summary": "status succeeded · 3 warnings",
+      "status": "succeeded",
+      "category": "Hydraulics Pack",
+      "operation_id": null,
+      "section_id": null,
+      "depth_md_si": null,
+      "duration_hours": null,
+      "severity": "warning",
+      "npt": false,
+      "npt_hours": null,
+      "evidence_refs": [
+        "eng_01M458C15JYYDVVNH1D9Y6M26W"
+      ],
+      "document_id": null,
+      "links": {
+        "engine_run": "/#/engineering/runs/eng_01M458C15JYYDVVNH1D9Y6M26W"
+      },
+      "attributes": {
+        "engine_key": "hydraulics.laminar",
+        "engine_version": "1.2.0",
+        "is_feasible": true,
+        "duration_ms": null,
+        "triggered_by": "optimisation",
+        "workflow_run_id": null,
+        "inputs_hash": "e91738bf0957c34d575baf946d4ea47e24b62ae0f7d4e493078e4db08865a009"
+      }
+    },
+    {
+      "kind": "engine_run",
+      "id": "eng_01M458C15KJANBZ9W414PFFZ7B",
+      "at": "2026-10-05T05:25:17.619739+00:00",
+      "end_at": null,
+      "title": "hydraulics.laminar v1.2.0",
+      "summary": "status succeeded · 3 warnings",
+      "status": "succeeded",
+      "category": "Hydraulics Pack",
+      "operation_id": null,
+      "section_id": null,
+      "depth_md_si": null,
+      "duration_hours": null,
+      "severity": "warning",
+      "npt": false,
+      "npt_hours": null,
+      "evidence_refs": [
+        "eng_01M458C15KJANBZ9W414PFFZ7B"
+      ],
+      "document_id": null,
+      "links": {
+        "engine_run": "/#/engineering/runs/eng_01M458C15KJANBZ9W414PFFZ7B"
+      },
+      "attributes": {
+        "engine_key": "hydraulics.laminar",
+        "engine_version": "1.2.0",
+        "is_feasible": true,
+        "duration_ms": null,
+        "triggered_by": "optimisation",
+        "workflow_run_id": null,
+        "inputs_hash": "e91738bf0957c34d575baf946d4ea47e24b62ae0f7d4e493078e4db08865a009"
+      }
+    },
+    {
+      "kind": "engine_run",
+      "id": "eng_01M458C15NFGJM769FNJWM0B37",
+      "at": "2026-10-05T05:25:17.621391+00:00",
+      "end_at": null,
+      "title": "hydraulics.laminar v1.2.0",
+      "summary": "status succeeded · 3 warnings",
+      "status": "succeeded",
+      "category": "Hydraulics Pack",
+      "operation_id": null,
+      "section_id": null,
+      "depth_md_si": null,
+      "duration_hours": null,
+      "severity": "warning",
+      "npt": false,
+      "npt_hours": null,
+      "evidence_refs": [
+        "eng_01M458C15NFGJM769FNJWM0B37"
+      ],
+      "document_id": null,
+      "links": {
+        "engine_run": "/#/engineering/runs/eng_01M458C15NFGJM769FNJWM0B37"
+      },
+      "attributes": {
+        "engine_key": "hydraulics.laminar",
+        "engine_version": "1.2.0",
+        "is_feasible": true,
+        "duration_ms": null,
+        "triggered_by": "optimisation",
+        "workflow_run_id": null,
+        "inputs_hash": "9786180d4191f1ad4d914f84b305d4d27c15475ba5cccf207aaa6f6ffaa85e91"
+      }
+    },
+    {
+      "kind": "engine_run",
+      "id": "eng_01M458C15PHD42PTMWA8EZX7KY",
+      "at": "2026-10-05T05:25:17.622891+00:00",
+      "end_at": null,
+      "title": "hydraulics.laminar v1.2.0",
+      "summary": "status succeeded · 3 warnings",
+      "status": "succeeded",
+      "category": "Hydraulics Pack",
+      "operation_id": null,
+      "section_id": null,
+      "depth_md_si": null,
+      "duration_hours": null,
+      "severity": "warning",
+      "npt": false,
+      "npt_hours": null,
+      "evidence_refs": [
+        "eng_01M458C15PHD42PTMWA8EZX7KY"
+      ],
+      "document_id": null,
+      "links": {
+        "engine_run": "/#/engineering/runs/eng_01M458C15PHD42PTMWA8EZX7KY"
+      },
+      "attributes": {
+        "engine_key": "hydraulics.laminar",
+        "engine_version": "1.2.0",
+        "is_feasible": true,
+        "duration_ms": null,
+        "triggered_by": "optimisation",
+        "workflow_run_id": null,
+        "inputs_hash": "9786180d4191f1ad4d914f84b305d4d27c15475ba5cccf207aaa6f6ffaa85e91"
+      }
+    },
+    {
+      "kind": "engine_run",
+      "id": "eng_01M458C15RAHFJ9AC023HK6V4S",
+      "at": "2026-10-05T05:25:17.624382+00:00",
+      "end_at": null,
+      "title": "hydraulics.laminar v1.2.0",
+      "summary": "status succeeded · 3 warnings",
+      "status": "succeeded",
+      "category": "Hydraulics Pack",
+      "operation_id": null,
+      "section_id": null,
+      "depth_md_si": null,
+      "duration_hours": null,
+      "severity": "warning",
+      "npt": false,
+      "npt_hours": null,
+      "evidence_refs": [
+        "eng_01M458C15RAHFJ9AC023HK6V4S"
+      ],
+      "document_id": null,
+      "links": {
+        "engine_run": "/#/engineering/runs/eng_01M458C15RAHFJ9AC023HK6V4S"
+      },
+      "attributes": {
+        "engine_key": "hydraulics.laminar",
+        "engine_version": "1.2.0",
+        "is_feasible": true,
+        "duration_ms": null,
+        "triggered_by": "optimisation",
+        "workflow_run_id": null,
+        "inputs_hash": "9786180d4191f1ad4d914f84b305d4d27c15475ba5cccf207aaa6f6ffaa85e91"
+      }
+    },
+    {
+      "kind": "engine_run",
+      "id": "eng_01M458C15SXAZH7KCKTQ70TP6G",
+      "at": "2026-10-05T05:25:17.625908+00:00",
+      "end_at": null,
+      "title": "hydraulics.laminar v1.2.0",
+      "summary": "status succeeded · 3 warnings",
+      "status": "succeeded",
+      "category": "Hydraulics Pack",
+      "operation_id": null,
+      "section_id": null,
+      "depth_md_si": null,
+      "duration_hours": null,
+      "severity": "warning",
+      "npt": false,
+      "npt_hours": null,
+      "evidence_refs": [
+        "eng_01M458C15SXAZH7KCKTQ70TP6G"
+      ],
+      "document_id": null,
+      "links": {
+        "engine_run": "/#/engineering/runs/eng_01M458C15SXAZH7KCKTQ70TP6G"
+      },
+      "attributes": {
+        "engine_key": "hydraulics.laminar",
+        "engine_version": "1.2.0",
+        "is_feasible": true,
+        "duration_ms": null,
+        "triggered_by": "optimisation",
+        "workflow_run_id": null,
+        "inputs_hash": "6f66645fd546ab80001f4ef84b44343d0b948ee7810b8c4809b11adafd54bdad"
+      }
+    },
+    {
+      "kind": "engine_run",
+      "id": "eng_01M458C15V9K38QJGJE84F8Q82",
+      "at": "2026-10-05T05:25:17.627756+00:00",
+      "end_at": null,
+      "title": "hydraulics.laminar v1.2.0",
+      "summary": "status succeeded · 3 warnings",
+      "status": "succeeded",
+      "category": "Hydraulics Pack",
+      "operation_id": null,
+      "section_id": null,
+      "depth_md_si": null,
+      "duration_hours": null,
+      "severity": "warning",
+      "npt": false,
+      "npt_hours": null,
+      "evidence_refs": [
+        "eng_01M458C15V9K38QJGJE84F8Q82"
+      ],
+      "document_id": null,
+      "links": {
+        "engine_run": "/#/engineering/runs/eng_01M458C15V9K38QJGJE84F8Q82"
+      },
+      "attributes": {
+        "engine_key": "hydraulics.laminar",
+        "engine_version": "1.2.0",
+        "is_feasible": true,
+        "duration_ms": null,
+        "triggered_by": "optimisation",
+        "workflow_run_id": null,
+        "inputs_hash": "6f66645fd546ab80001f4ef84b44343d0b948ee7810b8c4809b11adafd54bdad"
+      }
+    },
+    {
+      "kind": "engine_run",
+      "id": "eng_01M458C15XQEXDXBT6VAZVXMFC",
+      "at": "2026-10-05T05:25:17.629643+00:00",
+      "end_at": null,
+      "title": "hydraulics.laminar v1.2.0",
+      "summary": "status succeeded · 3 warnings",
+      "status": "succeeded",
+      "category": "Hydraulics Pack",
+      "operation_id": null,
+      "section_id": null,
+      "depth_md_si": null,
+      "duration_hours": null,
+      "severity": "warning",
+      "npt": false,
+      "npt_hours": null,
+      "evidence_refs": [
+        "eng_01M458C15XQEXDXBT6VAZVXMFC"
+      ],
+      "document_id": null,
+      "links": {
+        "engine_run": "/#/engineering/runs/eng_01M458C15XQEXDXBT6VAZVXMFC"
+      },
+      "attributes": {
+        "engine_key": "hydraulics.laminar",
+        "engine_version": "1.2.0",
+        "is_feasible": true,
+        "duration_ms": null,
+        "triggered_by": "optimisation",
+        "workflow_run_id": null,
+        "inputs_hash": "6f66645fd546ab80001f4ef84b44343d0b948ee7810b8c4809b11adafd54bdad"
+      }
+    }
+  ],
+  "count": 25,
+  "kinds_available": [
+    "operation",
+    "event",
+    "document",
+    "engine_run",
+    "recommendation",
+    "⟪trimmed: 2 more entries⟫"
+  ],
+  "next_cursor": "eyJhdCI6IjIwMjYtMTAtMDVUMDU6MjU6MTcuNjI5NjQzKzAwOjAwIiwiaWQiOiJlbmdfMDFNNDU4QzE1WFFFWERYQlQ2VkFaVlhNRkMiLCJraW5kIjoiZW5naW5lX3J1biJ9"
+}

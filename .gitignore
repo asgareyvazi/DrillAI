@@ -1,0 +1,52 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+
+# --- tooling caches ---
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# --- local runtime data (databases, blob storage, logs) ---
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+*.log
+.data/
+drillai.db*
+
+# --- environment / secrets ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# --- editors / OS ---
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# --- node ---
+node_modules/
+*.tsbuildinfo
+
+# --- frontend build & test output ---
+frontend/dist/
+frontend/coverage/
+frontend/.e2e/
+# The fault-injection and authentication-enabled stacks, which keep their own databases.
+frontend/.e2e-*/
+frontend/test-results/
+frontend/playwright-report/
+frontend/playwright/.cache/
