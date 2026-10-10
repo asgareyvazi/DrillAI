@@ -41,9 +41,10 @@ cd backend && source .venv/bin/activate && python ../../scripts/seed_demo.py --r
 src/
   api/         client.ts (transport, error normalisation), endpoints.ts (typed calls), types.ts (contracts)
   components/  common (Card, Table, Value, Async, Badge, Tabs…), layout (AppShell), evidence (panel)
+  hooks/       useRunEventStream.ts, useWellLiveStream.ts (well-scoped live WebSocket + polling fallback)
   i18n/        en.ts, fa.ts, index.tsx — one direction strategy, no per-page overrides
-  lib/         format.ts — the single unit and number formatting boundary
-  pages/       wells/ (list, cockpit, documents, operations), engineering/, workflow/, library/
+  lib/         format.ts (unit/number boundary), runEvents.ts, wellLiveStream.ts (live stream protocol)
+  pages/       wells/ (list, cockpit, OperationalMonitor, documents, operations), engineering/, workflow/, library/
   stores/      session.ts — locale, unit system, acting identity, selected context
   test/        setup.ts, fixtures/ (payloads captured from the running API)
 ```

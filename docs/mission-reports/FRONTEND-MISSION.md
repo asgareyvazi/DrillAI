@@ -1872,3 +1872,43 @@ The historical CP9 block and addendum above are preserved verbatim as written be
   8. `Migration check (fresh database)` (`alembic upgrade head` and `alembic check` against a fresh SQLite database).
   9. `End-to-end suite (main, faults and auth stacks)` (`npm run e2e` across `chromium`, `chromium-faults`, and `chromium-auth` with zero-skip/zero-flake enforcement).
 * **Forensic audit findings entering CP10:** Although CI run `38030893780` passed all repository gates at `d6d1862`, code inspection at the start of CP10 confirmed three gaps between the CP9 infrastructure and a complete live operational slice: (1) `outbox_events.sequence` was allocated only per organization while `GET /wells/{well_id}/live/stream` computed `position - sequence > backlog_bound` on the filtered well stream, allowing high-rate events on Well B to trigger a false `backlog_exceeded` gap on Well A; (2) telemetry ingestion emitted `telemetry.received` without automatically invoking rule evaluation unless `POST /wells/{well_id}/alerts/evaluate` was called; and (3) `WellCockpit.tsx` did not yet expose the live telemetry KPI strip, bounded telemetry chart, live WebSocket transport indicator, or governed alert workflow. CP10 addresses those items directly.
+
+---
+
+### Independent CP10 certification block — Live Operations Productization, Automatic Alerting, WebSocket Correctness & Operator Cockpit (2026-10-10)
+
+#### 1. Verdict
+CP10 is implemented on `arena/01a0dca0-drillai`, completing the end-to-end live operational vertical slice (`Telemetry Source → Validated Adapter / Ingestion → Canonical TimeSeries → Automatic Rule Evaluation → Alert Lifecycle → Transactional Outbox → Per-Well Monotonic Live Stream → Frontend Operational Monitor → Governed Alert Transitions & T1 Historical Evidence Drawer → Operations Advisor Context`). Checkpoints A (`d2cfe221678fbfd7910a5d3b9cac5c90de17973e`) and B (`c47dbca3739b91138fbd0fce36260bcbca2cb6cd`) were pushed to `origin/arena/01a0dca0-drillai` and verified via `git ls-remote`; Checkpoints C, D, and E are committed locally on `arena/01a0dca0-drillai` and pass every local frontend, backend, PostgreSQL, migration, and 77-journey real-stack Playwright E2E gate. Because the sandbox `GH_TOKEN` expired after pushing Checkpoint B (`gh auth status`: `The github.com token in GH_TOKEN is no longer valid`), remote publication and GitHub Actions verification for Checkpoints C–E remain pending until GitHub authentication is refreshed in Arena.
+
+#### 2. Repository identity & checkpoint chain
+* **Target branch:** `arena/01a0dca0-drillai` (`main` untouched at `bfa066b28e0071880cb9191a4f1d47fdaa143e04`).
+* **Baseline entering CP10:** `d6d186278e43cb00985326b7bd85703e72a5d80f` (verified green in GitHub Actions run `38030893780`).
+* **Checkpoint A (pushed & verified on `origin`):** `d2cfe221678fbfd7910a5d3b9cac5c90de17973e` — per-well outbox sequence allocator (`OutboxWellSequence`, `outbox_events.well_sequence`, Alembic migration `a9d4e21b8c60`), org+well-scoped cursor token (`encode_stream_cursor` / `decode_stream_cursor`), and per-well WebSocket stream cursor/backlog calculation eliminating false cross-well `backlog_exceeded` gaps.
+* **Checkpoint B (pushed & verified on `origin`):** `c47dbca3739b91138fbd0fce36260bcbca2cb6cd` — automatic rule evaluation after valid telemetry ingestion (`_evaluate_after_ingest`), savepoint fault isolation, PostgreSQL row-level locking on channel evaluation, historical `T1` alert evidence anchoring (`TimeSeriesPoint.ts <= alert.observed_at`), and governed `AdapterRunner` / `POST /wells/{well_id}/timeseries/commission-synthetic`.
+* **Checkpoint C (committed locally):** `33cefc9` — typed frontend telemetry/live/alert contracts and endpoints (`frontend/src/api/{types,endpoints}.ts`), `WellLiveStream` (`frontend/src/lib/wellLiveStream.ts`), `useWellLiveStream` (`frontend/src/hooks/useWellLiveStream.ts`), bilingual EN/FA strings (`frontend/src/i18n/{en,fa}.ts`), and `OperationalMonitor.tsx` integrated into `WellCockpit.tsx` and `AdvisorWorkspace.tsx`.
+* **Checkpoint D (committed locally):** `c3be169d3976f9f1c2d8b619318769d6127d49a0` — real-stack Playwright E2E journeys (`frontend/e2e/live-operations.spec.ts` and `frontend/e2e/error-auth.spec.ts`) and WebSocket disconnect hardening in `backend/src/drillai/api/routers/live.py`.
+
+#### 3. Exact verification gates executed
+* `cd frontend && npm run typecheck`: **passed** (`tsc -b --noEmit`, 0 errors).
+* `cd frontend && npm run lint`: **passed** (`eslint .`, 0 errors).
+* `cd frontend && npm test`: **28 test files, 305 tests passed, 0 failed, 0 skipped**.
+* `cd frontend && npm run build`: **passed** (`tsc -b && vite build`).
+* `cd backend && .venv/bin/ruff check .`: **passed** (`All checks passed!`).
+* `cd backend && DRILLAI_DATABASE_URL="sqlite+aiosqlite:////tmp/cp10_final_mig.db" .venv/bin/alembic upgrade head && DRILLAI_DATABASE_URL="sqlite+aiosqlite:////tmp/cp10_final_mig.db" .venv/bin/alembic check`: **passed** (`No new upgrade operations detected` through head `a9d4e21b8c60`).
+* `cd backend && DRILLAI_TEST_POSTGRES=1 .venv/bin/python -m pytest -o addopts=""`: **983 passed, 0 failed, 0 skipped** (`tests/api`: 160 passed; `tests/db tests/telemetry`: 244 passed; remaining `tests/`: 579 passed).
+* `cd frontend && npm run e2e`: **77 passed in 16 spec files (4.4m)** across `chromium`, `chromium-faults`, and `chromium-auth` with zero HTTP mocking.
+
+### CP10 Gate 0 release closure and forensic audit record (2026-10-10)
+
+The historical CP10 block above is preserved verbatim. Upon resuming in CP11 Phase A with refreshed GitHub credentials (`gh auth status` verified active), a forensic audit of the repository and working tree established:
+
+1. **Git & CI state at start of Phase A:** `origin/arena/01a0dca0-drillai` was at `c47dbca3739b91138fbd0fce36260bcbca2cb6cd` (CP10 Checkpoint B), verified green in GitHub Actions run [38035575155](https://github.com/asgareyvazi/DrillAI/actions/runs/38035575155). All CP10 Checkpoints C, D, and E working-tree changes were preserved intact on disk from the workspace snapshot.
+2. **Protocol adapter forensic correction:** Inspection of `backend/src/drillai/telemetry/adapters.py` at `c47dbca3739b91138fbd0fce36260bcbca2cb6cd` confirmed that CP10 ships `SyntheticAdapter`, `WitsmlShapedAdapter` (an in-memory normalizer/validator for JSON-projected frames), and `AdapterRunner`. Any earlier chat reference to `WitsmlPollingAdapter` or `EtpMessageAdapter` in CP10 was inaccurate: CP10 did not include network transport clients for WITSML or ETP.
+3. **Re-executed CP10 Gate 0 verification before publication:**
+   * `cd frontend && npm run typecheck && npm run lint && npm test && npm run build`: **28 test files, 305 tests passed**, production build clean (`285 modules transformed`).
+   * `cd backend && .venv/bin/ruff check .`: `All checks passed!`.
+   * `cd backend && DRILLAI_DATABASE_URL="sqlite+aiosqlite:////tmp/cp10_a3_mig.db" .venv/bin/alembic upgrade head && DRILLAI_DATABASE_URL="sqlite+aiosqlite:////tmp/cp10_a3_mig.db" .venv/bin/alembic check`: `No new upgrade operations detected` through head `a9d4e21b8c60`.
+   * `cd backend && DRILLAI_TEST_POSTGRES=1 .venv/bin/python -m pytest tests/db tests/telemetry tests/api/test_live_stream.py -o addopts="" -q`: **260 passed, 1 warning**.
+   * `cd frontend && npm run e2e`: **77 passed (4.2m)** across `chromium`, `chromium-faults`, and `chromium-auth` with zero HTTP mocking.
+
+

@@ -97,22 +97,25 @@ it holds to and `docs/FRONTEND_TESTING.md` lists what is verified and how.
 | --- | --- | --- |
 | Frontend types | `cd frontend && npm run typecheck` | strict TypeScript over app, tests and specs |
 | Frontend lint | `cd frontend && npm run lint` | unused code, `any`, React rules |
-| Frontend unit/component | `cd frontend && npm test` | 275 tests in 23 files |
+| Frontend unit/component | `cd frontend && npm test` | 305 tests in 28 files |
 | Frontend build | `cd frontend && npm run build` | `tsc -b` plus the production Vite build |
-| Backend tests | `cd backend && .venv/bin/python -m pytest` | 399 tests, of which 2 run against a real PostgreSQL |
+| Backend tests | `cd backend && DRILLAI_TEST_POSTGRES=1 .venv/bin/python -m pytest -o addopts=""` | 983 tests, including PostgreSQL persistence and migration verification |
 | Backend lint | `cd backend && .venv/bin/python -m ruff check .` | style and import hygiene |
 | Migrations | `cd backend && .venv/bin/python -m alembic upgrade head && .venv/bin/python -m alembic check` | no model/migration drift, against a fresh database |
-| End-to-end | `cd frontend && npm run e2e` | 65 browser journeys against the real stack |
+| End-to-end | `cd frontend && npm run e2e` | 77 browser journeys in 16 spec files against the real stack |
 
 Set `DRILLAI_TEST_POSTGRES=1` to run the PostgreSQL-backed persistence tests through the repository's
 own embedded PostgreSQL (`pgserver`); without it they skip, and the suite reports
-**397 passed, 2 skipped** rather than **399 passed**.
+**980 passed, 3 skipped** rather than **983 passed**.
 
-The end-to-end suite is 13 spec files across three deployments of the same product — development
+The end-to-end suite is 16 spec files across three deployments of the same product — development
 identity, deterministic fault injection, and authentication enabled — covering the cockpit,
-documents and evidence, the workflow studio lifecycle, the run monitor with approvals, the durable
-run-event WebSocket, the failure matrix, permissions and identity, deep links and context, RTL, and
-keyboard/assistive-technology behaviour. HTTP is never intercepted anywhere — no spec calls
+live operational monitor (`live-operations.spec.ts`: synthetic telemetry commissioning, automatic rule
+evaluation on ingestion, historical `T1` alert evidence drawer, server-governed `allowed_transitions`,
+409 optimistic concurrency conflict recovery, hysteresis auto-clear, cross-well stream isolation, and
+Persian RTL token isolation), documents and evidence, the workflow studio lifecycle, the run monitor
+with approvals, the durable run-event WebSocket, the failure matrix, permissions and identity, deep
+links and context, RTL, and keyboard/assistive-technology behaviour. HTTP is never intercepted anywhere — no spec calls
 `page.route()`, and the failures a healthy server cannot produce come from the application's own
 config-guarded injector. The only browser-level interception is two socket-level relays in the run-event
 journeys, which exist so a spec can state exactly when a live stream failed: they forward to the real

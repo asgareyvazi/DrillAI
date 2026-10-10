@@ -99,11 +99,12 @@ third of the suite, so all three projects run.
 
 ### The journeys
 
-74 journeys in 15 spec files. The list is the coverage; the counts are what the suite reports.
+77 journeys in 16 spec files. The list is the coverage; the counts are what the suite reports.
 
 | Spec | Journeys | Covers |
 | --- | --- | --- |
 | `well-cockpit.spec.ts` | 4 | list → cockpit → NPT → missing data → timeline → reload → unknown well → unknown route |
+| `live-operations.spec.ts` | 3 | CP10 live operational vertical slice: synthetic telemetry commissioning → automatic rule evaluation on ingestion → live KPI strip & bounded channel history chart → historical `T1` alert evidence drawer unaffected by later `T2` points → server-governed `allowed_transitions` ack/clear/cancel & real 409 conflict recovery → hysteresis auto-clear → cross-well stream isolation → missing/untrustworthy quality honesty → Persian RTL token isolation |
 | `documents-evidence.spec.ts` | 4 | upload → ingestion → extraction record → page/region evidence |
 | `workflow-studio.spec.ts` | 9 | create → configure → connect → validate → save → version → publish, and the draft lifecycle |
 | `run-monitor.spec.ts` | 6 | run list, node executions, the approval inbox, a run that fails and says which node failed |
