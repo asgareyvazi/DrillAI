@@ -1849,3 +1849,7 @@ The full CP9 frontend Operational Monitor and the ≥10 real-stack E2E catalogue
 
 #### 9. Final git gate
 The local work is ready to commit after the gates above. It must not be described as remotely complete until push and `git ls-remote` succeed. If the push still fails with invalid credentials, preserve the local commit, report the exact authentication error, and stop short of claiming remote delivery.
+
+### CP9 publication addendum (verified 2026-10-10)
+
+The local implementation was committed as `09bef033` and integrated with the fetched remote checkpoint history using a non-destructive merge commit `2f4c6a2`. Push succeeded to the mandated branch, and `git ls-remote origin refs/heads/arena/01a0dca0-drillai` returned `2f4c6a22d652ce3c81874ee8019767e50b182d7f`. The working tree is clean. GitHub Actions was queried after publication: the newest reported successful CI run is for the prior remote SHA `f430d334...`; no CI run for `2f4c6a2` was available at query time. Accordingly, CP9 local gates are green, publication is verified, and CI for the final SHA remains pending rather than claimed green.
