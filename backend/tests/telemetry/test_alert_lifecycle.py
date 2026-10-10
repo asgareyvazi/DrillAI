@@ -54,6 +54,7 @@ async def _append(fabric: Fabric, tenant, series_id: str, values: list[tuple[dt.
         report = await service.append_points(
             series_id,
             [PointIn(ts=ts, value=value, unit="psi", quality="good") for ts, value in values],
+            auto_evaluate=False,
         )
         assert report.accepted == len(values), report.to_dict()
         await session.commit()
@@ -707,3 +708,304 @@ async def test_the_alert_count_matches_the_rows_written(fabric: Fabric) -> None:
             )
         ).scalar_one()
     assert stored == report.raised == len(report.alerts) == 1
+
+
+# --------------------------------------------------------------------------- CP10 automatic evaluation, 8-case semantics, fault isolation & evidence T1 integrity
+
+
+async def test_auto_evaluation_on_append_raises_holds_and_clears_without_manual_endpoint(
+    fabric: Fabric,
+) -> None:
+    """Ingesting telemetry through TelemetryService.append_points automatically evaluates rules,
+    raises an alert on sustained breach, holds on duplicate/continued breach, and clears on recovery."""
+
+    series_id = await _well(fabric, fabric.alpha)
+    await _rule(
+        fabric,
+        fabric.alpha,
+        sustain_seconds=10.0,
+        clear_operator="lte",
+        clear_threshold=3800.0,
+        clear_sustain_seconds=10.0,
+    )
+
+    async with fabric.session() as session:
+        service = TelemetryService(session, fabric.org_id(fabric.alpha))
+        breach = await service.append_points(
+            series_id,
+            [
+                PointIn(ts=NOW - dt.timedelta(seconds=15), value=4150.0, unit="psi", quality="good", source_point_id="b1"),
+                PointIn(ts=NOW, value=4250.0, unit="psi", quality="good", source_point_id="b2"),
+            ],
+            received_at=NOW,
+        )
+        await session.commit()
+
+    assert breach.alerts_raised == 1
+    assert breach.alerts_cleared == 0
+    assert breach.evaluation["status"] == "evaluated"
+    assert breach.evaluation["decision"] == "new_measurement"
+    assert breach.evaluation["mode"] == "auto_ingest"
+    assert breach.evaluation["evaluation_id"].startswith("evl_")
+    assert breach.evaluation["duration_ms"] >= 0.0
+
+    # Exact duplicate replay skips evaluation and never raises a second alert.
+    async with fabric.session() as session:
+        service = TelemetryService(session, fabric.org_id(fabric.alpha))
+        dup = await service.append_points(
+            series_id,
+            [
+                PointIn(ts=NOW - dt.timedelta(seconds=15), value=4150.0, unit="psi", quality="good", source_point_id="b1"),
+                PointIn(ts=NOW, value=4250.0, unit="psi", quality="good", source_point_id="b2"),
+            ],
+            received_at=NOW + dt.timedelta(seconds=1),
+        )
+        await session.commit()
+
+    assert dup.duplicates == 2
+    assert dup.alerts_raised == 0
+    assert dup.evaluation["status"] == "skipped"
+    assert dup.evaluation["decision"] == "skipped_duplicate_replay"
+
+    # Conflicting replay under reject policy skips evaluation and keeps open alert intact.
+    async with fabric.session() as session:
+        service = TelemetryService(session, fabric.org_id(fabric.alpha))
+        conflict = await service.append_points(
+            series_id,
+            [
+                PointIn(ts=NOW, value=3100.0, unit="psi", quality="good", source_point_id="b2"),
+            ],
+            on_conflict="reject",
+            received_at=NOW + dt.timedelta(seconds=2),
+        )
+        await session.commit()
+
+    assert conflict.rejected == 1
+    assert conflict.evaluation["status"] == "skipped"
+    assert conflict.evaluation["decision"] == "skipped_conflicting_replay"
+
+    # Untrustworthy quality ('bad' / 'missing') does not silently clear the open alert.
+    async with fabric.session() as session:
+        service = TelemetryService(session, fabric.org_id(fabric.alpha))
+        bad_batch = await service.append_points(
+            series_id,
+            [
+                PointIn(ts=NOW + dt.timedelta(seconds=5), value=3000.0, unit="psi", quality="bad", source_point_id="bad1"),
+                PointIn(ts=NOW + dt.timedelta(seconds=16), value=3000.0, unit="psi", quality="bad", source_point_id="bad2"),
+            ],
+            received_at=NOW + dt.timedelta(seconds=16),
+        )
+        await session.commit()
+
+    assert bad_batch.accepted == 2
+    assert bad_batch.alerts_cleared == 0
+    assert bad_batch.evaluation["status"] == "skipped"
+    assert bad_batch.evaluation["decision"] == "skipped_untrustworthy_quality"
+
+    # Historical out-of-order backfill far behind the horizon does not overwrite current state.
+    async with fabric.session() as session:
+        service = TelemetryService(session, fabric.org_id(fabric.alpha))
+        historical = await service.append_points(
+            series_id,
+            [
+                PointIn(
+                    ts=NOW - dt.timedelta(minutes=30),
+                    value=3000.0,
+                    unit="psi",
+                    quality="good",
+                    source_point_id="hist1",
+                ),
+                PointIn(
+                    ts=NOW - dt.timedelta(minutes=29),
+                    value=3000.0,
+                    unit="psi",
+                    quality="good",
+                    source_point_id="hist2",
+                ),
+            ],
+            received_at=NOW + dt.timedelta(seconds=20),
+        )
+        await session.commit()
+
+    assert historical.accepted == 2
+    assert historical.out_of_order == 2
+    assert historical.alerts_cleared == 0
+    assert historical.evaluation["status"] == "skipped"
+    assert historical.evaluation["decision"] == "skipped_historical_out_of_order"
+
+    # Valid recovery measurements sustained for >= 10s automatically clear the alert.
+    async with fabric.session() as session:
+        service = TelemetryService(session, fabric.org_id(fabric.alpha))
+        recovery = await service.append_points(
+            series_id,
+            [
+                PointIn(ts=NOW + dt.timedelta(seconds=30), value=3600.0, unit="psi", quality="good", source_point_id="r1"),
+                PointIn(ts=NOW + dt.timedelta(seconds=45), value=3550.0, unit="psi", quality="good", source_point_id="r2"),
+            ],
+            received_at=NOW + dt.timedelta(seconds=45),
+        )
+        await session.commit()
+
+    assert recovery.alerts_cleared == 1
+    assert recovery.evaluation["status"] == "evaluated"
+    assert recovery.evaluation["decision"] == "new_measurement"
+    alerts = await _alerts(fabric, fabric.alpha)
+    assert len(alerts) == 1
+    assert alerts[0].status == "cleared"
+
+
+async def test_authorized_revision_triggers_automatic_re_evaluation(fabric: Fabric) -> None:
+    """When on_conflict='revise' updates a measurement in place, automatic evaluation runs with
+    decision='revised_measurement'."""
+
+    series_id = await _well(fabric, fabric.alpha)
+    await _rule(fabric, fabric.alpha, sustain_seconds=0.0)
+
+    async with fabric.session() as session:
+        service = TelemetryService(session, fabric.org_id(fabric.alpha))
+        first = await service.append_points(
+            series_id,
+            [PointIn(ts=NOW, value=3500.0, unit="psi", quality="good", source_point_id="rev-pt")],
+            received_at=NOW,
+        )
+        await session.commit()
+    assert first.alerts_raised == 0
+
+    async with fabric.session() as session:
+        service = TelemetryService(session, fabric.org_id(fabric.alpha))
+        revised = await service.append_points(
+            series_id,
+            [PointIn(ts=NOW, value=4300.0, unit="psi", quality="good", source_point_id="rev-pt")],
+            on_conflict="revise",
+            received_at=NOW + dt.timedelta(seconds=5),
+        )
+        await session.commit()
+
+    assert revised.revised == 1
+    assert revised.alerts_raised == 1
+    assert revised.evaluation["decision"] == "revised_measurement"
+
+
+async def test_misconfigured_rule_does_not_abort_telemetry_ingest_or_healthy_rules(
+    fabric: Fabric,
+) -> None:
+    """During automatic evaluation (and recovery evaluation), a rule with an incompatible unit is
+    isolated in a savepoint and recorded in failures, while the telemetry batch and healthy rules
+    succeed."""
+
+    series_id = await _well(fabric, fabric.alpha)
+    await _rule(fabric, fabric.alpha, rule_key="spp-broken", unit="rpm", threshold=120.0)
+    await _rule(fabric, fabric.alpha, rule_key="spp-valid", unit="psi", threshold=4000.0)
+
+    async with fabric.session() as session:
+        service = TelemetryService(session, fabric.org_id(fabric.alpha))
+        report = await service.append_points(
+            series_id,
+            [PointIn(ts=NOW, value=4250.0, unit="psi", quality="good", source_point_id="iso-1")],
+            received_at=NOW,
+        )
+        await session.commit()
+
+    assert report.accepted == 1
+    assert report.alerts_raised == 1
+    assert report.evaluation["status"] == "degraded"
+    assert report.evaluation["failed"] == 1
+    assert report.evaluation["reconciled"] is True
+    assert len(report.evaluation["failures"]) == 1
+    assert report.evaluation["failures"][0]["rule_key"] == "spp-broken"
+
+    # Recovery mode on AlertService.evaluate_well also isolates the broken rule.
+    async with fabric.session() as session:
+        recovery = await AlertService(session, fabric.org_id(fabric.alpha)).evaluate_well(
+            fabric.alpha.well_id,
+            now=NOW + dt.timedelta(seconds=5),
+            mode="recovery",
+        )
+        await session.commit()
+
+    assert recovery.mode == "recovery"
+    assert recovery.failed == 1
+    assert recovery.already_open == 1
+    assert recovery.reconciled is True
+
+
+async def test_concurrent_evaluators_on_same_channel_raise_only_one_alert(
+    fabric: Fabric,
+) -> None:
+    """Two evaluators running concurrently for the same well and channel produce exactly one open alert."""
+
+    import asyncio
+
+    series_id = await _well(fabric, fabric.alpha)
+    await _append(fabric, fabric.alpha, series_id, [(NOW, 4250.0)])
+    await _rule(fabric, fabric.alpha, sustain_seconds=0.0)
+
+    async def run_one():
+        async with fabric.session() as session:
+            rep = await AlertService(session, fabric.org_id(fabric.alpha)).evaluate_well(
+                fabric.alpha.well_id,
+                now=NOW,
+            )
+            await session.commit()
+            return rep
+
+    first, second = await asyncio.gather(run_one(), run_one())
+    assert first.raised + second.raised == 1
+    assert first.already_open + second.already_open == 1
+    alerts = await _alerts(fabric, fabric.alpha)
+    assert len(alerts) == 1
+
+
+async def test_historical_evidence_at_t1_is_not_overwritten_by_later_t2_telemetry(
+    fabric: Fabric,
+) -> None:
+    """When an alert is raised at T1 and 30 more points arrive at T2 > T1, evidence(alert_id) still
+    returns the historical T1 points rather than replacing them with T2 points."""
+
+    series_id = await _well(fabric, fabric.alpha)
+    await _rule(fabric, fabric.alpha, sustain_seconds=10.0)
+
+    t1 = NOW
+    async with fabric.session() as session:
+        service = TelemetryService(session, fabric.org_id(fabric.alpha))
+        rep_t1 = await service.append_points(
+            series_id,
+            [
+                PointIn(ts=t1 - dt.timedelta(seconds=10), value=4150.0, unit="psi", quality="good", source_point_id="t1-a"),
+                PointIn(ts=t1, value=4250.0, unit="psi", quality="good", source_point_id="t1-b"),
+            ],
+            received_at=t1,
+        )
+        await session.commit()
+    assert rep_t1.alerts_raised == 1
+    alert = (await _alerts(fabric, fabric.alpha))[0]
+
+    # Now append 30 later points at T2 > T1.
+    async with fabric.session() as session:
+        service = TelemetryService(session, fabric.org_id(fabric.alpha))
+        await service.append_points(
+            series_id,
+            [
+                PointIn(
+                    ts=t1 + dt.timedelta(minutes=5, seconds=index),
+                    value=4300.0 + index,
+                    unit="psi",
+                    quality="good",
+                    source_point_id=f"t2-{index}",
+                )
+                for index in range(30)
+            ],
+            received_at=t1 + dt.timedelta(minutes=6),
+        )
+        await session.commit()
+
+    async with fabric.session() as session:
+        evidence = await AlertService(session, fabric.org_id(fabric.alpha)).evidence(alert.id, points=10)
+
+    point_timestamps = [ dt.datetime.fromisoformat(pt["ts"]) for pt in evidence["points"] ]
+    assert len(point_timestamps) == 2
+    assert all(ts <= t1 for ts in point_timestamps), (
+        f"Evidence points at T1 were polluted by T2 points: {point_timestamps}"
+    )
+    assert evidence["observed"]["observed_at"] == t1.isoformat()
+

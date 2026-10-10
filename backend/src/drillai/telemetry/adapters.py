@@ -28,23 +28,35 @@ live. An adapter that could write would be a second ingestion path with its own 
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import datetime as dt
-from collections.abc import Iterable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Protocol, runtime_checkable
 
-from drillai.core.errors import ValidationFailed
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from drillai.core.clock import utc_now
+from drillai.core.errors import Conflict, ValidationFailed
 from drillai.telemetry.service import IngestReport, PointIn, TelemetryService
 from drillai.telemetry.units import convert
 from drillai.telemetry.vocabulary import CHANNEL_DIMENSIONS, QUALITY_STATES, SOURCE_KINDS
 
+ADAPTER_RUNNER_STATES = ("stopped", "starting", "running", "backing_off", "degraded", "failed")
+
 __all__ = [
+    "ADAPTER_RUNNER_STATES",
+    "AdapterHealth",
+    "AdapterIngestReport",
+    "AdapterRunner",
     "ChannelDescriptor",
     "SourceAdapter",
     "SourceFrame",
     "SyntheticAdapter",
     "WitsmlShapedAdapter",
     "ingest_frames",
+    "validate_descriptor",
 ]
 
 #: How many frames one ``poll`` returns, whatever the source has queued. A source that floods a poll is
@@ -440,6 +452,9 @@ class AdapterIngestReport:
     channels_created: int = 0
     reports: dict[str, IngestReport] = field(default_factory=dict)
     frames: int = 0
+    polls: int = 1
+    alerts_raised: int = 0
+    alerts_cleared: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         totals = {
@@ -452,8 +467,13 @@ class AdapterIngestReport:
             "adapter": self.adapter,
             "source": self.source,
             "frames": self.frames,
+            "polls": self.polls,
             "channels": sorted(self.reports),
             "channels_created": self.channels_created,
+            "alerts_raised": self.alerts_raised
+            or sum(report.alerts_raised for report in self.reports.values()),
+            "alerts_cleared": self.alerts_cleared
+            or sum(report.alerts_cleared for report in self.reports.values()),
             "totals": totals,
             "per_channel": {key: report.to_dict() for key, report in sorted(self.reports.items())},
         }
@@ -486,6 +506,8 @@ async def ingest_frames(
     await adapter.connect()
     try:
         descriptors = list(await adapter.describe_channels())
+        for descriptor in descriptors:
+            validate_descriptor(descriptor)
         if subscribe is not None:
             await adapter.subscribe(subscribe)
         # Channels are registered through the service, one per descriptor the source declares — the
@@ -521,7 +543,10 @@ async def ingest_frames(
                 )
             grouped.setdefault(key, []).append(point)
         for key, points in grouped.items():
-            report.reports[key] = await service.append_points(resolved[key], points)
+            channel_report = await service.append_points(resolved[key], points)
+            report.reports[key] = channel_report
+            report.alerts_raised += channel_report.alerts_raised
+            report.alerts_cleared += channel_report.alerts_cleared
         return report
     finally:
         if close:
@@ -541,3 +566,406 @@ def validate_descriptor(descriptor: ChannelDescriptor) -> None:
             },
         )
     convert(0.0, descriptor.unit, descriptor.dimension)
+
+
+@dataclass(frozen=True)
+class AdapterHealth:
+    """Runtime health snapshot of an adapter runner."""
+
+    adapter_key: str
+    source: str
+    well_id: str
+    status: str
+    polls_completed: int = 0
+    frames_received: int = 0
+    points_accepted: int = 0
+    points_duplicates: int = 0
+    points_rejected: int = 0
+    alerts_raised: int = 0
+    alerts_cleared: int = 0
+    reconnect_count: int = 0
+    consecutive_failures: int = 0
+    backoff_seconds: float = 0.0
+    started_at: dt.datetime | None = None
+    stopped_at: dt.datetime | None = None
+    last_poll_at: dt.datetime | None = None
+    last_successful_poll_at: dt.datetime | None = None
+    last_frame_at: dt.datetime | None = None
+    last_successful_ingest_at: dt.datetime | None = None
+    last_error: str | None = None
+    last_error_at: dt.datetime | None = None
+    subscribed_channels: tuple[str, ...] = ()
+
+    @property
+    def is_live(self) -> bool:
+        """A stopped, backing-off, degraded, or failed adapter never reports LIVE."""
+        return (
+            self.status == "running"
+            and self.last_error is None
+            and self.last_successful_poll_at is not None
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "adapter_key": self.adapter_key,
+            "source": self.source,
+            "well_id": self.well_id,
+            "status": self.status,
+            "is_live": self.is_live,
+            "polls_completed": self.polls_completed,
+            "frames_received": self.frames_received,
+            "points_accepted": self.points_accepted,
+            "points_duplicates": self.points_duplicates,
+            "points_rejected": self.points_rejected,
+            "alerts_raised": self.alerts_raised,
+            "alerts_cleared": self.alerts_cleared,
+            "reconnect_count": self.reconnect_count,
+            "consecutive_failures": self.consecutive_failures,
+            "backoff_seconds": round(self.backoff_seconds, 3),
+            "started_at": self.started_at.isoformat() if self.started_at else None,
+            "stopped_at": self.stopped_at.isoformat() if self.stopped_at else None,
+            "last_poll_at": self.last_poll_at.isoformat() if self.last_poll_at else None,
+            "last_successful_poll_at": (
+                self.last_successful_poll_at.isoformat() if self.last_successful_poll_at else None
+            ),
+            "last_frame_at": self.last_frame_at.isoformat() if self.last_frame_at else None,
+            "last_successful_ingest_at": (
+                self.last_successful_ingest_at.isoformat() if self.last_successful_ingest_at else None
+            ),
+            "last_error": self.last_error,
+            "last_error_at": self.last_error_at.isoformat() if self.last_error_at else None,
+            "subscribed_channels": list(self.subscribed_channels),
+        }
+
+
+class AdapterRunner:
+    """Governable execution lifecycle connecting a :class:`SourceAdapter` to :class:`TelemetryService`.
+
+    The runner never writes to the database directly: every channel registration and measurement batch
+    passes through :class:`TelemetryService` (and therefore through unit normalization, replay
+    detection, automatic alert rule evaluation, audit logging, and the transactional outbox).
+    """
+
+    def __init__(
+        self,
+        *,
+        session_factory: Callable[[], contextlib.AbstractAsyncContextManager[AsyncSession]],
+        org_id: str,
+        well_id: str,
+        adapter: SourceAdapter,
+        wellbore_id: str | None = None,
+        operation_id: str | None = None,
+        subscribe: Sequence[str] | None = None,
+        poll_interval_seconds: float = 0.25,
+        base_backoff_seconds: float = 0.05,
+        max_backoff_seconds: float = 4.0,
+        max_consecutive_failures: int = 5,
+        principal: Any = None,
+    ) -> None:
+        if adapter.source not in SOURCE_KINDS:
+            raise ValidationFailed(
+                "the adapter's source kind is not one the platform records",
+                details={"field": "source", "value": adapter.source, "allowed": list(SOURCE_KINDS)},
+            )
+        self._session_factory = session_factory
+        self.org_id = org_id
+        self.well_id = well_id
+        self.wellbore_id = wellbore_id
+        self.operation_id = operation_id
+        self.adapter = adapter
+        self._requested_subscription = tuple(subscribe) if subscribe is not None else None
+        self.poll_interval_seconds = max(0.005, float(poll_interval_seconds))
+        self.base_backoff_seconds = max(0.005, float(base_backoff_seconds))
+        self.max_backoff_seconds = max(self.base_backoff_seconds, float(max_backoff_seconds))
+        self.max_consecutive_failures = max(1, int(max_consecutive_failures))
+        self._principal = principal
+
+        self._status: str = "stopped"
+        self._resolved_channels: dict[str, str] = {}
+        self._channels_created: int = 0
+        self._polls_completed: int = 0
+        self._frames_received: int = 0
+        self._points_accepted: int = 0
+        self._points_duplicates: int = 0
+        self._points_rejected: int = 0
+        self._alerts_raised: int = 0
+        self._alerts_cleared: int = 0
+        self._reconnect_count: int = 0
+        self._consecutive_failures: int = 0
+        self._backoff_seconds: float = 0.0
+        self._started_at: dt.datetime | None = None
+        self._stopped_at: dt.datetime | None = None
+        self._last_poll_at: dt.datetime | None = None
+        self._last_successful_poll_at: dt.datetime | None = None
+        self._last_frame_at: dt.datetime | None = None
+        self._last_successful_ingest_at: dt.datetime | None = None
+        self._last_error: str | None = None
+        self._last_error_at: dt.datetime | None = None
+        self._subscribed_channels: tuple[str, ...] = ()
+        self._task: asyncio.Task[None] | None = None
+        self._stop_event = asyncio.Event()
+
+    def health(self) -> AdapterHealth:
+        return AdapterHealth(
+            adapter_key=self.adapter.key,
+            source=self.adapter.source,
+            well_id=self.well_id,
+            status=self._status,
+            polls_completed=self._polls_completed,
+            frames_received=self._frames_received,
+            points_accepted=self._points_accepted,
+            points_duplicates=self._points_duplicates,
+            points_rejected=self._points_rejected,
+            alerts_raised=self._alerts_raised,
+            alerts_cleared=self._alerts_cleared,
+            reconnect_count=self._reconnect_count,
+            consecutive_failures=self._consecutive_failures,
+            backoff_seconds=self._backoff_seconds,
+            started_at=self._started_at,
+            stopped_at=self._stopped_at,
+            last_poll_at=self._last_poll_at,
+            last_successful_poll_at=self._last_successful_poll_at,
+            last_frame_at=self._last_frame_at,
+            last_successful_ingest_at=self._last_successful_ingest_at,
+            last_error=self._last_error,
+            last_error_at=self._last_error_at,
+            subscribed_channels=self._subscribed_channels,
+        )
+
+    async def initialize(self) -> dict[str, str]:
+        """Connect the adapter, validate descriptors, subscribe, and register channels."""
+        self._status = "starting"
+        self._started_at = self._started_at or utc_now()
+        self._stopped_at = None
+        await self.adapter.connect()
+        descriptors = list(await self.adapter.describe_channels())
+        for descriptor in descriptors:
+            validate_descriptor(descriptor)
+        if self._requested_subscription is not None:
+            await self.adapter.subscribe(self._requested_subscription)
+            subscribed = {key.strip().lower() for key in self._requested_subscription}
+        else:
+            subscribed = {descriptor.channel_key.strip().lower() for descriptor in descriptors}
+
+        resolved: dict[str, str] = {}
+        async with self._session_factory() as session:
+            service = TelemetryService(session, self.org_id)
+            for descriptor in descriptors:
+                channel, created = await service.create_channel(
+                    well_id=self.well_id,
+                    wellbore_id=self.wellbore_id,
+                    operation_id=self.operation_id,
+                    channel_key=descriptor.channel_key,
+                    name=descriptor.name,
+                    dimension=descriptor.dimension,
+                    unit=descriptor.unit,
+                    description=descriptor.description,
+                    is_realtime=descriptor.is_realtime,
+                    source=self.adapter.source,
+                    principal=self._principal,
+                )
+                resolved[descriptor.channel_key.strip().lower()] = channel.id
+                if created:
+                    self._channels_created += 1
+            await session.commit()
+
+        self._resolved_channels = resolved
+        self._subscribed_channels = tuple(sorted(subscribed & set(resolved)))
+        self._status = "running"
+        return dict(self._resolved_channels)
+
+    async def step(self) -> AdapterIngestReport:
+        """Execute one poll -> normalize -> ingest -> auto-evaluate cycle."""
+        now = utc_now()
+        self._last_poll_at = now
+        try:
+            if not self._resolved_channels or self._status in {"stopped", "backing_off"}:
+                if self._status == "backing_off":
+                    self._reconnect_count += 1
+                await self.initialize()
+
+            frames = list(await self.adapter.poll())
+            poll_report = AdapterIngestReport(
+                adapter=self.adapter.key,
+                source=self.adapter.source,
+                channels_created=self._channels_created,
+                frames=len(frames),
+                polls=1,
+            )
+            grouped: dict[str, list[PointIn]] = {}
+            for frame in frames:
+                point = self.adapter.normalize(frame)
+                key = frame.channel_key.strip().lower()
+                if key not in self._resolved_channels:
+                    raise ValidationFailed(
+                        "the source produced a frame for a channel it did not describe",
+                        details={
+                            "channel_key": frame.channel_key,
+                            "described": sorted(self._resolved_channels),
+                        },
+                    )
+                grouped.setdefault(key, []).append(point)
+
+            if grouped:
+                self._last_frame_at = utc_now()
+                async with self._session_factory() as session:
+                    service = TelemetryService(session, self.org_id)
+                    for key, points in grouped.items():
+                        channel_report = await service.append_points(
+                            self._resolved_channels[key],
+                            points,
+                            principal=self._principal,
+                        )
+                        poll_report.reports[key] = channel_report
+                        poll_report.alerts_raised += channel_report.alerts_raised
+                        poll_report.alerts_cleared += channel_report.alerts_cleared
+                        self._points_accepted += channel_report.accepted
+                        self._points_duplicates += channel_report.duplicates
+                        self._points_rejected += channel_report.rejected
+                        self._alerts_raised += channel_report.alerts_raised
+                        self._alerts_cleared += channel_report.alerts_cleared
+                    await session.commit()
+                self._last_successful_ingest_at = utc_now()
+
+            self._polls_completed += 1
+            self._frames_received += len(frames)
+            self._last_successful_poll_at = utc_now()
+            self._consecutive_failures = 0
+            self._backoff_seconds = 0.0
+            self._last_error = None
+            self._last_error_at = None
+            self._status = "running"
+            return poll_report
+        except Exception as exc:
+            self._consecutive_failures += 1
+            self._last_error = str(exc)
+            self._last_error_at = utc_now()
+            self._backoff_seconds = min(
+                self.max_backoff_seconds,
+                self.base_backoff_seconds * (2 ** max(0, self._consecutive_failures - 1)),
+            )
+            if self._consecutive_failures >= self.max_consecutive_failures:
+                self._status = "failed"
+            else:
+                self._status = "backing_off"
+            with contextlib.suppress(Exception):
+                await self.adapter.close()
+            raise
+
+    async def run_until_drained(self, *, max_polls: int = 100) -> AdapterIngestReport:
+        """Poll in a bounded loop until the adapter returns an empty batch, then close cleanly."""
+        if self._task is not None and not self._task.done():
+            raise Conflict(
+                "adapter runner is already active",
+                details={"well_id": self.well_id, "adapter": self.adapter.key, "status": self._status},
+            )
+        combined = AdapterIngestReport(adapter=self.adapter.key, source=self.adapter.source, polls=0)
+        try:
+            await self.initialize()
+            for _ in range(max(1, max_polls)):
+                step_report = await self.step()
+                combined.polls += 1
+                combined.frames += step_report.frames
+                combined.channels_created = self._channels_created
+                combined.alerts_raised += step_report.alerts_raised
+                combined.alerts_cleared += step_report.alerts_cleared
+                for key, ch_rep in step_report.reports.items():
+                    if key not in combined.reports:
+                        combined.reports[key] = ch_rep
+                    else:
+                        prev = combined.reports[key]
+                        combined.reports[key] = IngestReport(
+                            channel_id=prev.channel_id,
+                            received=prev.received + ch_rep.received,
+                            accepted=prev.accepted + ch_rep.accepted,
+                            duplicates=prev.duplicates + ch_rep.duplicates,
+                            rejected=prev.rejected + ch_rep.rejected,
+                            late=prev.late + ch_rep.late,
+                            out_of_order=prev.out_of_order + ch_rep.out_of_order,
+                            revised=prev.revised + ch_rep.revised,
+                            quality_counts={
+                                k: prev.quality_counts.get(k, 0) + ch_rep.quality_counts.get(k, 0)
+                                for k in set(prev.quality_counts) | set(ch_rep.quality_counts)
+                            },
+                            first_ts=prev.first_ts or ch_rep.first_ts,
+                            last_ts=ch_rep.last_ts or prev.last_ts,
+                            rejections=[*prev.rejections, *ch_rep.rejections],
+                            conflicts=[*prev.conflicts, *ch_rep.conflicts],
+                            alerts_raised=prev.alerts_raised + ch_rep.alerts_raised,
+                            alerts_cleared=prev.alerts_cleared + ch_rep.alerts_cleared,
+                            evaluation=ch_rep.evaluation or prev.evaluation,
+                        )
+                if step_report.frames == 0:
+                    break
+            return combined
+        finally:
+            await self.stop()
+
+    async def start(self) -> None:
+        """Start the background polling loop, refusing duplicate startups."""
+        if self._task is not None and not self._task.done():
+            raise Conflict(
+                "adapter runner is already active",
+                details={"well_id": self.well_id, "adapter": self.adapter.key, "status": self._status},
+            )
+        self._stop_event.clear()
+        await self.initialize()
+        self._task = asyncio.create_task(
+            self._run_loop(), name=f"adapter-runner:{self.well_id}:{self.adapter.key}"
+        )
+
+    async def _run_loop(self) -> None:
+        try:
+            while not self._stop_event.is_set():
+                try:
+                    await self.step()
+                    wait_seconds = self.poll_interval_seconds
+                except asyncio.CancelledError:
+                    raise
+                except Exception:
+                    if self._status == "failed":
+                        return
+                    wait_seconds = self._backoff_seconds or self.base_backoff_seconds
+                try:
+                    await asyncio.wait_for(self._stop_event.wait(), timeout=wait_seconds)
+                except TimeoutError:
+                    continue
+        except asyncio.CancelledError:
+            raise
+        finally:
+            with contextlib.suppress(Exception):
+                await self.adapter.close()
+            if self._status != "failed":
+                self._status = "stopped"
+            self._stopped_at = utc_now()
+
+    async def stop(self) -> None:
+        """Gracefully stop the runner and close the adapter."""
+        self._stop_event.set()
+        if self._task is not None:
+            if not self._task.done():
+                self._task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await self._task
+            self._task = None
+        with contextlib.suppress(Exception):
+            await self.adapter.close()
+        if self._status != "failed":
+            self._status = "stopped"
+        self._stopped_at = utc_now()
+
+    async def cancel(self) -> None:
+        """Cancel the runner immediately and close the adapter."""
+        await self.stop()
+
+    async def restart(self) -> None:
+        """Stop the runner if active, reset consecutive failure counters, and start again."""
+        await self.stop()
+        self._reconnect_count += 1
+        self._consecutive_failures = 0
+        self._backoff_seconds = 0.0
+        self._last_error = None
+        self._last_error_at = None
+        self._resolved_channels = {}
+        await self.start()
+

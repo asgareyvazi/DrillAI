@@ -349,4 +349,139 @@ async def test_ingesting_the_same_frames_twice_is_a_replay_not_a_second_row(sess
     assert len(rows) == 1
 
 
+from drillai.core.errors import Conflict
+from drillai.db.models import Alert, OutboxEvent
 from drillai.db.models import TimeSeriesPoint as TimeSeriesPointRow
+from drillai.telemetry.adapters import AdapterRunner
+from drillai.telemetry.alerts import AlertRuleService
+
+
+async def test_adapter_runner_drives_synthetic_adapter_through_telemetry_and_auto_alerts(session) -> None:
+    """AdapterRunner executes SyntheticAdapter -> TelemetryService -> AlertService -> Outbox in one
+    governed path and reports accurate runtime health."""
+
+    import contextlib
+
+    await _tenant(session)
+    await AlertRuleService(session, ORG).create(
+        rule_key="spp-high-runner",
+        name="SPP High Runner",
+        channel_key="spp",
+        operator="gt",
+        threshold=4000.0,
+        unit="psi",
+        severity="high",
+        sustain_seconds=5.0,
+        cooldown_seconds=0.0,
+        well_id=WELL,
+    )
+    await session.commit()
+
+    adapter = SyntheticAdapter(
+        [_spp()],
+        {"spp": [(0.0, 4150.0), (5.0, 4250.0)]},
+        start=START,
+    )
+
+    @contextlib.asynccontextmanager
+    async def _borrowed():
+        yield session
+
+    runner = AdapterRunner(
+        session_factory=_borrowed,
+        org_id=ORG,
+        well_id=WELL,
+        adapter=adapter,
+    )
+    assert runner.health().status == "stopped"
+    assert runner.health().is_live is False
+
+    await runner.initialize()
+    step1 = await runner.step()
+    assert step1.frames == 1
+    assert step1.alerts_raised == 0
+    step2 = await runner.step()
+    assert step2.frames == 1
+    assert step2.alerts_raised == 1
+    assert runner.health().status == "running"
+    assert runner.health().is_live is True
+    assert runner.health().points_accepted == 2
+    assert runner.health().alerts_raised == 1
+
+    await runner.stop()
+    assert runner.health().status == "stopped"
+    assert runner.health().is_live is False
+
+    alerts = (
+        await session.execute(select(Alert).where(Alert.org_id == ORG, Alert.well_id == WELL))
+    ).scalars().all()
+    assert len(alerts) == 1
+    assert alerts[0].status == "raised"
+
+    outbox_types = (
+        await session.execute(
+            select(OutboxEvent.event_type).where(OutboxEvent.org_id == ORG, OutboxEvent.well_id == WELL)
+        )
+    ).scalars().all()
+    assert "telemetry.received" in outbox_types
+    assert "alert.raised" in outbox_types
+
+
+async def test_adapter_runner_prevents_duplicate_start_and_tracks_failure_backoff(session) -> None:
+    """Starting an already-running AdapterRunner is refused with Conflict; poll failures transition
+    through backing_off to failed and never claim is_live=True."""
+
+    import contextlib
+
+    await _tenant(session)
+
+    @contextlib.asynccontextmanager
+    async def _borrowed():
+        yield session
+
+    runner = AdapterRunner(
+        session_factory=_borrowed,
+        org_id=ORG,
+        well_id=WELL,
+        adapter=SyntheticAdapter([_spp()], {"spp": [(0.0, 3500.0)]}, start=START),
+        poll_interval_seconds=0.5,
+    )
+    await runner.start()
+    try:
+        with pytest.raises(Conflict):
+            await runner.start()
+    finally:
+        await runner.stop()
+    assert runner.health().status == "stopped"
+    assert runner.health().is_live is False
+
+    class _FailingAdapter(SyntheticAdapter):
+        async def poll(self):
+            raise RuntimeError("upstream socket reset")
+
+    failing_runner = AdapterRunner(
+        session_factory=_borrowed,
+        org_id=ORG,
+        well_id=WELL,
+        adapter=_FailingAdapter([_spp()], {"spp": [(0.0, 3500.0)]}, start=START),
+        base_backoff_seconds=0.05,
+        max_backoff_seconds=0.5,
+        max_consecutive_failures=2,
+    )
+    await failing_runner.initialize()
+    with pytest.raises(RuntimeError, match="upstream socket reset"):
+        await failing_runner.step()
+    h1 = failing_runner.health()
+    assert h1.status == "backing_off"
+    assert h1.is_live is False
+    assert h1.consecutive_failures == 1
+    assert h1.backoff_seconds == pytest.approx(0.05)
+    assert "upstream socket reset" in (h1.last_error or "")
+
+    with pytest.raises(RuntimeError, match="upstream socket reset"):
+        await failing_runner.step()
+    h2 = failing_runner.health()
+    assert h2.status == "failed"
+    assert h2.is_live is False
+    assert h2.consecutive_failures == 2
+

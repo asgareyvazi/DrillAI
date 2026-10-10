@@ -773,6 +773,7 @@ def latest_reading_out(reading: Any) -> dict[str, Any]:
         "value": reading.value,
         "quality": reading.quality,
         "quality_flags": list(reading.quality_flags),
+        "is_trustworthy": bool(getattr(reading, "is_trustworthy", reading.value is not None)),
         "observed_at": _iso(reading.observed_at),
         "received_at": _iso(reading.received_at),
         "age_seconds": reading.age_seconds,
@@ -831,6 +832,8 @@ def alert_out(row: Any) -> dict[str, Any]:
     sends back as ``expected_updated_at`` to make its decision conflict-checked.
     """
 
+    from drillai.telemetry.vocabulary import alert_transitions
+
     closed_at = row.cleared_at or row.acknowledged_at
     return {
         "id": row.id,
@@ -846,6 +849,7 @@ def alert_out(row: Any) -> dict[str, Any]:
         "section_id": row.section_id,
         "subject": {"kind": row.subject_kind, "id": row.subject_id},
         "series_id": row.series_id,
+        "channel_key": (row.attributes or {}).get("channel_key"),
         "source_point_id": row.source_point_id,
         "rule_id": row.rule_id,
         "rule_ref": row.rule_ref,
@@ -868,6 +872,7 @@ def alert_out(row: Any) -> dict[str, Any]:
         "cleared_at": _iso(row.cleared_at),
         "cancelled_reason": row.cancelled_reason,
         "reason": (row.attributes or {}).get("raise_reason"),
+        "allowed_transitions": sorted(alert_transitions(row.status)),
         "version": _iso(row.updated_at),
         "transitioned_at": _iso(closed_at),
         "evidence_url": f"/api/v1/alerts/{row.id}/evidence",

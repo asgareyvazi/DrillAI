@@ -26,9 +26,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from drillai.api.deps import AuthContext, OptionalFilter, get_db, require
 from drillai.api.serializers import channel_out, point_out
+from drillai.core.clock import utc_now
 from drillai.core.idempotency import complete, replay_or_reserve
 from drillai.security.actions import authorize
-from drillai.telemetry.alerts import AlertService
+from drillai.telemetry.adapters import (
+    AdapterRunner,
+    ChannelDescriptor,
+    SyntheticAdapter,
+)
 from drillai.telemetry.identity import resolve_channel_scope
 from drillai.telemetry.service import PointIn, TelemetryService
 
@@ -258,9 +263,6 @@ async def append_points(
         return replayed
 
     service = _service(session, auth)
-    # The channel is resolved (tenant-scoped) before anything is written or evaluated: the rule pass
-    # below needs the well it belongs to, and a caller who cannot read the channel cannot append to it.
-    channel = await service.channel_by_id(series_id)
     report = await service.append_points(
         series_id,
         [
@@ -281,17 +283,9 @@ async def append_points(
         default_unit=payload.default_unit,
         on_conflict=payload.on_conflict,
         principal=auth.principal,
+        trace_id=getattr(request.state, "request_id", None),
     )
     response = report.to_dict()
-    # Rules are evaluated on the channels this batch actually touched, before the commit: a measurement
-    # and the alert it causes are one transaction. A rule that fired on a batch that then rolled back
-    # would leave an alert about a reading that does not exist.
-    if report.written:
-        evaluation = await AlertService(session, org_id, principal=auth.principal).evaluate_well(
-            channel.well_id, channel_ids=[channel.id]
-        )
-        response["alerts_raised"] = evaluation.raised
-        response["alerts_cleared"] = evaluation.cleared
     await complete(session, org_id=org_id, key=idempotency_key, scope=scope, response=response)
     await session.commit()
     return response
@@ -340,3 +334,112 @@ async def well_latest(
         "fresh_seconds": service.fresh_seconds,
         "stale_seconds": service.stale_seconds,
     }
+
+
+class SyntheticChannelPlanModel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    channel_key: str = Field(min_length=1, max_length=160)
+    name: str = Field(min_length=1, max_length=200)
+    dimension: str
+    unit: str
+    values: list[float] = Field(min_length=1, max_length=500)
+    start: dt.datetime | None = None
+    step_seconds: float = Field(default=5.0, gt=0)
+    quality: str = "good"
+    source_prefix: str = "syn"
+
+
+class SyntheticCommissionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    wellbore_id: str | None = None
+    operation_id: str | None = None
+    channels: list[SyntheticChannelPlanModel] = Field(min_length=1, max_length=50)
+    subscribe: list[str] | None = None
+
+
+@router.post(
+    "/wells/{well_id}/timeseries/commission-synthetic",
+    summary="Execute a deterministic synthetic telemetry commissioning run through AdapterRunner",
+    status_code=201,
+)
+async def commission_synthetic_telemetry(
+    well_id: str,
+    payload: SyntheticCommissionRequest,
+    request: Request,
+    session: Annotated[AsyncSession, Depends(get_db)],
+    auth: Annotated[AuthContext, Depends(require("timeseries.read"))],
+    idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key", max_length=160)] = None,
+) -> dict[str, Any]:
+    """Run a declared :class:`SyntheticAdapter` plan through :class:`AdapterRunner` and
+    :class:`TelemetryService`, exercising channel registration, unit normalization, automatic rule
+    evaluation, outbox emission, and runtime health reporting."""
+
+    import contextlib
+
+    authorize(auth.principal, "timeseries.append")
+    org_id = auth.org_id or ""
+    scope = "timeseries.commission_synthetic"
+    body = {"well_id": well_id, **payload.model_dump(mode="json")}
+    if (
+        replayed := await replay_or_reserve(
+            session, org_id=org_id, key=idempotency_key, scope=scope, payload=body
+        )
+    ) is not None:
+        return replayed
+
+    await resolve_channel_scope(
+        session,
+        org_id=org_id,
+        well_id=well_id,
+        wellbore_id=payload.wellbore_id,
+        operation_id=payload.operation_id,
+    )
+    default_start = next(
+        (item.start for item in payload.channels if item.start is not None),
+        utc_now() - dt.timedelta(seconds=30),
+    )
+    descriptors = [
+        ChannelDescriptor(
+            channel_key=item.channel_key,
+            name=item.name,
+            dimension=item.dimension,
+            unit=item.unit,
+            is_realtime=True,
+        )
+        for item in payload.channels
+    ]
+    plan: dict[str, list[tuple[float, float | None]]] = {
+        item.channel_key: [
+            (float(idx * item.step_seconds), float(val)) for idx, val in enumerate(item.values)
+        ]
+        for item in payload.channels
+    }
+    adapter = SyntheticAdapter(descriptors, plan, start=default_start)
+
+    @contextlib.asynccontextmanager
+    async def _borrowed_session():
+        yield session
+
+    runner = AdapterRunner(
+        session_factory=_borrowed_session,
+        org_id=org_id,
+        well_id=well_id,
+        wellbore_id=payload.wellbore_id,
+        operation_id=payload.operation_id,
+        adapter=adapter,
+        subscribe=payload.subscribe,
+        principal=auth.principal,
+    )
+    max_polls = max((len(item.values) for item in payload.channels), default=1) + 2
+    report = await runner.run_until_drained(max_polls=max_polls)
+    response = {
+        "well_id": well_id,
+        "report": report.to_dict(),
+        "health": runner.health().to_dict(),
+    }
+    await complete(session, org_id=org_id, key=idempotency_key, scope=scope, response=response)
+    await session.commit()
+    return response
+

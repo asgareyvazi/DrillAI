@@ -521,7 +521,7 @@ async def test_interleaved_activity_on_another_well_never_triggers_false_backlog
                 ],
             )
 
-        # Now breach the threshold on Well A and raise an alert.
+        # Now breach the threshold on Well A and raise an alert automatically on ingest.
         await _append(
             client,
             series_a,
@@ -533,7 +533,6 @@ async def test_interleaved_activity_on_another_well_never_triggers_false_backlog
                 }
             ],
         )
-        await client.post(f"{PREFIX}/wells/{well_a}/alerts/evaluate", headers=headers("engineer"))
 
         frames = await _read_until(
             socket_a,
@@ -617,7 +616,6 @@ async def test_scoped_cursor_resumes_and_multiple_consumers_observe_deterministi
             series_id,
             [{"ts": BASE_TS.isoformat(), "value": 4250.0, "unit": "psi"}],
         )
-        await client.post(f"{PREFIX}/wells/{well_id}/alerts/evaluate", headers=headers("engineer"))
 
         frames_one = await _read_until(
             sub_one, lambda frame: frame["type"] == "event" and frame["event"]["type"] == "alert.raised"
@@ -639,4 +637,89 @@ async def test_scoped_cursor_resumes_and_multiple_consumers_observe_deterministi
         await _read(resumed, 2)
         tail_frames = await _read_until(resumed, lambda frame: frame["type"] == "telemetry")
     assert _sequences(tail_frames) == [max(_sequences(frames_one)) + 1]
+
+
+async def test_synthetic_commissioning_and_live_snapshot_endpoint(client, websocket) -> None:
+    """POST /wells/{well_id}/timeseries/commission-synthetic runs SyntheticAdapter via AdapterRunner,
+    auto-raises alerts, emits outbox events to the live stream, and GET /wells/{well_id}/live/snapshot
+    returns the assembled operational view with explicit as_of timestamps and cursor."""
+
+    project = await client.post(
+        f"{PREFIX}/projects", json={"name": "Commissioning"}, headers=headers("well_manager")
+    )
+    well = await client.post(
+        f"{PREFIX}/wells",
+        json={"project_id": project.json()["id"], "name": "COMM-1", "well_type": "development_producer"},
+        headers=headers("well_manager"),
+    )
+    assert well.status_code == 201, well.text
+    well_id = well.json()["id"]
+
+    rule_resp = await client.post(
+        f"{PREFIX}/alert-rules",
+        json={
+            "rule_key": "spp-high-comm",
+            "name": "Standpipe Pressure High",
+            "channel_key": "spp",
+            "well_id": well_id,
+            "operator": "gt",
+            "threshold": 4000.0,
+            "unit": "psi",
+            "severity": "critical",
+            "sustain_seconds": 5.0,
+            "cooldown_seconds": 0.0,
+        },
+        headers=headers("engineer"),
+    )
+    assert rule_resp.status_code == 201, rule_resp.text
+
+    async with websocket(f"{PREFIX}/wells/{well_id}/live/stream") as socket:
+        await _read(socket, 2)
+        comm_resp = await client.post(
+            f"{PREFIX}/wells/{well_id}/timeseries/commission-synthetic",
+            json={
+                "channels": [
+                    {
+                        "channel_key": "spp",
+                        "name": "Standpipe Pressure",
+                        "dimension": "pressure",
+                        "unit": "psi",
+                        "values": [4120.0, 4260.0],
+                        "start": BASE_TS.isoformat(),
+                        "step_seconds": 5.0,
+                    }
+                ],
+            },
+            headers={**headers("engineer"), "Idempotency-Key": "comm-001"},
+        )
+        assert comm_resp.status_code == 201, comm_resp.text
+        comm_body = comm_resp.json()
+        assert comm_body["report"]["alerts_raised"] == 1
+        assert comm_body["report"]["totals"]["accepted"] == 2
+        assert comm_body["health"]["points_accepted"] == 2
+
+        frames = await _read_until(
+            socket, lambda frame: frame["type"] == "event" and frame["event"]["type"] == "alert.raised"
+        )
+        assert any(f["type"] == "telemetry" for f in frames)
+
+    from drillai.telemetry.outbox import decode_stream_cursor
+
+    snap_resp = await client.get(
+        f"{PREFIX}/wells/{well_id}/live/snapshot",
+        headers=headers("viewer"),
+    )
+    assert snap_resp.status_code == 200, snap_resp.text
+    snap = snap_resp.json()
+    assert snap["well_id"] == well_id
+    assert snap["telemetry_as_of"] is not None
+    assert snap["alerts_as_of"] is not None
+    decoded_cursor = decode_stream_cursor(snap["cursor"])
+    assert decoded_cursor.well_id == well_id
+    assert decoded_cursor.sequence == snap["stream_position"]
+    assert len(snap["latest"]) == 1
+    assert snap["latest"][0]["is_trustworthy"] is True
+    assert len(snap["alerts"]) == 1
+    assert "acknowledged" in snap["alerts"][0]["allowed_transitions"]
+
 

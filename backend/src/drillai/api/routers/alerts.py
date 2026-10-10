@@ -254,10 +254,12 @@ async def alert_evidence(
         "alert": alert_out(evidence["alert"]),
         "rule": alert_rule_out(evidence["rule"]) if evidence["rule"] is not None else None,
         "rule_snapshot": evidence["rule_snapshot"],
+        "evaluation": evidence.get("evaluation"),
         "observed": evidence["observed"],
         "provenance": evidence["provenance"],
         "points": evidence["points"],
         "timeline": evidence["timeline"],
+        "audit_events": evidence.get("audit_events", []),
     }
 
 
@@ -339,9 +341,11 @@ async def cancel_alert(
 @router.post("/wells/{well_id}/alerts/evaluate", summary="Run the well's rules against its stored points")
 async def evaluate_well(
     well_id: str,
+    request: Request,
     session: Annotated[AsyncSession, Depends(get_db)],
     auth: Annotated[AuthContext, Depends(require("alert.read"))],
     channel_id: list[str] | None = Query(default=None, description="repeatable; narrow the pass"),
+    mode: str = Query(default="manual", description="manual | recovery"),
 ) -> dict[str, Any]:
     """Deterministic: the same stored points and rules produce the same decisions, every time.
 
@@ -351,7 +355,12 @@ async def evaluate_well(
     """
 
     authorize(auth.principal, "alert.rule_manage")
-    report = await _alerts(session, auth).evaluate_well(well_id, channel_ids=channel_id)
+    report = await _alerts(session, auth).evaluate_well(
+        well_id,
+        channel_ids=channel_id,
+        mode=mode,
+        trace_id=getattr(request.state, "request_id", None),
+    )
     payload = report.to_dict()
     await session.commit()
     return payload

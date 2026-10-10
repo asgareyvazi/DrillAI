@@ -33,17 +33,17 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from drillai.api.deps import AuthContext, current_auth
+from drillai.api.deps import AuthContext, current_auth, get_db, require
 from drillai.api.serializers import alert_out
 from drillai.core.clock import utc_now
-from drillai.core.errors import ValidationFailed
-from drillai.db.models import Well
+from drillai.core.errors import NotFound, ValidationFailed
+from drillai.db.models import Operation, Well
 from drillai.telemetry.alerts import AlertService
 from drillai.telemetry.outbox import (
     ENVELOPE_VERSION,
@@ -141,6 +141,15 @@ async def _snapshot(
         candidate = row.updated_at or row.raised_at
         if candidate is not None and (alerts_ts is None or candidate > alerts_ts):
             alerts_ts = candidate
+    operation_ts = (
+        await session.execute(
+            select(func.max(Operation.updated_at)).where(
+                Operation.org_id == org_id,
+                Operation.well_id == well_id,
+                Operation.operation_class == "actual",
+            )
+        )
+    ).scalar_one_or_none()
     trends = await service.trends(
         well_id=well_id, channel_ids=[reading.channel_id for reading in readings]
     )
@@ -149,7 +158,8 @@ async def _snapshot(
         "well_id": well_id,
         "generated_at": now_iso,
         "telemetry_as_of": latest_ts.isoformat() if latest_ts is not None else None,
-        "alerts_as_of": alerts_ts.isoformat() if alerts_ts is not None else now_iso,
+        "operation_as_of": operation_ts.isoformat() if operation_ts is not None else None,
+        "alerts_as_of": alerts_ts.isoformat() if alerts_ts is not None else None,
         "stream_position": position,
         "cursor": encode_stream_cursor(org_id=org_id, well_id=well_id, sequence=position),
         "latest": [reading.to_dict() for reading in readings],
@@ -157,6 +167,27 @@ async def _snapshot(
         "alerts": [alert_out(row) for row in alerts],
         "freshness": dict(sorted(freshness.items())),
     }
+
+
+@router.get("/wells/{well_id}/live/snapshot", summary="Bounded operational snapshot of a well")
+async def get_well_live_snapshot(
+    well_id: str,
+    session: Annotated[AsyncSession, Depends(get_db)],
+    auth: Annotated[AuthContext, Depends(require("live.read"))],
+) -> dict[str, Any]:
+    """Assembled operational view (latest readings, non-predictive trends, open alerts, stream cursor)
+    with explicit per-domain ``as_of`` timestamps for resync and polling fallback."""
+
+    org_id = auth.org_id or ""
+    owned = (
+        await session.execute(
+            select(Well.id).where(Well.id == well_id, Well.org_id == org_id)
+        )
+    ).scalar_one_or_none()
+    if owned is None:
+        raise NotFound(f"well {well_id!r} not found")
+    position = await stream_position(session, org_id, well_id=well_id)
+    return await _snapshot(session, auth, well_id, position=position)
 
 
 @router.websocket("/wells/{well_id}/live/stream")

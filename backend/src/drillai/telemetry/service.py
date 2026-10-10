@@ -175,6 +175,9 @@ class IngestReport:
     #: A conflict is not a duplicate: the source is asserting something new about a moment it already
     #: described, and the caller decides (see ``on_conflict``).
     conflicts: list[Rejection] = field(default_factory=list)
+    alerts_raised: int = 0
+    alerts_cleared: int = 0
+    evaluation: dict[str, Any] = field(default_factory=dict)
 
     @property
     def written(self) -> int:
@@ -201,6 +204,9 @@ class IngestReport:
                 {"index": item.index, "reason": item.reason, **item.details}
                 for item in self.rejections[:50]
             ],
+            "alerts_raised": self.alerts_raised,
+            "alerts_cleared": self.alerts_cleared,
+            "evaluation": dict(self.evaluation),
             "reconciled": self.received == self.accepted + self.duplicates + self.rejected + self.revised,
         }
 
@@ -225,6 +231,10 @@ class LatestReading:
     source_ref: str | None
     is_late: bool
 
+    @property
+    def is_trustworthy(self) -> bool:
+        return self.quality in TRUSTWORTHY_QUALITY and self.value is not None
+
     def to_dict(self) -> dict[str, Any]:
         """The reading as a client sees it: the number *and* how much to trust it.
 
@@ -241,6 +251,7 @@ class LatestReading:
             "value": self.value,
             "quality": self.quality,
             "quality_flags": list(self.quality_flags),
+            "is_trustworthy": self.is_trustworthy,
             "observed_at": self.observed_at.isoformat() if self.observed_at else None,
             "received_at": self.received_at.isoformat() if self.received_at else None,
             "age_seconds": round(self.age_seconds, 3) if self.age_seconds is not None else None,
@@ -569,6 +580,9 @@ class TelemetryService:
         on_conflict: str = "reject",
         principal: Any = None,
         received_at: dt.datetime | None = None,
+        auto_evaluate: bool = True,
+        evaluation_now: dt.datetime | None = None,
+        trace_id: str | None = None,
     ) -> IngestReport:
         """Append a batch of measurements.
 
@@ -603,6 +617,13 @@ class TelemetryService:
         now = received_at or utc_now()
         report = IngestReport(channel_id=channel.id, received=len(points))
         if not points:
+            report.evaluation = {
+                "status": "skipped",
+                "decision": "skipped_empty_batch",
+                "mode": "auto_ingest",
+                "raised": 0,
+                "cleared": 0,
+            }
             return report
 
         # ---- pass 1: validate and normalise, refusing row by row and never raising for one bad row.
@@ -642,6 +663,8 @@ class TelemetryService:
             if horizon is None or item.row.ts > horizon:
                 horizon = item.row.ts
         landed = await self._insert_points([item.row for item in candidates])
+        trustworthy_written = 0
+        newest_trustworthy_ts: dt.datetime | None = None
 
         for item in prepared:
             key = item.identity.dedup_key
@@ -684,6 +707,10 @@ class TelemetryService:
                 report.revised += 1
 
             report.quality_counts[row.quality] = report.quality_counts.get(row.quality, 0) + 1
+            if row.quality in TRUSTWORTHY_QUALITY and row.value is not None:
+                trustworthy_written += 1
+                if newest_trustworthy_ts is None or row.ts > newest_trustworthy_ts:
+                    newest_trustworthy_ts = row.ts
             if row.is_late:
                 report.late += 1
             if row.is_out_of_order:
@@ -799,7 +826,116 @@ class TelemetryService:
                     "quality_counts": dict(sorted(report.quality_counts.items())),
                 },
             )
+        await self._evaluate_after_ingest(
+            channel=channel,
+            report=report,
+            auto_evaluate=auto_evaluate,
+            trustworthy_written=trustworthy_written,
+            newest_trustworthy_ts=newest_trustworthy_ts,
+            previous_horizon=previous_horizon,
+            now=evaluation_now or now,
+            principal=principal,
+            trace_id=trace_id,
+        )
         return report
+
+    async def _evaluate_after_ingest(
+        self,
+        *,
+        channel: TimeSeries,
+        report: IngestReport,
+        auto_evaluate: bool,
+        trustworthy_written: int,
+        newest_trustworthy_ts: dt.datetime | None,
+        previous_horizon: dt.datetime | None,
+        now: dt.datetime,
+        principal: Any,
+        trace_id: str | None,
+    ) -> None:
+        """Deterministically classify whether an ingested batch should evaluate alert rules."""
+
+        if not auto_evaluate or not channel.well_id:
+            report.evaluation = {
+                "status": "skipped",
+                "decision": "disabled",
+                "mode": "auto_ingest",
+                "raised": 0,
+                "cleared": 0,
+            }
+            return
+
+        if report.written == 0:
+            if report.duplicates > 0 and not report.conflicts:
+                decision = "skipped_duplicate_replay"
+            elif report.conflicts:
+                decision = "skipped_conflicting_replay"
+            else:
+                decision = "skipped_no_accepted_points"
+            report.evaluation = {
+                "status": "skipped",
+                "decision": decision,
+                "mode": "auto_ingest",
+                "raised": 0,
+                "cleared": 0,
+            }
+            return
+
+        if trustworthy_written == 0 and report.revised == 0:
+            report.evaluation = {
+                "status": "skipped",
+                "decision": "skipped_untrustworthy_quality",
+                "mode": "auto_ingest",
+                "raised": 0,
+                "cleared": 0,
+            }
+            return
+
+        if (
+            previous_horizon is not None
+            and newest_trustworthy_ts is not None
+            and (previous_horizon - newest_trustworthy_ts).total_seconds() > self.stale_seconds
+            and report.revised == 0
+        ):
+            report.evaluation = {
+                "status": "skipped",
+                "decision": "skipped_historical_out_of_order",
+                "mode": "auto_ingest",
+                "raised": 0,
+                "cleared": 0,
+                "horizon_ts": previous_horizon.isoformat(),
+                "batch_last_ts": newest_trustworthy_ts.isoformat(),
+            }
+            return
+
+        if report.revised > 0:
+            decision = "revised_measurement"
+        elif report.late > 0 and report.accepted == report.late:
+            decision = "late_measurement"
+        elif report.out_of_order > 0 and report.accepted == report.out_of_order:
+            decision = "out_of_order_within_window"
+        else:
+            decision = "new_measurement"
+
+        from drillai.telemetry.alerts import AlertService
+
+        eval_report = await AlertService(
+            self.session, self.org_id, principal=principal
+        ).evaluate_well(
+            channel.well_id,
+            now=now,
+            channel_ids=[channel.id],
+            mode="auto_ingest",
+            isolate_rule_errors=True,
+            trigger=decision,
+            trace_id=trace_id,
+        )
+        report.alerts_raised = eval_report.raised
+        report.alerts_cleared = eval_report.cleared
+        report.evaluation = {
+            "status": "evaluated" if eval_report.failed == 0 else "degraded",
+            "decision": decision,
+            **eval_report.to_dict(),
+        }
 
     def _prepare_point(
         self,

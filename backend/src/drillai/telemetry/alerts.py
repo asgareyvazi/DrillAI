@@ -26,7 +26,9 @@ deterministic — same points, same ruleset, same answer — because the arithme
 
 from __future__ import annotations
 
+import asyncio
 import datetime as dt
+import time
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from typing import Any
@@ -38,7 +40,8 @@ from drillai.core.audit import record_audit
 from drillai.core.clock import utc_now
 from drillai.core.errors import Conflict, NotFound, ValidationFailed
 from drillai.core.ids import new_id
-from drillai.db.models import Alert, AlertRule, TimeSeries, TimeSeriesPoint, Well
+from drillai.core.logging import get_logger
+from drillai.db.models import Alert, AlertRule, AuditLog, TimeSeries, TimeSeriesPoint, Well
 from drillai.security.actions import Principal
 from drillai.telemetry.outbox import emit
 from drillai.telemetry.rules import (
@@ -56,7 +59,24 @@ from drillai.telemetry.vocabulary import (
     alert_transitions,
 )
 
+logger = get_logger(__name__)
+
+EVALUATION_MODES = ("auto_ingest", "manual", "recovery")
+
+_WELL_EVAL_LOCKS: dict[tuple[str, str], asyncio.Lock] = {}
+
+
+def _well_eval_lock(org_id: str, well_id: str) -> asyncio.Lock:
+    key = (org_id, well_id)
+    lock = _WELL_EVAL_LOCKS.get(key)
+    if lock is None:
+        lock = asyncio.Lock()
+        _WELL_EVAL_LOCKS[key] = lock
+    return lock
+
+
 __all__ = [
+    "EVALUATION_MODES",
     "AlertRuleService",
     "AlertService",
     "EvaluationReport",
@@ -140,6 +160,13 @@ class EvaluationReport:
     """What one evaluation pass did, in numbers that add up."""
 
     well_id: str
+    evaluation_id: str = field(default_factory=lambda: new_id("evl"))
+    mode: str = "manual"
+    trigger: str | None = None
+    evaluated_at: dt.datetime = field(default_factory=utc_now)
+    duration_ms: float = 0.0
+    trace_id: str | None = None
+    channel_ids: list[str] = field(default_factory=list)
     evaluated: int = 0
     raised: int = 0
     cleared: int = 0
@@ -147,8 +174,10 @@ class EvaluationReport:
     suppressed_cooldown: int = 0
     already_open: int = 0
     insufficient_data: int = 0
+    failed: int = 0
     channels_without_points: int = 0
     evaluations: list[Evaluation] = field(default_factory=list)
+    failures: list[dict[str, Any]] = field(default_factory=list)
     alerts: list[Alert] = field(default_factory=list)
 
     @property
@@ -166,11 +195,19 @@ class EvaluationReport:
             + self.suppressed_cooldown
             + self.already_open
             + self.insufficient_data
+            + self.failed
         )
 
     def to_dict(self) -> dict[str, Any]:
         return {
+            "evaluation_id": self.evaluation_id,
             "well_id": self.well_id,
+            "mode": self.mode,
+            "trigger": self.trigger,
+            "evaluated_at": self.evaluated_at.isoformat() if self.evaluated_at else None,
+            "duration_ms": self.duration_ms,
+            "trace_id": self.trace_id,
+            "channel_ids": list(self.channel_ids),
             "evaluated": self.evaluated,
             "raised": self.raised,
             "cleared": self.cleared,
@@ -178,9 +215,11 @@ class EvaluationReport:
             "suppressed_cooldown": self.suppressed_cooldown,
             "already_open": self.already_open,
             "insufficient_data": self.insufficient_data,
+            "failed": self.failed,
             "channels_without_points": self.channels_without_points,
             "alerts": [item.id for item in self.alerts],
             "evaluations": [item.to_dict() for item in self.evaluations],
+            "failures": list(self.failures),
             "reconciled": self.reconciled,
         }
 
@@ -552,8 +591,8 @@ class AlertService:
 
         "Why was this raised?" is answered from stored facts, not from a re-run of the rule: the rule
         version that raised it is recorded on the row (``rule_snapshot``), the point that breached is
-        named, and the surrounding measurements are the *actual* stored points so a reader can see the
-        trajectory the rule saw.
+        named, and the surrounding measurements are the *actual* stored points up to ``alert.observed_at``
+        so later telemetry at T2 never overwrites the historical T1 evidence that raised the alert.
         """
 
         alert = await self.get(alert_id)
@@ -568,11 +607,14 @@ class AlertService:
             ).scalar_one_or_none()
         surrounding: list[dict[str, Any]] = []
         if alert.series_id:
+            point_clauses: list[Any] = [TimeSeriesPoint.series_id == alert.series_id]
+            if alert.observed_at is not None:
+                point_clauses.append(TimeSeriesPoint.ts <= alert.observed_at)
             rows = (
                 (
                     await self.session.execute(
                         select(TimeSeriesPoint)
-                        .where(TimeSeriesPoint.series_id == alert.series_id)
+                        .where(*point_clauses)
                         .order_by(TimeSeriesPoint.ts.desc(), TimeSeriesPoint.id.desc())
                         .limit(min(points, 200))
                     )
@@ -586,6 +628,11 @@ class AlertService:
                     "ts": row.ts.isoformat() if row.ts else None,
                     "value": row.value,
                     "quality": row.quality,
+                    "quality_flags": [
+                        *(["late"] if row.is_late else []),
+                        *(["out_of_order"] if row.is_out_of_order else []),
+                        *list((row.attributes or {}).get("quality_flags") or []),
+                    ],
                     "is_late": row.is_late,
                     "is_out_of_order": row.is_out_of_order,
                 }
@@ -618,10 +665,40 @@ class AlertService:
                     or alert.cancelled_reason,
                 }
             )
+        audit_rows = (
+            (
+                await self.session.execute(
+                    select(AuditLog)
+                    .where(
+                        AuditLog.org_id == self.org_id,
+                        AuditLog.resource_kind == "alert",
+                        AuditLog.resource_id == alert.id,
+                    )
+                    .order_by(AuditLog.occurred_at.asc(), AuditLog.id.asc())
+                    .limit(100)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        audit_events = [
+            {
+                "id": row.id,
+                "action": row.action,
+                "actor_id": row.actor_id,
+                "actor_kind": row.actor_kind,
+                "occurred_at": row.occurred_at.isoformat() if row.occurred_at else None,
+                "reason": (row.details or {}).get("reason"),
+                "before": row.before,
+                "after": row.after,
+            }
+            for row in audit_rows
+        ]
         return {
             "alert": alert,
             "rule": rule,
             "rule_snapshot": (alert.attributes or {}).get("rule_snapshot"),
+            "evaluation": (alert.attributes or {}).get("evaluation"),
             "observed": {
                 "value": alert.observed_value,
                 "threshold": alert.threshold_value,
@@ -636,14 +713,19 @@ class AlertService:
             },
             "provenance": {
                 "series_id": alert.series_id,
+                "channel_key": (alert.attributes or {}).get("channel_key"),
+                "dimension": (alert.attributes or {}).get("dimension"),
                 "point_id": alert.source_point_id,
                 "rule_id": alert.rule_id,
                 "rule_ref": alert.rule_ref,
+                "well_id": alert.well_id,
+                "wellbore_id": alert.wellbore_id,
                 "section_id": alert.section_id,
                 "operation_id": alert.operation_id,
             },
             "points": surrounding,
             "timeline": timeline,
+            "audit_events": audit_events,
         }
 
     # ------------------------------------------------------------------ life cycle
@@ -817,6 +899,10 @@ class AlertService:
         *,
         now: dt.datetime | None = None,
         channel_ids: Sequence[str] | None = None,
+        mode: str = "manual",
+        isolate_rule_errors: bool = False,
+        trigger: str | None = None,
+        trace_id: str | None = None,
     ) -> EvaluationReport:
         """Evaluate every enabled rule that watches this well, and act on the answers.
 
@@ -825,7 +911,15 @@ class AlertService:
         rescanning channels nothing happened to.
         """
 
+        if mode not in EVALUATION_MODES:
+            raise ValidationFailed(
+                "unknown alert evaluation mode",
+                details={"field": "mode", "value": mode, "allowed": list(EVALUATION_MODES)},
+            )
+        started_perf = time.perf_counter()
         moment = now or utc_now()
+        isolate_errors = bool(isolate_rule_errors or mode in {"auto_ingest", "recovery"})
+
         # A well the caller's organisation does not own is *not found*, exactly as an unknown well id is:
         # an evaluation pass over somebody else's well must not be answerable with an empty report that
         # looks like a well with no channels.
@@ -836,60 +930,187 @@ class AlertService:
         ).scalar_one_or_none()
         if owned is None:
             raise NotFound(f"well {well_id!r} not found")
-        report = EvaluationReport(well_id=well_id)
-        rules = await self._rules_for(well_id)
-        if channel_ids is None:
-            channels = await self._channels_for(well_id, None)
-        else:
-            channels = await self._channels_for(well_id, list(channel_ids))
-        by_key: dict[str, list[TimeSeries]] = {}
-        for channel in channels:
-            by_key.setdefault(channel.channel_key, []).append(channel)
-        if not channels:
-            return report
 
-        for rule in rules:
-            spec = rule_spec_from_row(rule)
-            watched = by_key.get(rule.channel_key, [])
-            if rule.wellbore_id:
-                watched = [channel for channel in watched if channel.wellbore_id == rule.wellbore_id]
-            for channel in watched:
-                observations = await self._observations(channel.id)
-                if not observations:
-                    report.channels_without_points += 1
-                    continue
-                # The thresholds are put into the unit the stored values are in — explicitly, through
-                # the unit engine, and only when the rule declares a unit at all. A rule whose declared
-                # unit cannot measure this channel refuses here, by name, rather than comparing numbers
-                # from two different scales.
-                threshold, clear_threshold = thresholds_in_channel_units(rule, channel)
-                outcome = evaluate(
-                    RuleSpec(
-                        **{
-                            **spec.__dict__,
-                            "threshold": threshold,
-                            "clear_threshold": clear_threshold,
-                            "unit": channel.unit,
-                            "declared_unit": rule.unit,
-                            "declared_threshold": float(rule.threshold),
-                        }
-                    ),
-                    observations,
-                    channel_id=channel.id,
-                    channel_key=channel.channel_key,
-                    now=moment,
-                )
-                report.evaluated += 1
-                report.evaluations.append(outcome)
-                if outcome.outcome == "raise":
-                    await self._act_on_raise(rule, channel, outcome, moment, report)
-                elif outcome.outcome == "clear":
-                    await self._act_on_clear(rule, channel, outcome, moment, report)
-                elif outcome.outcome == "hold":
-                    report.held += 1
-                else:
-                    report.insufficient_data += 1
+        scoped_channels = list(channel_ids) if channel_ids is not None else []
+        report = EvaluationReport(
+            well_id=well_id,
+            mode=mode,
+            trigger=trigger or mode,
+            evaluated_at=moment,
+            trace_id=trace_id,
+            channel_ids=scoped_channels,
+        )
+
+        async with _well_eval_lock(self.org_id, well_id):
+            rules = await self._rules_for(well_id)
+            if channel_ids is None:
+                channels = await self._channels_for(well_id, None)
+            else:
+                channels = await self._channels_for(well_id, scoped_channels)
+            report.channel_ids = [channel.id for channel in channels]
+            by_key: dict[str, list[TimeSeries]] = {}
+            for channel in channels:
+                by_key.setdefault(channel.channel_key, []).append(channel)
+            if not channels:
+                report.duration_ms = round((time.perf_counter() - started_perf) * 1000.0, 3)
+                return report
+
+            locked_channels: set[str] = set()
+            is_postgres = (
+                self.session.bind is not None and self.session.bind.dialect.name == "postgresql"
+            )
+
+            for rule in rules:
+                watched = by_key.get(rule.channel_key, [])
+                if rule.wellbore_id:
+                    watched = [channel for channel in watched if channel.wellbore_id == rule.wellbore_id]
+                for channel in watched:
+                    if is_postgres and channel.id not in locked_channels:
+                        await self.session.execute(
+                            select(TimeSeries.id)
+                            .where(TimeSeries.id == channel.id, TimeSeries.org_id == self.org_id)
+                            .with_for_update()
+                        )
+                        locked_channels.add(channel.id)
+                    observations = await self._observations(channel.id)
+                    if not observations:
+                        report.channels_without_points += 1
+                        continue
+                    if isolate_errors:
+                        try:
+                            async with self.session.begin_nested():
+                                await self._evaluate_rule_on_channel(
+                                    rule=rule,
+                                    channel=channel,
+                                    observations=observations,
+                                    moment=moment,
+                                    report=report,
+                                )
+                        except Exception as exc:
+                            report.evaluated += 1
+                            report.failed += 1
+                            failure = {
+                                "rule_id": rule.id,
+                                "rule_key": rule.rule_key,
+                                "channel_id": channel.id,
+                                "channel_key": channel.channel_key,
+                                "error_code": getattr(exc, "code", "evaluation_error"),
+                                "reason": str(exc),
+                            }
+                            report.failures.append(failure)
+                            report.evaluations.append(
+                                Evaluation(
+                                    rule_id=rule.id,
+                                    rule_key=rule.rule_key,
+                                    channel_id=channel.id,
+                                    channel_key=channel.channel_key,
+                                    outcome="error",
+                                    observed_value=None,
+                                    observed_at=None,
+                                    point_id=None,
+                                    sustained_seconds=0.0,
+                                    samples=len(observations),
+                                    breaching_samples=0,
+                                    excluded_quality=0,
+                                    threshold=float(rule.threshold)
+                                    if isinstance(rule.threshold, int | float)
+                                    else 0.0,
+                                    clear_threshold=float(rule.clear_threshold)
+                                    if isinstance(rule.clear_threshold, int | float)
+                                    else 0.0,
+                                    unit=channel.unit,
+                                    severity=rule.severity,
+                                    reason=str(exc),
+                                    basis={"error": failure},
+                                )
+                            )
+                            logger.warning(
+                                "alert rule evaluation failed in isolated mode",
+                                extra={
+                                    "extra_fields": {
+                                        "evaluation_id": report.evaluation_id,
+                                        "well_id": well_id,
+                                        "mode": mode,
+                                        "trace_id": trace_id,
+                                        **failure,
+                                    }
+                                },
+                            )
+                    else:
+                        await self._evaluate_rule_on_channel(
+                            rule=rule,
+                            channel=channel,
+                            observations=observations,
+                            moment=moment,
+                            report=report,
+                        )
+
+        report.duration_ms = round((time.perf_counter() - started_perf) * 1000.0, 3)
+        logger.info(
+            "alert evaluation completed",
+            extra={
+                "extra_fields": {
+                    "evaluation_id": report.evaluation_id,
+                    "well_id": well_id,
+                    "mode": report.mode,
+                    "trigger": report.trigger,
+                    "channel_ids": report.channel_ids,
+                    "evaluated": report.evaluated,
+                    "raised": report.raised,
+                    "cleared": report.cleared,
+                    "held": report.held,
+                    "suppressed_cooldown": report.suppressed_cooldown,
+                    "already_open": report.already_open,
+                    "insufficient_data": report.insufficient_data,
+                    "failed": report.failed,
+                    "duration_ms": report.duration_ms,
+                    "trace_id": report.trace_id,
+                }
+            },
+        )
         return report
+
+    async def _evaluate_rule_on_channel(
+        self,
+        *,
+        rule: AlertRule,
+        channel: TimeSeries,
+        observations: list[Observation],
+        moment: dt.datetime,
+        report: EvaluationReport,
+    ) -> None:
+        spec = rule_spec_from_row(rule)
+        # The thresholds are put into the unit the stored values are in — explicitly, through
+        # the unit engine, and only when the rule declares a unit at all. A rule whose declared
+        # unit cannot measure this channel refuses here, by name, rather than comparing numbers
+        # from two different scales.
+        threshold, clear_threshold = thresholds_in_channel_units(rule, channel)
+        outcome = evaluate(
+            RuleSpec(
+                **{
+                    **spec.__dict__,
+                    "threshold": threshold,
+                    "clear_threshold": clear_threshold,
+                    "unit": channel.unit,
+                    "declared_unit": rule.unit,
+                    "declared_threshold": float(rule.threshold),
+                }
+            ),
+            observations,
+            channel_id=channel.id,
+            channel_key=channel.channel_key,
+            now=moment,
+        )
+        report.evaluated += 1
+        report.evaluations.append(outcome)
+        if outcome.outcome == "raise":
+            await self._act_on_raise(rule, channel, outcome, moment, report)
+        elif outcome.outcome == "clear":
+            await self._act_on_clear(rule, channel, outcome, moment, report)
+        elif outcome.outcome == "hold":
+            report.held += 1
+        else:
+            report.insufficient_data += 1
 
     async def _rules_for(self, well_id: str) -> list[AlertRule]:
         rows = (
@@ -1138,6 +1359,7 @@ class AlertService:
                 )
                 .order_by(Alert.raised_at.desc())
                 .limit(1)
+                .execution_options(populate_existing=True)
             )
         ).scalar_one_or_none()
 
