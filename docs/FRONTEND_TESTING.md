@@ -36,8 +36,9 @@ They skip unless the repository's own embedded PostgreSQL is switched on:
 cd backend && DRILLAI_TEST_POSTGRES=1 .venv/bin/python -m pytest
 ```
 
-With it, the suite reports **709 passed**; without it, **706 passed, 3 skipped**. CI runs them (the
-`pgserver` dev dependency is already in `backend/pyproject.toml`), so the certificate is the 709-test
+With it, the suite reports **996 passed** (including `test_competing_workers_fencing_on_postgres` in
+`tests/telemetry/test_connector_worker.py`); without it, **992 passed, 4 skipped**. CI runs them (the
+`pgserver` dev dependency is already in `backend/pyproject.toml`), so the certificate is the 996-test
 one. Nothing is replaced with SQLite to make them pass, and the tests are never deleted.
 
 ## Unit and component tests

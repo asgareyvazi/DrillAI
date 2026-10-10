@@ -11,11 +11,11 @@ engineering arithmetic, and it never invents engineering values.
 
 | Path | Contents |
 | --- | --- |
-| `backend/` | Python 3.11 service: domain models, engines, data fabric, workflow runtime, AI/LLM abstraction, FastAPI |
-| `scripts/` | Operator/repository tooling (`bootstrap.sh` setup, `seed_demo.py` demo data, `smoke_e2e.py` API smoke check) |
-| `frontend/` | React/TypeScript client: the drilling intelligence workspace (see `docs/FRONTEND.md`) |
-| `docs/` | Frontend documentation and the mission reports (`docs/mission-reports/`) |
-| `ops/` | Reserved for deployment assets (Compose profiles, images) — **not written yet** |
+| `backend/` | Python 3.11 service: domain models, engines, data fabric, workflow runtime, AI/LLM abstraction, WITSML 1.4.1.1 SOAP & ETP 1.2 WebSocket connectors, durable connector worker, FastAPI |
+| `scripts/` | Operator/repository tooling (`bootstrap.sh` setup, `seed_demo.py` demo data, `smoke_e2e.py` API smoke check, `verify_stack.py` multi-process stack verification) |
+| `frontend/` | React/TypeScript client: the drilling intelligence workspace & telemetry connector registry (see `docs/FRONTEND.md`) |
+| `docs/` | Frontend, connector/protocol & operational runbook documentation (`docs/CONNECTORS_AND_OPERATIONS.md`) and mission reports (`docs/mission-reports/`) |
+| `docker-compose.yml` | Reproducible multi-service deployment stack (`postgres`, `migrate`, `backend`, `connector-worker`, `frontend` Nginx proxy) with `.env.example` |
 
 ## Quickstart
 
@@ -97,23 +97,25 @@ it holds to and `docs/FRONTEND_TESTING.md` lists what is verified and how.
 | --- | --- | --- |
 | Frontend types | `cd frontend && npm run typecheck` | strict TypeScript over app, tests and specs |
 | Frontend lint | `cd frontend && npm run lint` | unused code, `any`, React rules |
-| Frontend unit/component | `cd frontend && npm test` | 305 tests in 28 files |
+| Frontend unit/component | `cd frontend && npm test` | 307 tests in 29 files |
 | Frontend build | `cd frontend && npm run build` | `tsc -b` plus the production Vite build |
-| Backend tests | `cd backend && DRILLAI_TEST_POSTGRES=1 .venv/bin/python -m pytest -o addopts=""` | 983 tests, including PostgreSQL persistence and migration verification |
+| Backend tests | `cd backend && DRILLAI_TEST_POSTGRES=1 .venv/bin/python -m pytest -o addopts=""` | 996 tests, including 4 PostgreSQL persistence, migration & competing-worker fencing tests |
 | Backend lint | `cd backend && .venv/bin/python -m ruff check .` | style and import hygiene |
 | Migrations | `cd backend && .venv/bin/python -m alembic upgrade head && .venv/bin/python -m alembic check` | no model/migration drift, against a fresh database |
-| End-to-end | `cd frontend && npm run e2e` | 77 browser journeys in 16 spec files against the real stack |
+| Stack verification | `backend/.venv/bin/python scripts/verify_stack.py` | clean migration, backend, dedicated `connector-worker`, real WITSML 1.4.1.1 SOAP ingest & restart recovery |
+| End-to-end | `cd frontend && npm run e2e` | 91 browser journeys in 17 spec files against the real stack |
 
-Set `DRILLAI_TEST_POSTGRES=1` to run the PostgreSQL-backed persistence tests through the repository's
-own embedded PostgreSQL (`pgserver`); without it they skip, and the suite reports
-**980 passed, 3 skipped** rather than **983 passed**.
+Set `DRILLAI_TEST_POSTGRES=1` to run the PostgreSQL-backed persistence and competing-worker fencing
+tests through the repository's own embedded PostgreSQL (`pgserver`); without it they skip, and the
+suite reports **992 passed, 4 skipped** rather than **996 passed**.
 
-The end-to-end suite is 16 spec files across three deployments of the same product — development
+The end-to-end suite is 17 spec files across three deployments of the same product — development
 identity, deterministic fault injection, and authentication enabled — covering the cockpit,
-live operational monitor (`live-operations.spec.ts`: synthetic telemetry commissioning, automatic rule
-evaluation on ingestion, historical `T1` alert evidence drawer, server-governed `allowed_transitions`,
-409 optimistic concurrency conflict recovery, hysteresis auto-clear, cross-well stream isolation, and
-Persian RTL token isolation), documents and evidence, the workflow studio lifecycle, the run monitor
+live operational monitor (`live-operations.spec.ts`), telemetry connector registry & real WITSML/ETP
+protocols (`connectors-platform.spec.ts`: WITSML 1.4.1.1 SOAP & ETP 1.2 WebSocket connectors, masked
+secret references, SSRF protection, governed start/stop/restart/disable, worker polling, backoff &
+recovery, duplicate replay guard, low-quality sensor handling, viewer read-only RBAC, 409 optimistic
+concurrency, and Persian RTL technical token isolation), documents and evidence, the workflow studio lifecycle, the run monitor
 with approvals, the durable run-event WebSocket, the failure matrix, permissions and identity, deep
 links and context, RTL, and keyboard/assistive-technology behaviour. HTTP is never intercepted anywhere — no spec calls
 `page.route()`, and the failures a healthy server cannot produce come from the application's own
@@ -129,10 +131,9 @@ Every required gate is a separate step that fails the job; there is no `continue
 
 Not implemented yet (do not assume otherwise):
 
-- **No `ops/` deployment assets.** There is no Compose profile, image build or deployment manifest in
-  the repository; CI certifies the product, it does not deploy it.
-- Integration adapters for messaging (Telegram/WhatsApp/email), WITSML/ETP and vector databases are
-  configuration-shaped boundaries; outbound delivery, live WITSML/ETP streaming and pgvector-backed
-  retrieval are not exercised by the test suite.
-- Persian (`fa`) translations cover the shell and the primary surfaces rather than every string in
-  every workspace; untranslated keys fall back to English through the catalogue mechanism.
+- **External commercial WITSML/ETP vendor certification.** `witsml.1.4.1.1.soap_http` and
+  `etp.1.2.json_ws` are verified over real TCP/HTTP/WebSocket against the local protocol harness
+  servers (`LocalWitsmlSoapServer` and `LocalEtpWebSocketServer`), not against a live third-party
+  commercial rig store in CI (`external_vendor_verified: false`).
+- Integration adapters for outbound messaging (Telegram/WhatsApp/email) and pgvector-backed
+  retrieval are configuration-shaped boundaries.
