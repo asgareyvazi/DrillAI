@@ -379,6 +379,7 @@ class EvaluationRun(Base, IdMixin, CreatedAtMixin, OrgScopedMixin):
 
 # --------------------------------------------------------------------------- integrations
 CONNECTOR_PROVIDERS = (
+    "synthetic",
     "telegram",
     "whatsapp",
     "email",
@@ -393,6 +394,30 @@ CONNECTOR_PROVIDERS = (
     "object_storage",
 )
 
+CONNECTOR_PROFILES = (
+    "synthetic.v1",
+    "witsml.1.4.1.1.soap_http",
+    "etp.1.2.json_ws",
+)
+
+CONNECTOR_DESIRED_STATES = (
+    "disabled",
+    "stopped",
+    "enabled",
+)
+
+CONNECTOR_RUNTIME_STATUSES = (
+    "created",
+    "configured",
+    "stopped",
+    "starting",
+    "running",
+    "backing_off",
+    "degraded",
+    "failed",
+    "disabled",
+)
+
 
 class Connector(Base, IdMixin, TimestampMixin, OrgScopedMixin):
     """Configured integration endpoint (inbound, outbound or both)."""
@@ -404,10 +429,20 @@ class Connector(Base, IdMixin, TimestampMixin, OrgScopedMixin):
     key: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(240), nullable=False)
     provider: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
+    protocol_profile: Mapped[str] = mapped_column(
+        String(64), default="synthetic.v1", nullable=False, index=True
+    )
     direction: Mapped[str] = mapped_column(String(24), default="inbound", nullable=False)
     status: Mapped[str] = mapped_column(String(24), default="disabled", nullable=False, index=True)
+    desired_state: Mapped[str] = mapped_column(
+        String(24), default="disabled", nullable=False, index=True
+    )
+    config_version: Mapped[int] = mapped_column(IntType, default=1, nullable=False)
     project_id: Mapped[str | None] = mapped_column(String(64), index=True)
     well_id: Mapped[str | None] = mapped_column(String(64), index=True)
+    wellbore_id: Mapped[str | None] = mapped_column(String(64), index=True)
+    operation_id: Mapped[str | None] = mapped_column(String(64), index=True)
+    endpoint_url: Mapped[str | None] = mapped_column(String(500))
     description: Mapped[str | None] = mapped_column(TextType)
     config: Mapped[dict] = mapped_column(JsonType, default=dict, nullable=False)
     secret_refs: Mapped[dict] = mapped_column(JsonType, default=dict, nullable=False)
@@ -415,12 +450,61 @@ class Connector(Base, IdMixin, TimestampMixin, OrgScopedMixin):
     default_document_type: Mapped[str | None] = mapped_column(String(40))
     default_well_id: Mapped[str | None] = mapped_column(String(64))
     cursor: Mapped[dict] = mapped_column(JsonType, default=dict, nullable=False)
+    worker_id: Mapped[str | None] = mapped_column(String(120), index=True)
+    lease_expires_at: Mapped[dt.datetime | None] = mapped_column(UtcDateTime, index=True)
+    last_heartbeat_at: Mapped[dt.datetime | None] = mapped_column(UtcDateTime)
+    fencing_token: Mapped[int] = mapped_column(IntType, default=0, nullable=False)
+    last_transition_at: Mapped[dt.datetime | None] = mapped_column(UtcDateTime)
+    last_connected_at: Mapped[dt.datetime | None] = mapped_column(UtcDateTime)
+    last_poll_at: Mapped[dt.datetime | None] = mapped_column(UtcDateTime)
+    last_successful_poll_at: Mapped[dt.datetime | None] = mapped_column(UtcDateTime)
+    last_frame_at: Mapped[dt.datetime | None] = mapped_column(UtcDateTime)
+    last_ingest_at: Mapped[dt.datetime | None] = mapped_column(UtcDateTime)
     last_sync_at: Mapped[dt.datetime | None] = mapped_column(UtcDateTime)
     last_error: Mapped[str | None] = mapped_column(TextType)
+    last_error_category: Mapped[str | None] = mapped_column(String(64))
+    last_error_at: Mapped[dt.datetime | None] = mapped_column(UtcDateTime)
+    last_trace_id: Mapped[str | None] = mapped_column(String(64))
     error_count: Mapped[int] = mapped_column(IntType, default=0, nullable=False)
+    reconnect_count: Mapped[int] = mapped_column(IntType, default=0, nullable=False)
+    backoff_seconds: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    next_poll_at: Mapped[dt.datetime | None] = mapped_column(UtcDateTime, index=True)
     is_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_by: Mapped[str | None] = mapped_column(String(64))
     attributes: Mapped[dict] = mapped_column(JsonType, default=dict, nullable=False)
+
+
+class ConnectorRun(Base, IdMixin, CreatedAtMixin, OrgScopedMixin):
+    """Bounded operational ledger row for one connector poll, connection test, or preview."""
+
+    __tablename__ = "connector_runs"
+    id_prefix = "crn"
+
+    connector_id: Mapped[str] = mapped_column(
+        ForeignKey("connectors.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    well_id: Mapped[str | None] = mapped_column(String(64), index=True)
+    worker_id: Mapped[str | None] = mapped_column(String(120))
+    fencing_token: Mapped[int] = mapped_column(IntType, default=0, nullable=False)
+    config_version: Mapped[int] = mapped_column(IntType, default=1, nullable=False)
+    run_kind: Mapped[str] = mapped_column(String(32), default="poll", nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(24), default="running", nullable=False, index=True)
+    started_at: Mapped[dt.datetime] = mapped_column(UtcDateTime, nullable=False, index=True)
+    finished_at: Mapped[dt.datetime | None] = mapped_column(UtcDateTime)
+    duration_ms: Mapped[float | None] = mapped_column(Float)
+    frames_received: Mapped[int] = mapped_column(IntType, default=0, nullable=False)
+    points_accepted: Mapped[int] = mapped_column(IntType, default=0, nullable=False)
+    points_duplicates: Mapped[int] = mapped_column(IntType, default=0, nullable=False)
+    points_revised: Mapped[int] = mapped_column(IntType, default=0, nullable=False)
+    points_rejected: Mapped[int] = mapped_column(IntType, default=0, nullable=False)
+    alerts_raised: Mapped[int] = mapped_column(IntType, default=0, nullable=False)
+    alerts_cleared: Mapped[int] = mapped_column(IntType, default=0, nullable=False)
+    cursor_before: Mapped[dict] = mapped_column(JsonType, default=dict, nullable=False)
+    cursor_after: Mapped[dict] = mapped_column(JsonType, default=dict, nullable=False)
+    error_category: Mapped[str | None] = mapped_column(String(64))
+    error_message: Mapped[str | None] = mapped_column(TextType)
+    trace_id: Mapped[str | None] = mapped_column(String(64), index=True)
+    details: Mapped[dict] = mapped_column(JsonType, default=dict, nullable=False)
 
 
 class ConnectorEvent(Base, IdMixin, CreatedAtMixin, OrgScopedMixin):

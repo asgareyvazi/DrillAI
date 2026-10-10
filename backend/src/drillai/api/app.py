@@ -23,6 +23,7 @@ from starlette.middleware.gzip import GZipMiddleware
 from drillai.api.routers import (
     alerts,
     assets,
+    connectors,
     context,
     documents,
     drilling,
@@ -117,6 +118,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         # The fault routes are unauthenticated by construction (they exist to make the client fail,
         # not to be authorised), so a deployment that enabled them by accident must not start at all.
         raise ConfigurationError("DRILLAI_E2E_FAULTS must not be enabled in production")
+    if settings.is_production and settings.connector_allow_loopback:
+        raise ConfigurationError("DRILLAI_CONNECTOR_ALLOW_LOOPBACK must not be enabled in production")
 
     @contextlib.asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -186,6 +189,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(evidence.router, prefix=prefix)
     app.include_router(operations.router, prefix=prefix)
     app.include_router(timeseries.router, prefix=prefix)
+    app.include_router(connectors.router, prefix=prefix)
     app.include_router(alerts.router, prefix=prefix)
     app.include_router(live.router, prefix=prefix)
     app.include_router(registry.router, prefix=prefix)

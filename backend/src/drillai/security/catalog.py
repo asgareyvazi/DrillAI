@@ -39,6 +39,12 @@ PLATFORM_ACTIONS: tuple[tuple[str, ActionLevel, str, str], ...] = (
         "Read telemetry channels, windows and latest values.",
         "timeseries.read",
     ),
+    (
+        "connector.read",
+        ActionLevel.OBSERVE,
+        "Read telemetry connectors, health, channel mappings and run history.",
+        "connector.read",
+    ),
     ("alert.read", ActionLevel.OBSERVE, "Read alerts and their evidence.", "alert.read"),
     (
         "live.read",
@@ -249,6 +255,24 @@ PLATFORM_ACTIONS: tuple[tuple[str, ActionLevel, str, str], ...] = (
         ActionLevel.DRAFT,
         "Retire or re-scope a telemetry channel.",
         "timeseries.manage",
+    ),
+    (
+        "connector.test",
+        ActionLevel.DRAFT,
+        "Test connector connectivity or preview channel descriptors without persistent ingestion.",
+        "connector.test",
+    ),
+    (
+        "connector.manage",
+        ActionLevel.DRAFT,
+        "Create or update a telemetry connector configuration and channel mappings.",
+        "connector.manage",
+    ),
+    (
+        "connector.control",
+        ActionLevel.DRAFT,
+        "Start, stop, restart or disable a telemetry connector.",
+        "connector.control",
     ),
     # --- propose -------------------------------------------------------------------------
     (

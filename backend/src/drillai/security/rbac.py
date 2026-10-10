@@ -92,6 +92,7 @@ ROLE_CATALOGUE: tuple[Role, ...] = (
             # the writes (recording a measurement, acknowledging an alert) are DRAFT-level actions this
             # role's ceiling refuses at authorization time.
             "timeseries.read",
+            "connector.read",
             "alert.read",
             "live.read",
             "context.read",
@@ -127,6 +128,7 @@ ROLE_CATALOGUE: tuple[Role, ...] = (
             # role's ceiling. `live.read` is separate from `timeseries.read` on purpose — a socket is a
             # different entitlement from a query, and a role can be given one without the other.
             "timeseries.*",
+            "connector.*",
             "alert.*",
             "live.read",
             "context.read",
@@ -174,6 +176,7 @@ ROLE_CATALOGUE: tuple[Role, ...] = (
             # and `event.read` is the permission those endpoints check.
             "event.read",
             "timeseries.*",
+            "connector.*",
             "alert.*",
             "live.read",
             "dashboard.*",
@@ -213,6 +216,7 @@ ROLE_CATALOGUE: tuple[Role, ...] = (
             # granted explicitly rather than through a wildcard — reading a channel is not appending one
             # and not deciding an alert, both of which stay outside this role.
             "timeseries.read",
+            "connector.read",
             "alert.read",
             "live.read",
         ),
@@ -230,6 +234,7 @@ ROLE_CATALOGUE: tuple[Role, ...] = (
             # Telemetry is ingestion: the data manager owns the acquisition boundary, and the alert
             # *lifecycle* is not theirs — they read alerts and do not decide them.
             "timeseries.*",
+            "connector.*",
             "alert.read",
             "live.read",
             "context.read",
@@ -258,6 +263,7 @@ ROLE_CATALOGUE: tuple[Role, ...] = (
             "user.*",
             "role.*",
             "integration.*",
+            "connector.*",
             "audit.read",
             "*.read",
             "project.write",

@@ -178,6 +178,7 @@ DOMAIN_EVENT_TYPES: tuple[str, ...] = (
     "telemetry.channel_created",
     "telemetry.received",
     "telemetry.channel_updated",
+    "connector.changed",
     "operation.changed",
     "event.created",
     "alert.raised",

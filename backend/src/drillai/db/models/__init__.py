@@ -129,7 +129,10 @@ from drillai.db.models.optimization import (
     ScenarioResult,
 )
 from drillai.db.models.platform import (
+    CONNECTOR_DESIRED_STATES,
+    CONNECTOR_PROFILES,
     CONNECTOR_PROVIDERS,
+    CONNECTOR_RUNTIME_STATUSES,
     POLICY_EFFECTS,
     REGISTRY_KINDS,
     REGISTRY_STATUSES,
@@ -140,6 +143,7 @@ from drillai.db.models.platform import (
     AuditLog,
     Connector,
     ConnectorEvent,
+    ConnectorRun,
     EvaluationCase,
     EvaluationRun,
     EvaluationSuite,
@@ -201,7 +205,7 @@ ALL_MODELS = [
     # registry & platform security/observability/integration
     RegistryItem, RegistryItemVersion, PolicyBinding, AuditLog, SecretRef, IdempotencyKey,
     Trace, Span, MetricPoint, EvaluationSuite, EvaluationCase, EvaluationRun,
-    Connector, ConnectorEvent, OutboundMessage, Schedule,
+    Connector, ConnectorEvent, ConnectorRun, OutboundMessage, Schedule,
 ]
 
 __all__ = [
@@ -215,7 +219,10 @@ __all__ = [
     "ASPECTS",
     "CAUSE_BASES",
     "CLASSIFICATION_SOURCES",
+    "CONNECTOR_DESIRED_STATES",
+    "CONNECTOR_PROFILES",
     "CONNECTOR_PROVIDERS",
+    "CONNECTOR_RUNTIME_STATUSES",
     "DATUMS",
     "DOC_STATUSES",
     "DOC_TYPES",
@@ -281,6 +288,7 @@ __all__ = [
     "ChangeRecord",
     "Connector",
     "ConnectorEvent",
+    "ConnectorRun",
     "Conversation",
     "Derivation",
     "Document",

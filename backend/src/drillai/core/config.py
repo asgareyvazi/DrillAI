@@ -141,8 +141,14 @@ class Settings(BaseSettings):
     scheduler_poll_seconds: float = 5.0
 
     # ------------------------------------------------------------------ connectors
-    witsml_connector_enabled: bool = False
-    etp_connector_enabled: bool = False
+    witsml_connector_enabled: bool = True
+    etp_connector_enabled: bool = True
+    connector_allow_loopback: bool = False
+    connector_allowed_hosts: str = ""
+    connector_worker_lease_seconds: float = 30.0
+    connector_worker_poll_seconds: float = 1.0
+    connector_max_response_bytes: int = 5 * 1024 * 1024  # 5 MB per protocol response
+    connector_request_timeout_seconds: float = 10.0
 
     # ------------------------------------------------------------------ seed
     seed_on_start: bool = False
@@ -172,6 +178,10 @@ class Settings(BaseSettings):
     @property
     def allowed_host_list(self) -> list[str]:
         return [host.strip() for host in self.allowed_hosts.split(",") if host.strip()]
+
+    @property
+    def connector_allowed_host_list(self) -> list[str]:
+        return [host.strip().lower() for host in self.connector_allowed_hosts.split(",") if host.strip()]
 
     def sqlalchemy_url(self) -> str:
         """Return a SQLAlchemy async URL (SQLite paths are made absolute)."""

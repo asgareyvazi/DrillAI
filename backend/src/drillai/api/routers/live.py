@@ -45,6 +45,7 @@ from drillai.core.clock import utc_now
 from drillai.core.errors import NotFound, ValidationFailed
 from drillai.db.models import Operation, Well
 from drillai.telemetry.alerts import AlertService
+from drillai.telemetry.connectors import ConnectorService
 from drillai.telemetry.outbox import (
     ENVELOPE_VERSION,
     STREAM_CURSOR_VERSION,
@@ -153,6 +154,9 @@ async def _snapshot(
     trends = await service.trends(
         well_id=well_id, channel_ids=[reading.channel_id for reading in readings]
     )
+    connectors_list, _ = await ConnectorService(
+        session, org_id, principal=auth.principal
+    ).list(well_id=well_id, limit=25)
     now_iso = utc_now().isoformat()
     return {
         "well_id": well_id,
@@ -165,6 +169,7 @@ async def _snapshot(
         "latest": [reading.to_dict() for reading in readings],
         "trends": {key: value.to_dict() for key, value in sorted(trends.items())},
         "alerts": [alert_out(row) for row in alerts],
+        "connectors": connectors_list,
         "freshness": dict(sorted(freshness.items())),
     }
 
