@@ -117,6 +117,60 @@ PROHIBITED_METADATA_HOSTS: frozenset[str] = frozenset(
 
 
 @dataclass(frozen=True)
+class ChannelMappingSpec:
+    """Typed mapping between a source protocol mnemonic/URI and a platform channel."""
+
+    source_mnemonic: str
+    channel_key: str
+    name: str
+    dimension: str
+    unit: str
+    channel_uri: str = ""
+    description: str | None = None
+    is_realtime: bool = True
+
+
+class ConnectorTransportError(Exception):
+    """Structured protocol/transport failure with explicit retryability and category."""
+
+    def __init__(self, category: str, message: str, *, retryable: bool = True) -> None:
+        super().__init__(message)
+        self.category = category
+        self.message = message
+        self.retryable = retryable
+
+
+def parse_channel_mappings(raw_mappings: Any) -> list[ChannelMappingSpec]:
+    """Parse validated channel mapping dictionaries into typed ChannelMappingSpec instances."""
+    if not isinstance(raw_mappings, list):
+        return []
+    specs: list[ChannelMappingSpec] = []
+    for item in raw_mappings:
+        if not isinstance(item, dict):
+            continue
+        src = str(item.get("source_mnemonic") or item.get("channel_key") or "").strip()
+        key = str(item.get("channel_key") or src).strip().lower()
+        name = str(item.get("name") or key.upper()).strip()
+        dim = str(item.get("dimension") or "").strip().lower()
+        unit = str(item.get("unit") or "").strip()
+        if not src or not key or not dim or not unit:
+            continue
+        specs.append(
+            ChannelMappingSpec(
+                source_mnemonic=src,
+                channel_key=key,
+                name=name,
+                dimension=dim,
+                unit=unit,
+                channel_uri=str(item.get("channel_uri") or f"eml://witsml/logChannel/{src}"),
+                description=item.get("description"),
+                is_realtime=bool(item.get("is_realtime", True)),
+            )
+        )
+    return specs
+
+
+@dataclass(frozen=True)
 class ProtocolProfileSpec:
     """Explicit capability and verification declaration for a supported connector profile."""
 
@@ -247,6 +301,8 @@ def redact_sensitive_text(text: str | None, secrets: dict[str, str] | None = Non
 
 def classify_connector_error(exc: Exception) -> str:
     """Map an exception into a bounded operational error category."""
+    if isinstance(exc, ConnectorTransportError):
+        return exc.category
     if isinstance(exc, ValidationFailed):
         return str(exc.details.get("reason") or "validation_error")
     if isinstance(exc, PermissionDenied):
@@ -1698,6 +1754,9 @@ class ConnectorService:
                 config=cfg,
                 secrets=resolved_secrets or {},
                 cursor=dict(row.cursor or {}),
+                well_id=row.well_id or "",
+                wellbore_id=row.wellbore_id,
+                operation_id=row.operation_id,
             )
 
         if row.protocol_profile == "etp.1.2.json_ws":
@@ -1709,6 +1768,9 @@ class ConnectorService:
                 config=cfg,
                 secrets=resolved_secrets or {},
                 cursor=dict(row.cursor or {}),
+                well_id=row.well_id or "",
+                wellbore_id=row.wellbore_id,
+                operation_id=row.operation_id,
             )
 
         raise ValidationFailed(
