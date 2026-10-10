@@ -112,6 +112,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     configure_logging(level=settings.log_level, json_output=settings.log_json)
     if settings.is_production and not settings.auth_enabled:
         raise ConfigurationError("DRILLAI_AUTH_ENABLED must be true in production")
+    if settings.is_production and settings.debug:
+        raise ConfigurationError("DRILLAI_DEBUG must not be enabled in production")
     if settings.is_production and settings.cors_origins.strip() == "*":
         raise ConfigurationError("wildcard CORS origins are not allowed in production")
     if settings.is_production and settings.e2e_faults:
@@ -120,6 +122,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         raise ConfigurationError("DRILLAI_E2E_FAULTS must not be enabled in production")
     if settings.is_production and settings.connector_allow_loopback:
         raise ConfigurationError("DRILLAI_CONNECTOR_ALLOW_LOOPBACK must not be enabled in production")
+    if (
+        settings.is_production
+        and settings.secret_backend == "database"
+        and not settings.secret_master_key.strip()
+    ):
+        raise ConfigurationError(
+            "DRILLAI_SECRET_MASTER_KEY is required when DRILLAI_SECRET_BACKEND=database in production"
+        )
 
     @contextlib.asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -129,8 +139,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             await _run_migrations(settings)
         app.state.catalogues = catalogues
         app.state.started_at = time.time()
-        yield
-        await app.state.database.dispose()
+        worker = getattr(app.state, "connector_worker", None)
+        if settings.connector_worker_enabled and worker is not None:
+            worker.start_background()
+        try:
+            yield
+        finally:
+            if worker is not None:
+                await worker.stop()
+            harness = getattr(app.state, "protocol_harness", None)
+            if harness is not None:
+                await harness.stop()
+            await app.state.database.dispose()
 
     # Registries are warmed in the factory, not only in the lifespan: an ASGI app mounted without
     # a lifespan (test clients, worker entry points) must not present an empty catalogue, which
@@ -156,6 +176,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # The blob store is process-scoped: a per-request instance would be correct for the
     # filesystem backend and would silently lose every blob for the in-memory one.
     app.state.blob_store = blob_store_from_settings(settings)
+    from drillai.telemetry.protocols.harness import LocalProtocolHarnessManager
+    from drillai.telemetry.worker import ConnectorWorker
+
+    app.state.connector_worker = ConnectorWorker(app.state.database)
+    app.state.protocol_harness = (
+        LocalProtocolHarnessManager() if not settings.is_production else None
+    )
 
     if settings.e2e_faults:
         # Registered *first*, which makes it the innermost layer: a faulted response still travels

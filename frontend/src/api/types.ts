@@ -2000,7 +2000,291 @@ export interface WellLiveSnapshot {
   latest: TelemetryLatestReading[]
   trends: Record<string, TelemetryTrend>
   alerts: AlertRow[]
+  connectors?: ConnectorRow[]
   freshness: Record<string, number>
+}
+
+// --------------------------------------------------------------------------- telemetry connectors
+
+export interface ConnectorProfileSpec {
+  profile: string
+  provider: string
+  standard_version: string
+  transport: string
+  auth_modes: string[]
+  supported_operations: string[]
+  supported_objects: string[]
+  resume_mechanism: string
+  is_synthetic: boolean
+  local_harness_verified: boolean
+  external_vendor_verified: boolean
+  limitations: string
+}
+
+export interface ConnectorChannelMapping {
+  source_mnemonic: string
+  channel_uri?: string
+  channel_key: string
+  name: string
+  dimension: string
+  unit: string
+  description?: string | null
+  is_realtime?: boolean
+}
+
+export interface ConnectorMaskedSecretRef {
+  slot: string
+  ref: string
+  backend: string
+  configured: boolean
+  masked_value: string
+}
+
+export interface ConnectorWorkerLease {
+  worker_id: string | null
+  lease_expires_at: string | null
+  last_heartbeat_at: string | null
+  fencing_token: number
+  lease_active: boolean
+}
+
+export interface ConnectorHealthSummary {
+  health_state:
+    | 'disabled'
+    | 'stopped'
+    | 'failed'
+    | 'backing_off'
+    | 'degraded'
+    | 'configured'
+    | 'starting'
+    | 'lease_expired'
+    | 'no_data_yet'
+    | 'stale_data'
+    | 'low_quality_data'
+    | 'live'
+    | string
+  is_live: boolean
+  lease_active: boolean
+  data_freshness: 'fresh' | 'stale' | 'missing' | string
+  has_low_quality: boolean
+  trustworthy_channels: number
+  seconds_since_last_poll: number | null
+  seconds_since_last_ingest: number | null
+  consecutive_failures: number
+  reconnect_count: number
+  backoff_seconds: number
+  next_poll_at: string | null
+  last_transition_at: string | null
+  last_connected_at: string | null
+  last_poll_at: string | null
+  last_successful_poll_at: string | null
+  last_frame_at: string | null
+  last_ingest_at: string | null
+  last_error: string | null
+  last_error_category: string | null
+  last_error_at: string | null
+  last_trace_id: string | null
+}
+
+export interface ConnectorRow {
+  id: string
+  org_id: string
+  key: string
+  name: string
+  provider: string
+  protocol_profile: string
+  profile_spec: ConnectorProfileSpec | null
+  is_synthetic: boolean
+  source_classification: 'synthetic_test_only' | 'external_protocol' | string
+  direction: string
+  well_id: string | null
+  wellbore_id: string | null
+  operation_id: string | null
+  project_id: string | null
+  endpoint_url: string | null
+  description: string | null
+  is_enabled: boolean
+  desired_state: 'enabled' | 'stopped' | 'disabled' | string
+  status:
+    | 'created'
+    | 'configured'
+    | 'stopped'
+    | 'starting'
+    | 'running'
+    | 'backing_off'
+    | 'degraded'
+    | 'failed'
+    | 'disabled'
+    | string
+  config_version: number
+  version: string | null
+  config: Record<string, unknown>
+  channel_mappings: ConnectorChannelMapping[]
+  mapped_channel_count: number
+  secret_refs: Record<string, ConnectorMaskedSecretRef>
+  cursor: Record<string, unknown>
+  worker: ConnectorWorkerLease
+  health: ConnectorHealthSummary
+  allowed_actions: string[]
+  created_by: string | null
+  created_at: string | null
+  updated_at: string | null
+}
+
+export interface ConnectorsPage extends Page<ConnectorRow> {
+  profiles?: string[]
+  statuses?: string[]
+}
+
+export interface ConnectorProfilesCatalogue {
+  profiles: ConnectorProfileSpec[]
+  allowed_secret_slots: string[]
+  desired_states: string[]
+  runtime_statuses: string[]
+}
+
+export interface ConnectorRunRow {
+  id: string
+  org_id: string
+  connector_id: string
+  well_id: string | null
+  worker_id: string | null
+  fencing_token: number
+  config_version: number
+  run_kind: string
+  status: string
+  started_at: string | null
+  finished_at: string | null
+  duration_ms: number | null
+  frames_received: number
+  points_accepted: number
+  points_duplicates: number
+  points_revised: number
+  points_rejected: number
+  alerts_raised: number
+  alerts_cleared: number
+  cursor_before: Record<string, unknown>
+  cursor_after: Record<string, unknown>
+  error_category: string | null
+  error_message: string | null
+  trace_id: string | null
+  details: Record<string, unknown>
+}
+
+export interface ConnectorRunsPage {
+  connector_id: string
+  items: ConnectorRunRow[]
+  total: number
+  limit: number
+}
+
+export interface ConnectorTestResult {
+  ok: boolean
+  connector_id: string
+  protocol_profile: string
+  is_synthetic: boolean
+  tested_at: string
+  duration_ms: number
+  discovered_channels: Array<{
+    channel_key: string
+    name: string
+    dimension: string
+    unit: string
+    is_realtime: boolean
+  }>
+  error_category: string | null
+  error_message: string | null
+  trace_id: string | null
+}
+
+export interface ConnectorPreviewResult {
+  connector_id: string
+  protocol_profile: string
+  is_synthetic: boolean
+  descriptors: Array<{
+    channel_key: string
+    name: string
+    dimension: string
+    unit: string
+    is_realtime: boolean
+  }>
+  samples: Array<{
+    channel_key: string
+    ts: string
+    value: number | null
+    unit: string
+    quality: string
+    source_point_id: string | null
+  }>
+  sample_count: number
+}
+
+export interface ConnectorCreatePayload {
+  key: string
+  name: string
+  protocol_profile: string
+  well_id: string
+  wellbore_id?: string | null
+  operation_id?: string | null
+  endpoint_url?: string | null
+  description?: string | null
+  config: Record<string, unknown>
+  secret_refs?: Record<string, string>
+}
+
+export interface ConnectorUpdatePayload {
+  expected_config_version: number
+  reason: string
+  name?: string | null
+  description?: string | null
+  endpoint_url?: string | null
+  config?: Record<string, unknown> | null
+  secret_refs?: Record<string, string> | null
+  clear_secret_slots?: string[] | null
+}
+
+export interface ConnectorTransitionPayload {
+  reason?: string | null
+  expected_config_version?: number | null
+}
+
+export interface ConnectorPollResponse {
+  outcome: {
+    connector_id: string
+    protocol_profile: string
+    status: string
+    fencing_token: number
+    frames_received: number
+    points_accepted: number
+    points_duplicates: number
+    points_revised: number
+    points_rejected: number
+    alerts_raised: number
+    alerts_cleared: number
+    error_category: string | null
+    error_message: string | null
+    duration_ms: number
+  }
+  connector: ConnectorRow
+}
+
+export interface ProtocolHarnessStatus {
+  witsml: {
+    running: boolean
+    endpoint_url: string | null
+    fault_mode: string
+    requests_received: number
+    row_count: number
+    secret_refs: Record<string, string>
+  }
+  etp: {
+    running: boolean
+    endpoint_url: string | null
+    fault_mode: string
+    sessions_opened: number
+    point_count: number
+    secret_refs: Record<string, string>
+  }
 }
 
 export interface SyntheticChannelPlanPayload {

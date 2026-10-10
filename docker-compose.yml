@@ -1,0 +1,108 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-drillai}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-drillai_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-drillai}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - drillai_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-drillai} -d ${POSTGRES_DB:-drillai}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  migrate:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    environment:
+      DRILLAI_ENVIRONMENT: ${DRILLAI_ENVIRONMENT:-staging}
+      DRILLAI_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-drillai}:${POSTGRES_PASSWORD:-drillai_dev_password}@postgres:5432/${POSTGRES_DB:-drillai}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["alembic", "upgrade", "head"]
+    restart: "no"
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      DRILLAI_ENVIRONMENT: ${DRILLAI_ENVIRONMENT:-staging}
+      DRILLAI_AUTH_ENABLED: ${DRILLAI_AUTH_ENABLED:-true}
+      DRILLAI_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-drillai}:${POSTGRES_PASSWORD:-drillai_dev_password}@postgres:5432/${POSTGRES_DB:-drillai}
+      DRILLAI_CORS_ORIGINS: ${DRILLAI_CORS_ORIGINS:-http://localhost:8080}
+      DRILLAI_BLOB_BACKEND: filesystem
+      DRILLAI_BLOB_ROOT: /var/lib/drillai/blobs
+      DRILLAI_CONNECTOR_WORKER_ENABLED: "false"
+      DRILLAI_CONNECTOR_ALLOW_LOOPBACK: "false"
+      DRILLAI_CONNECTOR_ALLOWED_HOSTS: ${DRILLAI_CONNECTOR_ALLOWED_HOSTS:-}
+      DRILLAI_E2E_FAULTS: "false"
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    volumes:
+      - drillai_blobs:/var/lib/drillai/blobs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health', timeout=3)",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+  connector-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      DRILLAI_ENVIRONMENT: ${DRILLAI_ENVIRONMENT:-staging}
+      DRILLAI_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-drillai}:${POSTGRES_PASSWORD:-drillai_dev_password}@postgres:5432/${POSTGRES_DB:-drillai}
+      DRILLAI_CONNECTOR_ALLOW_LOOPBACK: "false"
+      DRILLAI_CONNECTOR_ALLOWED_HOSTS: ${DRILLAI_CONNECTOR_ALLOWED_HOSTS:-}
+      DRILLAI_CONNECTOR_WORKER_LEASE_SECONDS: ${DRILLAI_CONNECTOR_WORKER_LEASE_SECONDS:-30.0}
+      DRILLAI_CONNECTOR_WORKER_POLL_SECONDS: ${DRILLAI_CONNECTOR_WORKER_POLL_SECONDS:-1.0}
+      DRILLAI_CONNECTOR_WORKER_MAX_CONCURRENCY: ${DRILLAI_CONNECTOR_WORKER_MAX_CONCURRENCY:-8}
+      DRILLAI_CONNECTOR_RUN_RETENTION_LIMIT: ${DRILLAI_CONNECTOR_RUN_RETENTION_LIMIT:-100}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    command: ["python", "-m", "drillai.telemetry.worker"]
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-8080}:8080"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+volumes:
+  drillai_pgdata:
+  drillai_blobs:

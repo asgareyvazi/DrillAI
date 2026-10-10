@@ -37,6 +37,7 @@ export const NAV_ITEMS: NavItem[] = [
   { to: '/workflows', labelKey: 'nav.workflowStudio', scope: 'global' },
   { to: '/runs', labelKey: 'nav.runs', scope: 'global' },
   { to: '/library', labelKey: 'nav.library', scope: 'global' },
+  { to: '/connectors', labelKey: 'nav.connectors', scope: 'global' },
   { to: '/platform', labelKey: 'nav.platform', scope: 'global' },
 ]
 

@@ -42,6 +42,9 @@ dev = [
 # Optional heavy adapters — enabled only when the deployment needs them.
 vector = ["pgvector>=0.3"]
 
+[project.scripts]
+drillai-worker = "drillai.telemetry.worker:main"
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/drillai"]
 

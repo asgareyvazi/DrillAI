@@ -19,6 +19,7 @@ import { ApiError } from '../../api/client'
 import { drillingApi } from '../../api/endpoints'
 import type {
   AlertRow,
+  ConnectorRow,
   DrillingState,
   TelemetryLatestReading,
   TelemetryPoint,
@@ -686,6 +687,29 @@ export function OperationalMonitor({
     latestReadings: latestQuery.data?.items,
   })
 
+  const wellConnectorsQuery = useQuery({
+    queryKey: ['connectors', 'well', wellId],
+    queryFn: ({ signal }) =>
+      typeof drillingApi.listConnectors === 'function'
+        ? drillingApi.listConnectors({ well_id: wellId, limit: 50 }, signal)
+        : Promise.resolve({
+            items: [],
+            total: 0,
+            limit: 50,
+            offset: 0,
+            profiles: [],
+            statuses: [],
+          }),
+    refetchInterval: 4000,
+  })
+
+  const wellConnectors: ConnectorRow[] = useMemo(() => {
+    if (wellConnectorsQuery.data?.items?.length) {
+      return wellConnectorsQuery.data.items
+    }
+    return liveStream.snapshot?.connectors ?? []
+  }, [wellConnectorsQuery.data?.items, liveStream.snapshot?.connectors])
+
   const readings: TelemetryLatestReading[] = useMemo(() => {
     const raw = latestQuery.data?.items ?? liveStream.snapshot?.latest ?? []
     const rankMap = new Map<string, number>(
@@ -991,6 +1015,113 @@ export function OperationalMonitor({
                 {drillingState.progress.current_md_source ?? 'measured'})
               </span>
             )}
+          </div>
+        )}
+      </Card>
+
+      {/* Well Telemetry Connectors Health Banner */}
+      <Card
+        title={t('liveMonitor.connectorsBannerTitle')}
+        subtitle={t('liveMonitor.connectorsBannerSubtitle')}
+        data-testid="monitor-connectors-card"
+        actions={
+          <Link
+            to={`/connectors?wellId=${encodeURIComponent(wellId)}`}
+            className="text-xs font-medium text-signal underline hover:text-signal-deep dark:text-signal-light"
+            data-testid="monitor-manage-connectors-link"
+          >
+            {t('liveMonitor.connectorsManageLink')}
+          </Link>
+        }
+      >
+        {wellConnectors.length === 0 ? (
+          <p
+            className="text-xs text-graphite-500"
+            data-testid="monitor-no-connectors"
+          >
+            {t('liveMonitor.connectorsNone')}
+          </p>
+        ) : (
+          <div
+            className="grid gap-2.5 sm:grid-cols-2"
+            data-testid="monitor-connectors-list"
+          >
+            {wellConnectors.map((conn) => {
+              const healthTone = conn.health.is_live
+                ? 'ok'
+                : conn.health.health_state === 'failed'
+                  ? 'danger'
+                  : conn.health.health_state === 'backing_off' ||
+                      conn.health.health_state === 'stale_data' ||
+                      conn.health.health_state === 'low_quality_data' ||
+                      conn.health.health_state === 'no_data_yet'
+                    ? 'warning'
+                    : 'neutral'
+              return (
+                <div
+                  key={conn.id}
+                  data-testid={`monitor-connector-${conn.key}`}
+                  className="rounded-md border border-graphite-100 p-3 text-xs dark:border-graphite-800"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-semibold text-graphite-800 dark:text-graphite-100">
+                        {conn.name}
+                      </span>
+                      <Badge tone={conn.is_synthetic ? 'warning' : 'info'}>
+                        {conn.is_synthetic
+                          ? t('connectors.syntheticBadge')
+                          : t('connectors.externalBadge')}
+                      </Badge>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <Badge
+                        tone={
+                          conn.status === 'running'
+                            ? 'ok'
+                            : conn.status === 'failed'
+                              ? 'danger'
+                              : conn.status === 'backing_off'
+                                ? 'warning'
+                                : 'neutral'
+                        }
+                      >
+                        {conn.status}
+                      </Badge>
+                      <Badge tone={healthTone}>
+                        {conn.health.is_live ? 'LIVE' : conn.health.health_state}
+                      </Badge>
+                    </div>
+                  </div>
+                  <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[11px] text-graphite-500">
+                    <span dir="ltr" className="font-mono">
+                      {conn.key}
+                    </span>
+                    <span>·</span>
+                    <span dir="ltr" className="font-mono">
+                      {conn.protocol_profile}
+                    </span>
+                    <span>·</span>
+                    <span dir="ltr" className="font-mono">
+                      freshness:{conn.health.data_freshness}
+                    </span>
+                    <span>·</span>
+                    <span dir="ltr" className="font-mono">
+                      #{conn.worker.fencing_token}
+                    </span>
+                  </div>
+                  {conn.health.last_error && (
+                    <div
+                      className="mt-1.5 rounded border border-danger/30 bg-danger/10 px-2 py-1 font-mono text-[11px] text-danger"
+                      dir="ltr"
+                      data-testid={`monitor-connector-error-${conn.key}`}
+                    >
+                      [{conn.health.last_error_category ?? 'error'}] {conn.health.last_error}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
           </div>
         )}
       </Card>

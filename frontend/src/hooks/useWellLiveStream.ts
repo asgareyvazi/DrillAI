@@ -150,6 +150,7 @@ export function useWellLiveStream(
         queryClient.invalidateQueries({ queryKey: ['alerts', wellId] }),
         queryClient.invalidateQueries({ queryKey: ['well-live-snapshot', wellId] }),
         queryClient.invalidateQueries({ queryKey: ['timeseries-points', wellId] }),
+        queryClient.invalidateQueries({ queryKey: ['connectors'] }),
       ])
     } finally {
       setIsResyncing(false)
@@ -242,6 +243,10 @@ export function useWellLiveStream(
         setRecentEvents((prev) => [ev, ...prev].slice(0, MAX_RECENT_EVENTS))
         if (ev.type.startsWith('alert.')) {
           invalidateAlertQueries(ev.subject?.id ?? null)
+        } else if (ev.type === 'connector.changed') {
+          void queryClient.invalidateQueries({ queryKey: ['connectors'] })
+          void queryClient.invalidateQueries({ queryKey: ['well-live-snapshot', wellId] })
+          scheduleTelemetryReconcile()
         } else if (ev.type === 'well_state.changed' || ev.type.startsWith('operation.')) {
           void queryClient.invalidateQueries({ queryKey: ['well-state', wellId] })
           invalidateTelemetryQueries()

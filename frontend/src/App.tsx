@@ -22,6 +22,7 @@ import ReportsWorkspace from './pages/engineering/ReportsWorkspace'
 import WorkflowStudio from './pages/workflow/WorkflowStudio'
 import RunMonitor from './pages/workflow/RunMonitor'
 import LibraryPage from './pages/library/LibraryPage'
+import ConnectorsPage from './pages/library/ConnectorsPage'
 import PlatformPage from './pages/library/PlatformPage'
 import NotFound from './pages/NotFound'
 
@@ -105,6 +106,7 @@ export function App() {
         <Route path="/workflows" element={<PageErrorBoundary><WorkflowStudio /></PageErrorBoundary>} />
         <Route path="/runs" element={<PageErrorBoundary><RunMonitor /></PageErrorBoundary>} />
         <Route path="/library" element={<PageErrorBoundary><LibraryPage /></PageErrorBoundary>} />
+        <Route path="/connectors" element={<PageErrorBoundary><ConnectorsPage /></PageErrorBoundary>} />
         <Route path="/platform" element={<PageErrorBoundary><PlatformPage /></PageErrorBoundary>} />
         <Route path="*" element={<NotFound />} />
       </Route>

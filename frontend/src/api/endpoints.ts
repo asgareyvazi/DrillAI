@@ -74,6 +74,17 @@ import type {
   TelemetryWindowResponse,
   WellLatestTelemetryResponse,
   WellLiveSnapshot,
+  ConnectorCreatePayload,
+  ConnectorPollResponse,
+  ConnectorPreviewResult,
+  ConnectorProfilesCatalogue,
+  ConnectorRow,
+  ConnectorRunsPage,
+  ConnectorsPage,
+  ConnectorTestResult,
+  ConnectorTransitionPayload,
+  ConnectorUpdatePayload,
+  ProtocolHarnessStatus,
   Rig,
   ReportKind,
   RunEvent,
@@ -798,6 +809,112 @@ export const drillingApi = {
     api.post<AlertEvaluationReport>(`/wells/${enc(wellId)}/alerts/evaluate`, undefined, {
       query: params,
     }),
+
+  // ------------------------------------------------------------------ telemetry connectors
+  connectorProfiles: (signal?: AbortSignal) =>
+    api.get<ConnectorProfilesCatalogue>('/connectors/profiles', {
+      signal,
+      validate: expect.object('profiles'),
+    }),
+  listConnectors: (
+    params: {
+      well_id?: string
+      provider?: string
+      status?: string
+      limit?: number
+      offset?: number
+    } = {},
+    signal?: AbortSignal,
+  ) =>
+    api.get<ConnectorsPage>('/connectors', {
+      query: params,
+      signal,
+      validate: expect.paged(),
+    }),
+  getConnector: (connectorId: string, signal?: AbortSignal) =>
+    api.get<ConnectorRow>(`/connectors/${enc(connectorId)}`, {
+      signal,
+      validate: expect.object('id'),
+    }),
+  createConnector: (body: ConnectorCreatePayload, idempotencyKey?: string) =>
+    api.post<ConnectorRow>('/connectors', body, idempotencyHeader(idempotencyKey)),
+  updateConnector: (
+    connectorId: string,
+    body: ConnectorUpdatePayload,
+    idempotencyKey?: string,
+  ) =>
+    api.patch<ConnectorRow>(
+      `/connectors/${enc(connectorId)}`,
+      body,
+      idempotencyHeader(idempotencyKey),
+    ),
+  testConnector: (connectorId: string) =>
+    api.post<ConnectorTestResult>(`/connectors/${enc(connectorId)}/test`),
+  previewConnector: (connectorId: string, sampleLimit = 20) =>
+    api.post<ConnectorPreviewResult>(`/connectors/${enc(connectorId)}/preview`, {
+      sample_limit: sampleLimit,
+    }),
+  startConnector: (
+    connectorId: string,
+    body: ConnectorTransitionPayload = {},
+    idempotencyKey?: string,
+  ) =>
+    api.post<ConnectorRow>(
+      `/connectors/${enc(connectorId)}/start`,
+      body,
+      idempotencyHeader(idempotencyKey),
+    ),
+  stopConnector: (
+    connectorId: string,
+    body: ConnectorTransitionPayload,
+    idempotencyKey?: string,
+  ) =>
+    api.post<ConnectorRow>(
+      `/connectors/${enc(connectorId)}/stop`,
+      body,
+      idempotencyHeader(idempotencyKey),
+    ),
+  restartConnector: (
+    connectorId: string,
+    body: ConnectorTransitionPayload,
+    idempotencyKey?: string,
+  ) =>
+    api.post<ConnectorRow>(
+      `/connectors/${enc(connectorId)}/restart`,
+      body,
+      idempotencyHeader(idempotencyKey),
+    ),
+  disableConnector: (
+    connectorId: string,
+    body: ConnectorTransitionPayload,
+    idempotencyKey?: string,
+  ) =>
+    api.post<ConnectorRow>(
+      `/connectors/${enc(connectorId)}/disable`,
+      body,
+      idempotencyHeader(idempotencyKey),
+    ),
+  pollConnector: (connectorId: string) =>
+    api.post<ConnectorPollResponse>(`/connectors/${enc(connectorId)}/poll`),
+  listConnectorRuns: (
+    connectorId: string,
+    params: { limit?: number } = {},
+    signal?: AbortSignal,
+  ) =>
+    api.get<ConnectorRunsPage>(`/connectors/${enc(connectorId)}/runs`, {
+      query: params,
+      signal,
+      validate: expect.object('items'),
+    }),
+  ensureProtocolHarness: () =>
+    api.post<ProtocolHarnessStatus>('/connectors/harness/ensure'),
+  configureProtocolHarness: (body: {
+    protocol: 'witsml' | 'etp'
+    fault_mode?: string
+    append_values?: Record<string, number | null>
+    depth_md?: number
+    quality?: string
+  }) => api.post<ProtocolHarnessStatus>('/connectors/harness/configure', body),
 
   // ------------------------------------------------------------------ platform & registry
   capabilities: (signal?: AbortSignal) => api.get<PlatformCapabilities>('/platform/capabilities', { signal }),
