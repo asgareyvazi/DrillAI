@@ -4,12 +4,12 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-drillai}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-drillai_dev_password}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in environment or .env}
       POSTGRES_DB: ${POSTGRES_DB:-drillai}
-    ports:
-      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - drillai_pgdata:/var/lib/postgresql/data
+    networks:
+      - drillai_internal
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-drillai} -d ${POSTGRES_DB:-drillai}"]
       interval: 5s
@@ -22,7 +22,10 @@ services:
       dockerfile: Dockerfile
     environment:
       DRILLAI_ENVIRONMENT: ${DRILLAI_ENVIRONMENT:-staging}
-      DRILLAI_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-drillai}:${POSTGRES_PASSWORD:-drillai_dev_password}@postgres:5432/${POSTGRES_DB:-drillai}
+      DRILLAI_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-drillai}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@postgres:5432/${POSTGRES_DB:-drillai}
+      DRILLAI_BLOB_ROOT: /var/lib/drillai/blobs
+    networks:
+      - drillai_internal
     depends_on:
       postgres:
         condition: service_healthy
@@ -37,7 +40,7 @@ services:
     environment:
       DRILLAI_ENVIRONMENT: ${DRILLAI_ENVIRONMENT:-staging}
       DRILLAI_AUTH_ENABLED: ${DRILLAI_AUTH_ENABLED:-true}
-      DRILLAI_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-drillai}:${POSTGRES_PASSWORD:-drillai_dev_password}@postgres:5432/${POSTGRES_DB:-drillai}
+      DRILLAI_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-drillai}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@postgres:5432/${POSTGRES_DB:-drillai}
       DRILLAI_CORS_ORIGINS: ${DRILLAI_CORS_ORIGINS:-http://localhost:8080}
       DRILLAI_BLOB_BACKEND: filesystem
       DRILLAI_BLOB_ROOT: /var/lib/drillai/blobs
@@ -46,9 +49,12 @@ services:
       DRILLAI_CONNECTOR_ALLOWED_HOSTS: ${DRILLAI_CONNECTOR_ALLOWED_HOSTS:-}
       DRILLAI_E2E_FAULTS: "false"
     ports:
-      - "${BACKEND_PORT:-8000}:8000"
+      - "${BIND_ADDRESS:-127.0.0.1}:${BACKEND_PORT:-8000}:8000"
     volumes:
       - drillai_blobs:/var/lib/drillai/blobs
+    networks:
+      - drillai_internal
+      - drillai_edge
     depends_on:
       postgres:
         condition: service_healthy
@@ -62,9 +68,9 @@ services:
           "-c",
           "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health', timeout=3)",
         ]
-      interval: 10s
+      interval: 5s
       timeout: 5s
-      retries: 6
+      retries: 12
 
   connector-worker:
     build:
@@ -73,18 +79,24 @@ services:
     restart: unless-stopped
     environment:
       DRILLAI_ENVIRONMENT: ${DRILLAI_ENVIRONMENT:-staging}
-      DRILLAI_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-drillai}:${POSTGRES_PASSWORD:-drillai_dev_password}@postgres:5432/${POSTGRES_DB:-drillai}
+      DRILLAI_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-drillai}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@postgres:5432/${POSTGRES_DB:-drillai}
+      DRILLAI_BLOB_ROOT: /var/lib/drillai/blobs
       DRILLAI_CONNECTOR_ALLOW_LOOPBACK: "false"
       DRILLAI_CONNECTOR_ALLOWED_HOSTS: ${DRILLAI_CONNECTOR_ALLOWED_HOSTS:-}
       DRILLAI_CONNECTOR_WORKER_LEASE_SECONDS: ${DRILLAI_CONNECTOR_WORKER_LEASE_SECONDS:-30.0}
       DRILLAI_CONNECTOR_WORKER_POLL_SECONDS: ${DRILLAI_CONNECTOR_WORKER_POLL_SECONDS:-1.0}
       DRILLAI_CONNECTOR_WORKER_MAX_CONCURRENCY: ${DRILLAI_CONNECTOR_WORKER_MAX_CONCURRENCY:-8}
       DRILLAI_CONNECTOR_RUN_RETENTION_LIMIT: ${DRILLAI_CONNECTOR_RUN_RETENTION_LIMIT:-100}
+    networks:
+      - drillai_internal
+      - drillai_edge
     depends_on:
       postgres:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
+      backend:
+        condition: service_healthy
     command: ["python", "-m", "drillai.telemetry.worker"]
 
   frontend:
@@ -93,15 +105,22 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     ports:
-      - "${FRONTEND_PORT:-8080}:8080"
+      - "${BIND_ADDRESS:-127.0.0.1}:${FRONTEND_PORT:-8080}:8080"
+    networks:
+      - drillai_edge
     depends_on:
       backend:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/ || exit 1"]
-      interval: 10s
+      interval: 5s
       timeout: 5s
-      retries: 6
+      retries: 12
+
+networks:
+  drillai_internal:
+    internal: true
+  drillai_edge:
 
 volumes:
   drillai_pgdata:

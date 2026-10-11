@@ -195,7 +195,11 @@ async def _run_verification() -> int:
 
                 # 4. Restart worker process and verify lease recovery
                 worker_proc.terminate()
-                worker_proc.wait(timeout=5)
+                try:
+                    worker_proc.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    worker_proc.kill()
+                    worker_proc.wait(timeout=5)
                 worker_proc = subprocess.Popen(
                     [python_bin, "-m", "drillai.telemetry.worker"],
                     cwd=str(BACKEND_DIR),
@@ -203,7 +207,7 @@ async def _run_verification() -> int:
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
                 )
-                await asyncio.sleep(0.8)
+                await asyncio.sleep(1.2)
                 runs = (await client.get(f"/api/v1/connectors/{cid}/runs", headers=headers)).json()
                 assert runs["total"] >= 1, "Expected connector run ledger entries"
 
@@ -212,10 +216,18 @@ async def _run_verification() -> int:
         finally:
             if worker_proc is not None and worker_proc.poll() is None:
                 worker_proc.terminate()
-                worker_proc.wait(timeout=5)
+                try:
+                    worker_proc.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    worker_proc.kill()
+                    worker_proc.wait(timeout=5)
             if api_proc is not None and api_proc.poll() is None:
                 api_proc.terminate()
-                api_proc.wait(timeout=5)
+                try:
+                    api_proc.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    api_proc.kill()
+                    api_proc.wait(timeout=5)
             await witsml_server.stop()
 
 

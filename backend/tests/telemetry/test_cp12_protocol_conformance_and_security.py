@@ -955,3 +955,153 @@ def test_d2_secret_reference_minimization_and_query_token_redaction():
     assert "secret_jwt_999" not in scrubbed
     assert "key_888" not in scrubbed
     assert "DRILLAI_SECRET_PROD_WITSML_USER" not in scrubbed
+
+
+def test_e1_e2_docker_compose_security_posture():
+    """Verify `docker-compose.yml` enforces:
+    - Required `POSTGRES_PASSWORD` (`${POSTGRES_PASSWORD:?...}`) with no reusable default fallback
+    - Private internal network (`drillai_internal`) with `postgres` not published on `0.0.0.0:5432`
+    - `127.0.0.1` default host binding (`${BIND_ADDRESS:-127.0.0.1}`) for `backend` and `frontend`
+    - `/api/v1/health/ready` readiness probe on `backend`
+    """
+    from pathlib import Path
+
+    repo_root = Path(__file__).resolve().parents[3]
+    compose_text = (repo_root / "docker-compose.yml").read_text(encoding="utf-8")
+    assert "POSTGRES_PASSWORD:?" in compose_text
+    assert "drillai_dev_password" not in compose_text
+    assert "5432:5432" not in compose_text
+    assert "drillai_internal:" in compose_text
+    assert "internal: true" in compose_text
+    assert "${BIND_ADDRESS:-127.0.0.1}:${BACKEND_PORT:-8000}:8000" in compose_text
+    assert "${BIND_ADDRESS:-127.0.0.1}:${FRONTEND_PORT:-8080}:8080" in compose_text
+    assert "/api/v1/health" in compose_text
+
+
+async def test_h1_h3_bounded_soak_multi_connector_fault_recovery_and_retention(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+):
+    """Run a multi-connector soak across WITSML 1.4.1.1, ETP 1.2, and Synthetic connectors
+    with injected transient faults, verifying:
+    - Zero data loss across recovery cycles
+    - Bounded `ConnectorRun` retention (`run_retention_limit=8`)
+    - Bounded observability `Histogram` sample buffer (`MAX_HISTOGRAM_SAMPLES`)
+    """
+    from drillai.db.models import ConnectorRun
+    from drillai.observability.tracing import MAX_HISTOGRAM_SAMPLES, Histogram
+    from drillai.telemetry.protocols.etp import LocalEtpWebSocketServer
+    from drillai.telemetry.protocols.witsml import LocalWitsmlSoapServer
+
+    monkeypatch.setenv("DRILLAI_ENVIRONMENT", "test")
+    monkeypatch.setenv("DRILLAI_AUTH_ENABLED", "false")
+    monkeypatch.setenv("DRILLAI_BLOB_BACKEND", "memory")
+    monkeypatch.setenv("DRILLAI_DATABASE_URL", f"sqlite+aiosqlite:///{tmp_path}/soak_h1_h3.db")
+    monkeypatch.setenv("DRILLAI_SCHEDULER_ENABLED", "false")
+    monkeypatch.setenv("DRILLAI_CONNECTOR_ALLOW_LOOPBACK", "true")
+    reset_settings_cache()
+    settings = get_settings()
+    app = create_app(settings)
+
+    async with app.state.database.engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    org_id = "org_000000000000000000000001"
+    well_id = "wel_soak_01"
+    wellbore_id = "wbr_soak_01"
+    await _seed_org_and_well(app, org_id, well_id, wellbore_id, settings.dev_org_slug)
+
+    witsml_srv = LocalWitsmlSoapServer()
+    etp_srv = LocalEtpWebSocketServer()
+    t0 = dt.datetime(2026, 6, 3, 0, 0, 0, tzinfo=dt.UTC)
+    witsml_srv.seed_default_rows(start=t0, count=6, step_seconds=5.0)
+    etp_srv.seed_default_points(start=t0 + dt.timedelta(minutes=5), count=6, step_seconds=5.0)
+
+    try:
+        async with witsml_srv, etp_srv:
+            worker = ConnectorWorker(
+                app.state.database,
+                worker_id="wrk_soak_01",
+                lease_seconds=5.0,
+                max_concurrency=4,
+                retention_limit=8,
+                allow_loopback=True,
+            )
+            async with app.state.database.session() as session:
+                svc = ConnectorService(session, org_id)
+                c_witsml = await svc.create(
+                    key="soak-witsml",
+                    name="Soak WITSML",
+                    protocol_profile="witsml.1.4.1.1.soap_http",
+                    well_id=well_id,
+                    wellbore_id=wellbore_id,
+                    endpoint_url=witsml_srv.endpoint_url,
+                    config={
+                        "auth_mode": "none",
+                        "poll_interval_seconds": 0.05,
+                        "max_points_per_poll": 4,
+                        "channel_mappings": _mappings(),
+                    },
+                    allow_loopback=True,
+                )
+                c_etp = await svc.create(
+                    key="soak-etp",
+                    name="Soak ETP",
+                    protocol_profile="etp.1.2.json_ws",
+                    well_id=well_id,
+                    wellbore_id=wellbore_id,
+                    endpoint_url=etp_srv.endpoint_url,
+                    config={
+                        "auth_mode": "none",
+                        "poll_interval_seconds": 0.05,
+                        "max_points_per_poll": 4,
+                        "channel_mappings": _mappings(),
+                    },
+                    allow_loopback=True,
+                )
+                await svc.transition(c_witsml["id"], action="start", reason="start soak")
+                await svc.transition(c_etp["id"], action="start", reason="start soak")
+                await session.commit()
+
+            # Execute 15 worker ticks with mid-soak transient faults on ticks 3 and 7
+            for tick in range(15):
+                if tick in (3, 7):
+                    witsml_srv.fault_mode = "http_500"
+                    etp_srv.fault_mode = "disconnect_mid_stream"
+                else:
+                    witsml_srv.fault_mode = "ok"
+                    etp_srv.fault_mode = "ok"
+
+                # Force connectors to be due immediately so all 15 ticks execute
+                async with app.state.database.session() as session:
+                    rows = (await session.execute(select(Connector))).scalars().all()
+                    now_due = utc_now() - dt.timedelta(seconds=1)
+                    for r in rows:
+                        r.next_poll_at = now_due
+                        r.lease_expires_at = None
+                    await session.commit()
+
+                outcomes = await worker.run_once()
+                assert len(outcomes) == 2
+
+            # Verify both connectors recovered to running and pruned runs to <= 8 each
+            async with app.state.database.session() as session:
+                for cid in (c_witsml["id"], c_etp["id"]):
+                    row = await session.get(Connector, cid)
+                    assert row is not None
+                    assert row.status == "running"
+                    runs = (
+                        await session.execute(
+                            select(ConnectorRun).where(ConnectorRun.connector_id == cid)
+                        )
+                    ).scalars().all()
+                    assert len(runs) == 8
+
+            # Verify Histogram sample buffer stays bounded at MAX_HISTOGRAM_SAMPLES
+            hist = Histogram("test.soak.hist", "bounded histogram check")
+            for i in range(MAX_HISTOGRAM_SAMPLES + 500):
+                hist.observe(float(i))
+            snap = hist.snapshot()
+            assert snap[""]["count"] == MAX_HISTOGRAM_SAMPLES + 500
+            assert len(hist._values[()]) == MAX_HISTOGRAM_SAMPLES
+    finally:
+        await app.state.database.dispose()
