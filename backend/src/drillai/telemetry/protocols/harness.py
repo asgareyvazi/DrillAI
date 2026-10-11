@@ -121,7 +121,7 @@ class LocalProtocolHarnessManager:
         *,
         protocol: str,
         fault_mode: str | None = None,
-        append_values: dict[str, float | None] | None = None,
+        append_values: dict[str, float | int | str | None] | None = None,
         depth_md: float = 2500.0,
         quality: str = "good",
         reset_rows: bool = False,

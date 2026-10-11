@@ -2297,6 +2297,7 @@ class ConnectorService:
             update_vals["error_count"] = 0
             update_vals["backoff_seconds"] = 0.0
             update_vals["next_poll_at"] = now
+            update_vals["fencing_token"] = current_fencing + 1
         elif verb == "stop":
             update_vals["desired_state"] = "stopped"
             update_vals["is_enabled"] = False
@@ -2331,9 +2332,8 @@ class ConnectorService:
             Connector.id == row.id,
             Connector.org_id == self.org_id,
             Connector.config_version == current_cfg_version,
+            Connector.fencing_token == current_fencing,
         ]
-        if expected_config_version is not None:
-            cas_clauses.append(Connector.fencing_token == current_fencing)
 
         cas_res = await self.session.execute(
             update(Connector).where(*cas_clauses).values(**update_vals)
@@ -2696,15 +2696,21 @@ class ConnectorService:
             duration_ms = round((time.perf_counter() - t0) * 1000.0, 2)
             category = classify_connector_error(exc)
             safe_msg = redact_sensitive_text(str(exc), resolved_secrets) or "connection test failed"
-            failed_stage = (
-                "endpoint_policy_validated"
-                if not milestones
-                else (
-                    "socket_connected"
-                    if len(milestones) == 1
-                    else "session_established"
+            if not milestones:
+                failed_stage = "endpoint_policy_validated"
+            elif len(milestones) == 1 and category in ("auth_failure", "protocol_error"):
+                milestones.append(
+                    {
+                        "stage": "socket_connected",
+                        "status": "passed",
+                        "detail": "TCP socket connected prior to handshake/session rejection",
+                    }
                 )
-            )
+                failed_stage = "session_established"
+            elif len(milestones) == 1:
+                failed_stage = "socket_connected"
+            else:
+                failed_stage = "session_established"
             milestones.append(
                 {
                     "stage": failed_stage,

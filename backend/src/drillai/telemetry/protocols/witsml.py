@@ -511,6 +511,12 @@ def parse_get_from_store_response(
 
             if not mnemonic_list:
                 continue
+            if unit_list and len(unit_list) != len(mnemonic_list):
+                raise ConnectorTransportError(
+                    "malformed_payload",
+                    f"WITSML <unitList> length ({len(unit_list)}) does not match <mnemonicList> length ({len(mnemonic_list)})",
+                    retryable=False,
+                )
 
             upper_mnemonics = [m.upper() for m in mnemonic_list]
             try:
@@ -523,6 +529,11 @@ def parse_get_from_store_response(
                 if candidate_depth in upper_mnemonics and upper_mnemonics.index(candidate_depth) != idx_pos:
                     depth_pos = upper_mnemonics.index(candidate_depth)
                     break
+            depth_unit = (
+                unit_list[depth_pos].strip().lower()
+                if (depth_pos is not None and depth_pos < len(unit_list))
+                else "m"
+            )
 
             quality_pos: int | None = None
             for candidate_q in ("QUALITY", "QUAL", "QFLAG"):
@@ -566,7 +577,10 @@ def parse_get_from_store_response(
                         try:
                             parsed_d = float(raw_d)
                             if math.isfinite(parsed_d):
-                                row_depth = parsed_d
+                                if depth_unit in ("ft", "feet", "foot", "ft_us"):
+                                    row_depth = parsed_d * 0.3048
+                                else:
+                                    row_depth = parsed_d
                         except ValueError:
                             row_depth = None
 

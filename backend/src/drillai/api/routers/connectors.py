@@ -96,7 +96,7 @@ class HarnessConfigureRequest(BaseModel):
 
     protocol: str = Field(pattern="^(witsml|etp|etp_binary)$")
     fault_mode: str | None = Field(default=None, max_length=64)
-    append_values: dict[str, float | None] | None = None
+    append_values: dict[str, float | int | str | None] | None = None
     depth_md: float = Field(default=2500.0, ge=0.0, le=20000.0)
     quality: str = Field(default="good", max_length=24)
     reset_rows: bool = Field(default=False)
@@ -108,6 +108,7 @@ class EgressPolicyUpdateRequest(BaseModel):
     reason: str = Field(min_length=1, max_length=1000)
     allowed_hosts: list[str] | None = Field(default=None, max_length=100)
     allowed_private_cidrs: list[str] | None = Field(default=None, max_length=50)
+    allowed_private_networks: list[str] | None = Field(default=None, max_length=50)
 
 
 @router.get("/connectors/profiles", summary="Supported telemetry connector protocol profiles")
@@ -141,20 +142,36 @@ async def update_egress_policy(
     body: EgressPolicyUpdateRequest,
     session: Annotated[AsyncSession, Depends(get_db)],
     auth: Annotated[AuthContext, Depends(require("connector.manage"))],
+    idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key", max_length=160)] = None,
 ) -> dict[str, Any]:
     if "admin" not in (auth.principal.role_keys or ()):
         raise PermissionDenied(
             "only administrators may modify outbound connector network egress policy",
             details={"reason": "admin_role_required"},
         )
+    org_id = auth.org_id or ""
+    scope = "connector.egress_policy.update"
+    payload_json = body.model_dump(mode="json")
+    if (
+        replayed := await replay_or_reserve(
+            session, org_id=org_id, key=idempotency_key, scope=scope, payload=payload_json
+        )
+    ) is not None:
+        return replayed
+
     before = get_egress_policy()
+    cidrs = (
+        body.allowed_private_cidrs
+        if body.allowed_private_cidrs is not None
+        else body.allowed_private_networks
+    )
     after = set_egress_policy(
         allowed_hosts=body.allowed_hosts,
-        allowed_private_cidrs=body.allowed_private_cidrs,
+        allowed_private_cidrs=cidrs,
     )
     await record_audit(
         session,
-        org_id=auth.org_id or "",
+        org_id=org_id,
         principal=auth.principal,
         action="connector.egress_policy.update",
         resource_kind="connector_egress_policy",
@@ -163,6 +180,8 @@ async def update_egress_policy(
         after=after,
         details={"reason": body.reason},
     )
+    await complete(session, org_id=org_id, key=idempotency_key, scope=scope, response=after)
+    await session.commit()
     return after
 
 

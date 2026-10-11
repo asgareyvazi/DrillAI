@@ -138,7 +138,7 @@ class ConnectorWorker:
         self.last_cycle_at: dt.datetime | None = None
 
     async def renew_lease(self, claimed: ClaimedConnector) -> bool:
-        """Atomically extend the worker lease only if fencing_token and config_version still match."""
+        """Atomically extend the worker lease only if fencing_token, config_version, and active lease still hold."""
         now = utc_now()
         lease_until = now + dt.timedelta(seconds=self.lease_seconds)
         async with self.database.session() as hb_session:
@@ -151,6 +151,8 @@ class ConnectorWorker:
                     Connector.config_version == claimed.config_version,
                     Connector.is_enabled.is_(True),
                     Connector.desired_state == "enabled",
+                    Connector.lease_expires_at.is_not(None),
+                    Connector.lease_expires_at > now,
                 )
                 .values(
                     lease_expires_at=lease_until,
@@ -409,11 +411,16 @@ class ConnectorWorker:
             if self._before_commit_hook is not None:
                 await self._before_commit_hook(claimed)
 
-            # Phase 2: Short atomic DB transaction — verify fencing token & config_version, ingest via TelemetryService, advance cursor, commit.
+            # Phase 2: Short atomic DB transaction — verify fencing token, config_version, and active lease,
+            # ingest via TelemetryService, advance cursor, commit.
             async with self.database.session() as session:
                 current_row = (
                     await session.execute(select(Connector).where(Connector.id == claimed.connector_id))
                 ).scalar_one_or_none()
+                now_phase2 = utc_now()
+                current_lease_exp = (
+                    _ensure_aware(current_row.lease_expires_at) if current_row is not None else None
+                )
                 if (
                     current_row is None
                     or current_row.worker_id != self.worker_id
@@ -421,6 +428,8 @@ class ConnectorWorker:
                     or int(current_row.config_version or 1) != claimed.config_version
                     or not current_row.is_enabled
                     or current_row.desired_state != "enabled"
+                    or current_lease_exp is None
+                    or current_lease_exp <= now_phase2
                 ):
                     await adapter.close()
                     await session.rollback()
@@ -508,9 +517,22 @@ class ConnectorWorker:
                         "per_source_channel": {},
                     }
 
+                discovered_count = int(protocol_manifest.get("source_records_discovered", 0))
+                if discovered_count == 0 and frames_received == 0 and rejected == 0:
+                    data_outcome = "no_data"
+                elif (accepted + duplicates + revised) == 0 and rejected > 0:
+                    data_outcome = "rejected_only"
+                elif (accepted + duplicates + revised) > 0 and rejected > 0:
+                    data_outcome = "partial_with_rejections"
+                elif has_more_deferred:
+                    data_outcome = "partial_batch_capped"
+                else:
+                    data_outcome = "all_valid_accepted"
+
                 run_manifest: dict[str, Any] = {
                     **protocol_manifest,
                     "checkpoint_status": checkpoint_status,
+                    "data_outcome": data_outcome,
                     "points_accepted": accepted,
                     "points_duplicates": duplicates,
                     "points_revised": revised,
@@ -556,7 +578,7 @@ class ConnectorWorker:
                 if claimed.previous_status != "running":
                     update_values["last_transition_at"] = finished
 
-                # Atomic fencing-token and config_version check on Connector update before committing the transaction!
+                # Atomic fencing-token, config_version, and active lease check on Connector update before committing!
                 fenced_update = await session.execute(
                     update(Connector)
                     .where(
@@ -566,6 +588,8 @@ class ConnectorWorker:
                         Connector.config_version == claimed.config_version,
                         Connector.is_enabled.is_(True),
                         Connector.desired_state == "enabled",
+                        Connector.lease_expires_at.is_not(None),
+                        Connector.lease_expires_at > finished,
                     )
                     .values(**update_values)
                 )
@@ -727,6 +751,7 @@ class ConnectorWorker:
             row = (
                 await err_session.execute(select(Connector).where(Connector.id == claimed.connector_id))
             ).scalar_one_or_none()
+            row_lease_exp = _ensure_aware(row.lease_expires_at) if row is not None else None
             if (
                 row is None
                 or row.worker_id != self.worker_id
@@ -734,6 +759,8 @@ class ConnectorWorker:
                 or int(row.config_version or 1) != claimed.config_version
                 or not row.is_enabled
                 or row.desired_state != "enabled"
+                or row_lease_exp is None
+                or row_lease_exp <= finished
             ):
                 await err_session.rollback()
                 return self._record_fenced_outcome(claimed, t0)
@@ -764,6 +791,10 @@ class ConnectorWorker:
                     Connector.worker_id == self.worker_id,
                     Connector.fencing_token == claimed.fencing_token,
                     Connector.config_version == claimed.config_version,
+                    Connector.is_enabled.is_(True),
+                    Connector.desired_state == "enabled",
+                    Connector.lease_expires_at.is_not(None),
+                    Connector.lease_expires_at > finished,
                 )
                 .values(
                     status=new_status,
