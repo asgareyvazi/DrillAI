@@ -20,9 +20,11 @@ from drillai.telemetry.protocols.etp import (
     EtpWebSocketClient,
     compute_etp_watermark_for_frames,
 )
+from drillai.telemetry.protocols.etp_binary import EtpBinaryWebSocketClient
 from drillai.telemetry.service import PointIn
 
 __all__ = [
+    "EtpBinarySubscriptionAdapter",
     "EtpChannelBinding",
     "EtpSubscriptionAdapter",
 ]
@@ -213,3 +215,44 @@ class EtpSubscriptionAdapter:
     async def close(self) -> None:
         self._connected = False
         self._last_batch = None
+
+
+class EtpBinarySubscriptionAdapter(EtpSubscriptionAdapter):
+    """Production ETP 1.2 Binary Avro WebSocket subscription adapter (`etp.1.2.binary_ws`)."""
+
+    key = "etp.1.2.binary_ws"
+    source = "etp"
+    source_kind = "etp"
+
+    def __init__(
+        self,
+        *,
+        endpoint_url: str,
+        channel_mappings: list[dict[str, Any]] | None = None,
+        config: dict[str, Any] | None = None,
+        secrets: dict[str, str] | None = None,
+        cursor: dict[str, Any] | None = None,
+        well_id: str = "",
+        wellbore_id: str | None = None,
+        operation_id: str | None = None,
+    ) -> None:
+        super().__init__(
+            endpoint_url=endpoint_url,
+            channel_mappings=channel_mappings,
+            config=config,
+            secrets=secrets,
+            cursor=cursor,
+            well_id=well_id,
+            wellbore_id=wellbore_id,
+            operation_id=operation_id,
+        )
+        self._client = EtpBinaryWebSocketClient(  # type: ignore[assignment]
+            endpoint_url=endpoint_url,
+            secrets=self._secrets,
+            timeout_seconds=float(self._config.get("timeout_seconds", 10.0)),
+        )
+
+    async def poll(self) -> Sequence[SourceFrame]:
+        frames = await super().poll()
+        self._cursor["protocol"] = "etp.1.2.binary_ws"
+        return frames

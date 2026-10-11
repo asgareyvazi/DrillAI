@@ -15,6 +15,7 @@ from drillai.core.clock import utc_now
 from drillai.core.config import get_settings
 from drillai.core.errors import PermissionDenied
 from drillai.telemetry.protocols.etp import EtpSamplePoint, LocalEtpWebSocketServer
+from drillai.telemetry.protocols.etp_binary import LocalEtpBinaryWebSocketServer
 from drillai.telemetry.protocols.witsml import LocalWitsmlSoapServer, WitsmlSampleRow
 
 
@@ -24,6 +25,7 @@ class LocalProtocolHarnessManager:
 
     witsml_server: LocalWitsmlSoapServer | None = field(default=None, init=False)
     etp_server: LocalEtpWebSocketServer | None = field(default=None, init=False)
+    etp_binary_server: LocalEtpBinaryWebSocketServer | None = field(default=None, init=False)
 
     def _assert_non_production(self) -> None:
         settings = get_settings()
@@ -63,6 +65,17 @@ class LocalProtocolHarnessManager:
             )
             await self.etp_server.start()
 
+        if self.etp_binary_server is None or self.etp_binary_server._server is None:
+            self.etp_binary_server = LocalEtpBinaryWebSocketServer(
+                host="127.0.0.1",
+                port=0,
+                expected_bearer_token="HarnessEtpBearerToken123!",
+            )
+            self.etp_binary_server.seed_default_points(
+                start=now - dt.timedelta(seconds=20), count=5, step_seconds=4.0
+            )
+            await self.etp_binary_server.start()
+
         return self.status()
 
     def status(self) -> dict[str, Any]:
@@ -85,6 +98,18 @@ class LocalProtocolHarnessManager:
                 "fault_mode": self.etp_server.fault_mode if self.etp_server else "ok",
                 "sessions_opened": self.etp_server.sessions_opened if self.etp_server else 0,
                 "point_count": len(self.etp_server.points) if self.etp_server else 0,
+                "secret_refs": {
+                    "bearer_token": "env:DRILLAI_SECRET_HARNESS_ETP_TOKEN",
+                },
+            },
+            "etp_binary": {
+                "running": bool(self.etp_binary_server and self.etp_binary_server._server is not None),
+                "endpoint_url": self.etp_binary_server.endpoint_url if self.etp_binary_server else None,
+                "fault_mode": self.etp_binary_server.fault_mode if self.etp_binary_server else "ok",
+                "sessions_opened": (
+                    self.etp_binary_server.sessions_opened if self.etp_binary_server else 0
+                ),
+                "point_count": len(self.etp_binary_server.points) if self.etp_binary_server else 0,
                 "secret_refs": {
                     "bearer_token": "env:DRILLAI_SECRET_HARNESS_ETP_TOKEN",
                 },
@@ -145,6 +170,29 @@ class LocalProtocolHarnessManager:
                             quality=quality,
                         )
                     )
+        elif proto == "etp_binary" and self.etp_binary_server is not None:
+            if fault_mode is not None:
+                self.etp_binary_server.fault_mode = fault_mode
+            if reset_rows:
+                self.etp_binary_server.points.clear()
+                if not append_values:
+                    self.etp_binary_server.seed_default_points(
+                        start=utc_now() - dt.timedelta(seconds=20), count=5, step_seconds=4.0
+                    )
+            if append_values:
+                ch_map = {ch.mnemonic.upper(): ch.channel_id for ch in self.etp_binary_server.channels}
+                for mnem, val in append_values.items():
+                    mnem_up = mnem.upper()
+                    self.etp_binary_server.points.append(
+                        EtpSamplePoint(
+                            channel_id=ch_map.get(mnem_up, 1),
+                            mnemonic=mnem_up,
+                            timestamp=now_iso,
+                            value=val,
+                            depth_md=depth_md,
+                            quality=quality,
+                        )
+                    )
         return self.status()
 
     async def stop(self) -> None:
@@ -154,3 +202,6 @@ class LocalProtocolHarnessManager:
         if self.etp_server is not None:
             await self.etp_server.stop()
             self.etp_server = None
+        if self.etp_binary_server is not None:
+            await self.etp_binary_server.stop()
+            self.etp_binary_server = None

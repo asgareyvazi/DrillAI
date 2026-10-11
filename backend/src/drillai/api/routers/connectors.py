@@ -94,7 +94,7 @@ class ConnectorReplayRequest(BaseModel):
 class HarnessConfigureRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    protocol: str = Field(pattern="^(witsml|etp)$")
+    protocol: str = Field(pattern="^(witsml|etp|etp_binary)$")
     fault_mode: str | None = Field(default=None, max_length=64)
     append_values: dict[str, float | None] | None = None
     depth_md: float = Field(default=2500.0, ge=0.0, le=20000.0)

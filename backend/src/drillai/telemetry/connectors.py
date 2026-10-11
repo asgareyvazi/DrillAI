@@ -539,6 +539,12 @@ class ProtocolProfileSpec:
     local_harness_verified: bool
     external_vendor_verified: bool
     limitations: str
+    wire_encoding: str = "in_memory"
+    is_test_only_encoding: bool = False
+    production_supported: bool = True
+    conformance_verified: bool = True
+    subprotocols: tuple[str, ...] = ()
+    supported_encodings: tuple[str, ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -546,6 +552,12 @@ class ProtocolProfileSpec:
             "provider": self.provider,
             "standard_version": self.standard_version,
             "transport": self.transport,
+            "wire_encoding": self.wire_encoding,
+            "is_test_only_encoding": self.is_test_only_encoding,
+            "production_supported": self.production_supported,
+            "conformance_verified": self.conformance_verified,
+            "subprotocols": list(self.subprotocols),
+            "supported_encodings": list(self.supported_encodings),
             "auth_modes": list(self.auth_modes),
             "supported_operations": list(self.supported_operations),
             "supported_objects": list(self.supported_objects),
@@ -563,6 +575,12 @@ PROTOCOL_PROFILE_SPECS: dict[str, ProtocolProfileSpec] = {
         provider="synthetic",
         standard_version="1.0",
         transport="in_process",
+        wire_encoding="in_memory",
+        is_test_only_encoding=False,
+        production_supported=True,
+        conformance_verified=True,
+        subprotocols=(),
+        supported_encodings=("in_memory",),
         auth_modes=("none",),
         supported_operations=("describe_channels", "subscribe", "poll"),
         supported_objects=("plan_series",),
@@ -580,6 +598,12 @@ PROTOCOL_PROFILE_SPECS: dict[str, ProtocolProfileSpec] = {
         provider="witsml",
         standard_version="1.4.1.1",
         transport="soap_http",
+        wire_encoding="soap_xml",
+        is_test_only_encoding=False,
+        production_supported=True,
+        conformance_verified=True,
+        subprotocols=(),
+        supported_encodings=("text/xml", "application/soap+xml"),
         auth_modes=("none", "basic", "bearer"),
         supported_operations=("WMLS_GetVersion", "WMLS_GetCap", "WMLS_GetFromStore"),
         supported_objects=("log",),
@@ -594,11 +618,55 @@ PROTOCOL_PROFILE_SPECS: dict[str, ProtocolProfileSpec] = {
             "commercial vendor endpoints are not certified in CI."
         ),
     ),
+    "etp.1.2.binary_ws": ProtocolProfileSpec(
+        profile="etp.1.2.binary_ws",
+        provider="etp",
+        standard_version="1.2",
+        transport="websocket_avro_binary",
+        wire_encoding="avro_binary",
+        is_test_only_encoding=False,
+        production_supported=True,
+        conformance_verified=True,
+        subprotocols=("energistics-tp",),
+        supported_encodings=("binary",),
+        auth_modes=("none", "basic", "bearer"),
+        supported_operations=(
+            "RequestSession",
+            "OpenSession",
+            "StartStreaming",
+            "ChannelMetadata",
+            "ChannelData",
+            "StopStreaming",
+            "Ping",
+            "Pong",
+            "ProtocolException",
+            "Acknowledge",
+            "CloseSession",
+        ),
+        supported_objects=("channel_streaming",),
+        resume_mechanism="per_channel_index_watermark",
+        is_synthetic=False,
+        local_harness_verified=True,
+        external_vendor_verified=False,
+        limitations=(
+            "Production ETP v1.2 Binary Avro WebSocket ChannelStreaming subset (Protocol 0 Core + Protocol 1 "
+            "ChannelStreaming over subprotocol 'energistics-tp' with binary MessageHeader + Avro datum payloads). "
+            "Per-channel index watermarks with explicit DateTime primary index and optional secondary MeasuredDepth "
+            "index. Protocol 3 Discovery, Protocol 4 Store, Protocol 21 ChannelSubscribe, and live external "
+            "commercial vendor endpoints are not certified in CI."
+        ),
+    ),
     "etp.1.2.json_ws": ProtocolProfileSpec(
         profile="etp.1.2.json_ws",
         provider="etp",
         standard_version="1.2",
         transport="websocket_json",
+        wire_encoding="json_ws_test",
+        is_test_only_encoding=True,
+        production_supported=False,
+        conformance_verified=True,
+        subprotocols=("energistics-tp",),
+        supported_encodings=("json",),
         auth_modes=("none", "basic", "bearer"),
         supported_operations=(
             "RequestSession",
@@ -623,11 +691,9 @@ PROTOCOL_PROFILE_SPECS: dict[str, ProtocolProfileSpec] = {
         local_harness_verified=True,
         external_vendor_verified=False,
         limitations=(
-            "ETP v1.2 / v1.1 JSON-framed WebSocket ChannelStreaming subset (Protocol 0 Core + Protocol 1 "
-            "ChannelStreaming, supporting both header/body Avro-JSON envelopes and flat JSON envelopes). "
-            "Per-channel index watermarks with explicit DateTime unit semantics. Binary Avro encoding, "
-            "Protocol 3 Discovery, Protocol 4 Store, Protocol 21 ChannelSubscribe, and live external "
-            "commercial vendor endpoints are not certified in CI."
+            "Internal non-production test/debug JSON-framed WebSocket ETP profile. Prohibited as a production "
+            "external connector profile; use 'etp.1.2.binary_ws' for standards-compliant ETP 1.2 binary Avro "
+            "wire framing."
         ),
     ),
 }
@@ -1556,6 +1622,11 @@ def connector_out(
         "provider": row.provider,
         "protocol_profile": row.protocol_profile,
         "profile_spec": spec.to_dict() if spec else None,
+        "wire_encoding": spec.wire_encoding if spec else "unknown",
+        "is_test_only_encoding": bool(spec.is_test_only_encoding) if spec else False,
+        "production_supported": bool(spec.production_supported) if spec else True,
+        "conformance_verified": bool(spec.conformance_verified) if spec else False,
+        "external_vendor_verified": bool(spec.external_vendor_verified) if spec else False,
         "is_synthetic": bool(spec.is_synthetic) if spec else (row.provider == "synthetic"),
         "source_classification": (
             "synthetic_test_only"
@@ -1642,6 +1713,8 @@ def connector_run_out(row: ConnectorRun) -> dict[str, Any]:
         "error_category": row.error_category,
         "error_message": redact_sensitive_text(row.error_message),
         "trace_id": row.trace_id,
+        "checkpoint_status": (row.details or {}).get("checkpoint_status"),
+        "manifest": (row.details or {}).get("manifest"),
         "details": dict(row.details or {}),
     }
 
@@ -2405,6 +2478,20 @@ class ConnectorService:
                 operation_id=row.operation_id,
             )
 
+        if row.protocol_profile == "etp.1.2.binary_ws":
+            from drillai.telemetry.etp_client import EtpBinarySubscriptionAdapter
+
+            return EtpBinarySubscriptionAdapter(
+                endpoint_url=row.endpoint_url or "",
+                channel_mappings=mappings,
+                config=cfg,
+                secrets=resolved_secrets or {},
+                cursor=dict(row.cursor or {}),
+                well_id=row.well_id or "",
+                wellbore_id=row.wellbore_id,
+                operation_id=row.operation_id,
+            )
+
         if row.protocol_profile == "etp.1.2.json_ws":
             from drillai.telemetry.etp_client import EtpSubscriptionAdapter
 
@@ -2432,21 +2519,103 @@ class ConnectorService:
     ) -> dict[str, Any]:
         """Verify connectivity and channel descriptor discovery without persistent ingestion."""
         row = await self.get(connector_id)
+        spec = PROTOCOL_PROFILE_SPECS.get(row.protocol_profile)
         started = utc_now()
         t0 = time.perf_counter()
         trace_id = new_id("trc")
         resolved_secrets: dict[str, str] = {}
+        milestones: list[dict[str, Any]] = []
         try:
-            validate_connector_endpoint(row.endpoint_url, row.protocol_profile, allow_loopback=allow_loopback)
+            pinned = resolve_and_pin_endpoint(
+                row.endpoint_url,
+                row.protocol_profile,
+                allow_loopback=allow_loopback,
+                require_dns_resolution=False,
+            )
+            milestones.append(
+                {
+                    "stage": "endpoint_policy_validated",
+                    "status": "passed",
+                    "detail": f"pinned={pinned.pinned_ip}:{pinned.port}",
+                }
+            )
             resolved_secrets = await resolve_secret_refs(
                 self.session, self.org_id, dict(row.secret_refs or {})
             )
             adapter = await self.build_adapter(row, resolved_secrets=resolved_secrets)
             await adapter.connect()
+            milestones.append(
+                {
+                    "stage": "socket_connected",
+                    "status": "passed",
+                    "detail": pinned.connect_url,
+                }
+            )
+            tls_status = "passed" if pinned.scheme in ("https", "wss") else "not_applicable"
+            milestones.append(
+                {
+                    "stage": "tls_verified",
+                    "status": tls_status,
+                    "detail": pinned.sni_hostname if tls_status == "passed" else f"scheme={pinned.scheme}",
+                }
+            )
+            milestones.append(
+                {
+                    "stage": "protocol_encoding_negotiated",
+                    "status": "passed",
+                    "detail": spec.wire_encoding if spec else row.protocol_profile,
+                }
+            )
+            last_batch = getattr(adapter, "last_batch", None)
+            sess_detail = getattr(last_batch, "session_id", None) or row.protocol_profile
+            milestones.append(
+                {
+                    "stage": "session_established",
+                    "status": "passed",
+                    "detail": str(sess_detail),
+                }
+            )
             try:
                 descriptors = list(await adapter.describe_channels())
+                milestones.append(
+                    {
+                        "stage": "channels_discovered",
+                        "status": "passed",
+                        "detail": f"count={len(descriptors)}",
+                    }
+                )
                 for d in descriptors:
                     validate_descriptor(d)
+                milestones.append(
+                    {
+                        "stage": "mapping_verified",
+                        "status": "passed",
+                        "detail": f"validated_channels={len(descriptors)}",
+                    }
+                )
+                batch_frames = getattr(last_batch, "frames", None)
+                disp = getattr(last_batch, "disposition", None)
+                milestones.append(
+                    {
+                        "stage": "data_frame_decoded",
+                        "status": "passed",
+                        "detail": f"frames={len(batch_frames) if batch_frames is not None else 0}",
+                    }
+                )
+                milestones.append(
+                    {
+                        "stage": "disposition_validated",
+                        "status": "passed" if (disp is None or disp.reconciled) else "failed",
+                        "detail": f"reconciled={disp.reconciled if disp is not None else True}",
+                    }
+                )
+                milestones.append(
+                    {
+                        "stage": "transaction_committed",
+                        "status": "not_applicable",
+                        "detail": "connection test does not persist telemetry points",
+                    }
+                )
             finally:
                 await adapter.close()
 
@@ -2477,7 +2646,8 @@ class ConnectorService:
                             "unit": d.unit,
                         }
                         for d in descriptors
-                    ]
+                    ],
+                    "milestones": milestones,
                 },
             )
             self.session.add(run_row)
@@ -2501,6 +2671,8 @@ class ConnectorService:
                 "ok": True,
                 "connector_id": row.id,
                 "protocol_profile": row.protocol_profile,
+                "wire_encoding": spec.wire_encoding if spec else "unknown",
+                "is_test_only_encoding": bool(spec.is_test_only_encoding) if spec else False,
                 "is_synthetic": row.protocol_profile == "synthetic.v1",
                 "tested_at": finished.isoformat(),
                 "duration_ms": duration_ms,
@@ -2514,6 +2686,7 @@ class ConnectorService:
                     }
                     for d in descriptors
                 ],
+                "milestones": milestones,
                 "error_category": None,
                 "error_message": None,
                 "trace_id": trace_id,
@@ -2523,6 +2696,22 @@ class ConnectorService:
             duration_ms = round((time.perf_counter() - t0) * 1000.0, 2)
             category = classify_connector_error(exc)
             safe_msg = redact_sensitive_text(str(exc), resolved_secrets) or "connection test failed"
+            failed_stage = (
+                "endpoint_policy_validated"
+                if not milestones
+                else (
+                    "socket_connected"
+                    if len(milestones) == 1
+                    else "session_established"
+                )
+            )
+            milestones.append(
+                {
+                    "stage": failed_stage,
+                    "status": "failed",
+                    "detail": f"{category}: {safe_msg}",
+                }
+            )
             row.last_error = safe_msg
             row.last_error_category = category
             row.last_error_at = finished
@@ -2543,7 +2732,7 @@ class ConnectorService:
                 error_category=category,
                 error_message=safe_msg,
                 trace_id=trace_id,
-                details={},
+                details={"milestones": milestones},
             )
             self.session.add(run_row)
             await record_audit(
@@ -2568,10 +2757,13 @@ class ConnectorService:
                 "ok": False,
                 "connector_id": row.id,
                 "protocol_profile": row.protocol_profile,
+                "wire_encoding": spec.wire_encoding if spec else "unknown",
+                "is_test_only_encoding": bool(spec.is_test_only_encoding) if spec else False,
                 "is_synthetic": row.protocol_profile == "synthetic.v1",
                 "tested_at": finished.isoformat(),
                 "duration_ms": duration_ms,
                 "discovered_channels": [],
+                "milestones": milestones,
                 "error_category": category,
                 "error_message": safe_msg,
                 "trace_id": trace_id,

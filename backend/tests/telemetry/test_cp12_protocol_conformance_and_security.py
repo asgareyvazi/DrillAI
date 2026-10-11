@@ -1004,7 +1004,6 @@ async def test_h1_h3_bounded_soak_multi_connector_fault_recovery_and_retention(
     monkeypatch.setenv("DRILLAI_BLOB_BACKEND", "memory")
     monkeypatch.setenv("DRILLAI_DATABASE_URL", f"sqlite+aiosqlite:///{tmp_path}/soak_h1_h3.db")
     monkeypatch.setenv("DRILLAI_SCHEDULER_ENABLED", "false")
-    monkeypatch.setenv("DRILLAI_CONNECTOR_ALLOW_LOOPBACK", "true")
     reset_settings_cache()
     settings = get_settings()
     app = create_app(settings)

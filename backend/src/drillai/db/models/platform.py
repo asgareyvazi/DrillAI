@@ -397,6 +397,7 @@ CONNECTOR_PROVIDERS = (
 CONNECTOR_PROFILES = (
     "synthetic.v1",
     "witsml.1.4.1.1.soap_http",
+    "etp.1.2.binary_ws",
     "etp.1.2.json_ws",
 )
 

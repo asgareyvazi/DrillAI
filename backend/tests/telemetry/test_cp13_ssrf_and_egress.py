@@ -39,6 +39,7 @@ from drillai.telemetry.protocols.witsml import LocalWitsmlSoapServer, WitsmlSoap
 
 @pytest.fixture(autouse=True)
 def _clean_resolvers_and_policy():
+    reset_settings_cache()
     set_custom_dns_resolver(None)
     reset_egress_policy()
     clear_harness_endpoints()
@@ -46,6 +47,7 @@ def _clean_resolvers_and_policy():
     set_custom_dns_resolver(None)
     reset_egress_policy()
     clear_harness_endpoints()
+    reset_settings_cache()
 
 
 def _generate_self_signed_tls_contexts(
