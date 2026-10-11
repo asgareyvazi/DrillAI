@@ -8,13 +8,32 @@ and the durable connector worker ingest ETP frames exclusively through ``Telemet
 from __future__ import annotations
 
 from collections.abc import Sequence
+from dataclasses import dataclass
 from typing import Any
 
 from drillai.core.errors import ValidationFailed
 from drillai.telemetry.adapters import ChannelDescriptor, SourceFrame
 from drillai.telemetry.connectors import parse_channel_mappings
-from drillai.telemetry.protocols.etp import EtpChannelInfo, EtpPollBatch, EtpWebSocketClient
+from drillai.telemetry.protocols.etp import (
+    EtpChannelInfo,
+    EtpPollBatch,
+    EtpWebSocketClient,
+    compute_etp_watermark_for_frames,
+)
 from drillai.telemetry.service import PointIn
+
+__all__ = [
+    "EtpChannelBinding",
+    "EtpSubscriptionAdapter",
+]
+
+
+@dataclass(frozen=True)
+class EtpChannelBinding:
+    channel_uri: str
+    channel_key: str
+    source_unit: str
+    dimension: str
 
 
 class EtpSubscriptionAdapter:
@@ -22,12 +41,13 @@ class EtpSubscriptionAdapter:
 
     key = "etp.1.2.json_ws"
     source = "etp"
+    source_kind = "etp"
 
     def __init__(
         self,
         *,
         endpoint_url: str,
-        channel_mappings: list[dict[str, Any]],
+        channel_mappings: list[dict[str, Any]] | None = None,
         config: dict[str, Any] | None = None,
         secrets: dict[str, str] | None = None,
         cursor: dict[str, Any] | None = None,
@@ -37,8 +57,10 @@ class EtpSubscriptionAdapter:
     ) -> None:
         self._endpoint_url = endpoint_url
         self._config = dict(config or {})
-        self._config["channel_mappings"] = list(channel_mappings)
-        self._mappings = parse_channel_mappings(channel_mappings)
+        if channel_mappings is not None:
+            self._config["channel_mappings"] = list(channel_mappings)
+        raw_mappings = self._config.get("channel_mappings") or []
+        self._mappings = parse_channel_mappings(raw_mappings)
         self._channels: dict[str, ChannelDescriptor] = {
             m.channel_key: ChannelDescriptor(
                 channel_key=m.channel_key,
@@ -85,6 +107,7 @@ class EtpSubscriptionAdapter:
             config=self._config,
             watermark=self._cursor,
             max_frames=max_pts,
+            subscribed_channels=self._subscribed or None,
         )
         self._discovered_info = list(self._last_batch.discovered_channels)
         self._connected = True
@@ -92,11 +115,7 @@ class EtpSubscriptionAdapter:
     async def describe_channels(self) -> Sequence[ChannelDescriptor]:
         if not self._connected:
             await self.connect()
-        discovered_units = {
-            ch.mnemonic.upper(): ch.unit
-            for ch in self._discovered_info
-            if ch.unit
-        }
+        discovered_units = {ch.mnemonic.upper(): ch.unit for ch in self._discovered_info if ch.unit}
         result: list[ChannelDescriptor] = []
         for m in self._mappings:
             unit = discovered_units.get(m.source_mnemonic.upper()) or m.unit
@@ -137,16 +156,40 @@ class EtpSubscriptionAdapter:
                 config=self._config,
                 watermark=self._cursor,
                 max_frames=max_pts,
+                subscribed_channels=self._subscribed or None,
             )
             self._last_consumed_batch = batch
             self._discovered_info = list(batch.discovered_channels)
-        self._cursor = dict(batch.next_watermark)
-        frames = [
-            f
-            for f in batch.frames
-            if not self._subscribed or f.channel_key in self._subscribed
-        ]
-        return frames[:max_pts]
+
+        frames = list(batch.frames)
+        if self._subscribed:
+            filtered: list[SourceFrame] = []
+            for f in frames:
+                if f.channel_key in self._subscribed:
+                    filtered.append(f)
+                else:
+                    batch.disposition.mapped_frames_emitted = max(
+                        0, batch.disposition.mapped_frames_emitted - 1
+                    )
+                    batch.disposition.unsubscribed_skipped += 1
+            frames = filtered
+
+        if len(frames) > max_pts:
+            deferred_count = len(frames) - max_pts
+            frames = frames[:max_pts]
+            batch.disposition.mapped_frames_emitted = len(frames)
+            batch.disposition.deferred_over_cap += deferred_count
+            batch.disposition.truncated_by_limit = True
+            batch.disposition.partial_more_available = True
+
+        has_more = batch.disposition.partial_more_available or batch.disposition.truncated_by_limit
+        self._cursor = compute_etp_watermark_for_frames(
+            self._cursor,
+            frames,
+            session_id=batch.session_id,
+            has_more=has_more,
+        )
+        return frames
 
     def normalize(self, frame: SourceFrame) -> PointIn:
         frame.validate()

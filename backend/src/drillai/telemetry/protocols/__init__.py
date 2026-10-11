@@ -2,6 +2,8 @@
 
 from drillai.telemetry.protocols.etp import (
     EtpChannelInfo,
+    EtpChannelMetadata,
+    EtpIndexMetadata,
     EtpPollBatch,
     EtpSamplePoint,
     EtpWebSocketClient,
@@ -19,6 +21,8 @@ from drillai.telemetry.protocols.witsml import (
 
 __all__ = [
     "EtpChannelInfo",
+    "EtpChannelMetadata",
+    "EtpIndexMetadata",
     "EtpPollBatch",
     "EtpSamplePoint",
     "EtpWebSocketClient",

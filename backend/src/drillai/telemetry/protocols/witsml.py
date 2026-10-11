@@ -1,14 +1,16 @@
 """WITSML 1.4.1.1 SOAP/HTTP read-only polling client and local protocol-compatible test server.
 
 Implements the ``witsml.1.4.1.1.soap_http`` profile:
-- SOAP 1.1 ``WMLS_GetFromStore`` over HTTP/HTTPS POST
+- SOAP 1.1 ``WMLS_GetVersion``, ``WMLS_GetCap``, and ``WMLS_GetFromStore`` over HTTP/HTTPS POST
 - Standards-based HTTP Basic or Bearer authentication
-- XML entity/DTD rejection, namespace-aware parsing of ``<logs><log><logCurveInfo>`` and ``<logData>``
-- Timezone-aware UTC index timestamp parsing and incremental ``startDateTimeIndex`` watermark advancing
-- Pagination support when ``WMLS_GetFromStore`` returns ``Result=2`` (partial response, more rows available)
-- Bounded retries for transient transport/5xx errors; immediate fail-fast on authentication or schema errors
+- Full-payload XML entity/DTD/depth/complexity protection on both SOAP envelope and ``XMLout``
+- Namespace-aware parsing of ``<logs><log><logCurveInfo>`` and ``<logData>``
+- Timezone-aware UTC index timestamp parsing and inclusive ``startDateTimeIndex`` watermark advancing
+  with per-timestamp curve completion tracking so ``max_points_per_poll`` caps and multi-page boundaries
+  never skip unprocessed measurements
+- Exact source-record disposition accounting (`ProtocolPollDisposition`)
 - ``LocalWitsmlSoapServer``: a real TCP/HTTP 1.1 SOAP server for protocol-level integration and E2E testing
-  (explicitly distinct from external vendor certification).
+  (explicitly distinct from external commercial vendor certification).
 """
 
 from __future__ import annotations
@@ -17,6 +19,9 @@ import asyncio
 import base64
 import datetime as dt
 import html
+import io
+import math
+import re
 from dataclasses import dataclass, field
 from typing import Any
 from xml.etree import ElementTree as ET
@@ -27,11 +32,22 @@ from drillai.telemetry.adapters import SourceFrame
 from drillai.telemetry.connectors import (
     ChannelMappingSpec,
     ConnectorTransportError,
+    ProtocolPollDisposition,
     parse_channel_mappings,
     redact_sensitive_text,
 )
 
 MAX_WITSML_XML_BYTES = 5 * 1024 * 1024  # 5 MB
+MAX_XML_DEPTH = 32
+MAX_XML_ELEMENTS = 50_000
+
+_FORBIDDEN_XML_DECL_RE = re.compile(
+    r"<!\s*(?:DOCTYPE|ENTITY|ELEMENT|ATTLIST|NOTATION)\b",
+    re.IGNORECASE,
+)
+_CUSTOM_ENTITY_REF_RE = re.compile(
+    r"&(?!(?:lt|gt|amp|apos|quot|#\d+|#x[0-9a-fA-F]+);)[A-Za-z_][A-Za-z0-9._-]*;"
+)
 
 _QUALITY_MAP: dict[str, str] = {
     "good": "good",
@@ -39,7 +55,7 @@ _QUALITY_MAP: dict[str, str] = {
     "valid": "good",
     "1": "good",
     "suspect": "suspect",
-    "questionable": "suspect",
+    "questionable": "queue_questionable",
     "doubtful": "suspect",
     "bad": "bad",
     "invalid": "bad",
@@ -47,6 +63,11 @@ _QUALITY_MAP: dict[str, str] = {
     "missing": "missing",
     "null": "missing",
 }
+
+
+def _normalize_quality(raw_q: str) -> str:
+    val = _QUALITY_MAP.get(raw_q.strip().lower(), "suspect")
+    return "suspect" if val == "queue_questionable" else val
 
 
 @dataclass(frozen=True)
@@ -65,6 +86,8 @@ class WitsmlPollBatch:
     raw_rows_parsed: int
     skipped_rows: int
     partial_more_available: bool = False
+    duplicates_suppressed: int = 0
+    disposition: ProtocolPollDisposition = field(default_factory=ProtocolPollDisposition)
 
 
 def _local_name(tag: str) -> str:
@@ -76,16 +99,75 @@ def _local_name(tag: str) -> str:
 
 
 def _ensure_safe_xml(xml_text: str) -> None:
-    upper = xml_text[:4096].upper()
-    if "<!DOCTYPE" in upper or "<!ENTITY" in upper:
+    """Validate the entire XML payload against DTD/XXE/entity declarations before parsing."""
+    raw_bytes = xml_text.encode("utf-8")
+    if len(raw_bytes) > MAX_WITSML_XML_BYTES:
+        raise ConnectorTransportError(
+            "oversized_payload",
+            f"WITSML XML payload exceeds {MAX_WITSML_XML_BYTES} bytes",
+            retryable=False,
+        )
+    if _FORBIDDEN_XML_DECL_RE.search(xml_text):
         raise ConnectorTransportError(
             "malformed_payload",
             "WITSML XML response contains forbidden DOCTYPE or ENTITY declarations",
             retryable=False,
         )
+    if _CUSTOM_ENTITY_REF_RE.search(xml_text):
+        raise ConnectorTransportError(
+            "malformed_payload",
+            "WITSML XML response contains forbidden custom entity references",
+            retryable=False,
+        )
+
+
+def _parse_safe_xml(xml_text: str, *, context: str = "WITSML XML") -> ET.Element:
+    """Parse XML after full-payload DTD/entity checks while enforcing depth and element bounds."""
+    _ensure_safe_xml(xml_text)
+    depth = 0
+    elements = 0
+    root: ET.Element | None = None
+    try:
+        for event, elem in ET.iterparse(io.StringIO(xml_text), events=("start", "end")):
+            if event == "start":
+                depth += 1
+                elements += 1
+                if depth > MAX_XML_DEPTH:
+                    raise ConnectorTransportError(
+                        "malformed_payload",
+                        f"{context} exceeds maximum nesting depth of {MAX_XML_DEPTH}",
+                        retryable=False,
+                    )
+                if elements > MAX_XML_ELEMENTS:
+                    raise ConnectorTransportError(
+                        "oversized_payload",
+                        f"{context} exceeds maximum element count of {MAX_XML_ELEMENTS}",
+                        retryable=False,
+                    )
+                if root is None:
+                    root = elem
+            else:
+                depth -= 1
+    except ConnectorTransportError:
+        raise
+    except ET.ParseError as exc:
+        raise ConnectorTransportError(
+            "malformed_payload",
+            f"invalid {context}: {exc}",
+            retryable=False,
+        ) from exc
+    if root is None:
+        raise ConnectorTransportError(
+            "malformed_payload",
+            f"empty {context}",
+            retryable=False,
+        )
+    return root
 
 
 def _parse_iso_utc(raw: str) -> dt.datetime:
+    if not isinstance(raw, str):
+        raise ValueError("timestamp must be an ISO-8601 string")
     cleaned = raw.strip()
     if not cleaned:
         raise ValueError("empty timestamp")
@@ -94,7 +176,40 @@ def _parse_iso_utc(raw: str) -> dt.datetime:
     parsed = dt.datetime.fromisoformat(cleaned)
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=dt.UTC)
-    return parsed.astimezone(dt.UTC)
+    utc_dt = parsed.astimezone(dt.UTC)
+    if utc_dt < dt.datetime(1970, 1, 2, tzinfo=dt.UTC) or utc_dt > dt.datetime(2100, 1, 1, tzinfo=dt.UTC):
+        raise ValueError(f"timestamp {raw!r} is outside operational UTC bounds")
+    return utc_dt
+
+
+def build_get_version_soap_envelope() -> str:
+    """Build a WITSML 1.4.1.1 ``WMLS_GetVersion`` SOAP 1.1 envelope."""
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" '
+        'xmlns:wmls="http://www.witsml.org/message/120">'
+        "<soapenv:Header/>"
+        "<soapenv:Body>"
+        "<wmls:WMLS_GetVersion/>"
+        "</soapenv:Body>"
+        "</soapenv:Envelope>"
+    )
+
+
+def build_get_cap_soap_envelope(options_in: str = "dataVersion=1.4.1.1") -> str:
+    """Build a WITSML 1.4.1.1 ``WMLS_GetCap`` SOAP 1.1 envelope."""
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" '
+        'xmlns:wmls="http://www.witsml.org/message/120">'
+        "<soapenv:Header/>"
+        "<soapenv:Body>"
+        "<wmls:WMLS_GetCap>"
+        f"<OptionsIn>{html.escape(options_in)}</OptionsIn>"
+        "</wmls:WMLS_GetCap>"
+        "</soapenv:Body>"
+        "</soapenv:Envelope>"
+    )
 
 
 def build_get_from_store_soap_envelope(
@@ -115,7 +230,7 @@ def build_get_from_store_soap_envelope(
     query_in = (
         '<logs xmlns="http://www.witsml.org/schemas/1series" version="1.4.1.1">'
         f'<log uidWell="{html.escape(uid_well)}" uidWellbore="{html.escape(uid_wellbore)}" uid="{html.escape(uid_log)}">'
-        "<nameWell/><nameWellbore/><name/><indexCurve/>"
+        "<nameWell/><nameWellbore/><name/><indexType/><indexCurve/>"
         f"{start_clause}"
         "<logCurveInfo><mnemonic/><unit/><curveDescription/></logCurveInfo>"
         "<logData><mnemonicList/><unitList/><data/></logData>"
@@ -144,6 +259,53 @@ def build_get_from_store_soap_envelope(
     )
 
 
+def compute_witsml_next_watermark(
+    previous_watermark: dict[str, Any] | None,
+    emitted_frames: tuple[SourceFrame, ...] | list[SourceFrame],
+    *,
+    has_more: bool = False,
+) -> dict[str, Any]:
+    """Compute a safe WITSML watermark exclusively from frames that were actually emitted."""
+    prev = dict(previous_watermark or {})
+    if not emitted_frames:
+        if "protocol" not in prev and prev.get("cursor_timestamp"):
+            prev["protocol"] = "witsml.1.4.1.1.soap_http"
+        prev["has_more_deferred"] = bool(has_more)
+        return prev
+
+    prev_cursor_ts: dt.datetime | None = None
+    if prev.get("cursor_timestamp"):
+        try:
+            prev_cursor_ts = _parse_iso_utc(str(prev["cursor_timestamp"]))
+        except ValueError:
+            prev_cursor_ts = None
+
+    max_ts = max(f.ts for f in emitted_frames)
+    if prev_cursor_ts is not None and prev_cursor_ts > max_ts:
+        max_ts = prev_cursor_ts
+
+    completed_ids: set[str] = set()
+    completed_vals: dict[str, float | None] = {}
+    if prev_cursor_ts is not None and max_ts == prev_cursor_ts:
+        for pid in prev.get("completed_at_cursor") or []:
+            completed_ids.add(str(pid))
+        for pid, pval in (prev.get("completed_values_at_cursor") or {}).items():
+            completed_vals[str(pid)] = float(pval) if pval is not None else None
+
+    for frame in emitted_frames:
+        if frame.ts == max_ts and frame.source_point_id:
+            completed_ids.add(frame.source_point_id)
+            completed_vals[frame.source_point_id] = frame.value
+
+    return {
+        "protocol": "witsml.1.4.1.1.soap_http",
+        "cursor_timestamp": max_ts.isoformat(),
+        "completed_at_cursor": sorted(completed_ids),
+        "completed_values_at_cursor": completed_vals,
+        "has_more_deferred": bool(has_more),
+    }
+
+
 def parse_get_from_store_response(
     soap_xml: str,
     *,
@@ -152,23 +314,19 @@ def parse_get_from_store_response(
     wellbore_id: str | None = None,
     operation_id: str | None = None,
     previous_watermark: dict[str, Any] | None = None,
+    max_frames: int | None = None,
+    subscribed_channels: set[str] | None = None,
+    expected_uid_well: str | None = None,
+    expected_uid_wellbore: str | None = None,
+    expected_uid_log: str | None = None,
 ) -> WitsmlPollBatch:
-    """Parse a WITSML 1.4.1.1 ``WMLS_GetFromStoreResponse`` or direct ``<logs>`` document."""
-    if len(soap_xml.encode("utf-8")) > MAX_WITSML_XML_BYTES:
-        raise ConnectorTransportError(
-            "oversized_payload",
-            f"WITSML SOAP response exceeds {MAX_WITSML_XML_BYTES} bytes",
-            retryable=False,
-        )
-    _ensure_safe_xml(soap_xml)
-    try:
-        outer = ET.fromstring(soap_xml)
-    except ET.ParseError as exc:
-        raise ConnectorTransportError(
-            "malformed_payload",
-            f"invalid WITSML SOAP XML: {exc}",
-            retryable=False,
-        ) from exc
+    """Parse a WITSML 1.4.1.1 ``WMLS_GetFromStoreResponse`` or direct ``<logs>`` document.
+
+    Enforces ``max_frames`` and ``subscribed_channels`` during parsing so that ``next_watermark``
+    never advances past any frame that was not emitted in ``frames``.
+    """
+    outer = _parse_safe_xml(soap_xml, context="WITSML SOAP XML")
+    disposition = ProtocolPollDisposition(pages_or_messages_received=1)
 
     fault_string: str | None = None
     result_code = 1
@@ -213,16 +371,10 @@ def parse_get_from_store_response(
                 raw_rows_parsed=0,
                 skipped_rows=0,
                 partial_more_available=False,
+                duplicates_suppressed=0,
+                disposition=disposition,
             )
-        _ensure_safe_xml(xml_out_text)
-        try:
-            logs_root = ET.fromstring(xml_out_text)
-        except ET.ParseError as exc:
-            raise ConnectorTransportError(
-                "malformed_payload",
-                f"invalid WITSML XMLout payload: {exc}",
-                retryable=False,
-            ) from exc
+        logs_root = _parse_safe_xml(xml_out_text, context="WITSML XMLout payload")
 
     mapping_by_mnemonic = {m.source_mnemonic.upper(): m for m in mappings}
     discovered: list[WitsmlCurveDescriptor] = []
@@ -230,26 +382,60 @@ def parse_get_from_store_response(
     frames: list[SourceFrame] = []
     raw_rows_parsed = 0
     skipped_rows = 0
+    duplicates_suppressed = 0
 
+    prev_wm = dict(previous_watermark or {})
     prev_cursor_ts: dt.datetime | None = None
-    if previous_watermark and previous_watermark.get("cursor_timestamp"):
+    if prev_wm.get("cursor_timestamp"):
         try:
-            prev_cursor_ts = _parse_iso_utc(str(previous_watermark["cursor_timestamp"]))
+            prev_cursor_ts = _parse_iso_utc(str(prev_wm["cursor_timestamp"]))
         except ValueError:
             prev_cursor_ts = None
-    max_ts: dt.datetime | None = prev_cursor_ts
+
+    has_completed_set = "completed_at_cursor" in prev_wm
+    completed_at_cursor: set[str] = {str(x) for x in (prev_wm.get("completed_at_cursor") or [])}
+    completed_values: dict[str, float | None] = {
+        str(k): (float(v) if v is not None else None)
+        for k, v in (prev_wm.get("completed_values_at_cursor") or {}).items()
+    }
+    seen_in_batch: dict[str, tuple[bool, float | None]] = {}
 
     for log_elem in logs_root.iter():
         if _local_name(log_elem.tag) != "log":
             continue
 
+        actual_uid_well = (log_elem.attrib.get("uidWell") or "").strip()
+        actual_uid_wellbore = (log_elem.attrib.get("uidWellbore") or "").strip()
+        actual_uid_log = (log_elem.attrib.get("uid") or "").strip()
+        if expected_uid_well and actual_uid_well and actual_uid_well != expected_uid_well:
+            raise ConnectorTransportError(
+                "protocol_error",
+                f"WITSML log uidWell {actual_uid_well!r} does not match expected {expected_uid_well!r}",
+                retryable=False,
+            )
+        if expected_uid_wellbore and actual_uid_wellbore and actual_uid_wellbore != expected_uid_wellbore:
+            raise ConnectorTransportError(
+                "protocol_error",
+                f"WITSML log uidWellbore {actual_uid_wellbore!r} does not match expected {expected_uid_wellbore!r}",
+                retryable=False,
+            )
+        if expected_uid_log and actual_uid_log and actual_uid_log != expected_uid_log:
+            raise ConnectorTransportError(
+                "protocol_error",
+                f"WITSML log uid {actual_uid_log!r} does not match expected {expected_uid_log!r}",
+                retryable=False,
+            )
+
+        index_type = "date time"
         index_curve = "TIME"
         null_value = "-999.25"
         curve_units: dict[str, str] = {}
 
         for child in log_elem:
             cname = _local_name(child.tag)
-            if cname == "indexCurve" and child.text and child.text.strip():
+            if cname == "indexType" and child.text and child.text.strip():
+                index_type = child.text.strip().lower()
+            elif cname == "indexCurve" and child.text and child.text.strip():
                 index_curve = child.text.strip().upper()
             elif cname == "nullValue" and child.text and child.text.strip():
                 null_value = child.text.strip()
@@ -276,6 +462,13 @@ def parse_get_from_store_response(
                                 curve_description=desc,
                             )
                         )
+
+        if "depth" in index_type and "time" not in index_type:
+            raise ConnectorTransportError(
+                "protocol_error",
+                f"unsupported WITSML log indexType {index_type!r}; profile requires date time index",
+                retryable=False,
+            )
 
         for child in log_elem:
             if _local_name(child.tag) != "logData":
@@ -319,37 +512,77 @@ def parse_get_from_store_response(
                 tokens = [tok.strip() for tok in row_text.split(",")]
                 if len(tokens) <= idx_pos:
                     skipped_rows += 1
+                    disposition.source_records_discovered += 1
+                    disposition.rejected_malformed_timestamp += 1
+                    disposition.record_channel_outcome(index_curve, "rejected")
+                    disposition.record_rejection(
+                        reason="malformed_timestamp",
+                        source_mnemonic=index_curve,
+                        raw_value=row_text[:80],
+                    )
                     continue
                 try:
                     row_ts = _parse_iso_utc(tokens[idx_pos])
                 except ValueError:
                     skipped_rows += 1
+                    disposition.source_records_discovered += 1
+                    disposition.rejected_malformed_timestamp += 1
+                    disposition.record_channel_outcome(index_curve, "rejected")
+                    disposition.record_rejection(
+                        reason="malformed_timestamp",
+                        source_mnemonic=index_curve,
+                        index_repr=tokens[idx_pos],
+                    )
                     continue
-
-                raw_rows_parsed += 1
-                if max_ts is None or row_ts > max_ts:
-                    max_ts = row_ts
 
                 row_depth: float | None = None
                 if depth_pos is not None and depth_pos < len(tokens):
                     raw_d = tokens[depth_pos]
                     if raw_d and raw_d != null_value:
                         try:
-                            row_depth = float(raw_d)
+                            parsed_d = float(raw_d)
+                            if math.isfinite(parsed_d):
+                                row_depth = parsed_d
                         except ValueError:
                             row_depth = None
 
                 row_quality = "good"
                 if quality_pos is not None and quality_pos < len(tokens):
                     raw_q = tokens[quality_pos].strip().lower()
-                    row_quality = _QUALITY_MAP.get(raw_q, "suspect")
+                    if raw_q and raw_q != null_value:
+                        row_quality = _normalize_quality(raw_q)
+
+                row_had_active_cells = False
 
                 for col_idx, mnem_upper in enumerate(upper_mnemonics):
                     if col_idx in {idx_pos, quality_pos}:
                         continue
-                    mapping = mapping_by_mnemonic.get(mnem_upper)
-                    if mapping is None or col_idx >= len(tokens):
+                    if col_idx == depth_pos and mnem_upper not in mapping_by_mnemonic:
                         continue
+
+                    disposition.source_records_discovered += 1
+                    mapping = mapping_by_mnemonic.get(mnem_upper)
+                    if mapping is None:
+                        disposition.unmapped_skipped += 1
+                        disposition.record_channel_outcome(mnem_upper, "unmapped_skipped")
+                        continue
+
+                    if subscribed_channels and mapping.channel_key not in subscribed_channels:
+                        disposition.unsubscribed_skipped += 1
+                        disposition.record_channel_outcome(mnem_upper, "unsubscribed_skipped")
+                        continue
+
+                    if col_idx >= len(tokens):
+                        skipped_rows += 1
+                        disposition.rejected_invalid_value += 1
+                        disposition.record_channel_outcome(mnem_upper, "rejected")
+                        disposition.record_rejection(
+                            reason="missing_column_token",
+                            source_mnemonic=mnem_upper,
+                            index_repr=row_ts.isoformat(),
+                        )
+                        continue
+
                     raw_val = tokens[col_idx]
                     val: float | None
                     col_quality = row_quality
@@ -361,8 +594,64 @@ def parse_get_from_store_response(
                             val = float(raw_val)
                         except ValueError:
                             skipped_rows += 1
+                            disposition.rejected_invalid_value += 1
+                            disposition.record_channel_outcome(mnem_upper, "rejected")
+                            disposition.record_rejection(
+                                reason="invalid_numeric_value",
+                                source_mnemonic=mnem_upper,
+                                index_repr=row_ts.isoformat(),
+                                raw_value=raw_val,
+                            )
+                            continue
+                        if not math.isfinite(val):
+                            skipped_rows += 1
+                            disposition.rejected_non_finite_value += 1
+                            disposition.record_channel_outcome(mnem_upper, "rejected")
+                            disposition.record_rejection(
+                                reason="non_finite_value",
+                                source_mnemonic=mnem_upper,
+                                index_repr=row_ts.isoformat(),
+                                raw_value=raw_val,
+                            )
                             continue
 
+                    point_id = f"witsml:{mapping.channel_key}:{row_ts.isoformat()}"
+
+                    # Check inclusive watermark suppression
+                    if prev_cursor_ts is not None:
+                        if row_ts < prev_cursor_ts:
+                            disposition.watermark_suppressed += 1
+                            disposition.record_channel_outcome(mnem_upper, "watermark_suppressed")
+                            continue
+                        if row_ts == prev_cursor_ts:
+                            if not has_completed_set:
+                                disposition.watermark_suppressed += 1
+                                disposition.record_channel_outcome(mnem_upper, "watermark_suppressed")
+                                continue
+                            if point_id in completed_at_cursor and (
+                                point_id not in completed_values or completed_values.get(point_id) == val
+                            ):
+                                disposition.watermark_suppressed += 1
+                                disposition.record_channel_outcome(mnem_upper, "watermark_suppressed")
+                                continue
+
+                    # Check in-batch exact duplicate (same point_id and same value)
+                    prev_seen = seen_in_batch.get(point_id)
+                    if prev_seen is not None and prev_seen == (True, val):
+                        duplicates_suppressed += 1
+                        disposition.in_batch_duplicates += 1
+                        disposition.record_channel_outcome(mnem_upper, "in_batch_duplicates")
+                        continue
+
+                    # Enforce max_frames cap BEFORE emitting or advancing watermark
+                    if max_frames is not None and len(frames) >= max_frames:
+                        disposition.deferred_over_cap += 1
+                        disposition.truncated_by_limit = True
+                        disposition.record_channel_outcome(mnem_upper, "deferred_over_cap")
+                        continue
+
+                    row_had_active_cells = True
+                    seen_in_batch[point_id] = (True, val)
                     source_unit = (
                         unit_list[col_idx].strip()
                         if col_idx < len(unit_list) and unit_list[col_idx].strip()
@@ -375,17 +664,25 @@ def parse_get_from_store_response(
                             value=val,
                             unit=source_unit or mapping.unit,
                             quality=col_quality,
-                            source_point_id=f"witsml:{mapping.channel_key}:{row_ts.isoformat()}",
+                            source_point_id=point_id,
                             source_ref=f"witsml.log:{mnemonic_list[col_idx]}",
-                            sequence=raw_rows_parsed,
+                            sequence=len(frames) + 1,
                             depth_md_si=row_depth,
                         )
                     )
+                    disposition.mapped_frames_emitted += 1
+                    disposition.record_channel_outcome(mnem_upper, "emitted")
 
-    next_watermark = dict(previous_watermark or {})
-    if max_ts is not None:
-        next_watermark["cursor_timestamp"] = max_ts.isoformat()
-        next_watermark["protocol"] = "witsml.1.4.1.1.soap_http"
+                if row_had_active_cells:
+                    raw_rows_parsed += 1
+
+    partial_more = (result_code == 2) or disposition.truncated_by_limit
+    disposition.partial_more_available = partial_more
+    next_watermark = compute_witsml_next_watermark(
+        previous_watermark,
+        frames,
+        has_more=partial_more,
+    )
 
     return WitsmlPollBatch(
         frames=tuple(frames),
@@ -394,7 +691,9 @@ def parse_get_from_store_response(
         pages_fetched=1,
         raw_rows_parsed=raw_rows_parsed,
         skipped_rows=skipped_rows,
-        partial_more_available=(result_code == 2),
+        partial_more_available=partial_more,
+        duplicates_suppressed=duplicates_suppressed,
+        disposition=disposition,
     )
 
 
@@ -418,11 +717,11 @@ class WitsmlSoapClient:
         self._max_retries = max(0, min(max_retries, 5))
         self._tls_verify = True
 
-    def _build_headers(self) -> dict[str, str]:
+    def _build_headers(self, soap_action: str = "Store.WMLS_GetFromStore") -> dict[str, str]:
         headers = {
             "Content-Type": "text/xml; charset=utf-8",
             "Accept": "text/xml, application/soap+xml, application/xml",
-            "SOAPAction": '"http://www.witsml.org/action/120/Store.WMLS_GetFromStore"',
+            "SOAPAction": f'"http://www.witsml.org/action/120/{soap_action}"',
             "User-Agent": "DrillAI-WITSML-Connector/1.4.1.1",
         }
         if "bearer_token" in self._secrets:
@@ -436,8 +735,8 @@ class WitsmlSoapClient:
             return httpx.BasicAuth(self._secrets["username"], self._secrets["password"])
         return None
 
-    async def _post_soap(self, envelope: str) -> str:
-        headers = self._build_headers()
+    async def _post_soap(self, envelope: str, *, soap_action: str = "Store.WMLS_GetFromStore") -> str:
+        headers = self._build_headers(soap_action=soap_action)
         auth = self._build_auth()
         last_exc: ConnectorTransportError | None = None
 
@@ -463,7 +762,11 @@ class WitsmlSoapClient:
                 )
             except httpx.ConnectError as exc:
                 msg = str(exc)
-                err_code = "tls_error" if "SSL" in msg.upper() or "CERTIFICATE" in msg.upper() else "connection_refused"
+                err_code = (
+                    "tls_error"
+                    if "SSL" in msg.upper() or "CERTIFICATE" in msg.upper()
+                    else "connection_refused"
+                )
                 last_exc = ConnectorTransportError(
                     err_code,
                     redact_sensitive_text(f"WITSML connection error: {exc}", self._secrets)
@@ -473,8 +776,7 @@ class WitsmlSoapClient:
             except httpx.HTTPError as exc:
                 last_exc = ConnectorTransportError(
                     "transport_error",
-                    redact_sensitive_text(f"WITSML HTTP error: {exc}", self._secrets)
-                    or "WITSML HTTP error",
+                    redact_sensitive_text(f"WITSML HTTP error: {exc}", self._secrets) or "WITSML HTTP error",
                     retryable=True,
                 )
             else:
@@ -519,6 +821,52 @@ class WitsmlSoapClient:
         assert last_exc is not None
         raise last_exc
 
+    async def get_version(self) -> str:
+        """Execute ``WMLS_GetVersion`` and return the server's supported WITSML version string."""
+        soap_text = await self._post_soap(
+            build_get_version_soap_envelope(), soap_action="Store.WMLS_GetVersion"
+        )
+        outer = _parse_safe_xml(soap_text, context="WITSML GetVersion XML")
+        for elem in outer.iter():
+            if _local_name(elem.tag) == "Result" and elem.text and elem.text.strip():
+                return elem.text.strip()
+        raise ConnectorTransportError(
+            "protocol_error",
+            "WITSML WMLS_GetVersion response did not contain a Result element",
+            retryable=False,
+        )
+
+    async def get_cap(self) -> dict[str, Any]:
+        """Execute ``WMLS_GetCap`` and return parsed server capabilities."""
+        soap_text = await self._post_soap(build_get_cap_soap_envelope(), soap_action="Store.WMLS_GetCap")
+        outer = _parse_safe_xml(soap_text, context="WITSML GetCap XML")
+        result_code = 1
+        cap_xml = ""
+        for elem in outer.iter():
+            lname = _local_name(elem.tag)
+            if lname == "Result" and elem.text:
+                try:
+                    result_code = int(elem.text.strip())
+                except ValueError:
+                    result_code = -1
+            elif lname == "CapabilitiesOut" and elem.text:
+                cap_xml = elem.text
+        if result_code <= 0:
+            raise ConnectorTransportError(
+                "protocol_error",
+                f"WITSML WMLS_GetCap failed with Result={result_code}",
+                retryable=False,
+            )
+        functions: list[str] = []
+        schema_version = "1.4.1.1"
+        if cap_xml.strip():
+            cap_root = _parse_safe_xml(cap_xml, context="WITSML CapabilitiesOut XML")
+            schema_version = cap_root.attrib.get("version") or schema_version
+            for elem in cap_root.iter():
+                if _local_name(elem.tag) == "function" and elem.attrib.get("name"):
+                    functions.append(elem.attrib["name"])
+        return {"version": schema_version, "functions": functions}
+
     async def poll_log_batch(
         self,
         *,
@@ -528,24 +876,48 @@ class WitsmlSoapClient:
         config: dict[str, Any],
         watermark: dict[str, Any] | None = None,
         max_pages: int = 3,
+        max_frames: int | None = None,
+        subscribed_channels: set[str] | None = None,
     ) -> WitsmlPollBatch:
-        """Poll one or more pages of WITSML 1.4.1.1 log data starting at ``watermark``."""
+        """Poll one or more pages of WITSML 1.4.1.1 log data starting at ``watermark``.
+
+        Guarantees that ``next_watermark`` never advances past ``max_frames`` and that all
+        remaining frames are either deferred to the next poll or fetched on subsequent pages.
+        """
         mappings = parse_channel_mappings(config.get("channel_mappings"))
-        uid_well = str(config.get("uid_well") or well_id)
-        uid_wellbore = str(config.get("uid_wellbore") or (wellbore_id or ""))
-        uid_log = str(config.get("uid_log") or "")
+        uid_well = str(config.get("uid_well") or config.get("well_uid") or well_id)
+        uid_wellbore = str(config.get("uid_wellbore") or config.get("wellbore_uid") or (wellbore_id or ""))
+        uid_log = str(config.get("uid_log") or config.get("log_uid") or "")
+        expected_uid_well = str(config.get("uid_well") or config.get("well_uid") or "").strip() or None
+        expected_uid_wellbore = (
+            str(config.get("uid_wellbore") or config.get("wellbore_uid") or "").strip() or None
+        )
+        expected_uid_log = str(config.get("uid_log") or config.get("log_uid") or "").strip() or None
         max_return_nodes = int(config.get("max_return_nodes") or 500)
+        effective_max_frames = (
+            int(max_frames)
+            if max_frames is not None
+            else (int(config["max_points_per_poll"]) if "max_points_per_poll" in config else None)
+        )
 
         current_watermark = dict(watermark or {})
         all_frames: list[SourceFrame] = []
         discovered_by_mnem: dict[str, WitsmlCurveDescriptor] = {}
-        seen_keys: set[tuple[str, str]] = set()
         pages_fetched = 0
         total_raw_rows = 0
         total_skipped = 0
+        total_dups = 0
         partial_remaining = False
+        combined_disp = ProtocolPollDisposition()
 
         for _ in range(max(1, min(max_pages, 10))):
+            remaining_frame_budget = (
+                max(0, effective_max_frames - len(all_frames)) if effective_max_frames is not None else None
+            )
+            if remaining_frame_budget is not None and remaining_frame_budget == 0:
+                partial_remaining = True
+                break
+
             cursor_ts = current_watermark.get("cursor_timestamp")
             envelope = build_get_from_store_soap_envelope(
                 uid_well=uid_well,
@@ -556,31 +928,80 @@ class WitsmlSoapClient:
                 max_return_nodes=max_return_nodes,
             )
             soap_text = await self._post_soap(envelope)
-            batch = parse_get_from_store_response(
+            page_batch = parse_get_from_store_response(
                 soap_text,
                 mappings=mappings,
                 well_id=well_id,
                 wellbore_id=wellbore_id,
                 operation_id=operation_id,
                 previous_watermark=current_watermark,
+                max_frames=remaining_frame_budget,
+                subscribed_channels=subscribed_channels,
+                expected_uid_well=expected_uid_well,
+                expected_uid_wellbore=expected_uid_wellbore,
+                expected_uid_log=expected_uid_log,
             )
             pages_fetched += 1
-            total_raw_rows += batch.raw_rows_parsed
-            total_skipped += batch.skipped_rows
-            for curve in batch.discovered_curves:
+            total_raw_rows += page_batch.raw_rows_parsed
+            total_skipped += page_batch.skipped_rows
+            total_dups += page_batch.duplicates_suppressed
+
+            pdisp = page_batch.disposition
+            combined_disp.pages_or_messages_received += pdisp.pages_or_messages_received
+            combined_disp.source_records_discovered += pdisp.source_records_discovered
+            combined_disp.mapped_frames_emitted += pdisp.mapped_frames_emitted
+            combined_disp.unmapped_skipped += pdisp.unmapped_skipped
+            combined_disp.unsubscribed_skipped += pdisp.unsubscribed_skipped
+            combined_disp.watermark_suppressed += pdisp.watermark_suppressed
+            combined_disp.in_batch_duplicates += pdisp.in_batch_duplicates
+            combined_disp.deferred_over_cap += pdisp.deferred_over_cap
+            combined_disp.rejected_malformed_timestamp += pdisp.rejected_malformed_timestamp
+            combined_disp.rejected_unsupported_index += pdisp.rejected_unsupported_index
+            combined_disp.rejected_invalid_value += pdisp.rejected_invalid_value
+            combined_disp.rejected_non_finite_value += pdisp.rejected_non_finite_value
+            combined_disp.rejected_unknown_channel += pdisp.rejected_unknown_channel
+            combined_disp.truncated_by_limit = combined_disp.truncated_by_limit or pdisp.truncated_by_limit
+            for rej in pdisp.protocol_rejections:
+                if len(combined_disp.protocol_rejections) < 50:
+                    combined_disp.protocol_rejections.append(rej)
+            for ch_key, ch_counts in pdisp.per_source_channel.items():
+                dest = combined_disp.per_source_channel.setdefault(
+                    ch_key,
+                    {
+                        "discovered": 0,
+                        "emitted": 0,
+                        "unmapped_skipped": 0,
+                        "unsubscribed_skipped": 0,
+                        "watermark_suppressed": 0,
+                        "in_batch_duplicates": 0,
+                        "deferred_over_cap": 0,
+                        "rejected": 0,
+                    },
+                )
+                for bucket_k, bucket_v in ch_counts.items():
+                    dest[bucket_k] = dest.get(bucket_k, 0) + bucket_v
+
+            for curve in page_batch.discovered_curves:
                 discovered_by_mnem.setdefault(curve.mnemonic.upper(), curve)
-            for frame in batch.frames:
-                dedup_key = (frame.channel_key, frame.ts.isoformat())
-                if dedup_key not in seen_keys:
-                    seen_keys.add(dedup_key)
-                    all_frames.append(frame)
+            for frame in page_batch.frames:
+                all_frames.append(frame)
 
             prev_cursor = current_watermark.get("cursor_timestamp")
-            new_cursor = batch.next_watermark.get("cursor_timestamp")
-            current_watermark = dict(batch.next_watermark)
-            partial_remaining = batch.partial_more_available
-            if not batch.partial_more_available or not new_cursor or new_cursor == prev_cursor:
+            prev_completed = list(current_watermark.get("completed_at_cursor") or [])
+            new_cursor = page_batch.next_watermark.get("cursor_timestamp")
+            new_completed = list(page_batch.next_watermark.get("completed_at_cursor") or [])
+            current_watermark = dict(page_batch.next_watermark)
+            partial_remaining = page_batch.partial_more_available
+
+            if pdisp.truncated_by_limit:
                 break
+            if not page_batch.partial_more_available:
+                break
+            if not new_cursor or (new_cursor == prev_cursor and new_completed == prev_completed):
+                break
+
+        combined_disp.partial_more_available = partial_remaining
+        current_watermark["has_more_deferred"] = bool(partial_remaining)
 
         return WitsmlPollBatch(
             frames=tuple(all_frames),
@@ -590,6 +1011,8 @@ class WitsmlSoapClient:
             raw_rows_parsed=total_raw_rows,
             skipped_rows=total_skipped,
             partial_more_available=partial_remaining,
+            duplicates_suppressed=total_dups,
+            disposition=combined_disp,
         )
 
 
@@ -602,18 +1025,19 @@ class WitsmlSoapClient:
 class WitsmlSampleRow:
     timestamp: str
     depth_md: float
-    values: dict[str, float | None]
+    values: dict[str, float | int | str | None]
     quality: str = "good"
 
 
 @dataclass
 class LocalWitsmlSoapServer:
-    """In-process local TCP HTTP/1.1 SOAP server speaking ``WMLS_GetFromStore`` for ``log`` objects.
+    """In-process local TCP HTTP/1.1 SOAP server speaking ``WMLS_GetVersion``, ``WMLS_GetCap``,
+    and ``WMLS_GetFromStore`` for ``log`` objects.
 
-    Supports authentication verification (Basic or Bearer), ``startDateTimeIndex`` filtering,
+    Supports authentication verification (Basic or Bearer), inclusive ``startDateTimeIndex`` filtering,
     ``maxReturnNodes`` pagination (returning ``Result=2`` when more rows remain and ``Result=1`` when
     complete), and fault injection modes (``ok``, ``auth_failure``, ``http_500``, ``malformed_xml``,
-    ``slow_timeout``) for deterministic transport testing.
+    ``xxe_entity``, ``slow_timeout``) for deterministic transport testing.
     """
 
     host: str = "127.0.0.1"
@@ -624,6 +1048,7 @@ class LocalWitsmlSoapServer:
     uid_well: str = "well-01"
     uid_wellbore: str = "wb-01"
     uid_log: str = "log-time-01"
+    index_type: str = "date time"
     curves: list[tuple[str, str, str]] = field(
         default_factory=lambda: [
             ("TIME", "s", "Time Index"),
@@ -654,7 +1079,9 @@ class LocalWitsmlSoapServer:
         count: int = 6,
         step_seconds: float = 5.0,
     ) -> None:
-        base = (start or (dt.datetime.now(dt.UTC) - dt.timedelta(seconds=count * step_seconds))).astimezone(dt.UTC)
+        base = (start or (dt.datetime.now(dt.UTC) - dt.timedelta(seconds=count * step_seconds))).astimezone(
+            dt.UTC
+        )
         seeded: list[WitsmlSampleRow] = []
         for idx in range(count):
             ts = (base + dt.timedelta(seconds=idx * step_seconds)).isoformat()
@@ -663,7 +1090,7 @@ class LocalWitsmlSoapServer:
                     timestamp=ts,
                     depth_md=2450.0 + idx * 0.5,
                     values={
-                        "SPP": 2950.0 + idx * 25.0,  # psi (will normalize to kPa via platform unit engine)
+                        "SPP": 2950.0 + idx * 25.0,
                         "WOB": 22.0 + idx * 0.5,
                         "HKLD": 185.0 + idx * 1.0,
                         "RPM": 120.0 + (idx % 3) * 2.0,
@@ -713,16 +1140,29 @@ class LocalWitsmlSoapServer:
         return True
 
     def _render_logs_xml(self, start_dt: dt.datetime | None, max_nodes: int) -> tuple[str, int]:
+        """Render WITSML 1.4.1.1 ``<logs>`` with standard inclusive ``startDateTimeIndex`` semantics."""
         filtered: list[WitsmlSampleRow] = []
+        boundary_count = 0
         for row in self.rows:
-            row_dt = _parse_iso_utc(row.timestamp)
-            if start_dt is not None and row_dt <= start_dt:
+            try:
+                row_dt = _parse_iso_utc(row.timestamp)
+            except ValueError:
+                # Include intentionally malformed timestamp rows so parser rejection tests can observe them
+                filtered.append(row)
                 continue
+            if start_dt is not None and row_dt < start_dt:
+                continue
+            if start_dt is not None and row_dt == start_dt:
+                boundary_count += 1
             filtered.append(row)
 
         limit = self.page_size_override or max_nodes
-        has_more = len(filtered) > limit
-        page = filtered[:limit]
+        # When resuming at start_dt (inclusive), include the boundary row(s) at start_dt plus up to `limit`
+        # subsequent rows so a completed boundary row does not consume the new-row page budget while any
+        # unfinished curves or duplicate-timestamp rows at start_dt remain present in the response.
+        effective_limit = limit + (1 if boundary_count > 0 else 0)
+        has_more = len(filtered) > effective_limit
+        page = filtered[:effective_limit]
         result_code = 2 if has_more else 1
 
         curve_infos = []
@@ -758,7 +1198,7 @@ class LocalWitsmlSoapServer:
             "<nameWell>Harness Well</nameWell>"
             "<nameWellbore>Main Wellbore</nameWellbore>"
             "<name>Time Drilling Log</name>"
-            "<indexType>date time</indexType>"
+            f"<indexType>{html.escape(self.index_type)}</indexType>"
             "<indexCurve>TIME</indexCurve>"
             "<nullValue>-999.25</nullValue>"
             f"{''.join(curve_infos)}"
@@ -772,9 +1212,7 @@ class LocalWitsmlSoapServer:
         )
         return logs_xml, result_code
 
-    async def _handle_client(
-        self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
-    ) -> None:
+    async def _handle_client(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         try:
             raw_head = await asyncio.wait_for(reader.readuntil(b"\r\n\r\n"), timeout=5.0)
             head_text = raw_head.decode("latin-1")
@@ -810,6 +1248,58 @@ class LocalWitsmlSoapServer:
                     "<soapenv:Envelope><broken><unclosed>",
                     "text/xml; charset=utf-8",
                 )
+                return
+
+            if self.fault_mode == "xxe_entity":
+                padding = "<!-- " + ("A" * 4500) + " -->"
+                xxe_doc = (
+                    '<?xml version="1.0" encoding="UTF-8"?>'
+                    f"{padding}"
+                    '<!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///etc/passwd">]>'
+                    '<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/">'
+                    "<soapenv:Body>&xxe;</soapenv:Body></soapenv:Envelope>"
+                )
+                await self._write_response(writer, 200, xxe_doc, "text/xml; charset=utf-8")
+                return
+
+            if "WMLS_GetVersion" in body_text:
+                soap_resp = (
+                    '<?xml version="1.0" encoding="UTF-8"?>'
+                    '<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" '
+                    'xmlns:wmls="http://www.witsml.org/message/120">'
+                    "<soapenv:Body>"
+                    "<wmls:WMLS_GetVersionResponse>"
+                    "<Result>1.4.1.1</Result>"
+                    "</wmls:WMLS_GetVersionResponse>"
+                    "</soapenv:Body>"
+                    "</soapenv:Envelope>"
+                )
+                await self._write_response(writer, 200, soap_resp, "text/xml; charset=utf-8")
+                return
+
+            if "WMLS_GetCap" in body_text:
+                cap_xml = (
+                    '<capServers xmlns="http://www.witsml.org/schemas/1series" version="1.4.1.1">'
+                    '<capServer apiVersion="1.4.1.1">'
+                    "<name>DrillAI Local WITSML Store</name>"
+                    '<function name="WMLS_GetFromStore"><dataObject>log</dataObject></function>'
+                    "</capServer>"
+                    "</capServers>"
+                )
+                soap_resp = (
+                    '<?xml version="1.0" encoding="UTF-8"?>'
+                    '<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" '
+                    'xmlns:wmls="http://www.witsml.org/message/120">'
+                    "<soapenv:Body>"
+                    "<wmls:WMLS_GetCapResponse>"
+                    "<Result>1</Result>"
+                    f"<CapabilitiesOut>{html.escape(cap_xml)}</CapabilitiesOut>"
+                    "<SuppMsgOut/>"
+                    "</wmls:WMLS_GetCapResponse>"
+                    "</soapenv:Body>"
+                    "</soapenv:Envelope>"
+                )
+                await self._write_response(writer, 200, soap_resp, "text/xml; charset=utf-8")
                 return
 
             start_dt: dt.datetime | None = None
@@ -859,9 +1349,7 @@ class LocalWitsmlSoapServer:
     async def _write_response(
         writer: asyncio.StreamWriter, status: int, body: str, content_type: str
     ) -> None:
-        reason = {200: "OK", 401: "Unauthorized", 500: "Internal Server Error"}.get(
-            status, "Error"
-        )
+        reason = {200: "OK", 401: "Unauthorized", 500: "Internal Server Error"}.get(status, "Error")
         payload = body.encode("utf-8")
         head = (
             f"HTTP/1.1 {status} {reason}\r\n"

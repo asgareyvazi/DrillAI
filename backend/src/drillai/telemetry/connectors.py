@@ -29,7 +29,7 @@ import os
 import re
 import socket
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 from urllib.parse import urlparse
 
@@ -71,12 +71,16 @@ __all__ = [
     "CONNECTOR_PROFILES",
     "CONNECTOR_RUNTIME_STATUSES",
     "PROTOCOL_PROFILE_SPECS",
+    "ChannelMappingSpec",
     "ConnectorService",
+    "ConnectorTransportError",
+    "ProtocolPollDisposition",
     "ProtocolProfileSpec",
     "classify_connector_error",
     "connector_out",
     "connector_run_out",
     "mask_secret_refs",
+    "parse_channel_mappings",
     "redact_sensitive_text",
     "resolve_secret_refs",
     "validate_connector_config",
@@ -140,21 +144,216 @@ class ConnectorTransportError(Exception):
         self.retryable = retryable
 
 
+@dataclass
+class ProtocolPollDisposition:
+    """Bounded, audit-safe accounting of every source record encountered during a protocol poll.
+
+    Satisfies the exact invariant:
+    ``source_records_discovered == mapped_frames_emitted + unmapped_skipped + unsubscribed_skipped
+    + watermark_suppressed + in_batch_duplicates + deferred_over_cap + total_protocol_rejected``.
+    """
+
+    pages_or_messages_received: int = 0
+    source_records_discovered: int = 0
+    mapped_frames_emitted: int = 0
+    unmapped_skipped: int = 0
+    unsubscribed_skipped: int = 0
+    watermark_suppressed: int = 0
+    in_batch_duplicates: int = 0
+    deferred_over_cap: int = 0
+    rejected_malformed_timestamp: int = 0
+    rejected_unsupported_index: int = 0
+    rejected_invalid_value: int = 0
+    rejected_non_finite_value: int = 0
+    rejected_unknown_channel: int = 0
+    truncated_by_limit: bool = False
+    partial_more_available: bool = False
+    protocol_rejections: list[dict[str, Any]] = field(default_factory=list)
+    per_source_channel: dict[str, dict[str, int]] = field(default_factory=dict)
+
+    @property
+    def total_protocol_rejected(self) -> int:
+        return (
+            self.rejected_malformed_timestamp
+            + self.rejected_unsupported_index
+            + self.rejected_invalid_value
+            + self.rejected_non_finite_value
+            + self.rejected_unknown_channel
+        )
+
+    @property
+    def total_filtered(self) -> int:
+        return self.unmapped_skipped + self.unsubscribed_skipped
+
+    @property
+    def reconciled(self) -> bool:
+        return self.source_records_discovered == (
+            self.mapped_frames_emitted
+            + self.unmapped_skipped
+            + self.unsubscribed_skipped
+            + self.watermark_suppressed
+            + self.in_batch_duplicates
+            + self.deferred_over_cap
+            + self.total_protocol_rejected
+        )
+
+    def record_channel_outcome(self, source_mnemonic: str, bucket: str, count: int = 1) -> None:
+        key = (source_mnemonic or "<unknown>").strip().upper() or "<UNKNOWN>"
+        if len(self.per_source_channel) >= 100 and key not in self.per_source_channel:
+            key = "<OVERFLOW>"
+        entry = self.per_source_channel.setdefault(
+            key,
+            {
+                "discovered": 0,
+                "emitted": 0,
+                "unmapped_skipped": 0,
+                "unsubscribed_skipped": 0,
+                "watermark_suppressed": 0,
+                "in_batch_duplicates": 0,
+                "deferred_over_cap": 0,
+                "rejected": 0,
+            },
+        )
+        entry["discovered"] = entry.get("discovered", 0) + count
+        entry[bucket] = entry.get(bucket, 0) + count
+
+    def record_rejection(
+        self,
+        *,
+        reason: str,
+        source_mnemonic: str = "",
+        index_repr: str | None = None,
+        raw_value: str | None = None,
+    ) -> None:
+        if len(self.protocol_rejections) < 50:
+            self.protocol_rejections.append(
+                {
+                    "reason": reason,
+                    "source_mnemonic": source_mnemonic[:80] if source_mnemonic else None,
+                    "index": str(index_repr)[:80] if index_repr is not None else None,
+                    "raw_value": str(raw_value)[:80] if raw_value is not None else None,
+                }
+            )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "pages_or_messages_received": self.pages_or_messages_received,
+            "source_records_discovered": self.source_records_discovered,
+            "mapped_frames_emitted": self.mapped_frames_emitted,
+            "unmapped_skipped": self.unmapped_skipped,
+            "unsubscribed_skipped": self.unsubscribed_skipped,
+            "watermark_suppressed": self.watermark_suppressed,
+            "in_batch_duplicates": self.in_batch_duplicates,
+            "deferred_over_cap": self.deferred_over_cap,
+            "rejected_malformed_timestamp": self.rejected_malformed_timestamp,
+            "rejected_unsupported_index": self.rejected_unsupported_index,
+            "rejected_invalid_value": self.rejected_invalid_value,
+            "rejected_non_finite_value": self.rejected_non_finite_value,
+            "rejected_unknown_channel": self.rejected_unknown_channel,
+            "total_protocol_rejected": self.total_protocol_rejected,
+            "total_filtered": self.total_filtered,
+            "truncated_by_limit": self.truncated_by_limit,
+            "partial_more_available": self.partial_more_available,
+            "reconciled": self.reconciled,
+            "protocol_rejections": list(self.protocol_rejections[:50]),
+            "per_source_channel": dict(sorted(self.per_source_channel.items())),
+        }
+
+
 def parse_channel_mappings(raw_mappings: Any) -> list[ChannelMappingSpec]:
-    """Parse validated channel mapping dictionaries into typed ChannelMappingSpec instances."""
-    if not isinstance(raw_mappings, list):
+    """Fail-closed parser and validator for channel mapping definitions.
+
+    Never silently drops non-object, incomplete, duplicate, or invalid mapping entries.
+    """
+    if raw_mappings is None:
         return []
+    if not isinstance(raw_mappings, list | tuple):
+        raise ValidationFailed(
+            "channel_mappings must be a list of channel mapping objects",
+            details={"field": "config.channel_mappings", "reason": "invalid_channel_mappings"},
+        )
+    if len(raw_mappings) > 100:
+        raise ValidationFailed(
+            "channel_mappings cannot exceed 100 channels per connector",
+            details={
+                "field": "config.channel_mappings",
+                "count": len(raw_mappings),
+                "reason": "invalid_channel_mappings",
+            },
+        )
     specs: list[ChannelMappingSpec] = []
-    for item in raw_mappings:
+    seen_source: set[str] = set()
+    seen_target: set[str] = set()
+    for idx, item in enumerate(raw_mappings):
         if not isinstance(item, dict):
-            continue
+            raise ValidationFailed(
+                f"channel_mappings[{idx}] must be an object",
+                details={
+                    "field": f"config.channel_mappings[{idx}]",
+                    "reason": "invalid_channel_mappings",
+                },
+            )
         src = str(item.get("source_mnemonic") or item.get("channel_key") or "").strip()
         key = str(item.get("channel_key") or src).strip().lower()
         name = str(item.get("name") or key.upper()).strip()
         dim = str(item.get("dimension") or "").strip().lower()
         unit = str(item.get("unit") or "").strip()
         if not src or not key or not dim or not unit:
-            continue
+            raise ValidationFailed(
+                f"channel_mappings[{idx}] requires non-empty source_mnemonic, channel_key, dimension, and unit",
+                details={
+                    "field": f"config.channel_mappings[{idx}]",
+                    "reason": "invalid_channel_mappings",
+                },
+            )
+        if len(src) > 120 or len(key) > 120 or len(name) > 200:
+            raise ValidationFailed(
+                f"channel_mappings[{idx}] identifier exceeds maximum length",
+                details={
+                    "field": f"config.channel_mappings[{idx}]",
+                    "reason": "invalid_channel_mappings",
+                },
+            )
+        if dim not in CHANNEL_DIMENSIONS:
+            raise ValidationFailed(
+                f"channel_mappings[{idx}] dimension {dim!r} is not in CHANNEL_DIMENSIONS",
+                details={
+                    "field": f"config.channel_mappings[{idx}].dimension",
+                    "value": dim,
+                    "allowed": list(CHANNEL_DIMENSIONS),
+                    "reason": "invalid_channel_mappings",
+                },
+            )
+        convert(0.0, unit, dim)
+        descriptor = ChannelDescriptor(
+            channel_key=key,
+            name=name,
+            dimension=dim,
+            unit=unit,
+            description=item.get("description"),
+            is_realtime=bool(item.get("is_realtime", True)),
+        )
+        validate_descriptor(descriptor)
+        src_norm = src.lower()
+        if src_norm in seen_source:
+            raise ValidationFailed(
+                f"duplicate source_mnemonic {src!r} in channel_mappings",
+                details={
+                    "field": f"config.channel_mappings[{idx}].source_mnemonic",
+                    "reason": "duplicate_channel_mapping",
+                },
+            )
+        if key in seen_target:
+            raise ValidationFailed(
+                f"duplicate target channel_key {key!r} in channel_mappings",
+                details={
+                    "field": f"config.channel_mappings[{idx}].channel_key",
+                    "reason": "duplicate_channel_mapping",
+                },
+            )
+        seen_source.add(src_norm)
+        seen_target.add(key)
+        raw_uri = str(item.get("channel_uri") or f"eml://witsml/logChannel/{src}").strip()
         specs.append(
             ChannelMappingSpec(
                 source_mnemonic=src,
@@ -162,7 +361,7 @@ def parse_channel_mappings(raw_mappings: Any) -> list[ChannelMappingSpec]:
                 name=name,
                 dimension=dim,
                 unit=unit,
-                channel_uri=str(item.get("channel_uri") or f"eml://witsml/logChannel/{src}"),
+                channel_uri=raw_uri[:300],
                 description=item.get("description"),
                 is_realtime=bool(item.get("is_realtime", True)),
             )
@@ -230,14 +429,15 @@ PROTOCOL_PROFILE_SPECS: dict[str, ProtocolProfileSpec] = {
         auth_modes=("none", "basic", "bearer"),
         supported_operations=("WMLS_GetVersion", "WMLS_GetCap", "WMLS_GetFromStore"),
         supported_objects=("log",),
-        resume_mechanism="startDateTimeIndex_watermark",
+        resume_mechanism="startDateTimeIndex_inclusive_watermark",
         is_synthetic=False,
         local_harness_verified=True,
         external_vendor_verified=False,
         limitations=(
-            "Read-only SOAP 1.1 WMLS_GetFromStore time-indexed log polling subset. "
-            "Depth-indexed logs, WMLS_AddToStore/UpdateInStore, and live external commercial "
-            "vendor endpoints are not certified in CI."
+            "Read-only SOAP 1.1 WMLS_GetFromStore time-indexed log polling subset (plus WMLS_GetVersion and "
+            "WMLS_GetCap). Inclusive startDateTimeIndex watermark with per-curve cursor completion tracking. "
+            "Depth-indexed logs, WMLS_AddToStore/UpdateInStore, WITSML 2.1 ETP Store objects, and live external "
+            "commercial vendor endpoints are not certified in CI."
         ),
     ),
     "etp.1.2.json_ws": ProtocolProfileSpec(
@@ -249,24 +449,31 @@ PROTOCOL_PROFILE_SPECS: dict[str, ProtocolProfileSpec] = {
         supported_operations=(
             "RequestSession",
             "OpenSession",
+            "StartStreaming",
             "Start",
             "ChannelDescribe",
             "ChannelMetadata",
             "ChannelStreamingStart",
             "ChannelData",
+            "StopStreaming",
+            "ChannelStreamingStop",
             "Ping",
             "Pong",
+            "ProtocolException",
+            "Acknowledge",
             "CloseSession",
         ),
         supported_objects=("channel_streaming",),
-        resume_mechanism="channel_startIndex_watermark",
+        resume_mechanism="per_channel_index_watermark",
         is_synthetic=False,
         local_harness_verified=True,
         external_vendor_verified=False,
         limitations=(
-            "ETP v1.2 JSON-framed WebSocket subset (Protocol 0 Core + Protocol 1 ChannelStreaming). "
-            "Avro binary framing, Discovery/Store protocols, and live external commercial vendor "
-            "endpoints are not certified in CI."
+            "ETP v1.2 / v1.1 JSON-framed WebSocket ChannelStreaming subset (Protocol 0 Core + Protocol 1 "
+            "ChannelStreaming, supporting both header/body Avro-JSON envelopes and flat JSON envelopes). "
+            "Per-channel index watermarks with explicit DateTime unit semantics. Binary Avro encoding, "
+            "Protocol 3 Discovery, Protocol 4 Store, Protocol 21 ChannelSubscribe, and live external "
+            "commercial vendor endpoints are not certified in CI."
         ),
     ),
 }
@@ -344,9 +551,7 @@ def validate_no_plaintext_secrets(payload: Any, *, path: str = "config") -> None
     elif isinstance(payload, list | tuple):
         for idx, item in enumerate(payload):
             validate_no_plaintext_secrets(item, path=f"{path}[{idx}]")
-    elif isinstance(payload, str) and re.search(
-        r"[a-zA-Z][a-zA-Z0-9+.-]*://[^/\s:@]+:[^@\s/]+@", payload
-    ):
+    elif isinstance(payload, str) and re.search(r"[a-zA-Z][a-zA-Z0-9+.-]*://[^/\s:@]+:[^@\s/]+@", payload):
         raise ValidationFailed(
             f"embedded URL credentials in {path!r} are forbidden; use secret_refs",
             details={"field": path, "reason": "plaintext_secret_forbidden"},
@@ -616,9 +821,7 @@ def validate_connector_endpoint(
 
     for ip in candidate_ips:
         ip_text = str(ip).lower()
-        if ip_text in PROHIBITED_METADATA_HOSTS or (
-            ip.is_link_local and not ip.is_loopback
-        ):
+        if ip_text in PROHIBITED_METADATA_HOSTS or (ip.is_link_local and not ip.is_loopback):
             raise ValidationFailed(
                 f"endpoint_url destination {ip_text!r} is a prohibited link-local/metadata address",
                 details={"field": "endpoint_url", "ip": ip_text, "reason": "ssrf_blocked"},
@@ -711,7 +914,11 @@ def validate_connector_config(
 
     base_backoff_seconds = float(config.get("base_backoff_seconds", 1.0))
     max_backoff_seconds = float(config.get("max_backoff_seconds", 30.0))
-    if base_backoff_seconds < 0.01 or max_backoff_seconds < base_backoff_seconds or max_backoff_seconds > 3600.0:
+    if (
+        base_backoff_seconds < 0.01
+        or max_backoff_seconds < base_backoff_seconds
+        or max_backoff_seconds > 3600.0
+    ):
         raise ValidationFailed(
             "backoff bounds must satisfy 0.01 <= base_backoff_seconds <= max_backoff_seconds <= 3600",
             details={
@@ -721,83 +928,20 @@ def validate_connector_config(
             },
         )
 
-    raw_mappings = config.get("channel_mappings")
-    if raw_mappings is None:
-        raw_mappings = []
-    if not isinstance(raw_mappings, list):
-        raise ValidationFailed(
-            "channel_mappings must be a list of channel mapping objects",
-            details={"field": "config.channel_mappings"},
-        )
-    if len(raw_mappings) > 100:
-        raise ValidationFailed(
-            "channel_mappings cannot exceed 100 channels per connector",
-            details={"field": "config.channel_mappings", "count": len(raw_mappings)},
-        )
-
-    normalized_mappings: list[dict[str, Any]] = []
-    seen_source: set[str] = set()
-    seen_target: set[str] = set()
-    for idx, item in enumerate(raw_mappings):
-        if not isinstance(item, dict):
-            raise ValidationFailed(
-                f"channel_mappings[{idx}] must be an object",
-                details={"field": f"config.channel_mappings[{idx}]"},
-            )
-        source_mnemonic = str(item.get("source_mnemonic") or item.get("channel_key") or "").strip()
-        channel_key = str(item.get("channel_key") or source_mnemonic).strip().lower()
-        name = str(item.get("name") or channel_key.upper()).strip()
-        dimension = str(item.get("dimension") or "").strip().lower()
-        unit = str(item.get("unit") or "").strip()
-        if not source_mnemonic or not channel_key:
-            raise ValidationFailed(
-                f"channel_mappings[{idx}] requires source_mnemonic and channel_key",
-                details={"field": f"config.channel_mappings[{idx}]"},
-            )
-        if dimension not in CHANNEL_DIMENSIONS:
-            raise ValidationFailed(
-                f"channel_mappings[{idx}] dimension {dimension!r} is not in CHANNEL_DIMENSIONS",
-                details={
-                    "field": f"config.channel_mappings[{idx}].dimension",
-                    "value": dimension,
-                    "allowed": list(CHANNEL_DIMENSIONS),
-                },
-            )
-        convert(0.0, unit, dimension)
-        descriptor = ChannelDescriptor(
-            channel_key=channel_key,
-            name=name,
-            dimension=dimension,
-            unit=unit,
-            description=item.get("description"),
-            is_realtime=bool(item.get("is_realtime", True)),
-        )
-        validate_descriptor(descriptor)
-        src_norm = source_mnemonic.lower()
-        if src_norm in seen_source:
-            raise ValidationFailed(
-                f"duplicate source_mnemonic {source_mnemonic!r} in channel_mappings",
-                details={"field": f"config.channel_mappings[{idx}].source_mnemonic"},
-            )
-        if channel_key in seen_target:
-            raise ValidationFailed(
-                f"duplicate target channel_key {channel_key!r} in channel_mappings",
-                details={"field": f"config.channel_mappings[{idx}].channel_key"},
-            )
-        seen_source.add(src_norm)
-        seen_target.add(channel_key)
-        normalized_mappings.append(
-            {
-                "source_mnemonic": source_mnemonic,
-                "channel_uri": str(item.get("channel_uri") or f"eml://witsml/logChannel/{source_mnemonic}"),
-                "channel_key": channel_key,
-                "name": name,
-                "dimension": dimension,
-                "unit": unit,
-                "description": item.get("description"),
-                "is_realtime": bool(item.get("is_realtime", True)),
-            }
-        )
+    parsed_specs = parse_channel_mappings(config.get("channel_mappings"))
+    normalized_mappings: list[dict[str, Any]] = [
+        {
+            "source_mnemonic": spec_item.source_mnemonic,
+            "channel_uri": spec_item.channel_uri,
+            "channel_key": spec_item.channel_key,
+            "name": spec_item.name,
+            "dimension": spec_item.dimension,
+            "unit": spec_item.unit,
+            "description": spec_item.description,
+            "is_realtime": spec_item.is_realtime,
+        }
+        for spec_item in parsed_specs
+    ]
 
     normalized: dict[str, Any] = {
         "auth_mode": auth_mode,
@@ -814,6 +958,11 @@ def validate_connector_config(
         "well_uid",
         "wellbore_uid",
         "log_uid",
+        "uid_well",
+        "uid_wellbore",
+        "uid_log",
+        "max_return_nodes",
+        "max_pages_per_poll",
         "plan",
         "start_iso",
         "quality",
@@ -854,14 +1003,10 @@ def compute_connector_health(
     lease_active = bool(row.worker_id and lease_expires and lease_expires > current)
 
     seconds_since_ingest = (
-        max(0.0, round((current - last_ingest).total_seconds(), 2))
-        if last_ingest is not None
-        else None
+        max(0.0, round((current - last_ingest).total_seconds(), 2)) if last_ingest is not None else None
     )
     seconds_since_poll = (
-        max(0.0, round((current - last_poll).total_seconds(), 2))
-        if last_poll is not None
-        else None
+        max(0.0, round((current - last_poll).total_seconds(), 2)) if last_poll is not None else None
     )
 
     if telemetry_summary is not None:
@@ -949,12 +1094,17 @@ def allowed_connector_actions(row: Connector, principal: Principal | None = None
     if can_manage:
         actions.append("update")
     if can_control:
-        if not row.is_enabled or row.desired_state in ("disabled", "stopped") or row.status in (
-            "created",
-            "configured",
-            "stopped",
-            "disabled",
-            "failed",
+        if (
+            not row.is_enabled
+            or row.desired_state in ("disabled", "stopped")
+            or row.status
+            in (
+                "created",
+                "configured",
+                "stopped",
+                "disabled",
+                "failed",
+            )
         ):
             actions.append("start")
         if row.is_enabled or row.status in ("starting", "running", "backing_off", "degraded"):
@@ -1014,9 +1164,7 @@ def connector_out(
         "worker": {
             "worker_id": row.worker_id,
             "lease_expires_at": row.lease_expires_at.isoformat() if row.lease_expires_at else None,
-            "last_heartbeat_at": (
-                row.last_heartbeat_at.isoformat() if row.last_heartbeat_at else None
-            ),
+            "last_heartbeat_at": (row.last_heartbeat_at.isoformat() if row.last_heartbeat_at else None),
             "fencing_token": int(row.fencing_token or 0),
             "lease_active": health["lease_active"],
         },
@@ -1026,12 +1174,8 @@ def connector_out(
             "reconnect_count": int(row.reconnect_count or 0),
             "backoff_seconds": round(float(row.backoff_seconds or 0.0), 3),
             "next_poll_at": row.next_poll_at.isoformat() if row.next_poll_at else None,
-            "last_transition_at": (
-                row.last_transition_at.isoformat() if row.last_transition_at else None
-            ),
-            "last_connected_at": (
-                row.last_connected_at.isoformat() if row.last_connected_at else None
-            ),
+            "last_transition_at": (row.last_transition_at.isoformat() if row.last_transition_at else None),
+            "last_connected_at": (row.last_connected_at.isoformat() if row.last_connected_at else None),
             "last_poll_at": row.last_poll_at.isoformat() if row.last_poll_at else None,
             "last_successful_poll_at": (
                 row.last_successful_poll_at.isoformat() if row.last_successful_poll_at else None
@@ -1161,9 +1305,7 @@ class ConnectorService:
                 details={"field": "well_id", "reason": "well_required"},
             )
         well = (
-            await self.session.execute(
-                select(Well).where(Well.id == well_id, Well.org_id == self.org_id)
-            )
+            await self.session.execute(select(Well).where(Well.id == well_id, Well.org_id == self.org_id))
         ).scalar_one_or_none()
         if well is None:
             raise NotFound(f"well {well_id!r} not found")
@@ -1196,9 +1338,7 @@ class ConnectorService:
     async def get(self, connector_id: str) -> Connector:
         row = (
             await self.session.execute(
-                select(Connector).where(
-                    Connector.id == connector_id, Connector.org_id == self.org_id
-                )
+                select(Connector).where(Connector.id == connector_id, Connector.org_id == self.org_id)
             )
         ).scalar_one_or_none()
         if row is None:
@@ -1292,9 +1432,7 @@ class ConnectorService:
         total = int(
             (
                 await self.session.execute(
-                    select(func.count()).select_from(
-                        select(Connector.id).where(*clauses).subquery()
-                    )
+                    select(func.count()).select_from(select(Connector.id).where(*clauses).subquery())
                 )
             ).scalar_one()
         )
@@ -1327,9 +1465,7 @@ class ConnectorService:
 
     async def inspect(self, connector_id: str) -> dict[str, Any]:
         row = await self.get(connector_id)
-        summaries = (
-            await self._telemetry_summaries_by_well([row.well_id]) if row.well_id else {}
-        )
+        summaries = await self._telemetry_summaries_by_well([row.well_id]) if row.well_id else {}
         return connector_out(
             row,
             principal=self._principal,
@@ -1367,14 +1503,10 @@ class ConnectorService:
                 details={"field": "protocol_profile", "allowed": list(PROTOCOL_PROFILE_SPECS)},
             )
 
-        well = await self._verify_scope(
-            well_id=well_id, wellbore_id=wellbore_id, operation_id=operation_id
-        )
+        well = await self._verify_scope(well_id=well_id, wellbore_id=wellbore_id, operation_id=operation_id)
         existing = (
             await self.session.execute(
-                select(Connector.id).where(
-                    Connector.org_id == self.org_id, Connector.key == clean_key
-                )
+                select(Connector.id).where(Connector.org_id == self.org_id, Connector.key == clean_key)
             )
         ).scalar_one_or_none()
         if existing is not None:
@@ -1492,9 +1624,7 @@ class ConnectorService:
         allow_loopback: bool | None = None,
     ) -> dict[str, Any]:
         row = await self.get(connector_id)
-        if expected_config_version is not None and int(row.config_version) != int(
-            expected_config_version
-        ):
+        if expected_config_version is not None and int(row.config_version) != int(expected_config_version):
             raise Conflict(
                 "connector configuration was modified by another request",
                 details={
@@ -1534,14 +1664,10 @@ class ConnectorService:
 
         if config is not None:
             merged_config = {**dict(row.config or {}), **config}
-            row.config = validate_connector_config(
-                merged_config, protocol_profile=row.protocol_profile
-            )
+            row.config = validate_connector_config(merged_config, protocol_profile=row.protocol_profile)
 
         auth_mode = (row.config or {}).get("auth_mode", "none")
-        if auth_mode == "basic" and (
-            "username" not in row.secret_refs or "password" not in row.secret_refs
-        ):
+        if auth_mode == "basic" and ("username" not in row.secret_refs or "password" not in row.secret_refs):
             raise ValidationFailed(
                 "auth_mode='basic' requires both 'username' and 'password' in secret_refs",
                 details={"field": "secret_refs", "auth_mode": "basic"},
@@ -1616,9 +1742,7 @@ class ConnectorService:
                 f"connector {verb!r} requires a non-empty operator reason",
                 details={"field": "reason", "action": verb},
             )
-        if expected_config_version is not None and int(row.config_version) != int(
-            expected_config_version
-        ):
+        if expected_config_version is not None and int(row.config_version) != int(expected_config_version):
             raise Conflict(
                 "connector configuration version changed since it was read",
                 details={
@@ -1722,9 +1846,7 @@ class ConnectorService:
         )
         return await self.inspect(row.id)
 
-    async def list_runs(
-        self, connector_id: str, *, limit: int = 50
-    ) -> list[dict[str, Any]]:
+    async def list_runs(self, connector_id: str, *, limit: int = 50) -> list[dict[str, Any]]:
         await self.get(connector_id)
         rows = (
             (
@@ -1766,26 +1888,21 @@ class ConnectorService:
         if row.protocol_profile == "synthetic.v1":
             plan_cfg = cfg.get("plan")
             if not isinstance(plan_cfg, dict) or not plan_cfg:
-                plan_cfg = {
-                    d.channel_key: [[0.0, 100.0], [5.0, 105.0]] for d in descriptors
-                }
+                plan_cfg = {d.channel_key: [[0.0, 100.0], [5.0, 105.0]] for d in descriptors}
             step_index = int((row.cursor or {}).get("step_index", 0))
             loop_plan = bool(cfg.get("loop", True))
             start_iso = cfg.get("start_iso")
             parsed_plan: dict[str, list[tuple[float, float | None]]] = {}
             for ch_key, pts in plan_cfg.items():
                 key_norm = str(ch_key).strip().lower()
-                entries = [
-                    (float(pair[0]), float(pair[1]) if pair[1] is not None else None)
-                    for pair in pts
-                ]
+                entries = [(float(pair[0]), float(pair[1]) if pair[1] is not None else None) for pair in pts]
                 if not entries:
                     continue
                 if start_iso:
                     # Pinned start_iso: slice by step_index
-                    parsed_plan[key_norm] = entries[step_index:] if not loop_plan else [
-                        entries[step_index % len(entries)]
-                    ]
+                    parsed_plan[key_norm] = (
+                        entries[step_index:] if not loop_plan else [entries[step_index % len(entries)]]
+                    )
                 else:
                     # Live commissioning synthetic plan: emit current step at utc_now()
                     chosen = (
@@ -1795,9 +1912,7 @@ class ConnectorService:
                     )
                     parsed_plan[key_norm] = [(0.0, chosen[1])] if chosen is not None else []
             start_dt = (
-                dt.datetime.fromisoformat(str(start_iso).replace("Z", "+00:00"))
-                if start_iso
-                else utc_now()
+                dt.datetime.fromisoformat(str(start_iso).replace("Z", "+00:00")) if start_iso else utc_now()
             )
             return ConnectorSyntheticAdapter(
                 descriptors,
@@ -1854,9 +1969,7 @@ class ConnectorService:
         trace_id = new_id("trc")
         resolved_secrets: dict[str, str] = {}
         try:
-            validate_connector_endpoint(
-                row.endpoint_url, row.protocol_profile, allow_loopback=allow_loopback
-            )
+            validate_connector_endpoint(row.endpoint_url, row.protocol_profile, allow_loopback=allow_loopback)
             resolved_secrets = await resolve_secret_refs(
                 self.session, self.org_id, dict(row.secret_refs or {})
             )
@@ -2006,12 +2119,8 @@ class ConnectorService:
         """Preview channel descriptors and a bounded sample of frames without persisting points."""
         row = await self.get(connector_id)
         bounded_limit = min(max(1, int(sample_limit)), 50)
-        resolved_secrets = await resolve_secret_refs(
-            self.session, self.org_id, dict(row.secret_refs or {})
-        )
-        validate_connector_endpoint(
-            row.endpoint_url, row.protocol_profile, allow_loopback=allow_loopback
-        )
+        resolved_secrets = await resolve_secret_refs(self.session, self.org_id, dict(row.secret_refs or {}))
+        validate_connector_endpoint(row.endpoint_url, row.protocol_profile, allow_loopback=allow_loopback)
         adapter = await self.build_adapter(row, resolved_secrets=resolved_secrets)
         await adapter.connect()
         try:

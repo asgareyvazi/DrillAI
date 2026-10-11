@@ -89,6 +89,8 @@ class PollCycleOutcome:
     alerts_cleared: int = 0
     cursor_before: dict[str, Any] | None = None
     cursor_after: dict[str, Any] | None = None
+    checkpoint_status: str = "unchanged"
+    manifest: dict[str, Any] | None = None
     error_category: str | None = None
     error_message: str | None = None
     duration_ms: float = 0.0
@@ -114,9 +116,7 @@ class ConnectorWorker:
         self.database = database
         self.worker_id = worker_id or f"wrk_{host}_{os.getpid()}_{new_id('w')[-6:]}"
         self.lease_seconds = float(
-            lease_seconds
-            if lease_seconds is not None
-            else settings.connector_worker_lease_seconds
+            lease_seconds if lease_seconds is not None else settings.connector_worker_lease_seconds
         )
         self.poll_interval_seconds = float(
             poll_interval_seconds
@@ -124,14 +124,10 @@ class ConnectorWorker:
             else settings.connector_worker_poll_seconds
         )
         self.max_concurrency = int(
-            max_concurrency
-            if max_concurrency is not None
-            else settings.connector_worker_max_concurrency
+            max_concurrency if max_concurrency is not None else settings.connector_worker_max_concurrency
         )
         self.retention_limit = int(
-            retention_limit
-            if retention_limit is not None
-            else settings.connector_run_retention_limit
+            retention_limit if retention_limit is not None else settings.connector_run_retention_limit
         )
         self.allow_loopback = allow_loopback
         self._before_commit_hook = before_commit_hook
@@ -311,9 +307,7 @@ class ConnectorWorker:
             # Phase 1: Load config & resolve secrets in a short read session (never hold a DB transaction across network I/O).
             async with self.database.session() as read_session:
                 row = (
-                    await read_session.execute(
-                        select(Connector).where(Connector.id == claimed.connector_id)
-                    )
+                    await read_session.execute(select(Connector).where(Connector.id == claimed.connector_id))
                 ).scalar_one_or_none()
                 if (
                     row is None
@@ -345,9 +339,7 @@ class ConnectorWorker:
             # Phase 2: Short atomic DB transaction — verify fencing token, ingest via TelemetryService, advance cursor, commit.
             async with self.database.session() as session:
                 current_row = (
-                    await session.execute(
-                        select(Connector).where(Connector.id == claimed.connector_id)
-                    )
+                    await session.execute(select(Connector).where(Connector.id == claimed.connector_id))
                 ).scalar_one_or_none()
                 if (
                     current_row is None
@@ -372,30 +364,98 @@ class ConnectorWorker:
                 new_cursor = dict(getattr(adapter, "cursor", None) or claimed.cursor_before)
                 report_dict = ingest_report.to_dict()
                 totals = report_dict["totals"]
-                protocol_dups = int(
-                    getattr(getattr(adapter, "last_batch", None), "duplicates_suppressed", 0)
-                    or 0
-                )
+                last_batch = getattr(adapter, "last_batch", None)
+                protocol_disp = getattr(last_batch, "disposition", None)
+                protocol_dups = int(getattr(last_batch, "duplicates_suppressed", 0) or 0)
+                protocol_rejected = int(getattr(protocol_disp, "total_protocol_rejected", 0) or 0)
+
                 frames_received = int(ingest_report.frames)
                 accepted = int(totals.get("accepted", 0))
                 duplicates = int(totals.get("duplicates", 0)) + protocol_dups
                 revised = int(totals.get("revised", 0))
-                rejected = int(totals.get("rejected", 0))
+                service_rejected = int(totals.get("rejected", 0))
+                rejected = service_rejected + protocol_rejected
                 alerts_raised = int(report_dict.get("alerts_raised", 0))
                 alerts_cleared = int(report_dict.get("alerts_cleared", 0))
 
                 low_quality_count = 0
+                out_of_order_count = 0
+                late_count = 0
+                conflicts_count = 0
+                quality_totals: dict[str, int] = {}
                 for ch_rep in ingest_report.reports.values():
+                    out_of_order_count += int(getattr(ch_rep, "out_of_order", 0) or 0)
+                    late_count += int(getattr(ch_rep, "late", 0) or 0)
+                    conflicts_count += len(getattr(ch_rep, "conflicts", None) or [])
                     for q_label, q_num in (ch_rep.quality_counts or {}).items():
-                        if str(q_label).lower() not in ("good", "questionable"):
+                        q_key = str(q_label).lower()
+                        quality_totals[q_key] = quality_totals.get(q_key, 0) + int(q_num or 0)
+                        if q_key not in ("good", "questionable"):
                             low_quality_count += int(q_num or 0)
                 if frames_received > 0:
                     new_cursor["last_batch_low_quality"] = low_quality_count > 0
 
+                has_more_deferred = bool(
+                    new_cursor.get("has_more_deferred")
+                    or getattr(protocol_disp, "partial_more_available", False)
+                    or getattr(protocol_disp, "truncated_by_limit", False)
+                    or (int(getattr(protocol_disp, "deferred_over_cap", 0) or 0) > 0)
+                )
+                if has_more_deferred:
+                    checkpoint_status = "partial"
+                elif new_cursor != claimed.cursor_before and frames_received > 0:
+                    checkpoint_status = "complete"
+                else:
+                    checkpoint_status = "unchanged"
+
+                if protocol_disp is not None:
+                    protocol_manifest = protocol_disp.to_dict()
+                else:
+                    protocol_manifest = {
+                        "pages_or_messages_received": 1 if frames_received > 0 else 0,
+                        "source_records_discovered": frames_received + protocol_dups,
+                        "mapped_frames_emitted": frames_received,
+                        "unmapped_skipped": 0,
+                        "unsubscribed_skipped": 0,
+                        "watermark_suppressed": protocol_dups,
+                        "in_batch_duplicates": 0,
+                        "deferred_over_cap": 0,
+                        "rejected_malformed_timestamp": 0,
+                        "rejected_unsupported_index": 0,
+                        "rejected_invalid_value": 0,
+                        "rejected_non_finite_value": 0,
+                        "rejected_unknown_channel": 0,
+                        "total_protocol_rejected": 0,
+                        "total_filtered": 0,
+                        "truncated_by_limit": False,
+                        "partial_more_available": False,
+                        "reconciled": True,
+                        "protocol_rejections": [],
+                        "per_source_channel": {},
+                    }
+
+                run_manifest: dict[str, Any] = {
+                    **protocol_manifest,
+                    "checkpoint_status": checkpoint_status,
+                    "points_accepted": accepted,
+                    "points_duplicates": duplicates,
+                    "points_revised": revised,
+                    "points_rejected": rejected,
+                    "service_rejected": service_rejected,
+                    "conflicts": conflicts_count,
+                    "out_of_order": out_of_order_count,
+                    "late": late_count,
+                    "low_quality_count": low_quality_count,
+                    "quality_counts": quality_totals,
+                }
+
                 finished = utc_now()
                 duration_ms = round((time.perf_counter() - t0) * 1000.0, 2)
                 poll_interval = float(cfg.get("poll_interval_seconds", 2.0))
-                next_poll_at = finished + dt.timedelta(seconds=poll_interval)
+                if has_more_deferred:
+                    next_poll_at = finished + dt.timedelta(milliseconds=50)
+                else:
+                    next_poll_at = finished + dt.timedelta(seconds=poll_interval)
                 lease_until = finished + dt.timedelta(seconds=self.lease_seconds)
 
                 update_values: dict[str, Any] = {
@@ -463,6 +523,8 @@ class ConnectorWorker:
                     trace_id=trace_id,
                     details={
                         "channels": ingest_report.to_dict().get("channels", []),
+                        "checkpoint_status": checkpoint_status,
+                        "manifest": run_manifest,
                     },
                 )
                 session.add(run_row)
@@ -492,9 +554,9 @@ class ConnectorWorker:
 
                 await session.commit()
 
-                metrics.counter(
-                    "drillai.connector.polls_total", "total connector poll cycles"
-                ).inc(1, protocol_profile=claimed.protocol_profile, status="succeeded")
+                metrics.counter("drillai.connector.polls_total", "total connector poll cycles").inc(
+                    1, protocol_profile=claimed.protocol_profile, status="succeeded"
+                )
                 metrics.counter(
                     "drillai.connector.frames_received_total", "total frames received by connectors"
                 ).inc(frames_received, protocol_profile=claimed.protocol_profile)
@@ -524,6 +586,8 @@ class ConnectorWorker:
                     alerts_cleared=alerts_cleared,
                     cursor_before=claimed.cursor_before,
                     cursor_after=new_cursor,
+                    checkpoint_status=checkpoint_status,
+                    manifest=run_manifest,
                     duration_ms=duration_ms,
                 )
 
@@ -537,9 +601,7 @@ class ConnectorWorker:
                 trace_id=trace_id,
             )
 
-    def _record_fenced_outcome(
-        self, claimed: ClaimedConnector, t0: float
-    ) -> PollCycleOutcome:
+    def _record_fenced_outcome(self, claimed: ClaimedConnector, t0: float) -> PollCycleOutcome:
         duration_ms = round((time.perf_counter() - t0) * 1000.0, 2)
         metrics = get_metrics()
         metrics.counter("drillai.connector.polls_total", "total connector poll cycles").inc(
@@ -581,17 +643,12 @@ class ConnectorWorker:
         finished = utc_now()
         duration_ms = round((time.perf_counter() - t0) * 1000.0, 2)
         category = classify_connector_error(exc)
-        safe_msg = (
-            redact_sensitive_text(str(exc), resolved_secrets)
-            or f"connector poll failed ({category})"
-        )
+        safe_msg = redact_sensitive_text(str(exc), resolved_secrets) or f"connector poll failed ({category})"
         metrics = get_metrics()
 
         async with self.database.session() as err_session:
             row = (
-                await err_session.execute(
-                    select(Connector).where(Connector.id == claimed.connector_id)
-                )
+                await err_session.execute(select(Connector).where(Connector.id == claimed.connector_id))
             ).scalar_one_or_none()
             if (
                 row is None
@@ -671,6 +728,7 @@ class ConnectorWorker:
                     "consecutive_failures": new_error_count,
                     "backoff_seconds": backoff,
                     "next_status": new_status,
+                    "checkpoint_status": "failed",
                 },
             )
             err_session.add(run_row)
@@ -704,9 +762,9 @@ class ConnectorWorker:
         metrics.counter("drillai.connector.errors_total", "connector errors by category").inc(
             1, protocol_profile=claimed.protocol_profile, error_category=category
         )
-        metrics.histogram(
-            "drillai.connector.poll_duration_ms", "connector poll duration in ms"
-        ).observe(duration_ms, protocol_profile=claimed.protocol_profile, status="failed")
+        metrics.histogram("drillai.connector.poll_duration_ms", "connector poll duration in ms").observe(
+            duration_ms, protocol_profile=claimed.protocol_profile, status="failed"
+        )
 
         logger.warning(
             "connector poll cycle failed",
@@ -791,9 +849,7 @@ class ConnectorWorker:
                         extra={"worker_id": self.worker_id, "error": str(exc)},
                     )
                 with contextlib.suppress(TimeoutError):
-                    await asyncio.wait_for(
-                        self._stop_event.wait(), timeout=self.poll_interval_seconds
-                    )
+                    await asyncio.wait_for(self._stop_event.wait(), timeout=self.poll_interval_seconds)
         finally:
             with contextlib.suppress(Exception):
                 await self.release_owned_leases()

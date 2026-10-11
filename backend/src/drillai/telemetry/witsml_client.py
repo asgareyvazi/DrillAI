@@ -8,13 +8,65 @@ and the durable connector worker ingest WITSML frames exclusively through ``Tele
 from __future__ import annotations
 
 from collections.abc import Sequence
+from dataclasses import dataclass
 from typing import Any
 
 from drillai.core.errors import ValidationFailed
 from drillai.telemetry.adapters import ChannelDescriptor, SourceFrame
 from drillai.telemetry.connectors import parse_channel_mappings
-from drillai.telemetry.protocols.witsml import WitsmlPollBatch, WitsmlSoapClient
+from drillai.telemetry.protocols.witsml import (
+    WitsmlPollBatch,
+    WitsmlSoapClient,
+    compute_witsml_next_watermark,
+)
 from drillai.telemetry.service import PointIn
+
+__all__ = [
+    "WITSML_MNEMONIC_ALIASES",
+    "WitsmlChannelMap",
+    "WitsmlPollingAdapter",
+    "resolve_witsml_mnemonic",
+]
+
+WITSML_MNEMONIC_ALIASES: dict[str, str] = {
+    "DEPT": "depth_md",
+    "DBTM": "bit_depth",
+    "DVER": "depth_tvd",
+    "BPOS": "block_pos",
+    "ROPA": "rop",
+    "ROP": "rop",
+    "HKLA": "hookload",
+    "HKLD": "hookload",
+    "WOBA": "wob",
+    "WOB": "wob",
+    "RPMA": "rpm",
+    "RPM": "rpm",
+    "TQA": "torque",
+    "TRQ": "torque",
+    "SPPA": "spp",
+    "SPP": "spp",
+    "MFIA": "flow_in",
+    "FLOWIN": "flow_in",
+    "MFOA": "flow_out",
+    "FLOWOUT": "flow_out",
+    "MDIA": "mud_weight_in",
+    "MDOA": "mud_weight_out",
+    "TVA": "pit_volume_total",
+    "ECDA": "ecd",
+}
+
+
+@dataclass(frozen=True)
+class WitsmlChannelMap:
+    source_mnemonic: str
+    channel_key: str
+    source_unit: str
+    dimension: str
+
+
+def resolve_witsml_mnemonic(mnemonic: str) -> str | None:
+    cleaned = mnemonic.strip().upper()
+    return WITSML_MNEMONIC_ALIASES.get(cleaned)
 
 
 class WitsmlPollingAdapter:
@@ -22,12 +74,13 @@ class WitsmlPollingAdapter:
 
     key = "witsml.1.4.1.1.soap_http"
     source = "witsml"
+    source_kind = "witsml"
 
     def __init__(
         self,
         *,
         endpoint_url: str,
-        channel_mappings: list[dict[str, Any]],
+        channel_mappings: list[dict[str, Any]] | None = None,
         config: dict[str, Any] | None = None,
         secrets: dict[str, str] | None = None,
         cursor: dict[str, Any] | None = None,
@@ -37,8 +90,10 @@ class WitsmlPollingAdapter:
     ) -> None:
         self._endpoint_url = endpoint_url
         self._config = dict(config or {})
-        self._config["channel_mappings"] = list(channel_mappings)
-        self._mappings = parse_channel_mappings(channel_mappings)
+        if channel_mappings is not None:
+            self._config["channel_mappings"] = list(channel_mappings)
+        raw_mappings = self._config.get("channel_mappings") or []
+        self._mappings = parse_channel_mappings(raw_mappings)
         self._channels: dict[str, ChannelDescriptor] = {
             m.channel_key: ChannelDescriptor(
                 channel_key=m.channel_key,
@@ -78,6 +133,7 @@ class WitsmlPollingAdapter:
     async def connect(self) -> None:
         if self._connected and self._last_batch is not None:
             return
+        max_pts = int(self._config.get("max_points_per_poll", 250))
         self._last_batch = await self._client.poll_log_batch(
             well_id=self._well_id or "well-probe",
             wellbore_id=self._wellbore_id,
@@ -85,6 +141,8 @@ class WitsmlPollingAdapter:
             config=self._config,
             watermark=self._cursor,
             max_pages=int(self._config.get("max_pages_per_poll", 3)),
+            max_frames=max_pts,
+            subscribed_channels=self._subscribed or None,
         )
         self._connected = True
 
@@ -94,11 +152,7 @@ class WitsmlPollingAdapter:
         if not self._last_batch:
             return list(self._channels.values())
 
-        discovered_units = {
-            c.mnemonic.upper(): c.unit
-            for c in self._last_batch.discovered_curves
-            if c.unit
-        }
+        discovered_units = {c.mnemonic.upper(): c.unit for c in self._last_batch.discovered_curves if c.unit}
         result: list[ChannelDescriptor] = []
         for m in self._mappings:
             unit = discovered_units.get(m.source_mnemonic.upper()) or m.unit
@@ -126,6 +180,7 @@ class WitsmlPollingAdapter:
     async def poll(self) -> Sequence[SourceFrame]:
         if not self._connected:
             await self.connect()
+        max_pts = int(self._config.get("max_points_per_poll", 250))
         if self._last_batch is not None:
             batch = self._last_batch
             self._last_consumed_batch = batch
@@ -138,16 +193,39 @@ class WitsmlPollingAdapter:
                 config=self._config,
                 watermark=self._cursor,
                 max_pages=int(self._config.get("max_pages_per_poll", 3)),
+                max_frames=max_pts,
+                subscribed_channels=self._subscribed or None,
             )
             self._last_consumed_batch = batch
-        self._cursor = dict(batch.next_watermark)
-        max_pts = int(self._config.get("max_points_per_poll", 250))
-        frames = [
-            f
-            for f in batch.frames
-            if not self._subscribed or f.channel_key in self._subscribed
-        ]
-        return frames[:max_pts]
+
+        frames = list(batch.frames)
+        if self._subscribed:
+            filtered: list[SourceFrame] = []
+            for f in frames:
+                if f.channel_key in self._subscribed:
+                    filtered.append(f)
+                else:
+                    batch.disposition.mapped_frames_emitted = max(
+                        0, batch.disposition.mapped_frames_emitted - 1
+                    )
+                    batch.disposition.unsubscribed_skipped += 1
+            frames = filtered
+
+        if len(frames) > max_pts:
+            deferred_count = len(frames) - max_pts
+            frames = frames[:max_pts]
+            batch.disposition.mapped_frames_emitted = len(frames)
+            batch.disposition.deferred_over_cap += deferred_count
+            batch.disposition.truncated_by_limit = True
+            batch.disposition.partial_more_available = True
+
+        has_more = batch.partial_more_available or batch.disposition.truncated_by_limit
+        self._cursor = compute_witsml_next_watermark(
+            self._cursor,
+            frames,
+            has_more=has_more,
+        )
+        return frames
 
     def normalize(self, frame: SourceFrame) -> PointIn:
         frame.validate()
