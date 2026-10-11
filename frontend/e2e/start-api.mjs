@@ -85,7 +85,7 @@ const env = {
   DRILLAI_BLOB_BACKEND: 'filesystem',
   DRILLAI_BLOB_ROOT: path.join(dataDir, 'blobs'),
   DRILLAI_SCHEDULER_ENABLED: 'false',
-  DRILLAI_CONNECTOR_ALLOW_LOOPBACK: 'true',
+  DRILLAI_CONNECTOR_ALLOW_LOOPBACK: 'false',
   DRILLAI_CONNECTOR_ALLOW_PRIVATE_NETWORKS: 'false',
   DRILLAI_DEV_ORG_SLUG: fixtures.org_slug ?? 'demo-operator',
   DRILLAI_LOG_JSON: 'false',

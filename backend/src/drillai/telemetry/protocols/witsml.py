@@ -22,6 +22,7 @@ import html
 import io
 import math
 import re
+import ssl
 from dataclasses import dataclass, field
 from typing import Any
 from xml.etree import ElementTree as ET
@@ -36,6 +37,8 @@ from drillai.telemetry.connectors import (
     enforce_connect_time_ssrf,
     parse_channel_mappings,
     redact_sensitive_text,
+    register_harness_endpoint,
+    unregister_harness_endpoint,
 )
 
 MAX_WITSML_XML_BYTES = 5 * 1024 * 1024  # 5 MB
@@ -729,14 +732,15 @@ class WitsmlSoapClient:
         timeout_seconds: float = 10.0,
         max_retries: int = 2,
         tls_verify: bool = True,
+        ssl_context: ssl.SSLContext | bool = True,
     ) -> None:
-        if tls_verify is False:
+        if tls_verify is False or ssl_context is False:
             raise ValueError("tls_verify=False is forbidden")
         self._endpoint_url = endpoint_url
         self._secrets = dict(secrets or {})
         self._timeout_seconds = max(1.0, min(timeout_seconds, 30.0))
         self._max_retries = max(0, min(max_retries, 5))
-        self._tls_verify = True
+        self._tls_verify: ssl.SSLContext | bool = ssl_context if isinstance(ssl_context, ssl.SSLContext) else True
 
     def _build_headers(self, soap_action: str = "Store.WMLS_GetFromStore") -> dict[str, str]:
         headers = {
@@ -757,23 +761,29 @@ class WitsmlSoapClient:
         return None
 
     async def _post_soap(self, envelope: str, *, soap_action: str = "Store.WMLS_GetFromStore") -> str:
-        enforce_connect_time_ssrf(self._endpoint_url, "witsml.1.4.1.1.soap_http")
-        headers = self._build_headers(soap_action=soap_action)
         auth = self._build_auth()
         last_exc: ConnectorTransportError | None = None
 
         for attempt in range(self._max_retries + 1):
+            pinned = enforce_connect_time_ssrf(self._endpoint_url, "witsml.1.4.1.1.soap_http")
+            headers = self._build_headers(soap_action=soap_action)
+            headers["Host"] = pinned.host_header
+            extensions: dict[str, Any] = {}
+            if pinned.scheme == "https":
+                extensions["sni_hostname"] = pinned.sni_hostname
             try:
                 async with httpx.AsyncClient(
                     timeout=httpx.Timeout(self._timeout_seconds),
                     follow_redirects=False,
                     verify=self._tls_verify,
+                    trust_env=False,
                 ) as client:
                     response = await client.post(
-                        self._endpoint_url,
+                        pinned.connect_url,
                         content=envelope.encode("utf-8"),
                         headers=headers,
                         auth=auth,
+                        extensions=extensions,
                     )
             except httpx.TimeoutException as exc:
                 last_exc = ConnectorTransportError(
@@ -1130,10 +1140,12 @@ class LocalWitsmlSoapServer:
         sockets = self._server.sockets or []
         if sockets:
             self.port = int(sockets[0].getsockname()[1])
+        register_harness_endpoint(self.host, self.port)
         return self.endpoint_url
 
     async def stop(self) -> None:
         if self._server is not None:
+            unregister_harness_endpoint(self.host, self.port)
             self._server.close()
             await self._server.wait_closed()
             self._server = None

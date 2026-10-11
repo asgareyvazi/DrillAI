@@ -75,17 +75,27 @@ __all__ = [
     "ChannelMappingSpec",
     "ConnectorService",
     "ConnectorTransportError",
+    "PinnedEndpoint",
     "ProtocolPollDisposition",
     "ProtocolProfileSpec",
     "classify_connector_error",
+    "clear_harness_endpoints",
     "connector_out",
     "connector_run_out",
     "enforce_connect_time_ssrf",
+    "get_egress_policy",
+    "is_harness_endpoint",
     "mask_secret_refs",
     "parse_channel_mappings",
+    "parse_private_cidr_list",
     "redact_sensitive_text",
+    "register_harness_endpoint",
+    "reset_egress_policy",
+    "resolve_and_pin_endpoint",
     "resolve_secret_refs",
     "set_custom_dns_resolver",
+    "set_egress_policy",
+    "unregister_harness_endpoint",
     "validate_connector_config",
     "validate_connector_endpoint",
     "validate_no_plaintext_secrets",
@@ -101,6 +111,9 @@ MASKED_SECRET_PLACEHOLDERS: frozenset[str] = frozenset(
 CONNECTOR_KEY_PATTERN = re.compile(r"^[a-z0-9][a-z0-9._-]{1,118}[a-z0-9]$")
 
 _custom_dns_resolver: Callable[[str, int], Sequence[str]] | None = None
+_HARNESS_OWNED_ENDPOINTS: set[tuple[str, int]] = set()
+_runtime_allowed_hosts_override: list[str] | None = None
+_runtime_allowed_private_cidrs_override: list[str] | None = None
 
 
 def set_custom_dns_resolver(
@@ -109,6 +122,131 @@ def set_custom_dns_resolver(
     """Install or clear a custom DNS resolver function ``(hostname, port) -> list[ip_str]`` for testing."""
     global _custom_dns_resolver
     _custom_dns_resolver = resolver
+
+
+def register_harness_endpoint(host: str, port: int) -> None:
+    """Register a local non-production test harness (host, port) endpoint."""
+    clean_host = (host or "127.0.0.1").strip().lower().strip("[]")
+    if clean_host in {"localhost", "127.0.0.1", "::1"} and 1 <= int(port) <= 65535:
+        _HARNESS_OWNED_ENDPOINTS.add(("127.0.0.1", int(port)))
+        _HARNESS_OWNED_ENDPOINTS.add(("::1", int(port)))
+
+
+def unregister_harness_endpoint(host: str, port: int) -> None:
+    """Remove a previously registered local test harness endpoint."""
+    _HARNESS_OWNED_ENDPOINTS.discard(("127.0.0.1", int(port)))
+    _HARNESS_OWNED_ENDPOINTS.discard(("::1", int(port)))
+
+
+def clear_harness_endpoints() -> None:
+    """Clear all in-memory harness endpoints."""
+    _HARNESS_OWNED_ENDPOINTS.clear()
+
+
+def is_harness_endpoint(host_or_ip: str, port: int | None, *, is_production: bool | None = None) -> bool:
+    """Return True only if (host_or_ip, port) is an active non-production local harness endpoint."""
+    settings = get_settings()
+    prod = settings.is_production if is_production is None else is_production
+    if prod or port is None:
+        return False
+    clean = (host_or_ip or "").strip().lower().strip("[]")
+    if clean == "localhost":
+        clean = "127.0.0.1"
+    if (clean, int(port)) in _HARNESS_OWNED_ENDPOINTS:
+        return True
+    return clean in {"127.0.0.1", "::1"} and int(port) in settings.connector_harness_port_list
+
+
+def parse_private_cidr_list(
+    raw_cidrs: Sequence[str] | None,
+) -> list[ipaddress.IPv4Network | ipaddress.IPv6Network]:
+    """Parse and validate approved private rig network CIDRs, rejecting loopback/link-local/public/wildcard ranges."""
+    if not raw_cidrs:
+        return []
+    networks: list[ipaddress.IPv4Network | ipaddress.IPv6Network] = []
+    for item in raw_cidrs:
+        text = str(item or "").strip()
+        if not text:
+            continue
+        try:
+            net = ipaddress.ip_network(text, strict=False)
+        except ValueError as exc:
+            raise ValidationFailed(
+                f"invalid private network CIDR {text!r}",
+                details={"field": "allowed_private_cidrs", "cidr": text, "reason": "invalid_cidr"},
+            ) from exc
+        if (
+            net.prefixlen == 0
+            or net.is_loopback
+            or net.is_link_local
+            or net.is_multicast
+            or net.is_unspecified
+            or not net.is_private
+        ):
+            raise ValidationFailed(
+                f"CIDR {text!r} is not a scoped private network range (loopback, link-local, wildcard, and public ranges are forbidden)",
+                details={"field": "allowed_private_cidrs", "cidr": text, "reason": "invalid_cidr"},
+            )
+        networks.append(net)
+    return networks
+
+
+def get_egress_policy() -> dict[str, Any]:
+    """Return the active connector outbound network egress policy."""
+    settings = get_settings()
+    allowed_hosts = (
+        list(_runtime_allowed_hosts_override)
+        if _runtime_allowed_hosts_override is not None
+        else list(settings.connector_allowed_host_list)
+    )
+    allowed_cidrs = (
+        list(_runtime_allowed_private_cidrs_override)
+        if _runtime_allowed_private_cidrs_override is not None
+        else list(settings.connector_allowed_private_cidr_list)
+    )
+    harness_ports = sorted(
+        {port for _, port in _HARNESS_OWNED_ENDPOINTS} | set(settings.connector_harness_port_list)
+    )
+    return {
+        "is_production": settings.is_production,
+        "allow_loopback": bool(settings.connector_allow_loopback and not settings.is_production),
+        "allowed_hosts": allowed_hosts,
+        "allowed_private_cidrs": allowed_cidrs,
+        "harness_ports": [] if settings.is_production else harness_ports,
+    }
+
+
+def set_egress_policy(
+    *,
+    allowed_hosts: Sequence[str] | None = None,
+    allowed_private_cidrs: Sequence[str] | None = None,
+) -> dict[str, Any]:
+    """Update the runtime connector outbound egress policy after validating all hosts and CIDRs."""
+    global _runtime_allowed_hosts_override, _runtime_allowed_private_cidrs_override
+    if allowed_private_cidrs is not None:
+        nets = parse_private_cidr_list(allowed_private_cidrs)
+        _runtime_allowed_private_cidrs_override = [str(n) for n in nets]
+    if allowed_hosts is not None:
+        cleaned_hosts: list[str] = []
+        for raw_h in allowed_hosts:
+            h = str(raw_h or "").strip().lower().rstrip(".")
+            if not h:
+                continue
+            if h in PROHIBITED_METADATA_HOSTS or h.endswith(".internal") or h in {"localhost", "127.0.0.1", "::1"}:
+                raise ValidationFailed(
+                    f"host {h!r} cannot be added to allowed_hosts",
+                    details={"field": "allowed_hosts", "host": h, "reason": "ssrf_blocked"},
+                )
+            cleaned_hosts.append(h)
+        _runtime_allowed_hosts_override = cleaned_hosts
+    return get_egress_policy()
+
+
+def reset_egress_policy() -> None:
+    """Reset runtime egress policy overrides back to environment settings."""
+    global _runtime_allowed_hosts_override, _runtime_allowed_private_cidrs_override
+    _runtime_allowed_hosts_override = None
+    _runtime_allowed_private_cidrs_override = None
 
 FORBIDDEN_SECRET_KEY_PATTERNS: tuple[str, ...] = (
     "password",
@@ -744,7 +882,7 @@ async def resolve_secret_refs(
 
 
 _AMBIGUOUS_NUMERIC_HOST_RE = re.compile(
-    r"^(?:\d+|0x[0-9a-fA-F]+|\d+\.\d+|\d+\.\d+\.\d+|0\d+(?:\.\d+){3}|(?:\d+\.)*0\d+(?:\.\d+)*)$"
+    r"^(?:0x[0-9a-fA-F]+|\d+)(?:\.(?:0x[0-9a-fA-F]+|\d+))*$"
 )
 
 
@@ -763,16 +901,35 @@ def _unpack_embedded_ip(
     return out
 
 
-def validate_connector_endpoint(
+@dataclass(frozen=True)
+class PinnedEndpoint:
+    """Validated, DNS-resolved, socket-pinned outbound endpoint descriptor."""
+
+    original_url: str
+    scheme: str
+    hostname: str
+    port: int
+    pinned_ip: str
+    all_resolved_ips: tuple[str, ...]
+    host_header: str
+    sni_hostname: str
+    connect_url: str
+    is_harness: bool = False
+    is_private_rig: bool = False
+
+
+def resolve_and_pin_endpoint(
     endpoint_url: str | None,
     protocol_profile: str,
     *,
     allow_loopback: bool | None = None,
-    allowed_hosts: list[str] | tuple[str, ...] | None = None,
+    allowed_hosts: Sequence[str] | None = None,
+    allowed_private_cidrs: Sequence[str] | None = None,
     is_production: bool | None = None,
     resolver: Callable[[str, int], Sequence[str]] | None = None,
-) -> str | None:
-    """Validate protocol, scheme, port, hostname, and connect-time SSRF/DNS-rebinding constraints."""
+    require_dns_resolution: bool = True,
+) -> PinnedEndpoint:
+    """Validate URL, resolve all A/AAAA records, enforce egress/loopback/private-CIDR policy, and pin socket IP."""
     if protocol_profile not in PROTOCOL_PROFILE_SPECS:
         raise ValidationFailed(
             f"unsupported protocol profile {protocol_profile!r}",
@@ -783,16 +940,41 @@ def validate_connector_endpoint(
             },
         )
     settings = get_settings()
+    policy = get_egress_policy()
+    if is_production is None:
+        is_production = settings.is_production
     if allow_loopback is None:
         allow_loopback = settings.connector_allow_loopback
     if allowed_hosts is None:
-        allowed_hosts = settings.connector_allowed_host_list
-    if is_production is None:
-        is_production = settings.is_production
+        allowed_hosts = policy["allowed_hosts"]
+    if allowed_private_cidrs is None:
+        allowed_private_cidrs = policy["allowed_private_cidrs"]
+
+    spec = PROTOCOL_PROFILE_SPECS[protocol_profile]
+    if is_production and not getattr(spec, "production_supported", True):
+        raise ValidationFailed(
+            f"protocol profile {protocol_profile!r} is an internal/test-only profile and is prohibited in production; use 'etp.1.2.binary_ws'",
+            details={
+                "field": "protocol_profile",
+                "value": protocol_profile,
+                "reason": "profile_not_production_approved",
+            },
+        )
 
     if protocol_profile == "synthetic.v1":
         if endpoint_url is None or endpoint_url.strip() in ("", "synthetic://plan"):
-            return "synthetic://plan"
+            return PinnedEndpoint(
+                original_url="synthetic://plan",
+                scheme="synthetic",
+                hostname="plan",
+                port=0,
+                pinned_ip="0.0.0.0",
+                all_resolved_ips=(),
+                host_header="plan",
+                sni_hostname="plan",
+                connect_url="synthetic://plan",
+                is_harness=True,
+            )
         raise ValidationFailed(
             "synthetic.v1 connectors do not accept an external network endpoint_url",
             details={"field": "endpoint_url", "value": endpoint_url, "reason": "invalid_endpoint"},
@@ -819,7 +1001,7 @@ def validate_connector_endpoint(
     scheme = (parsed.scheme or "").lower()
     if protocol_profile == "witsml.1.4.1.1.soap_http":
         allowed_schemes = ("https",) if is_production else ("https", "http")
-    elif protocol_profile == "etp.1.2.json_ws":
+    elif protocol_profile in ("etp.1.2.json_ws", "etp.1.2.binary_ws"):
         allowed_schemes = ("wss",) if is_production else ("wss", "ws")
     else:
         allowed_schemes = ()
@@ -842,14 +1024,12 @@ def validate_connector_endpoint(
             details={"field": "endpoint_url", "reason": "invalid_hostname"},
         )
 
-    # Cloud metadata endpoints are unconditionally blocked regardless of allowlists or loopback flags.
     if hostname in PROHIBITED_METADATA_HOSTS or hostname.endswith(".internal"):
         raise ValidationFailed(
             f"endpoint_url host {hostname!r} is a prohibited metadata or internal destination",
             details={"field": "endpoint_url", "host": hostname, "reason": "ssrf_blocked"},
         )
 
-    # Reject ambiguous numeric/octal/hex/shorthand IPv4 hostnames (e.g. 0177.0.0.1, 2130706433, 127.1)
     if _AMBIGUOUS_NUMERIC_HOST_RE.match(hostname):
         try:
             parsed_lit = ipaddress.ip_address(hostname)
@@ -876,24 +1056,46 @@ def validate_connector_endpoint(
             "endpoint_url port must be between 1 and 65535",
             details={"field": "endpoint_url", "port": port, "reason": "invalid_port"},
         )
+    default_port = 443 if scheme in ("https", "wss") else 80
+    effective_port = int(port or default_port)
 
-    normalized_allowlist = {h.strip().lower().rstrip(".") for h in allowed_hosts if h.strip()}
+    normalized_allowlist = {h.strip().lower().rstrip(".") for h in allowed_hosts if h and h.strip()}
+    private_networks = parse_private_cidr_list(allowed_private_cidrs)
     active_resolver = resolver or _custom_dns_resolver
 
+    is_ip_literal = False
+    primary_ips: list[ipaddress.IPv4Address | ipaddress.IPv6Address] = []
     candidate_ips: list[ipaddress.IPv4Address | ipaddress.IPv6Address] = []
     try:
         lit_ip = ipaddress.ip_address(hostname)
+        is_ip_literal = True
+        primary_ips.append(lit_ip)
         candidate_ips.extend(_unpack_embedded_ip(lit_ip))
     except ValueError:
-        if hostname in {"localhost", "localhost.localdomain"} and not (
-            allow_loopback and not is_production
-        ) and hostname not in normalized_allowlist:
+        if hostname in {"localhost", "localhost.localdomain"} and (
+            is_production
+            or not (
+                allow_loopback
+                or is_harness_endpoint("127.0.0.1", effective_port, is_production=is_production)
+            )
+        ):
             raise ValidationFailed(
                 "loopback endpoint host 'localhost' is prohibited by SSRF policy",
                 details={"field": "endpoint_url", "host": hostname, "reason": "ssrf_blocked"},
             ) from None
         if active_resolver is not None:
-            resolved_strs = active_resolver(hostname, port or 443)
+            try:
+                resolved_strs = active_resolver(hostname, effective_port)
+            except TimeoutError as exc:
+                raise ValidationFailed(
+                    f"DNS resolution timed out for {hostname!r}",
+                    details={"field": "endpoint_url", "host": hostname, "reason": "timeout"},
+                ) from exc
+            except Exception as exc:
+                raise ValidationFailed(
+                    f"endpoint_url host {hostname!r} could not be resolved: {exc}",
+                    details={"field": "endpoint_url", "host": hostname, "reason": "dns_failure"},
+                ) from exc
             if not resolved_strs:
                 raise ValidationFailed(
                     f"endpoint_url host {hostname!r} could not be resolved",
@@ -907,19 +1109,28 @@ def validate_connector_endpoint(
                         f"DNS resolver returned invalid IP {ip_s!r} for {hostname!r}",
                         details={"field": "endpoint_url", "host": hostname, "reason": "ssrf_blocked"},
                     ) from exc
+                primary_ips.append(r_ip)
                 candidate_ips.extend(_unpack_embedded_ip(r_ip))
         else:
             try:
-                infos = socket.getaddrinfo(hostname, port or 443, type=socket.SOCK_STREAM)
+                infos = socket.getaddrinfo(hostname, effective_port, type=socket.SOCK_STREAM)
                 for info in infos:
                     sockaddr = info[4]
                     if sockaddr and sockaddr[0]:
                         raw_addr = str(sockaddr[0]).split("%", 1)[0]
                         r_ip = ipaddress.ip_address(raw_addr)
+                        if r_ip not in primary_ips:
+                            primary_ips.append(r_ip)
                         candidate_ips.extend(_unpack_embedded_ip(r_ip))
-            except socket.gaierror:
-                pass
+            except socket.gaierror as exc:
+                if require_dns_resolution:
+                    raise ValidationFailed(
+                        f"endpoint_url host {hostname!r} could not be resolved",
+                        details={"field": "endpoint_url", "host": hostname, "reason": "dns_failure"},
+                    ) from exc
 
+    is_harness = False
+    is_private_rig = False
     for ip in candidate_ips:
         ip_text = str(ip).lower()
         if ip_text in PROHIBITED_METADATA_HOSTS or (ip.is_link_local and not ip.is_loopback):
@@ -933,18 +1144,92 @@ def validate_connector_endpoint(
                 details={"field": "endpoint_url", "ip": ip_text, "reason": "ssrf_blocked"},
             )
         if ip.is_loopback:
-            if not (allow_loopback and not is_production) and hostname not in normalized_allowlist:
+            if is_production:
                 raise ValidationFailed(
-                    f"loopback destination {ip_text!r} is prohibited by SSRF policy",
+                    f"loopback destination {ip_text!r} is prohibited in production",
                     details={"field": "endpoint_url", "ip": ip_text, "reason": "ssrf_blocked"},
                 )
-        elif ip.is_private and hostname not in normalized_allowlist:
-            raise ValidationFailed(
-                f"private network destination {ip_text!r} is prohibited unless host is allowlisted",
-                details={"field": "endpoint_url", "ip": ip_text, "reason": "ssrf_blocked"},
+            harness_ok = is_harness_endpoint(ip_text, effective_port, is_production=is_production)
+            if harness_ok:
+                is_harness = True
+            elif not allow_loopback:
+                raise ValidationFailed(
+                    f"loopback destination {ip_text}:{effective_port} is prohibited by SSRF policy (not an approved harness endpoint)",
+                    details={
+                        "field": "endpoint_url",
+                        "ip": ip_text,
+                        "port": effective_port,
+                        "reason": "ssrf_blocked",
+                    },
+                )
+        elif ip.is_private:
+            in_approved_cidr = any(ip in net for net in private_networks)
+            host_or_ip_allowlisted = (
+                hostname in normalized_allowlist
+                or f"{hostname}:{effective_port}" in normalized_allowlist
+                or ip_text in normalized_allowlist
+                or f"{ip_text}:{effective_port}" in normalized_allowlist
             )
+            if in_approved_cidr and (host_or_ip_allowlisted or is_ip_literal):
+                is_private_rig = True
+            else:
+                raise ValidationFailed(
+                    f"private network destination {ip_text!r} is prohibited unless within an approved private rig network CIDR and allowlist",
+                    details={
+                        "field": "endpoint_url",
+                        "host": hostname,
+                        "ip": ip_text,
+                        "reason": "ssrf_blocked",
+                    },
+                )
 
-    return cleaned
+    pinned_ip = str(primary_ips[0]) if primary_ips else hostname
+    ip_host = f"[{pinned_ip}]" if ":" in pinned_ip else pinned_ip
+    netloc = f"{ip_host}:{port}" if port is not None else ip_host
+    connect_url = parsed._replace(netloc=netloc).geturl()
+    host_header = (
+        f"[{hostname}]:{port}"
+        if (":" in hostname and port is not None)
+        else (f"{hostname}:{port}" if port is not None else hostname)
+    )
+
+    return PinnedEndpoint(
+        original_url=cleaned,
+        scheme=scheme,
+        hostname=hostname,
+        port=effective_port,
+        pinned_ip=pinned_ip,
+        all_resolved_ips=tuple(str(ip) for ip in primary_ips),
+        host_header=host_header,
+        sni_hostname=hostname,
+        connect_url=connect_url,
+        is_harness=is_harness,
+        is_private_rig=is_private_rig,
+    )
+
+
+def validate_connector_endpoint(
+    endpoint_url: str | None,
+    protocol_profile: str,
+    *,
+    allow_loopback: bool | None = None,
+    allowed_hosts: list[str] | tuple[str, ...] | None = None,
+    allowed_private_cidrs: Sequence[str] | None = None,
+    is_production: bool | None = None,
+    resolver: Callable[[str, int], Sequence[str]] | None = None,
+) -> str | None:
+    """Validate protocol, scheme, port, hostname, and SSRF/DNS-rebinding constraints."""
+    pinned = resolve_and_pin_endpoint(
+        endpoint_url,
+        protocol_profile,
+        allow_loopback=allow_loopback,
+        allowed_hosts=allowed_hosts,
+        allowed_private_cidrs=allowed_private_cidrs,
+        is_production=is_production,
+        resolver=resolver,
+        require_dns_resolution=False,
+    )
+    return pinned.original_url
 
 
 def enforce_connect_time_ssrf(
@@ -952,30 +1237,30 @@ def enforce_connect_time_ssrf(
     protocol_profile: str,
     *,
     allow_loopback: bool | None = None,
-) -> None:
-    """Enforce SSRF and DNS-rebinding checks immediately before opening an outbound network socket."""
-    settings = get_settings()
-    parsed = urlparse(endpoint_url.strip())
-    hostname = (parsed.hostname or "").strip().lower().rstrip(".")
-    effective_allow_loopback = (
-        allow_loopback
-        if allow_loopback is not None
-        else (
-            settings.connector_allow_loopback
-            or (not settings.is_production and hostname in {"127.0.0.1", "::1"})
-        )
-    )
+    allowed_hosts: Sequence[str] | None = None,
+    allowed_private_cidrs: Sequence[str] | None = None,
+    is_production: bool | None = None,
+    resolver: Callable[[str, int], Sequence[str]] | None = None,
+) -> PinnedEndpoint:
+    """Enforce connection-bound SSRF/DNS-rebinding checks and return the pinned socket destination."""
     try:
-        validate_connector_endpoint(
+        return resolve_and_pin_endpoint(
             endpoint_url,
             protocol_profile,
-            allow_loopback=effective_allow_loopback,
+            allow_loopback=allow_loopback,
+            allowed_hosts=allowed_hosts,
+            allowed_private_cidrs=allowed_private_cidrs,
+            is_production=is_production,
+            resolver=resolver,
+            require_dns_resolution=True,
         )
     except ValidationFailed as exc:
+        reason = str(exc.details.get("reason") or "ssrf_blocked")
+        retryable = reason in {"dns_failure", "timeout"}
         raise ConnectorTransportError(
-            str(exc.details.get("reason") or "ssrf_blocked"),
+            reason,
             str(exc),
-            retryable=False,
+            retryable=retryable,
         ) from exc
 
 

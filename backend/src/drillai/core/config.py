@@ -145,6 +145,8 @@ class Settings(BaseSettings):
     etp_connector_enabled: bool = True
     connector_allow_loopback: bool = False
     connector_allowed_hosts: str = ""
+    connector_allowed_private_networks: str = ""
+    connector_harness_ports: str = ""
     connector_worker_enabled: bool = False
     connector_worker_lease_seconds: float = 30.0
     connector_worker_poll_seconds: float = 1.0
@@ -185,6 +187,25 @@ class Settings(BaseSettings):
     @property
     def connector_allowed_host_list(self) -> list[str]:
         return [host.strip().lower() for host in self.connector_allowed_hosts.split(",") if host.strip()]
+
+    @property
+    def connector_allowed_private_cidr_list(self) -> list[str]:
+        return [
+            cidr.strip()
+            for cidr in self.connector_allowed_private_networks.split(",")
+            if cidr.strip()
+        ]
+
+    @property
+    def connector_harness_port_list(self) -> list[int]:
+        ports: list[int] = []
+        for raw in self.connector_harness_ports.split(","):
+            val = raw.strip()
+            if val.isdigit():
+                port_num = int(val)
+                if 1 <= port_num <= 65535:
+                    ports.append(port_num)
+        return ports
 
     def sqlalchemy_url(self) -> str:
         """Return a SQLAlchemy async URL (SQLite paths are made absolute)."""

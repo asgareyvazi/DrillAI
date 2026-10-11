@@ -26,6 +26,7 @@ import contextlib
 import datetime as dt
 import json
 import math
+import ssl
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -47,6 +48,8 @@ from drillai.telemetry.connectors import (
     enforce_connect_time_ssrf,
     parse_channel_mappings,
     redact_sensitive_text,
+    register_harness_endpoint,
+    unregister_harness_endpoint,
 )
 
 MAX_ETP_FRAME_BYTES = 1024 * 1024  # 1 MB per WebSocket frame
@@ -459,10 +462,32 @@ class EtpWebSocketClient:
         endpoint_url: str,
         secrets: dict[str, str] | None = None,
         timeout_seconds: float = 10.0,
+        ssl_context: ssl.SSLContext | bool = True,
     ) -> None:
+        if ssl_context is False:
+            raise ValueError("ssl_context=False is forbidden")
         self._endpoint_url = endpoint_url
         self._secrets = dict(secrets or {})
         self._timeout_seconds = max(1.0, min(timeout_seconds, 30.0))
+        self._ssl_context: ssl.SSLContext | bool = (
+            ssl_context if isinstance(ssl_context, ssl.SSLContext) else True
+        )
+
+    def _ws_connect_kwargs(self, pinned: Any, headers: dict[str, str], close_timeout: float) -> dict[str, Any]:
+        kwargs: dict[str, Any] = {
+            "subprotocols": ["energistics-tp"],
+            "additional_headers": headers,
+            "open_timeout": self._timeout_seconds,
+            "close_timeout": close_timeout,
+            "max_size": MAX_ETP_FRAME_BYTES,
+            "host": pinned.pinned_ip,
+            "port": pinned.port,
+            "proxy": None,
+        }
+        if pinned.scheme == "wss":
+            kwargs["ssl"] = self._ssl_context
+            kwargs["server_hostname"] = pinned.sni_hostname
+        return kwargs
 
     def _build_headers(self) -> dict[str, str]:
         headers: dict[str, str] = {}
@@ -554,16 +579,12 @@ class EtpWebSocketClient:
 
     async def probe_session(self) -> tuple[str, list[EtpChannelInfo]]:
         """Perform ETP ``RequestSession`` -> ``OpenSession`` and ``ChannelDescribe``/``Start`` -> ``ChannelMetadata`` discovery."""
-        enforce_connect_time_ssrf(self._endpoint_url, "etp.1.2.json_ws")
+        pinned = enforce_connect_time_ssrf(self._endpoint_url, "etp.1.2.json_ws")
         headers = self._build_headers()
         try:
             async with websockets.connect(
                 self._endpoint_url,
-                subprotocols=["energistics-tp"],
-                additional_headers=headers,
-                open_timeout=self._timeout_seconds,
-                close_timeout=min(self._timeout_seconds, 2.0),
-                max_size=MAX_ETP_FRAME_BYTES,
+                **self._ws_connect_kwargs(pinned, headers, min(self._timeout_seconds, 2.0)),
             ) as ws:
                 request_msg_id = 1
                 await ws.send(
@@ -700,7 +721,7 @@ class EtpWebSocketClient:
         subscribed_channels: set[str] | None = None,
     ) -> EtpPollBatch:
         """Open an ETP 1.2 WebSocket session, subscribe to mapped channels, and collect a batch."""
-        enforce_connect_time_ssrf(self._endpoint_url, "etp.1.2.json_ws")
+        pinned = enforce_connect_time_ssrf(self._endpoint_url, "etp.1.2.json_ws")
         mappings = parse_channel_mappings(config.get("channel_mappings"))
         mapping_by_mnemonic = {m.source_mnemonic.upper(): m for m in mappings}
         mapping_by_uri = {m.channel_uri.lower(): m for m in mappings}
@@ -710,11 +731,7 @@ class EtpWebSocketClient:
         try:
             async with websockets.connect(
                 self._endpoint_url,
-                subprotocols=["energistics-tp"],
-                additional_headers=headers,
-                open_timeout=self._timeout_seconds,
-                close_timeout=min(self._timeout_seconds, 5.0),
-                max_size=MAX_ETP_FRAME_BYTES,
+                **self._ws_connect_kwargs(pinned, headers, min(self._timeout_seconds, 5.0)),
             ) as ws:
                 request_msg_id = 1
                 await ws.send(
@@ -1431,10 +1448,12 @@ class LocalEtpWebSocketServer:
         sockets = self._server.sockets or []
         if sockets:
             self.port = int(sockets[0].getsockname()[1])
+        register_harness_endpoint(self.host, self.port)
         return self.endpoint_url
 
     async def stop(self) -> None:
         if self._server is not None:
+            unregister_harness_endpoint(self.host, self.port)
             self._server.close()
             await self._server.wait_closed()
             self._server = None

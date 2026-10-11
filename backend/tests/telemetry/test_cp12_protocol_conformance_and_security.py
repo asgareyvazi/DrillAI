@@ -35,7 +35,9 @@ from drillai.telemetry.connectors import (
     enforce_connect_time_ssrf,
     mask_secret_refs,
     redact_sensitive_text,
+    register_harness_endpoint,
     set_custom_dns_resolver,
+    unregister_harness_endpoint,
     validate_connector_endpoint,
     validate_secret_refs,
 )
@@ -214,6 +216,7 @@ async def test_b1_b3_independent_witsml_1411_soap_conformance_and_negative_fixtu
 
     srv = await asyncio.start_server(_raw_http_handler, "127.0.0.1", 0)
     port = int(srv.sockets[0].getsockname()[1])
+    register_harness_endpoint("127.0.0.1", port)
     url = f"http://127.0.0.1:{port}/witsml"
 
     try:
@@ -288,6 +291,7 @@ async def test_b1_b3_independent_witsml_1411_soap_conformance_and_negative_fixtu
             parse_get_from_store_response(depth_log_xml, mappings=[], well_id="W1")
         assert depth_exc.value.category == "protocol_error"
     finally:
+        unregister_harness_endpoint("127.0.0.1", port)
         srv.close()
         await srv.wait_closed()
 
@@ -504,43 +508,46 @@ async def test_b1_b2_independent_etp_12_avro_json_conformance_and_lifecycle():
         subprotocols=["energistics-tp"],
     ) as ws_srv:
         port = int(ws_srv.sockets[0].getsockname()[1])
+        register_harness_endpoint("127.0.0.1", port)
         url = f"ws://127.0.0.1:{port}/etp12"
         client = EtpWebSocketClient(endpoint_url=url, timeout_seconds=5.0)
-
-        # 1. Verify full ETP 1.2 handshake, Ping/Pong, dynamic mid-stream ChannelMetadata, and ChannelData
-        batch = await client.poll_subscription_batch(
-            well_id="wel_etp_spec",
-            config={"channel_mappings": _mappings()},
-            watermark={},
-        )
-        assert batch.session_id == "spec-etp12-sess-01"
-        assert batch.ping_pong_verified is True
-        assert len(batch.frames) == 2
-        assert {f.channel_key for f in batch.frames} == {"spp", "wob"}
-        assert batch.disposition.reconciled is True
-
-        # Verify client outbound messages used canonical ETP 1.2 {header, body} structure
-        assert all("header" in m and "body" in m for m in client_messages)
-
-        # 2. Verify mismatched OpenSession correlationId is rejected
-        mode = "bad_correlation_id"
-        with pytest.raises(ConnectorTransportError) as corr_exc:
-            await client.poll_subscription_batch(
+        try:
+            # 1. Verify full ETP 1.2 handshake, Ping/Pong, dynamic mid-stream ChannelMetadata, and ChannelData
+            batch = await client.poll_subscription_batch(
                 well_id="wel_etp_spec",
                 config={"channel_mappings": _mappings()},
+                watermark={},
             )
-        assert corr_exc.value.category == "protocol_error"
-        assert "correlationId" in str(corr_exc.value)
+            assert batch.session_id == "spec-etp12-sess-01"
+            assert batch.ping_pong_verified is True
+            assert len(batch.frames) == 2
+            assert {f.channel_key for f in batch.frames} == {"spp", "wob"}
+            assert batch.disposition.reconciled is True
 
-        # 3. Verify ProtocolException with `errors` map is parsed and rejected
-        mode = "errors_map_exception"
-        with pytest.raises(ConnectorTransportError) as map_exc:
-            await client.poll_subscription_batch(
-                well_id="wel_etp_spec",
-                config={"channel_mappings": _mappings()},
-            )
-        assert map_exc.value.category == "protocol_error"
-        assert "Unsupported protocol role" in str(map_exc.value)
+            # Verify client outbound messages used canonical ETP 1.2 {header, body} structure
+            assert all("header" in m and "body" in m for m in client_messages)
+
+            # 2. Verify mismatched OpenSession correlationId is rejected
+            mode = "bad_correlation_id"
+            with pytest.raises(ConnectorTransportError) as corr_exc:
+                await client.poll_subscription_batch(
+                    well_id="wel_etp_spec",
+                    config={"channel_mappings": _mappings()},
+                )
+            assert corr_exc.value.category == "protocol_error"
+            assert "correlationId" in str(corr_exc.value)
+
+            # 3. Verify ProtocolException with `errors` map is parsed and rejected
+            mode = "errors_map_exception"
+            with pytest.raises(ConnectorTransportError) as map_exc:
+                await client.poll_subscription_batch(
+                    well_id="wel_etp_spec",
+                    config={"channel_mappings": _mappings()},
+                )
+            assert map_exc.value.category == "protocol_error"
+            assert "Unsupported protocol role" in str(map_exc.value)
+        finally:
+            unregister_harness_endpoint("127.0.0.1", port)
 
     # 4. Verify PROTOCOL_PROFILE_SPECS honesty
     etp_spec = PROTOCOL_PROFILE_SPECS["etp.1.2.json_ws"]

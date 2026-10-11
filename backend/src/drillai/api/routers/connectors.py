@@ -17,6 +17,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from drillai.api.deps import AuthContext, OptionalFilter, get_db, require
+from drillai.core.audit import record_audit
 from drillai.core.clock import utc_now
 from drillai.core.errors import PermissionDenied, ValidationFailed
 from drillai.core.idempotency import complete, replay_or_reserve
@@ -28,6 +29,8 @@ from drillai.telemetry.connectors import (
     CONNECTOR_RUNTIME_STATUSES,
     PROTOCOL_PROFILE_SPECS,
     ConnectorService,
+    get_egress_policy,
+    set_egress_policy,
 )
 
 router = APIRouter(tags=["connectors"])
@@ -99,6 +102,14 @@ class HarnessConfigureRequest(BaseModel):
     reset_rows: bool = Field(default=False)
 
 
+class EgressPolicyUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    reason: str = Field(min_length=1, max_length=1000)
+    allowed_hosts: list[str] | None = Field(default=None, max_length=100)
+    allowed_private_cidrs: list[str] | None = Field(default=None, max_length=50)
+
+
 @router.get("/connectors/profiles", summary="Supported telemetry connector protocol profiles")
 async def list_connector_profiles(
     _: Annotated[AuthContext, Depends(require("connector.read"))],
@@ -108,7 +119,51 @@ async def list_connector_profiles(
         "allowed_secret_slots": list(ALLOWED_SECRET_SLOTS),
         "desired_states": list(CONNECTOR_DESIRED_STATES),
         "runtime_statuses": list(CONNECTOR_RUNTIME_STATUSES),
+        "egress_policy": get_egress_policy(),
     }
+
+
+@router.get(
+    "/connectors/egress-policy",
+    summary="Inspect active outbound network egress policy for telemetry connectors",
+)
+async def inspect_egress_policy(
+    _: Annotated[AuthContext, Depends(require("connector.read"))],
+) -> dict[str, Any]:
+    return get_egress_policy()
+
+
+@router.put(
+    "/connectors/egress-policy",
+    summary="Update outbound network egress policy (admin only, audited)",
+)
+async def update_egress_policy(
+    body: EgressPolicyUpdateRequest,
+    session: Annotated[AsyncSession, Depends(get_db)],
+    auth: Annotated[AuthContext, Depends(require("connector.manage"))],
+) -> dict[str, Any]:
+    if "admin" not in (auth.principal.role_keys or ()):
+        raise PermissionDenied(
+            "only administrators may modify outbound connector network egress policy",
+            details={"reason": "admin_role_required"},
+        )
+    before = get_egress_policy()
+    after = set_egress_policy(
+        allowed_hosts=body.allowed_hosts,
+        allowed_private_cidrs=body.allowed_private_cidrs,
+    )
+    await record_audit(
+        session,
+        org_id=auth.org_id or "",
+        principal=auth.principal,
+        action="connector.egress_policy.update",
+        resource_kind="connector_egress_policy",
+        resource_id="global",
+        before=before,
+        after=after,
+        details={"reason": body.reason},
+    )
+    return after
 
 
 @router.post(
