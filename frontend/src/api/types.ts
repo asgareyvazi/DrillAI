@@ -2038,6 +2038,7 @@ export interface ConnectorMaskedSecretRef {
   backend: string
   configured: boolean
   masked_value: string
+  redacted?: boolean
 }
 
 export interface ConnectorWorkerLease {
@@ -2246,6 +2247,43 @@ export interface ConnectorUpdatePayload {
 export interface ConnectorTransitionPayload {
   reason?: string | null
   expected_config_version?: number | null
+}
+
+export interface ConnectorRunManifest {
+  pages_or_messages_received?: number
+  source_records_discovered?: number
+  mapped_frames_emitted?: number
+  unmapped_skipped?: number
+  unsubscribed_skipped?: number
+  watermark_suppressed?: number
+  in_batch_duplicates?: number
+  deferred_over_cap?: number
+  malformed_timestamp_rejected?: number
+  unsupported_index_rejected?: number
+  invalid_value_rejected?: number
+  untrustworthy_quality_rejected?: number
+  total_protocol_rejected?: number
+  partial_page_or_stream?: boolean
+  reconciled?: boolean
+  checkpoint_status?: 'advanced' | 'unchanged' | 'partial_page_deferred' | string
+  dry_run?: boolean
+  sample_rejections?: Array<Record<string, unknown>>
+}
+
+export interface ConnectorReplayPayload {
+  reason: string
+  from_timestamp?: string | null
+  channel_keys?: string[] | null
+  dry_run?: boolean
+  expected_config_version?: number | null
+}
+
+export interface ConnectorReplayResponse {
+  ok: boolean
+  dry_run: boolean
+  connector_id: string
+  run: ConnectorRunRow
+  connector: ConnectorRow
 }
 
 export interface ConnectorPollResponse {

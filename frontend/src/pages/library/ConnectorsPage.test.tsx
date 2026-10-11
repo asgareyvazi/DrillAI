@@ -26,6 +26,7 @@ const mockStopConnector = vi.fn()
 const mockRestartConnector = vi.fn()
 const mockDisableConnector = vi.fn()
 const mockPollConnector = vi.fn()
+const mockReplayConnector = vi.fn()
 const mockEnsureProtocolHarness = vi.fn()
 
 vi.mock('../../api/endpoints', () => ({
@@ -45,6 +46,7 @@ vi.mock('../../api/endpoints', () => ({
     restartConnector: (...args: unknown[]) => mockRestartConnector(...args),
     disableConnector: (...args: unknown[]) => mockDisableConnector(...args),
     pollConnector: (...args: unknown[]) => mockPollConnector(...args),
+    replayConnector: (...args: unknown[]) => mockReplayConnector(...args),
     ensureProtocolHarness: (...args: unknown[]) => mockEnsureProtocolHarness(...args),
   },
 }))
@@ -230,10 +232,20 @@ beforeEach(() => {
         points_rejected: 0,
         bad_quality_points: 0,
         cursor_before: {},
-        cursor_after: { watermark_ts: '2026-10-10T10:00:00Z' },
+        cursor_after: { cursor_timestamp: '2026-10-10T10:00:00Z' },
         error_category: null,
         error_message: null,
-        diagnostics: {},
+        details: {
+          manifest: {
+            source_records_discovered: 5,
+            mapped_frames_emitted: 3,
+            unmapped_skipped: 1,
+            watermark_suppressed: 1,
+            deferred_over_cap: 0,
+            reconciled: true,
+            checkpoint_status: 'advanced',
+          },
+        },
       },
     ],
     total: 1,
@@ -325,5 +337,90 @@ describe('ConnectorsPage', () => {
     expect(screen.queryByTestId('connector-form-card')).not.toBeInTheDocument()
     expect(screen.queryByTestId('connector-lifecycle-controls')).not.toBeInTheDocument()
     expect(screen.queryByTestId('connector-test-btn')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('connector-replay-card')).not.toBeInTheDocument()
+  })
+
+  it('displays the reconciled run disposition manifest and executes governed dry-run and live replay', async () => {
+    mockIdentity.mockResolvedValue({
+      principal_id: 'usr_eng',
+      permissions: ['connector.read', 'connector.manage', 'connector.control', 'connector.test'],
+    })
+    mockReplayConnector.mockResolvedValue({
+      ok: true,
+      dry_run: true,
+      connector_id: 'cnc_witsml_01',
+      run: {
+        id: 'cnr_replay_01',
+        org_id: 'org_default',
+        connector_id: 'cnc_witsml_01',
+        well_id: 'wel_01',
+        worker_id: null,
+        fencing_token: 4,
+        config_version: 2,
+        run_kind: 'replay_dry_run',
+        status: 'succeeded',
+        started_at: '2026-10-10T10:02:00Z',
+        finished_at: '2026-10-10T10:02:01Z',
+        duration_ms: 35,
+        frames_received: 6,
+        points_accepted: 0,
+        points_duplicates: 6,
+        points_revised: 0,
+        points_rejected: 0,
+        alerts_raised: 0,
+        alerts_cleared: 0,
+        cursor_before: { cursor_timestamp: '2026-10-10T10:00:00Z' },
+        cursor_after: { cursor_timestamp: '2026-10-10T10:00:00Z' },
+        error_category: null,
+        error_message: null,
+        trace_id: 'trc_replay_01',
+        details: {
+          manifest: {
+            source_records_discovered: 6,
+            mapped_frames_emitted: 6,
+            reconciled: true,
+            checkpoint_status: 'unchanged',
+          },
+        },
+      },
+      connector: sampleWitsmlConnector,
+    })
+
+    renderWorkspace()
+
+    await waitFor(() => {
+      expect(screen.getByTestId('selected-run-manifest')).toBeInTheDocument()
+    })
+    expect(screen.getByTestId('manifest-discovered')).toHaveTextContent('5')
+    expect(screen.getByTestId('manifest-emitted')).toHaveTextContent('3')
+    expect(screen.getByTestId('manifest-accepted')).toHaveTextContent('3')
+    expect(screen.getByTestId('manifest-unmapped')).toHaveTextContent('1')
+    expect(screen.getByTestId('manifest-watermark-suppressed')).toHaveTextContent('1')
+
+    await userEvent.type(
+      screen.getByTestId('connector-replay-from-ts'),
+      '2026-10-10T09:50:00Z',
+    )
+    await userEvent.type(
+      screen.getByTestId('connector-replay-reason'),
+      'Dry-run verify historical window',
+    )
+    await userEvent.click(screen.getByTestId('connector-replay-dryrun-btn'))
+
+    await waitFor(() => {
+      expect(mockReplayConnector).toHaveBeenCalledWith(
+        'cnc_witsml_01',
+        {
+          reason: 'Dry-run verify historical window',
+          from_timestamp: '2026-10-10T09:50:00Z',
+          dry_run: true,
+          expected_config_version: 2,
+        },
+        expect.stringMatching(/^cnc-replay-dry-/),
+      )
+    })
+    await waitFor(() => {
+      expect(screen.getByTestId('connector-replay-result')).toHaveTextContent('DRY RUN')
+    })
   })
 })

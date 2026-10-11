@@ -78,6 +78,8 @@ import type {
   ConnectorPollResponse,
   ConnectorPreviewResult,
   ConnectorProfilesCatalogue,
+  ConnectorReplayPayload,
+  ConnectorReplayResponse,
   ConnectorRow,
   ConnectorRunsPage,
   ConnectorsPage,
@@ -896,6 +898,16 @@ export const drillingApi = {
     ),
   pollConnector: (connectorId: string) =>
     api.post<ConnectorPollResponse>(`/connectors/${enc(connectorId)}/poll`),
+  replayConnector: (
+    connectorId: string,
+    body: ConnectorReplayPayload,
+    idempotencyKey?: string,
+  ) =>
+    api.post<ConnectorReplayResponse>(
+      `/connectors/${enc(connectorId)}/replay`,
+      body,
+      idempotencyHeader(idempotencyKey),
+    ),
   listConnectorRuns: (
     connectorId: string,
     params: { limit?: number } = {},

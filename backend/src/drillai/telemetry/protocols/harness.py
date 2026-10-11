@@ -109,6 +109,10 @@ class LocalProtocolHarnessManager:
                 self.witsml_server.fault_mode = fault_mode
             if reset_rows:
                 self.witsml_server.rows.clear()
+                if not append_values:
+                    self.witsml_server.seed_default_rows(
+                        start=utc_now() - dt.timedelta(seconds=20), count=5, step_seconds=4.0
+                    )
             if append_values:
                 self.witsml_server.rows.append(
                     WitsmlSampleRow(
@@ -123,6 +127,10 @@ class LocalProtocolHarnessManager:
                 self.etp_server.fault_mode = fault_mode
             if reset_rows:
                 self.etp_server.points.clear()
+                if not append_values:
+                    self.etp_server.seed_default_points(
+                        start=utc_now() - dt.timedelta(seconds=20), count=5, step_seconds=4.0
+                    )
             if append_values:
                 ch_map = {ch.mnemonic.upper(): ch.channel_id for ch in self.etp_server.channels}
                 for mnem, val in append_values.items():

@@ -695,4 +695,575 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
 
     expect(appConsoleErrors(consoleErrors)).toEqual([])
   })
+
+  test('Journey 15 (CP12 Scenario 3): WITSML over-cap batch (max_points_per_poll=3) defers remaining curves with zero silent data loss and surfaces partial_page_deferred in UI manifest', async ({
+    page,
+    request,
+    wellId,
+    consoleErrors,
+  }) => {
+    const harness = await apiPost<HarnessSnapshot>(request, '/connectors/harness/ensure', {}, 'engineer')
+    await apiPost(
+      request,
+      '/connectors/harness/configure',
+      {
+        protocol: 'witsml',
+        fault_mode: 'ok',
+        reset_rows: true,
+        append_values: { SPP: 3610.0, WOB: 23.0, RPM: 118.0 },
+        quality: 'good',
+      },
+      'engineer',
+    )
+
+    const connKey = `e2e-witsml-cap-${Date.now().toString(36)}`
+    const created = await apiPost<ConnectorDto>(
+      request,
+      '/connectors',
+      {
+        key: connKey,
+        name: 'WITSML Over-Cap Batch Safety Store',
+        protocol_profile: 'witsml.1.4.1.1.soap_http',
+        well_id: wellId,
+        endpoint_url: harness.witsml.endpoint_url,
+        config: {
+          auth_mode: 'basic',
+          tls_verify: true,
+          poll_interval_seconds: 1.0,
+          max_points_per_poll: 2,
+          channel_mappings: [
+            { source_mnemonic: 'SPP', channel_key: 'spp', name: 'Standpipe Pressure', dimension: 'pressure', unit: 'psi' },
+            { source_mnemonic: 'WOB', channel_key: 'wob', name: 'Weight on Bit', dimension: 'force', unit: 'klbf' },
+            { source_mnemonic: 'RPM', channel_key: 'rpm', name: 'Rotary Speed', dimension: 'rotary_speed', unit: 'rpm' },
+          ],
+        },
+        secret_refs: harness.witsml.secret_refs,
+      },
+      'engineer',
+    )
+    await apiPost(request, `/connectors/${created.id}/start`, { reason: 'Start over-cap test' }, 'engineer')
+
+    // Poll 1: emits 2 points out of 3 (1 row * 3 curves) and defers 1 point
+    await apiPost(request, `/connectors/${created.id}/poll`, {}, 'engineer')
+
+    await page.goto(`/connectors?wellId=${wellId}`)
+    await page.getByTestId(`connector-row-${connKey}`).click()
+    await expect(page.getByTestId('selected-run-manifest')).toBeVisible()
+    await expect(page.getByTestId('manifest-emitted')).toHaveText('2')
+    await expect(page.getByTestId('manifest-deferred-over-cap')).toHaveText('1')
+    await expect(page.getByTestId('selected-run-manifest')).toContainText('partial')
+    await expect(page.getByTestId('manifest-cursor-after')).toContainText('completed_at_cursor')
+
+    // Poll 2 drains the remaining 1 point on that row without dropping any curve
+    await page.getByTestId('connector-poll-now-btn').click()
+
+    await expect(page.getByTestId('manifest-deferred-over-cap')).toHaveText('0')
+    await expect(page.getByTestId('selected-run-manifest')).toContainText('complete')
+
+    expect(appConsoleErrors(consoleErrors)).toEqual([])
+  })
+
+  test('Journey 16 (CP12 Scenario 4): ETP 1.2 per-channel watermarks (channel_cursors) preserve independent channel progress in UI', async ({
+    page,
+    request,
+    wellId,
+    consoleErrors,
+  }) => {
+    const harness = await apiPost<HarnessSnapshot>(request, '/connectors/harness/ensure', {}, 'engineer')
+    await apiPost(
+      request,
+      '/connectors/harness/configure',
+      {
+        protocol: 'etp',
+        fault_mode: 'ok',
+        reset_rows: true,
+        append_values: { SPP: 3910.0, WOB: 25.5 },
+        quality: 'good',
+      },
+      'engineer',
+    )
+
+    const connKey = `e2e-etp-chcursor-${Date.now().toString(36)}`
+    const created = await apiPost<ConnectorDto>(
+      request,
+      '/connectors',
+      {
+        key: connKey,
+        name: 'ETP Per-Channel Watermark Stream',
+        protocol_profile: 'etp.1.2.json_ws',
+        well_id: wellId,
+        endpoint_url: harness.etp.endpoint_url,
+        config: {
+          auth_mode: 'bearer',
+          tls_verify: true,
+          poll_interval_seconds: 1.0,
+          channel_mappings: [
+            { source_mnemonic: 'SPP', channel_key: 'spp', name: 'Standpipe Pressure', dimension: 'pressure', unit: 'psi' },
+            { source_mnemonic: 'WOB', channel_key: 'wob', name: 'Weight on Bit', dimension: 'force', unit: 'klbf' },
+          ],
+        },
+        secret_refs: harness.etp.secret_refs,
+      },
+      'engineer',
+    )
+    await apiPost(request, `/connectors/${created.id}/start`, { reason: 'Start ETP per-channel cursor test' }, 'engineer')
+    await apiPost(request, `/connectors/${created.id}/poll`, {}, 'engineer')
+
+    await page.goto(`/connectors?wellId=${wellId}`)
+    await page.getByTestId(`connector-row-${connKey}`).click()
+    await expect(page.getByTestId('detail-watermark-cursor')).toContainText('channel_cursors')
+    await expect(page.getByTestId('detail-watermark-cursor')).toContainText('spp')
+    await expect(page.getByTestId('detail-watermark-cursor')).toContainText('wob')
+
+    expect(appConsoleErrors(consoleErrors)).toEqual([])
+  })
+
+  test('Journey 17 (CP12 Scenarios 5 & 6): Governed Dry-Run Replay and Live Replay/Backfill in UI preserve non-regressing watermarks and deduplicate points', async ({
+    page,
+    request,
+    wellId,
+    consoleErrors,
+  }) => {
+    const harness = await apiPost<HarnessSnapshot>(request, '/connectors/harness/ensure', {}, 'engineer')
+    await apiPost(
+      request,
+      '/connectors/harness/configure',
+      {
+        protocol: 'witsml',
+        fault_mode: 'ok',
+        reset_rows: true,
+      },
+      'engineer',
+    )
+
+    const connKey = `e2e-witsml-replay-${Date.now().toString(36)}`
+    const created = await apiPost<ConnectorDto>(
+      request,
+      '/connectors',
+      {
+        key: connKey,
+        name: 'WITSML Governed Replay Workbench Feed',
+        protocol_profile: 'witsml.1.4.1.1.soap_http',
+        well_id: wellId,
+        endpoint_url: harness.witsml.endpoint_url,
+        config: {
+          auth_mode: 'basic',
+          tls_verify: true,
+          poll_interval_seconds: 1.0,
+          channel_mappings: [
+            { source_mnemonic: 'SPP', channel_key: 'spp', name: 'Standpipe Pressure', dimension: 'pressure', unit: 'psi' },
+          ],
+        },
+        secret_refs: harness.witsml.secret_refs,
+      },
+      'engineer',
+    )
+    await apiPost(request, `/connectors/${created.id}/start`, { reason: 'Start before replay' }, 'engineer')
+    await apiPost(request, `/connectors/${created.id}/poll`, {}, 'engineer')
+
+    await page.goto(`/connectors?wellId=${wellId}`)
+    await page.getByTestId(`connector-row-${connKey}`).click()
+    await expect(page.getByTestId('connector-replay-card')).toBeVisible()
+
+    // 1. Dry-run replay from earlier timestamp
+    await page.getByTestId('connector-replay-from-ts').fill('2020-01-01T00:00:00Z')
+    await page.getByTestId('connector-replay-reason').fill('Dry-run audit of historical window')
+    await page.getByTestId('connector-replay-dryrun-btn').click()
+
+    await expect(page.getByTestId('connector-replay-result')).toBeVisible()
+    await expect(page.getByTestId('connector-replay-result')).toContainText('DRY RUN')
+    await expect(page.getByTestId('connector-replay-result')).toContainText('accepted: 0')
+
+    // 2. Live governed replay from earlier timestamp deduplicates already-ingested points
+    await page.getByTestId('connector-replay-reason').fill('Execute governed replay verification')
+    await page.getByTestId('connector-replay-execute-btn').click()
+
+    await expect(page.getByTestId('connector-replay-result')).toContainText('LIVE BACKFILL')
+    await expect(page.getByTestId('connector-runs-table')).toContainText('replay')
+
+    expect(appConsoleErrors(consoleErrors)).toEqual([])
+  })
+
+  test('Journey 18 (CP12 Scenario 7): SSRF defense blocks IPv4-mapped IPv6 (::ffff:127.0.0.1) and non-canonical octal IPv4 (0177.0.0.1) in UI', async ({
+    page,
+    wellId,
+    consoleErrors,
+  }) => {
+    await page.goto(`/connectors?wellId=${wellId}`)
+
+    await page.getByTestId('connector-key-input').fill(`ssrf-ipv6map-${Date.now().toString(36)}`)
+    await page.getByTestId('connector-name-input').fill('Blocked IPv4-Mapped IPv6 Target')
+    await page.getByTestId('connector-endpoint-input').fill('https://[::ffff:169.254.169.254]/witsml')
+    await page.getByTestId('connector-submit-btn').click()
+
+    await expect(page.getByTestId('connector-form-error')).toBeVisible()
+
+    // Non-canonical octal IPv4 is also blocked
+    await page.getByTestId('connector-endpoint-input').fill('https://0177.0.0.1/witsml')
+    await page.getByTestId('connector-submit-btn').click()
+    await expect(page.getByTestId('connector-form-error')).toBeVisible()
+
+    expect(appConsoleErrors(consoleErrors)).toEqual([])
+  })
+
+  test('Journey 19 (CP12 Scenario 8): Secret reference minimization ensures raw DRILLAI_SECRET_* env names never leak in connector detail or API response', async ({
+    page,
+    request,
+    wellId,
+    consoleErrors,
+  }) => {
+    const harness = await apiPost<HarnessSnapshot>(request, '/connectors/harness/ensure', {}, 'engineer')
+    const connKey = `e2e-sec-min-${Date.now().toString(36)}`
+    const created = await apiPost<ConnectorDto>(
+      request,
+      '/connectors',
+      {
+        key: connKey,
+        name: 'Minimized Secret Ref Connector',
+        protocol_profile: 'witsml.1.4.1.1.soap_http',
+        well_id: wellId,
+        endpoint_url: harness.witsml.endpoint_url,
+        config: {
+          auth_mode: 'basic',
+          tls_verify: true,
+          poll_interval_seconds: 1.0,
+          channel_mappings: [
+            { source_mnemonic: 'SPP', channel_key: 'spp', name: 'Standpipe Pressure', dimension: 'pressure', unit: 'psi' },
+          ],
+        },
+        secret_refs: harness.witsml.secret_refs,
+      },
+      'engineer',
+    )
+
+    // API response must mask `ref` as `env:********`
+    const inspected = await apiGet<{ secret_refs: Record<string, { ref: string; redacted: boolean }> }>(
+      request,
+      `/connectors/${created.id}`,
+      'engineer',
+    )
+    expect(inspected.secret_refs.username?.ref).toBe('env:********')
+    expect(inspected.secret_refs.username?.redacted).toBe(true)
+
+    await page.goto(`/connectors?wellId=${wellId}`)
+    await page.getByTestId(`connector-row-${connKey}`).click()
+    await expect(page.getByTestId('detail-secret-refs')).toContainText('username: env:********')
+    await expect(page.getByTestId('detail-secret-refs')).not.toContainText('DRILLAI_SECRET_HARNESS_WITSML_USER')
+
+    expect(appConsoleErrors(consoleErrors)).toEqual([])
+  })
+
+  test('Journey 20 (CP12 Scenario 9): Malformed XML / SOAP Fault surfaces protocol_error and Operator Remediation Guidance in UI', async ({
+    page,
+    request,
+    wellId,
+    consoleErrors,
+  }) => {
+    const harness = await apiPost<HarnessSnapshot>(request, '/connectors/harness/ensure', {}, 'engineer')
+    await apiPost(
+      request,
+      '/connectors/harness/configure',
+      {
+        protocol: 'witsml',
+        fault_mode: 'malformed_xml',
+      },
+      'engineer',
+    )
+
+    const connKey = `e2e-witsml-xmlerr-${Date.now().toString(36)}`
+    const created = await apiPost<ConnectorDto>(
+      request,
+      '/connectors',
+      {
+        key: connKey,
+        name: 'WITSML Malformed XML Fault Source',
+        protocol_profile: 'witsml.1.4.1.1.soap_http',
+        well_id: wellId,
+        endpoint_url: harness.witsml.endpoint_url,
+        config: {
+          auth_mode: 'basic',
+          tls_verify: true,
+          poll_interval_seconds: 1.0,
+          channel_mappings: [
+            { source_mnemonic: 'SPP', channel_key: 'spp', name: 'Standpipe Pressure', dimension: 'pressure', unit: 'psi' },
+          ],
+        },
+        secret_refs: harness.witsml.secret_refs,
+      },
+      'engineer',
+    )
+    await apiPost(request, `/connectors/${created.id}/start`, { reason: 'Start XML error test' }, 'engineer')
+    await apiPost(request, `/connectors/${created.id}/poll`, {}, 'engineer')
+
+    // Restore WITSML harness
+    await apiPost(request, '/connectors/harness/configure', { protocol: 'witsml', fault_mode: 'ok' }, 'engineer')
+
+    await page.goto(`/connectors?wellId=${wellId}`)
+    await page.getByTestId(`connector-row-${connKey}`).click()
+    await expect(page.getByTestId('detail-last-error')).toContainText('[malformed_payload]')
+    await expect(page.getByTestId('detail-error-remediation')).toBeVisible()
+    await expect(page.getByTestId('detail-error-remediation')).toContainText('Operator Remediation Guidance')
+
+    expect(appConsoleErrors(consoleErrors)).toEqual([])
+  })
+
+  test('Journey 21 (CP12 Scenario 10): ETP protocol_exception transitions connector to backing_off with remediation guidance, then recovers cleanly', async ({
+    page,
+    request,
+    wellId,
+    consoleErrors,
+  }) => {
+    const harness = await apiPost<HarnessSnapshot>(request, '/connectors/harness/ensure', {}, 'engineer')
+    await apiPost(
+      request,
+      '/connectors/harness/configure',
+      {
+        protocol: 'etp',
+        fault_mode: 'protocol_exception',
+      },
+      'engineer',
+    )
+
+    const connKey = `e2e-etp-protoexc-${Date.now().toString(36)}`
+    const created = await apiPost<ConnectorDto>(
+      request,
+      '/connectors',
+      {
+        key: connKey,
+        name: 'ETP Protocol Exception Recovery Stream',
+        protocol_profile: 'etp.1.2.json_ws',
+        well_id: wellId,
+        endpoint_url: harness.etp.endpoint_url,
+        config: {
+          auth_mode: 'bearer',
+          tls_verify: true,
+          poll_interval_seconds: 1.0,
+          channel_mappings: [
+            { source_mnemonic: 'SPP', channel_key: 'spp', name: 'Standpipe Pressure', dimension: 'pressure', unit: 'psi' },
+          ],
+        },
+        secret_refs: harness.etp.secret_refs,
+      },
+      'engineer',
+    )
+    await apiPost(request, `/connectors/${created.id}/start`, { reason: 'Start ETP protocol exception test' }, 'engineer')
+    await apiPost(request, `/connectors/${created.id}/poll`, {}, 'engineer')
+
+    await page.goto(`/connectors?wellId=${wellId}`)
+    await page.getByTestId(`connector-row-${connKey}`).click()
+    await expect(page.getByTestId('detail-runtime-status')).toHaveText('backing_off')
+    await expect(page.getByTestId('detail-error-remediation')).toBeVisible()
+
+    // Restore ETP harness and poll via UI
+    await apiPost(request, '/connectors/harness/configure', { protocol: 'etp', fault_mode: 'ok' }, 'engineer')
+    await page.getByTestId('connector-poll-now-btn').click()
+    await expect(page.getByTestId('detail-runtime-status')).toHaveText('running')
+    await expect(page.getByTestId('detail-health-state')).toHaveText('LIVE')
+
+    expect(appConsoleErrors(consoleErrors)).toEqual([])
+  })
+
+  test('Journey 22 (CP12 Scenario 11): Bad-quality telemetry is surfaced in run manifest without triggering false threshold alerts', async ({
+    page,
+    request,
+    wellId,
+    consoleErrors,
+  }) => {
+    const ruleKey = `e2e_badq_noraise_${Date.now()}`
+    await apiPost(
+      request,
+      '/alert-rules',
+      {
+        well_id: wellId,
+        rule_key: ruleKey,
+        name: 'Bad Quality Must Not Raise Alert',
+        channel_key: 'wob',
+        operator: 'gt',
+        threshold: 80,
+        unit: 'klbf',
+        clear_operator: 'lte',
+        clear_threshold: 50,
+        sustain_seconds: 0,
+        cooldown_seconds: 0,
+        severity: 'high',
+      },
+      'supervisor',
+    )
+
+    const harness = await apiPost<HarnessSnapshot>(request, '/connectors/harness/ensure', {}, 'engineer')
+    await apiPost(
+      request,
+      '/connectors/harness/configure',
+      {
+        protocol: 'witsml',
+        fault_mode: 'ok',
+        reset_rows: true,
+        append_values: { WOB: 150.0, SPP: 3000.0 },
+        quality: 'bad',
+      },
+      'engineer',
+    )
+
+    const connKey = `e2e-badq-noalert-${Date.now().toString(36)}`
+    const created = await apiPost<ConnectorDto>(
+      request,
+      '/connectors',
+      {
+        key: connKey,
+        name: 'WITSML Bad Quality Alert Guard',
+        protocol_profile: 'witsml.1.4.1.1.soap_http',
+        well_id: wellId,
+        endpoint_url: harness.witsml.endpoint_url,
+        config: {
+          auth_mode: 'basic',
+          tls_verify: true,
+          poll_interval_seconds: 1.0,
+          channel_mappings: [
+            { source_mnemonic: 'WOB', channel_key: 'wob', name: 'Weight on Bit', dimension: 'force', unit: 'klbf' },
+          ],
+        },
+        secret_refs: harness.witsml.secret_refs,
+      },
+      'engineer',
+    )
+    await apiPost(request, `/connectors/${created.id}/start`, { reason: 'Start bad quality alert guard' }, 'engineer')
+    await apiPost(request, `/connectors/${created.id}/poll`, {}, 'engineer')
+
+    // Restore harness to good quality
+    await apiPost(
+      request,
+      '/connectors/harness/configure',
+      { protocol: 'witsml', fault_mode: 'ok', reset_rows: true, quality: 'good' },
+      'engineer',
+    )
+
+    await page.goto(wellPath('/cockpit?tab=live'))
+    await expect(page.getByTestId('operational-alerts-list')).not.toContainText('Bad Quality Must Not Raise Alert')
+
+    expect(appConsoleErrors(consoleErrors)).toEqual([])
+  })
+
+  test('Journey 23 (CP12 Scenario 12): Operational Monitor Manage Connectors link navigates to well-filtered Connector Workspace', async ({
+    page,
+    wellId,
+    consoleErrors,
+  }) => {
+    await page.goto(wellPath('/cockpit?tab=live'))
+    await expect(page.getByTestId('monitor-connectors-card')).toBeVisible()
+    await page.getByTestId('monitor-manage-connectors-link').click()
+
+    await expect(page.getByTestId('connectors-workspace')).toBeVisible()
+    await expect(page.getByTestId('filter-connector-well')).toHaveValue(wellId)
+
+    expect(appConsoleErrors(consoleErrors)).toEqual([])
+  })
+
+  test('Journey 24 (CP12 Scenario 13): Disabled connector reports disabled health state on both Connector Workspace and Operational Monitor banner', async ({
+    page,
+    request,
+    wellId,
+    consoleErrors,
+  }) => {
+    const connKey = `e2e-disabled-banner-${Date.now().toString(36)}`
+    const created = await apiPost<ConnectorDto>(
+      request,
+      '/connectors',
+      {
+        key: connKey,
+        name: 'Disabled Banner Verification Connector',
+        protocol_profile: 'synthetic.v1',
+        well_id: wellId,
+        config: {
+          auth_mode: 'none',
+          poll_interval_seconds: 2.0,
+          channel_mappings: [
+            { source_mnemonic: 'SPP', channel_key: 'spp', name: 'Standpipe Pressure', dimension: 'pressure', unit: 'psi' },
+          ],
+        },
+      },
+      'engineer',
+    )
+
+    await page.goto(wellPath('/cockpit?tab=live'))
+    const bannerRow = page.getByTestId(`monitor-connector-${created.key}`)
+    await expect(bannerRow).toBeVisible()
+    await expect(bannerRow).toContainText('disabled')
+    await expect(bannerRow).not.toContainText('LIVE')
+
+    expect(appConsoleErrors(consoleErrors)).toEqual([])
+  })
+
+  test('Journey 25 (CP12 Scenario 15): Interactive Run Manifest Inspector switches between historical runs in the Run Ledger', async ({
+    page,
+    request,
+    wellId,
+    consoleErrors,
+  }) => {
+    const harness = await apiPost<HarnessSnapshot>(request, '/connectors/harness/ensure', {}, 'engineer')
+    await apiPost(
+      request,
+      '/connectors/harness/configure',
+      { protocol: 'witsml', fault_mode: 'ok', reset_rows: true },
+      'engineer',
+    )
+
+    const connKey = `e2e-manifest-switch-${Date.now().toString(36)}`
+    const created = await apiPost<ConnectorDto>(
+      request,
+      '/connectors',
+      {
+        key: connKey,
+        name: 'Manifest Switch Inspector Feed',
+        protocol_profile: 'witsml.1.4.1.1.soap_http',
+        well_id: wellId,
+        endpoint_url: harness.witsml.endpoint_url,
+        config: {
+          auth_mode: 'basic',
+          tls_verify: true,
+          poll_interval_seconds: 1.0,
+          channel_mappings: [
+            { source_mnemonic: 'SPP', channel_key: 'spp', name: 'Standpipe Pressure', dimension: 'pressure', unit: 'psi' },
+          ],
+        },
+        secret_refs: harness.witsml.secret_refs,
+      },
+      'engineer',
+    )
+    await apiPost(request, `/connectors/${created.id}/start`, { reason: 'Start for manifest switch' }, 'engineer')
+    await apiPost(request, `/connectors/${created.id}/poll`, {}, 'engineer')
+    await apiPost(request, `/connectors/${created.id}/poll`, {}, 'engineer')
+
+    const runs = await apiGet<{ items: Array<{ id: string }> }>(request, `/connectors/${created.id}/runs`, 'engineer')
+    expect(runs.items.length).toBeGreaterThanOrEqual(2)
+    const olderRunId = runs.items[1]!.id
+
+    await page.goto(`/connectors?wellId=${wellId}`)
+    await page.getByTestId(`connector-row-${connKey}`).click()
+    await page.getByTestId(`inspect-run-${olderRunId}`).click()
+
+    await expect(page.getByTestId('selected-run-manifest')).toContainText(olderRunId)
+
+    expect(appConsoleErrors(consoleErrors)).toEqual([])
+  })
+
+  test('Journey 26 (CP12 Scenarios 16 & 17): Persian (fa) RTL & keyboard accessibility on Run Manifest Inspector and Governed Replay Workbench', async ({
+    page,
+    wellId,
+    consoleErrors,
+  }) => {
+    await page.goto(`/connectors?wellId=${wellId}`)
+    await page.getByTestId('locale-switch').selectOption('fa')
+
+    await expect(page.locator('html')).toHaveAttribute('dir', 'rtl')
+    await expect(page.getByTestId('connector-replay-card')).toBeVisible()
+    await expect(page.getByTestId('connector-replay-from-ts')).toHaveAttribute('dir', 'ltr')
+    await expect(page.getByTestId('selected-run-manifest')).toBeVisible()
+    await expect(page.getByTestId('manifest-cursor-after')).toHaveAttribute('dir', 'ltr')
+
+    const bodyText = await page.locator('body').innerText()
+    expect(bodyText).not.toContain('⟦')
+
+    await page.getByTestId('locale-switch').selectOption('en')
+    expect(appConsoleErrors(consoleErrors)).toEqual([])
+  })
 })

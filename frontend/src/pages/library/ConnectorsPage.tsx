@@ -7,7 +7,10 @@ import type {
   ConnectorChannelMapping,
   ConnectorCreatePayload,
   ConnectorPreviewResult,
+  ConnectorReplayResponse,
   ConnectorRow,
+  ConnectorRunManifest,
+  ConnectorRunRow,
   ConnectorTestResult,
 } from '../../api/types'
 import { Badge, Button, Card, ErrorState } from '../../components/common'
@@ -126,9 +129,13 @@ export function ConnectorsPage() {
   const [transitionReason, setTransitionReason] = useState<string>('')
   const [actionError, setActionError] = useState<string | null>(null)
 
-  // Test & preview state
+  // Test, preview, replay & run manifest inspector state
   const [testResult, setTestResult] = useState<ConnectorTestResult | null>(null)
   const [previewResult, setPreviewResult] = useState<ConnectorPreviewResult | null>(null)
+  const [replayFromTs, setReplayFromTs] = useState<string>('')
+  const [replayReason, setReplayReason] = useState<string>('')
+  const [replayResult, setReplayResult] = useState<ConnectorReplayResponse | null>(null)
+  const [inspectedRunId, setInspectedRunId] = useState<string | null>(null)
 
   // Queries
   const identityQuery = useQuery({
@@ -379,11 +386,11 @@ export function ConnectorsPage() {
     },
     onError: async (err) => {
       if (err instanceof ApiError && err.status === 409 && editingConnector) {
+        const latest = await drillingApi.getConnector(editingConnector.id)
+        startEdit(latest)
         setConflictBanner(
           'Connector configuration was updated by another operator. Reloaded latest version.',
         )
-        const latest = await drillingApi.getConnector(editingConnector.id)
-        startEdit(latest)
         return
       }
       setFormError(err instanceof Error ? err.message : String(err))
@@ -452,7 +459,71 @@ export function ConnectorsPage() {
     },
   })
 
+  const replayMutation = useMutation({
+    mutationFn: async ({
+      connector,
+      dryRun,
+    }: {
+      connector: ConnectorRow
+      dryRun: boolean
+    }) => {
+      setActionError(null)
+      if (!replayReason.trim()) {
+        throw new Error('A governance reason is required to execute or preview a replay.')
+      }
+      return drillingApi.replayConnector(
+        connector.id,
+        {
+          reason: replayReason.trim(),
+          from_timestamp: replayFromTs.trim() || null,
+          dry_run: dryRun,
+          expected_config_version: connector.config_version,
+        },
+        makeIdemKey(dryRun ? 'cnc-replay-dry' : 'cnc-replay-live'),
+      )
+    },
+    onSuccess: async (res) => {
+      setReplayResult(res)
+      setInspectedRunId(res.run.id)
+      await invalidateConnectorQueries(res.connector.id, res.connector.well_id)
+    },
+    onError: (err) => {
+      setActionError(err instanceof Error ? err.message : String(err))
+    },
+  })
+
+  const getRemediationText = (category: string | null | undefined): string => {
+    switch (category) {
+      case 'ssrf_blocked':
+        return t('connectors.remediationSsrf')
+      case 'dns_failure':
+        return t('connectors.remediationDns')
+      case 'auth_failure':
+        return t('connectors.remediationAuth')
+      case 'secret_resolution_error':
+        return t('connectors.remediationSecret')
+      case 'protocol_error':
+      case 'malformed_payload':
+        return t('connectors.remediationProtocol')
+      case 'network_timeout':
+      case 'transport_error':
+        return t('connectors.remediationTimeout')
+      default:
+        return t('connectors.remediationDefault')
+    }
+  }
+
   const selected = selectedDetailQuery.data ?? null
+  const runsList: ConnectorRunRow[] = selectedRunsQuery.data?.items ?? []
+  const inspectedRun: ConnectorRunRow | null =
+    runsList.find((r) => r.id === inspectedRunId) ?? runsList[0] ?? null
+  const inspectedManifest: ConnectorRunManifest | null =
+    inspectedRun &&
+    typeof inspectedRun.details === 'object' &&
+    inspectedRun.details !== null &&
+    'manifest' in inspectedRun.details
+      ? (inspectedRun.details.manifest as ConnectorRunManifest)
+      : null
 
   return (
     <div className="space-y-6" data-testid="connectors-workspace">
@@ -916,6 +987,26 @@ export function ConnectorsPage() {
 
                   <div>
                     <label
+                      htmlFor="connector-max-points"
+                      className="mb-1 block text-xs text-slate-300"
+                    >
+                      {t('connectors.maxPointsLabel')}
+                    </label>
+                    <input
+                      id="connector-max-points"
+                      data-testid="connector-max-points"
+                      dir="ltr"
+                      type="number"
+                      min="1"
+                      max="5000"
+                      value={formMaxPoints}
+                      onChange={(e) => setFormMaxPoints(e.target.value)}
+                      className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1.5 font-mono text-xs text-slate-100"
+                    />
+                  </div>
+
+                  <div>
+                    <label
                       htmlFor="connector-max-failures"
                       className="mb-1 block text-xs text-slate-300"
                     >
@@ -923,6 +1014,7 @@ export function ConnectorsPage() {
                     </label>
                     <input
                       id="connector-max-failures"
+                      data-testid="connector-max-failures"
                       dir="ltr"
                       type="number"
                       min="1"
@@ -1501,10 +1593,21 @@ export function ConnectorsPage() {
                       className="rounded border border-rose-500/40 bg-rose-950/30 p-2.5 text-rose-200"
                       data-testid="detail-last-error"
                     >
-                      <span dir="ltr" className="font-mono font-semibold">
-                        [{selected.health.last_error_category ?? 'error'}]
-                      </span>{' '}
-                      <span dir="ltr">{selected.health.last_error}</span>
+                      <div>
+                        <span dir="ltr" className="font-mono font-semibold">
+                          [{selected.health.last_error_category ?? 'error'}]
+                        </span>{' '}
+                        <span dir="ltr">{selected.health.last_error}</span>
+                      </div>
+                      <div
+                        className="mt-1.5 border-t border-rose-500/20 pt-1.5 text-[11px] text-amber-200"
+                        data-testid="detail-error-remediation"
+                      >
+                        <span className="font-semibold">
+                          {t('connectors.remediationTitle')}:
+                        </span>{' '}
+                        {getRemediationText(selected.health.last_error_category)}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -1669,7 +1772,99 @@ export function ConnectorsPage() {
                 </Card>
               )}
 
-              {/* Bounded Connector Run Ledger */}
+              {/* Governed Replay & Backfill Workbench */}
+              {canControl && (
+                <Card className="p-4" data-testid="connector-replay-card">
+                  <h3 className="text-xs font-semibold text-slate-100">
+                    {t('connectors.replayTitle')}
+                  </h3>
+                  <p className="mt-1 text-xs text-slate-400">
+                    {t('connectors.replaySubtitle')}
+                  </p>
+                  <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div>
+                      <label
+                        htmlFor="connector-replay-from-ts"
+                        className="mb-1 block text-xs text-slate-300"
+                      >
+                        {t('connectors.replayFromTsLabel')}
+                      </label>
+                      <input
+                        id="connector-replay-from-ts"
+                        data-testid="connector-replay-from-ts"
+                        dir="ltr"
+                        value={replayFromTs}
+                        onChange={(e) => setReplayFromTs(e.target.value)}
+                        placeholder={t('connectors.replayFromTsPlaceholder')}
+                        className="w-full rounded border border-slate-700 bg-slate-900 px-2.5 py-1.5 font-mono text-xs text-slate-100"
+                      />
+                    </div>
+                    <div>
+                      <label
+                        htmlFor="connector-replay-reason"
+                        className="mb-1 block text-xs text-slate-300"
+                      >
+                        {t('connectors.replayReasonLabel')}
+                      </label>
+                      <input
+                        id="connector-replay-reason"
+                        data-testid="connector-replay-reason"
+                        value={replayReason}
+                        onChange={(e) => setReplayReason(e.target.value)}
+                        placeholder={t('connectors.replayReasonPlaceholder')}
+                        className="w-full rounded border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-xs text-slate-100"
+                      />
+                    </div>
+                  </div>
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <Button
+                      variant="default"
+                      disabled={replayMutation.isPending}
+                      onClick={() =>
+                        replayMutation.mutate({ connector: selected, dryRun: true })
+                      }
+                      data-testid="connector-replay-dryrun-btn"
+                    >
+                      {t('connectors.replayDryRunBtn')}
+                    </Button>
+                    <Button
+                      variant="primary"
+                      disabled={replayMutation.isPending}
+                      onClick={() =>
+                        replayMutation.mutate({ connector: selected, dryRun: false })
+                      }
+                      data-testid="connector-replay-execute-btn"
+                    >
+                      {t('connectors.replayExecuteBtn')}
+                    </Button>
+                  </div>
+
+                  {replayResult && replayResult.connector_id === selected.id && (
+                    <div
+                      className="mt-3 rounded border border-sky-500/30 bg-sky-950/20 p-3 text-xs"
+                      data-testid="connector-replay-result"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="font-semibold text-slate-100">
+                          {t('connectors.replayResultTitle')}
+                        </span>
+                        <Badge tone={replayResult.dry_run ? 'info' : 'ok'}>
+                          {replayResult.dry_run
+                            ? t('connectors.replayDryRunBadge')
+                            : t('connectors.replayLiveBadge')}
+                        </Badge>
+                      </div>
+                      <div className="mt-2 grid grid-cols-3 gap-2 font-mono text-slate-200" dir="ltr">
+                        <div>frames: {replayResult.run.frames_received}</div>
+                        <div>accepted: {replayResult.run.points_accepted}</div>
+                        <div>duplicates: {replayResult.run.points_duplicates}</div>
+                      </div>
+                    </div>
+                  )}
+                </Card>
+              )}
+
+              {/* Bounded Connector Run Ledger & Disposition Manifest Inspector */}
               <Card className="p-4" data-testid="connector-runs-card">
                 <h3 className="text-xs font-semibold text-slate-100">
                   {t('connectors.runsTitle')} ({selectedRunsQuery.data?.total ?? 0})
@@ -1677,73 +1872,282 @@ export function ConnectorsPage() {
                 {!selectedRunsQuery.data?.items?.length ? (
                   <p className="mt-2 text-xs text-slate-400">{t('connectors.noRuns')}</p>
                 ) : (
-                  <div className="mt-2 overflow-x-auto">
-                    <table
-                      className="w-full text-xs"
-                      data-testid="connector-runs-table"
-                    >
-                      <thead>
-                        <tr className="border-b border-slate-800 text-slate-400">
-                          <th className="py-1.5 pe-2 text-start">
-                            {t('connectors.runKindCol')}
-                          </th>
-                          <th className="py-1.5 pe-2 text-start">
-                            {t('connectors.runStatusCol')}
-                          </th>
-                          <th className="py-1.5 pe-2 text-start">
-                            {t('connectors.runFramesCol')}
-                          </th>
-                          <th className="py-1.5 pe-2 text-start">
-                            {t('connectors.runAcceptedCol')}
-                          </th>
-                          <th className="py-1.5 pe-2 text-start">
-                            {t('connectors.runDuplicatesCol')}
-                          </th>
-                          <th className="py-1.5 pe-2 text-start">
-                            {t('connectors.runDurationCol')}
-                          </th>
-                          <th className="py-1.5 pe-2 text-start">
-                            {t('connectors.runTokenCol')}
-                          </th>
-                          <th className="py-1.5 text-start">
-                            {t('connectors.runErrorCol')}
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {selectedRunsQuery.data.items.map((run) => (
-                          <tr key={run.id} className="border-b border-slate-900">
-                            <td className="py-1.5 pe-2 font-mono text-slate-300" dir="ltr">
-                              {run.run_kind}
-                            </td>
-                            <td className="py-1.5 pe-2">
-                              <Badge tone={statusTone(run.status)}>{run.status}</Badge>
-                            </td>
-                            <td className="py-1.5 pe-2 font-mono text-slate-200" dir="ltr">
-                              {run.frames_received}
-                            </td>
-                            <td className="py-1.5 pe-2 font-mono text-slate-200" dir="ltr">
-                              {run.points_accepted}
-                            </td>
-                            <td className="py-1.5 pe-2 font-mono text-slate-400" dir="ltr">
-                              {run.points_duplicates}
-                            </td>
-                            <td className="py-1.5 pe-2 font-mono text-slate-300" dir="ltr">
-                              {run.duration_ms ?? 0} ms
-                            </td>
-                            <td className="py-1.5 pe-2 font-mono text-slate-400" dir="ltr">
-                              #{run.fencing_token}
-                            </td>
-                            <td className="py-1.5 font-mono text-rose-300" dir="ltr">
-                              {run.error_category
-                                ? `[${run.error_category}] ${run.error_message ?? ''}`
-                                : '—'}
-                            </td>
+                  <>
+                    <div className="mt-2 overflow-x-auto">
+                      <table
+                        className="w-full text-xs"
+                        data-testid="connector-runs-table"
+                      >
+                        <thead>
+                          <tr className="border-b border-slate-800 text-slate-400">
+                            <th className="py-1.5 pe-2 text-start">
+                              {t('connectors.runKindCol')}
+                            </th>
+                            <th className="py-1.5 pe-2 text-start">
+                              {t('connectors.runStatusCol')}
+                            </th>
+                            <th className="py-1.5 pe-2 text-start">
+                              {t('connectors.runFramesCol')}
+                            </th>
+                            <th className="py-1.5 pe-2 text-start">
+                              {t('connectors.runAcceptedCol')}
+                            </th>
+                            <th className="py-1.5 pe-2 text-start">
+                              {t('connectors.runDuplicatesCol')}
+                            </th>
+                            <th className="py-1.5 pe-2 text-start">
+                              {t('connectors.runDurationCol')}
+                            </th>
+                            <th className="py-1.5 pe-2 text-start">
+                              {t('connectors.runTokenCol')}
+                            </th>
+                            <th className="py-1.5 pe-2 text-start">
+                              {t('connectors.runErrorCol')}
+                            </th>
+                            <th className="py-1.5 text-end">
+                              {t('connectors.inspectRunBtn')}
+                            </th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                        </thead>
+                        <tbody>
+                          {selectedRunsQuery.data.items.map((run) => {
+                            const isInspected = inspectedRun?.id === run.id
+                            return (
+                              <tr
+                                key={run.id}
+                                className={`border-b border-slate-900 ${
+                                  isInspected ? 'bg-sky-950/30' : ''
+                                }`}
+                              >
+                                <td
+                                  className="py-1.5 pe-2 font-mono text-slate-300"
+                                  dir="ltr"
+                                >
+                                  {run.run_kind}
+                                </td>
+                                <td className="py-1.5 pe-2">
+                                  <Badge tone={statusTone(run.status)}>
+                                    {run.status}
+                                  </Badge>
+                                </td>
+                                <td
+                                  className="py-1.5 pe-2 font-mono text-slate-200"
+                                  dir="ltr"
+                                >
+                                  {run.frames_received}
+                                </td>
+                                <td
+                                  className="py-1.5 pe-2 font-mono text-slate-200"
+                                  dir="ltr"
+                                >
+                                  {run.points_accepted}
+                                </td>
+                                <td
+                                  className="py-1.5 pe-2 font-mono text-slate-400"
+                                  dir="ltr"
+                                >
+                                  {run.points_duplicates}
+                                </td>
+                                <td
+                                  className="py-1.5 pe-2 font-mono text-slate-300"
+                                  dir="ltr"
+                                >
+                                  {run.duration_ms ?? 0} ms
+                                </td>
+                                <td
+                                  className="py-1.5 pe-2 font-mono text-slate-400"
+                                  dir="ltr"
+                                >
+                                  #{run.fencing_token}
+                                </td>
+                                <td
+                                  className="py-1.5 pe-2 font-mono text-rose-300"
+                                  dir="ltr"
+                                >
+                                  {run.error_category
+                                    ? `[${run.error_category}] ${run.error_message ?? ''}`
+                                    : '—'}
+                                </td>
+                                <td className="py-1.5 text-end">
+                                  <button
+                                    type="button"
+                                    data-testid={`inspect-run-${run.id}`}
+                                    onClick={() => setInspectedRunId(run.id)}
+                                    className="rounded border border-slate-700 bg-slate-900 px-2 py-0.5 text-[11px] text-sky-300 hover:border-sky-500"
+                                  >
+                                    {t('connectors.inspectRunBtn')}
+                                  </button>
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Selected Run Data Disposition & Checkpoint Manifest */}
+                    {inspectedRun && (
+                      <div
+                        className="mt-4 rounded border border-slate-800 bg-slate-950/80 p-3 text-xs"
+                        data-testid="selected-run-manifest"
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-slate-100">
+                              {t('connectors.manifestTitle')}
+                            </span>
+                            <span dir="ltr" className="font-mono text-slate-400">
+                              ({inspectedRun.id})
+                            </span>
+                          </div>
+                          {inspectedManifest && (
+                            <div className="flex items-center gap-1.5">
+                              <Badge
+                                tone={inspectedManifest.reconciled ? 'ok' : 'warning'}
+                              >
+                                {inspectedManifest.reconciled
+                                  ? t('connectors.manifestReconciled')
+                                  : t('connectors.manifestNotReconciled')}
+                              </Badge>
+                              {inspectedManifest.checkpoint_status && (
+                                <Badge tone="info">
+                                  {inspectedManifest.checkpoint_status}
+                                </Badge>
+                              )}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="mt-2.5 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                          <div className="rounded border border-slate-800/80 bg-slate-900/60 p-2">
+                            <div className="text-[11px] text-slate-400">
+                              {t('connectors.manifestDiscovered')}
+                            </div>
+                            <div
+                              dir="ltr"
+                              className="mt-0.5 font-mono font-semibold text-slate-100"
+                              data-testid="manifest-discovered"
+                            >
+                              {inspectedManifest?.source_records_discovered ??
+                                inspectedRun.frames_received}
+                            </div>
+                          </div>
+                          <div className="rounded border border-slate-800/80 bg-slate-900/60 p-2">
+                            <div className="text-[11px] text-slate-400">
+                              {t('connectors.manifestEmitted')}
+                            </div>
+                            <div
+                              dir="ltr"
+                              className="mt-0.5 font-mono font-semibold text-slate-100"
+                              data-testid="manifest-emitted"
+                            >
+                              {inspectedManifest?.mapped_frames_emitted ??
+                                inspectedRun.frames_received}
+                            </div>
+                          </div>
+                          <div className="rounded border border-slate-800/80 bg-slate-900/60 p-2">
+                            <div className="text-[11px] text-slate-400">
+                              {t('connectors.manifestAccepted')}
+                            </div>
+                            <div
+                              dir="ltr"
+                              className="mt-0.5 font-mono font-semibold text-emerald-300"
+                              data-testid="manifest-accepted"
+                            >
+                              {inspectedRun.points_accepted}
+                            </div>
+                          </div>
+                          <div className="rounded border border-slate-800/80 bg-slate-900/60 p-2">
+                            <div className="text-[11px] text-slate-400">
+                              {t('connectors.manifestDuplicates')}
+                            </div>
+                            <div
+                              dir="ltr"
+                              className="mt-0.5 font-mono font-semibold text-slate-200"
+                              data-testid="manifest-duplicates"
+                            >
+                              {inspectedRun.points_duplicates}
+                            </div>
+                          </div>
+                          <div className="rounded border border-slate-800/80 bg-slate-900/60 p-2">
+                            <div className="text-[11px] text-slate-400">
+                              {t('connectors.manifestRejected')}
+                            </div>
+                            <div
+                              dir="ltr"
+                              className="mt-0.5 font-mono font-semibold text-rose-300"
+                              data-testid="manifest-rejected"
+                            >
+                              {inspectedRun.points_rejected}
+                            </div>
+                          </div>
+                          <div className="rounded border border-slate-800/80 bg-slate-900/60 p-2">
+                            <div className="text-[11px] text-slate-400">
+                              {t('connectors.manifestUnmapped')}
+                            </div>
+                            <div
+                              dir="ltr"
+                              className="mt-0.5 font-mono font-semibold text-slate-300"
+                              data-testid="manifest-unmapped"
+                            >
+                              {inspectedManifest?.unmapped_skipped ?? 0}
+                            </div>
+                          </div>
+                          <div className="rounded border border-slate-800/80 bg-slate-900/60 p-2">
+                            <div className="text-[11px] text-slate-400">
+                              {t('connectors.manifestWatermarkSuppressed')}
+                            </div>
+                            <div
+                              dir="ltr"
+                              className="mt-0.5 font-mono font-semibold text-slate-300"
+                              data-testid="manifest-watermark-suppressed"
+                            >
+                              {inspectedManifest?.watermark_suppressed ?? 0}
+                            </div>
+                          </div>
+                          <div className="rounded border border-slate-800/80 bg-slate-900/60 p-2">
+                            <div className="text-[11px] text-slate-400">
+                              {t('connectors.manifestDeferredOverCap')}
+                            </div>
+                            <div
+                              dir="ltr"
+                              className="mt-0.5 font-mono font-semibold text-amber-300"
+                              data-testid="manifest-deferred-over-cap"
+                            >
+                              {inspectedManifest?.deferred_over_cap ?? 0}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="mt-2.5 space-y-1 text-[11px]">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="text-slate-400">
+                              {t('connectors.cursorBeforeLabel')}:
+                            </span>
+                            <code
+                              dir="ltr"
+                              className="rounded bg-slate-900 px-1.5 py-0.5 font-mono text-slate-300"
+                              data-testid="manifest-cursor-before"
+                            >
+                              {JSON.stringify(inspectedRun.cursor_before ?? {})}
+                            </code>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="text-slate-400">
+                              {t('connectors.cursorAfterLabel')}:
+                            </span>
+                            <code
+                              dir="ltr"
+                              className="rounded bg-slate-900 px-1.5 py-0.5 font-mono text-sky-300"
+                              data-testid="manifest-cursor-after"
+                            >
+                              {JSON.stringify(inspectedRun.cursor_after ?? {})}
+                            </code>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </>
                 )}
               </Card>
             </>
