@@ -1064,7 +1064,7 @@ export function OperationalMonitor({
                   className="rounded-md border border-graphite-100 p-3 text-xs dark:border-graphite-800"
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex flex-wrap items-center gap-1.5">
                       <span className="font-semibold text-graphite-800 dark:text-graphite-100">
                         {conn.name}
                       </span>
@@ -1073,6 +1073,12 @@ export function OperationalMonitor({
                           ? t('connectors.syntheticBadge')
                           : t('connectors.externalBadge')}
                       </Badge>
+                      {conn.protocol_profile === 'etp.1.2.binary_ws' && (
+                        <Badge tone="ok">{t('connectors.etpBinaryBadge')}</Badge>
+                      )}
+                      {conn.is_test_only_encoding && (
+                        <Badge tone="warning">{t('connectors.etpJsonTestBadge')}</Badge>
+                      )}
                     </div>
                     <div className="flex items-center gap-1.5">
                       <Badge

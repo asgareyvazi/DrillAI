@@ -921,12 +921,19 @@ export const drillingApi = {
   ensureProtocolHarness: () =>
     api.post<ProtocolHarnessStatus>('/connectors/harness/ensure'),
   configureProtocolHarness: (body: {
-    protocol: 'witsml' | 'etp'
+    protocol: 'witsml' | 'etp' | 'etp_binary'
     fault_mode?: string
     append_values?: Record<string, number | null>
     depth_md?: number
     quality?: string
   }) => api.post<ProtocolHarnessStatus>('/connectors/harness/configure', body),
+  getConnectorEgressPolicy: (signal?: AbortSignal) =>
+    api.get<import('./types').ConnectorEgressPolicy>('/connectors/egress-policy', { signal }),
+  updateConnectorEgressPolicy: (body: {
+    allowed_hosts?: string[]
+    allowed_private_cidrs?: string[]
+    reason: string
+  }) => api.put<import('./types').ConnectorEgressPolicy>('/connectors/egress-policy', body),
 
   // ------------------------------------------------------------------ platform & registry
   capabilities: (signal?: AbortSignal) => api.get<PlatformCapabilities>('/platform/capabilities', { signal }),

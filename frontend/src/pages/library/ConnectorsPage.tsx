@@ -261,7 +261,7 @@ export function ConnectorsPage() {
   }
 
   const applyPresetMutation = useMutation({
-    mutationFn: async (preset: 'witsml' | 'etp' | 'synthetic') => {
+    mutationFn: async (preset: 'witsml' | 'etp_binary' | 'etp' | 'synthetic') => {
       setFormError(null)
       if (preset === 'synthetic') {
         setEditingConnector(null)
@@ -293,6 +293,23 @@ export function ConnectorsPage() {
           harness.witsml.secret_refs.password ?? 'env:DRILLAI_SECRET_HARNESS_WITSML_PASS',
         )
         setFormBearerRef('')
+        setFormMappings([...DEFAULT_MAPPINGS])
+      } else if (preset === 'etp_binary') {
+        setEditingConnector(null)
+        setFormProfile('etp.1.2.binary_ws')
+        setFormKey(`etp-bin-rig-${Date.now().toString(36).slice(-4)}`)
+        setFormName('Local ETP 1.2 Binary Avro Stream')
+        setFormEndpoint(
+          harness.etp_binary?.endpoint_url ?? 'ws://127.0.0.1:18082/etp12-bin',
+        )
+        setFormAuthMode('bearer')
+        setFormPollInterval('1.0')
+        setFormUsernameRef('')
+        setFormPasswordRef('')
+        setFormBearerRef(
+          harness.etp_binary?.secret_refs?.bearer_token ??
+            'env:DRILLAI_SECRET_HARNESS_ETP_BINARY_TOKEN',
+        )
         setFormMappings([...DEFAULT_MAPPINGS])
       } else {
         setEditingConnector(null)
@@ -545,11 +562,11 @@ export function ConnectorsPage() {
       {/* Protocol Profile Capability & Verification Honesty Cards */}
       {profilesQuery.data?.profiles && (
         <div
-          className="grid grid-cols-1 gap-3 md:grid-cols-3"
+          className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4"
           data-testid="connector-profile-cards"
         >
           {profilesQuery.data.profiles.map((spec) => (
-            <Card key={spec.profile} className="p-4">
+            <Card key={spec.profile} className="p-4" data-testid={`profile-card-${spec.profile}`}>
               <div className="flex items-center justify-between gap-2">
                 <span
                   dir="ltr"
@@ -564,6 +581,20 @@ export function ConnectorsPage() {
                 </Badge>
               </div>
               <div className="mt-2 flex flex-wrap gap-1.5 text-xs">
+                {spec.wire_encoding && (
+                  <Badge
+                    tone={spec.is_test_only_encoding ? 'warning' : 'info'}
+                    data-testid={`profile-encoding-${spec.profile}`}
+                  >
+                    {spec.wire_encoding}
+                  </Badge>
+                )}
+                {spec.is_test_only_encoding && (
+                  <Badge tone="warning">{t('connectors.etpJsonTestBadge')}</Badge>
+                )}
+                {spec.conformance_verified && (
+                  <Badge tone="ok">{t('connectors.conformanceVerifiedBadge')}</Badge>
+                )}
                 <Badge tone="ok">{t('connectors.localHarnessVerified')}</Badge>
                 {!spec.external_vendor_verified && (
                   <Badge tone="neutral">{t('connectors.externalVendorUnverified')}</Badge>
@@ -763,6 +794,14 @@ export function ConnectorsPage() {
                   </Button>
                   <Button
                     variant="default"
+                    onClick={() => applyPresetMutation.mutate('etp_binary')}
+                    disabled={applyPresetMutation.isPending}
+                    data-testid="preset-local-etp-binary"
+                  >
+                    {t('connectors.useLocalEtpBinaryPreset')}
+                  </Button>
+                  <Button
+                    variant="default"
                     onClick={() => applyPresetMutation.mutate('etp')}
                     disabled={applyPresetMutation.isPending}
                     data-testid="preset-local-etp"
@@ -863,7 +902,10 @@ export function ConnectorsPage() {
                         if (next === 'synthetic.v1') {
                           setFormEndpoint('synthetic://plan')
                           setFormAuthMode('none')
-                        } else if (next === 'etp.1.2.json_ws') {
+                        } else if (
+                          next === 'etp.1.2.binary_ws' ||
+                          next === 'etp.1.2.json_ws'
+                        ) {
                           setFormAuthMode('bearer')
                         } else {
                           setFormAuthMode('basic')
@@ -874,6 +916,7 @@ export function ConnectorsPage() {
                       <option value="witsml.1.4.1.1.soap_http">
                         witsml.1.4.1.1.soap_http
                       </option>
+                      <option value="etp.1.2.binary_ws">etp.1.2.binary_ws</option>
                       <option value="etp.1.2.json_ws">etp.1.2.json_ws</option>
                       <option value="synthetic.v1">synthetic.v1</option>
                     </select>
@@ -1273,6 +1316,16 @@ export function ConnectorsPage() {
                           ? t('connectors.syntheticBadge')
                           : t('connectors.externalBadge')}
                       </Badge>
+                      {selected.protocol_profile === 'etp.1.2.binary_ws' && (
+                        <Badge tone="ok" data-testid="detail-profile-honesty-badge">
+                          {t('connectors.etpBinaryBadge')}
+                        </Badge>
+                      )}
+                      {selected.is_test_only_encoding && (
+                        <Badge tone="warning" data-testid="detail-profile-honesty-badge">
+                          {t('connectors.etpJsonTestBadge')}
+                        </Badge>
+                      )}
                     </div>
                     <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-400">
                       <span dir="ltr" className="font-mono text-slate-300">
@@ -1726,6 +1779,40 @@ export function ConnectorsPage() {
                       </div>
                     )}
                   </div>
+                  {testResult.milestones && testResult.milestones.length > 0 && (
+                    <div
+                      className="mt-3 border-t border-slate-800 pt-2.5"
+                      data-testid="connector-test-milestones"
+                    >
+                      <div className="mb-1.5 text-[11px] font-semibold text-slate-300">
+                        {t('connectors.testMilestonesTitle')}
+                      </div>
+                      <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
+                        {testResult.milestones.map((m) => (
+                          <div
+                            key={m.stage}
+                            data-testid={`test-milestone-${m.stage}`}
+                            className="flex items-center justify-between gap-2 rounded border border-slate-800/80 bg-slate-950/60 px-2 py-1 text-[11px]"
+                          >
+                            <span dir="ltr" className="font-mono text-slate-300">
+                              {m.stage}
+                            </span>
+                            <Badge
+                              tone={
+                                m.status === 'passed'
+                                  ? 'ok'
+                                  : m.status === 'failed'
+                                    ? 'danger'
+                                    : 'neutral'
+                              }
+                            >
+                              {m.status}
+                            </Badge>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </Card>
               )}
 
@@ -2001,7 +2088,40 @@ export function ConnectorsPage() {
                             </span>
                           </div>
                           {inspectedManifest && (
-                            <div className="flex items-center gap-1.5">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              {inspectedManifest.data_outcome && (
+                                <Badge
+                                  tone={
+                                    inspectedManifest.data_outcome ===
+                                    'all_valid_accepted'
+                                      ? 'ok'
+                                      : inspectedManifest.data_outcome ===
+                                          'rejected_only'
+                                        ? 'danger'
+                                        : inspectedManifest.data_outcome ===
+                                              'partial_with_rejections' ||
+                                            inspectedManifest.data_outcome ===
+                                              'partial_batch_capped'
+                                          ? 'warning'
+                                          : 'neutral'
+                                  }
+                                  data-testid="manifest-data-outcome"
+                                >
+                                  {inspectedManifest.data_outcome ===
+                                  'all_valid_accepted'
+                                    ? t('connectors.dataOutcomeAllValid')
+                                    : inspectedManifest.data_outcome ===
+                                        'partial_with_rejections'
+                                      ? t('connectors.dataOutcomePartialRejections')
+                                      : inspectedManifest.data_outcome ===
+                                          'rejected_only'
+                                        ? t('connectors.dataOutcomeRejectedOnly')
+                                        : inspectedManifest.data_outcome ===
+                                            'partial_batch_capped'
+                                          ? t('connectors.dataOutcomePartialCapped')
+                                          : t('connectors.dataOutcomeNoData')}
+                                </Badge>
+                              )}
                               <Badge
                                 tone={inspectedManifest.reconciled ? 'ok' : 'warning'}
                               >

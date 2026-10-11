@@ -2011,12 +2011,16 @@ export interface ConnectorProfileSpec {
   provider: string
   standard_version: string
   transport: string
+  wire_encoding?: string
   auth_modes: string[]
   supported_operations: string[]
   supported_objects: string[]
   resume_mechanism: string
   is_synthetic: boolean
+  is_test_only_encoding?: boolean
+  production_supported?: boolean
   local_harness_verified: boolean
+  conformance_verified?: boolean
   external_vendor_verified: boolean
   limitations: string
 }
@@ -2095,6 +2099,11 @@ export interface ConnectorRow {
   provider: string
   protocol_profile: string
   profile_spec: ConnectorProfileSpec | null
+  wire_encoding?: string
+  is_test_only_encoding?: boolean
+  production_supported?: boolean
+  conformance_verified?: boolean
+  external_vendor_verified?: boolean
   is_synthetic: boolean
   source_classification: 'synthetic_test_only' | 'external_protocol' | string
   direction: string
@@ -2169,6 +2178,8 @@ export interface ConnectorRunRow {
   error_category: string | null
   error_message: string | null
   trace_id: string | null
+  checkpoint_status?: string | null
+  manifest?: ConnectorRunManifest | null
   details: Record<string, unknown>
 }
 
@@ -2179,10 +2190,18 @@ export interface ConnectorRunsPage {
   limit: number
 }
 
+export interface ConnectorTestMilestone {
+  stage: string
+  status: 'passed' | 'failed' | 'not_applicable' | string
+  detail: string
+}
+
 export interface ConnectorTestResult {
   ok: boolean
   connector_id: string
   protocol_profile: string
+  wire_encoding?: string
+  is_test_only_encoding?: boolean
   is_synthetic: boolean
   tested_at: string
   duration_ms: number
@@ -2193,6 +2212,7 @@ export interface ConnectorTestResult {
     unit: string
     is_realtime: boolean
   }>
+  milestones?: ConnectorTestMilestone[]
   error_category: string | null
   error_message: string | null
   trace_id: string | null
@@ -2262,12 +2282,27 @@ export interface ConnectorRunManifest {
   unsupported_index_rejected?: number
   invalid_value_rejected?: number
   untrustworthy_quality_rejected?: number
+  rejected_malformed_timestamp?: number
+  rejected_unsupported_index?: number
+  rejected_invalid_value?: number
+  rejected_non_finite_value?: number
+  rejected_unknown_channel?: number
   total_protocol_rejected?: number
   partial_page_or_stream?: boolean
+  truncated_by_limit?: boolean
+  partial_more_available?: boolean
   reconciled?: boolean
-  checkpoint_status?: 'advanced' | 'unchanged' | 'partial_page_deferred' | string
+  checkpoint_status?: 'complete' | 'partial' | 'unchanged' | 'advanced' | 'partial_page_deferred' | string
+  data_outcome?:
+    | 'all_valid_accepted'
+    | 'partial_with_rejections'
+    | 'rejected_only'
+    | 'partial_batch_capped'
+    | 'no_data'
+    | string
   dry_run?: boolean
   sample_rejections?: Array<Record<string, unknown>>
+  protocol_rejections?: Array<Record<string, unknown>>
 }
 
 export interface ConnectorReplayPayload {
@@ -2323,6 +2358,22 @@ export interface ProtocolHarnessStatus {
     point_count: number
     secret_refs: Record<string, string>
   }
+  etp_binary?: {
+    running: boolean
+    endpoint_url: string | null
+    fault_mode: string
+    sessions_opened: number
+    point_count: number
+    secret_refs: Record<string, string>
+  }
+}
+
+export interface ConnectorEgressPolicy {
+  allowed_hosts: string[]
+  allowed_private_cidrs: string[]
+  allow_loopback: boolean
+  harness_owned_endpoints: string[]
+  is_production: boolean
 }
 
 export interface SyntheticChannelPlanPayload {

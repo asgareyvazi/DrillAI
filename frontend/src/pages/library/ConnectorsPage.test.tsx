@@ -175,26 +175,70 @@ beforeEach(() => {
         provider: 'witsml.1.4.1.1.soap_http',
         standard_version: 'WITSML 1.4.1.1',
         transport: 'HTTP/HTTPS SOAP 1.1 XML (WMLS_GetFromStore)',
+        wire_encoding: 'soap_xml',
         auth_modes: ['none', 'basic', 'bearer'],
         supported_operations: ['WMLS_GetFromStore'],
         supported_objects: ['log (time-indexed channelData)'],
         resume_mechanism: 'startDateTimeIndex watermark',
         is_synthetic: false,
+        is_test_only_encoding: false,
+        production_supported: true,
         local_harness_verified: true,
+        conformance_verified: true,
         external_vendor_verified: false,
         limitations: 'Read-only WITSML 1.4.1.1 log polling.',
+      },
+      {
+        profile: 'etp.1.2.binary_ws',
+        provider: 'etp.1.2.binary_ws',
+        standard_version: 'ETP 1.2 Binary Avro',
+        transport: 'WebSocket (energistics-tp binary Avro)',
+        wire_encoding: 'avro_binary',
+        auth_modes: ['none', 'bearer'],
+        supported_operations: ['RequestSession', 'StartStreaming', 'ChannelData'],
+        supported_objects: ['ChannelMetadataRecord', 'DataItem'],
+        resume_mechanism: 'per-channel channel_cursors',
+        is_synthetic: false,
+        is_test_only_encoding: false,
+        production_supported: true,
+        local_harness_verified: true,
+        conformance_verified: true,
+        external_vendor_verified: false,
+        limitations: 'Read-only ETP 1.2 binary Avro Protocol 0 + Protocol 1.',
+      },
+      {
+        profile: 'etp.1.2.json_ws',
+        provider: 'etp.1.2.json_ws',
+        standard_version: 'ETP 1.2 JSON (Internal Test)',
+        transport: 'WebSocket JSON framing',
+        wire_encoding: 'json_ws_test',
+        auth_modes: ['none', 'bearer'],
+        supported_operations: ['RequestSession', 'StartStreaming'],
+        supported_objects: ['JSON ChannelMetadata / ChannelData'],
+        resume_mechanism: 'per-channel channel_cursors',
+        is_synthetic: false,
+        is_test_only_encoding: true,
+        production_supported: false,
+        local_harness_verified: true,
+        conformance_verified: false,
+        external_vendor_verified: false,
+        limitations: 'Internal test/debug JSON profile only.',
       },
       {
         profile: 'synthetic.v1',
         provider: 'synthetic.v1',
         standard_version: 'DrillAI Synthetic v1',
         transport: 'In-process deterministic frame generator',
+        wire_encoding: 'in_process_synthetic',
         auth_modes: ['none'],
         supported_operations: ['poll'],
         supported_objects: ['synthetic channel plan'],
         resume_mechanism: 'step_index cursor',
         is_synthetic: true,
+        is_test_only_encoding: true,
+        production_supported: false,
         local_harness_verified: true,
+        conformance_verified: false,
         external_vendor_verified: false,
         limitations: 'Synthetic commissioning source only.',
       },
@@ -244,6 +288,7 @@ beforeEach(() => {
             deferred_over_cap: 0,
             reconciled: true,
             checkpoint_status: 'advanced',
+            data_outcome: 'all_valid_accepted',
           },
         },
       },
@@ -270,6 +315,11 @@ describe('ConnectorsPage', () => {
         { key: 'spp', label: 'Standpipe Pressure', dimension: 'pressure', unit: 'psi' },
       ],
       mapped_channels: sampleWitsmlConnector.channel_mappings,
+      milestones: [
+        { stage: 'endpoint_policy', status: 'passed', detail: 'Pinned IP validated' },
+        { stage: 'socket_connect', status: 'passed', detail: 'Connected' },
+        { stage: 'session_established', status: 'passed', detail: 'SOAP session' },
+      ],
       error_category: null,
       error_message: null,
     })
@@ -301,6 +351,18 @@ describe('ConnectorsPage', () => {
     await waitFor(() => {
       expect(screen.getByTestId('connector-test-result')).toHaveTextContent('42 ms')
     })
+    expect(screen.getByTestId('test-milestone-endpoint_policy')).toHaveTextContent(
+      'passed',
+    )
+    expect(screen.getByTestId('profile-encoding-etp.1.2.binary_ws')).toHaveTextContent(
+      'avro_binary',
+    )
+    expect(screen.getByTestId('profile-encoding-etp.1.2.json_ws')).toHaveTextContent(
+      'json_ws_test',
+    )
+    expect(screen.getByTestId('manifest-data-outcome')).toHaveTextContent(
+      'All valid points accepted',
+    )
 
     // Governed disable requires a reason
     await userEvent.click(screen.getByTestId('connector-disable-btn'))
