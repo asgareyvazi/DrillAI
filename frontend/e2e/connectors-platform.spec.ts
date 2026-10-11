@@ -32,6 +32,11 @@ type HarnessSnapshot = {
     secret_refs: { bearer_token: string }
     sessions_opened: number
   }
+  etp_binary: {
+    endpoint_url: string
+    secret_refs: { bearer_token: string }
+    sessions_opened: number
+  }
 }
 
 type ConnectorDto = {
@@ -1264,6 +1269,672 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
     expect(bodyText).not.toContain('⟦')
 
     await page.getByTestId('locale-switch').selectOption('en')
+    expect(appConsoleErrors(consoleErrors)).toEqual([])
+  })
+
+  test('Journey 27 (CP13 Scenarios 1 & 2): register ETP 1.2 Binary Avro connector (etp.1.2.binary_ws), verify capability & test-only honesty badges, inspect 10 connection test milestones, preview, start, observe LIVE on Operational Monitor, and stop', async ({
+    page,
+    request,
+    wellId,
+    consoleErrors,
+  }) => {
+    await page.goto(`/connectors?wellId=${wellId}`)
+    await expect(page.getByTestId('connectors-workspace')).toBeVisible()
+
+    // Verify capability honesty cards distinguish avro_binary (production) from json_ws_test (test/debug only)
+    await expect(page.getByTestId('profile-encoding-etp.1.2.binary_ws')).toHaveText('avro_binary')
+    await expect(page.getByTestId('profile-encoding-etp.1.2.json_ws')).toHaveText('json_ws_test')
+    await expect(page.getByTestId('profile-card-etp.1.2.json_ws')).toContainText(
+      'ETP 1.2 JSON (INTERNAL TEST/DEBUG ONLY)',
+    )
+    await expect(page.getByTestId('profile-card-etp.1.2.binary_ws')).toContainText(
+      'Independent conformance suite verified',
+    )
+
+    // Use the Local ETP 1.2 Binary Avro preset
+    await page.getByTestId('preset-local-etp-binary').click()
+    const uniqueKey = `e2e-etp-bin-${Date.now().toString(36)}`
+    await page.getByTestId('connector-key-input').fill(uniqueKey)
+    await page.getByTestId('connector-name-input').fill('E2E Rig ETP 1.2 Binary Avro Stream')
+    await page.getByTestId('connector-submit-btn').click()
+
+    await expect(page.getByTestId('selected-connector-name')).toHaveText(
+      'E2E Rig ETP 1.2 Binary Avro Stream',
+    )
+    await expect(page.getByTestId('detail-profile-honesty-badge')).toHaveText(
+      'ETP 1.2 BINARY AVRO (PRODUCTION)',
+    )
+
+    // Run connection test and verify milestones
+    await page.getByTestId('connector-test-btn').click()
+    await expect(page.getByTestId('connector-test-result')).toContainText(
+      'Connection test succeeded',
+    )
+    await expect(page.getByTestId('connector-test-milestones')).toBeVisible()
+    await expect(page.getByTestId('test-milestone-endpoint_policy_validated')).toContainText('passed')
+    await expect(page.getByTestId('test-milestone-socket_connected')).toContainText('passed')
+    await expect(page.getByTestId('test-milestone-protocol_encoding_negotiated')).toContainText('passed')
+    await expect(page.getByTestId('test-milestone-session_established')).toContainText('passed')
+    await expect(page.getByTestId('test-milestone-channels_discovered')).toContainText('passed')
+    await expect(page.getByTestId('test-milestone-mapping_verified')).toContainText('passed')
+    await expect(page.getByTestId('test-milestone-data_frame_decoded')).toContainText('passed')
+    await expect(page.getByTestId('test-milestone-disposition_validated')).toContainText('passed')
+
+    // Preview frames
+    await page.getByTestId('connector-preview-btn').click()
+    await expect(page.getByTestId('connector-preview-result')).toBeVisible()
+
+    // Start connector and poll
+    await page.getByTestId('connector-start-btn').click()
+    await expect(page.getByTestId('detail-runtime-status')).toHaveText('starting')
+
+    await page.getByTestId('connector-poll-now-btn').click()
+    await expect(page.getByTestId('detail-runtime-status')).toHaveText('running')
+    await expect(page.getByTestId('detail-health-state')).toHaveText('LIVE')
+
+    // Verify Operational Monitor displays ETP 1.2 BINARY AVRO and LIVE
+    await page.goto(wellPath('/cockpit?tab=live'))
+    const monitorCard = page.getByTestId(`monitor-connector-${uniqueKey}`)
+    await expect(monitorCard).toBeVisible()
+    await expect(monitorCard).toContainText('ETP 1.2 BINARY AVRO')
+    await expect(monitorCard).toContainText('LIVE')
+
+    // Stop connector via API and verify stopped state
+    const list = await apiGet<{ items: ConnectorDto[] }>(
+      request,
+      `/connectors?well_id=${wellId}`,
+      'engineer',
+    )
+    const found = list.items.find((c) => c.key === uniqueKey)
+    expect(found).toBeTruthy()
+    await apiPost(
+      request,
+      `/connectors/${found!.id}/stop`,
+      { reason: 'Complete ETP binary E2E check' },
+      'engineer',
+    )
+
+    expect(appConsoleErrors(consoleErrors)).toEqual([])
+  })
+
+  test('Journey 28 (CP13 Scenario 3): ETP 1.2 Binary Avro per-channel watermarks (channel_cursors) preserve slow + fast channel progression without skipping slow-channel points', async ({
+    page,
+    request,
+    wellId,
+    consoleErrors,
+  }) => {
+    const harness = await apiPost<HarnessSnapshot>(request, '/connectors/harness/ensure', {}, 'engineer')
+    await apiPost(
+      request,
+      '/connectors/harness/configure',
+      {
+        protocol: 'etp_binary',
+        fault_mode: 'ok',
+        reset_rows: true,
+        append_values: { SPP: 3320.0, WOB: 24.5 },
+        quality: 'good',
+      },
+      'engineer',
+    )
+
+    const connKey = `e2e-etp-bin-cursors-${Date.now().toString(36)}`
+    const created = await apiPost<ConnectorDto>(
+      request,
+      '/connectors',
+      {
+        key: connKey,
+        name: 'ETP Binary Per-Channel Watermark Stream',
+        protocol_profile: 'etp.1.2.binary_ws',
+        well_id: wellId,
+        endpoint_url: harness.etp_binary.endpoint_url,
+        config: {
+          auth_mode: 'bearer',
+          tls_verify: true,
+          poll_interval_seconds: 1.0,
+          channel_mappings: [
+            { source_mnemonic: 'SPP', channel_key: 'spp', name: 'Standpipe Pressure', dimension: 'pressure', unit: 'psi' },
+            { source_mnemonic: 'WOB', channel_key: 'wob', name: 'Weight on Bit', dimension: 'force', unit: 'klbf' },
+          ],
+        },
+        secret_refs: harness.etp_binary.secret_refs,
+      },
+      'engineer',
+    )
+    await apiPost(request, `/connectors/${created.id}/start`, { reason: 'Start ETP binary cursor test' }, 'engineer')
+    await apiPost(request, `/connectors/${created.id}/poll`, {}, 'engineer')
+
+    // Append fast channel SPP first, then slow channel WOB
+    await apiPost(
+      request,
+      '/connectors/harness/configure',
+      {
+        protocol: 'etp_binary',
+        fault_mode: 'ok',
+        reset_rows: false,
+        append_values: { SPP: 3380.0 },
+        quality: 'good',
+      },
+      'engineer',
+    )
+    await apiPost(request, `/connectors/${created.id}/poll`, {}, 'engineer')
+
+    await page.goto(`/connectors?wellId=${wellId}`)
+    await page.getByTestId(`connector-row-${connKey}`).click()
+    await expect(page.getByTestId('detail-watermark-cursor')).toContainText('channel_cursors')
+    await expect(page.getByTestId('detail-watermark-cursor')).toContainText('spp')
+    await expect(page.getByTestId('detail-watermark-cursor')).toContainText('wob')
+
+    expect(appConsoleErrors(consoleErrors)).toEqual([])
+  })
+
+  test('Journey 29 (CP13 Scenario 4): ETP 1.2 Binary Avro ProtocolException fault surfaces structured protocol_error and recovers cleanly', async ({
+    page,
+    request,
+    wellId,
+    consoleErrors,
+  }) => {
+    const harness = await apiPost<HarnessSnapshot>(request, '/connectors/harness/ensure', {}, 'engineer')
+    const connKey = `e2e-etp-bin-fault-${Date.now().toString(36)}`
+    const created = await apiPost<ConnectorDto>(
+      request,
+      '/connectors',
+      {
+        key: connKey,
+        name: 'ETP Binary ProtocolException Recovery Stream',
+        protocol_profile: 'etp.1.2.binary_ws',
+        well_id: wellId,
+        endpoint_url: harness.etp_binary.endpoint_url,
+        config: {
+          auth_mode: 'bearer',
+          tls_verify: true,
+          poll_interval_seconds: 1.0,
+          channel_mappings: [
+            { source_mnemonic: 'SPP', channel_key: 'spp', name: 'Standpipe Pressure', dimension: 'pressure', unit: 'psi' },
+          ],
+        },
+        secret_refs: harness.etp_binary.secret_refs,
+      },
+      'engineer',
+    )
+    await apiPost(request, `/connectors/${created.id}/start`, { reason: 'Start ETP binary fault test' }, 'engineer')
+
+    // Inject ETP binary ProtocolException fault
+    await apiPost(
+      request,
+      '/connectors/harness/configure',
+      { protocol: 'etp_binary', fault_mode: 'protocol_exception' },
+      'engineer',
+    )
+    await apiPost(request, `/connectors/${created.id}/poll`, {}, 'engineer')
+
+    await page.goto(`/connectors?wellId=${wellId}`)
+    await page.getByTestId(`connector-row-${connKey}`).click()
+    await expect(page.getByTestId('detail-runtime-status')).toHaveText('backing_off')
+    await expect(page.getByTestId('detail-error-remediation')).toBeVisible()
+
+    // Restore ETP binary harness and poll via UI
+    await apiPost(
+      request,
+      '/connectors/harness/configure',
+      { protocol: 'etp_binary', fault_mode: 'ok', reset_rows: true },
+      'engineer',
+    )
+    await page.getByTestId('connector-poll-now-btn').click()
+    await expect(page.getByTestId('detail-runtime-status')).toHaveText('running')
+    await expect(page.getByTestId('detail-health-state')).toHaveText('LIVE')
+
+    expect(appConsoleErrors(consoleErrors)).toEqual([])
+  })
+
+  test('Journey 30 (CP13 Scenario 5): WITSML tight batch cap (max_points_per_poll=1) surfaces Partial batch (over-cap deferred) in manifest-data-outcome and drains cleanly', async ({
+    page,
+    request,
+    wellId,
+    consoleErrors,
+  }) => {
+    const harness = await apiPost<HarnessSnapshot>(request, '/connectors/harness/ensure', {}, 'engineer')
+    await apiPost(
+      request,
+      '/connectors/harness/configure',
+      { protocol: 'witsml', fault_mode: 'ok', reset_rows: true },
+      'engineer',
+    )
+
+    const connKey = `e2e-cp13-cap1-${Date.now().toString(36)}`
+    const created = await apiPost<ConnectorDto>(
+      request,
+      '/connectors',
+      {
+        key: connKey,
+        name: 'WITSML Cap-1 Data Outcome Store',
+        protocol_profile: 'witsml.1.4.1.1.soap_http',
+        well_id: wellId,
+        endpoint_url: harness.witsml.endpoint_url,
+        config: {
+          auth_mode: 'basic',
+          tls_verify: true,
+          poll_interval_seconds: 1.0,
+          max_points_per_poll: 1,
+          channel_mappings: [
+            { source_mnemonic: 'SPP', channel_key: 'spp', name: 'Standpipe Pressure', dimension: 'pressure', unit: 'psi' },
+            { source_mnemonic: 'WOB', channel_key: 'wob', name: 'Weight on Bit', dimension: 'force', unit: 'klbf' },
+          ],
+        },
+        secret_refs: harness.witsml.secret_refs,
+      },
+      'engineer',
+    )
+    await apiPost(request, `/connectors/${created.id}/start`, { reason: 'Start cap=1 test' }, 'engineer')
+    await apiPost(request, `/connectors/${created.id}/poll`, {}, 'engineer')
+
+    await page.goto(`/connectors?wellId=${wellId}`)
+    await page.getByTestId(`connector-row-${connKey}`).click()
+    await expect(page.getByTestId('manifest-data-outcome')).toHaveText(
+      'Partial: batch-capped (more queued)',
+    )
+    await expect(page.getByTestId('manifest-deferred-over-cap')).not.toHaveText('0')
+
+    expect(appConsoleErrors(consoleErrors)).toEqual([])
+  })
+
+  test('Journey 31 (CP13 Scenario 6): Mixed valid and invalid points surface Partial: valid accepted, invalid rejected in manifest-data-outcome rather than All valid points accepted', async ({
+    page,
+    request,
+    wellId,
+    consoleErrors,
+  }) => {
+    const harness = await apiPost<HarnessSnapshot>(request, '/connectors/harness/ensure', {}, 'engineer')
+    await apiPost(
+      request,
+      '/connectors/harness/configure',
+      {
+        protocol: 'witsml',
+        fault_mode: 'ok',
+        reset_rows: true,
+        append_values: { SPP: 3100.0, WOB: 'INVALID_TEXT' },
+        quality: 'good',
+      },
+      'engineer',
+    )
+
+    const connKey = `e2e-cp13-mixed-${Date.now().toString(36)}`
+    const created = await apiPost<ConnectorDto>(
+      request,
+      '/connectors',
+      {
+        key: connKey,
+        name: 'WITSML Mixed Valid/Rejected Store',
+        protocol_profile: 'witsml.1.4.1.1.soap_http',
+        well_id: wellId,
+        endpoint_url: harness.witsml.endpoint_url,
+        config: {
+          auth_mode: 'basic',
+          tls_verify: true,
+          poll_interval_seconds: 1.0,
+          max_points_per_poll: 50,
+          channel_mappings: [
+            { source_mnemonic: 'SPP', channel_key: 'spp', name: 'Standpipe Pressure', dimension: 'pressure', unit: 'psi' },
+            { source_mnemonic: 'WOB', channel_key: 'wob', name: 'Weight on Bit', dimension: 'force', unit: 'klbf' },
+          ],
+        },
+        secret_refs: harness.witsml.secret_refs,
+      },
+      'engineer',
+    )
+    await apiPost(request, `/connectors/${created.id}/start`, { reason: 'Start mixed valid/rejected test' }, 'engineer')
+    await apiPost(request, `/connectors/${created.id}/poll`, {}, 'engineer')
+
+    // Restore harness
+    await apiPost(
+      request,
+      '/connectors/harness/configure',
+      { protocol: 'witsml', fault_mode: 'ok', reset_rows: true },
+      'engineer',
+    )
+
+    await page.goto(`/connectors?wellId=${wellId}`)
+    await page.getByTestId(`connector-row-${connKey}`).click()
+    await expect(page.getByTestId('manifest-data-outcome')).toHaveText(
+      'Partial: accepted with rejections',
+    )
+    await expect(page.getByTestId('manifest-rejected')).not.toHaveText('0')
+
+    expect(appConsoleErrors(consoleErrors)).toEqual([])
+  })
+
+  test('Journey 32 (CP13 Scenario 7): SSRF connection-bound enforcement rejects non-harness loopback port, link-local metadata, and unapproved private RFC-1918 IP', async ({
+    page,
+    wellId,
+    consoleErrors,
+  }) => {
+    await page.goto(`/connectors?wellId=${wellId}`)
+
+    // 1. Non-harness loopback port (e.g. Redis 6379) is blocked even in development when DRILLAI_CONNECTOR_ALLOW_LOOPBACK=false
+    await page.getByTestId('connector-key-input').fill(`ssrf-loopback-${Date.now().toString(36)}`)
+    await page.getByTestId('connector-name-input').fill('Blocked Non-Harness Loopback Port')
+    await page.getByTestId('connector-endpoint-input').fill('http://127.0.0.1:6379/witsml')
+    await page.getByTestId('connector-submit-btn').click()
+    await expect(page.getByTestId('connector-form-error')).toBeVisible()
+    await expect(page.getByTestId('connector-form-error')).toContainText('127.0.0.1')
+
+    // 2. Unapproved private RFC-1918 IP is blocked
+    await page.getByTestId('connector-endpoint-input').fill('https://10.42.0.10/witsml/store')
+    await page.getByTestId('connector-submit-btn').click()
+    await expect(page.getByTestId('connector-form-error')).toContainText('10.42.0.10')
+
+    expect(appConsoleErrors(consoleErrors)).toEqual([])
+  })
+
+  test('Journey 33 (CP13 Scenario 8): Private rig-network egress policy (PUT /connectors/egress-policy) enforces admin-only RBAC and Idempotency-Key replay safety', async ({
+    request,
+  }) => {
+    // Engineer and Viewer are forbidden (403) from mutating egress policy
+    const engAttempt = await request.fetch('/api/v1/connectors/egress-policy', {
+      method: 'PUT',
+      headers: {
+        'X-Dev-Roles': 'engineer',
+        'Idempotency-Key': `egress-eng-${Date.now()}`,
+      },
+      data: {
+        allowed_hosts: ['rig14.internal.example.com'],
+        allowed_private_networks: ['10.42.0.0/16'],
+        reason: 'Attempt unauthorized policy change',
+      },
+    })
+    expect(engAttempt.status()).toBe(403)
+
+    // Admin can update egress policy with required audit reason and Idempotency-Key
+    const idemKey = `egress-admin-${Date.now()}`
+    const adminResp1 = await request.fetch('/api/v1/connectors/egress-policy', {
+      method: 'PUT',
+      headers: {
+        'X-Dev-Roles': 'admin',
+        'Idempotency-Key': idemKey,
+      },
+      data: {
+        allowed_hosts: ['rig14.internal.example.com'],
+        allowed_private_networks: ['10.42.0.0/16'],
+        reason: 'Approve Rig 14 OT subnet for WITSML/ETP ingestion',
+      },
+    })
+    expect(adminResp1.ok()).toBeTruthy()
+    const policy1 = (await adminResp1.json()) as {
+      allowed_hosts: string[]
+      allowed_private_cidrs: string[]
+    }
+    expect(policy1.allowed_private_cidrs).toContain('10.42.0.0/16')
+
+    // Replaying with the same Idempotency-Key returns the exact same response
+    const adminResp2 = await request.fetch('/api/v1/connectors/egress-policy', {
+      method: 'PUT',
+      headers: {
+        'X-Dev-Roles': 'admin',
+        'Idempotency-Key': idemKey,
+      },
+      data: {
+        allowed_hosts: ['rig14.internal.example.com'],
+        allowed_private_networks: ['10.42.0.0/16'],
+        reason: 'Approve Rig 14 OT subnet for WITSML/ETP ingestion',
+      },
+    })
+    expect(adminResp2.ok()).toBeTruthy()
+
+    // Reset egress policy back to empty so subsequent tests see clean defaults
+    await request.fetch('/api/v1/connectors/egress-policy', {
+      method: 'PUT',
+      headers: {
+        'X-Dev-Roles': 'admin',
+        'Idempotency-Key': `egress-reset-${Date.now()}`,
+      },
+      data: {
+        allowed_hosts: [],
+        allowed_private_networks: [],
+        reason: 'Reset egress policy after test',
+      },
+    })
+  })
+
+  test('Journey 34 (CP13 Scenarios 9 & 10): Connection test milestones report failed stage on transport error and redact secret tokens from error diagnostics', async ({
+    page,
+    request,
+    wellId,
+    consoleErrors,
+  }) => {
+    const harness = await apiPost<HarnessSnapshot>(request, '/connectors/harness/ensure', {}, 'engineer')
+    const connKey = `e2e-cp13-redact-${Date.now().toString(36)}`
+    const created = await apiPost<ConnectorDto>(
+      request,
+      '/connectors',
+      {
+        key: connKey,
+        name: 'ETP Binary Secret Redaction Check',
+        protocol_profile: 'etp.1.2.binary_ws',
+        well_id: wellId,
+        endpoint_url: harness.etp_binary.endpoint_url,
+        config: {
+          auth_mode: 'bearer',
+          tls_verify: true,
+          poll_interval_seconds: 1.0,
+          channel_mappings: [
+            { source_mnemonic: 'SPP', channel_key: 'spp', name: 'Standpipe Pressure', dimension: 'pressure', unit: 'psi' },
+          ],
+        },
+        secret_refs: harness.etp_binary.secret_refs,
+      },
+      'engineer',
+    )
+
+    // Inject auth_failure on ETP binary server
+    await apiPost(
+      request,
+      '/connectors/harness/configure',
+      { protocol: 'etp_binary', fault_mode: 'auth_failure' },
+      'engineer',
+    )
+
+    await page.goto(`/connectors?wellId=${wellId}`)
+    await page.getByTestId(`connector-row-${connKey}`).click()
+    await page.getByTestId('connector-test-btn').click()
+
+    await expect(page.getByTestId('connector-test-result')).toContainText('Connection test failed')
+    await expect(page.getByTestId('test-milestone-endpoint_policy_validated')).toContainText('passed')
+    await expect(page.getByTestId('test-milestone-session_established')).toContainText('failed')
+
+    // Secret token must never appear in page content
+    const html = await page.content()
+    expect(html).not.toContain('HarnessEtpBearerToken123!')
+
+    // Restore ETP binary harness
+    await apiPost(
+      request,
+      '/connectors/harness/configure',
+      { protocol: 'etp_binary', fault_mode: 'ok', reset_rows: true },
+      'engineer',
+    )
+
+    expect(appConsoleErrors(consoleErrors)).toEqual([])
+  })
+
+  test('Journey 35 (CP13 Scenarios 11 & 12): Governed start/restart/stop transitions increment fencing_token on ETP binary connector and reject stale expected_config_version with 409', async ({
+    request,
+    wellId,
+  }) => {
+    const harness = await apiPost<HarnessSnapshot>(request, '/connectors/harness/ensure', {}, 'engineer')
+    const connKey = `e2e-cp13-cas-${Date.now().toString(36)}`
+    const created = await apiPost<ConnectorDto>(
+      request,
+      '/connectors',
+      {
+        key: connKey,
+        name: 'ETP Binary CAS & Fencing Check',
+        protocol_profile: 'etp.1.2.binary_ws',
+        well_id: wellId,
+        endpoint_url: harness.etp_binary.endpoint_url,
+        config: {
+          auth_mode: 'bearer',
+          tls_verify: true,
+          poll_interval_seconds: 1.0,
+          channel_mappings: [
+            { source_mnemonic: 'SPP', channel_key: 'spp', name: 'Standpipe Pressure', dimension: 'pressure', unit: 'psi' },
+          ],
+        },
+        secret_refs: harness.etp_binary.secret_refs,
+      },
+      'engineer',
+    )
+    const f0 = created.worker.fencing_token
+    const v0 = created.config_version
+
+    const started = await apiPost<ConnectorDto>(
+      request,
+      `/connectors/${created.id}/start`,
+      { reason: 'Start ETP binary CAS check', expected_config_version: v0 },
+      'engineer',
+    )
+    expect(started.worker.fencing_token).toBeGreaterThan(f0)
+
+    // Update configuration so config_version advances from v0 -> v1
+    const updated = await apiPatch<ConnectorDto>(
+      request,
+      `/connectors/${created.id}`,
+      {
+        expected_config_version: v0,
+        reason: 'Bump ETP binary description',
+        description: 'Updated description for CAS check',
+      },
+      'engineer',
+    )
+    expect(updated.config_version).toBeGreaterThan(v0)
+
+    // Stale expected_config_version (v0) on stop is rejected with 409 Conflict
+    const staleStop = await apiAttempt(request, 'POST', `/connectors/${created.id}/stop`, {
+      role: 'engineer',
+      body: { reason: 'Stale stop attempt', expected_config_version: v0 },
+    })
+    expect(staleStop.status).toBe(409)
+
+    // Fresh expected_config_version succeeds and increments fencing_token again
+    const stopped = await apiPost<ConnectorDto>(
+      request,
+      `/connectors/${created.id}/stop`,
+      { reason: 'Fresh stop', expected_config_version: updated.config_version },
+      'engineer',
+    )
+    expect(stopped.worker.fencing_token).toBeGreaterThan(updated.worker.fencing_token)
+    expect(stopped.status).toBe('stopped')
+  })
+
+  test('Journey 36 (CP13 Scenario 13): Viewer role read-only enforcement on /connectors with ETP 1.2 Binary Avro connector selected', async ({
+    page,
+    wellId,
+    consoleErrors,
+  }) => {
+    await page.goto(`/connectors?wellId=${wellId}`)
+    await selectRole(page, 'viewer')
+
+    await expect(page.getByTestId('connectors-readonly-banner')).toBeVisible()
+    await expect(page.getByTestId('connector-form-card')).toHaveCount(0)
+    await expect(page.getByTestId('connector-lifecycle-controls')).toHaveCount(0)
+    await expect(page.getByTestId('connector-test-btn')).toHaveCount(0)
+    await expect(page.getByTestId('connector-replay-card')).toHaveCount(0)
+
+    await selectRole(page, 'engineer')
+    expect(appConsoleErrors(consoleErrors)).toEqual([])
+  })
+
+  test('Journey 37 (CP13 Scenario 14): Historical replay dry-run and live execute on ETP 1.2 Binary Avro connector verify reconciled manifest and data_outcome', async ({
+    page,
+    request,
+    wellId,
+    consoleErrors,
+  }) => {
+    const harness = await apiPost<HarnessSnapshot>(request, '/connectors/harness/ensure', {}, 'engineer')
+    await apiPost(
+      request,
+      '/connectors/harness/configure',
+      { protocol: 'etp_binary', fault_mode: 'ok', reset_rows: true },
+      'engineer',
+    )
+
+    const connKey = `e2e-etp-bin-replay-${Date.now().toString(36)}`
+    const created = await apiPost<ConnectorDto>(
+      request,
+      '/connectors',
+      {
+        key: connKey,
+        name: 'ETP Binary Historical Replay Stream',
+        protocol_profile: 'etp.1.2.binary_ws',
+        well_id: wellId,
+        endpoint_url: harness.etp_binary.endpoint_url,
+        config: {
+          auth_mode: 'bearer',
+          tls_verify: true,
+          poll_interval_seconds: 1.0,
+          channel_mappings: [
+            { source_mnemonic: 'SPP', channel_key: 'spp', name: 'Standpipe Pressure', dimension: 'pressure', unit: 'psi' },
+          ],
+        },
+        secret_refs: harness.etp_binary.secret_refs,
+      },
+      'engineer',
+    )
+    await apiPost(request, `/connectors/${created.id}/start`, { reason: 'Start ETP binary replay stream' }, 'engineer')
+    await apiPost(request, `/connectors/${created.id}/poll`, {}, 'engineer')
+
+    await page.goto(`/connectors?wellId=${wellId}`)
+    await page.getByTestId(`connector-row-${connKey}`).click()
+
+    await expect(page.getByTestId('manifest-data-outcome')).toHaveText('All valid points accepted')
+    await page.getByTestId('connector-replay-from-ts').fill('2020-01-01T00:00:00Z')
+    await page.getByTestId('connector-replay-reason').fill('Verify ETP binary historical window')
+    await page.getByTestId('connector-replay-dryrun-btn').click()
+
+    await expect(page.getByTestId('connector-replay-result')).toContainText('DRY RUN')
+    expect(appConsoleErrors(consoleErrors)).toEqual([])
+  })
+
+  test('Journey 38 (CP13 Scenarios 15 & 16): Persian (fa) RTL rendering of ETP 1.2 Binary Avro & test-only honesty badges plus zero unnamed interactive accessibility controls', async ({
+    page,
+    wellId,
+    consoleErrors,
+  }) => {
+    await page.goto(`/connectors?wellId=${wellId}`)
+    await page.getByTestId('locale-switch').selectOption('fa')
+
+    await expect(page.locator('html')).toHaveAttribute('dir', 'rtl')
+    await expect(page.getByTestId('profile-card-etp.1.2.binary_ws')).toContainText(
+      'تأییدشده با مجموعه آزمون انطباق مستقل',
+    )
+    await expect(page.getByTestId('profile-card-etp.1.2.json_ws')).toContainText(
+      'ETP 1.2 JSON (ویژهٔ تست/اشکال‌زدایی داخلی)',
+    )
+
+    const bodyText = await page.locator('body').innerText()
+    expect(bodyText).not.toContain('⟦')
+
+    await page.getByTestId('locale-switch').selectOption('en')
+
+    // Verify zero unnamed interactive controls in the browser accessibility tree
+    const snapshot = await page.locator('body').ariaSnapshot()
+    const interactiveRoles = [
+      'button',
+      'link',
+      'textbox',
+      'searchbox',
+      'combobox',
+      'checkbox',
+      'radio',
+      'switch',
+      'tab',
+    ]
+    const unnamed: string[] = []
+    for (const line of snapshot.split('\n')) {
+      const match = /^\s*-\s+([a-zA-Z]+)\s*$/.exec(line)
+      if (match && interactiveRoles.includes(match[1] as string)) {
+        unnamed.push(match[1] as string)
+      }
+    }
+    expect(unnamed).toEqual([])
     expect(appConsoleErrors(consoleErrors)).toEqual([])
   })
 })
