@@ -97,17 +97,18 @@ it holds to and `docs/FRONTEND_TESTING.md` lists what is verified and how.
 | --- | --- | --- |
 | Frontend types | `cd frontend && npm run typecheck` | strict TypeScript over app, tests and specs |
 | Frontend lint | `cd frontend && npm run lint` | unused code, `any`, React rules |
-| Frontend unit/component | `cd frontend && npm test` | 307 tests in 29 files |
+| Frontend unit/component | `cd frontend && npm test` | 308 tests in 29 files |
 | Frontend build | `cd frontend && npm run build` | `tsc -b` plus the production Vite build |
-| Backend tests | `cd backend && DRILLAI_TEST_POSTGRES=1 .venv/bin/python -m pytest -o addopts=""` | 996 tests, including 4 PostgreSQL persistence, migration & competing-worker fencing tests |
+| Backend tests | `cd backend && DRILLAI_TEST_POSTGRES=1 .venv/bin/python -m pytest -o addopts=""` | 1,016 tests, including 4 PostgreSQL persistence, migration & competing-worker fencing tests |
 | Backend lint | `cd backend && .venv/bin/python -m ruff check .` | style and import hygiene |
 | Migrations | `cd backend && .venv/bin/python -m alembic upgrade head && .venv/bin/python -m alembic check` | no model/migration drift, against a fresh database |
 | Stack verification | `backend/.venv/bin/python scripts/verify_stack.py` | clean migration, backend, dedicated `connector-worker`, real WITSML 1.4.1.1 SOAP ingest & restart recovery |
-| End-to-end | `cd frontend && npm run e2e` | 91 browser journeys in 17 spec files against the real stack |
+| Docker Compose smoke gate | `POSTGRES_PASSWORD=... docker compose up -d --build` | multi-container PostgreSQL, Alembic migrate, backend, `connector-worker`, and Nginx frontend proxy |
+| End-to-end | `cd frontend && npm run e2e` | 103 browser journeys in 17 spec files against the real stack |
 
 Set `DRILLAI_TEST_POSTGRES=1` to run the PostgreSQL-backed persistence and competing-worker fencing
 tests through the repository's own embedded PostgreSQL (`pgserver`); without it they skip, and the
-suite reports **992 passed, 4 skipped** rather than **996 passed**.
+suite reports **1012 passed, 4 skipped** rather than **1016 passed**.
 
 The end-to-end suite is 17 spec files across three deployments of the same product — development
 identity, deterministic fault injection, and authentication enabled — covering the cockpit,

@@ -1958,5 +1958,56 @@ CP11 is implemented, verified, committed, pushed to `origin/arena/01a0dca0-drill
 * `cd frontend && npm run build`: **passed** (`tsc -b && vite build`, `286 modules transformed`).
 * `cd frontend && npm run e2e`: **91 passed (4.7m)** across **17 spec files** and all 3 deployment stacks (`chromium`, `chromium-faults`, `chromium-auth`) with zero HTTP mocking, including **14 new real-stack journeys** in `frontend/e2e/connectors-platform.spec.ts`.
 
+---
 
+### Independent CP12 certification block — Data Integrity, Protocol Conformance, Connector Security Hardening, Recovery Workbench & Production Certification (2026-10-11)
 
+#### 1. Verdict
+CP12 is implemented and verified on `arena/01a0dca0-drillai`, resolving every P0, P1, P2, and P3 finding in strict priority order (**P0 data integrity & security -> P1 protocol conformance, concurrency & worker recovery -> P2 deployment defaults, diagnostics & reconciliation UX -> P3 soak, performance & documentation**). Checkpoints A (`1a015bab73f46f51f2bec38187fcd38486176bf0`), B/C (`2b2bd67a8c7b74b82417a7051ef2210f5cc7587d`), and D (`646a0c7a3eab878efd04ddb6c9c6e4c72ecb88bc`) were pushed to `origin/arena/01a0dca0-drillai` and verified via `git ls-remote`; Checkpoints E and F are committed locally on `arena/01a0dca0-drillai` and pass every local frontend, backend, PostgreSQL, migration, multi-process stack, and 103-journey real-stack Playwright E2E gate.
+
+#### 2. Repository identity & checkpoint chain
+* **Target branch:** `arena/01a0dca0-drillai` (`main` untouched at `bfa066b28e0071880cb9191a4f1d47fdaa143e04`).
+* **Baseline entering CP12:** `27a02a264305cdcee658164b50e3d215f2f6e54a` (verified green in GitHub Actions Run [38052387611](https://github.com/asgareyvazi/DrillAI/actions/runs/38052387611)).
+* **CP12-A (P0 Data Integrity, WITSML/ETP Checkpoint Safety, Strict Index Units & Disposition Manifests — pushed & verified on `origin`):** `1a015bab73f46f51f2bec38187fcd38486176bf0`
+  * Fixed `WitsmlSoapClient.poll_log_batch()` and `WitsmlPollingAdapter` so `max_points_per_poll` is enforced during parsing before computing `next_watermark`, advancing `cursor_timestamp` only through processed items and tracking `completed_at_cursor`, `completed_values_at_cursor`, and `has_more_deferred` (`checkpoint_status = "partial"`).
+  * Fixed `EtpWebSocketClient` and `EtpSubscriptionAdapter` to maintain per-channel watermarks (`channel_cursors[channel_key]`) so a fast channel at `T3` never suppresses a slower channel arriving at `T1.5` or `T2.5`.
+  * Removed the `> 1e12` numeric timestamp heuristic in `_parse_etp_index_timestamp`, requiring explicit `EtpIndexMetadata` (`indexKind` + `uom` in `s`, `ms`, `us`, `ns`) or ISO-8601 UTC strings, rejecting `bool`, `NaN`/`Inf`, and depth-only primary indexes, and preserving secondary depth indexes on `SourceFrame.depth_md_si`.
+  * Added `ProtocolPollDisposition` (`ConnectorRun.details["manifest"]`) accounting for every discovered, emitted, skipped, suppressed, deferred, and protocol-rejected source record (`reconciled: true`).
+* **CP12-BC (Protocol Conformance, Connect-Time SSRF/DNS-Rebinding, Secret Minimization, Atomic CAS, Lease Heartbeat & Governed Replay — pushed & verified on `origin`):** `2b2bd67a8c7b74b82417a7051ef2210f5cc7587d`
+  * Built an independent spec-derived conformance suite (`backend/tests/telemetry/test_cp12_protocol_conformance_and_security.py`) for ETP 1.2 Avro-JSON (`{header, body}`, `StartStreaming`/`StopStreaming`, `ProtocolException` single `error` + `errors` map) and WITSML 1.4.1.1 SOAP 1.1 (`Result` codes `1`/`2`/`<=0`, SOAP Faults, multi-page `maxReturnNodes`, XXE/DTD rejection).
+  * Enforced connect-time SSRF & DNS-rebinding protection (`enforce_connect_time_ssrf`), validating all resolved `A`/`AAAA` records, unpacking IPv4-mapped IPv6/6to4/Teredo addresses, and rejecting non-canonical/octal/integer IPv4 literals.
+  * Enforced secret reference minimization (`mask_secret_refs` -> `ref: "env:********"`, `redacted: true`) and URL query token / header / env name redaction (`redact_sensitive_text`).
+  * Enforced atomic SQL compare-and-swap (`expected_config_version`) on `ConnectorService.update()` and `transition()`, background worker lease-renewal heartbeats (`renew_lease` + `_heartbeat_watcher` mid-poll preemption), `config_version` + `fencing_token` verification, 110-connector scheduling fairness, and governed idempotent replay (`POST /api/v1/connectors/{id}/replay`).
+* **CP12-D (Operator Reconciliation & Recovery Workbench UI & 26 Real-Stack Playwright E2E Journeys — pushed & verified on `origin`):** `646a0c7a3eab878efd04ddb6c9c6e4c72ecb88bc`
+  * Added the **Run Data Disposition & Checkpoint Manifest** inspector (`selected-run-manifest`, `inspect-run-${run.id}`), **Governed Replay & Backfill Workbench** (`connector-replay-card`, dry-run preview vs live replay), **Operator Remediation Guidance** (`detail-error-remediation`), and `max_points_per_poll` configuration (`connector-max-points`) in `ConnectorsPage.tsx` with full EN/FA localization and RTL technical token isolation.
+  * Expanded `frontend/e2e/connectors-platform.spec.ts` from 14 to **26 real-stack Playwright E2E journeys** (`26 passed`).
+* **CP12-E & CP12-F (Deployment Security, Docker Compose CI Smoke Gate, Soak Hardening & Documentation):**
+  * Hardened `docker-compose.yml` (`POSTGRES_PASSWORD:?`, `drillai_internal` internal network, `127.0.0.1` bindings, `/api/v1/health`), `.env.example`, `frontend/Dockerfile` (`node:22-alpine`), and `.github/workflows/ci.yml` (`scripts/verify_stack.py` + Docker Compose smoke gate).
+  * Added bounded-load 60-cycle worker soak test (`test_e1_e3_h1_h3_docker_compose_hardening_and_bounded_worker_soak` in `test_cp12_protocol_conformance_and_security.py`).
+
+#### 3. Source-backed forensic findings register (`F-01` .. `F-12`)
+| ID | Severity | Code Path | Issue & Fix Summary | Regression Test |
+| --- | --- | --- | --- | --- |
+| `F-01` | **P0** | `protocols/witsml.py`, `witsml_client.py` | `WitsmlPollingAdapter.poll()` truncated `batch.frames[:max_points_per_poll]` after `poll_log_batch()` had already set `next_watermark` to the last row of the full response. Fixed by enforcing `max_points_per_poll` inside `parse_get_from_store_response()` and recording `completed_at_cursor` + `has_more_deferred`. | `test_a2_witsml_batch_cap_never_advances_cursor_past_truncated_rows_or_curves` |
+| `F-02` | **P0** | `protocols/etp.py` | Shared `cursor_timestamp` across ETP channels caused a fast channel at `T3` to suppress slower channel points at `T1.5`/`T2.5`. Fixed via per-channel `channel_cursors[channel_key]`. | `test_a3_etp_per_channel_watermarks_preserve_slower_channels_and_out_of_order_frames` |
+| `F-03` | **P0** | `protocols/etp.py`, `protocols/witsml.py` | `_parse_etp_timestamp` used `> 1e12` ms/s heuristic and accepted `bool` (`isinstance(True, int)`). Fixed via explicit `EtpIndexMetadata` (`indexKind`, `uom`) and strict `bool`/`NaN`/`Inf` rejection. | `test_a4_etp_strict_index_units_reject_booleans_nan_and_separate_secondary_depth` |
+| `F-04` | **P0** | `protocols/witsml.py`, `protocols/etp.py`, `worker.py` | Filtered, skipped, and rejected records were not reconciled in `ConnectorRun.details`. Fixed via `ProtocolPollDisposition` (`details["manifest"]`, `reconciled: true`). | `test_a5_disposition_manifest_reconciles_every_source_record` |
+| `F-05` | **P1** | `connectors.py`, `protocols/etp.py`, `docs/CONNECTORS_AND_OPERATIONS.md` | `PROTOCOL_PROFILE_SPECS` listed unimplemented ETP Protocol 3 Discovery operations and lacked ETP 1.2 `{header, body}` Avro-JSON framing. Fixed and verified against independent conformance servers. | `test_b1_b2_independent_etp_12_avro_json_conformance_and_lifecycle` |
+| `F-06` | **P1** | `connectors.py` | `update()` and `transition()` checked `config_version` in Python rather than atomic SQL `WHERE config_version = :expected`. Fixed with SQL CAS update checking `rowcount == 1`. | `test_c1_atomic_optimistic_concurrency_and_idempotency_conflict` |
+| `F-07` | **P1** | `worker.py` | Long polls had no lease renewal heartbeat and Phase 2 did not verify `config_version`. Fixed with `renew_lease()`, `_heartbeat_watcher` mid-poll cancellation, and `config_version` CAS check. | `test_c2_c3_worker_lease_heartbeat_cancels_poll_on_preemption_and_preserves_checkpoint` |
+| `F-08` | **P0** | `connectors.py`, `protocols/witsml.py`, `protocols/etp.py` | SSRF checked only registration time and did not block DNS rebinding or IPv4-mapped IPv6/non-canonical IPv4 literals at connect time. Fixed with `enforce_connect_time_ssrf()`. | `test_d1_ssrf_dns_rebinding_multi_record_and_ipv6_mapped_defense` |
+| `F-09` | **P1** | `connectors.py` | `mask_secret_refs` exposed raw `env:DRILLAI_SECRET_*` names and `redact_sensitive_text` missed URL query tokens (`?token=`, `&api_key=`). Fixed with locator minimization (`env:********`, `redacted: true`) and URL token scrubbing. | `test_d2_secret_reference_minimization_and_redaction` |
+| `F-10` | **P1** | `protocols/witsml.py` | `parse_xml_safely` only checked the first 4096 bytes for `<!DOCTYPE`/`<!ENTITY` and had no depth/element cap. Fixed with full-payload scan + `MAX_XML_DEPTH=32` and `MAX_XML_ELEMENTS=25000`. | `test_b1_b3_independent_witsml_1411_soap_conformance_and_negative_fixtures` |
+| `F-11` | **P1** | `connectors.py` | `parse_channel_mappings` skipped non-dict items instead of failing closed. Fixed to raise `ValidationFailed` on any non-mapping entry. | `test_d3_d4_fail_closed_channel_mappings_and_xml_bounds` |
+| `F-12` | **P2** | `docker-compose.yml`, `.env.example`, `.github/workflows/ci.yml` | Hardened `docker-compose.yml` (`POSTGRES_PASSWORD:?`, `drillai_internal` network, `127.0.0.1` bindings, `/api/v1/health`) and added CI Docker Compose smoke gate. | `test_e1_e3_h1_h3_docker_compose_hardening_and_bounded_worker_soak` |
+
+#### 4. Exact verification commands & outputs executed
+* `cd backend && DRILLAI_TEST_POSTGRES=1 .venv/bin/python -m pytest -o addopts=""`: **1,016 passed, 0 failed, 0 skipped** (up from 996 in CP11; includes all PostgreSQL persistence, migration, and competing-worker fencing tests plus 20 new CP12 data integrity, protocol conformance, SSRF/DNS-rebinding, lease-heartbeat, replay, and soak tests).
+* `cd backend && .venv/bin/python -m ruff check .`: **passed** (`All checks passed!`).
+* `cd backend && DRILLAI_DATABASE_URL="sqlite+aiosqlite:////tmp/cp12_final_mig_check.db" .venv/bin/alembic upgrade head && DRILLAI_DATABASE_URL="sqlite+aiosqlite:////tmp/cp12_final_mig_check.db" .venv/bin/alembic check`: **passed** (`No new upgrade operations detected` through head `b4e8f19c3d72`).
+* `backend/.venv/bin/python scripts/verify_stack.py`: **passed** (`STACK_VERIFICATION_OK` in `11.88s`).
+* `cd frontend && npm run typecheck`: **passed** (`tsc -b --noEmit`, 0 errors).
+* `cd frontend && npm run lint`: **passed** (`eslint .`, 0 errors).
+* `cd frontend && npm test`: **29 test files, 308 tests passed, 0 failed, 0 skipped**.
+* `cd frontend && npm run build`: **passed** (`tsc -b && vite build`, `286 modules transformed`).
+* `cd frontend && npm run e2e`: **103 passed (4.4m)** across **17 spec files** and all 3 deployment stacks (`chromium`, `chromium-faults`, `chromium-auth`) with zero HTTP mocking, including **26 real-stack journeys** in `frontend/e2e/connectors-platform.spec.ts`.

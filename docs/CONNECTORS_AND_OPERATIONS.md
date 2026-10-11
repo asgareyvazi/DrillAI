@@ -1,7 +1,8 @@
 # Telemetry Connectors, WITSML/ETP Protocols, Worker Runtime & Operations Runbook
 
-This document specifies the production integration architecture, protocol profiles, security controls,
-fenced competing-worker execution model, deployment topology, and operator runbooks introduced in CP11.
+This document specifies the production integration architecture, protocol profiles, standards gap matrix,
+checkpoint and data disposition invariants, security controls, fenced competing-worker execution model,
+deployment topology, and operator runbooks certified in CP11 and CP12.
 
 ---
 
@@ -16,150 +17,150 @@ External Rig Store / Stream (WITSML 1.4.1.1 SOAP | ETP 1.2 WebSocket | Synthetic
         │
         ▼
 Protocol Transport Client (`WitsmlSoapClient` | `EtpWebSocketClient` | `ConnectorSyntheticAdapter`)
-  • SSRF endpoint & DNS/IP validation (`validate_connector_endpoint`)
-  • Secret reference resolution (`env:DRILLAI_SECRET_*` | `secret_ref:*`)
+  • Registration-time & connect-time SSRF / DNS-rebinding guard (`validate_connector_endpoint`,
+    `enforce_connect_time_ssrf`: validates all resolved A/AAAA records, unpacks IPv4-mapped IPv6,
+    6to4, and Teredo addresses, and rejects non-canonical/octal/integer IPv4 literals)
+  • Minimized secret reference resolution (`env:DRILLAI_SECRET_*` | `secret_ref:*` | `secret:*`)
+  • Full-payload XML DTD/entity/depth/element bounds & strict SOAP 1.1 `<Envelope>` validation
   • TLS certificate verification (`tls_verify=True` enforced)
         │
         ▼
 SourceAdapter (`WitsmlPollingAdapter` | `EtpSubscriptionAdapter` | `ConnectorSyntheticAdapter`)
-  • Emits normalized `ChannelDescriptor` + `SourceFrame` batches
-  • Computes next source watermark (`cursor_timestamp`, `uid_well`, `uid_log`, `last_session_id`)
+  • Emits normalized `ChannelDescriptor` + `SourceFrame` batches bounded by `max_points_per_poll`
+  • Computes checkpoint watermarks strictly from processed items (`cursor_timestamp` +
+    `completed_at_cursor` for WITSML; per-channel `channel_cursors[channel_key]` for ETP)
+  • Records reconciled `ProtocolPollDisposition` accounting for every source record
         │
         ▼
 Durable `ConnectorWorker` (`python -m drillai.telemetry.worker`)
-  • Phase 1 (outside DB write lock): CAS lease claim (`fencing_token` + `lease_expires_at`),
-    protocol connect & frame fetch
-  • Phase 2 (short atomic DB transaction): verify `worker_id` & `fencing_token` CAS,
+  • Fair candidate discovery (`next_poll_at ASC NULLS FIRST, last_poll_at ASC NULLS FIRST, id ASC`)
+  • Active-connector in-memory guard preventing overlapping in-process polls
+  • Phase 1 (outside DB write lock): CAS lease claim (`fencing_token` + `config_version` +
+    `lease_expires_at`), background `_heartbeat_watcher` renewing lease & cancelling in-flight
+    poll immediately if preempted (`renew_lease() == False`)
+  • Phase 2 (short atomic DB transaction): verify `worker_id`, `fencing_token`, AND `config_version`,
     ingest frames via `ingest_frames(TelemetryService, adapter, ...)`, advance `Connector.cursor`,
-    append `ConnectorRun`, prune bounded run ledger, emit `connector.changed` outbox event
+    append `ConnectorRun` with `details["manifest"]` and `checkpoint_status`, prune bounded run ledger
         │
         ▼
 `TelemetryService`
   • Unit validation & conversion to canonical SI (`Pa`, `N`, `rad/s`, `m3/s`, `m`, `N.m`)
-  • Idempotent point deduplication (`(series_id, ts)` + `source_point_id`)
+  • Idempotent point deduplication (`(series_id, ts)` + `source_point_id`) & conflict detection
   • Quality classification (`good`, `questionable`, `bad`, `missing`, `suspect`)
   • Transactional outbox emission (`telemetry.received`, `well_state.changed`)
   • Automatic rule evaluation (`AlertEvaluationService`) -> `alert.changed`
         │
         ▼
-Per-Well Live Stream (`/api/v1/wells/{well_id}/live/stream`) & Operational Monitor UI
+Per-Well Live Stream (`/api/v1/wells/{well_id}/live/stream`), Operational Monitor & Connector Workspace
 ```
 
 ---
 
-## 2. Supported Protocol Profiles & Verification Honesty
+## 2. Supported Protocol Profiles, Checkpoint Semantics & Standards Gap Matrix
 
-| Profile Key | Standard / Version | Transport | Auth Modes | Resume / Watermark | Local Harness Verified | External Commercial Vendor Verified |
+| Profile Key | Standard / Version | Transport | Auth Modes | Resume / Watermark | Local Harness & Spec Suite Verified | External Commercial Vendor Verified |
 | --- | --- | --- | --- | --- | --- | --- |
-| `witsml.1.4.1.1.soap_http` | Energistics WITSML 1.4.1.1 | HTTP/HTTPS SOAP 1.1 (`WMLS_GetFromStore`) | `none`, `basic`, `bearer` | `<startDateTimeIndex>` (`cursor_timestamp` ISO-8601 UTC) | **Yes** (`LocalWitsmlSoapServer` over TCP) | **No** (no external vendor server in CI) |
-| `etp.1.2.json_ws` | Energistics ETP v1.2 (JSON framing subset) | WebSocket (`ws://` / `wss://`, subprotocol `energistics-tp`) | `none`, `basic`, `bearer` | `Start.startTimestamp` (`cursor_timestamp` ISO-8601 UTC) | **Yes** (`LocalEtpWebSocketServer` over TCP) | **No** (no external vendor server in CI) |
+| `witsml.1.4.1.1.soap_http` | Energistics WITSML 1.4.1.1 | HTTP/HTTPS SOAP 1.1 (`WMLS_GetVersion`, `WMLS_GetCap`, `WMLS_GetFromStore`) | `none`, `basic`, `bearer` | Inclusive `<startDateTimeIndex>` (`cursor_timestamp` + `completed_at_cursor` + `has_more_deferred`) | **Yes** (`LocalWitsmlSoapServer` + independent SOAP 1.1 conformance suite) | **No** (no external vendor server in CI) |
+| `etp.1.2.json_ws` | Energistics ETP v1.2 / v1.1 (Avro-JSON & flat JSON framing subset) | WebSocket (`ws://` / `wss://`, subprotocol `energistics-tp`) | `none`, `basic`, `bearer` | Per-channel `channel_cursors[channel_key]` (`last_timestamp`, `last_index_raw`, `recent_point_ids`) | **Yes** (`LocalEtpWebSocketServer` + independent ETP 1.2 Avro-JSON conformance suite) | **No** (no external vendor server in CI) |
 | `synthetic.v1` | DrillAI Synthetic v1 | In-process deterministic plan generator | `none` | `step_index` + `cursor_timestamp` | **Yes** | **N/A** (`SYNTHETIC / TEST SOURCE`) |
 
-### Explicit Scope & Limitations
-1. **`witsml.1.4.1.1.soap_http`**:
-   - Implements read-only `WMLS_GetFromStore` polling for time-indexed `<log>` objects (`<logCurveInfo>` + comma-delimited `<logData><mnemonicList>/<unitList>/<data>`).
-   - Handles WITSML positive status codes (`1` complete, `2` partial/truncated with bounded page continuation) and negative error codes (`<Result> < 0`) or `<soap:Fault>`.
-   - Depth-indexed logs, trajectory/mudLog/bhaRun objects, and write operations (`WMLS_AddToStore`, `WMLS_UpdateInStore`, `WMLS_DeleteFromStore`) are out of scope.
-2. **`etp.1.2.json_ws`**:
-   - Implements ETP v1.2 Protocol 0 (`Core`: `RequestSession`, `OpenSession`, `Ping`, `Pong`, `ProtocolException`, `CloseSession`) and Protocol 1 (`ChannelStreaming`: `Start`, `ChannelMetadata`, `ChannelData`) using JSON message framing over WebSocket (`energistics-tp`).
-   - Binary Avro framing and ETP Discovery/Store protocols (Protocols 3/4) are out of scope.
-3. **Verification Honesty**:
-   - Automated tests in CI verify real TCP/HTTP/WebSocket client-server exchanges against `LocalWitsmlSoapServer` and `LocalEtpWebSocketServer`.
-   - External commercial vendor servers (e.g. Kongsberg, Pason, Halliburton, SLB live rig stores) are **not** connected in CI and are explicitly badged as `External commercial vendor unverified in CI` in both API metadata (`external_vendor_verified: false`) and the operator UI.
+### 2.1 WITSML 1.4.1.1 Checkpoint & Batch-Cap Invariants (`witsml.1.4.1.1.soap_http`)
+- **Inclusive `<startDateTimeIndex>`**: Standard WITSML 1.4.1.1 stores treat `<startDateTimeIndex>` as inclusive (`>=`).
+- **Mid-Row & Multi-Page Batch Cap Safety**: `WitsmlSoapClient.poll_log_batch()` enforces `max_points_per_poll` during parsing before computing `next_watermark`. If `max_points_per_poll` truncates a multi-curve row or multi-row page mid-flight:
+  - `cursor_timestamp` advances only to the timestamp of the last emitted frame.
+  - `completed_at_cursor` records the exact `source_point_id`s (`witsml:{channel_key}:{ts}`) and `completed_values_at_cursor` emitted at `cursor_timestamp`.
+  - `has_more_deferred` is set to `True` (`checkpoint_status = "partial"`), and the worker schedules the next poll immediately (`+50 ms`) so remaining curves on the same timestamp row and subsequent rows are ingested on the next poll with zero silent data loss and zero duplicate acceptance.
+
+### 2.2 ETP 1.2 Per-Channel Watermarks & Index Unit Semantics (`etp.1.2.json_ws`)
+- **Per-Channel Watermarks (`channel_cursors`)**: Each mapped channel maintains its own independent watermark (`channel_cursors[channel_key] = {last_timestamp, last_index_raw, index_kind, index_uom, recent_point_ids}`). A fast channel advancing to `T3` never suppresses a slower or out-of-order channel arriving at `T1.5` or `T2.5`.
+- **Explicit Index Metadata (`EtpIndexMetadata`)**: Numeric primary time indexes are converted strictly using the channel's declared `IndexMetadataRecord` (`indexKind` in `DateTime`/`Time`/`ElapsedTime` and `uom` in `s`, `ms`, `us`/`µs`, `ns`), never a magnitude heuristic. Boolean values, `NaN`/`Inf`, depth-only primary indexes (`indexKind="MeasuredDepth"`), and unknown units are rejected with explicit `ProtocolPollDisposition` counters. Secondary depth indexes are preserved on `SourceFrame.depth_md_si`.
+
+### 2.3 Evidence-Based Standards Gap Matrix (Phase B4)
+
+| Standard / Capability | Status in DrillAI | Evidence / Verification |
+| --- | --- | --- |
+| **WITSML 1.4.1.1 SOAP 1.1 `WMLS_GetVersion`, `WMLS_GetCap`, `WMLS_GetFromStore` (time-indexed `<log>`)** | **Implemented & Verified** | `backend/src/drillai/telemetry/protocols/witsml.py`, `test_cp12_protocol_conformance_and_security.py`, `test_cp12_data_integrity.py` |
+| **WITSML 1.4.1.1 Result codes (`1` complete, `2` partial/more available, `<=0` error) & SOAP Faults** | **Implemented & Verified** | `WitsmlSoapClient`, `test_b1_b3_independent_witsml_1411_soap_conformance_and_negative_fixtures` |
+| **WITSML 1.4.1.1 depth-indexed `<log>`, `<trajectory>`, `<mudLog>`, and write operations (`WMLS_AddToStore`)** | **Out of Scope (Fail-Closed)** | Depth-indexed logs raise `ConnectorTransportError("protocol_error")`; connectors are strictly read-only |
+| **WITSML 2.1 XML/JSON data objects over ETP Store (Protocol 4)** | **Out of Scope** | Documented in `PROTOCOL_PROFILE_SPECS` limitations |
+| **ETP v1.2 Protocol 0 (`Core`: `RequestSession`, `OpenSession`, `Ping`, `Pong`, `ProtocolException` error + errors map, `CloseSession`)** | **Implemented & Verified** | `backend/src/drillai/telemetry/protocols/etp.py`, `test_b1_b2_independent_etp_12_avro_json_conformance_and_lifecycle` |
+| **ETP v1.2 / v1.1 Protocol 1 (`ChannelStreaming`: `Start`/`StartStreaming`, `ChannelDescribe`, `ChannelMetadata`, `ChannelData`, `ChannelStreamingStart`, `StopStreaming`) in Avro-JSON (`{header, body}`) and flat JSON** | **Implemented & Verified** | `EtpWebSocketClient`, `test_cp12_protocol_conformance_and_security.py`, `test_cp12_data_integrity.py` |
+| **ETP v1.2 Binary Avro framing, Protocol 3 (`Discovery`), Protocol 4 (`Store`), Protocol 21 (`ChannelSubscribe`)** | **Out of Scope** | Explicitly excluded from `PROTOCOL_PROFILE_SPECS["etp.1.2.json_ws"].supported_operations` |
+| **Live External Commercial Vendor Servers (Kongsberg, Pason, Halliburton, SLB)** | **Unverified in CI** | `external_vendor_verified: false` in API and badged in `/connectors` UI |
 
 ---
 
-## 3. Security, SSRF Protection & Secret References
+## 3. Security, Outbound SSRF/DNS-Rebinding Defense & Secret Minimization
 
-### 3.1 Secret References (`secret_refs`)
-Plaintext passwords, bearer tokens, or API keys are rejected (`422 ValidationFailed`) if supplied in
-`config` or `secret_refs`. Credentials must be referenced via locator strings:
-- **Environment locator**: `env:DRILLAI_SECRET_<NAME>` (must start with `DRILLAI_SECRET_`, uppercase alphanumeric/underscore).
-- **Platform SecretRef table locator**: `secret_ref:<key>` (resolved tenant-scoped from `secret_refs` table).
+### 3.1 Secret Reference Minimization (`secret_refs`)
+- Plaintext credentials in `config` or `secret_refs` are refused (`422 ValidationFailed`).
+- Supported locators: `env:DRILLAI_SECRET_<NAME>`, `secret_ref:<key>`, and `secret:<key>` (normalized to `secret_ref:<key>`).
+- **Minimization**: Read serializers (`mask_secret_refs`) redact both the secret value (`masked_value: "********"`) and the internal locator string (`ref: "env:********"` or `"secret_ref:********"`, `redacted: true`) so raw environment variable names (`DRILLAI_SECRET_*`) and internal secret keys are never exposed in API responses, UI screens, or audit logs.
+- **Redaction (`redact_sensitive_text`)**: Scrubs `Authorization: Basic/Bearer`, `X-API-Key`, URL query parameters (`?token=`, `&api_key=`, `&access_token=`, `&password=`, `&secret=`, `&sig=`), key/value credential assignments, and `DRILLAI_SECRET_*` names from all transport errors, run ledgers, and logs.
 
-Every read serializer (`GET /api/v1/connectors`, `GET /api/v1/connectors/{id}`) masks configured secret
-values as `"********"`. Error messages, run diagnostics, and structured logs pass through
-`redact_sensitive_text()` so credentials never leak into logs, audit records, or UI banners.
+### 3.2 Registration-Time & Connect-Time SSRF / DNS-Rebinding Protection
+- `validate_connector_endpoint()` (at registration/update) and `enforce_connect_time_ssrf()` (immediately before every outbound HTTP POST or WebSocket handshake):
+  - Reject non-canonical, octal, integer, or shorthand IPv4 literals (`0177.0.0.1`, `2130706433`, `127.1`).
+  - Unpack IPv4-mapped IPv6 (`::ffff:127.0.0.1`, `::ffff:169.254.169.254`, `::ffff:10.0.0.1`), 6to4 (`2002::/16`), and Teredo (`2001:0000::/32`) addresses and validate both outer and embedded IPv4 addresses.
+  - Validate **all** resolved DNS `A`/`AAAA` records — if any record in a multi-record DNS response is loopback, private RFC-1918, link-local, or cloud metadata (`169.254.169.254`), or if a hostname rebinds from a public IP to a private/loopback IP at connect time, the connection is blocked (`ssrf_blocked`, `retryable=False`).
 
-### 3.2 SSRF & Transport Security (`validate_connector_endpoint`)
-- Allowed schemes: `http://`, `https://` for WITSML; `ws://`, `wss://` for ETP; `synthetic://` for `synthetic.v1`. `file://`, `ftp://`, `gopher://`, and URLs with embedded `user:pass@host` credentials are unconditionally rejected.
-- Cloud metadata and link-local addresses (`169.254.169.254`, `fe80::/10`, `metadata.google.internal`, `metadata.azure.com`) are unconditionally blocked in all environments.
-- Loopback (`127.0.0.0/8`, `::1`, `localhost`) and RFC-1918 private networks (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`) are blocked by default. Loopback can only be enabled in non-production (`DRILLAI_CONNECTOR_ALLOW_LOOPBACK=true`) for local protocol harness testing; in `DRILLAI_ENVIRONMENT=production`, `DRILLAI_CONNECTOR_ALLOW_LOOPBACK=true` causes fail-closed startup refusal.
-- TLS certificate verification (`tls_verify: true`) is mandatory; `tls_verify: false` is rejected.
-
----
-
-## 4. Competing-Worker Lease, Fencing Token & Checkpoint Safety
-
-### 4.1 Lease Acquisition & Monotonic Fencing Token
-`ConnectorWorker` claims due connectors (`is_enabled=True`, `desired_state='enabled'`, `next_poll_at <= now`, and either unleased or `lease_expires_at <= now`) using an atomic compare-and-swap (CAS) `UPDATE`:
-- Increments `Connector.fencing_token` by `+1`.
-- Sets `worker_id`, `last_heartbeat_at = now`, and `lease_expires_at = now + lease_seconds`.
-- If a prior worker's lease expired (`lease_expires_at <= now`), the new worker increments `reconnect_count` and records metric `drillai_connector_lease_recoveries_total`.
-
-### 4.2 Two-Phase Poll Execution & Stale-Worker Fencing
-1. **Phase 1 (Network I/O outside DB write transaction)**:
-   The worker loads connector config and executes `await adapter.connect()` over the network without holding a database write transaction.
-2. **Phase 2 (Short atomic write transaction with fencing verification)**:
-   The worker opens a short DB write session, verifies that `Connector.worker_id == self.worker_id` and `Connector.fencing_token == claimed.fencing_token` and `Connector.desired_state == 'enabled'`, ingests frames through `TelemetryService`, and executes a fenced `UPDATE ... WHERE id = :id AND worker_id = :wid AND fencing_token = :token`.
-   - If another worker stole the lease after lease expiry or an operator stopped/disabled the connector while Phase 1 was in flight, the stale worker rolls back its transaction, discards the poll result, and increments `drillai_connector_fenced_stale_commits_total`.
-   - Source watermarks (`Connector.cursor`) advance **only** inside the same transaction that commits ingested `TimeSeriesPoint` rows. If ingestion fails, the transaction rolls back and `Connector.cursor` remains at `cursor_before`.
+### 3.3 Full-Payload XML Safety & Fail-Closed Channel Mappings
+- `parse_xml_safely()` inspects the entire XML payload (case-insensitive) for `<!DOCTYPE`, `<!ENTITY`, and external `SYSTEM`/`PUBLIC` declarations, enforces `MAX_XML_DEPTH = 32` and `MAX_XML_ELEMENTS = 25000`, and requires a valid SOAP `<Envelope>` or WITSML `<logs>` root element.
+- `parse_channel_mappings()` fails closed (`ValidationFailed`) if any stored or supplied mapping is malformed, missing required fields, or uses an invalid unit/dimension.
 
 ---
 
-## 5. Non-Conflated Health Semantics
+## 4. Optimistic Concurrency, Competing-Worker Leases, Heartbeats & Run Manifests
 
-The platform separates four distinct operational dimensions:
-1. **Process Readiness (`/api/v1/health/ready`)**: Whether the FastAPI process, database, migration head, and embedded worker loop are healthy.
-2. **Desired Intent (`desired_state`)**: Operator-governed target state (`enabled`, `stopped`, `disabled`).
-3. **Observed Runtime Status (`status`)**: Worker execution state (`configured`, `starting`, `running`, `backing_off`, `degraded`, `failed`, `stopped`, `disabled`).
-4. **Operational Health & Data Freshness (`health.health_state`, `health.is_live`, `health.data_freshness`)**:
-   - `is_live` is `true` **only** when `desired_state == 'enabled'`, `status == 'running'`, `error_count == 0`, `data_freshness == 'fresh'`, and `has_low_quality == false`.
-   - Stopped or disabled connectors report `stopped` / `disabled` (never `LIVE`).
-   - Running connectors whose latest telemetry is older than `DRILLAI_TELEMETRY_FRESH_SECONDS` report `stale_data`.
-   - Running connectors whose latest batch contains untrustworthy quality (`bad`, `missing`, `suspect`) report `low_quality_data`.
+### 4.1 Atomic Optimistic Concurrency (`expected_config_version`)
+- `ConnectorService.update()` and `ConnectorService.transition()` execute an atomic SQL compare-and-swap:
+  `UPDATE connectors SET ..., config_version = config_version + 1 WHERE id = :id AND org_id = :org_id AND config_version = :expected`
+  If `rowcount != 1`, a `409 Conflict` is raised immediately.
+- All mutating endpoints (`/connectors`, `PATCH /connectors/{id}`, `start`, `stop`, `restart`, `disable`, `replay`) enforce org-scoped `Idempotency-Key` reservation (`replay_or_reserve` / `complete`), returning `409 Conflict` if the same key is reused with a different request payload.
+
+### 4.2 Lease Renewal Heartbeat & Mid-Poll Preemption
+- During Phase 1 network I/O, `ConnectorWorker` runs a background `_heartbeat_watcher` task that calls `renew_lease()` every `max(0.1s, min(lease_seconds / 3, 2.0s))` to extend `lease_expires_at` and update `last_heartbeat_at` while verifying `worker_id`, `fencing_token`, `config_version`, and `desired_state == 'enabled'`.
+- If another worker steals an expired lease or an operator stops/disables/updates the connector mid-poll, `renew_lease()` returns `False` and `_heartbeat_watcher` immediately **cancels** the in-flight `adapter.connect()` task and returns `status = "fenced"`.
+- Phase 2 commit verifies both `fencing_token == claimed.fencing_token` AND `config_version == claimed.config_version` before committing ingested frames and advancing `Connector.cursor`.
+
+### 4.3 Reconciled Run Disposition Manifest (`ConnectorRun.details["manifest"]`)
+Every poll and replay run persists a bounded manifest (`ProtocolPollDisposition.to_dict()`) recording:
+- `source_records_discovered`, `mapped_frames_emitted`, `unmapped_skipped`, `unsubscribed_skipped`, `watermark_suppressed`, `in_batch_duplicates`, `deferred_over_cap`,
+- `rejected_malformed_timestamp`, `rejected_unsupported_index`, `rejected_invalid_value`, `rejected_non_finite_value`, `rejected_unknown_channel`, `total_protocol_rejected`,
+- `reconciled` (`source_records_discovered == mapped_frames_emitted + total_filtered + total_protocol_rejected`),
+- `checkpoint_status` (`"complete"`, `"partial"`, `"unchanged"`, `"failed"`),
+- `cursor_before` and `cursor_after`.
 
 ---
 
-## 6. Deployment & Verification Stack
+## 5. Deployment Security & Verification Stack
 
-### 6.1 Multi-Container Compose Stack
-Copy `.env.example` to `.env` and start the reproducible stack:
+### 5.1 Hardened `docker-compose.yml`
+1. Copy `.env.example` to `.env` and set a strong `POSTGRES_PASSWORD` (required — `docker-compose.yml` enforces `${POSTGRES_PASSWORD:?...}` with no default fallback password).
+2. `postgres` runs on an internal-only Docker network (`drillai_internal`, `internal: true`) with no host port published by default.
+3. `backend` and `frontend` bind to `127.0.0.1` by default (`${BIND_ADDRESS:-127.0.0.1}:8000:8000` and `${BIND_ADDRESS:-127.0.0.1}:8080:8080`).
 
 ```bash
 cp .env.example .env
 docker compose up --build -d
 ```
 
-Services defined in `docker-compose.yml`:
-- `postgres`: PostgreSQL 16 with `pg_isready` healthcheck.
-- `migrate`: One-shot `python -m alembic upgrade head && python -m alembic check` init container.
-- `backend`: FastAPI server (`0.0.0.0:8080`) with `/api/v1/health/ready` healthcheck.
-- `connector-worker`: Dedicated `python -m drillai.telemetry.worker` process with independent worker heartbeat and lease management.
-- `frontend`: Multi-stage Vite production build served by Nginx (`0.0.0.0:5173`), proxying `/api/` and WebSocket `/api/v1/wells/*/live/stream` to `backend:8080`.
-
-### 6.2 Automated Multi-Process Stack Verification
-To verify clean migration, backend readiness, dedicated `connector-worker` process polling against a real local WITSML 1.4.1.1 SOAP server, telemetry ingestion, and restart recovery without Docker daemon privileges:
-
-```bash
-backend/.venv/bin/python scripts/verify_stack.py
-```
+### 5.2 Multi-Process Stack Verification vs Docker Compose CI Smoke Gate
+- **Local Multi-Process Stack (`scripts/verify_stack.py`)**: Runs Alembic migrations, starts `uvicorn`, `LocalWitsmlSoapServer`, and standalone `python -m drillai.telemetry.worker` processes, verifies live ingestion and worker restart recovery, and prints `STACK_VERIFICATION_OK`.
+- **Docker Compose CI Smoke Gate (`.github/workflows/ci.yml`)**: Validates `docker compose config -q`, builds the production `backend` and `frontend` Docker images, starts `postgres`, `migrate`, `backend`, `connector-worker`, and `frontend`, verifies `/api/v1/health/ready` and `/api/v1/connectors/profiles` through the Nginx proxy container, and tears down cleanly.
 
 ---
 
-## 7. Operator Runbooks
+## 6. Operator Runbooks: Reconciliation & Governed Replay Workbench
 
-### 7.1 Onboarding a New Well & Telemetry Connector
-1. Ensure required credentials are provided as environment variables (`export DRILLAI_SECRET_RIG01_USER=...`, `export DRILLAI_SECRET_RIG01_PASS=...`) on both `backend` and `connector-worker`.
-2. Navigate to `/connectors` in the workspace (or click **Manage Connectors** from the Well Cockpit Operational Monitor).
-3. Select the target Well, choose `witsml.1.4.1.1.soap_http` or `etp.1.2.json_ws`, enter the HTTPS/WSS endpoint URL, and enter secret references (`env:DRILLAI_SECRET_RIG01_USER`, `env:DRILLAI_SECRET_RIG01_PASS`).
-4. Map source mnemonics (e.g. `SPP`, `WOB`, `RPM`) to canonical platform channel keys (`spp`, `wob`, `rpm`), dimensions (`pressure`, `force`, `rotary_speed`), and source units (`psi`, `klbf`, `rpm`).
-5. Click **Register Connector**, then click **Test Connection** and **Preview Samples** to verify connectivity, credentials, and unit normalization without writing to time-series storage.
-6. Click **Start** to enable durable worker ingestion.
+### 6.1 Inspecting Run Disposition Manifests
+1. Open `/connectors` and select a connector.
+2. In the **Bounded Connector Run Ledger**, click **Inspect** on any run to view the **Run Data Disposition & Checkpoint Manifest** (`selected-run-manifest`).
+3. Verify `Reconciled`, `Checkpoint status` (`complete` vs `partial` when `Deferred over batch cap > 0`), `Source records discovered`, `Mapped frames emitted`, `Points accepted`, `Duplicates suppressed`, `Rejected`, `Unmapped skipped`, `Watermark suppressed`, and `Cursor before` / `Cursor after`.
 
-### 7.2 Diagnosing Failing, Backing-Off, or Stale Connectors
-- **`error_category = auth_failure`**: Verify the `env:DRILLAI_SECRET_*` variable is set in the `connector-worker` environment and matches the rig server's credentials.
-- **`error_category = tls_error`**: Verify the rig endpoint presents a valid certificate chain trusted by the system CA bundle. Never set `tls_verify=false`.
-- **`error_category = ssrf_blocked`**: The endpoint resolved to a loopback, link-local, or private RFC-1918 IP not listed in `DRILLAI_CONNECTOR_ALLOWED_HOSTS`. Add the approved rig hostname to `DRILLAI_CONNECTOR_ALLOWED_HOSTS`.
-- **`status = backing_off` / `failed`**: Inspect the **Connector Run Ledger** table on `/connectors` for `error_category` and redacted `error_message`. Once the upstream issue is resolved, click **Restart** (with an operational reason) to reset `error_count` and trigger immediate polling.
-- **`health_state = low_quality_data`**: The upstream rig store is transmitting `-999.25` null values or `bad`/`suspect` quality flags. Inspect sensor calibration at the rig; DrillAI preserves the points with `is_trustworthy=false` and suppresses false threshold alerts.
+### 6.2 Executing a Governed Replay / Backfill (`POST /api/v1/connectors/{id}/replay`)
+1. In the **Governed Replay & Backfill Workbench** card on `/connectors`:
+   - Optionally enter an ISO-8601 UTC start timestamp (`Replay from timestamp`, e.g. `2026-06-01T00:00:00Z`; leave blank to replay from the connector's current cursor).
+   - Enter a mandatory **Replay governance reason**.
+2. Click **Dry-Run Replay Preview** (`dry_run: true`) first to inspect how many frames would be discovered and emitted without writing points or mutating the connector's cursor (`run_kind = "replay_dry_run"`).
+3. Click **Execute Governed Replay** (`dry_run: false`) to backfill missing points into `TelemetryService` (`run_kind = "replay"`). Already-ingested points are automatically deduplicated (`points_duplicates`), the connector's persistent watermark **never regresses** behind `cursor_before`, and an `AuditLog` entry is recorded with the operator's reason.

@@ -202,6 +202,52 @@ jobs:
           .venv/bin/python -m alembic upgrade head
           .venv/bin/python -m alembic check
 
+      - name: Multi-process stack verification (scripts/verify_stack.py)
+        run: |
+          set -o pipefail
+          backend/.venv/bin/python scripts/verify_stack.py 2>&1 | tee "$RUNNER_TEMP/verify-stack.log"
+          if ! grep -q "STACK_VERIFICATION_OK" "$RUNNER_TEMP/verify-stack.log"; then
+            echo "::error::scripts/verify_stack.py did not print STACK_VERIFICATION_OK"
+            exit 1
+          fi
+          {
+            echo '### Multi-process stack verification'
+            echo '```'
+            grep "STACK_VERIFICATION_OK" "$RUNNER_TEMP/verify-stack.log"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Docker Compose deployment smoke gate (docker-compose.yml)
+        env:
+          POSTGRES_PASSWORD: ci_ephemeral_pg_password_9f8e7d
+          DRILLAI_AUTH_ENABLED: 'false'
+        run: |
+          set -euo pipefail
+          cleanup() {
+            docker compose logs --tail=80 || true
+            docker compose down -v --remove-orphans || true
+          }
+          trap cleanup EXIT
+          docker compose config -q
+          docker compose up -d --build
+          for attempt in $(seq 1 45); do
+            if curl -fsS http://127.0.0.1:8000/api/v1/health/ready >/dev/null 2>&1 && \
+               curl -fsS http://127.0.0.1:8080/api/v1/health/ready >/dev/null 2>&1; then
+              break
+            fi
+            sleep 2
+          done
+          curl -fsS http://127.0.0.1:8000/api/v1/health/ready | grep -q '"status":"ok"'
+          curl -fsS http://127.0.0.1:8080/api/v1/health/ready | grep -q '"status":"ok"'
+          curl -fsS -H "X-Dev-Roles: viewer" http://127.0.0.1:8080/api/v1/connectors/profiles | grep -q '"witsml.1.4.1.1.soap_http"'
+          docker compose ps --format json
+          {
+            echo '### Docker Compose deployment smoke gate'
+            echo '```'
+            echo 'DOCKER_COMPOSE_SMOKE_OK: postgres, migrate, backend, connector-worker, and frontend verified.'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
       # ------------------------------------------------------------------ real-stack E2E
       # `npm run e2e` is the repository's own wrapper: it resolves a browser, refuses ports held by a
       # stale server, and lets Playwright start the API and the web server for all three deployments.

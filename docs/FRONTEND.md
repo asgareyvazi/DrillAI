@@ -90,16 +90,25 @@ types or engines, so it cannot drift from the backend's own catalogue.
 Components pass a value and a unit; nothing else formats a number, so a value cannot be shown in one
 unit in the header and another in a table.
 
+## Telemetry Connectors, Live Stream & Reconciliation Workbench
+
+- **Live Operational Monitor (`/wells/:wellId?tab=live`)**: Consumes `/api/v1/wells/{well_id}/live/stream`
+  over WebSocket with automatic polling fallback, displaying real-time channel cards, alert rule
+  evaluation, acknowledgement/resolution audit flows, and per-well connector health badges.
+- **Telemetry Connectors & Recovery Workbench (`/connectors`)**: Allows operators and engineers to
+  register, test, preview, start, stop, restart, disable, poll, and replay WITSML 1.4.1.1 SOAP
+  (`witsml.1.4.1.1.soap_http`), ETP 1.2 WebSocket (`etp.1.2.json_ws`), and Synthetic (`synthetic.v1`)
+  connectors, inspect per-run data disposition & checkpoint manifests (`ConnectorRun.details.manifest`),
+  review structured failure remediation guidance, and execute governed idempotent replays (`dry_run`
+  preview vs live backfill).
+
 ## Known limitations
 
-- Persian (`fa`) translations cover the shell and the primary surfaces, not every string in every
-  workspace; an untranslated key falls back to English through the catalogue mechanism rather than
-  rendering an empty string.
-- No `ops/` deployment assets (Compose profile, image build, deployment manifest). CI certifies the
-  product — install, gates and the real end-to-end suite — but does not deploy it.
-- Integration adapters for messaging, WITSML/ETP and vector databases are configuration-shaped
-  boundaries; the test suite does not exercise outbound delivery, live streaming or pgvector-backed
-  retrieval.
-- The end-to-end suite is a browser suite, not a cross-browser one: it runs Chromium. The client uses
-  no Chromium-only API that a second engine would break on, but that is an expectation, not a
-  certified fact.
+- **External commercial WITSML/ETP vendor certification**: `witsml.1.4.1.1.soap_http` and
+  `etp.1.2.json_ws` are verified against independent spec-derived conformance suites and local TCP
+  protocol harness servers (`LocalWitsmlSoapServer`, `LocalEtpWebSocketServer`), not against a live
+  third-party commercial rig server in CI (`external_vendor_verified: false`).
+- Integration adapters for outbound messaging (Telegram/WhatsApp/email) and pgvector-backed
+  retrieval remain configuration-shaped boundaries.
+- The end-to-end suite runs Chromium across three deployments (`chromium`, `chromium-faults`,
+  `chromium-auth`).
