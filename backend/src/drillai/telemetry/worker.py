@@ -133,8 +133,35 @@ class ConnectorWorker:
         self._before_commit_hook = before_commit_hook
         self._stop_event = asyncio.Event()
         self._task: asyncio.Task[None] | None = None
+        self._active_connectors: set[str] = set()
         self.cycles_completed = 0
         self.last_cycle_at: dt.datetime | None = None
+
+    async def renew_lease(self, claimed: ClaimedConnector) -> bool:
+        """Atomically extend the worker lease only if fencing_token and config_version still match."""
+        now = utc_now()
+        lease_until = now + dt.timedelta(seconds=self.lease_seconds)
+        async with self.database.session() as hb_session:
+            res = await hb_session.execute(
+                update(Connector)
+                .where(
+                    Connector.id == claimed.connector_id,
+                    Connector.worker_id == self.worker_id,
+                    Connector.fencing_token == claimed.fencing_token,
+                    Connector.config_version == claimed.config_version,
+                    Connector.is_enabled.is_(True),
+                    Connector.desired_state == "enabled",
+                )
+                .values(
+                    lease_expires_at=lease_until,
+                    last_heartbeat_at=now,
+                )
+            )
+            if (res.rowcount or 0) != 1:
+                await hb_session.rollback()
+                return False
+            await hb_session.commit()
+            return True
 
     async def discover_candidate_ids(
         self, session: AsyncSession, *, now: dt.datetime | None = None
@@ -150,8 +177,12 @@ class ConnectorWorker:
                         Connector.desired_state == "enabled",
                         Connector.status.in_(ELIGIBLE_RUNTIME_STATUSES),
                     )
-                    .order_by(Connector.next_poll_at.asc().nullsfirst(), Connector.id.asc())
-                    .limit(100)
+                    .order_by(
+                        Connector.next_poll_at.asc().nullsfirst(),
+                        Connector.last_poll_at.asc().nullsfirst(),
+                        Connector.id.asc(),
+                    )
+                    .limit(200)
                 )
             )
             .scalars()
@@ -159,6 +190,8 @@ class ConnectorWorker:
         )
         candidates: list[str] = []
         for row in rows:
+            if row.id in self._active_connectors:
+                continue
             next_poll = _ensure_aware(row.next_poll_at)
             if next_poll is not None and next_poll > current:
                 continue
@@ -177,6 +210,8 @@ class ConnectorWorker:
         self, connector_id: str, *, now: dt.datetime | None = None
     ) -> ClaimedConnector | None:
         """Atomically claim or renew ownership of a connector with a monotonically increasing fencing token."""
+        if connector_id in self._active_connectors:
+            return None
         current = now or utc_now()
         lease_until = current + dt.timedelta(seconds=self.lease_seconds)
 
@@ -225,6 +260,7 @@ class ConnectorWorker:
                 .where(
                     Connector.id == connector_id,
                     Connector.fencing_token == prev_token,
+                    Connector.config_version == cfg_version,
                     Connector.is_enabled.is_(True),
                     Connector.desired_state == "enabled",
                 )
@@ -296,7 +332,10 @@ class ConnectorWorker:
             )
 
     async def execute_claimed_poll(self, claimed: ClaimedConnector) -> PollCycleOutcome:
-        """Execute one poll/stream batch for a claimed connector with fencing-token protection."""
+        """Execute one poll/stream batch for a claimed connector with fencing-token and lease-heartbeat protection."""
+        if claimed.connector_id in self._active_connectors:
+            return self._record_fenced_outcome(claimed, time.perf_counter())
+        self._active_connectors.add(claimed.connector_id)
         started = utc_now()
         t0 = time.perf_counter()
         trace_id = new_id("trc")
@@ -313,6 +352,7 @@ class ConnectorWorker:
                     row is None
                     or row.worker_id != self.worker_id
                     or int(row.fencing_token or 0) != claimed.fencing_token
+                    or int(row.config_version or 1) != claimed.config_version
                     or not row.is_enabled
                     or row.desired_state != "enabled"
                 ):
@@ -331,12 +371,45 @@ class ConnectorWorker:
                 conn_svc = ConnectorService(read_session, row.org_id)
                 adapter = await conn_svc.build_adapter(row, resolved_secrets=resolved_secrets)
 
-            # Perform external protocol connect/fetch outside the DB transaction.
-            await adapter.connect()
+            # Perform external protocol connect/fetch outside the DB transaction with a fenced lease-renewal heartbeat.
+            lost_lease = False
+            connect_task = asyncio.create_task(adapter.connect())
+            hb_interval = max(0.15, min(2.0, self.lease_seconds / 3.0))
+
+            async def _heartbeat_watcher() -> None:
+                nonlocal lost_lease
+                while not connect_task.done():
+                    await asyncio.sleep(hb_interval)
+                    if connect_task.done():
+                        break
+                    if not await self.renew_lease(claimed):
+                        lost_lease = True
+                        connect_task.cancel()
+                        break
+
+            hb_task = asyncio.create_task(_heartbeat_watcher())
+            try:
+                await connect_task
+            except asyncio.CancelledError:
+                with contextlib.suppress(Exception):
+                    await adapter.close()
+                if lost_lease:
+                    return self._record_fenced_outcome(claimed, t0)
+                raise
+            finally:
+                hb_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError, Exception):
+                    await hb_task
+
+            if lost_lease:
+                with contextlib.suppress(Exception):
+                    await adapter.close()
+                return self._record_fenced_outcome(claimed, t0)
+
             if self._before_commit_hook is not None:
                 await self._before_commit_hook(claimed)
 
-            # Phase 2: Short atomic DB transaction — verify fencing token, ingest via TelemetryService, advance cursor, commit.
+            # Phase 2: Short atomic DB transaction — verify fencing token & config_version, ingest via TelemetryService, advance cursor, commit.
             async with self.database.session() as session:
                 current_row = (
                     await session.execute(select(Connector).where(Connector.id == claimed.connector_id))
@@ -345,6 +418,7 @@ class ConnectorWorker:
                     current_row is None
                     or current_row.worker_id != self.worker_id
                     or int(current_row.fencing_token or 0) != claimed.fencing_token
+                    or int(current_row.config_version or 1) != claimed.config_version
                     or not current_row.is_enabled
                     or current_row.desired_state != "enabled"
                 ):
@@ -482,13 +556,14 @@ class ConnectorWorker:
                 if claimed.previous_status != "running":
                     update_values["last_transition_at"] = finished
 
-                # Atomic fencing-token check on Connector update before committing the transaction!
+                # Atomic fencing-token and config_version check on Connector update before committing the transaction!
                 fenced_update = await session.execute(
                     update(Connector)
                     .where(
                         Connector.id == claimed.connector_id,
                         Connector.worker_id == self.worker_id,
                         Connector.fencing_token == claimed.fencing_token,
+                        Connector.config_version == claimed.config_version,
                         Connector.is_enabled.is_(True),
                         Connector.desired_state == "enabled",
                     )
@@ -600,6 +675,8 @@ class ConnectorWorker:
                 t0=t0,
                 trace_id=trace_id,
             )
+        finally:
+            self._active_connectors.discard(claimed.connector_id)
 
     def _record_fenced_outcome(self, claimed: ClaimedConnector, t0: float) -> PollCycleOutcome:
         duration_ms = round((time.perf_counter() - t0) * 1000.0, 2)
@@ -654,6 +731,7 @@ class ConnectorWorker:
                 row is None
                 or row.worker_id != self.worker_id
                 or int(row.fencing_token or 0) != claimed.fencing_token
+                or int(row.config_version or 1) != claimed.config_version
                 or not row.is_enabled
                 or row.desired_state != "enabled"
             ):
@@ -685,6 +763,7 @@ class ConnectorWorker:
                     Connector.id == claimed.connector_id,
                     Connector.worker_id == self.worker_id,
                     Connector.fencing_token == claimed.fencing_token,
+                    Connector.config_version == claimed.config_version,
                 )
                 .values(
                     status=new_status,

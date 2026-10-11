@@ -33,6 +33,7 @@ from drillai.telemetry.connectors import (
     ChannelMappingSpec,
     ConnectorTransportError,
     ProtocolPollDisposition,
+    enforce_connect_time_ssrf,
     parse_channel_mappings,
     redact_sensitive_text,
 )
@@ -330,17 +331,25 @@ def parse_get_from_store_response(
 
     fault_string: str | None = None
     result_code = 1
+    found_result = False
     supp_msg_out = ""
     xml_out_text: str | None = None
 
     if _local_name(outer.tag) == "logs":
         logs_root = outer
     else:
+        if _local_name(outer.tag) != "Envelope":
+            raise ConnectorTransportError(
+                "protocol_error",
+                f"expected SOAP Envelope or WITSML <logs> root element, got {_local_name(outer.tag)!r}",
+                retryable=False,
+            )
         for elem in outer.iter():
             lname = _local_name(elem.tag)
             if lname == "faultstring" and elem.text:
                 fault_string = elem.text.strip()
             elif lname == "Result" and elem.text:
+                found_result = True
                 try:
                     result_code = int(elem.text.strip())
                 except ValueError:
@@ -354,6 +363,12 @@ def parse_get_from_store_response(
             raise ConnectorTransportError(
                 "protocol_error",
                 f"WITSML SOAP Fault: {fault_string}",
+                retryable=False,
+            )
+        if not found_result:
+            raise ConnectorTransportError(
+                "protocol_error",
+                "WITSML SOAP response missing mandatory <Result> element",
                 retryable=False,
             )
         if result_code <= 0:
@@ -375,6 +390,12 @@ def parse_get_from_store_response(
                 disposition=disposition,
             )
         logs_root = _parse_safe_xml(xml_out_text, context="WITSML XMLout payload")
+        if _local_name(logs_root.tag) != "logs":
+            raise ConnectorTransportError(
+                "protocol_error",
+                f"expected WITSML <logs> root in XMLout, got {_local_name(logs_root.tag)!r}",
+                retryable=False,
+            )
 
     mapping_by_mnemonic = {m.source_mnemonic.upper(): m for m in mappings}
     discovered: list[WitsmlCurveDescriptor] = []
@@ -736,6 +757,7 @@ class WitsmlSoapClient:
         return None
 
     async def _post_soap(self, envelope: str, *, soap_action: str = "Store.WMLS_GetFromStore") -> str:
+        enforce_connect_time_ssrf(self._endpoint_url, "witsml.1.4.1.1.soap_http")
         headers = self._build_headers(soap_action=soap_action)
         auth = self._build_auth()
         last_exc: ConnectorTransportError | None = None

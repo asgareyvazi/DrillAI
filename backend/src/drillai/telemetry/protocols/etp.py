@@ -44,6 +44,7 @@ from drillai.telemetry.connectors import (
     ChannelMappingSpec,
     ConnectorTransportError,
     ProtocolPollDisposition,
+    enforce_connect_time_ssrf,
     parse_channel_mappings,
     redact_sensitive_text,
 )
@@ -553,6 +554,7 @@ class EtpWebSocketClient:
 
     async def probe_session(self) -> tuple[str, list[EtpChannelInfo]]:
         """Perform ETP ``RequestSession`` -> ``OpenSession`` and ``ChannelDescribe``/``Start`` -> ``ChannelMetadata`` discovery."""
+        enforce_connect_time_ssrf(self._endpoint_url, "etp.1.2.json_ws")
         headers = self._build_headers()
         try:
             async with websockets.connect(
@@ -698,6 +700,7 @@ class EtpWebSocketClient:
         subscribed_channels: set[str] | None = None,
     ) -> EtpPollBatch:
         """Open an ETP 1.2 WebSocket session, subscribe to mapped channels, and collect a batch."""
+        enforce_connect_time_ssrf(self._endpoint_url, "etp.1.2.json_ws")
         mappings = parse_channel_mappings(config.get("channel_mappings"))
         mapping_by_mnemonic = {m.source_mnemonic.upper(): m for m in mappings}
         mapping_by_uri = {m.channel_uri.lower(): m for m in mappings}

@@ -29,11 +29,12 @@ import os
 import re
 import socket
 import time
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 from urllib.parse import urlparse
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from drillai.core.audit import record_audit
@@ -79,10 +80,12 @@ __all__ = [
     "classify_connector_error",
     "connector_out",
     "connector_run_out",
+    "enforce_connect_time_ssrf",
     "mask_secret_refs",
     "parse_channel_mappings",
     "redact_sensitive_text",
     "resolve_secret_refs",
+    "set_custom_dns_resolver",
     "validate_connector_config",
     "validate_connector_endpoint",
     "validate_no_plaintext_secrets",
@@ -91,8 +94,21 @@ __all__ = [
 
 ALLOWED_SECRET_SLOTS: tuple[str, ...] = ("username", "password", "bearer_token")
 ENV_SECRET_PATTERN = re.compile(r"^env:(DRILLAI_SECRET_[A-Z0-9_]{2,120})$")
-SECRET_REF_PATTERN = re.compile(r"^secret_ref:([a-zA-Z0-9._:-]{2,160})$")
+SECRET_REF_PATTERN = re.compile(r"^(?:secret_ref|secret):([a-zA-Z0-9._:-]{2,160})$")
+MASKED_SECRET_PLACEHOLDERS: frozenset[str] = frozenset(
+    {"********", "env:********", "secret_ref:********", "secret:********"}
+)
 CONNECTOR_KEY_PATTERN = re.compile(r"^[a-z0-9][a-z0-9._-]{1,118}[a-z0-9]$")
+
+_custom_dns_resolver: Callable[[str, int], Sequence[str]] | None = None
+
+
+def set_custom_dns_resolver(
+    resolver: Callable[[str, int], Sequence[str]] | None,
+) -> None:
+    """Install or clear a custom DNS resolver function ``(hostname, port) -> list[ip_str]`` for testing."""
+    global _custom_dns_resolver
+    _custom_dns_resolver = resolver
 
 FORBIDDEN_SECRET_KEY_PATTERNS: tuple[str, ...] = (
     "password",
@@ -480,7 +496,7 @@ PROTOCOL_PROFILE_SPECS: dict[str, ProtocolProfileSpec] = {
 
 
 def redact_sensitive_text(text: str | None, secrets: dict[str, str] | None = None) -> str | None:
-    """Scrub resolved secrets, Authorization headers, and embedded URL credentials from strings."""
+    """Scrub resolved secrets, Authorization/API-Key headers, URL query tokens, and internal env names."""
     if text is None:
         return None
     cleaned = str(text)
@@ -494,6 +510,11 @@ def redact_sensitive_text(text: str | None, secrets: dict[str, str] | None = Non
         cleaned,
     )
     cleaned = re.sub(
+        r"(?i)(x-api-key\s*[:=]\s*)[^\s,;\"']+",
+        r"\1********",
+        cleaned,
+    )
+    cleaned = re.sub(
         r"(?i)(?:bearer|basic)\s+[A-Za-z0-9._~+/=-]{8,}",
         "********",
         cleaned,
@@ -501,6 +522,16 @@ def redact_sensitive_text(text: str | None, secrets: dict[str, str] | None = Non
     cleaned = re.sub(
         r"([a-zA-Z][a-zA-Z0-9+.-]*://[^/\s:@]+:)([^@\s/]+)(@)",
         r"\1********\3",
+        cleaned,
+    )
+    cleaned = re.sub(
+        r"(?i)([?&](?:token|access_token|auth_token|api_key|apikey|password|passwd|secret|sig|signature)=)[^&\s#\"']+",
+        r"\1********",
+        cleaned,
+    )
+    cleaned = re.sub(
+        r"\b(?:env:)?DRILLAI_SECRET_[A-Z0-9_]+\b",
+        "env:********",
         cleaned,
     )
     return cleaned[:1000]
@@ -558,8 +589,12 @@ def validate_no_plaintext_secrets(payload: Any, *, path: str = "config") -> None
         )
 
 
-def validate_secret_refs(secret_refs: dict[str, Any] | None) -> dict[str, str]:
-    """Validate that secret_refs only maps allowed credential slots to env: or secret_ref: locators."""
+def validate_secret_refs(
+    secret_refs: dict[str, Any] | None,
+    *,
+    allow_masked_placeholders: bool = False,
+) -> dict[str, str]:
+    """Validate that secret_refs only maps allowed credential slots to env:, secret_ref:, or secret: locators."""
     if not secret_refs:
         return {}
     if not isinstance(secret_refs, dict):
@@ -587,20 +622,30 @@ def validate_secret_refs(secret_refs: dict[str, Any] | None) -> dict[str, str]:
                 details={"field": f"secret_refs.{slot_name}", "reason": "invalid_secret_ref"},
             )
         ref = locator.strip()
-        if not (ENV_SECRET_PATTERN.match(ref) or SECRET_REF_PATTERN.match(ref)):
+        if allow_masked_placeholders and ref in MASKED_SECRET_PLACEHOLDERS:
+            continue
+        env_match = ENV_SECRET_PATTERN.match(ref)
+        ref_match = SECRET_REF_PATTERN.match(ref)
+        if not (env_match or ref_match):
             raise ValidationFailed(
-                f"secret reference for {slot_name!r} must use 'env:DRILLAI_SECRET_<NAME>' or 'secret_ref:<key>'",
+                f"secret reference for {slot_name!r} must use 'env:DRILLAI_SECRET_<NAME>', 'secret_ref:<key>', or 'secret:<key>'",
                 details={
                     "field": f"secret_refs.{slot_name}",
                     "reason": "invalid_secret_ref",
                 },
             )
+        if ref_match and ref.startswith("secret:"):
+            ref = f"secret_ref:{ref_match.group(1)}"
         normalized[slot_name] = ref
     return normalized
 
 
 def mask_secret_refs(secret_refs: dict[str, Any] | None) -> dict[str, dict[str, Any]]:
-    """Return a safe, masked representation of configured secret references for API responses."""
+    """Return a minimized, masked representation of configured secret references.
+
+    Never exposes raw internal environment variable names or secret locator keys in API responses,
+    UI payloads, or audit records.
+    """
     if not secret_refs or not isinstance(secret_refs, dict):
         return {}
     masked: dict[str, dict[str, Any]] = {}
@@ -611,9 +656,10 @@ def mask_secret_refs(secret_refs: dict[str, Any] | None) -> dict[str, dict[str, 
         backend = "env" if ref_str.startswith("env:") else "secret_ref"
         masked[str(slot)] = {
             "slot": str(slot),
-            "ref": ref_str,
+            "ref": f"{backend}:********",
             "backend": backend,
             "configured": True,
+            "redacted": True,
             "masked_value": "********",
         }
     return masked
@@ -624,7 +670,7 @@ async def resolve_secret_refs(
     org_id: str,
     secret_refs: dict[str, str] | None,
 ) -> dict[str, str]:
-    """Resolve configured secret references at runtime without ever persisting or logging values."""
+    """Resolve configured secret references at runtime without ever persisting or logging values or env names."""
     if not secret_refs:
         return {}
     resolved: dict[str, str] = {}
@@ -635,11 +681,11 @@ async def resolve_secret_refs(
             val = os.environ.get(env_name, "")
             if not val:
                 raise ValidationFailed(
-                    f"environment secret {env_name!r} for slot {slot!r} is not set",
+                    f"configured environment secret for slot {slot!r} is not set",
                     details={
                         "field": f"secret_refs.{slot}",
                         "slot": slot,
-                        "ref": ref,
+                        "backend": "env",
                         "reason": "secret_not_found",
                     },
                 )
@@ -660,11 +706,11 @@ async def resolve_secret_refs(
             ).scalar_one_or_none()
             if row is None:
                 raise ValidationFailed(
-                    f"secret_ref {key!r} for slot {slot!r} was not found or is inactive in this organization",
+                    f"configured secret_ref for slot {slot!r} was not found or is inactive in this organization",
                     details={
                         "field": f"secret_refs.{slot}",
                         "slot": slot,
-                        "ref": ref,
+                        "backend": "secret_ref",
                         "reason": "secret_not_found",
                     },
                 )
@@ -674,11 +720,11 @@ async def resolve_secret_refs(
                 val = os.environ.get(env_name, "")
                 if not val:
                     raise ValidationFailed(
-                        f"environment variable {env_name!r} referenced by SecretRef {key!r} is not set",
+                        f"backing environment secret for slot {slot!r} is not set",
                         details={
                             "field": f"secret_refs.{slot}",
                             "slot": slot,
-                            "ref": ref,
+                            "backend": "secret_ref",
                             "reason": "secret_not_found",
                         },
                     )
@@ -691,10 +737,30 @@ async def resolve_secret_refs(
             continue
 
         raise ValidationFailed(
-            f"invalid secret reference {ref!r} for slot {slot!r}",
+            f"invalid secret reference for slot {slot!r}",
             details={"field": f"secret_refs.{slot}", "reason": "invalid_secret_ref"},
         )
     return resolved
+
+
+_AMBIGUOUS_NUMERIC_HOST_RE = re.compile(
+    r"^(?:\d+|0x[0-9a-fA-F]+|\d+\.\d+|\d+\.\d+\.\d+|0\d+(?:\.\d+){3}|(?:\d+\.)*0\d+(?:\.\d+)*)$"
+)
+
+
+def _unpack_embedded_ip(
+    ip: ipaddress.IPv4Address | ipaddress.IPv6Address,
+) -> list[ipaddress.IPv4Address | ipaddress.IPv6Address]:
+    """Return the IP and any embedded IPv4 addresses (IPv4-mapped IPv6, 6to4, Teredo)."""
+    out: list[ipaddress.IPv4Address | ipaddress.IPv6Address] = [ip]
+    if isinstance(ip, ipaddress.IPv6Address):
+        if ip.ipv4_mapped is not None:
+            out.append(ip.ipv4_mapped)
+        if ip.sixtofour is not None:
+            out.append(ip.sixtofour)
+        if ip.teredo is not None:
+            out.extend(ip.teredo)
+    return out
 
 
 def validate_connector_endpoint(
@@ -704,8 +770,9 @@ def validate_connector_endpoint(
     allow_loopback: bool | None = None,
     allowed_hosts: list[str] | tuple[str, ...] | None = None,
     is_production: bool | None = None,
+    resolver: Callable[[str, int], Sequence[str]] | None = None,
 ) -> str | None:
-    """Validate protocol, scheme, port, hostname, and SSRF constraints for a connector endpoint."""
+    """Validate protocol, scheme, port, hostname, and connect-time SSRF/DNS-rebinding constraints."""
     if protocol_profile not in PROTOCOL_PROFILE_SPECS:
         raise ValidationFailed(
             f"unsupported protocol profile {protocol_profile!r}",
@@ -768,7 +835,7 @@ def validate_connector_endpoint(
             },
         )
 
-    hostname = (parsed.hostname or "").strip().lower()
+    hostname = (parsed.hostname or "").strip().lower().rstrip(".")
     if not hostname:
         raise ValidationFailed(
             "endpoint_url has no valid hostname",
@@ -781,6 +848,21 @@ def validate_connector_endpoint(
             f"endpoint_url host {hostname!r} is a prohibited metadata or internal destination",
             details={"field": "endpoint_url", "host": hostname, "reason": "ssrf_blocked"},
         )
+
+    # Reject ambiguous numeric/octal/hex/shorthand IPv4 hostnames (e.g. 0177.0.0.1, 2130706433, 127.1)
+    if _AMBIGUOUS_NUMERIC_HOST_RE.match(hostname):
+        try:
+            parsed_lit = ipaddress.ip_address(hostname)
+            if str(parsed_lit).lower() != hostname:
+                raise ValidationFailed(
+                    f"non-canonical IP address literal {hostname!r} is prohibited by SSRF policy",
+                    details={"field": "endpoint_url", "host": hostname, "reason": "ssrf_blocked"},
+                )
+        except ValueError as exc:
+            raise ValidationFailed(
+                f"ambiguous numeric IP literal {hostname!r} is prohibited by SSRF policy",
+                details={"field": "endpoint_url", "host": hostname, "reason": "ssrf_blocked"},
+            ) from exc
 
     try:
         port = parsed.port
@@ -795,29 +877,48 @@ def validate_connector_endpoint(
             details={"field": "endpoint_url", "port": port, "reason": "invalid_port"},
         )
 
-    normalized_allowlist = {h.strip().lower() for h in allowed_hosts if h.strip()}
+    normalized_allowlist = {h.strip().lower().rstrip(".") for h in allowed_hosts if h.strip()}
+    active_resolver = resolver or _custom_dns_resolver
 
-    # Validate literal IP or resolve DNS addresses to guard against SSRF.
     candidate_ips: list[ipaddress.IPv4Address | ipaddress.IPv6Address] = []
     try:
-        candidate_ips.append(ipaddress.ip_address(hostname))
+        lit_ip = ipaddress.ip_address(hostname)
+        candidate_ips.extend(_unpack_embedded_ip(lit_ip))
     except ValueError:
-        try:
-            infos = socket.getaddrinfo(hostname, port or 443, type=socket.SOCK_STREAM)
-            for info in infos:
-                sockaddr = info[4]
-                if sockaddr and sockaddr[0]:
-                    candidate_ips.append(ipaddress.ip_address(sockaddr[0]))
-        except socket.gaierror:
-            # Hostname does not resolve right now (e.g. offline test or unresolvable host).
-            # Still enforce literal/loopback/private rules on the hostname string itself.
-            if hostname in {"localhost", "localhost.localdomain"} and not (
-                allow_loopback and not is_production
-            ):
+        if hostname in {"localhost", "localhost.localdomain"} and not (
+            allow_loopback and not is_production
+        ) and hostname not in normalized_allowlist:
+            raise ValidationFailed(
+                "loopback endpoint host 'localhost' is prohibited by SSRF policy",
+                details={"field": "endpoint_url", "host": hostname, "reason": "ssrf_blocked"},
+            ) from None
+        if active_resolver is not None:
+            resolved_strs = active_resolver(hostname, port or 443)
+            if not resolved_strs:
                 raise ValidationFailed(
-                    "loopback endpoint host 'localhost' is prohibited by SSRF policy",
-                    details={"field": "endpoint_url", "host": hostname, "reason": "ssrf_blocked"},
+                    f"endpoint_url host {hostname!r} could not be resolved",
+                    details={"field": "endpoint_url", "host": hostname, "reason": "dns_failure"},
                 ) from None
+            for ip_s in resolved_strs:
+                try:
+                    r_ip = ipaddress.ip_address(str(ip_s).strip())
+                except ValueError as exc:
+                    raise ValidationFailed(
+                        f"DNS resolver returned invalid IP {ip_s!r} for {hostname!r}",
+                        details={"field": "endpoint_url", "host": hostname, "reason": "ssrf_blocked"},
+                    ) from exc
+                candidate_ips.extend(_unpack_embedded_ip(r_ip))
+        else:
+            try:
+                infos = socket.getaddrinfo(hostname, port or 443, type=socket.SOCK_STREAM)
+                for info in infos:
+                    sockaddr = info[4]
+                    if sockaddr and sockaddr[0]:
+                        raw_addr = str(sockaddr[0]).split("%", 1)[0]
+                        r_ip = ipaddress.ip_address(raw_addr)
+                        candidate_ips.extend(_unpack_embedded_ip(r_ip))
+            except socket.gaierror:
+                pass
 
     for ip in candidate_ips:
         ip_text = str(ip).lower()
@@ -844,6 +945,38 @@ def validate_connector_endpoint(
             )
 
     return cleaned
+
+
+def enforce_connect_time_ssrf(
+    endpoint_url: str,
+    protocol_profile: str,
+    *,
+    allow_loopback: bool | None = None,
+) -> None:
+    """Enforce SSRF and DNS-rebinding checks immediately before opening an outbound network socket."""
+    settings = get_settings()
+    parsed = urlparse(endpoint_url.strip())
+    hostname = (parsed.hostname or "").strip().lower().rstrip(".")
+    effective_allow_loopback = (
+        allow_loopback
+        if allow_loopback is not None
+        else (
+            settings.connector_allow_loopback
+            or (not settings.is_production and hostname in {"127.0.0.1", "::1"})
+        )
+    )
+    try:
+        validate_connector_endpoint(
+            endpoint_url,
+            protocol_profile,
+            allow_loopback=effective_allow_loopback,
+        )
+    except ValidationFailed as exc:
+        raise ConnectorTransportError(
+            str(exc.details.get("reason") or "ssrf_blocked"),
+            str(exc),
+            retryable=False,
+        ) from exc
 
 
 def validate_connector_config(
@@ -1624,32 +1757,36 @@ class ConnectorService:
         allow_loopback: bool | None = None,
     ) -> dict[str, Any]:
         row = await self.get(connector_id)
-        if expected_config_version is not None and int(row.config_version) != int(expected_config_version):
+        current_cfg_version = int(row.config_version or 1)
+        if expected_config_version is not None and current_cfg_version != int(expected_config_version):
             raise Conflict(
                 "connector configuration was modified by another request",
                 details={
                     "connector_id": row.id,
                     "expected_config_version": expected_config_version,
-                    "stored_config_version": int(row.config_version),
+                    "stored_config_version": current_cfg_version,
                 },
             )
 
         before = {
             "name": row.name,
             "endpoint_url": row.endpoint_url,
-            "config_version": int(row.config_version),
+            "config_version": current_cfg_version,
             "config": dict(row.config or {}),
             "secret_refs": mask_secret_refs(row.secret_refs),
         }
 
+        new_name = row.name
         if name is not None:
             if not name.strip():
                 raise ValidationFailed("connector name cannot be blank", details={"field": "name"})
-            row.name = name.strip()
+            new_name = name.strip()
+        new_description = row.description
         if description is not None:
-            row.description = description.strip() or None
+            new_description = description.strip() or None
+        new_endpoint_url = row.endpoint_url
         if endpoint_url is not None:
-            row.endpoint_url = validate_connector_endpoint(
+            new_endpoint_url = validate_connector_endpoint(
                 endpoint_url, row.protocol_profile, allow_loopback=allow_loopback
             )
 
@@ -1658,30 +1795,57 @@ class ConnectorService:
             for slot in clear_secret_slots:
                 merged_secrets.pop(str(slot).strip().lower(), None)
         if secret_refs is not None:
-            new_secrets = validate_secret_refs(secret_refs)
+            new_secrets = validate_secret_refs(secret_refs, allow_masked_placeholders=True)
             merged_secrets.update(new_secrets)
-        row.secret_refs = merged_secrets
 
+        new_config = dict(row.config or {})
         if config is not None:
-            merged_config = {**dict(row.config or {}), **config}
-            row.config = validate_connector_config(merged_config, protocol_profile=row.protocol_profile)
+            merged_config = {**new_config, **config}
+            new_config = validate_connector_config(merged_config, protocol_profile=row.protocol_profile)
 
-        auth_mode = (row.config or {}).get("auth_mode", "none")
-        if auth_mode == "basic" and ("username" not in row.secret_refs or "password" not in row.secret_refs):
+        auth_mode = new_config.get("auth_mode", "none")
+        if auth_mode == "basic" and ("username" not in merged_secrets or "password" not in merged_secrets):
             raise ValidationFailed(
                 "auth_mode='basic' requires both 'username' and 'password' in secret_refs",
                 details={"field": "secret_refs", "auth_mode": "basic"},
             )
-        if auth_mode == "bearer" and "bearer_token" not in row.secret_refs:
+        if auth_mode == "bearer" and "bearer_token" not in merged_secrets:
             raise ValidationFailed(
                 "auth_mode='bearer' requires 'bearer_token' in secret_refs",
                 details={"field": "secret_refs", "auth_mode": "bearer"},
             )
 
-        row.config_version = int(row.config_version or 1) + 1
-        row.fencing_token = int(row.fencing_token or 0) + 1
-        row.updated_at = utc_now()
-        await self.session.flush()
+        next_cfg_version = current_cfg_version + 1
+        next_fencing_token = int(row.fencing_token or 0) + 1
+        now = utc_now()
+
+        cas_result = await self.session.execute(
+            update(Connector)
+            .where(
+                Connector.id == row.id,
+                Connector.org_id == self.org_id,
+                Connector.config_version == current_cfg_version,
+            )
+            .values(
+                name=new_name,
+                description=new_description,
+                endpoint_url=new_endpoint_url,
+                secret_refs=merged_secrets,
+                config=new_config,
+                config_version=next_cfg_version,
+                fencing_token=next_fencing_token,
+                updated_at=now,
+            )
+        )
+        if (cas_result.rowcount or 0) != 1:
+            raise Conflict(
+                "connector configuration was modified concurrently by another transaction",
+                details={
+                    "connector_id": row.id,
+                    "expected_config_version": current_cfg_version,
+                },
+            )
+        await self.session.refresh(row)
 
         await emit(
             self.session,
@@ -1742,70 +1906,89 @@ class ConnectorService:
                 f"connector {verb!r} requires a non-empty operator reason",
                 details={"field": "reason", "action": verb},
             )
-        if expected_config_version is not None and int(row.config_version) != int(expected_config_version):
+        current_cfg_version = int(row.config_version or 1)
+        if expected_config_version is not None and current_cfg_version != int(expected_config_version):
             raise Conflict(
                 "connector configuration version changed since it was read",
                 details={
                     "connector_id": row.id,
                     "expected_config_version": expected_config_version,
-                    "stored_config_version": int(row.config_version),
+                    "stored_config_version": current_cfg_version,
                 },
             )
 
         now = utc_now()
+        current_fencing = int(row.fencing_token or 0)
         before = {
             "status": row.status,
             "desired_state": row.desired_state,
             "is_enabled": bool(row.is_enabled),
             "worker_id": row.worker_id,
-            "fencing_token": int(row.fencing_token or 0),
+            "fencing_token": current_fencing,
         }
 
+        update_vals: dict[str, Any] = {
+            "updated_at": now,
+            "last_transition_at": now,
+        }
         if verb == "start":
             # Note: starting sets desired_state='enabled' and status='starting' (never optimistically 'running' or 'live').
-            row.desired_state = "enabled"
-            row.is_enabled = True
-            if row.status not in ("running", "starting"):
-                row.status = "starting"
-            row.error_count = 0
-            row.backoff_seconds = 0.0
-            row.next_poll_at = now
-            row.last_transition_at = now
+            update_vals["desired_state"] = "enabled"
+            update_vals["is_enabled"] = True
+            update_vals["status"] = row.status if row.status in ("running", "starting") else "starting"
+            update_vals["error_count"] = 0
+            update_vals["backoff_seconds"] = 0.0
+            update_vals["next_poll_at"] = now
         elif verb == "stop":
-            row.desired_state = "stopped"
-            row.is_enabled = False
-            row.status = "stopped"
-            row.worker_id = None
-            row.lease_expires_at = None
-            row.backoff_seconds = 0.0
-            row.next_poll_at = None
-            row.fencing_token = int(row.fencing_token or 0) + 1
-            row.last_transition_at = now
+            update_vals["desired_state"] = "stopped"
+            update_vals["is_enabled"] = False
+            update_vals["status"] = "stopped"
+            update_vals["worker_id"] = None
+            update_vals["lease_expires_at"] = None
+            update_vals["backoff_seconds"] = 0.0
+            update_vals["next_poll_at"] = None
+            update_vals["fencing_token"] = current_fencing + 1
         elif verb == "disable":
-            row.desired_state = "disabled"
-            row.is_enabled = False
-            row.status = "disabled"
-            row.worker_id = None
-            row.lease_expires_at = None
-            row.backoff_seconds = 0.0
-            row.next_poll_at = None
-            row.fencing_token = int(row.fencing_token or 0) + 1
-            row.last_transition_at = now
+            update_vals["desired_state"] = "disabled"
+            update_vals["is_enabled"] = False
+            update_vals["status"] = "disabled"
+            update_vals["worker_id"] = None
+            update_vals["lease_expires_at"] = None
+            update_vals["backoff_seconds"] = 0.0
+            update_vals["next_poll_at"] = None
+            update_vals["fencing_token"] = current_fencing + 1
         elif verb == "restart":
-            row.desired_state = "enabled"
-            row.is_enabled = True
-            row.status = "starting"
-            row.worker_id = None
-            row.lease_expires_at = None
-            row.error_count = 0
-            row.backoff_seconds = 0.0
-            row.next_poll_at = now
-            row.reconnect_count = int(row.reconnect_count or 0) + 1
-            row.fencing_token = int(row.fencing_token or 0) + 1
-            row.last_transition_at = now
+            update_vals["desired_state"] = "enabled"
+            update_vals["is_enabled"] = True
+            update_vals["status"] = "starting"
+            update_vals["worker_id"] = None
+            update_vals["lease_expires_at"] = None
+            update_vals["error_count"] = 0
+            update_vals["backoff_seconds"] = 0.0
+            update_vals["next_poll_at"] = now
+            update_vals["reconnect_count"] = int(row.reconnect_count or 0) + 1
+            update_vals["fencing_token"] = current_fencing + 1
 
-        row.updated_at = now
-        await self.session.flush()
+        cas_clauses = [
+            Connector.id == row.id,
+            Connector.org_id == self.org_id,
+            Connector.config_version == current_cfg_version,
+        ]
+        if expected_config_version is not None:
+            cas_clauses.append(Connector.fencing_token == current_fencing)
+
+        cas_res = await self.session.execute(
+            update(Connector).where(*cas_clauses).values(**update_vals)
+        )
+        if (cas_res.rowcount or 0) != 1:
+            raise Conflict(
+                "connector state was modified concurrently by another operation",
+                details={
+                    "connector_id": row.id,
+                    "expected_config_version": current_cfg_version,
+                },
+            )
+        await self.session.refresh(row)
 
         await emit(
             self.session,
@@ -2160,3 +2343,361 @@ class ConnectorService:
             }
         finally:
             await adapter.close()
+
+    async def replay(
+        self,
+        connector_id: str,
+        *,
+        reason: str,
+        from_timestamp: str | None = None,
+        channel_keys: list[str] | None = None,
+        dry_run: bool = False,
+        expected_config_version: int | None = None,
+        allow_loopback: bool | None = None,
+    ) -> dict[str, Any]:
+        """Execute a governed, idempotent replay/backfill over a bounded cursor/time window.
+
+        - Requires a non-empty operator ``reason``.
+        - Enforces ``expected_config_version`` when supplied.
+        - Never regresses the connector's persistent watermark behind ``cursor_before``.
+        - Records an auditable ``ConnectorRun(run_kind="replay" | "replay_dry_run")`` and ``AuditLog``.
+        """
+        from drillai.telemetry.adapters import ingest_frames
+        from drillai.telemetry.service import TelemetryService
+
+        if not reason or not reason.strip():
+            raise ValidationFailed(
+                "connector replay requires a non-empty operator reason",
+                details={"field": "reason", "action": "replay"},
+            )
+        row = await self.get(connector_id)
+        current_cfg_version = int(row.config_version or 1)
+        if expected_config_version is not None and current_cfg_version != int(expected_config_version):
+            raise Conflict(
+                "connector configuration version changed since it was read",
+                details={
+                    "connector_id": row.id,
+                    "expected_config_version": expected_config_version,
+                    "stored_config_version": current_cfg_version,
+                },
+            )
+
+        cursor_before = dict(row.cursor or {})
+        replay_cursor: dict[str, Any] = {}
+        if from_timestamp is not None and from_timestamp.strip():
+            raw_from = from_timestamp.strip()
+            if raw_from.endswith("Z") or raw_from.endswith("z"):
+                raw_from = raw_from[:-1] + "+00:00"
+            try:
+                parsed_from = dt.datetime.fromisoformat(raw_from)
+            except ValueError as exc:
+                raise ValidationFailed(
+                    f"invalid from_timestamp {from_timestamp!r}; expected ISO-8601 UTC timestamp",
+                    details={"field": "from_timestamp", "reason": "invalid_timestamp"},
+                ) from exc
+            if parsed_from.tzinfo is None:
+                parsed_from = parsed_from.replace(tzinfo=dt.UTC)
+            inclusive_from = (
+                parsed_from.astimezone(dt.UTC) - dt.timedelta(microseconds=1)
+            ).isoformat()
+            replay_cursor = {"cursor_timestamp": inclusive_from}
+
+        started = utc_now()
+        t0 = time.perf_counter()
+        trace_id = new_id("trc")
+
+        validate_connector_endpoint(row.endpoint_url, row.protocol_profile, allow_loopback=allow_loopback)
+        resolved_secrets = await resolve_secret_refs(
+            self.session, self.org_id, dict(row.secret_refs or {})
+        )
+
+        # Build adapter with temporary replay_cursor
+        saved_row_cursor = row.cursor
+        row.cursor = replay_cursor
+        try:
+            adapter = await self.build_adapter(row, resolved_secrets=resolved_secrets)
+        finally:
+            row.cursor = saved_row_cursor
+
+        selected_channels: list[str] | None = None
+        if channel_keys:
+            selected_channels = [str(k).strip().lower() for k in channel_keys if str(k).strip()]
+
+        await adapter.connect()
+        try:
+            descriptors = list(await adapter.describe_channels())
+            for d in descriptors:
+                validate_descriptor(d)
+            if selected_channels:
+                await adapter.subscribe(selected_channels)
+
+            if dry_run:
+                frames = list(await adapter.poll())
+                last_batch = getattr(adapter, "last_batch", None)
+                protocol_disp = getattr(last_batch, "disposition", None)
+                protocol_dups = int(getattr(last_batch, "duplicates_suppressed", 0) or 0)
+                protocol_rejected = int(getattr(protocol_disp, "total_protocol_rejected", 0) or 0)
+                manifest = (
+                    protocol_disp.to_dict()
+                    if protocol_disp is not None
+                    else {
+                        "pages_or_messages_received": 1 if frames else 0,
+                        "source_records_discovered": len(frames) + protocol_dups,
+                        "mapped_frames_emitted": len(frames),
+                        "unmapped_skipped": 0,
+                        "unsubscribed_skipped": 0,
+                        "watermark_suppressed": protocol_dups,
+                        "in_batch_duplicates": 0,
+                        "deferred_over_cap": 0,
+                        "total_protocol_rejected": 0,
+                        "reconciled": True,
+                    }
+                )
+                manifest["dry_run"] = True
+                manifest["checkpoint_status"] = "unchanged"
+                finished = utc_now()
+                duration_ms = round((time.perf_counter() - t0) * 1000.0, 2)
+                run_row = ConnectorRun(
+                    id=new_id("crn"),
+                    org_id=self.org_id,
+                    connector_id=row.id,
+                    well_id=row.well_id,
+                    config_version=current_cfg_version,
+                    run_kind="replay_dry_run",
+                    status="succeeded",
+                    started_at=started,
+                    finished_at=finished,
+                    duration_ms=duration_ms,
+                    frames_received=len(frames),
+                    points_accepted=0,
+                    points_duplicates=protocol_dups,
+                    points_revised=0,
+                    points_rejected=protocol_rejected,
+                    cursor_before=cursor_before,
+                    cursor_after=cursor_before,
+                    trace_id=trace_id,
+                    details={
+                        "checkpoint_status": "unchanged",
+                        "replay": {
+                            "reason": reason.strip(),
+                            "from_timestamp": from_timestamp,
+                            "channel_keys": selected_channels,
+                            "dry_run": True,
+                        },
+                        "manifest": manifest,
+                    },
+                )
+                self.session.add(run_row)
+                await record_audit(
+                    self.session,
+                    org_id=self.org_id,
+                    principal=self._principal,
+                    action="connector.control",
+                    resource_kind="connector",
+                    resource_id=row.id,
+                    well_id=row.well_id,
+                    before={"cursor": cursor_before},
+                    after={"cursor": cursor_before},
+                    details={
+                        "transition": "replay_dry_run",
+                        "reason": reason.strip(),
+                        "from_timestamp": from_timestamp,
+                        "channel_keys": selected_channels,
+                        "frames_discovered": len(frames),
+                    },
+                )
+                await self.session.flush()
+                return {
+                    "ok": True,
+                    "dry_run": True,
+                    "connector_id": row.id,
+                    "run": connector_run_out(run_row),
+                    "connector": await self.inspect(row.id),
+                }
+
+            telemetry_svc = TelemetryService(self.session, self.org_id)
+            ingest_report = await ingest_frames(
+                telemetry_svc,
+                adapter,
+                well_id=row.well_id or "",
+                wellbore_id=row.wellbore_id,
+                operation_id=row.operation_id,
+                subscribe=selected_channels,
+            )
+        finally:
+            await adapter.close()
+
+        replay_after = dict(getattr(adapter, "cursor", None) or {})
+        # Never regress cursor_timestamp behind cursor_before!
+        merged_cursor = dict(cursor_before)
+        before_ts_str = cursor_before.get("cursor_timestamp")
+        after_ts_str = replay_after.get("cursor_timestamp")
+        if after_ts_str and (not before_ts_str or str(after_ts_str) >= str(before_ts_str)):
+            merged_cursor.update(replay_after)
+        elif not merged_cursor and replay_after:
+            merged_cursor = dict(replay_after)
+
+        # Merge per-channel cursors without regressing any channel's last_timestamp
+        if isinstance(replay_after.get("channel_cursors"), dict):
+            existing_ch = dict(merged_cursor.get("channel_cursors") or {})
+            for ch_k, ch_v in replay_after["channel_cursors"].items():
+                if not isinstance(ch_v, dict):
+                    continue
+                prev_ch = dict(existing_ch.get(ch_k) or {})
+                prev_ts = prev_ch.get("last_timestamp")
+                new_ts = ch_v.get("last_timestamp")
+                merged_recent = {
+                    **dict(prev_ch.get("recent_points") or {}),
+                    **dict(ch_v.get("recent_points") or {}),
+                }
+                existing_ch[ch_k] = {
+                    "last_timestamp": new_ts if (new_ts and (not prev_ts or str(new_ts) > str(prev_ts))) else prev_ts,
+                    "recent_points": merged_recent,
+                }
+            merged_cursor["channel_cursors"] = existing_ch
+
+        report_dict = ingest_report.to_dict()
+        totals = report_dict["totals"]
+        last_batch = getattr(adapter, "last_batch", None)
+        protocol_disp = getattr(last_batch, "disposition", None)
+        protocol_dups = int(getattr(last_batch, "duplicates_suppressed", 0) or 0)
+        protocol_rejected = int(getattr(protocol_disp, "total_protocol_rejected", 0) or 0)
+
+        frames_received = int(ingest_report.frames)
+        accepted = int(totals.get("accepted", 0))
+        duplicates = int(totals.get("duplicates", 0)) + protocol_dups
+        revised = int(totals.get("revised", 0))
+        service_rejected = int(totals.get("rejected", 0))
+        rejected = service_rejected + protocol_rejected
+        alerts_raised = int(report_dict.get("alerts_raised", 0))
+        alerts_cleared = int(report_dict.get("alerts_cleared", 0))
+
+        out_of_order_count = 0
+        late_count = 0
+        conflicts_count = 0
+        for ch_rep in ingest_report.reports.values():
+            out_of_order_count += int(getattr(ch_rep, "out_of_order", 0) or 0)
+            late_count += int(getattr(ch_rep, "late", 0) or 0)
+            conflicts_count += len(getattr(ch_rep, "conflicts", None) or [])
+
+        checkpoint_status = "complete" if merged_cursor != cursor_before else "unchanged"
+        base_manifest = (
+            protocol_disp.to_dict()
+            if protocol_disp is not None
+            else {
+                "pages_or_messages_received": 1 if frames_received > 0 else 0,
+                "source_records_discovered": frames_received + protocol_dups,
+                "mapped_frames_emitted": frames_received,
+                "unmapped_skipped": 0,
+                "unsubscribed_skipped": 0,
+                "watermark_suppressed": protocol_dups,
+                "in_batch_duplicates": 0,
+                "deferred_over_cap": 0,
+                "total_protocol_rejected": 0,
+                "reconciled": True,
+            }
+        )
+        run_manifest = {
+            **base_manifest,
+            "checkpoint_status": checkpoint_status,
+            "points_accepted": accepted,
+            "points_duplicates": duplicates,
+            "points_revised": revised,
+            "points_rejected": rejected,
+            "service_rejected": service_rejected,
+            "conflicts": conflicts_count,
+            "out_of_order": out_of_order_count,
+            "late": late_count,
+        }
+
+        finished = utc_now()
+        duration_ms = round((time.perf_counter() - t0) * 1000.0, 2)
+        row.cursor = merged_cursor
+        row.last_connected_at = finished
+        row.last_poll_at = finished
+        row.last_successful_poll_at = finished
+        if accepted > 0:
+            row.last_frame_at = finished
+            row.last_ingest_at = finished
+            row.last_sync_at = finished
+        row.last_trace_id = trace_id
+        row.updated_at = finished
+
+        run_row = ConnectorRun(
+            id=new_id("crn"),
+            org_id=self.org_id,
+            connector_id=row.id,
+            well_id=row.well_id,
+            config_version=current_cfg_version,
+            run_kind="replay",
+            status="succeeded",
+            started_at=started,
+            finished_at=finished,
+            duration_ms=duration_ms,
+            frames_received=frames_received,
+            points_accepted=accepted,
+            points_duplicates=duplicates,
+            points_revised=revised,
+            points_rejected=rejected,
+            alerts_raised=alerts_raised,
+            alerts_cleared=alerts_cleared,
+            cursor_before=cursor_before,
+            cursor_after=merged_cursor,
+            trace_id=trace_id,
+            details={
+                "channels": report_dict.get("channels", []),
+                "checkpoint_status": checkpoint_status,
+                "replay": {
+                    "reason": reason.strip(),
+                    "from_timestamp": from_timestamp,
+                    "channel_keys": selected_channels,
+                    "dry_run": False,
+                },
+                "manifest": run_manifest,
+            },
+        )
+        self.session.add(run_row)
+        await emit(
+            self.session,
+            org_id=self.org_id,
+            type="connector.changed",
+            subject_kind="connector",
+            subject_id=row.id,
+            well_id=row.well_id,
+            wellbore_id=row.wellbore_id,
+            payload={
+                "connector_id": row.id,
+                "action": "replay_succeeded",
+                "frames_received": frames_received,
+                "points_accepted": accepted,
+                "points_duplicates": duplicates,
+            },
+        )
+        await record_audit(
+            self.session,
+            org_id=self.org_id,
+            principal=self._principal,
+            action="connector.control",
+            resource_kind="connector",
+            resource_id=row.id,
+            well_id=row.well_id,
+            before={"cursor": cursor_before},
+            after={"cursor": merged_cursor},
+            details={
+                "transition": "replay",
+                "reason": reason.strip(),
+                "from_timestamp": from_timestamp,
+                "channel_keys": selected_channels,
+                "points_accepted": accepted,
+                "points_duplicates": duplicates,
+                "points_rejected": rejected,
+            },
+        )
+        await self.session.flush()
+        return {
+            "ok": True,
+            "dry_run": False,
+            "connector_id": row.id,
+            "run": connector_run_out(run_row),
+            "connector": await self.inspect(row.id),
+        }

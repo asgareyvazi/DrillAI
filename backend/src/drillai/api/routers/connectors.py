@@ -78,6 +78,16 @@ class ConnectorPreviewRequest(BaseModel):
     sample_limit: int = Field(default=20, ge=1, le=50)
 
 
+class ConnectorReplayRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    reason: str = Field(min_length=1, max_length=1000)
+    from_timestamp: str | None = Field(default=None, max_length=80)
+    channel_keys: list[str] | None = Field(default=None, max_length=100)
+    dry_run: bool = Field(default=False)
+    expected_config_version: int | None = Field(default=None, ge=1)
+
+
 class HarnessConfigureRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -378,6 +388,41 @@ async def poll_connector_now(
         "outcome": asdict(outcome),
         "connector": updated,
     }
+
+
+@router.post(
+    "/connectors/{connector_id}/replay",
+    summary="Execute a governed, idempotent replay/backfill over a bounded cursor/time window",
+)
+async def replay_connector(
+    connector_id: str,
+    payload: ConnectorReplayRequest,
+    session: Annotated[AsyncSession, Depends(get_db)],
+    auth: Annotated[AuthContext, Depends(require("connector.read"))],
+    idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key", max_length=160)] = None,
+) -> dict[str, Any]:
+    authorize(auth.principal, "connector.control")
+    org_id = auth.org_id or ""
+    scope = f"connector.replay:{connector_id}"
+    body = payload.model_dump(mode="json")
+    if (
+        replayed := await replay_or_reserve(
+            session, org_id=org_id, key=idempotency_key, scope=scope, payload=body
+        )
+    ) is not None:
+        return replayed
+
+    response = await _service(session, auth).replay(
+        connector_id,
+        reason=payload.reason,
+        from_timestamp=payload.from_timestamp,
+        channel_keys=payload.channel_keys,
+        dry_run=payload.dry_run,
+        expected_config_version=payload.expected_config_version,
+    )
+    await complete(session, org_id=org_id, key=idempotency_key, scope=scope, response=response)
+    await session.commit()
+    return response
 
 
 @router.get("/connectors/{connector_id}/runs", summary="Bounded connector run ledger")
