@@ -35,11 +35,14 @@ from drillai.telemetry.connectors import (
     ConnectorTransportError,
     ProtocolPollDisposition,
     enforce_connect_time_ssrf,
+    enforce_connect_time_ssrf_async,
     parse_channel_mappings,
     redact_sensitive_text,
     register_harness_endpoint,
     unregister_harness_endpoint,
 )
+
+_DEFAULT_ENFORCE_SSRF = enforce_connect_time_ssrf
 
 MAX_WITSML_XML_BYTES = 5 * 1024 * 1024  # 5 MB
 MAX_XML_DEPTH = 32
@@ -779,7 +782,14 @@ class WitsmlSoapClient:
         last_exc: ConnectorTransportError | None = None
 
         for attempt in range(self._max_retries + 1):
-            pinned = enforce_connect_time_ssrf(self._endpoint_url, "witsml.1.4.1.1.soap_http")
+            if enforce_connect_time_ssrf is _DEFAULT_ENFORCE_SSRF:
+                pinned = await enforce_connect_time_ssrf_async(
+                    self._endpoint_url,
+                    "witsml.1.4.1.1.soap_http",
+                    dns_timeout_seconds=min(self._timeout_seconds, 5.0),
+                )
+            else:
+                pinned = enforce_connect_time_ssrf(self._endpoint_url, "witsml.1.4.1.1.soap_http")
             headers = self._build_headers(soap_action=soap_action)
             headers["Host"] = pinned.host_header
             extensions: dict[str, Any] = {}

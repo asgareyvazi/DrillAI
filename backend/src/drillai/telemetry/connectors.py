@@ -23,11 +23,14 @@ or returned in plaintext.
 
 from __future__ import annotations
 
+import asyncio
+import concurrent.futures
 import datetime as dt
 import ipaddress
 import os
 import re
 import socket
+import threading
 import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
@@ -87,6 +90,7 @@ __all__ = [
     "connector_out",
     "connector_run_out",
     "enforce_connect_time_ssrf",
+    "enforce_connect_time_ssrf_async",
     "get_egress_policy",
     "is_harness_endpoint",
     "mask_secret_refs",
@@ -96,6 +100,7 @@ __all__ = [
     "register_harness_endpoint",
     "reset_egress_policy",
     "resolve_and_pin_endpoint",
+    "resolve_and_pin_endpoint_async",
     "resolve_secret_refs",
     "set_custom_dns_resolver",
     "set_egress_policy",
@@ -1494,12 +1499,18 @@ async def resolve_secret_refs(
 _AMBIGUOUS_NUMERIC_HOST_RE = re.compile(
     r"^(?:0x[0-9a-fA-F]+|\d+)(?:\.(?:0x[0-9a-fA-F]+|\d+))*$"
 )
+_NAT64_WELL_KNOWN_PREFIX = ipaddress.IPv6Network("64:ff9b::/96")
+
+DEFAULT_DNS_TIMEOUT_SECONDS: float = 3.0
+_DNS_MAX_CONCURRENCY: int = 8
+_DNS_EXECUTOR = concurrent.futures.ThreadPoolExecutor(max_workers=4, thread_name_prefix="drillai-dns")
+_DNS_SEMAPHORE = threading.BoundedSemaphore(_DNS_MAX_CONCURRENCY)
 
 
 def _unpack_embedded_ip(
     ip: ipaddress.IPv4Address | ipaddress.IPv6Address,
 ) -> list[ipaddress.IPv4Address | ipaddress.IPv6Address]:
-    """Return the IP and any embedded IPv4 addresses (IPv4-mapped IPv6, 6to4, Teredo)."""
+    """Return the IP and any embedded IPv4 addresses (IPv4-mapped IPv6, 6to4, Teredo, NAT64 64:ff9b::/96)."""
     out: list[ipaddress.IPv4Address | ipaddress.IPv6Address] = [ip]
     if isinstance(ip, ipaddress.IPv6Address):
         if ip.ipv4_mapped is not None:
@@ -1508,7 +1519,61 @@ def _unpack_embedded_ip(
             out.append(ip.sixtofour)
         if ip.teredo is not None:
             out.extend(ip.teredo)
+        if ip in _NAT64_WELL_KNOWN_PREFIX:
+            out.append(ipaddress.IPv4Address(int(ip) & 0xFFFFFFFF))
     return out
+
+
+def _execute_dns_lookup_raw(
+    hostname: str,
+    effective_port: int,
+    active_resolver: Callable[[str, int], Sequence[str]] | None,
+) -> list[str]:
+    """Execute a single DNS resolution call inside the bounded DNS thread pool."""
+    if active_resolver is not None:
+        return [str(item) for item in active_resolver(hostname, effective_port)]
+    infos = socket.getaddrinfo(hostname, effective_port, type=socket.SOCK_STREAM)
+    results: list[str] = []
+    for info in infos:
+        sockaddr = info[4]
+        if sockaddr and sockaddr[0]:
+            raw_addr = str(sockaddr[0]).split("%", 1)[0]
+            if raw_addr not in results:
+                results.append(raw_addr)
+    return results
+
+
+def _parse_and_expand_resolved_ips(
+    hostname: str,
+    resolved_strs: Sequence[str],
+    *,
+    require_dns_resolution: bool,
+) -> tuple[
+    list[ipaddress.IPv4Address | ipaddress.IPv6Address],
+    list[ipaddress.IPv4Address | ipaddress.IPv6Address],
+]:
+    if not resolved_strs:
+        if require_dns_resolution:
+            raise ValidationFailed(
+                f"endpoint_url host {hostname!r} could not be resolved",
+                details={"field": "endpoint_url", "host": hostname, "reason": "dns_failure"},
+            )
+        return [], []
+    primary_ips: list[ipaddress.IPv4Address | ipaddress.IPv6Address] = []
+    candidate_ips: list[ipaddress.IPv4Address | ipaddress.IPv6Address] = []
+    for ip_s in resolved_strs:
+        cleaned_ip_s = str(ip_s).strip()
+        try:
+            r_ip = ipaddress.ip_address(cleaned_ip_s)
+        except ValueError as exc:
+            raise ValidationFailed(
+                f"DNS resolver returned invalid IP {ip_s!r} for {hostname!r}",
+                details={"field": "endpoint_url", "host": hostname, "reason": "ssrf_blocked"},
+            ) from exc
+        if r_ip not in primary_ips:
+            primary_ips.append(r_ip)
+        candidate_ips.extend(_unpack_embedded_ip(r_ip))
+    return primary_ips, candidate_ips
 
 
 @dataclass(frozen=True)
@@ -1538,8 +1603,10 @@ def resolve_and_pin_endpoint(
     is_production: bool | None = None,
     resolver: Callable[[str, int], Sequence[str]] | None = None,
     require_dns_resolution: bool = True,
+    dns_timeout_seconds: float = DEFAULT_DNS_TIMEOUT_SECONDS,
+    _pre_resolved_ips: Sequence[str] | None = None,
 ) -> PinnedEndpoint:
-    """Validate URL, resolve all A/AAAA records, enforce egress/loopback/private-CIDR policy, and pin socket IP."""
+    """Validate URL, resolve all A/AAAA records with bounded timeout, enforce egress/loopback/private-CIDR policy, and pin socket IP."""
     if protocol_profile not in PROTOCOL_PROFILE_SPECS:
         raise ValidationFailed(
             f"unsupported protocol profile {protocol_profile!r}",
@@ -1672,6 +1739,7 @@ def resolve_and_pin_endpoint(
     normalized_allowlist = {h.strip().lower().rstrip(".") for h in allowed_hosts if h and h.strip()}
     private_networks = parse_private_cidr_list(allowed_private_cidrs)
     active_resolver = resolver or _custom_dns_resolver
+    bounded_dns_timeout = max(0.05, min(float(dns_timeout_seconds), 15.0))
 
     is_ip_literal = False
     primary_ips: list[ipaddress.IPv4Address | ipaddress.IPv6Address] = []
@@ -1693,51 +1761,76 @@ def resolve_and_pin_endpoint(
                 "loopback endpoint host 'localhost' is prohibited by SSRF policy",
                 details={"field": "endpoint_url", "host": hostname, "reason": "ssrf_blocked"},
             ) from None
-        if active_resolver is not None:
-            try:
-                resolved_strs = active_resolver(hostname, effective_port)
-            except TimeoutError as exc:
+        if _pre_resolved_ips is not None:
+            primary_ips, candidate_ips = _parse_and_expand_resolved_ips(
+                hostname,
+                _pre_resolved_ips,
+                require_dns_resolution=require_dns_resolution,
+            )
+        elif active_resolver is not None or require_dns_resolution:
+            if not _DNS_SEMAPHORE.acquire(timeout=min(bounded_dns_timeout, 1.0)):
                 raise ValidationFailed(
-                    f"DNS resolution timed out for {hostname!r}",
+                    f"DNS resolution timed out for {hostname!r} (resolver concurrency limit reached)",
+                    details={"field": "endpoint_url", "host": hostname, "reason": "timeout"},
+                ) from None
+
+            def _bounded_task() -> list[str]:
+                try:
+                    return _execute_dns_lookup_raw(hostname, effective_port, active_resolver)
+                finally:
+                    _DNS_SEMAPHORE.release()
+
+            fut = _DNS_EXECUTOR.submit(_bounded_task)
+            try:
+                resolved_strs = fut.result(timeout=bounded_dns_timeout)
+            except (TimeoutError, concurrent.futures.TimeoutError) as exc:
+                fut.cancel()
+                raise ValidationFailed(
+                    f"DNS resolution timed out for {hostname!r} after {bounded_dns_timeout:.2f}s",
                     details={"field": "endpoint_url", "host": hostname, "reason": "timeout"},
                 ) from exc
+            except socket.gaierror as exc:
+                if require_dns_resolution or active_resolver is not None:
+                    raise ValidationFailed(
+                        f"endpoint_url host {hostname!r} could not be resolved",
+                        details={"field": "endpoint_url", "host": hostname, "reason": "dns_failure"},
+                    ) from exc
+                resolved_strs = []
             except Exception as exc:
                 raise ValidationFailed(
                     f"endpoint_url host {hostname!r} could not be resolved: {exc}",
                     details={"field": "endpoint_url", "host": hostname, "reason": "dns_failure"},
                 ) from exc
-            if not resolved_strs:
-                raise ValidationFailed(
-                    f"endpoint_url host {hostname!r} could not be resolved",
-                    details={"field": "endpoint_url", "host": hostname, "reason": "dns_failure"},
-                ) from None
-            for ip_s in resolved_strs:
-                try:
-                    r_ip = ipaddress.ip_address(str(ip_s).strip())
-                except ValueError as exc:
-                    raise ValidationFailed(
-                        f"DNS resolver returned invalid IP {ip_s!r} for {hostname!r}",
-                        details={"field": "endpoint_url", "host": hostname, "reason": "ssrf_blocked"},
-                    ) from exc
-                primary_ips.append(r_ip)
-                candidate_ips.extend(_unpack_embedded_ip(r_ip))
+
+            primary_ips, candidate_ips = _parse_and_expand_resolved_ips(
+                hostname,
+                resolved_strs,
+                require_dns_resolution=(require_dns_resolution or active_resolver is not None),
+            )
         else:
-            try:
-                infos = socket.getaddrinfo(hostname, effective_port, type=socket.SOCK_STREAM)
-                for info in infos:
-                    sockaddr = info[4]
-                    if sockaddr and sockaddr[0]:
-                        raw_addr = str(sockaddr[0]).split("%", 1)[0]
-                        r_ip = ipaddress.ip_address(raw_addr)
-                        if r_ip not in primary_ips:
-                            primary_ips.append(r_ip)
-                        candidate_ips.extend(_unpack_embedded_ip(r_ip))
-            except socket.gaierror as exc:
-                if require_dns_resolution:
-                    raise ValidationFailed(
-                        f"endpoint_url host {hostname!r} could not be resolved",
-                        details={"field": "endpoint_url", "host": hostname, "reason": "dns_failure"},
-                    ) from exc
+            # Best-effort non-blocking check when require_dns_resolution=False and no custom resolver is active
+            if _DNS_SEMAPHORE.acquire(timeout=0.2):
+                def _best_effort_task() -> list[str]:
+                    try:
+                        return _execute_dns_lookup_raw(hostname, effective_port, None)
+                    finally:
+                        _DNS_SEMAPHORE.release()
+
+                fut_be = _DNS_EXECUTOR.submit(_best_effort_task)
+                try:
+                    resolved_be = fut_be.result(timeout=min(bounded_dns_timeout, 1.0))
+                    primary_ips, candidate_ips = _parse_and_expand_resolved_ips(
+                        hostname, resolved_be, require_dns_resolution=False
+                    )
+                except Exception:
+                    fut_be.cancel()
+                    primary_ips, candidate_ips = [], []
+
+    if require_dns_resolution and not primary_ips:
+        raise ValidationFailed(
+            f"endpoint_url host {hostname!r} could not be resolved to any valid IP address",
+            details={"field": "endpoint_url", "host": hostname, "reason": "dns_failure"},
+        )
 
     is_harness = False
     is_private_rig = False
@@ -1818,6 +1911,109 @@ def resolve_and_pin_endpoint(
     )
 
 
+async def resolve_and_pin_endpoint_async(
+    endpoint_url: str | None,
+    protocol_profile: str,
+    *,
+    allow_loopback: bool | None = None,
+    allowed_hosts: Sequence[str] | None = None,
+    allowed_private_cidrs: Sequence[str] | None = None,
+    is_production: bool | None = None,
+    resolver: Callable[[str, int], Sequence[str]] | None = None,
+    require_dns_resolution: bool = True,
+    dns_timeout_seconds: float = DEFAULT_DNS_TIMEOUT_SECONDS,
+) -> PinnedEndpoint:
+    """Non-blocking async endpoint validator and DNS resolver with bounded timeout and executor concurrency."""
+    # First validate URL syntax, scheme, and IP literal/metadata rules without DNS resolution
+    if endpoint_url and isinstance(endpoint_url, str) and protocol_profile != "synthetic.v1":
+        parsed = urlparse(endpoint_url.strip())
+        hostname = (parsed.hostname or "").strip().lower().rstrip(".")
+        scheme = (parsed.scheme or "").lower()
+        default_port = 443 if scheme in ("https", "wss") else 80
+        try:
+            effective_port = int(parsed.port or default_port)
+        except ValueError:
+            effective_port = default_port
+
+        is_lit = False
+        try:
+            if hostname:
+                ipaddress.ip_address(hostname)
+                is_lit = True
+        except ValueError:
+            is_lit = False
+
+        active_resolver = resolver or _custom_dns_resolver
+        bounded_dns_timeout = max(0.05, min(float(dns_timeout_seconds), 15.0))
+        if (
+            hostname
+            and not is_lit
+            and hostname not in PROHIBITED_METADATA_HOSTS
+            and not hostname.endswith(".internal")
+            and not _AMBIGUOUS_NUMERIC_HOST_RE.match(hostname)
+            and (require_dns_resolution or active_resolver is not None)
+        ):
+            if not _DNS_SEMAPHORE.acquire(blocking=False):
+                raise ValidationFailed(
+                    f"DNS resolution timed out for {hostname!r} (resolver concurrency limit reached)",
+                    details={"field": "endpoint_url", "host": hostname, "reason": "timeout"},
+                )
+
+            def _async_dns_worker() -> list[str]:
+                try:
+                    return _execute_dns_lookup_raw(hostname, effective_port, active_resolver)
+                finally:
+                    _DNS_SEMAPHORE.release()
+
+            fut = _DNS_EXECUTOR.submit(_async_dns_worker)
+            try:
+                resolved_strs = await asyncio.wait_for(
+                    asyncio.wrap_future(fut),
+                    timeout=bounded_dns_timeout,
+                )
+            except (TimeoutError, concurrent.futures.TimeoutError) as exc:
+                fut.cancel()
+                raise ValidationFailed(
+                    f"DNS resolution timed out for {hostname!r} after {bounded_dns_timeout:.2f}s",
+                    details={"field": "endpoint_url", "host": hostname, "reason": "timeout"},
+                ) from exc
+            except socket.gaierror as exc:
+                raise ValidationFailed(
+                    f"endpoint_url host {hostname!r} could not be resolved",
+                    details={"field": "endpoint_url", "host": hostname, "reason": "dns_failure"},
+                ) from exc
+            except Exception as exc:
+                raise ValidationFailed(
+                    f"endpoint_url host {hostname!r} could not be resolved: {exc}",
+                    details={"field": "endpoint_url", "host": hostname, "reason": "dns_failure"},
+                ) from exc
+
+            return resolve_and_pin_endpoint(
+                endpoint_url,
+                protocol_profile,
+                allow_loopback=allow_loopback,
+                allowed_hosts=allowed_hosts,
+                allowed_private_cidrs=allowed_private_cidrs,
+                is_production=is_production,
+                resolver=resolver,
+                require_dns_resolution=require_dns_resolution,
+                dns_timeout_seconds=bounded_dns_timeout,
+                _pre_resolved_ips=resolved_strs,
+            )
+
+    return resolve_and_pin_endpoint(
+        endpoint_url,
+        protocol_profile,
+        allow_loopback=allow_loopback,
+        allowed_hosts=allowed_hosts,
+        allowed_private_cidrs=allowed_private_cidrs,
+        is_production=is_production,
+        resolver=resolver,
+        require_dns_resolution=require_dns_resolution,
+        dns_timeout_seconds=dns_timeout_seconds,
+    )
+
+
 def validate_connector_endpoint(
     endpoint_url: str | None,
     protocol_profile: str,
@@ -1827,6 +2023,7 @@ def validate_connector_endpoint(
     allowed_private_cidrs: Sequence[str] | None = None,
     is_production: bool | None = None,
     resolver: Callable[[str, int], Sequence[str]] | None = None,
+    dns_timeout_seconds: float = DEFAULT_DNS_TIMEOUT_SECONDS,
 ) -> str | None:
     """Validate protocol, scheme, port, hostname, and SSRF/DNS-rebinding constraints."""
     pinned = resolve_and_pin_endpoint(
@@ -1838,6 +2035,7 @@ def validate_connector_endpoint(
         is_production=is_production,
         resolver=resolver,
         require_dns_resolution=False,
+        dns_timeout_seconds=dns_timeout_seconds,
     )
     return pinned.original_url
 
@@ -1851,6 +2049,7 @@ def enforce_connect_time_ssrf(
     allowed_private_cidrs: Sequence[str] | None = None,
     is_production: bool | None = None,
     resolver: Callable[[str, int], Sequence[str]] | None = None,
+    dns_timeout_seconds: float = DEFAULT_DNS_TIMEOUT_SECONDS,
 ) -> PinnedEndpoint:
     """Enforce connection-bound SSRF/DNS-rebinding checks and return the pinned socket destination."""
     try:
@@ -1863,6 +2062,41 @@ def enforce_connect_time_ssrf(
             is_production=is_production,
             resolver=resolver,
             require_dns_resolution=True,
+            dns_timeout_seconds=dns_timeout_seconds,
+        )
+    except ValidationFailed as exc:
+        reason = str(exc.details.get("reason") or "ssrf_blocked")
+        retryable = reason in {"dns_failure", "timeout"}
+        raise ConnectorTransportError(
+            reason,
+            str(exc),
+            retryable=retryable,
+        ) from exc
+
+
+async def enforce_connect_time_ssrf_async(
+    endpoint_url: str,
+    protocol_profile: str,
+    *,
+    allow_loopback: bool | None = None,
+    allowed_hosts: Sequence[str] | None = None,
+    allowed_private_cidrs: Sequence[str] | None = None,
+    is_production: bool | None = None,
+    resolver: Callable[[str, int], Sequence[str]] | None = None,
+    dns_timeout_seconds: float = DEFAULT_DNS_TIMEOUT_SECONDS,
+) -> PinnedEndpoint:
+    """Non-blocking async connection-bound SSRF/DNS-rebinding check with bounded timeout."""
+    try:
+        return await resolve_and_pin_endpoint_async(
+            endpoint_url,
+            protocol_profile,
+            allow_loopback=allow_loopback,
+            allowed_hosts=allowed_hosts,
+            allowed_private_cidrs=allowed_private_cidrs,
+            is_production=is_production,
+            resolver=resolver,
+            require_dns_resolution=True,
+            dns_timeout_seconds=dns_timeout_seconds,
         )
     except ValidationFailed as exc:
         reason = str(exc.details.get("reason") or "ssrf_blocked")

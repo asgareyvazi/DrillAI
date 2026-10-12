@@ -46,11 +46,14 @@ from drillai.telemetry.connectors import (
     ConnectorTransportError,
     ProtocolPollDisposition,
     enforce_connect_time_ssrf,
+    enforce_connect_time_ssrf_async,
     parse_channel_mappings,
     redact_sensitive_text,
     register_harness_endpoint,
     unregister_harness_endpoint,
 )
+
+_DEFAULT_ENFORCE_SSRF = enforce_connect_time_ssrf
 
 MAX_ETP_FRAME_BYTES = 1024 * 1024  # 1 MB per WebSocket frame
 MIN_VALID_UTC = dt.datetime(1975, 1, 1, tzinfo=dt.UTC)
@@ -579,7 +582,14 @@ class EtpWebSocketClient:
 
     async def probe_session(self) -> tuple[str, list[EtpChannelInfo]]:
         """Perform ETP ``RequestSession`` -> ``OpenSession`` and ``ChannelDescribe``/``Start`` -> ``ChannelMetadata`` discovery."""
-        pinned = enforce_connect_time_ssrf(self._endpoint_url, "etp.1.2.json_ws")
+        if enforce_connect_time_ssrf is _DEFAULT_ENFORCE_SSRF:
+            pinned = await enforce_connect_time_ssrf_async(
+                self._endpoint_url,
+                "etp.1.2.json_ws",
+                dns_timeout_seconds=min(self._timeout_seconds, 5.0),
+            )
+        else:
+            pinned = enforce_connect_time_ssrf(self._endpoint_url, "etp.1.2.json_ws")
         headers = self._build_headers()
         try:
             async with websockets.connect(
@@ -721,7 +731,14 @@ class EtpWebSocketClient:
         subscribed_channels: set[str] | None = None,
     ) -> EtpPollBatch:
         """Open an ETP 1.2 WebSocket session, subscribe to mapped channels, and collect a batch."""
-        pinned = enforce_connect_time_ssrf(self._endpoint_url, "etp.1.2.json_ws")
+        if enforce_connect_time_ssrf is _DEFAULT_ENFORCE_SSRF:
+            pinned = await enforce_connect_time_ssrf_async(
+                self._endpoint_url,
+                "etp.1.2.json_ws",
+                dns_timeout_seconds=min(self._timeout_seconds, 5.0),
+            )
+        else:
+            pinned = enforce_connect_time_ssrf(self._endpoint_url, "etp.1.2.json_ws")
         mappings = parse_channel_mappings(config.get("channel_mappings"))
         mapping_by_mnemonic = {m.source_mnemonic.upper(): m for m in mappings}
         mapping_by_uri = {m.channel_uri.lower(): m for m in mappings}

@@ -55,6 +55,7 @@ from drillai.telemetry.connectors import (
     ConnectorTransportError,
     ProtocolPollDisposition,
     enforce_connect_time_ssrf,
+    enforce_connect_time_ssrf_async,
     parse_channel_mappings,
     redact_sensitive_text,
     register_harness_endpoint,
@@ -70,6 +71,8 @@ from drillai.telemetry.protocols.etp import (
     _parse_iso_utc,
     compute_etp_watermark_for_frames,
 )
+
+_DEFAULT_ENFORCE_SSRF = enforce_connect_time_ssrf
 
 # ETP v1.2 MessageHeader flags
 MSG_FLAG_NONE = 0x00
@@ -1337,7 +1340,14 @@ class EtpBinaryWebSocketClient:
 
     async def probe_session(self) -> tuple[str, list[EtpChannelInfo]]:
         """Perform binary ETP 1.2 `RequestSession` -> `OpenSession` and `StartStreaming` -> `ChannelMetadata` discovery."""
-        pinned = enforce_connect_time_ssrf(self._endpoint_url, "etp.1.2.binary_ws")
+        if enforce_connect_time_ssrf is _DEFAULT_ENFORCE_SSRF:
+            pinned = await enforce_connect_time_ssrf_async(
+                self._endpoint_url,
+                "etp.1.2.binary_ws",
+                dns_timeout_seconds=min(self._timeout_seconds, 5.0),
+            )
+        else:
+            pinned = enforce_connect_time_ssrf(self._endpoint_url, "etp.1.2.binary_ws")
         headers = self._build_headers()
         try:
             async with websockets.connect(
@@ -1462,7 +1472,14 @@ class EtpBinaryWebSocketClient:
         subscribed_channels: set[str] | None = None,
     ) -> EtpPollBatch:
         """Open an ETP 1.2 binary Avro WebSocket session, stream `ChannelMetadata` + `ChannelData`, and reconcile."""
-        pinned = enforce_connect_time_ssrf(self._endpoint_url, "etp.1.2.binary_ws")
+        if enforce_connect_time_ssrf is _DEFAULT_ENFORCE_SSRF:
+            pinned = await enforce_connect_time_ssrf_async(
+                self._endpoint_url,
+                "etp.1.2.binary_ws",
+                dns_timeout_seconds=min(self._timeout_seconds, 5.0),
+            )
+        else:
+            pinned = enforce_connect_time_ssrf(self._endpoint_url, "etp.1.2.binary_ws")
         mappings = parse_channel_mappings(config.get("channel_mappings"))
         mapping_by_mnemonic = {m.source_mnemonic.upper(): m for m in mappings}
         mapping_by_uri = {m.channel_uri.lower(): m for m in mappings if m.channel_uri}
