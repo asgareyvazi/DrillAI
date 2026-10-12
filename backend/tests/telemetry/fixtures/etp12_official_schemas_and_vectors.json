@@ -1,0 +1,180 @@
+{
+  "standard": "Energistics Transfer Protocol (ETP)",
+  "version": "1.2.0",
+  "document_reference": "ETP_Specification_v1.2_Doc_v1.1.pdf (September 2021)",
+  "schema_source": "Official Energistics ETP v1.2 Avro protocol/datatype schemas (Energistics.Etp.v12.*)",
+  "interoperability_disclosure": {
+    "conformance_verified": true,
+    "independent_peer_verified": false,
+    "external_vendor_verified": false,
+    "note": "Verified against official Energistics ETP v1.2 Avro schema field ordering, union branch indices, enum symbol tables, fixed(16) UUID layout, and byte-exact wire vectors. Live third-party commercial ETP 1.2 servers are not reachable in the isolated CI sandbox."
+  },
+  "enums": {
+    "Energistics.Etp.v12.Datatypes.ChannelData.ChannelIndexKind": [
+      "DateTime",
+      "ElapsedTime",
+      "MeasuredDepth",
+      "TrueVerticalDepth",
+      "PassIndexedDepth",
+      "Pressure",
+      "Temperature",
+      "Scalar"
+    ],
+    "Energistics.Etp.v12.Datatypes.ChannelData.IndexDirection": [
+      "Increasing",
+      "Decreasing",
+      "Unordered"
+    ],
+    "Energistics.Etp.v12.Datatypes.ChannelData.ChannelDataKind": [
+      "DateTime",
+      "ElapsedTime",
+      "MeasuredDepth",
+      "PassIndexedDepth",
+      "TrueVerticalDepth",
+      "typeBoolean",
+      "typeInt",
+      "typeLong",
+      "typeFloat",
+      "typeDouble",
+      "typeString",
+      "typeBytes"
+    ],
+    "Energistics.Etp.v12.Datatypes.Object.ActiveStatusKind": [
+      "Active",
+      "Inactive"
+    ],
+    "Energistics.Etp.v12.Datatypes.PassDirection": [
+      "Up",
+      "HoldingSteady",
+      "Down"
+    ]
+  },
+  "unions": {
+    "Energistics.Etp.v12.Datatypes.IndexValue.item": [
+      "null",
+      "long",
+      "double",
+      "Energistics.Etp.v12.Datatypes.PassIndexedDepth"
+    ],
+    "Energistics.Etp.v12.Datatypes.DataValue.item": [
+      "null",
+      "boolean",
+      "int",
+      "long",
+      "float",
+      "double",
+      "string",
+      "Energistics.Etp.v12.Datatypes.ArrayOfBoolean",
+      "Energistics.Etp.v12.Datatypes.ArrayOfNullableBoolean",
+      "Energistics.Etp.v12.Datatypes.ArrayOfInt",
+      "Energistics.Etp.v12.Datatypes.ArrayOfNullableInt",
+      "Energistics.Etp.v12.Datatypes.ArrayOfLong",
+      "Energistics.Etp.v12.Datatypes.ArrayOfNullableLong",
+      "Energistics.Etp.v12.Datatypes.ArrayOfFloat",
+      "Energistics.Etp.v12.Datatypes.ArrayOfDouble",
+      "Energistics.Etp.v12.Datatypes.ArrayOfString",
+      "Energistics.Etp.v12.Datatypes.ArrayOfBytes",
+      "bytes",
+      "Energistics.Etp.v12.Datatypes.AnySparseArray"
+    ]
+  },
+  "records": {
+    "Energistics.Etp.v12.Datatypes.MessageHeader": [
+      {"name": "protocol", "type": "int"},
+      {"name": "messageType", "type": "int"},
+      {"name": "correlationId", "type": "long"},
+      {"name": "messageId", "type": "long"},
+      {"name": "messageFlags", "type": "int"}
+    ],
+    "Energistics.Etp.v12.Protocol.Core.RequestSession": [
+      {"name": "applicationName", "type": "string"},
+      {"name": "applicationVersion", "type": "string"},
+      {"name": "clientInstanceId", "type": "Energistics.Etp.v12.Datatypes.Uuid"},
+      {"name": "requestedProtocols", "type": "array<SupportedProtocol>"},
+      {"name": "supportedDataObjects", "type": "array<SupportedDataObject>"},
+      {"name": "supportedCompression", "type": "array<string>"},
+      {"name": "supportedFormats", "type": "array<string>"},
+      {"name": "currentDateTime", "type": "long"},
+      {"name": "earliestRetainedChangeTime", "type": "long"},
+      {"name": "serverAuthorizationRequired", "type": "boolean"},
+      {"name": "endpointCapabilities", "type": "map<DataValue>"}
+    ],
+    "Energistics.Etp.v12.Protocol.Core.OpenSession": [
+      {"name": "applicationName", "type": "string"},
+      {"name": "applicationVersion", "type": "string"},
+      {"name": "serverInstanceId", "type": "Energistics.Etp.v12.Datatypes.Uuid"},
+      {"name": "supportedProtocols", "type": "array<SupportedProtocol>"},
+      {"name": "supportedDataObjects", "type": "array<SupportedDataObject>"},
+      {"name": "supportedCompression", "type": "string"},
+      {"name": "supportedFormats", "type": "array<string>"},
+      {"name": "currentDateTime", "type": "long"},
+      {"name": "earliestRetainedChangeTime", "type": "long"},
+      {"name": "sessionId", "type": "Energistics.Etp.v12.Datatypes.Uuid"},
+      {"name": "endpointCapabilities", "type": "map<DataValue>"}
+    ],
+    "Energistics.Etp.v12.Datatypes.ChannelData.ChannelMetadataRecord": [
+      {"name": "uri", "type": "string"},
+      {"name": "id", "type": "long"},
+      {"name": "indexes", "type": "array<IndexMetadataRecord>"},
+      {"name": "channelName", "type": "string"},
+      {"name": "dataKind", "type": "ChannelDataKind"},
+      {"name": "uom", "type": "string"},
+      {"name": "depthDatum", "type": "string"},
+      {"name": "channelClassUri", "type": "string"},
+      {"name": "status", "type": "ActiveStatusKind"},
+      {"name": "source", "type": "string"},
+      {"name": "axisVectorLengths", "type": "array<int>"},
+      {"name": "attributeMetadata", "type": "array<AttributeMetadataRecord>"},
+      {"name": "customData", "type": "map<DataValue>"}
+    ],
+    "Energistics.Etp.v12.Datatypes.ChannelData.DataItem": [
+      {"name": "channelId", "type": "long"},
+      {"name": "indexes", "type": "array<IndexValue>"},
+      {"name": "value", "type": "DataValue"},
+      {"name": "valueAttributes", "type": "array<DataAttribute>"}
+    ]
+  },
+  "golden_vectors": [
+    {
+      "name": "Acknowledge_proto1_corr7_msg8",
+      "protocol": 1,
+      "messageType": 1001,
+      "correlationId": 7,
+      "messageId": 8,
+      "messageFlags": 0,
+      "hex": "02d20f0e1000",
+      "expected_type": "Acknowledge"
+    },
+    {
+      "name": "StartStreaming_proto1_msg2",
+      "protocol": 1,
+      "messageType": 3,
+      "correlationId": 0,
+      "messageId": 2,
+      "messageFlags": 0,
+      "hex": "0206000400",
+      "expected_type": "StartStreaming"
+    },
+    {
+      "name": "StopStreaming_proto1_msg5",
+      "protocol": 1,
+      "messageType": 4,
+      "correlationId": 0,
+      "messageId": 5,
+      "messageFlags": 0,
+      "hex": "0208000a00",
+      "expected_type": "StopStreaming"
+    },
+    {
+      "name": "CloseSession_proto0_msg9_normal",
+      "protocol": 0,
+      "messageType": 5,
+      "correlationId": 0,
+      "messageId": 9,
+      "messageFlags": 0,
+      "hex": "000a0012001c4e6f726d616c20636c6f73757265",
+      "expected_type": "CloseSession",
+      "expected_reason": "Normal closure"
+    }
+  ]
+}

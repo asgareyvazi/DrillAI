@@ -1323,6 +1323,8 @@ class ProtocolProfileSpec:
     is_test_only_encoding: bool = False
     production_supported: bool = True
     conformance_verified: bool = True
+    independent_peer_verified: bool = False
+    evidence_tier: str = "conformance_and_golden_vectors_verified"
     subprotocols: tuple[str, ...] = ()
     supported_encodings: tuple[str, ...] = ()
 
@@ -1336,6 +1338,8 @@ class ProtocolProfileSpec:
             "is_test_only_encoding": self.is_test_only_encoding,
             "production_supported": self.production_supported,
             "conformance_verified": self.conformance_verified,
+            "independent_peer_verified": self.independent_peer_verified,
+            "evidence_tier": self.evidence_tier,
             "subprotocols": list(self.subprotocols),
             "supported_encodings": list(self.supported_encodings),
             "auth_modes": list(self.auth_modes),
@@ -1359,6 +1363,8 @@ PROTOCOL_PROFILE_SPECS: dict[str, ProtocolProfileSpec] = {
         is_test_only_encoding=False,
         production_supported=True,
         conformance_verified=True,
+        independent_peer_verified=False,
+        evidence_tier="synthetic_deterministic",
         subprotocols=(),
         supported_encodings=("in_memory",),
         auth_modes=("none",),
@@ -1382,6 +1388,8 @@ PROTOCOL_PROFILE_SPECS: dict[str, ProtocolProfileSpec] = {
         is_test_only_encoding=False,
         production_supported=True,
         conformance_verified=True,
+        independent_peer_verified=False,
+        evidence_tier="conformance_and_golden_vectors_verified",
         subprotocols=(),
         supported_encodings=("text/xml", "application/soap+xml"),
         auth_modes=("none", "basic", "bearer"),
@@ -1407,6 +1415,8 @@ PROTOCOL_PROFILE_SPECS: dict[str, ProtocolProfileSpec] = {
         is_test_only_encoding=False,
         production_supported=True,
         conformance_verified=True,
+        independent_peer_verified=False,
+        evidence_tier="conformance_and_golden_vectors_verified",
         subprotocols=("energistics-tp",),
         supported_encodings=("binary",),
         auth_modes=("none", "basic", "bearer"),
@@ -1416,6 +1426,7 @@ PROTOCOL_PROFILE_SPECS: dict[str, ProtocolProfileSpec] = {
             "StartStreaming",
             "ChannelMetadata",
             "ChannelData",
+            "TruncateChannels",
             "StopStreaming",
             "Ping",
             "Pong",
@@ -1445,6 +1456,8 @@ PROTOCOL_PROFILE_SPECS: dict[str, ProtocolProfileSpec] = {
         is_test_only_encoding=True,
         production_supported=False,
         conformance_verified=True,
+        independent_peer_verified=False,
+        evidence_tier="internal_test_harness_only",
         subprotocols=("energistics-tp",),
         supported_encodings=("json",),
         auth_modes=("none", "basic", "bearer"),

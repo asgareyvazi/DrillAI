@@ -885,9 +885,10 @@ def _decode_attribute_metadata_record(r: AvroBinaryReader) -> dict[str, Any]:
 def _encode_channel_metadata_record(w: AvroBinaryWriter, ch: dict[str, Any]) -> None:
     uri = str(ch.get("uri") or ch.get("channelUri") or "")
     cid = int(ch.get("id") if ch.get("id") is not None else ch.get("channelId", 0))
-    indexes = list(
-        ch.get("indexes")
-        or [
+    if "indexes" in ch and ch["indexes"] is not None:
+        indexes = list(ch["indexes"])
+    else:
+        indexes = [
             {
                 "indexKind": "DateTime",
                 "uom": "us",
@@ -895,7 +896,6 @@ def _encode_channel_metadata_record(w: AvroBinaryWriter, ch: dict[str, Any]) -> 
                 "name": "TIME",
             }
         ]
-    )
     ch_name = str(ch.get("channelName") or ch.get("mnemonic") or "")
     raw_kind = str(ch.get("dataKind") or ch.get("dataType") or "typeDouble")
     if raw_kind == "double":
@@ -1044,6 +1044,10 @@ def decode_etp_binary_frame(raw: bytes) -> dict[str, Any]:
         raise AvroBinaryDecodeError("empty ETP 1.2 binary frame")
     r = AvroBinaryReader(bytes(raw))
     hdr = EtpMessageHeader.decode(r)
+    if hdr.message_flags & MSG_FLAG_COMPRESSED:
+        raise AvroBinaryDecodeError(
+            "ETP 1.2 binary frame sets compressed flag (0x08), which was not negotiated (supportedCompression=[])"
+        )
     proto = hdr.protocol
     mtype = hdr.message_type
 
@@ -1254,7 +1258,13 @@ class EtpBinaryWebSocketClient:
             return decode_etp_binary_frame(bytes(raw))
         except AvroBinaryDecodeError as exc:
             msg = str(exc)
-            category = "oversized_payload" if "exceeds max" in msg.lower() else "malformed_payload"
+            lower_msg = msg.lower()
+            if "exceeds max" in lower_msg:
+                category = "oversized_payload"
+            elif "compressed flag" in lower_msg:
+                category = "protocol_error"
+            else:
+                category = "malformed_payload"
             raise ConnectorTransportError(category, f"ETP 1.2 binary decode error: {msg}", retryable=False) from exc
 
     @staticmethod
@@ -1277,18 +1287,20 @@ class EtpBinaryWebSocketClient:
         if isinstance(raw_indexes, list):
             for idx_entry in raw_indexes:
                 if isinstance(idx_entry, dict):
+                    raw_kind = str(idx_entry.get("indexKind") or "").strip()
+                    raw_uom = str(idx_entry.get("uom") or "").strip()
+                    if not raw_kind or not raw_uom:
+                        continue
                     parsed_indexes.append(
                         EtpIndexMetadata(
-                            index_kind=str(idx_entry.get("indexKind") or "DateTime").strip(),
-                            uom=str(idx_entry.get("uom") or "us").strip(),
+                            index_kind=raw_kind,
+                            uom=raw_uom,
                             direction=str(idx_entry.get("direction") or "Increasing").strip(),
                             mnemonic=str(
                                 idx_entry.get("name") or idx_entry.get("mnemonic") or "TIME"
                             ).strip(),
                         )
                     )
-        if not parsed_indexes:
-            parsed_indexes.append(EtpIndexMetadata())
 
         return EtpChannelInfo(
             channel_id=cid_raw,
@@ -1326,6 +1338,24 @@ class EtpBinaryWebSocketClient:
             raise ConnectorTransportError(
                 "protocol_error",
                 f"ETP OpenSession correlationId {open_corr_id} does not match RequestSession messageId {request_msg_id}",
+                retryable=False,
+            )
+        supp_comp = str(open_msg.get("supportedCompression") or "").strip()
+        if supp_comp.lower() not in ("", "none", "identity"):
+            raise ConnectorTransportError(
+                "protocol_error",
+                f"ETP OpenSession selected unsupported compression {supp_comp!r} (requested none)",
+                retryable=False,
+            )
+        supp_formats = [
+            str(fmt).strip().lower()
+            for fmt in (open_msg.get("supportedFormats") or [])
+            if str(fmt).strip()
+        ]
+        if supp_formats and "xml" not in supp_formats:
+            raise ConnectorTransportError(
+                "protocol_error",
+                f"ETP OpenSession did not negotiate required format 'xml' (supportedFormats={supp_formats})",
                 retryable=False,
             )
         supp_protos = open_msg.get("supportedProtocols") or []
@@ -1615,6 +1645,50 @@ class EtpBinaryWebSocketClient:
                     if mtype == "ChannelMetadata":
                         _register_metadata_channels(msg.get("channels") or [])
                         continue
+                    if mtype == "TruncateChannels":
+                        for trunc in msg.get("channels") or []:
+                            if not isinstance(trunc, dict):
+                                continue
+                            tcid = trunc.get("channelId")
+                            if not isinstance(tcid, int) or isinstance(tcid, bool):
+                                continue
+                            tmeta = discovered.get(tcid)
+                            tmapping = channel_id_to_mapping.get(tcid)
+                            if tmapping is None or tmeta is None or not tmeta.indexes:
+                                continue
+                            raw_end = trunc.get("newEndIndex")
+                            if isinstance(raw_end, dict) and "item" in raw_end:
+                                raw_end = raw_end["item"]
+                            end_dt, _ = _parse_etp_index_timestamp(
+                                raw_end,
+                                index_kind=tmeta.primary_index.index_kind,
+                                index_uom=tmeta.primary_index.uom,
+                            )
+                            if end_dt is None:
+                                continue
+                            # Clamp pre-existing cursor watermark if truncated back before it
+                            prev_dt = prev_channel_dt.get(tmapping.channel_key)
+                            if prev_dt is not None and prev_dt > end_dt:
+                                prev_channel_dt[tmapping.channel_key] = end_dt
+                            # Drop any already-buffered frames in the current batch after newEndIndex
+                            kept_frames: list[SourceFrame] = []
+                            dropped_count = 0
+                            for ef in frames:
+                                if ef.channel_key == tmapping.channel_key and ef.ts > end_dt:
+                                    dropped_count += 1
+                                    seen_in_batch.pop(
+                                        f"etp_bin:{ef.channel_key}:{ef.ts.isoformat()}", None
+                                    )
+                                else:
+                                    kept_frames.append(ef)
+                            if dropped_count > 0:
+                                frames[:] = kept_frames
+                                disposition.mapped_frames_emitted = max(
+                                    0, disposition.mapped_frames_emitted - dropped_count
+                                )
+                                disposition.watermark_suppressed += dropped_count
+                                duplicates_suppressed += dropped_count
+                        continue
                     if mtype == "CloseSession":
                         break
                     if mtype != "ChannelData":
@@ -1669,6 +1743,15 @@ class EtpBinaryWebSocketClient:
                         if subscribed_channels and mapping.channel_key not in subscribed_channels:
                             disposition.unsubscribed_skipped += 1
                             disposition.record_channel_outcome(source_label, "unsubscribed_skipped")
+                            continue
+
+                        if meta is not None and not meta.indexes:
+                            disposition.rejected_unsupported_index += 1
+                            disposition.record_channel_outcome(source_label, "rejected")
+                            disposition.record_rejection(
+                                reason="missing_channel_index_metadata",
+                                source_mnemonic=source_label,
+                            )
                             continue
 
                         primary_idx_meta = meta.primary_index if meta is not None else EtpIndexMetadata()
