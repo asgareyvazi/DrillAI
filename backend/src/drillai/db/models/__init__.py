@@ -142,6 +142,7 @@ from drillai.db.models.platform import (
     TRACE_KINDS,
     AuditLog,
     Connector,
+    ConnectorEgressPolicy,
     ConnectorEvent,
     ConnectorRun,
     EvaluationCase,
@@ -205,7 +206,7 @@ ALL_MODELS = [
     # registry & platform security/observability/integration
     RegistryItem, RegistryItemVersion, PolicyBinding, AuditLog, SecretRef, IdempotencyKey,
     Trace, Span, MetricPoint, EvaluationSuite, EvaluationCase, EvaluationRun,
-    Connector, ConnectorEvent, ConnectorRun, OutboundMessage, Schedule,
+    Connector, ConnectorEgressPolicy, ConnectorEvent, ConnectorRun, OutboundMessage, Schedule,
 ]
 
 __all__ = [
@@ -287,6 +288,7 @@ __all__ = [
     "Certification",
     "ChangeRecord",
     "Connector",
+    "ConnectorEgressPolicy",
     "ConnectorEvent",
     "ConnectorRun",
     "Conversation",

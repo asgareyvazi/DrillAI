@@ -508,6 +508,26 @@ class ConnectorRun(Base, IdMixin, CreatedAtMixin, OrgScopedMixin):
     details: Mapped[dict] = mapped_column(JsonType, default=dict, nullable=False)
 
 
+class ConnectorEgressPolicy(Base, IdMixin, TimestampMixin):
+    """Durable, versioned system-wide outbound network egress policy for telemetry connectors."""
+
+    __tablename__ = "connector_egress_policies"
+    id_prefix = "cep"
+    __table_args__ = (UniqueConstraint("policy_key"),)
+
+    policy_key: Mapped[str] = mapped_column(String(64), default="global", nullable=False, index=True)
+    scope: Mapped[str] = mapped_column(String(24), default="system", nullable=False, index=True)
+    revision: Mapped[int] = mapped_column(IntType, default=1, nullable=False)
+    status: Mapped[str] = mapped_column(String(24), default="active", nullable=False, index=True)
+    allowed_hosts: Mapped[list] = mapped_column(JsonType, default=list, nullable=False)
+    allowed_private_cidrs: Mapped[list] = mapped_column(JsonType, default=list, nullable=False)
+    updated_by_id: Mapped[str | None] = mapped_column(String(64))
+    updated_by_display: Mapped[str | None] = mapped_column(String(200))
+    updated_by_org_id: Mapped[str | None] = mapped_column(String(64))
+    reason: Mapped[str] = mapped_column(TextType, default="initial default policy", nullable=False)
+    attributes: Mapped[dict] = mapped_column(JsonType, default=dict, nullable=False)
+
+
 class ConnectorEvent(Base, IdMixin, CreatedAtMixin, OrgScopedMixin):
     """Inbound or outbound integration message with dedup and processing state."""
 

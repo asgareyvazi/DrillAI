@@ -28,9 +28,14 @@ from drillai.telemetry.connectors import (
     CONNECTOR_PROFILES,
     CONNECTOR_RUNTIME_STATUSES,
     PROTOCOL_PROFILE_SPECS,
+    SYSTEM_EGRESS_POLICY_KEY,
+    SYSTEM_EGRESS_POLICY_ORG_ID,
+    SYSTEM_EGRESS_POLICY_SCOPE,
     ConnectorService,
-    get_egress_policy,
-    set_egress_policy,
+    _format_egress_policy_dict,
+    publish_committed_egress_policy_snapshot,
+    sync_egress_policy_from_db,
+    update_egress_policy_in_db,
 )
 
 router = APIRouter(tags=["connectors"])
@@ -109,18 +114,21 @@ class EgressPolicyUpdateRequest(BaseModel):
     allowed_hosts: list[str] | None = Field(default=None, max_length=100)
     allowed_private_cidrs: list[str] | None = Field(default=None, max_length=50)
     allowed_private_networks: list[str] | None = Field(default=None, max_length=50)
+    expected_revision: int | None = Field(default=None, ge=1)
 
 
 @router.get("/connectors/profiles", summary="Supported telemetry connector protocol profiles")
 async def list_connector_profiles(
+    session: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[AuthContext, Depends(require("connector.read"))],
 ) -> dict[str, Any]:
+    policy = await sync_egress_policy_from_db(session)
     return {
         "profiles": [spec.to_dict() for spec in PROTOCOL_PROFILE_SPECS.values()],
         "allowed_secret_slots": list(ALLOWED_SECRET_SLOTS),
         "desired_states": list(CONNECTOR_DESIRED_STATES),
         "runtime_statuses": list(CONNECTOR_RUNTIME_STATUSES),
-        "egress_policy": get_egress_policy(),
+        "egress_policy": policy,
     }
 
 
@@ -129,14 +137,15 @@ async def list_connector_profiles(
     summary="Inspect active outbound network egress policy for telemetry connectors",
 )
 async def inspect_egress_policy(
+    session: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[AuthContext, Depends(require("connector.read"))],
 ) -> dict[str, Any]:
-    return get_egress_policy()
+    return await sync_egress_policy_from_db(session)
 
 
 @router.put(
     "/connectors/egress-policy",
-    summary="Update outbound network egress policy (admin only, audited)",
+    summary="Update outbound network egress policy (admin only, audited, durable & versioned)",
 )
 async def update_egress_policy(
     body: EgressPolicyUpdateRequest,
@@ -149,40 +158,70 @@ async def update_egress_policy(
             "only administrators may modify outbound connector network egress policy",
             details={"reason": "admin_role_required"},
         )
-    org_id = auth.org_id or ""
+    actor_org_id = auth.org_id or ""
     scope = "connector.egress_policy.update"
-    payload_json = body.model_dump(mode="json")
-    if (
-        replayed := await replay_or_reserve(
-            session, org_id=org_id, key=idempotency_key, scope=scope, payload=payload_json
-        )
-    ) is not None:
-        return replayed
-
-    before = get_egress_policy()
     cidrs = (
         body.allowed_private_cidrs
         if body.allowed_private_cidrs is not None
         else body.allowed_private_networks
     )
-    after = set_egress_policy(
-        allowed_hosts=body.allowed_hosts,
-        allowed_private_cidrs=cidrs,
-    )
-    await record_audit(
-        session,
-        org_id=org_id,
-        principal=auth.principal,
-        action="connector.egress_policy.update",
-        resource_kind="connector_egress_policy",
-        resource_id="global",
-        before=before,
-        after=after,
-        details={"reason": body.reason},
-    )
-    await complete(session, org_id=org_id, key=idempotency_key, scope=scope, response=after)
-    await session.commit()
-    return after
+    # Canonicalize idempotency payload around the system-wide policy fields (excludingexpected_revision if replayed)
+    idempotency_payload = {
+        "reason": body.reason.strip(),
+        "allowed_hosts": body.allowed_hosts,
+        "allowed_private_cidrs": cidrs,
+    }
+    if (
+        replayed := await replay_or_reserve(
+            session,
+            org_id=SYSTEM_EGRESS_POLICY_ORG_ID,
+            key=idempotency_key,
+            scope=scope,
+            payload=idempotency_payload,
+        )
+    ) is not None:
+        return replayed
+
+    try:
+        before, candidate_snapshot = await update_egress_policy_in_db(
+            session,
+            principal=auth.principal,
+            actor_org_id=actor_org_id,
+            reason=body.reason,
+            allowed_hosts=body.allowed_hosts,
+            allowed_private_cidrs=cidrs,
+            expected_revision=body.expected_revision,
+        )
+        after_preview = _format_egress_policy_dict(candidate_snapshot)
+        await record_audit(
+            session,
+            org_id=actor_org_id or SYSTEM_EGRESS_POLICY_ORG_ID,
+            principal=auth.principal,
+            action="connector.egress_policy.update",
+            resource_kind="connector_egress_policy",
+            resource_id=SYSTEM_EGRESS_POLICY_KEY,
+            before=before,
+            after=after_preview,
+            details={
+                "reason": body.reason.strip(),
+                "scope": SYSTEM_EGRESS_POLICY_SCOPE,
+                "actor_org_id": actor_org_id,
+                "revision": int(candidate_snapshot["revision"]),
+            },
+        )
+        await complete(
+            session,
+            org_id=SYSTEM_EGRESS_POLICY_ORG_ID,
+            key=idempotency_key,
+            scope=scope,
+            response=after_preview,
+        )
+        await session.commit()
+    except Exception:
+        await session.rollback()
+        raise
+
+    return publish_committed_egress_policy_snapshot(candidate_snapshot)
 
 
 @router.post(

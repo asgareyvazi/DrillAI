@@ -47,6 +47,7 @@ from drillai.db.models import (
     CONNECTOR_PROFILES,
     CONNECTOR_RUNTIME_STATUSES,
     Connector,
+    ConnectorEgressPolicy,
     ConnectorRun,
     Operation,
     SecretRef,
@@ -72,6 +73,9 @@ __all__ = [
     "CONNECTOR_PROFILES",
     "CONNECTOR_RUNTIME_STATUSES",
     "PROTOCOL_PROFILE_SPECS",
+    "SYSTEM_EGRESS_POLICY_KEY",
+    "SYSTEM_EGRESS_POLICY_ORG_ID",
+    "SYSTEM_EGRESS_POLICY_SCOPE",
     "ChannelMappingSpec",
     "ConnectorService",
     "ConnectorTransportError",
@@ -95,9 +99,13 @@ __all__ = [
     "resolve_secret_refs",
     "set_custom_dns_resolver",
     "set_egress_policy",
+    "set_egress_policy_store_failure_for_test",
+    "sync_egress_policy_from_db",
     "unregister_harness_endpoint",
+    "update_egress_policy_in_db",
     "validate_connector_config",
     "validate_connector_endpoint",
+    "validate_egress_policy_candidate",
     "validate_no_plaintext_secrets",
     "validate_secret_refs",
 ]
@@ -110,10 +118,15 @@ MASKED_SECRET_PLACEHOLDERS: frozenset[str] = frozenset(
 )
 CONNECTOR_KEY_PATTERN = re.compile(r"^[a-z0-9][a-z0-9._-]{1,118}[a-z0-9]$")
 
+SYSTEM_EGRESS_POLICY_KEY = "global"
+SYSTEM_EGRESS_POLICY_SCOPE = "system"
+SYSTEM_EGRESS_POLICY_ORG_ID = "__system__"
+
 _custom_dns_resolver: Callable[[str, int], Sequence[str]] | None = None
 _HARNESS_OWNED_ENDPOINTS: set[tuple[str, int]] = set()
-_runtime_allowed_hosts_override: list[str] | None = None
-_runtime_allowed_private_cidrs_override: list[str] | None = None
+_active_egress_policy_snapshot: dict[str, Any] | None = None
+_egress_policy_store_failed: bool = False
+_egress_policy_store_error: str | None = None
 
 
 def set_custom_dns_resolver(
@@ -122,6 +135,16 @@ def set_custom_dns_resolver(
     """Install or clear a custom DNS resolver function ``(hostname, port) -> list[ip_str]`` for testing."""
     global _custom_dns_resolver
     _custom_dns_resolver = resolver
+
+
+def set_egress_policy_store_failure_for_test(
+    failed: bool,
+    reason: str | None = "authoritative egress policy store unavailable",
+) -> None:
+    """Force or clear fail-closed policy store unavailability state for testing."""
+    global _egress_policy_store_failed, _egress_policy_store_error
+    _egress_policy_store_failed = bool(failed)
+    _egress_policy_store_error = reason if failed else None
 
 
 def register_harness_endpoint(host: str, port: int) -> None:
@@ -164,6 +187,7 @@ def parse_private_cidr_list(
     if not raw_cidrs:
         return []
     networks: list[ipaddress.IPv4Network | ipaddress.IPv6Network] = []
+    seen_cidrs: set[str] = set()
     for item in raw_cidrs:
         text = str(item or "").strip()
         if not text:
@@ -181,72 +205,592 @@ def parse_private_cidr_list(
             or net.is_link_local
             or net.is_multicast
             or net.is_unspecified
+            or net.is_reserved
             or not net.is_private
         ):
             raise ValidationFailed(
                 f"CIDR {text!r} is not a scoped private network range (loopback, link-local, wildcard, and public ranges are forbidden)",
                 details={"field": "allowed_private_cidrs", "cidr": text, "reason": "invalid_cidr"},
             )
-        networks.append(net)
+        canon = str(net)
+        if canon not in seen_cidrs:
+            seen_cidrs.add(canon)
+            networks.append(net)
     return networks
 
 
-def get_egress_policy() -> dict[str, Any]:
-    """Return the active connector outbound network egress policy."""
+_VALID_HOST_LABEL_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$")
+
+
+def _validate_and_canonicalize_allowed_hosts(raw_hosts: Sequence[str] | None) -> list[str]:
+    """Validate and canonicalize allowed host or host:port entries, rejecting prohibited/wildcard/loopback/metadata entries."""
+    if not raw_hosts:
+        return []
+    cleaned: list[str] = []
+    seen: set[str] = set()
+    for raw_item in raw_hosts:
+        entry = str(raw_item or "").strip().lower()
+        if not entry:
+            continue
+        if (
+            any(ch in entry for ch in ("*", "/", "?", "#", "@", " ", "\t", "\r", "\n"))
+            or "://" in entry
+        ):
+            raise ValidationFailed(
+                f"host {raw_item!r} is invalid; wildcards, URL schemes, paths, and credentials are forbidden",
+                details={"field": "allowed_hosts", "host": str(raw_item), "reason": "invalid_host"},
+            )
+        host_part = entry
+        port_suffix = ""
+        if entry.startswith("["):
+            if "]" not in entry:
+                raise ValidationFailed(
+                    f"malformed bracketed IPv6 host {raw_item!r}",
+                    details={"field": "allowed_hosts", "host": str(raw_item), "reason": "invalid_host"},
+                )
+            bracket_end = entry.index("]")
+            host_part = entry[1:bracket_end]
+            rest = entry[bracket_end + 1 :]
+            if rest:
+                if not rest.startswith(":"):
+                    raise ValidationFailed(
+                        f"malformed host:port entry {raw_item!r}",
+                        details={"field": "allowed_hosts", "host": str(raw_item), "reason": "invalid_host"},
+                    )
+                try:
+                    p_val = int(rest[1:])
+                except ValueError as exc:
+                    raise ValidationFailed(
+                        f"invalid port in allowed_hosts entry {raw_item!r}",
+                        details={"field": "allowed_hosts", "host": str(raw_item), "reason": "invalid_port"},
+                    ) from exc
+                if not (1 <= p_val <= 65535):
+                    raise ValidationFailed(
+                        f"port out of range in allowed_hosts entry {raw_item!r}",
+                        details={"field": "allowed_hosts", "host": str(raw_item), "reason": "invalid_port"},
+                    )
+                port_suffix = f":{p_val}"
+        elif entry.count(":") == 1:
+            h_cand, p_cand = entry.rsplit(":", 1)
+            try:
+                p_val = int(p_cand)
+            except ValueError as exc:
+                raise ValidationFailed(
+                    f"invalid port in allowed_hosts entry {raw_item!r}",
+                    details={"field": "allowed_hosts", "host": str(raw_item), "reason": "invalid_port"},
+                ) from exc
+            if not (1 <= p_val <= 65535):
+                raise ValidationFailed(
+                    f"port out of range in allowed_hosts entry {raw_item!r}",
+                    details={"field": "allowed_hosts", "host": str(raw_item), "reason": "invalid_port"},
+                )
+            host_part = h_cand
+            port_suffix = f":{p_val}"
+
+        host_part = host_part.rstrip(".")
+        if (
+            not host_part
+            or host_part in PROHIBITED_METADATA_HOSTS
+            or host_part.endswith(".internal")
+            or host_part in {"localhost", "localhost.localdomain", "127.0.0.1", "::1"}
+        ):
+            raise ValidationFailed(
+                f"host {raw_item!r} cannot be added to allowed_hosts",
+                details={"field": "allowed_hosts", "host": str(raw_item), "reason": "ssrf_blocked"},
+            )
+
+        # Check if host_part is an IP literal or numeric host
+        is_ip = False
+        try:
+            ip_obj = ipaddress.ip_address(host_part)
+            is_ip = True
+            for unpacked in _unpack_embedded_ip(ip_obj):
+                u_str = str(unpacked).lower()
+                if (
+                    u_str in PROHIBITED_METADATA_HOSTS
+                    or unpacked.is_loopback
+                    or unpacked.is_link_local
+                    or unpacked.is_unspecified
+                    or unpacked.is_multicast
+                    or unpacked.is_reserved
+                ):
+                    raise ValidationFailed(
+                        f"IP address {raw_item!r} cannot be added to allowed_hosts",
+                        details={"field": "allowed_hosts", "host": str(raw_item), "reason": "ssrf_blocked"},
+                    )
+            host_part = str(ip_obj).lower()
+        except ValueError:
+            if _AMBIGUOUS_NUMERIC_HOST_RE.match(host_part) or ":" in host_part:
+                raise ValidationFailed(
+                    f"invalid or non-canonical IP/hostname {raw_item!r} in allowed_hosts",
+                    details={"field": "allowed_hosts", "host": str(raw_item), "reason": "ssrf_blocked"},
+                ) from None
+
+        if not is_ip:
+            labels = host_part.split(".")
+            if any(not _VALID_HOST_LABEL_RE.match(lbl) for lbl in labels):
+                raise ValidationFailed(
+                    f"malformed hostname {raw_item!r} in allowed_hosts",
+                    details={"field": "allowed_hosts", "host": str(raw_item), "reason": "invalid_host"},
+                )
+
+        canonical = (
+            f"[{host_part}]{port_suffix}"
+            if (is_ip and ":" in host_part and port_suffix)
+            else f"{host_part}{port_suffix}"
+        )
+        if canonical not in seen:
+            seen.add(canonical)
+            cleaned.append(canonical)
+    return cleaned
+
+
+def validate_egress_policy_candidate(
+    *,
+    allowed_hosts: Sequence[str] | None,
+    allowed_private_cidrs: Sequence[str] | None,
+    fallback_hosts: Sequence[str] = (),
+    fallback_cidrs: Sequence[str] = (),
+) -> tuple[list[str], list[str]]:
+    """Atomically validate and canonicalize a complete egress policy candidate in isolation.
+
+    Never mutates active state; raises :class:`ValidationFailed` if any host or CIDR is invalid.
+    """
+    effective_cidrs = allowed_private_cidrs if allowed_private_cidrs is not None else fallback_cidrs
+    effective_hosts = allowed_hosts if allowed_hosts is not None else fallback_hosts
+    validated_nets = parse_private_cidr_list(effective_cidrs)
+    validated_cidrs = [str(n) for n in validated_nets]
+    validated_hosts = _validate_and_canonicalize_allowed_hosts(effective_hosts)
+    return validated_hosts, validated_cidrs
+
+
+def _format_egress_policy_dict(snapshot: dict[str, Any]) -> dict[str, Any]:
     settings = get_settings()
-    allowed_hosts = (
-        list(_runtime_allowed_hosts_override)
-        if _runtime_allowed_hosts_override is not None
-        else list(settings.connector_allowed_host_list)
-    )
-    allowed_cidrs = (
-        list(_runtime_allowed_private_cidrs_override)
-        if _runtime_allowed_private_cidrs_override is not None
-        else list(settings.connector_allowed_private_cidr_list)
-    )
     harness_ports = sorted(
         {port for _, port in _HARNESS_OWNED_ENDPOINTS} | set(settings.connector_harness_port_list)
     )
+    loopback_allowed = bool(settings.connector_allow_loopback and not settings.is_production)
+    cidrs = list(snapshot.get("allowed_private_cidrs") or [])
     return {
+        "policy_id": snapshot.get("policy_id", "cep_env_default"),
+        "policy_key": snapshot.get("policy_key", SYSTEM_EGRESS_POLICY_KEY),
+        "scope": snapshot.get("scope", SYSTEM_EGRESS_POLICY_SCOPE),
+        "status": snapshot.get("status", "active"),
+        "source": snapshot.get("source", "env_default"),
+        "revision": int(snapshot.get("revision", 1)),
         "is_production": settings.is_production,
-        "allow_loopback": bool(settings.connector_allow_loopback and not settings.is_production),
-        "allowed_hosts": allowed_hosts,
-        "allowed_private_cidrs": allowed_cidrs,
+        "allow_loopback": loopback_allowed,
+        "loopback_allowed": loopback_allowed,
+        "allowed_hosts": list(snapshot.get("allowed_hosts") or []),
+        "allowed_private_cidrs": cidrs,
+        "allowed_private_networks": list(cidrs),
         "harness_ports": [] if settings.is_production else harness_ports,
+        "updated_at": snapshot.get("updated_at"),
+        "updated_by_id": snapshot.get("updated_by_id"),
+        "updated_by_display": snapshot.get("updated_by_display"),
+        "updated_by_org_id": snapshot.get("updated_by_org_id"),
+        "reason": snapshot.get("reason", "initial environment baseline"),
+        "last_synced_at": snapshot.get("last_synced_at"),
     }
+
+
+def get_egress_policy(*, fail_closed: bool = False) -> dict[str, Any]:
+    """Return the active connector outbound network egress policy snapshot."""
+    if _egress_policy_store_failed:
+        if fail_closed:
+            raise ValidationFailed(
+                f"authoritative connector egress policy store is unavailable ({_egress_policy_store_error or 'store_error'}); failing closed",
+                details={
+                    "field": "egress_policy",
+                    "reason": "ssrf_blocked",
+                    "policy_error": _egress_policy_store_error or "store_error",
+                },
+            )
+        settings = get_settings()
+        return {
+            "policy_id": "cep_unavailable",
+            "policy_key": SYSTEM_EGRESS_POLICY_KEY,
+            "scope": SYSTEM_EGRESS_POLICY_SCOPE,
+            "status": "unavailable_fail_closed",
+            "source": "fail_closed",
+            "revision": 0,
+            "is_production": settings.is_production,
+            "allow_loopback": False,
+            "loopback_allowed": False,
+            "allowed_hosts": [],
+            "allowed_private_cidrs": [],
+            "allowed_private_networks": [],
+            "harness_ports": [],
+            "updated_at": None,
+            "updated_by_id": None,
+            "updated_by_display": None,
+            "updated_by_org_id": None,
+            "reason": _egress_policy_store_error or "policy store unavailable",
+            "last_synced_at": None,
+        }
+    if _active_egress_policy_snapshot is not None:
+        return _format_egress_policy_dict(_active_egress_policy_snapshot)
+    settings = get_settings()
+    default_snapshot = {
+        "policy_id": "cep_env_default",
+        "policy_key": SYSTEM_EGRESS_POLICY_KEY,
+        "scope": SYSTEM_EGRESS_POLICY_SCOPE,
+        "status": "active",
+        "source": "env_default",
+        "revision": 1,
+        "allowed_hosts": list(settings.connector_allowed_host_list),
+        "allowed_private_cidrs": list(settings.connector_allowed_private_cidr_list),
+        "updated_at": None,
+        "updated_by_id": None,
+        "updated_by_display": None,
+        "updated_by_org_id": None,
+        "reason": "initial environment baseline",
+        "last_synced_at": None,
+    }
+    return _format_egress_policy_dict(default_snapshot)
+
+
+async def sync_egress_policy_from_db(
+    session: AsyncSession,
+    *,
+    fail_closed_on_error: bool = True,
+) -> dict[str, Any]:
+    """Load the authoritative system-wide egress policy from the database and update the local snapshot.
+
+    Fails closed if the database store cannot be queried or contains an inactive/corrupt policy row.
+    """
+    global _active_egress_policy_snapshot, _egress_policy_store_failed, _egress_policy_store_error
+    if _egress_policy_store_failed and fail_closed_on_error:
+        raise ValidationFailed(
+            f"authoritative connector egress policy store is unavailable ({_egress_policy_store_error or 'store_error'}); failing closed",
+            details={
+                "field": "egress_policy",
+                "reason": "ssrf_blocked",
+                "policy_error": _egress_policy_store_error or "store_error",
+            },
+        )
+    now_iso = utc_now().isoformat()
+    try:
+        row = (
+            await session.execute(
+                select(ConnectorEgressPolicy).where(
+                    ConnectorEgressPolicy.policy_key == SYSTEM_EGRESS_POLICY_KEY
+                )
+            )
+        ).scalar_one_or_none()
+    except Exception as exc:
+        _egress_policy_store_failed = True
+        _egress_policy_store_error = f"database_read_error: {type(exc).__name__}"
+        if fail_closed_on_error:
+            raise ValidationFailed(
+                "authoritative connector egress policy could not be loaded from database; failing closed",
+                details={
+                    "field": "egress_policy",
+                    "reason": "ssrf_blocked",
+                    "policy_error": _egress_policy_store_error,
+                },
+            ) from exc
+        return get_egress_policy(fail_closed=False)
+
+    if row is None:
+        if (
+            _active_egress_policy_snapshot is not None
+            and _active_egress_policy_snapshot.get("source") == "runtime"
+        ):
+            _egress_policy_store_failed = False
+            _egress_policy_store_error = None
+            _active_egress_policy_snapshot["last_synced_at"] = now_iso
+            return _format_egress_policy_dict(_active_egress_policy_snapshot)
+        settings = get_settings()
+        validated_hosts, validated_cidrs = validate_egress_policy_candidate(
+            allowed_hosts=settings.connector_allowed_host_list,
+            allowed_private_cidrs=settings.connector_allowed_private_cidr_list,
+        )
+        _egress_policy_store_failed = False
+        _egress_policy_store_error = None
+        _active_egress_policy_snapshot = {
+            "policy_id": "cep_env_default",
+            "policy_key": SYSTEM_EGRESS_POLICY_KEY,
+            "scope": SYSTEM_EGRESS_POLICY_SCOPE,
+            "status": "active",
+            "source": "env_default",
+            "revision": 1,
+            "allowed_hosts": validated_hosts,
+            "allowed_private_cidrs": validated_cidrs,
+            "updated_at": None,
+            "updated_by_id": None,
+            "updated_by_display": None,
+            "updated_by_org_id": None,
+            "reason": "initial environment baseline",
+            "last_synced_at": now_iso,
+        }
+        return _format_egress_policy_dict(_active_egress_policy_snapshot)
+
+    if row.status != "active":
+        _egress_policy_store_failed = True
+        _egress_policy_store_error = f"policy_status_{row.status}"
+        raise ValidationFailed(
+            f"authoritative connector egress policy is not active (status={row.status!r}); failing closed",
+            details={
+                "field": "egress_policy",
+                "reason": "ssrf_blocked",
+                "policy_status": row.status,
+            },
+        )
+
+    try:
+        validated_hosts, validated_cidrs = validate_egress_policy_candidate(
+            allowed_hosts=row.allowed_hosts if isinstance(row.allowed_hosts, list) else None,
+            allowed_private_cidrs=(
+                row.allowed_private_cidrs if isinstance(row.allowed_private_cidrs, list) else None
+            ),
+        )
+        if not isinstance(row.allowed_hosts, list) or not isinstance(row.allowed_private_cidrs, list):
+            raise ValidationFailed("corrupt egress policy JSON columns")
+    except Exception as exc:
+        _egress_policy_store_failed = True
+        _egress_policy_store_error = "corrupt_policy_record"
+        raise ValidationFailed(
+            "authoritative connector egress policy record in database is invalid; failing closed",
+            details={
+                "field": "egress_policy",
+                "reason": "ssrf_blocked",
+                "policy_error": "corrupt_policy_record",
+            },
+        ) from exc
+
+    _egress_policy_store_failed = False
+    _egress_policy_store_error = None
+    _active_egress_policy_snapshot = {
+        "policy_id": row.id,
+        "policy_key": row.policy_key,
+        "scope": row.scope,
+        "status": row.status,
+        "source": "database",
+        "revision": int(row.revision or 1),
+        "allowed_hosts": validated_hosts,
+        "allowed_private_cidrs": validated_cidrs,
+        "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+        "updated_by_id": row.updated_by_id,
+        "updated_by_display": row.updated_by_display,
+        "updated_by_org_id": row.updated_by_org_id,
+        "reason": row.reason,
+        "last_synced_at": now_iso,
+    }
+    return _format_egress_policy_dict(_active_egress_policy_snapshot)
+
+
+async def update_egress_policy_in_db(
+    session: AsyncSession,
+    *,
+    principal: Principal,
+    actor_org_id: str | None,
+    reason: str,
+    allowed_hosts: Sequence[str] | None = None,
+    allowed_private_cidrs: Sequence[str] | None = None,
+    expected_revision: int | None = None,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Atomically validate and persist a new system-wide egress policy revision with SQL CAS.
+
+    Returns ``(before_policy, committed_snapshot_candidate)`` inside the active transaction;
+    callers must commit the transaction before publishing the snapshot to the process cache.
+    """
+    from sqlalchemy.exc import IntegrityError
+
+    if not reason or not reason.strip():
+        raise ValidationFailed(
+            "egress policy update requires a non-empty reason",
+            details={"field": "reason", "reason": "reason_required"},
+        )
+
+    before_policy = await sync_egress_policy_from_db(session)
+    current_rev = int(before_policy.get("revision", 1))
+    if expected_revision is not None and int(expected_revision) != current_rev:
+        raise Conflict(
+            "connector egress policy was modified by another administrator",
+            details={
+                "policy_key": SYSTEM_EGRESS_POLICY_KEY,
+                "expected_revision": int(expected_revision),
+                "stored_revision": current_rev,
+            },
+        )
+
+    # Validate complete candidate in isolation before any DB write or cache mutation
+    validated_hosts, validated_cidrs = validate_egress_policy_candidate(
+        allowed_hosts=allowed_hosts,
+        allowed_private_cidrs=allowed_private_cidrs,
+        fallback_hosts=before_policy.get("allowed_hosts", []),
+        fallback_cidrs=before_policy.get("allowed_private_cidrs", []),
+    )
+
+    now = utc_now()
+    next_rev = current_rev + 1
+    row = (
+        await session.execute(
+            select(ConnectorEgressPolicy).where(
+                ConnectorEgressPolicy.policy_key == SYSTEM_EGRESS_POLICY_KEY
+            )
+        )
+    ).scalar_one_or_none()
+
+    actor_id = getattr(principal, "id", None)
+    actor_display = (
+        getattr(principal, "display_name", None)
+        or getattr(principal, "name", None)
+        or getattr(principal, "id", None)
+    )
+    clean_reason = reason.strip()
+
+    if row is None:
+        if current_rev != 1:
+            raise Conflict(
+                "connector egress policy state changed concurrently",
+                details={
+                    "policy_key": SYSTEM_EGRESS_POLICY_KEY,
+                    "expected_revision": current_rev,
+                },
+            )
+        new_row = ConnectorEgressPolicy(
+            id=new_id("cep"),
+            policy_key=SYSTEM_EGRESS_POLICY_KEY,
+            scope=SYSTEM_EGRESS_POLICY_SCOPE,
+            revision=next_rev,
+            status="active",
+            allowed_hosts=validated_hosts,
+            allowed_private_cidrs=validated_cidrs,
+            updated_by_id=actor_id,
+            updated_by_display=actor_display,
+            updated_by_org_id=actor_org_id,
+            reason=clean_reason,
+            attributes={},
+            created_at=now,
+            updated_at=now,
+        )
+        session.add(new_row)
+        try:
+            await session.flush()
+        except IntegrityError as exc:
+            await session.rollback()
+            raise Conflict(
+                "connector egress policy was created concurrently by another administrator",
+                details={
+                    "policy_key": SYSTEM_EGRESS_POLICY_KEY,
+                    "expected_revision": current_rev,
+                },
+            ) from exc
+        policy_id = new_row.id
+    else:
+        if int(row.revision or 1) != current_rev:
+            raise Conflict(
+                "connector egress policy was modified concurrently by another administrator",
+                details={
+                    "policy_key": SYSTEM_EGRESS_POLICY_KEY,
+                    "expected_revision": current_rev,
+                    "stored_revision": int(row.revision or 1),
+                },
+            )
+        cas_res = await session.execute(
+            update(ConnectorEgressPolicy)
+            .where(
+                ConnectorEgressPolicy.id == row.id,
+                ConnectorEgressPolicy.policy_key == SYSTEM_EGRESS_POLICY_KEY,
+                ConnectorEgressPolicy.revision == current_rev,
+            )
+            .values(
+                revision=next_rev,
+                status="active",
+                allowed_hosts=validated_hosts,
+                allowed_private_cidrs=validated_cidrs,
+                updated_by_id=actor_id,
+                updated_by_display=actor_display,
+                updated_by_org_id=actor_org_id,
+                reason=clean_reason,
+                updated_at=now,
+            )
+        )
+        if (cas_res.rowcount or 0) != 1:
+            await session.rollback()
+            raise Conflict(
+                "connector egress policy was modified concurrently by another administrator",
+                details={
+                    "policy_key": SYSTEM_EGRESS_POLICY_KEY,
+                    "expected_revision": current_rev,
+                },
+            )
+        policy_id = row.id
+
+    candidate_snapshot = {
+        "policy_id": policy_id,
+        "policy_key": SYSTEM_EGRESS_POLICY_KEY,
+        "scope": SYSTEM_EGRESS_POLICY_SCOPE,
+        "status": "active",
+        "source": "database",
+        "revision": next_rev,
+        "allowed_hosts": validated_hosts,
+        "allowed_private_cidrs": validated_cidrs,
+        "updated_at": now.isoformat(),
+        "updated_by_id": actor_id,
+        "updated_by_display": actor_display,
+        "updated_by_org_id": actor_org_id,
+        "reason": clean_reason,
+        "last_synced_at": now.isoformat(),
+    }
+    return before_policy, candidate_snapshot
+
+
+def publish_committed_egress_policy_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
+    """Publish a committed egress policy snapshot to the current process cache."""
+    global _active_egress_policy_snapshot, _egress_policy_store_failed, _egress_policy_store_error
+    _egress_policy_store_failed = False
+    _egress_policy_store_error = None
+    _active_egress_policy_snapshot = dict(snapshot)
+    return _format_egress_policy_dict(_active_egress_policy_snapshot)
 
 
 def set_egress_policy(
     *,
     allowed_hosts: Sequence[str] | None = None,
     allowed_private_cidrs: Sequence[str] | None = None,
+    reason: str = "in-process policy update",
 ) -> dict[str, Any]:
-    """Update the runtime connector outbound egress policy after validating all hosts and CIDRs."""
-    global _runtime_allowed_hosts_override, _runtime_allowed_private_cidrs_override
-    if allowed_private_cidrs is not None:
-        nets = parse_private_cidr_list(allowed_private_cidrs)
-        _runtime_allowed_private_cidrs_override = [str(n) for n in nets]
-    if allowed_hosts is not None:
-        cleaned_hosts: list[str] = []
-        for raw_h in allowed_hosts:
-            h = str(raw_h or "").strip().lower().rstrip(".")
-            if not h:
-                continue
-            if h in PROHIBITED_METADATA_HOSTS or h.endswith(".internal") or h in {"localhost", "127.0.0.1", "::1"}:
-                raise ValidationFailed(
-                    f"host {h!r} cannot be added to allowed_hosts",
-                    details={"field": "allowed_hosts", "host": h, "reason": "ssrf_blocked"},
-                )
-            cleaned_hosts.append(h)
-        _runtime_allowed_hosts_override = cleaned_hosts
-    return get_egress_policy()
+    """Atomically validate and update the active egress policy snapshot (validating all hosts and CIDRs before mutation)."""
+    global _active_egress_policy_snapshot, _egress_policy_store_failed, _egress_policy_store_error
+    current = get_egress_policy(fail_closed=False)
+    validated_hosts, validated_cidrs = validate_egress_policy_candidate(
+        allowed_hosts=allowed_hosts,
+        allowed_private_cidrs=allowed_private_cidrs,
+        fallback_hosts=current.get("allowed_hosts", []),
+        fallback_cidrs=current.get("allowed_private_cidrs", []),
+    )
+    now_iso = utc_now().isoformat()
+    next_rev = int(current.get("revision", 1)) + 1
+    _egress_policy_store_failed = False
+    _egress_policy_store_error = None
+    _active_egress_policy_snapshot = {
+        "policy_id": current.get("policy_id", "cep_runtime"),
+        "policy_key": SYSTEM_EGRESS_POLICY_KEY,
+        "scope": SYSTEM_EGRESS_POLICY_SCOPE,
+        "status": "active",
+        "source": "runtime",
+        "revision": next_rev,
+        "allowed_hosts": validated_hosts,
+        "allowed_private_cidrs": validated_cidrs,
+        "updated_at": now_iso,
+        "updated_by_id": current.get("updated_by_id"),
+        "updated_by_display": current.get("updated_by_display"),
+        "updated_by_org_id": current.get("updated_by_org_id"),
+        "reason": reason,
+        "last_synced_at": now_iso,
+    }
+    return _format_egress_policy_dict(_active_egress_policy_snapshot)
 
 
 def reset_egress_policy() -> None:
-    """Reset runtime egress policy overrides back to environment settings."""
-    global _runtime_allowed_hosts_override, _runtime_allowed_private_cidrs_override
-    _runtime_allowed_hosts_override = None
-    _runtime_allowed_private_cidrs_override = None
+    """Reset runtime egress policy snapshot and error flags back to environment settings."""
+    global _active_egress_policy_snapshot, _egress_policy_store_failed, _egress_policy_store_error
+    _active_egress_policy_snapshot = None
+    _egress_policy_store_failed = False
+    _egress_policy_store_error = None
 
 FORBIDDEN_SECRET_KEY_PATTERNS: tuple[str, ...] = (
     "password",
@@ -1006,7 +1550,7 @@ def resolve_and_pin_endpoint(
             },
         )
     settings = get_settings()
-    policy = get_egress_policy()
+    policy = get_egress_policy(fail_closed=True)
     if is_production is None:
         is_production = settings.is_production
     if allow_loopback is None:
@@ -1656,6 +2200,8 @@ def connector_out(
             "last_heartbeat_at": (row.last_heartbeat_at.isoformat() if row.last_heartbeat_at else None),
             "fencing_token": int(row.fencing_token or 0),
             "lease_active": health["lease_active"],
+            "last_policy_revision": (row.attributes or {}).get("last_policy_revision"),
+            "last_policy_sync_at": (row.attributes or {}).get("last_policy_sync_at"),
         },
         "health": {
             **health,
@@ -2006,6 +2552,7 @@ class ConnectorService:
                 details={"field": "key", "key": clean_key, "existing_id": existing},
             )
 
+        await sync_egress_policy_from_db(self.session)
         validated_endpoint = validate_connector_endpoint(
             endpoint_url, protocol_profile, allow_loopback=allow_loopback
         )
@@ -2144,6 +2691,7 @@ class ConnectorService:
             new_description = description.strip() or None
         new_endpoint_url = row.endpoint_url
         if endpoint_url is not None:
+            await sync_egress_policy_from_db(self.session)
             new_endpoint_url = validate_connector_endpoint(
                 endpoint_url, row.protocol_profile, allow_loopback=allow_loopback
             )
@@ -2528,6 +3076,7 @@ class ConnectorService:
         resolved_secrets: dict[str, str] = {}
         milestones: list[dict[str, Any]] = []
         try:
+            await sync_egress_policy_from_db(self.session)
             pinned = resolve_and_pin_endpoint(
                 row.endpoint_url,
                 row.protocol_profile,
@@ -2787,6 +3336,7 @@ class ConnectorService:
         """Preview channel descriptors and a bounded sample of frames without persisting points."""
         row = await self.get(connector_id)
         bounded_limit = min(max(1, int(sample_limit)), 50)
+        await sync_egress_policy_from_db(self.session)
         resolved_secrets = await resolve_secret_refs(self.session, self.org_id, dict(row.secret_refs or {}))
         validate_connector_endpoint(row.endpoint_url, row.protocol_profile, allow_loopback=allow_loopback)
         adapter = await self.build_adapter(row, resolved_secrets=resolved_secrets)
@@ -2891,6 +3441,7 @@ class ConnectorService:
         t0 = time.perf_counter()
         trace_id = new_id("trc")
 
+        await sync_egress_policy_from_db(self.session)
         validate_connector_endpoint(row.endpoint_url, row.protocol_profile, allow_loopback=allow_loopback)
         resolved_secrets = await resolve_secret_refs(
             self.session, self.org_id, dict(row.secret_refs or {})

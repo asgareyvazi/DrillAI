@@ -37,6 +37,7 @@ from drillai.telemetry.connectors import (
     classify_connector_error,
     redact_sensitive_text,
     resolve_secret_refs,
+    sync_egress_policy_from_db,
     validate_connector_endpoint,
 )
 from drillai.telemetry.outbox import emit
@@ -136,6 +137,8 @@ class ConnectorWorker:
         self._active_connectors: set[str] = set()
         self.cycles_completed = 0
         self.last_cycle_at: dt.datetime | None = None
+        self.last_policy_revision: int = 1
+        self.last_policy_sync_at: str | None = None
 
     async def renew_lease(self, claimed: ClaimedConnector) -> bool:
         """Atomically extend the worker lease only if fencing_token, config_version, and active lease still hold."""
@@ -362,6 +365,9 @@ class ConnectorWorker:
 
                 cfg = dict(row.config or {})
                 row_config_version = int(row.config_version or claimed.config_version)
+                active_policy = await sync_egress_policy_from_db(read_session)
+                self.last_policy_revision = int(active_policy.get("revision", 1))
+                self.last_policy_sync_at = active_policy.get("last_synced_at")
                 validate_connector_endpoint(
                     row.endpoint_url,
                     row.protocol_profile,
@@ -543,6 +549,7 @@ class ConnectorWorker:
                     "late": late_count,
                     "low_quality_count": low_quality_count,
                     "quality_counts": quality_totals,
+                    "policy_revision": self.last_policy_revision,
                 }
 
                 finished = utc_now()
@@ -553,6 +560,10 @@ class ConnectorWorker:
                 else:
                     next_poll_at = finished + dt.timedelta(seconds=poll_interval)
                 lease_until = finished + dt.timedelta(seconds=self.lease_seconds)
+
+                merged_attrs = dict(current_row.attributes or {})
+                merged_attrs["last_policy_revision"] = self.last_policy_revision
+                merged_attrs["last_policy_sync_at"] = self.last_policy_sync_at or finished.isoformat()
 
                 update_values: dict[str, Any] = {
                     "status": "running",
@@ -569,6 +580,7 @@ class ConnectorWorker:
                     "lease_expires_at": lease_until,
                     "last_heartbeat_at": finished,
                     "last_trace_id": trace_id,
+                    "attributes": merged_attrs,
                     "updated_at": finished,
                 }
                 if frames_received > 0:
@@ -783,6 +795,9 @@ class ConnectorWorker:
                 next_poll_at = finished + dt.timedelta(seconds=backoff)
 
             lease_until = finished + dt.timedelta(seconds=self.lease_seconds)
+            merged_err_attrs = dict(row.attributes or {})
+            merged_err_attrs["last_policy_revision"] = self.last_policy_revision
+            merged_err_attrs["last_policy_sync_at"] = self.last_policy_sync_at or finished.isoformat()
             # Notice: cursor is NEVER updated on failure!
             fenced_err_update = await err_session.execute(
                 update(Connector)
@@ -809,6 +824,7 @@ class ConnectorWorker:
                     last_transition_at=finished,
                     lease_expires_at=lease_until,
                     last_heartbeat_at=finished,
+                    attributes=merged_err_attrs,
                     updated_at=finished,
                 )
             )
@@ -839,6 +855,7 @@ class ConnectorWorker:
                     "backoff_seconds": backoff,
                     "next_status": new_status,
                     "checkpoint_status": "failed",
+                    "policy_revision": self.last_policy_revision,
                 },
             )
             err_session.add(run_row)
