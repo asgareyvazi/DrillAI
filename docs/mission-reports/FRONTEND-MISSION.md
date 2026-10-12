@@ -2118,4 +2118,22 @@ CP13 is implemented, verified, committed, and published on `arena/01a0dca0-drill
 | **CP13-C** | `5bca041` | 14-scenario WITSML 1.4.1.1 regression, worker lease expiry fencing (`R-01`), run `data_outcome` (`R-02`), PostgreSQL concurrent SQL CAS races & 4-connector soak | **Yes** |
 | **CP13-D** | `22db9c0d6f2c34b62ef3779311b5373ce3185c66` | 10-stage connection-test milestones, operator capability honesty UI, private rig-network egress UI & multi-protocol `verify_stack.py` | **Yes** |
 | **CP13-E** | `e47e08998eacfd65905130b29295869a9d229eb4` | 12 new real-stack Playwright E2E journeys for CP13 (38 total in `connectors-platform.spec.ts`) | **Yes** |
-| **CP13-F** | Published `HEAD` on `arena/01a0dca0-drillai` | Full-repo verification (`1,031` backend pytest + `308` Vitest + `115` Playwright E2E), initial `start` fencing compatibility & CP13 documentation/certification report | **Yes** |
+| **CP13-F** | `3720a18f9cf99698f8d6efb15ea7b005eba46eb4` | Full-repo verification (`1,031` backend pytest + `308` Vitest + `115` Playwright E2E), initial `start` fencing compatibility & CP13 documentation/certification report (certified on GitHub Actions Run `38219828253`) | **Yes** |
+
+---
+
+### CP14 — CP13 Publication Closure, Durable Egress Governance, Bounded DNS, Data-Outcome Integrity & ETP 1.2 Normative Verification
+
+Full audit details and verification matrices are recorded in `docs/mission-reports/CP14-SOURCE-AUDIT.md` and `docs/mission-reports/CP14-MISSION-REPORT.md`.
+
+| Checkpoint | Commit SHA | Summary | Remote `git ls-remote` Verified |
+| --- | --- | --- | --- |
+| **Gate 0 (CP13-F)** | `3720a18f9cf99698f8d6efb15ea7b005eba46eb4` | Reconciled and published CP13-F; certified on GitHub Actions Run `38219828253` (`conclusion: success` in `23m16s`) | **Yes** |
+| **CP14-A** | `fbe7feaf8cbe557e2487f91e81ad1ece0aa1ed55` | Source-backed CP13 audit register (`docs/mission-reports/CP14-SOURCE-AUDIT.md`, `F-CP14-01` through `F-CP14-10`) | **Yes** |
+| **CP14-B** | `0500ea7e71ae1306a52cf73e6f91fc3ac664d1a4` | Durable DB-backed `ConnectorEgressPolicy` (`c9f1a48b2e31`), atomic CAS/idempotency, fail-closed semantics, and multi-process worker sync | **Yes** |
+| **CP14-C** | `013d4bd8375cc051070cd076b1d79cd90fa3c1b9` | Bounded non-blocking async DNS resolution, NAT64/6to4/Teredo/IPv4-mapped IPv6 validation, and direct `EtpBinaryWebSocketClient` SSRF/rebinding/TLS-SNI/proxy tests | **Yes** |
+| **CP14-D** | `521add7f8e574a0cde4d1e8a6ac92fafc1780d8b` | 8-state truthful `data_outcome` classification, dual protocol/ingestion manifest reconciliation, and truthful 10-stage connection-test milestones | **Yes** |
+| **CP14-E** | `fa3051cea10145b8ed4f228132920879224a9606` | ETP 1.2 binary Avro normative index validation, `MSG_FLAG_COMPRESSED` & unrequested compression fail-closed rejection, `TruncateChannels`, official schema/golden wire vectors, and honest peer-verification metadata | **Yes** |
+| **CP14-F** | `94f6448ecf21244440f4654f2ab42a3355607cae` | Bounded `ConnectorRun(status="fenced")` ledger persistence and expanded multi-process `scripts/verify_stack.py` | **Yes** |
+| **CP14-G** | `b8c8ec5899bf94293f875d8c2e87d8e14115b9c2` | Operator UI egress-policy banner, worker policy sync badge, 8-state `data_outcome` labels (EN/FA), unit tests (`309 passed`), and Playwright E2E Journeys 33, 34, 39 (`39` connector journeys, `116` total E2E journeys); certified on GitHub Actions Run `38230898896` | **Yes (`b8c8ec58`)** |
+| **CP14-H** | `HEAD` (parent `b8c8ec5899bf94293f875d8c2e87d8e14115b9c2`) | CP14 documentation closure (`CP14-SOURCE-AUDIT.md`, `CP14-MISSION-REPORT.md`, `FRONTEND-MISSION.md`) | **Yes** |
