@@ -19,7 +19,6 @@ Covers all 12 mandatory CP15-B recovery scenarios:
 from __future__ import annotations
 
 import asyncio
-import datetime as dt
 import os
 import sys
 import textwrap
@@ -30,9 +29,10 @@ import httpx
 import pytest
 from sqlalchemy import delete, select, text, update
 
+from drillai.api.app import create_app
 from drillai.core.config import get_settings, reset_settings_cache
-from drillai.core.errors import Conflict, ValidationFailed
-from drillai.db.base import Base, utc_now
+from drillai.core.errors import ValidationFailed
+from drillai.db.base import Base
 from drillai.db.models import (
     Connector,
     ConnectorEgressPolicy,
@@ -42,7 +42,6 @@ from drillai.db.models import (
     Well,
 )
 from drillai.db.session import Database
-from drillai.api.app import create_app
 from drillai.security.actions import Principal
 from drillai.telemetry.connectors import (
     SYSTEM_EGRESS_POLICY_KEY,
@@ -58,7 +57,6 @@ from drillai.telemetry.connectors import (
     validate_connector_endpoint,
 )
 from drillai.telemetry.protocols import LocalWitsmlSoapServer
-from drillai.telemetry.worker import ConnectorWorker
 
 
 @pytest.fixture(autouse=True)

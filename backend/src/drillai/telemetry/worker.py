@@ -341,7 +341,7 @@ class ConnectorWorker:
     async def execute_claimed_poll(self, claimed: ClaimedConnector) -> PollCycleOutcome:
         """Execute one poll/stream batch for a claimed connector with fencing-token and lease-heartbeat protection."""
         if claimed.connector_id in self._active_connectors:
-            return self._record_fenced_outcome(claimed, time.perf_counter())
+            return await self._record_fenced_outcome(claimed, time.perf_counter())
         self._active_connectors.add(claimed.connector_id)
         started = utc_now()
         t0 = time.perf_counter()
@@ -355,6 +355,10 @@ class ConnectorWorker:
                 row = (
                     await read_session.execute(select(Connector).where(Connector.id == claimed.connector_id))
                 ).scalar_one_or_none()
+                now_phase1 = utc_now()
+                phase1_lease_exp = (
+                    _ensure_aware(row.lease_expires_at) if row is not None else None
+                )
                 if (
                     row is None
                     or row.worker_id != self.worker_id
@@ -362,8 +366,12 @@ class ConnectorWorker:
                     or int(row.config_version or 1) != claimed.config_version
                     or not row.is_enabled
                     or row.desired_state != "enabled"
+                    or phase1_lease_exp is None
+                    or phase1_lease_exp <= now_phase1
                 ):
-                    return self._record_fenced_outcome(claimed, t0)
+                    return await self._record_fenced_outcome(
+                        claimed, t0, started=started, trace_id=trace_id
+                    )
 
                 cfg = dict(row.config or {})
                 row_config_version = int(row.config_version or claimed.config_version)
@@ -523,6 +531,18 @@ class ConnectorWorker:
                     policy_revision=self.last_policy_revision,
                     dry_run=False,
                 )
+
+                if not run_manifest.get("reconciled", False):
+                    await adapter.close()
+                    await session.rollback()
+                    raise ValidationFailed(
+                        "poll manifest reconciliation invariant failed; transaction rolled back",
+                        details={
+                            "field": "manifest",
+                            "reason": "reconciliation_error",
+                            "manifest": run_manifest,
+                        },
+                    )
 
                 finished = utc_now()
                 duration_ms = round((time.perf_counter() - t0) * 1000.0, 2)
@@ -849,6 +869,22 @@ class ConnectorWorker:
                     claimed, t0, started=started, trace_id=trace_id
                 )
 
+            err_manifest = (
+                exc.details.get("manifest")
+                if isinstance(exc, ValidationFailed) and isinstance(exc.details.get("manifest"), dict)
+                else None
+            )
+            run_details: dict[str, Any] = {
+                "consecutive_failures": new_error_count,
+                "backoff_seconds": backoff,
+                "next_status": new_status,
+                "checkpoint_status": "rolled_back" if err_manifest is not None else "failed",
+                "persisted": False,
+                "policy_revision": self.last_policy_revision,
+            }
+            if err_manifest is not None:
+                run_details["manifest"] = err_manifest
+
             run_row = ConnectorRun(
                 id=new_id("crn"),
                 org_id=claimed.org_id,
@@ -862,18 +898,17 @@ class ConnectorWorker:
                 started_at=started,
                 finished_at=finished,
                 duration_ms=duration_ms,
+                frames_received=int(err_manifest.get("mapped_frames_emitted", 0)) if err_manifest else 0,
+                points_accepted=0,
+                points_duplicates=int(err_manifest.get("points_duplicates", 0)) if err_manifest else 0,
+                points_revised=0,
+                points_rejected=int(err_manifest.get("points_rejected", 0)) if err_manifest else 0,
                 cursor_before=claimed.cursor_before,
                 cursor_after=claimed.cursor_before,
                 error_category=category,
                 error_message=safe_msg,
                 trace_id=trace_id,
-                details={
-                    "consecutive_failures": new_error_count,
-                    "backoff_seconds": backoff,
-                    "next_status": new_status,
-                    "checkpoint_status": "failed",
-                    "policy_revision": self.last_policy_revision,
-                },
+                details=run_details,
             )
             err_session.add(run_row)
             await err_session.flush()
@@ -928,6 +963,8 @@ class ConnectorWorker:
             fencing_token=claimed.fencing_token,
             cursor_before=claimed.cursor_before,
             cursor_after=claimed.cursor_before,
+            checkpoint_status="rolled_back" if err_manifest is not None else "failed",
+            manifest=err_manifest,
             error_category=category,
             error_message=safe_msg,
             duration_ms=duration_ms,

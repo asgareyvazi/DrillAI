@@ -1190,10 +1190,26 @@ POLL_DATA_OUTCOMES: tuple[str, ...] = (
     "all_valid_accepted",
     "duplicates_only",
     "revisions_only",
+    "revisions_and_duplicates",
     "partial_with_rejections",
     "rejected_only",
     "partial_batch_capped",
+    "dry_run_preview",
+    "reconciliation_error",
 )
+
+
+def _extract_nonneg_int(val: Any, default: int = 0) -> tuple[bool, int]:
+    """Validate that ``val`` is a strict non-negative integer (rejecting booleans, floats, strings, negatives)."""
+    if val is None:
+        return True, default
+    if isinstance(val, bool) or not isinstance(val, int) or val < 0:
+        try:
+            coerced = max(0, int(val)) if not isinstance(val, bool) else 0
+        except (TypeError, ValueError):
+            coerced = 0
+        return False, coerced
+    return True, val
 
 
 def compute_poll_data_outcome(
@@ -1207,23 +1223,60 @@ def compute_poll_data_outcome(
     total_filtered: int,
     has_more_deferred: bool,
     dry_run: bool = False,
+    reconciled: bool = True,
 ) -> str:
     """Classify the exact, mutually-exclusive data outcome of a poll or replay run.
 
-    Never returns ``all_valid_accepted`` when ``points_accepted == 0`` on a real ingestion run.
+    Precedence truth table:
+    1. ``reconciliation_error`` — whenever ``reconciled`` is False (highest priority; transaction rolled back).
+    2. ``no_data`` — zero discovered, zero frames, zero accepted/revised/duplicates/rejected/filtered.
+    3. ``rejected_only`` — ``points_rejected > 0`` and zero valid points/frames accepted, revised, or duplicated.
+    4. ``partial_with_rejections`` — ``points_rejected > 0`` alongside at least one accepted/revised/duplicate/preview frame.
+    5. ``filtered_only`` — ``points_rejected == 0`` and ``frames_received == 0`` and ``total_filtered > 0`` with zero accepted/revised/duplicates.
+    6. ``partial_batch_capped`` — ``has_more_deferred`` is True (and not pure filtered_only).
+    7. ``dry_run_preview`` — ``dry_run`` is True and ``frames_received > 0`` (never claims ``all_valid_accepted`` because dry-run does not persist points).
+    8. ``all_valid_accepted`` — ``points_accepted > 0`` on a persisted run with zero rejections and no deferred cap.
+    9. ``revisions_and_duplicates`` — ``points_accepted == 0`` and ``points_revised > 0`` and ``points_duplicates > 0``.
+    10. ``revisions_only`` — ``points_accepted == 0`` and ``points_revised > 0`` and ``points_duplicates == 0``.
+    11. ``duplicates_only`` — ``points_accepted == 0`` and ``points_revised == 0`` and ``points_duplicates > 0``.
     """
-    if source_records_discovered == 0 and frames_received == 0 and points_rejected == 0:
+    if not reconciled:
+        return "reconciliation_error"
+    if dry_run and (points_accepted > 0 or points_revised > 0):
+        return "reconciliation_error"
+    if (
+        source_records_discovered == 0
+        and frames_received == 0
+        and points_rejected == 0
+        and points_accepted == 0
+        and points_duplicates == 0
+        and points_revised == 0
+        and total_filtered == 0
+    ):
         return "no_data"
-    if (points_accepted + points_duplicates + points_revised) == 0 and points_rejected > 0:
+    has_valid_activity = (points_accepted + points_duplicates + points_revised) > 0 or (
+        dry_run and frames_received > 0
+    )
+    if not has_valid_activity and points_rejected > 0:
         return "rejected_only"
-    if (points_accepted + points_duplicates + points_revised) > 0 and points_rejected > 0:
+    if has_valid_activity and points_rejected > 0:
         return "partial_with_rejections"
     if has_more_deferred:
-        if frames_received == 0 and total_filtered > 0 and points_accepted == 0 and points_duplicates == 0:
+        if (
+            frames_received == 0
+            and total_filtered > 0
+            and points_accepted == 0
+            and points_duplicates == 0
+            and points_revised == 0
+        ):
             return "filtered_only"
         return "partial_batch_capped"
-    if points_accepted > 0:
+    if dry_run and frames_received > 0:
+        return "dry_run_preview"
+    if not dry_run and points_accepted > 0:
         return "all_valid_accepted"
+    if points_revised > 0 and points_duplicates > 0:
+        return "revisions_and_duplicates"
     if points_revised > 0:
         return "revisions_only"
     if frames_received == 0 and total_filtered > 0:
@@ -1232,8 +1285,6 @@ def compute_poll_data_outcome(
         return "duplicates_only"
     if total_filtered > 0:
         return "filtered_only"
-    if dry_run and frames_received > 0:
-        return "all_valid_accepted"
     return "no_data"
 
 
@@ -1257,18 +1308,28 @@ def build_and_reconcile_poll_manifest(
     dry_run: bool = False,
 ) -> dict[str, Any]:
     """Construct a complete poll/replay manifest and enforce both protocol and ingestion reconciliation invariants."""
+    explicit_total_proto_rejected: Any = None
+    explicit_total_filtered: Any = None
+    explicit_proto_reconciled: Any = True
+
     if isinstance(protocol_disp, ProtocolPollDisposition):
         base: dict[str, Any] = protocol_disp.to_dict()
+        explicit_proto_reconciled = protocol_disp.reconciled
     elif isinstance(protocol_disp, dict):
         base = dict(protocol_disp)
+        explicit_total_proto_rejected = protocol_disp.get("total_protocol_rejected")
+        explicit_total_filtered = protocol_disp.get("total_filtered")
+        explicit_proto_reconciled = protocol_disp.get("reconciled", True)
     else:
+        _, safe_fr = _extract_nonneg_int(frames_received, 0)
+        _, safe_pdups = _extract_nonneg_int(protocol_dups, 0)
         base = {
-            "pages_or_messages_received": 1 if frames_received > 0 else 0,
-            "source_records_discovered": frames_received + protocol_dups,
-            "mapped_frames_emitted": frames_received,
+            "pages_or_messages_received": 1 if safe_fr > 0 else 0,
+            "source_records_discovered": safe_fr + safe_pdups,
+            "mapped_frames_emitted": safe_fr,
             "unmapped_skipped": 0,
             "unsubscribed_skipped": 0,
-            "watermark_suppressed": protocol_dups,
+            "watermark_suppressed": safe_pdups,
             "in_batch_duplicates": 0,
             "deferred_over_cap": 0,
             "rejected_malformed_timestamp": 0,
@@ -1285,21 +1346,47 @@ def build_and_reconcile_poll_manifest(
             "per_source_channel": {},
         }
 
-    discovered = int(base.get("source_records_discovered", 0))
-    emitted = int(base.get("mapped_frames_emitted", 0))
-    unmapped = int(base.get("unmapped_skipped", 0))
-    unsubscribed = int(base.get("unsubscribed_skipped", 0))
-    wm_suppressed = int(base.get("watermark_suppressed", 0))
-    in_batch_dups = int(base.get("in_batch_duplicates", 0))
-    deferred = int(base.get("deferred_over_cap", 0))
-    proto_rejected = (
-        int(base.get("rejected_malformed_timestamp", 0))
-        + int(base.get("rejected_unsupported_index", 0))
-        + int(base.get("rejected_invalid_value", 0))
-        + int(base.get("rejected_non_finite_value", 0))
-        + int(base.get("rejected_unknown_channel", 0))
-    )
+    proto_types_ok = True
+    if not isinstance(explicit_proto_reconciled, bool) or explicit_proto_reconciled is False:
+        proto_types_ok = False
+
+    def _pcount(key: str) -> int:
+        nonlocal proto_types_ok
+        if isinstance(protocol_disp, dict) and key in protocol_disp and protocol_disp[key] is None:
+            proto_types_ok = False
+            return 0
+        ok, val = _extract_nonneg_int(base.get(key, 0), 0)
+        if not ok:
+            proto_types_ok = False
+        base[key] = val
+        return val
+
+    _pcount("pages_or_messages_received")
+    discovered = _pcount("source_records_discovered")
+    emitted = _pcount("mapped_frames_emitted")
+    unmapped = _pcount("unmapped_skipped")
+    unsubscribed = _pcount("unsubscribed_skipped")
+    wm_suppressed = _pcount("watermark_suppressed")
+    in_batch_dups = _pcount("in_batch_duplicates")
+    deferred = _pcount("deferred_over_cap")
+    rej_ts = _pcount("rejected_malformed_timestamp")
+    rej_idx = _pcount("rejected_unsupported_index")
+    rej_val = _pcount("rejected_invalid_value")
+    rej_nan = _pcount("rejected_non_finite_value")
+    rej_unk = _pcount("rejected_unknown_channel")
+
+    proto_rejected = rej_ts + rej_idx + rej_val + rej_nan + rej_unk
     total_filtered = unmapped + unsubscribed
+
+    if explicit_total_proto_rejected is not None:
+        ok_tpr, val_tpr = _extract_nonneg_int(explicit_total_proto_rejected, -1)
+        if not ok_tpr or val_tpr != proto_rejected:
+            proto_types_ok = False
+    if explicit_total_filtered is not None:
+        ok_tf, val_tf = _extract_nonneg_int(explicit_total_filtered, -1)
+        if not ok_tf or val_tf != total_filtered:
+            proto_types_ok = False
+
     base["total_protocol_rejected"] = proto_rejected
     base["total_filtered"] = total_filtered
 
@@ -1312,58 +1399,156 @@ def build_and_reconcile_poll_manifest(
         + deferred
         + proto_rejected
     )
+
     per_channel_ok = True
-    for ch_stats in (base.get("per_source_channel") or {}).values():
-        if isinstance(ch_stats, dict):
-            ch_disc = int(ch_stats.get("discovered", 0))
+    raw_per_channel = base.get("per_source_channel")
+    if raw_per_channel is not None and not isinstance(raw_per_channel, dict):
+        per_channel_ok = False
+    elif isinstance(raw_per_channel, dict) and raw_per_channel:
+        sum_ch_disc = 0
+        sum_ch_emit = 0
+        sum_ch_unmap = 0
+        sum_ch_unsub = 0
+        sum_ch_wm = 0
+        sum_ch_dups = 0
+        sum_ch_def = 0
+        sum_ch_rej = 0
+        for ch_stats in raw_per_channel.values():
+            if not isinstance(ch_stats, dict):
+                per_channel_ok = False
+                break
+            ch_fields: dict[str, int] = {}
+            for f_name in (
+                "discovered",
+                "emitted",
+                "unmapped_skipped",
+                "unsubscribed_skipped",
+                "watermark_suppressed",
+                "in_batch_duplicates",
+                "deferred_over_cap",
+                "rejected",
+            ):
+                if f_name in ch_stats and ch_stats[f_name] is None:
+                    per_channel_ok = False
+                    ch_fields[f_name] = 0
+                    continue
+                ok_f, val_f = _extract_nonneg_int(ch_stats.get(f_name, 0), 0)
+                if not ok_f:
+                    per_channel_ok = False
+                ch_fields[f_name] = val_f
+            ch_disc = ch_fields["discovered"]
             ch_sum = (
-                int(ch_stats.get("emitted", 0))
-                + int(ch_stats.get("unmapped_skipped", 0))
-                + int(ch_stats.get("unsubscribed_skipped", 0))
-                + int(ch_stats.get("watermark_suppressed", 0))
-                + int(ch_stats.get("in_batch_duplicates", 0))
-                + int(ch_stats.get("deferred_over_cap", 0))
-                + int(ch_stats.get("rejected", 0))
+                ch_fields["emitted"]
+                + ch_fields["unmapped_skipped"]
+                + ch_fields["unsubscribed_skipped"]
+                + ch_fields["watermark_suppressed"]
+                + ch_fields["in_batch_duplicates"]
+                + ch_fields["deferred_over_cap"]
+                + ch_fields["rejected"]
             )
             if ch_disc != ch_sum:
                 per_channel_ok = False
                 break
+            sum_ch_disc += ch_disc
+            sum_ch_emit += ch_fields["emitted"]
+            sum_ch_unmap += ch_fields["unmapped_skipped"]
+            sum_ch_unsub += ch_fields["unsubscribed_skipped"]
+            sum_ch_wm += ch_fields["watermark_suppressed"]
+            sum_ch_dups += ch_fields["in_batch_duplicates"]
+            sum_ch_def += ch_fields["deferred_over_cap"]
+            sum_ch_rej += ch_fields["rejected"]
+        if per_channel_ok and (
+            sum_ch_disc != discovered
+            or sum_ch_emit != emitted
+            or sum_ch_unmap != unmapped
+            or sum_ch_unsub != unsubscribed
+            or sum_ch_wm != wm_suppressed
+            or sum_ch_dups != in_batch_dups
+            or sum_ch_def != deferred
+            or sum_ch_rej != proto_rejected
+        ):
+            per_channel_ok = False
 
-    protocol_reconciled = bool(discovered == expected_discovered and per_channel_ok)
-    effective_proto_dups = wm_suppressed + in_batch_dups if protocol_disp is not None else protocol_dups
-    points_duplicates = service_duplicates + effective_proto_dups
-    points_rejected = service_rejected + proto_rejected
+    protocol_reconciled = bool(
+        proto_types_ok and discovered == expected_discovered and per_channel_ok
+    )
+
+    ingest_types_ok = True
+    for raw_ing_val in (
+        protocol_dups,
+        frames_received,
+        accepted,
+        service_duplicates,
+        revised,
+        service_rejected,
+        conflicts_count,
+        out_of_order_count,
+        late_count,
+        low_quality_count,
+    ):
+        if raw_ing_val is None:
+            ingest_types_ok = False
+            continue
+        ok_ing, _ = _extract_nonneg_int(raw_ing_val, 0)
+        if not ok_ing:
+            ingest_types_ok = False
+
+    _, safe_proto_dups = _extract_nonneg_int(protocol_dups, 0)
+    _, safe_frames_received = _extract_nonneg_int(frames_received, 0)
+    _, safe_accepted = _extract_nonneg_int(accepted, 0)
+    _, safe_svc_dups = _extract_nonneg_int(service_duplicates, 0)
+    _, safe_revised = _extract_nonneg_int(revised, 0)
+    _, safe_svc_rej = _extract_nonneg_int(service_rejected, 0)
+    _, safe_conflicts = _extract_nonneg_int(conflicts_count, 0)
+    _, safe_ooo = _extract_nonneg_int(out_of_order_count, 0)
+    _, safe_late = _extract_nonneg_int(late_count, 0)
+    _, safe_low_q = _extract_nonneg_int(low_quality_count, 0)
+
+    effective_proto_dups = (
+        wm_suppressed + in_batch_dups if protocol_disp is not None else safe_proto_dups
+    )
+    points_duplicates = safe_svc_dups + effective_proto_dups
+    points_rejected = safe_svc_rej + proto_rejected
 
     if dry_run:
-        ingestion_reconciled = bool(emitted == frames_received)
+        ingestion_reconciled = bool(
+            ingest_types_ok
+            and emitted == safe_frames_received
+            and safe_accepted == 0
+            and safe_svc_dups == 0
+            and safe_revised == 0
+            and safe_svc_rej == 0
+        )
     else:
-        service_total = accepted + service_duplicates + revised + service_rejected
+        service_total = safe_accepted + safe_svc_dups + safe_revised + safe_svc_rej
         end_to_end_total = (
-            accepted
+            safe_accepted
             + points_duplicates
-            + revised
+            + safe_revised
             + points_rejected
             + unmapped
             + unsubscribed
             + deferred
         )
         ingestion_reconciled = bool(
-            emitted == frames_received
-            and frames_received == service_total
+            ingest_types_ok
+            and emitted == safe_frames_received
+            and safe_frames_received == service_total
             and discovered == end_to_end_total
         )
 
     reconciled = bool(protocol_reconciled and ingestion_reconciled)
     data_outcome = compute_poll_data_outcome(
         source_records_discovered=discovered,
-        frames_received=frames_received,
-        points_accepted=accepted,
+        frames_received=safe_frames_received,
+        points_accepted=safe_accepted,
         points_duplicates=points_duplicates,
-        points_revised=revised,
+        points_revised=safe_revised,
         points_rejected=points_rejected,
         total_filtered=total_filtered,
         has_more_deferred=has_more_deferred,
         dry_run=dry_run,
+        reconciled=reconciled,
     )
 
     manifest: dict[str, Any] = {
@@ -1371,29 +1556,34 @@ def build_and_reconcile_poll_manifest(
         "protocol_reconciled": protocol_reconciled,
         "ingestion_reconciled": ingestion_reconciled,
         "reconciled": reconciled,
-        "checkpoint_status": checkpoint_status,
+        "persisted": bool(not dry_run and reconciled),
+        "dry_run": bool(dry_run),
+        "filtered_present": bool(total_filtered > 0),
+        "revised_present": bool(safe_revised > 0),
+        "duplicates_present": bool(points_duplicates > 0),
+        "checkpoint_status": "rolled_back" if not reconciled else checkpoint_status,
         "data_outcome": data_outcome,
-        "points_accepted": accepted,
+        "points_accepted": safe_accepted,
         "points_duplicates": points_duplicates,
-        "points_revised": revised,
+        "points_revised": safe_revised,
         "points_rejected": points_rejected,
-        "service_rejected": service_rejected,
-        "conflicts": conflicts_count,
-        "out_of_order": out_of_order_count,
-        "late": late_count,
-        "low_quality_count": low_quality_count,
+        "service_rejected": safe_svc_rej,
+        "conflicts": safe_conflicts,
+        "out_of_order": safe_ooo,
+        "late": safe_late,
+        "low_quality_count": safe_low_q,
         "quality_counts": dict(quality_totals or {}),
     }
     if policy_revision is not None:
         manifest["policy_revision"] = int(policy_revision)
-    if dry_run:
-        manifest["dry_run"] = True
     if not reconciled:
+        manifest["rolled_back"] = True
         manifest["reconciliation_error"] = (
             f"manifest count invariant mismatch (discovered={discovered}, "
             f"expected_discovered={expected_discovered}, emitted={emitted}, "
-            f"frames_received={frames_received}, accepted={accepted}, "
-            f"duplicates={points_duplicates}, revised={revised}, rejected={points_rejected})"
+            f"frames_received={safe_frames_received}, accepted={safe_accepted}, "
+            f"duplicates={points_duplicates}, revised={safe_revised}, rejected={points_rejected}, "
+            f"protocol_reconciled={protocol_reconciled}, ingestion_reconciled={ingestion_reconciled})"
         )
     return manifest
 
@@ -3845,11 +4035,26 @@ class ConnectorService:
                         "detail": frame_detail,
                     }
                 )
-                if disp is not None and not disp.reconciled:
-                    raise ValidationFailed(
-                        "protocol poll disposition failed reconciliation invariant during connection test",
-                        details={"field": "disposition", "reason": "disposition_unreconciled"},
+                active_pol_rev = int(get_egress_policy(fail_closed=False).get("revision", 1))
+                if disp is not None:
+                    probe_manifest = build_and_reconcile_poll_manifest(
+                        protocol_disp=disp,
+                        protocol_dups=int(getattr(last_batch, "duplicates_suppressed", 0) or 0),
+                        frames_received=frame_count,
+                        accepted=0,
+                        service_duplicates=0,
+                        revised=0,
+                        service_rejected=0,
+                        has_more_deferred=False,
+                        checkpoint_status="unchanged",
+                        policy_revision=active_pol_rev,
+                        dry_run=True,
                     )
+                    if not disp.reconciled or not probe_manifest["reconciled"]:
+                        raise ValidationFailed(
+                            "protocol poll disposition failed reconciliation invariant during connection test",
+                            details={"field": "disposition", "reason": "reconciliation_error"},
+                        )
                 milestones.append(
                     {
                         "stage": "disposition_validated",
@@ -3900,6 +4105,9 @@ class ConnectorService:
                         for d in descriptors
                     ],
                     "milestones": milestones,
+                    "policy_revision": active_pol_rev,
+                    "persisted": False,
+                    "dry_run": True,
                 },
             )
             self.session.add(run_row)
@@ -3916,6 +4124,7 @@ class ConnectorService:
                     "outcome": "succeeded",
                     "discovered_channel_count": len(descriptors),
                     "duration_ms": duration_ms,
+                    "policy_revision": active_pol_rev,
                 },
             )
             await self.session.flush()
@@ -3928,6 +4137,9 @@ class ConnectorService:
                 "is_synthetic": row.protocol_profile == "synthetic.v1",
                 "tested_at": finished.isoformat(),
                 "duration_ms": duration_ms,
+                "policy_revision": active_pol_rev,
+                "persisted": False,
+                "dry_run": True,
                 "discovered_channels": [
                     {
                         "channel_key": d.channel_key,
@@ -4031,6 +4243,7 @@ class ConnectorService:
                             ),
                         }
                     )
+            err_pol_rev = int(get_egress_policy(fail_closed=False).get("revision", 1))
             row.last_error = safe_msg
             row.last_error_category = category
             row.last_error_at = finished
@@ -4051,7 +4264,12 @@ class ConnectorService:
                 error_category=category,
                 error_message=safe_msg,
                 trace_id=trace_id,
-                details={"milestones": milestones},
+                details={
+                    "milestones": milestones,
+                    "policy_revision": err_pol_rev,
+                    "persisted": False,
+                    "dry_run": True,
+                },
             )
             self.session.add(run_row)
             await record_audit(
@@ -4069,6 +4287,7 @@ class ConnectorService:
                     "error_category": category,
                     "error_message": safe_msg,
                     "duration_ms": duration_ms,
+                    "policy_revision": err_pol_rev,
                 },
             )
             await self.session.flush()
@@ -4081,6 +4300,9 @@ class ConnectorService:
                 "is_synthetic": row.protocol_profile == "synthetic.v1",
                 "tested_at": finished.isoformat(),
                 "duration_ms": duration_ms,
+                "policy_revision": err_pol_rev,
+                "persisted": False,
+                "dry_run": True,
                 "discovered_channels": [],
                 "milestones": milestones,
                 "error_category": category,
@@ -4098,7 +4320,8 @@ class ConnectorService:
         """Preview channel descriptors and a bounded sample of frames without persisting points."""
         row = await self.get(connector_id)
         bounded_limit = min(max(1, int(sample_limit)), 50)
-        await sync_egress_policy_from_db(self.session)
+        active_pol = await sync_egress_policy_from_db(self.session)
+        active_pol_rev = int(active_pol.get("revision", 1))
         resolved_secrets = await resolve_secret_refs(self.session, self.org_id, dict(row.secret_refs or {}))
         validate_connector_endpoint(row.endpoint_url, row.protocol_profile, allow_loopback=allow_loopback)
         adapter = await self.build_adapter(row, resolved_secrets=resolved_secrets)
@@ -4107,7 +4330,38 @@ class ConnectorService:
             descriptors = list(await adapter.describe_channels())
             for d in descriptors:
                 validate_descriptor(d)
-            frames = list(await adapter.poll())[:bounded_limit]
+            all_frames = list(await adapter.poll())
+            last_batch = getattr(adapter, "last_batch", None)
+            protocol_disp = getattr(last_batch, "disposition", None)
+            protocol_dups = int(getattr(last_batch, "duplicates_suppressed", 0) or 0)
+            has_more_prev = bool(
+                getattr(protocol_disp, "partial_more_available", False)
+                or getattr(protocol_disp, "truncated_by_limit", False)
+                or (int(getattr(protocol_disp, "deferred_over_cap", 0) or 0) > 0)
+            )
+            preview_manifest = build_and_reconcile_poll_manifest(
+                protocol_disp=protocol_disp,
+                protocol_dups=protocol_dups,
+                frames_received=len(all_frames),
+                accepted=0,
+                service_duplicates=0,
+                revised=0,
+                service_rejected=0,
+                has_more_deferred=has_more_prev,
+                checkpoint_status="unchanged",
+                policy_revision=active_pol_rev,
+                dry_run=True,
+            )
+            if not preview_manifest["reconciled"]:
+                raise ValidationFailed(
+                    "preview poll disposition failed reconciliation invariant",
+                    details={
+                        "field": "disposition",
+                        "reason": "reconciliation_error",
+                        "manifest": preview_manifest,
+                    },
+                )
+            frames = all_frames[:bounded_limit]
             samples: list[dict[str, Any]] = []
             for frame in frames:
                 point = adapter.normalize(frame)
@@ -4125,6 +4379,10 @@ class ConnectorService:
                 "connector_id": row.id,
                 "protocol_profile": row.protocol_profile,
                 "is_synthetic": row.protocol_profile == "synthetic.v1",
+                "persisted": False,
+                "dry_run": True,
+                "policy_revision": active_pol_rev,
+                "manifest": preview_manifest,
                 "descriptors": [
                     {
                         "channel_key": d.channel_key,
@@ -4157,7 +4415,9 @@ class ConnectorService:
         - Requires a non-empty operator ``reason``.
         - Enforces ``expected_config_version`` when supplied.
         - Never regresses the connector's persistent watermark behind ``cursor_before``.
-        - Records an auditable ``ConnectorRun(run_kind="replay" | "replay_dry_run")`` and ``AuditLog``.
+        - Enforces fail-closed manifest reconciliation: if ``reconciled`` is False, rolls back any
+          ingested points, preserves ``cursor_before``, and records ``ConnectorRun(status="failed",
+          error_category="reconciliation_error")``.
         """
         from drillai.telemetry.adapters import ingest_frames
         from drillai.telemetry.service import TelemetryService
@@ -4203,7 +4463,8 @@ class ConnectorService:
         t0 = time.perf_counter()
         trace_id = new_id("trc")
 
-        await sync_egress_policy_from_db(self.session)
+        active_pol = await sync_egress_policy_from_db(self.session)
+        active_pol_rev = int(active_pol.get("revision", 1))
         validate_connector_endpoint(row.endpoint_url, row.protocol_profile, allow_loopback=allow_loopback)
         resolved_secrets = await resolve_secret_refs(
             self.session, self.org_id, dict(row.secret_refs or {})
@@ -4250,11 +4511,12 @@ class ConnectorService:
                     service_rejected=0,
                     has_more_deferred=has_more_dry,
                     checkpoint_status="unchanged",
-                    policy_revision=int(get_egress_policy(fail_closed=False).get("revision", 1)),
+                    policy_revision=active_pol_rev,
                     dry_run=True,
                 )
                 finished = utc_now()
                 duration_ms = round((time.perf_counter() - t0) * 1000.0, 2)
+                dry_reconciled = bool(manifest.get("reconciled", False))
                 run_row = ConnectorRun(
                     id=new_id("crn"),
                     org_id=self.org_id,
@@ -4262,7 +4524,7 @@ class ConnectorService:
                     well_id=row.well_id,
                     config_version=current_cfg_version,
                     run_kind="replay_dry_run",
-                    status="succeeded",
+                    status="succeeded" if dry_reconciled else "failed",
                     started_at=started,
                     finished_at=finished,
                     duration_ms=duration_ms,
@@ -4273,9 +4535,18 @@ class ConnectorService:
                     points_rejected=protocol_rejected,
                     cursor_before=cursor_before,
                     cursor_after=cursor_before,
+                    error_category=None if dry_reconciled else "reconciliation_error",
+                    error_message=(
+                        None
+                        if dry_reconciled
+                        else "replay dry-run manifest reconciliation invariant failed"
+                    ),
                     trace_id=trace_id,
                     details={
-                        "checkpoint_status": "unchanged",
+                        "checkpoint_status": "unchanged" if dry_reconciled else "rolled_back",
+                        "persisted": False,
+                        "dry_run": True,
+                        "policy_revision": active_pol_rev,
                         "replay": {
                             "reason": reason.strip(),
                             "from_timestamp": from_timestamp,
@@ -4294,6 +4565,7 @@ class ConnectorService:
                     resource_kind="connector",
                     resource_id=row.id,
                     well_id=row.well_id,
+                    outcome="success" if dry_reconciled else "failure",
                     before={"cursor": cursor_before},
                     after={"cursor": cursor_before},
                     details={
@@ -4302,26 +4574,36 @@ class ConnectorService:
                         "from_timestamp": from_timestamp,
                         "channel_keys": selected_channels,
                         "frames_discovered": len(frames),
+                        "reconciled": dry_reconciled,
                     },
                 )
                 await self.session.flush()
                 return {
-                    "ok": True,
+                    "ok": dry_reconciled,
                     "dry_run": True,
+                    "persisted": False,
+                    "policy_revision": active_pol_rev,
+                    "error_category": None if dry_reconciled else "reconciliation_error",
                     "connector_id": row.id,
                     "run": connector_run_out(run_row),
                     "connector": await self.inspect(row.id),
                 }
 
-            telemetry_svc = TelemetryService(self.session, self.org_id)
-            ingest_report = await ingest_frames(
-                telemetry_svc,
-                adapter,
-                well_id=row.well_id or "",
-                wellbore_id=row.wellbore_id,
-                operation_id=row.operation_id,
-                subscribe=selected_channels,
-            )
+            replay_sp = await self.session.begin_nested()
+            try:
+                telemetry_svc = TelemetryService(self.session, self.org_id)
+                ingest_report = await ingest_frames(
+                    telemetry_svc,
+                    adapter,
+                    well_id=row.well_id or "",
+                    wellbore_id=row.wellbore_id,
+                    operation_id=row.operation_id,
+                    subscribe=selected_channels,
+                )
+            except Exception:
+                if replay_sp.is_active:
+                    await replay_sp.rollback()
+                raise
         finally:
             await adapter.close()
 
@@ -4398,12 +4680,101 @@ class ConnectorService:
             conflicts_count=conflicts_count,
             out_of_order_count=out_of_order_count,
             late_count=late_count,
-            policy_revision=int(get_egress_policy(fail_closed=False).get("revision", 1)),
+            policy_revision=active_pol_rev,
             dry_run=False,
         )
 
         finished = utc_now()
         duration_ms = round((time.perf_counter() - t0) * 1000.0, 2)
+
+        if not run_manifest.get("reconciled", False):
+            # Fail-closed reconciliation invariant: roll back savepoint so zero telemetry points or channel mutations persist!
+            if replay_sp.is_active:
+                await replay_sp.rollback()
+            row = await self.get(connector_id)
+            err_msg = "replay manifest reconciliation invariant failed; transaction rolled back"
+            row.cursor = cursor_before
+            row.last_poll_at = finished
+            row.last_error = err_msg
+            row.last_error_category = "reconciliation_error"
+            row.last_error_at = finished
+            row.error_count = int(row.error_count or 0) + 1
+            row.last_trace_id = trace_id
+            row.updated_at = finished
+
+            run_row = ConnectorRun(
+                id=new_id("crn"),
+                org_id=self.org_id,
+                connector_id=row.id,
+                well_id=row.well_id,
+                config_version=current_cfg_version,
+                run_kind="replay",
+                status="failed",
+                started_at=started,
+                finished_at=finished,
+                duration_ms=duration_ms,
+                frames_received=frames_received,
+                points_accepted=0,
+                points_duplicates=duplicates,
+                points_revised=0,
+                points_rejected=rejected,
+                alerts_raised=0,
+                alerts_cleared=0,
+                cursor_before=cursor_before,
+                cursor_after=cursor_before,
+                error_category="reconciliation_error",
+                error_message=err_msg,
+                trace_id=trace_id,
+                details={
+                    "checkpoint_status": "rolled_back",
+                    "persisted": False,
+                    "dry_run": False,
+                    "policy_revision": active_pol_rev,
+                    "replay": {
+                        "reason": reason.strip(),
+                        "from_timestamp": from_timestamp,
+                        "channel_keys": selected_channels,
+                        "dry_run": False,
+                    },
+                    "manifest": run_manifest,
+                },
+            )
+            self.session.add(run_row)
+            await record_audit(
+                self.session,
+                org_id=self.org_id,
+                principal=self._principal,
+                action="connector.control",
+                resource_kind="connector",
+                resource_id=row.id,
+                well_id=row.well_id,
+                outcome="failure",
+                before={"cursor": cursor_before},
+                after={"cursor": cursor_before},
+                details={
+                    "transition": "replay",
+                    "reason": reason.strip(),
+                    "from_timestamp": from_timestamp,
+                    "channel_keys": selected_channels,
+                    "error_category": "reconciliation_error",
+                    "reconciled": False,
+                },
+            )
+            await self.session.flush()
+            return {
+                "ok": False,
+                "dry_run": False,
+                "persisted": False,
+                "policy_revision": active_pol_rev,
+                "error_category": "reconciliation_error",
+                "connector_id": row.id,
+                "run": connector_run_out(run_row),
+                "connector": await self.inspect(row.id),
+            }
+
+        if replay_sp.is_active:
+            await replay_sp.commit()
+
         row.cursor = merged_cursor
         row.last_connected_at = finished
         row.last_poll_at = finished
@@ -4439,6 +4810,9 @@ class ConnectorService:
             details={
                 "channels": report_dict.get("channels", []),
                 "checkpoint_status": checkpoint_status,
+                "persisted": True,
+                "dry_run": False,
+                "policy_revision": active_pol_rev,
                 "replay": {
                     "reason": reason.strip(),
                     "from_timestamp": from_timestamp,
@@ -4483,12 +4857,15 @@ class ConnectorService:
                 "points_accepted": accepted,
                 "points_duplicates": duplicates,
                 "points_rejected": rejected,
+                "reconciled": True,
             },
         )
         await self.session.flush()
         return {
             "ok": True,
             "dry_run": False,
+            "persisted": True,
+            "policy_revision": active_pol_rev,
             "connector_id": row.id,
             "run": connector_run_out(run_row),
             "connector": await self.inspect(row.id),

@@ -259,19 +259,44 @@ def test_manifest_reconciliation_and_all_eight_data_outcomes() -> None:
     assert m_ok["data_outcome"] == "all_valid_accepted"
     assert m_ok["reconciled"] is True
 
-    seen_outcomes = {
-        m_no_data["data_outcome"],
-        m_filtered["data_outcome"],
-        m_dups["data_outcome"],
-        m_rev["data_outcome"],
-        m_rej["data_outcome"],
-        m_part_rej["data_outcome"],
-        m_cap["data_outcome"],
-        m_ok["data_outcome"],
-    }
-    assert seen_outcomes == set(POLL_DATA_OUTCOMES)
+    # 9. revisions_and_duplicates: 2 frames emitted, 1 revised, 1 service duplicate, 0 newly accepted
+    disp_rev_dups = ProtocolPollDisposition(
+        pages_or_messages_received=1,
+        source_records_discovered=2,
+        mapped_frames_emitted=2,
+    )
+    m_rev_dups = build_and_reconcile_poll_manifest(
+        protocol_disp=disp_rev_dups,
+        protocol_dups=0,
+        frames_received=2,
+        accepted=0,
+        service_duplicates=1,
+        revised=1,
+        service_rejected=0,
+        has_more_deferred=False,
+        checkpoint_status="unchanged",
+    )
+    assert m_rev_dups["data_outcome"] == "revisions_and_duplicates"
+    assert m_rev_dups["reconciled"] is True
 
-    # Verify reconciliation failure detection when ingestion counts do not sum to mapped_frames_emitted
+    # 10. dry_run_preview: 3 discovered, 3 emitted, dry_run=True (0 persisted)
+    m_dry_run = build_and_reconcile_poll_manifest(
+        protocol_disp=disp_ok,
+        protocol_dups=0,
+        frames_received=3,
+        accepted=0,
+        service_duplicates=0,
+        revised=0,
+        service_rejected=0,
+        has_more_deferred=False,
+        checkpoint_status="unchanged",
+        dry_run=True,
+    )
+    assert m_dry_run["data_outcome"] == "dry_run_preview"
+    assert m_dry_run["persisted"] is False
+    assert m_dry_run["reconciled"] is True
+
+    # 11. Verify reconciliation failure detection when ingestion counts do not sum to mapped_frames_emitted
     m_bad_ingest = build_and_reconcile_poll_manifest(
         protocol_disp=disp_ok,
         protocol_dups=0,
@@ -286,6 +311,22 @@ def test_manifest_reconciliation_and_all_eight_data_outcomes() -> None:
     assert m_bad_ingest["protocol_reconciled"] is True
     assert m_bad_ingest["ingestion_reconciled"] is False
     assert m_bad_ingest["reconciled"] is False
+    assert m_bad_ingest["data_outcome"] == "reconciliation_error"
+
+    seen_outcomes = {
+        m_no_data["data_outcome"],
+        m_filtered["data_outcome"],
+        m_dups["data_outcome"],
+        m_rev["data_outcome"],
+        m_rev_dups["data_outcome"],
+        m_rej["data_outcome"],
+        m_part_rej["data_outcome"],
+        m_cap["data_outcome"],
+        m_ok["data_outcome"],
+        m_dry_run["data_outcome"],
+        m_bad_ingest["data_outcome"],
+    }
+    assert seen_outcomes == set(POLL_DATA_OUTCOMES)
 
 
 @pytest.mark.asyncio
