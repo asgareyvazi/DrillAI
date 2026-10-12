@@ -99,24 +99,26 @@ it holds to and `docs/FRONTEND_TESTING.md` lists what is verified and how.
 | Frontend lint | `cd frontend && npm run lint` | unused code, `any`, React rules |
 | Frontend unit/component | `cd frontend && npm test` | 308 tests in 29 files |
 | Frontend build | `cd frontend && npm run build` | `tsc -b` plus the production Vite build |
-| Backend tests | `cd backend && DRILLAI_TEST_POSTGRES=1 .venv/bin/python -m pytest -o addopts=""` | 1,016 tests, including 4 PostgreSQL persistence, migration & competing-worker fencing tests |
+| Backend tests | `cd backend && DRILLAI_TEST_POSTGRES=1 .venv/bin/python -m pytest -o addopts=""` | 1,031 tests, including 5 PostgreSQL persistence, migration, competing-worker fencing & concurrent SQL CAS race tests |
 | Backend lint | `cd backend && .venv/bin/python -m ruff check .` | style and import hygiene |
 | Migrations | `cd backend && .venv/bin/python -m alembic upgrade head && .venv/bin/python -m alembic check` | no model/migration drift, against a fresh database |
-| Stack verification | `backend/.venv/bin/python scripts/verify_stack.py` | clean migration, backend, dedicated `connector-worker`, real WITSML 1.4.1.1 SOAP ingest & restart recovery |
+| Stack verification | `backend/.venv/bin/python scripts/verify_stack.py` | clean migration, backend, dedicated `connector-worker`, real WITSML 1.4.1.1 SOAP & ETP 1.2 Binary Avro ingest, restart recovery & stop |
 | Docker Compose smoke gate | `POSTGRES_PASSWORD=... docker compose up -d --build` | multi-container PostgreSQL, Alembic migrate, backend, `connector-worker`, and Nginx frontend proxy |
-| End-to-end | `cd frontend && npm run e2e` | 103 browser journeys in 17 spec files against the real stack |
+| End-to-end | `cd frontend && npm run e2e` | 115 browser journeys in 17 spec files against the real stack |
 
-Set `DRILLAI_TEST_POSTGRES=1` to run the PostgreSQL-backed persistence and competing-worker fencing
-tests through the repository's own embedded PostgreSQL (`pgserver`); without it they skip, and the
-suite reports **1012 passed, 4 skipped** rather than **1016 passed**.
+Set `DRILLAI_TEST_POSTGRES=1` to run the PostgreSQL-backed persistence, competing-worker fencing,
+and concurrent SQL CAS race tests through the repository's own embedded PostgreSQL (`pgserver`);
+without it they skip, and the suite reports **1026 passed, 5 skipped** rather than **1031 passed**.
 
 The end-to-end suite is 17 spec files across three deployments of the same product — development
 identity, deterministic fault injection, and authentication enabled — covering the cockpit,
 live operational monitor (`live-operations.spec.ts`), telemetry connector registry & real WITSML/ETP
-protocols (`connectors-platform.spec.ts`: WITSML 1.4.1.1 SOAP & ETP 1.2 WebSocket connectors, masked
-secret references, SSRF protection, governed start/stop/restart/disable, worker polling, backoff &
-recovery, duplicate replay guard, low-quality sensor handling, viewer read-only RBAC, 409 optimistic
-concurrency, and Persian RTL technical token isolation), documents and evidence, the workflow studio lifecycle, the run monitor
+protocols (`connectors-platform.spec.ts`: WITSML 1.4.1.1 SOAP, production ETP 1.2 Binary Avro
+`etp.1.2.binary_ws`, and internal test ETP 1.2 JSON `etp.1.2.json_ws` connectors, masked secret
+references, connection-bound SSRF protection & private rig-network CIDR policy, 10-stage connection
+test milestones, governed start/stop/restart/disable, worker polling, backoff & recovery, duplicate
+replay guard, low-quality sensor handling, viewer read-only RBAC, 409 optimistic concurrency, and
+Persian RTL technical token isolation), documents and evidence, the workflow studio lifecycle, the run monitor
 with approvals, the durable run-event WebSocket, the failure matrix, permissions and identity, deep
 links and context, RTL, and keyboard/assistive-technology behaviour. HTTP is never intercepted anywhere — no spec calls
 `page.route()`, and the failures a healthy server cannot produce come from the application's own
@@ -126,15 +128,16 @@ backend and fabricate no frames.
 
 CI runs that whole sequence on every push to `arena/01a0dca0-drillai` (`.github/workflows/ci.yml`):
 install → frontend typecheck, lint, tests, build → backend tests (with PostgreSQL), lint, migration
-check → the complete end-to-end suite, with Playwright evidence uploaded only when a run has failed.
+check → multi-process stack verification (`scripts/verify_stack.py`) → Docker Compose smoke gate →
+the complete end-to-end suite, with Playwright evidence uploaded only when a run has failed.
 Every required gate is a separate step that fails the job; there is no `continue-on-error` and no
 `|| true` in the pipeline.
 
 Not implemented yet (do not assume otherwise):
 
 - **External commercial WITSML/ETP vendor certification.** `witsml.1.4.1.1.soap_http` and
-  `etp.1.2.json_ws` are verified over real TCP/HTTP/WebSocket against the local protocol harness
-  servers (`LocalWitsmlSoapServer` and `LocalEtpWebSocketServer`), not against a live third-party
-  commercial rig store in CI (`external_vendor_verified: false`).
+  `etp.1.2.binary_ws` are verified over real TCP/HTTP/WebSocket against both local protocol harness
+  servers (`LocalWitsmlSoapServer`, `LocalEtpBinaryWebSocketServer`) and independent conformance
+  suites, not against a live third-party commercial rig store in CI (`external_vendor_verified: false`).
 - Integration adapters for outbound messaging (Telegram/WhatsApp/email) and pgvector-backed
   retrieval are configuration-shaped boundaries.

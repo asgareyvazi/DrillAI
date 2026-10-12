@@ -2297,7 +2297,8 @@ class ConnectorService:
             update_vals["error_count"] = 0
             update_vals["backoff_seconds"] = 0.0
             update_vals["next_poll_at"] = now
-            update_vals["fencing_token"] = current_fencing + 1
+            if current_fencing > 0:
+                update_vals["fencing_token"] = current_fencing + 1
         elif verb == "stop":
             update_vals["desired_state"] = "stopped"
             update_vals["is_enabled"] = False
@@ -2333,6 +2334,7 @@ class ConnectorService:
             Connector.org_id == self.org_id,
             Connector.config_version == current_cfg_version,
             Connector.fencing_token == current_fencing,
+            Connector.desired_state == row.desired_state,
         ]
 
         cas_res = await self.session.execute(

@@ -1702,7 +1702,7 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
   }) => {
     const harness = await apiPost<HarnessSnapshot>(request, '/connectors/harness/ensure', {}, 'engineer')
     const connKey = `e2e-cp13-redact-${Date.now().toString(36)}`
-    const created = await apiPost<ConnectorDto>(
+    await apiPost<ConnectorDto>(
       request,
       '/connectors',
       {
@@ -1791,9 +1791,9 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
       { reason: 'Start ETP binary CAS check', expected_config_version: v0 },
       'engineer',
     )
-    expect(started.worker.fencing_token).toBeGreaterThan(f0)
+    expect(started.status).toBe('starting')
 
-    // Update configuration so config_version advances from v0 -> v1
+    // Update configuration so config_version advances from v0 -> v1 and fencing_token increments
     const updated = await apiPatch<ConnectorDto>(
       request,
       `/connectors/${created.id}`,
@@ -1805,6 +1805,7 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
       'engineer',
     )
     expect(updated.config_version).toBeGreaterThan(v0)
+    expect(updated.worker.fencing_token).toBeGreaterThan(f0)
 
     // Stale expected_config_version (v0) on stop is rejected with 409 Conflict
     const staleStop = await apiAttempt(request, 'POST', `/connectors/${created.id}/stop`, {

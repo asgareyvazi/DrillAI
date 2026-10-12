@@ -36,10 +36,12 @@ They skip unless the repository's own embedded PostgreSQL is switched on:
 cd backend && DRILLAI_TEST_POSTGRES=1 .venv/bin/python -m pytest
 ```
 
-With it, the suite reports **1016 passed** (including `test_competing_workers_fencing_on_postgres` in
-`tests/telemetry/test_connector_worker.py`); without it, **1012 passed, 4 skipped**. CI runs them (the
-`pgserver` dev dependency is already in `backend/pyproject.toml`), so the certificate is the 1016-test
-one. Nothing is replaced with SQLite to make them pass, and the tests are never deleted.
+With it, the suite reports **1031 passed** (including `test_competing_workers_fencing_on_postgres` in
+`tests/telemetry/test_connector_worker.py` and `test_phase6_postgres_concurrent_sql_cas_races` in
+`tests/telemetry/test_cp13_witsml_and_worker_races.py`); without it, **1026 passed, 5 skipped**. CI
+runs them (the `pgserver` dev dependency is already in `backend/pyproject.toml`), so the certificate
+is the 1031-test one. Nothing is replaced with SQLite to make them pass, and the tests are never
+deleted.
 
 ## Unit and component tests
 
@@ -100,12 +102,13 @@ third of the suite, so all three projects run.
 
 ### The journeys
 
-77 journeys in 16 spec files. The list is the coverage; the counts are what the suite reports.
+115 journeys in 17 spec files. The list is the coverage; the counts are what the suite reports.
 
 | Spec | Journeys | Covers |
 | --- | --- | --- |
 | `well-cockpit.spec.ts` | 4 | list → cockpit → NPT → missing data → timeline → reload → unknown well → unknown route |
 | `live-operations.spec.ts` | 3 | CP10 live operational vertical slice: synthetic telemetry commissioning → automatic rule evaluation on ingestion → live KPI strip & bounded channel history chart → historical `T1` alert evidence drawer unaffected by later `T2` points → server-governed `allowed_transitions` ack/clear/cancel & real 409 conflict recovery → hysteresis auto-clear → cross-well stream isolation → missing/untrustworthy quality honesty → Persian RTL token isolation |
+| `connectors-platform.spec.ts` | 38 | CP11/CP12/CP13 telemetry connectors, WITSML 1.4.1.1 SOAP, production ETP 1.2 Binary Avro (`etp.1.2.binary_ws`), & internal-test ETP 1.2 JSON (`etp.1.2.json_ws`), connection-bound SSRF & private rig-network CIDR policy, 10-stage connection-test milestones, secret minimization & redaction, reconciled run disposition manifests (`data_outcome`, per-channel `channel_cursors`), governed dry-run & live replay, 409 optimistic concurrency, mid-poll lease preemption, RBAC, and Persian RTL technical token isolation |
 | `documents-evidence.spec.ts` | 4 | upload → ingestion → extraction record → page/region evidence |
 | `workflow-studio.spec.ts` | 9 | create → configure → connect → validate → save → version → publish, and the draft lifecycle |
 | `run-monitor.spec.ts` | 6 | run list, node executions, the approval inbox, a run that fails and says which node failed |

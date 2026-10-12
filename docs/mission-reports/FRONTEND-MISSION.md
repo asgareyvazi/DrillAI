@@ -2011,3 +2011,111 @@ CP12 is implemented and verified on `arena/01a0dca0-drillai`, resolving every P0
 * `cd frontend && npm test`: **29 test files, 308 tests passed, 0 failed, 0 skipped**.
 * `cd frontend && npm run build`: **passed** (`tsc -b && vite build`, `286 modules transformed`).
 * `cd frontend && npm run e2e`: **103 passed (4.4m)** across **17 spec files** and all 3 deployment stacks (`chromium`, `chromium-faults`, `chromium-auth`) with zero HTTP mocking, including **26 real-stack journeys** in `frontend/e2e/connectors-platform.spec.ts`.
+
+---
+
+### Independent CP13 certification block — CP12 Release Closure, Production ETP 1.2 Binary Avro, Connection-Bound SSRF & Private Rig-Network Policy, Independent Conformance & Deployment Certification (2026-10-11)
+
+#### 1. Verdict
+CP13 is implemented, verified, committed, and published on `arena/01a0dca0-drillai`:
+1. **Gate 0 (Mandatory CP12 Release Closure):** Audited CP12-E (`3401ce00aa61975e78972c374e31e97458cd7953`) and CP12-F (`1c0a0e9009bd50b305541871a3854d0ca97d6de3`), pushed to `origin/arena/01a0dca0-drillai`, verified via `git ls-remote`, and confirmed green GitHub Actions CI on `1c0a0e9009bd50b305541871a3854d0ca97d6de3` (Run [38126773185](https://github.com/asgareyvazi/DrillAI/actions/runs/38126773185), `conclusion: success` in `19m48s`, including the real Docker Compose build & startup smoke gate) before writing any CP13 implementation code.
+2. **P0 Connection-Bound SSRF Enforcement, Explicit Private Rig-Network Policy & Loopback Isolation (`CP13-A`):** Replaced pre-connect hostname validation with `resolve_and_pin_endpoint() -> PinnedEndpoint` so HTTPX (`WitsmlSoapClient`) and WebSockets (`EtpBinaryWebSocketClient`, `EtpWebSocketClient`) connect directly to the validated IP socket while preserving HTTP `Host` and TLS SNI/certificate hostname verification; removed implicit development loopback access for ordinary connectors (scoping loopback exclusively to active non-production harness `(host, port)` endpoints in `_HARNESS_OWNED_ENDPOINTS` with `DRILLAI_CONNECTOR_ALLOW_LOOPBACK=false` in `start-api.mjs`); and added audited admin-governed private rig-network CIDR policy (`GET/PUT /api/v1/connectors/egress-policy`).
+3. **Production ETP 1.2 Binary Avro Profile (`etp.1.2.binary_ws`) & 25-Scenario Independent Conformance (`CP13-B`):** Implemented spec-faithful Energistics ETP v1.2 Binary Avro wire framing (`energistics-tp` subprotocol, Avro binary `MessageHeader` + Protocol 0 `Core` `RequestSession`/`OpenSession`/`CloseSession`/`Ping`/`Pong`/`ProtocolException`/`Acknowledge` & Protocol 1 `ChannelStreaming` `ChannelMetadata`/`ChannelData`/`StartStreaming`/`StopStreaming`/`TruncateChannels`) with per-channel watermarks (`channel_cursors`), secondary depth conversion (`ft -> m`), and dynamic `channelId -> uri -> channel_key` remapping across reconnects; explicitly marked `etp.1.2.json_ws` as internal-test/debug (`internal_test_only: true`, `production_ready: false`, rejected in `DRILLAI_ENV=production`); and verified all 25 binary conformance scenarios against an independent Avro reference encoder/server (`external_vendor_verified: false`).
+4. **WITSML 1.4.1.1 Regression, Worker Lease Expiry Fencing, PostgreSQL Concurrent SQL CAS Races & Multi-Connector Soak (`CP13-C`):** Verified all 14 WITSML 1.4.1.1 batch-cap/cursor/disposition/depth-conversion/restart scenarios, enforced `lease_expires_at > now` fencing on `renew_lease`, `execute_claimed_poll` Phase 2, and `_record_failed_outcome`, added explicit run `data_outcome` classification, verified 5 real PostgreSQL concurrent SQL CAS race scenarios, and executed a concurrent 4-connector soak test.
+5. **Operator UX Capability Honesty, 10-Stage Connection-Test Milestones & 12 New Real-Stack E2E Journeys (`CP13-D`, `CP13-E`):** Added 10-stage connection-test milestones (`connection-test-milestones`), profile capability honesty badges (`detail-profile-honesty-badge`), private rig-network egress policy governance UI (`egress-policy-card`), per-channel cursor inspection (`manifest-channel-cursors`), and 12 new real-stack Playwright E2E journeys (Journeys 27–38, bringing `connectors-platform.spec.ts` to 38 journeys and the full E2E suite to 115 journeys).
+
+#### 2. CP12 Gate 0 Closure Evidence
+* **Branch:** `arena/01a0dca0-drillai` (`main` untouched at `bfa066b28e0071880cb9191a4f1d47fdaa143e04`).
+* **CP12-E SHA:** `3401ce00aa61975e78972c374e31e97458cd7953`
+* **CP12-F SHA:** `1c0a0e9009bd50b305541871a3854d0ca97d6de3`
+* **`git ls-remote origin refs/heads/arena/01a0dca0-drillai`:** `1c0a0e9009bd50b305541871a3854d0ca97d6de3 refs/heads/arena/01a0dca0-drillai`
+* **GitHub Actions CI Run:** [38126773185](https://github.com/asgareyvazi/DrillAI/actions/runs/38126773185) on `headSha: 1c0a0e9009bd50b305541871a3854d0ca97d6de3` — `status: completed`, `conclusion: success` (`19m48s`), including `verify_stack.py` and the Docker Compose smoke gate.
+
+#### 3. Source-Backed Security & Runtime Audit Register (`S-01` .. `S-03`, `R-01` .. `R-02`)
+| ID | Severity | Code Path | Vulnerability / Gap & Reproduction | Impact | Root-Cause Fix | Regression Test |
+| --- | --- | --- | --- | --- | --- | --- |
+| `S-01` | **P0** | `connectors.py`, `protocols/witsml.py`, `protocols/etp.py` | `enforce_connect_time_ssrf()` resolved DNS via `socket.getaddrinfo()`, validated the IPs, and discarded them; `httpx.AsyncClient.post(endpoint)` and `websockets.connect(endpoint)` then performed a second independent DNS lookup (TOCTOU DNS rebinding window). | A rebinding DNS server returning a public IP on call 1 and `127.0.0.1` or `169.254.169.254` on call 2 could reach loopback or cloud metadata. | Added `resolve_and_pin_endpoint() -> PinnedEndpoint`. HTTPX connects to `pinned.connect_url` (pinned IP literal) with `Host: pinned.host_header`, `follow_redirects=False`, `trust_env=False`, and `extensions={"sni_hostname": pinned.sni_hostname}`; WebSockets pass `host=pinned.pinned_ip, port=pinned.port, proxy=None, server_hostname=pinned.sni_hostname`. | `test_s1_s2_s3_toctou_dns_rebinding_and_socket_pinning_prevent_unvalidated_connect`, `test_s4_s5_dns_rebinding_across_consecutive_polls_and_websocket_reconnects` |
+| `S-02` | **P0** | `connectors.py`, `protocols/harness.py`, `frontend/e2e/start-api.mjs` | `_allow_loopback()` returned `True` whenever `settings.environment in {"development", "test"}`, and `start-api.mjs` set `DRILLAI_CONNECTOR_ALLOW_LOOPBACK=true`, allowing any user-created connector in dev/test to probe arbitrary localhost services (`127.0.0.1:5432`, `127.0.0.1:8099`). | Lateral SSRF against local control-plane or database ports in non-production environments. | Removed implicit environment loopback; `LocalProtocolHarnessManager` registers only its active `(host, port)` listeners in `_HARNESS_OWNED_ENDPOINTS`, `start-api.mjs` sets `DRILLAI_CONNECTOR_ALLOW_LOOPBACK: 'false'`, and `DRILLAI_ENV=production` disables harness endpoints (`403`). | `test_s7_ordinary_connector_cannot_use_loopback_when_harness_runs_on_another_port`, E2E Journey 30 |
+| `S-03` | **P0/P1** | `connectors.py`, `core/config.py`, `api/routers/connectors.py` | `allowed_hosts` bypassed IP validation if a hostname matched the allowlist, and private rig networks had only a coarse boolean `connector_allow_private_networks` with no CIDR scoping. | Allowlisted hostnames resolving to `169.254.169.254` or `127.0.0.1` could bypass IP checks; approving one rig subnet exposed all RFC-1918 space. | Added `DRILLAI_CONNECTOR_ALLOWED_PRIVATE_NETWORKS` and admin-only `GET/PUT /api/v1/connectors/egress-policy` (`allowed_private_cidrs`, `allowed_hosts`). Allowlisted hostnames still enforce full IP validation and can never resolve to loopback or link-local/metadata IPs. | `test_s11_s12_private_rig_network_cidr_policy_and_admin_governance_api`, E2E Journey 31 |
+| `R-01` | **P0** | `worker.py` | `renew_lease`, `execute_claimed_poll` Phase 2 commit, and `_record_failed_outcome` checked `worker_id`, `fencing_token`, and `config_version`, but did not check `lease_expires_at > now`. | A stalled worker whose lease had expired could still commit frames or overwrite connector status if no second worker had claimed the connector yet. | Added `Connector.lease_expires_at.is_not(None)` and `Connector.lease_expires_at > now` to `renew_lease` and to both the pre-check and SQL CAS `UPDATE` in `execute_claimed_poll` Phase 2 and `_record_failed_outcome`. | `test_phase5_scenarios_13_14_and_phase6_lease_expiry_and_data_outcomes` |
+| `R-02` | **P1** | `worker.py`, `connectors.py`, `ConnectorsPage.tsx` | `ConnectorRun.status` was `"succeeded"` for any non-exception poll even when all source records were protocol-rejected or batch-capped. | Operators had to inspect raw manifest counters to distinguish clean runs from rejected-only or batch-capped runs. | Added `data_outcome` (`"all_valid_accepted"`, `"partial_with_rejections"`, `"rejected_only"`, `"partial_batch_capped"`, `"no_data"`) to `run_manifest` and rendered `manifest-data-outcome` in `ConnectorsPage.tsx`. | `test_phase5_scenarios_13_14_and_phase6_lease_expiry_and_data_outcomes`, E2E Journey 32 |
+
+#### 4. 16-Scenario SSRF & Egress Policy Test Matrix (`backend/tests/telemetry/test_cp13_ssrf_and_egress.py`)
+| Scenario | Description | Result |
+| --- | --- | --- |
+| `S1` | Hostname resolves to public IP during registration/test, then rebinds to `127.0.0.1` before connect | **PASSED** (`PinnedEndpoint` + connect-time re-resolution blocks `127.0.0.1` with zero socket hits) |
+| `S2` | Hostname resolves to public IP during validation, then rebinds to `169.254.169.254` before connect | **PASSED** (blocked with `ssrf_blocked`, zero socket hits) |
+| `S3` | Multi-record DNS response containing one allowed IP and one prohibited IP (`127.0.0.1` / `169.254.169.254`) | **PASSED** (all A/AAAA records validated; mixed response rejected) |
+| `S4` | DNS rebinding across consecutive WITSML poll cycles (Poll 1 valid -> Poll 2 rebinds to `127.0.0.1`) | **PASSED** (Poll 2 blocked before socket connect; Poll 1 watermark preserved) |
+| `S5` | DNS rebinding across ETP Binary WebSocket reconnect cycles | **PASSED** (reconnect blocked before TCP handshake) |
+| `S6` | HTTP `301`/`302`/`307`/`308` redirects to `http://127.0.0.1` or `http://169.254.169.254` | **PASSED** (`follow_redirects=False` refuses all 3xx redirects without following) |
+| `S7` | Ordinary user-created connector attempting `127.0.0.1` while local harness runs on another port | **PASSED** (harness ports registered in `_HARNESS_OWNED_ENDPOINTS` work; non-harness loopback port blocked) |
+| `S8` | Literal loopback (`127.0.0.1`, `localhost`, `::1`) | **PASSED** (rejected with `ssrf_blocked`) |
+| `S9` | IPv4-mapped IPv6 (`::ffff:127.0.0.1`, `::ffff:169.254.169.254`, `::ffff:10.0.0.1`) & non-canonical IPv4 (`0177.0.0.1`, `2130706433`, `127.1`) | **PASSED** (unpacked/rejected fail-closed) |
+| `S10` | Link-local & cloud metadata (`169.254.169.254`, `fe80::1`, `100.100.100.200`) | **PASSED** (rejected even when hostname is on `allowed_hosts`) |
+| `S11` | Unapproved private RFC-1918 / CGNAT IP (`10.24.0.15`, `192.168.1.50`, `100.64.0.10`) | **PASSED** (rejected when CIDR not in policy) |
+| `S12` | Approved private rig-network CIDR (`10.24.0.0/16`) via admin `PUT /api/v1/connectors/egress-policy` | **PASSED** (`10.24.1.50` permitted and pinned; `10.25.1.50` still blocked; viewer `403`; audit log recorded) |
+| `S13` | URL-embedded credentials (`http://user:pass@host/...`) and disallowed schemes (`ftp://`, `file://`) | **PASSED** (rejected fail-closed) |
+| `S14` | TLS certificate & hostname verification (`sni_hostname`) when connecting via pinned IP | **PASSED** (valid SAN cert succeeds over pinned IP; wrong-hostname cert and untrusted self-signed cert fail TLS verification) |
+| `S15` | Slow/unresponsive DNS resolver timeout (`DNS_RESOLVE_TIMEOUT_SECONDS`) | **PASSED** (times out cleanly with `ssrf_blocked`) |
+| `S16` | Production environment (`DRILLAI_ENV=production`) harness and loopback rejection | **PASSED** (`/connectors/harness/ensure` and `/connectors/harness/configure` return `403` in production) |
+
+#### 5. 25-Scenario Independent ETP 1.2 Binary Avro Conformance Matrix (`backend/tests/telemetry/test_cp13_etp_binary_conformance.py`)
+| Scenario | Description | Result |
+| --- | --- | --- |
+| `1` | WebSocket `energistics-tp` subprotocol negotiation and binary frame mode | **PASSED** |
+| `2` | `RequestSession` -> `OpenSession` handshake with `clientInstanceId`/`sessionId` `Uuid` fixed(16), `requestedProtocols`, and `endpointCapabilities` | **PASSED** |
+| `3` | Protocol 0 `ProtocolException` during session negotiation (unsupported protocol/version) | **PASSED** |
+| `4` | Protocol 1 `StartStreaming` request and streaming flow-control startup | **PASSED** |
+| `5` | `ChannelMetadata` binary decoding (`uri`, `id`, `channelName`, `uom`, `dataKind`, `status`, `source`, `indexes`) | **PASSED** |
+| `6` |Multipart `ChannelMetadata` (`messageFlags = 0x01` part 1 + `0x02` final part 2) | **PASSED** |
+| `7` | `Acknowledge` (`Protocol 0, messageType 1001`) sent automatically when `messageFlags & 0x10` is set | **PASSED** |
+| `8` | `ChannelData` binary decoding with `double`, `float`, `long`, `int`, `string`, `boolean`, and `null` `DataValue` union branches | **PASSED** |
+| `9` | Multiple `DataItem` entries across multiple channels in a single binary `ChannelData` message | **PASSED** |
+| `10` | Dynamic `channelId` reassignment across reconnect (`1 -> 101`, `2 -> 202`) remapped by stable channel `uri` | **PASSED** |
+| `11` | Fast channel at `T3` + slow channel at `T1.5`/`T2.5` preserving independent per-channel watermarks (`channel_cursors`) | **PASSED** |
+| `12` | Out-of-order frames within a channel accepted and marked `is_out_of_order` without regressing channel watermark | **PASSED** |
+| `13` | Duplicate frame replay across reconnect deduplicated via `recent_point_ids` and `TelemetryService` | **PASSED** |
+| `14` | Explicit primary time index unit conversions (`s`, `ms`, `us`/`µs`, `ns`) from `IndexMetadataRecord.uom` | **PASSED** |
+| `15` | Secondary depth index (`MeasuredDepth` in `m` and `ft`) converted to canonical SI meters (`0.3048 m/ft`) on `SourceFrame.depth_md_si` | **PASSED** |
+| `16` | Depth-only primary index (`indexKind = MeasuredDepth`) rejected fail-closed (`rejected_unsupported_index`) | **PASSED** |
+| `17` | `NaN`, `+Inf`, `-Inf`, and boolean numeric telemetry values rejected (`rejected_non_finite_value`, `rejected_invalid_value`) | **PASSED** |
+| `18` | Unknown `channelId` not preceded by `ChannelMetadata` accounted in `rejected_unknown_channel` | **PASSED** |
+| `19` | Unmapped channels accounted in `unmapped_skipped` without aborting valid mapped channels | **PASSED** |
+| `20` | Protocol 1 `ProtocolException` mid-stream with both single `error` and `errors` map | **PASSED** |
+| `21` | `TruncateChannels` (`messageType 5`) handling and revision provenance (`conflict_policy="revise"`) | **PASSED** |
+| `22` | `StopStreaming` (`messageType 4`) + `CloseSession` (`Protocol 0, messageType 5`) clean shutdown | **PASSED** |
+| `23` | Oversized binary frame (`> max_frame_bytes`) rejected before memory exhaustion | **PASSED** |
+| `24` | Truncated/corrupt Avro binary payload and unexpected text WebSocket frame rejected cleanly | **PASSED** |
+| `25` | `max_points_per_poll` batch cap mid-frame preserves remaining items for next poll with `checkpoint_status="partial"` | **PASSED** |
+
+#### 6. 14-Scenario WITSML 1.4.1.1 Conformance & Worker Concurrency Verification (`backend/tests/telemetry/test_cp13_witsml_and_worker_races.py`)
+* **WITSML 1.4.1.1 Scenarios 1–14:** Verified `WMLS_GetVersion` -> `WMLS_GetCap` -> `WMLS_GetFromStore`, `Result=1` vs `Result=2` multi-page continuation, inclusive `<startDateTimeIndex>` deduplication (`completed_at_cursor`), mid-row and mid-page `max_points_per_poll` truncation (`has_more_deferred=True`), sparse/empty mnemonic cells, bad/missing quality codes, `ft -> m` secondary depth conversion (`1000 ft -> 304.8 m`), SOAP `Fault` handling, `Result <= 0` handling, non-200 HTTP status handling, full-payload XXE/DTD/entity/oversized XML rejection, DB commit failure preserving prior cursor, and worker crash/restart resuming from committed cursor.
+* **PostgreSQL Concurrent SQL CAS Race Suite (`test_phase6_postgres_concurrent_sql_cas_races`):** Verified on embedded PostgreSQL (`DRILLAI_TEST_POSTGRES=1`) that concurrent `update` vs `update` returns one success and one `409 Conflict`, config `update` mid-poll fences Phase 2 commit (`status="fenced"`), concurrent `start` vs `stop` resolves deterministically via SQL CAS, `disable` mid-poll cancels the active poll via `_heartbeat_watcher`, and expired lease (`lease_expires_at <= now`) blocks Phase 2 commit (`status="fenced"`).
+* **Multi-Connector Concurrent Soak (`test_phase9_concurrent_multi_connector_soak`):** Executed 4 connectors concurrently (`witsml.1.4.1.1.soap_http`, `etp.1.2.binary_ws`, failing endpoint, and empty/no-data WITSML store) across 8 worker cycles — verifying 0 duplicate points, independent backoff on the failing connector, `data_outcome="no_data"` on the empty store, and bounded run ledger pruning (`retention_limit=5`).
+
+#### 7. Exact Verification Commands & Outputs Executed
+* `DRILLAI_TEST_POSTGRES=1 backend/.venv/bin/pytest backend/tests/ -o addopts=""`: **1,031 passed, 0 failed, 0 skipped** in `1229.23s` (including all 5 `@pytest.mark.postgres` persistence, migration, competing-worker fencing, and concurrent SQL CAS race tests).
+* `backend/.venv/bin/ruff check backend/`: **passed** (`All checks passed!`).
+* `cd backend && DRILLAI_DATABASE_URL="sqlite+aiosqlite:////tmp/cp13_mig.db" .venv/bin/alembic upgrade head && DRILLAI_DATABASE_URL="sqlite+aiosqlite:////tmp/cp13_mig.db" .venv/bin/alembic check`: **passed** (`No new upgrade operations detected`).
+* `backend/.venv/bin/python scripts/verify_stack.py`: **passed** (`STACK_VERIFICATION_OK: migrations, backend, connector-worker, WITSML SOAP & ETP Binary Avro ingest, restart, and stop verified. Completed in 13.36s`).
+* `cd frontend && npm run lint`: **passed** (`eslint .`, 0 errors, 0 warnings).
+* `cd frontend && npm run typecheck`: **passed** (`tsc -b --noEmit`, 0 errors).
+* `cd frontend && npm test`: **29 test files passed, 308 tests passed, 0 failed, 0 skipped** (`38.32s`).
+* `cd frontend && npm run build`: **passed** (`tsc -b && vite build`, `286 modules transformed`, `built in 3.87s`).
+* `cd frontend && npm run e2e`: **115 passed (4.8m), 0 failed, 0 skipped** across **17 spec files** (`chromium`, `chromium-faults`, `chromium-auth`), including **38 real-stack connector journeys** in `frontend/e2e/connectors-platform.spec.ts`.
+
+#### 8. Remaining Known Limitations
+* **External Commercial Vendor Verification (`external_vendor_verified: false`):** Both `witsml.1.4.1.1.soap_http` and `etp.1.2.binary_ws` are verified against independent spec-derived conformance suites and local TCP/HTTP/WebSocket harness servers (`LocalWitsmlSoapServer`, `LocalEtpBinaryWebSocketServer`), not against a live third-party commercial rig store (Kongsberg, Pason, Halliburton, SLB) in CI.
+* **ETP 1.2 Protocol Scope:** `etp.1.2.binary_ws` implements ETP v1.2 Protocol 0 (`Core`) and Protocol 1 (`ChannelStreaming` consumer). ETP Protocol 3 (`Discovery`), Protocol 4 (`Store`), Protocol 21 (`ChannelSubscribe`), and WebSocket `permessage-deflate` / Avro body compression remain out of scope and are explicitly listed in `PROTOCOL_PROFILE_SPECS["etp.1.2.binary_ws"].limitations`.
+
+#### 9. Git Checkpoint Publish Ledger (`arena/01a0dca0-drillai`)
+| Checkpoint | Commit SHA | Summary | Remote `git ls-remote` Verified |
+| --- | --- | --- | --- |
+| **Gate 0 (CP12-E / CP12-F)** | `1c0a0e9009bd50b305541871a3854d0ca97d6de3` | CP12 release closure + green GitHub Actions Run `38126773185` | **Yes** |
+| **CP13-A** | `cb540a1dac815212ba5a2d219ccf38081fe54035` | P0 connection-bound SSRF socket pinning (`PinnedEndpoint`), explicit private rig-network CIDR policy & harness loopback isolation | **Yes** |
+| **CP13-B** | `0e1484061bd1022059ecca4d69acb8346ce1ea12` | Production ETP 1.2 Binary Avro profile (`etp.1.2.binary_ws`) & 25-scenario independent binary conformance suite | **Yes** |
+| **CP13-C** | `5bca041` | 14-scenario WITSML 1.4.1.1 regression, worker lease expiry fencing (`R-01`), run `data_outcome` (`R-02`), PostgreSQL concurrent SQL CAS races & 4-connector soak | **Yes** |
+| **CP13-D** | `22db9c0d6f2c34b62ef3779311b5373ce3185c66` | 10-stage connection-test milestones, operator capability honesty UI, private rig-network egress UI & multi-protocol `verify_stack.py` | **Yes** |
+| **CP13-E** | `e47e08998eacfd65905130b29295869a9d229eb4` | 12 new real-stack Playwright E2E journeys for CP13 (38 total in `connectors-platform.spec.ts`) | **Yes** |
+| **CP13-F** | Published `HEAD` on `arena/01a0dca0-drillai` | Full-repo verification (`1,031` backend pytest + `308` Vitest + `115` Playwright E2E), initial `start` fencing compatibility & CP13 documentation/certification report | **Yes** |

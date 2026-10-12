@@ -94,20 +94,25 @@ unit in the header and another in a table.
 
 - **Live Operational Monitor (`/wells/:wellId?tab=live`)**: Consumes `/api/v1/wells/{well_id}/live/stream`
   over WebSocket with automatic polling fallback, displaying real-time channel cards, alert rule
-  evaluation, acknowledgement/resolution audit flows, and per-well connector health badges.
+  evaluation, acknowledgement/resolution audit flows, and per-well connector health badges (including
+  honest source-profile badges distinguishing production ETP 1.2 Binary Avro, WITSML 1.4.1.1 SOAP,
+  internal-test ETP JSON, and Synthetic sources).
 - **Telemetry Connectors & Recovery Workbench (`/connectors`)**: Allows operators and engineers to
   register, test, preview, start, stop, restart, disable, poll, and replay WITSML 1.4.1.1 SOAP
-  (`witsml.1.4.1.1.soap_http`), ETP 1.2 WebSocket (`etp.1.2.json_ws`), and Synthetic (`synthetic.v1`)
-  connectors, inspect per-run data disposition & checkpoint manifests (`ConnectorRun.details.manifest`),
-  review structured failure remediation guidance, and execute governed idempotent replays (`dry_run`
-  preview vs live backfill).
+  (`witsml.1.4.1.1.soap_http`), production ETP 1.2 Binary Avro (`etp.1.2.binary_ws`), internal test
+  ETP 1.2 JSON (`etp.1.2.json_ws`), and Synthetic (`synthetic.v1`) connectors, inspect 10-stage
+  connection-test milestones (`connection-test-milestones`), inspect per-run data disposition &
+  checkpoint manifests (`ConnectorRun.details.manifest` including `data_outcome` and per-channel
+  `channel_cursors`), review structured failure remediation guidance, execute governed idempotent
+  replays (`dry_run` preview vs live backfill), and manage approved private rig-network CIDRs &
+  hostnames (`egress-policy-card`, admin `L4`).
 
 ## Known limitations
 
 - **External commercial WITSML/ETP vendor certification**: `witsml.1.4.1.1.soap_http` and
-  `etp.1.2.json_ws` are verified against independent spec-derived conformance suites and local TCP
-  protocol harness servers (`LocalWitsmlSoapServer`, `LocalEtpWebSocketServer`), not against a live
-  third-party commercial rig server in CI (`external_vendor_verified: false`).
+  `etp.1.2.binary_ws` are verified against independent spec-derived conformance suites and local TCP
+  protocol harness servers (`LocalWitsmlSoapServer`, `LocalEtpBinaryWebSocketServer`), not against a
+  live third-party commercial rig server in CI (`external_vendor_verified: false`).
 - Integration adapters for outbound messaging (Telegram/WhatsApp/email) and pgvector-backed
   retrieval remain configuration-shaped boundaries.
 - The end-to-end suite runs Chromium across three deployments (`chromium`, `chromium-faults`,
