@@ -95,6 +95,7 @@ __all__ = [
     "connector_run_out",
     "enforce_connect_time_ssrf",
     "enforce_connect_time_ssrf_async",
+    "get_dns_executor_stats",
     "get_egress_policy",
     "is_harness_endpoint",
     "mask_secret_refs",
@@ -102,6 +103,7 @@ __all__ = [
     "parse_private_cidr_list",
     "redact_sensitive_text",
     "register_harness_endpoint",
+    "reset_dns_executor_state",
     "reset_egress_policy",
     "resolve_and_pin_endpoint",
     "resolve_and_pin_endpoint_async",
@@ -2141,8 +2143,175 @@ _NAT64_WELL_KNOWN_PREFIX = ipaddress.IPv6Network("64:ff9b::/96")
 
 DEFAULT_DNS_TIMEOUT_SECONDS: float = 3.0
 _DNS_MAX_CONCURRENCY: int = 8
-_DNS_EXECUTOR = concurrent.futures.ThreadPoolExecutor(max_workers=4, thread_name_prefix="drillai-dns")
+_DNS_EXECUTOR_WORKERS: int = 4
+_DNS_MAX_QUARANTINED_THREADS: int = 16
+_DNS_STATE_LOCK = threading.Lock()
+_dns_generation: int = 0
+_dns_active_in_gen: int = 0
+_dns_timed_out_in_gen: int = 0
+_dns_quarantined_threads: int = 0
+_DNS_EXECUTOR = concurrent.futures.ThreadPoolExecutor(
+    max_workers=_DNS_EXECUTOR_WORKERS,
+    thread_name_prefix="drillai-dns-g0",
+)
 _DNS_SEMAPHORE = threading.BoundedSemaphore(_DNS_MAX_CONCURRENCY)
+
+
+class _DnsPermitGuard:
+    """Thread-safe exact-once semaphore permit release guard."""
+
+    __slots__ = ("_lock", "_released", "_sem")
+
+    def __init__(self, semaphore: threading.BoundedSemaphore) -> None:
+        self._sem = semaphore
+        self._lock = threading.Lock()
+        self._released = False
+
+    @property
+    def released(self) -> bool:
+        with self._lock:
+            return self._released
+
+    def release_once(self) -> bool:
+        with self._lock:
+            if self._released:
+                return False
+            self._released = True
+        self._sem.release()
+        return True
+
+
+def _rotate_dns_executor_locked() -> None:
+    """Replace the current DNS ThreadPoolExecutor generation when worker slots are saturated by timed-out threads."""
+    global _DNS_EXECUTOR, _dns_generation, _dns_active_in_gen, _dns_timed_out_in_gen
+    old_executor = _DNS_EXECUTOR
+    _dns_generation += 1
+    _dns_active_in_gen = 0
+    _dns_timed_out_in_gen = 0
+    _DNS_EXECUTOR = concurrent.futures.ThreadPoolExecutor(
+        max_workers=_DNS_EXECUTOR_WORKERS,
+        thread_name_prefix=f"drillai-dns-g{_dns_generation}",
+    )
+    try:
+        old_executor.shutdown(wait=False, cancel_futures=True)
+    except Exception:
+        pass
+
+
+def get_dns_executor_stats() -> dict[str, int]:
+    """Return deterministic diagnostics for the bounded DNS resolver pool and permit semaphore."""
+    with _DNS_STATE_LOCK:
+        avail = int(getattr(_DNS_SEMAPHORE, "_value", 0))
+        return {
+            "max_concurrency": _DNS_MAX_CONCURRENCY,
+            "executor_workers": _DNS_EXECUTOR_WORKERS,
+            "available_permits": avail,
+            "in_flight_permits": max(0, _DNS_MAX_CONCURRENCY - avail),
+            "executor_generation": _dns_generation,
+            "active_in_generation": _dns_active_in_gen,
+            "timed_out_in_generation": _dns_timed_out_in_gen,
+            "quarantined_threads": _dns_quarantined_threads,
+            "max_quarantined_threads": _DNS_MAX_QUARANTINED_THREADS,
+        }
+
+
+def reset_dns_executor_state() -> None:
+    """Reset the DNS executor generation and semaphore state for isolated test teardown."""
+    global _DNS_SEMAPHORE, _dns_active_in_gen, _dns_timed_out_in_gen, _dns_quarantined_threads
+    with _DNS_STATE_LOCK:
+        _rotate_dns_executor_locked()
+        _dns_active_in_gen = 0
+        _dns_timed_out_in_gen = 0
+        _dns_quarantined_threads = 0
+        _DNS_SEMAPHORE = threading.BoundedSemaphore(_DNS_MAX_CONCURRENCY)
+
+
+def _submit_dns_lookup_task(
+    hostname: str,
+    effective_port: int,
+    active_resolver: Callable[[str, int], Sequence[str]] | None,
+    guard: _DnsPermitGuard,
+) -> tuple[concurrent.futures.Future[list[str]], dict[str, Any]]:
+    """Submit a bounded DNS lookup to the active executor generation with exact-once permit protection."""
+    global _dns_active_in_gen, _dns_timed_out_in_gen, _dns_quarantined_threads
+    with _DNS_STATE_LOCK:
+        if (
+            _dns_timed_out_in_gen >= _DNS_EXECUTOR_WORKERS
+            and _dns_quarantined_threads >= _DNS_MAX_QUARANTINED_THREADS
+        ):
+            guard.release_once()
+            raise ValidationFailed(
+                f"DNS resolution timed out for {hostname!r} (quarantined resolver thread cap reached)",
+                details={"field": "endpoint_url", "host": hostname, "reason": "timeout"},
+            )
+        if (
+            _dns_timed_out_in_gen >= _DNS_EXECUTOR_WORKERS
+            and _dns_quarantined_threads < _DNS_MAX_QUARANTINED_THREADS
+        ):
+            _rotate_dns_executor_locked()
+        task_state: dict[str, Any] = {
+            "gen": _dns_generation,
+            "started": False,
+            "finished": False,
+            "aborted": False,
+            "timed_out": False,
+        }
+        executor = _DNS_EXECUTOR
+
+    def _worker_fn() -> list[str]:
+        global _dns_active_in_gen, _dns_timed_out_in_gen, _dns_quarantined_threads
+        with _DNS_STATE_LOCK:
+            if task_state["aborted"]:
+                task_state["finished"] = True
+                guard.release_once()
+                return []
+            task_state["started"] = True
+            if task_state["gen"] == _dns_generation:
+                _dns_active_in_gen += 1
+        try:
+            return _execute_dns_lookup_raw(hostname, effective_port, active_resolver)
+        finally:
+            guard.release_once()
+            with _DNS_STATE_LOCK:
+                task_state["finished"] = True
+                if task_state["started"]:
+                    if task_state["gen"] == _dns_generation:
+                        _dns_active_in_gen = max(0, _dns_active_in_gen - 1)
+                        if task_state["timed_out"]:
+                            _dns_timed_out_in_gen = max(0, _dns_timed_out_in_gen - 1)
+                    if task_state["timed_out"]:
+                        _dns_quarantined_threads = max(0, _dns_quarantined_threads - 1)
+
+    try:
+        fut = executor.submit(_worker_fn)
+        fut.add_done_callback(lambda _f: guard.release_once())
+        return fut, task_state
+    except BaseException:
+        guard.release_once()
+        raise
+
+
+def _handle_dns_future_abort(
+    fut: concurrent.futures.Future[list[str]],
+    task_state: dict[str, Any],
+    guard: _DnsPermitGuard,
+) -> None:
+    """Cancel a queued DNS future or quarantine a running timed-out thread and release the caller's permit exact-once."""
+    global _dns_timed_out_in_gen, _dns_quarantined_threads
+    fut.cancel()
+    guard.release_once()
+    with _DNS_STATE_LOCK:
+        task_state["aborted"] = True
+        if task_state["started"] and not task_state["finished"] and not task_state["timed_out"]:
+            task_state["timed_out"] = True
+            _dns_quarantined_threads += 1
+            if task_state["gen"] == _dns_generation:
+                _dns_timed_out_in_gen += 1
+                if (
+                    (_dns_timed_out_in_gen >= _DNS_EXECUTOR_WORKERS or _dns_active_in_gen >= _DNS_EXECUTOR_WORKERS)
+                    and _dns_quarantined_threads <= _DNS_MAX_QUARANTINED_THREADS
+                ):
+                    _rotate_dns_executor_locked()
 
 
 def _unpack_embedded_ip(
@@ -2411,34 +2580,54 @@ def resolve_and_pin_endpoint(
                     f"DNS resolution timed out for {hostname!r} (resolver concurrency limit reached)",
                     details={"field": "endpoint_url", "host": hostname, "reason": "timeout"},
                 ) from None
+            guard = _DnsPermitGuard(_DNS_SEMAPHORE)
+            try:
+                fut, task_state = _submit_dns_lookup_task(
+                    hostname,
+                    effective_port,
+                    active_resolver,
+                    guard,
+                )
+            except ValidationFailed:
+                guard.release_once()
+                raise
+            except Exception as exc:
+                guard.release_once()
+                raise ValidationFailed(
+                    f"endpoint_url host {hostname!r} could not be resolved: {exc}",
+                    details={"field": "endpoint_url", "host": hostname, "reason": "dns_failure"},
+                ) from exc
 
-            def _bounded_task() -> list[str]:
-                try:
-                    return _execute_dns_lookup_raw(hostname, effective_port, active_resolver)
-                finally:
-                    _DNS_SEMAPHORE.release()
-
-            fut = _DNS_EXECUTOR.submit(_bounded_task)
             try:
                 resolved_strs = fut.result(timeout=bounded_dns_timeout)
-            except (TimeoutError, concurrent.futures.TimeoutError) as exc:
-                fut.cancel()
+            except (
+                TimeoutError,
+                concurrent.futures.TimeoutError,
+                concurrent.futures.CancelledError,
+            ) as exc:
+                _handle_dns_future_abort(fut, task_state, guard)
                 raise ValidationFailed(
                     f"DNS resolution timed out for {hostname!r} after {bounded_dns_timeout:.2f}s",
                     details={"field": "endpoint_url", "host": hostname, "reason": "timeout"},
                 ) from exc
             except socket.gaierror as exc:
+                guard.release_once()
                 if require_dns_resolution or active_resolver is not None:
                     raise ValidationFailed(
                         f"endpoint_url host {hostname!r} could not be resolved",
                         details={"field": "endpoint_url", "host": hostname, "reason": "dns_failure"},
                     ) from exc
                 resolved_strs = []
-            except Exception as exc:
-                raise ValidationFailed(
-                    f"endpoint_url host {hostname!r} could not be resolved: {exc}",
-                    details={"field": "endpoint_url", "host": hostname, "reason": "dns_failure"},
-                ) from exc
+            except BaseException as exc:
+                _handle_dns_future_abort(fut, task_state, guard)
+                if isinstance(exc, Exception):
+                    raise ValidationFailed(
+                        f"endpoint_url host {hostname!r} could not be resolved: {exc}",
+                        details={"field": "endpoint_url", "host": hostname, "reason": "dns_failure"},
+                    ) from exc
+                raise
+            finally:
+                guard.release_once()
 
             primary_ips, candidate_ips = _parse_and_expand_resolved_ips(
                 hostname,
@@ -2448,21 +2637,24 @@ def resolve_and_pin_endpoint(
         else:
             # Best-effort non-blocking check when require_dns_resolution=False and no custom resolver is active
             if _DNS_SEMAPHORE.acquire(timeout=0.2):
-                def _best_effort_task() -> list[str]:
-                    try:
-                        return _execute_dns_lookup_raw(hostname, effective_port, None)
-                    finally:
-                        _DNS_SEMAPHORE.release()
-
-                fut_be = _DNS_EXECUTOR.submit(_best_effort_task)
+                guard_be = _DnsPermitGuard(_DNS_SEMAPHORE)
                 try:
+                    fut_be, task_state_be = _submit_dns_lookup_task(
+                        hostname,
+                        effective_port,
+                        None,
+                        guard_be,
+                    )
                     resolved_be = fut_be.result(timeout=min(bounded_dns_timeout, 1.0))
                     primary_ips, candidate_ips = _parse_and_expand_resolved_ips(
                         hostname, resolved_be, require_dns_resolution=False
                     )
-                except Exception:
-                    fut_be.cancel()
+                except BaseException:
+                    if "fut_be" in locals() and "task_state_be" in locals():
+                        _handle_dns_future_abort(fut_be, task_state_be, guard_be)
                     primary_ips, candidate_ips = [], []
+                finally:
+                    guard_be.release_once()
 
     if require_dns_resolution and not primary_ips:
         raise ValidationFailed(
@@ -2596,35 +2788,60 @@ async def resolve_and_pin_endpoint_async(
                     f"DNS resolution timed out for {hostname!r} (resolver concurrency limit reached)",
                     details={"field": "endpoint_url", "host": hostname, "reason": "timeout"},
                 )
+            guard = _DnsPermitGuard(_DNS_SEMAPHORE)
+            try:
+                fut, task_state = _submit_dns_lookup_task(
+                    hostname,
+                    effective_port,
+                    active_resolver,
+                    guard,
+                )
+            except ValidationFailed:
+                guard.release_once()
+                raise
+            except Exception as exc:
+                guard.release_once()
+                raise ValidationFailed(
+                    f"endpoint_url host {hostname!r} could not be resolved: {exc}",
+                    details={"field": "endpoint_url", "host": hostname, "reason": "dns_failure"},
+                ) from exc
 
-            def _async_dns_worker() -> list[str]:
-                try:
-                    return _execute_dns_lookup_raw(hostname, effective_port, active_resolver)
-                finally:
-                    _DNS_SEMAPHORE.release()
-
-            fut = _DNS_EXECUTOR.submit(_async_dns_worker)
             try:
                 resolved_strs = await asyncio.wait_for(
                     asyncio.wrap_future(fut),
                     timeout=bounded_dns_timeout,
                 )
             except (TimeoutError, concurrent.futures.TimeoutError) as exc:
-                fut.cancel()
+                _handle_dns_future_abort(fut, task_state, guard)
+                raise ValidationFailed(
+                    f"DNS resolution timed out for {hostname!r} after {bounded_dns_timeout:.2f}s",
+                    details={"field": "endpoint_url", "host": hostname, "reason": "timeout"},
+                ) from exc
+            except (asyncio.CancelledError, concurrent.futures.CancelledError) as exc:
+                _handle_dns_future_abort(fut, task_state, guard)
+                cur_task = asyncio.current_task()
+                if cur_task is not None and cur_task.cancelling() > 0:
+                    raise
                 raise ValidationFailed(
                     f"DNS resolution timed out for {hostname!r} after {bounded_dns_timeout:.2f}s",
                     details={"field": "endpoint_url", "host": hostname, "reason": "timeout"},
                 ) from exc
             except socket.gaierror as exc:
+                guard.release_once()
                 raise ValidationFailed(
                     f"endpoint_url host {hostname!r} could not be resolved",
                     details={"field": "endpoint_url", "host": hostname, "reason": "dns_failure"},
                 ) from exc
-            except Exception as exc:
-                raise ValidationFailed(
-                    f"endpoint_url host {hostname!r} could not be resolved: {exc}",
-                    details={"field": "endpoint_url", "host": hostname, "reason": "dns_failure"},
-                ) from exc
+            except BaseException as exc:
+                _handle_dns_future_abort(fut, task_state, guard)
+                if isinstance(exc, Exception):
+                    raise ValidationFailed(
+                        f"endpoint_url host {hostname!r} could not be resolved: {exc}",
+                        details={"field": "endpoint_url", "host": hostname, "reason": "dns_failure"},
+                    ) from exc
+                raise
+            finally:
+                guard.release_once()
 
             return resolve_and_pin_endpoint(
                 endpoint_url,
