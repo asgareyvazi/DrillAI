@@ -55,6 +55,10 @@ async def _run_verification() -> int:
         etp_bin_server = LocalEtpBinaryWebSocketServer(
             expected_bearer_token="StackEtpBinaryBearerToken99!",
         )
+        policy_witsml_server = LocalWitsmlSoapServer(
+            expected_username="stack_user",
+            expected_password="StackSecretPass99!",
+        )
 
         api_proc: subprocess.Popen[bytes] | None = None
         worker_proc: subprocess.Popen[bytes] | None = None
@@ -62,6 +66,7 @@ async def _run_verification() -> int:
         try:
             await witsml_server.start()
             await etp_bin_server.start()
+            await policy_witsml_server.start()
 
             env = os.environ.copy()
             env.update(
@@ -216,6 +221,55 @@ async def _run_verification() -> int:
                         json={"reason": "stack verification start"},
                     )
 
+                # Verify non-harness loopback port is blocked when DRILLAI_CONNECTOR_ALLOW_LOOPBACK=false
+                blocked_resp = await client.post(
+                    "/api/v1/connectors",
+                    headers=headers,
+                    json={
+                        "key": "stack-unapproved-loopback",
+                        "name": "Unapproved Loopback Port",
+                        "protocol_profile": "witsml.1.4.1.1.soap_http",
+                        "well_id": well["id"],
+                        "endpoint_url": policy_witsml_server.endpoint_url,
+                        "config": {
+                            "auth_mode": "basic",
+                            "poll_interval_seconds": 0.25,
+                            "channel_mappings": [
+                                {
+                                    "source_mnemonic": "SPP",
+                                    "channel_key": "spp",
+                                    "name": "Standpipe Pressure",
+                                    "dimension": "pressure",
+                                    "unit": "psi",
+                                }
+                            ],
+                        },
+                        "secret_refs": {
+                            "username": "env:DRILLAI_SECRET_STACK_WITSML_USER",
+                            "password": "env:DRILLAI_SECRET_STACK_WITSML_PASS",
+                        },
+                    },
+                )
+                assert blocked_resp.status_code == 422, (
+                    f"Expected 422 ssrf_blocked for unapproved loopback port, got {blocked_resp.status_code}"
+                )
+
+                # Update durable egress policy to revision 2 before worker starts polling
+                pol_init = (await client.get("/api/v1/connectors/egress-policy", headers=headers)).json()
+                assert pol_init["revision"] == 1
+                pol_upd = await client.put(
+                    "/api/v1/connectors/egress-policy",
+                    headers={**headers, "Idempotency-Key": "stack-verify-policy-r2"},
+                    json={
+                        "allowed_hosts": ["witsml.rig-gateway.example.com"],
+                        "allowed_private_cidrs": ["10.24.0.0/16"],
+                        "expected_revision": 1,
+                        "reason": "Stack verification durable egress policy revision 2",
+                    },
+                )
+                assert pol_upd.status_code == 200
+                assert pol_upd.json()["revision"] == 2
+
                 # 3. Start dedicated standalone connector-worker process
                 worker_proc = subprocess.Popen(
                     [python_bin, "-m", "drillai.telemetry.worker"],
@@ -225,7 +279,7 @@ async def _run_verification() -> int:
                     stderr=subprocess.DEVNULL,
                 )
 
-                # Wait for worker to claim BOTH connectors and ingest telemetry
+                # Wait for worker to claim BOTH connectors, sync policy revision 2, and ingest telemetry
                 both_live = False
                 for _ in range(50):
                     info_w = (await client.get(f"/api/v1/connectors/{cid_witsml}", headers=headers)).json()
@@ -233,15 +287,17 @@ async def _run_verification() -> int:
                     if (
                         info_w["status"] == "running"
                         and info_w["health"]["is_live"] is True
+                        and info_w.get("worker", {}).get("last_policy_revision") == 2
                         and info_e["status"] == "running"
                         and info_e["health"]["is_live"] is True
+                        and info_e.get("worker", {}).get("last_policy_revision") == 2
                     ):
                         both_live = True
                         break
                     await asyncio.sleep(0.25)
                 if not both_live:
                     raise RuntimeError(
-                        "Standalone connector-worker did not transition both WITSML and ETP binary connectors to live"
+                        "Standalone connector-worker did not transition both WITSML and ETP binary connectors to live with policy_revision=2"
                     )
 
                 # 4. Restart worker process and verify lease recovery
@@ -271,8 +327,47 @@ async def _run_verification() -> int:
                     assert stop_res.json()["status"] == "stopped"
                     assert stop_res.json()["desired_state"] == "stopped"
 
+            # 5. Restart backend API process and verify egress policy revision 2 persists in DB
+            api_proc.terminate()
+            try:
+                api_proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                api_proc.kill()
+                api_proc.wait(timeout=5)
+            api_proc = subprocess.Popen(
+                [
+                    python_bin,
+                    "-m",
+                    "uvicorn",
+                    "drillai.api.app:create_app",
+                    "--factory",
+                    "--host",
+                    "127.0.0.1",
+                    "--port",
+                    str(api_port),
+                ],
+                cwd=str(BACKEND_DIR),
+                env=env,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            async with httpx.AsyncClient(base_url=base_url, timeout=5.0) as client2:
+                for _ in range(40):
+                    try:
+                        resp2 = await client2.get("/api/v1/health/ready", headers=headers)
+                        if resp2.status_code == 200:
+                            break
+                    except Exception:
+                        pass
+                    await asyncio.sleep(0.2)
+                pol_after_restart = (
+                    await client2.get("/api/v1/connectors/egress-policy", headers=headers)
+                ).json()
+                assert pol_after_restart["revision"] == 2
+                assert pol_after_restart["allowed_hosts"] == ["witsml.rig-gateway.example.com"]
+
             print(
-                "STACK_VERIFICATION_OK: migrations, backend, connector-worker, WITSML SOAP & ETP Binary Avro ingest, restart, and stop verified."
+                "STACK_VERIFICATION_OK: migrations, backend, connector-worker, durable egress policy sync, WITSML SOAP & ETP Binary Avro ingest, restart, and stop verified."
             )
             return 0
         finally:
@@ -292,6 +387,7 @@ async def _run_verification() -> int:
                     api_proc.wait(timeout=5)
             await witsml_server.stop()
             await etp_bin_server.stop()
+            await policy_witsml_server.stop()
 
 
 if __name__ == "__main__":

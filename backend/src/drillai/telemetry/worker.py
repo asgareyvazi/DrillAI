@@ -403,7 +403,9 @@ class ConnectorWorker:
                 with contextlib.suppress(Exception):
                     await adapter.close()
                 if lost_lease:
-                    return self._record_fenced_outcome(claimed, t0)
+                    return await self._record_fenced_outcome(
+                        claimed, t0, started=started, trace_id=trace_id
+                    )
                 raise
             finally:
                 hb_task.cancel()
@@ -413,7 +415,9 @@ class ConnectorWorker:
             if lost_lease:
                 with contextlib.suppress(Exception):
                     await adapter.close()
-                return self._record_fenced_outcome(claimed, t0)
+                return await self._record_fenced_outcome(
+                    claimed, t0, started=started, trace_id=trace_id
+                )
 
             if self._before_commit_hook is not None:
                 await self._before_commit_hook(claimed)
@@ -440,7 +444,9 @@ class ConnectorWorker:
                 ):
                     await adapter.close()
                     await session.rollback()
-                    return self._record_fenced_outcome(claimed, t0)
+                    return await self._record_fenced_outcome(
+                        claimed, t0, started=started, trace_id=trace_id
+                    )
 
                 telemetry_svc = TelemetryService(session, claimed.org_id)
                 ingest_report = await ingest_frames(
@@ -572,7 +578,9 @@ class ConnectorWorker:
                 )
                 if (fenced_update.rowcount or 0) != 1:
                     await session.rollback()
-                    return self._record_fenced_outcome(claimed, t0)
+                    return await self._record_fenced_outcome(
+                        claimed, t0, started=started, trace_id=trace_id
+                    )
 
                 run_row = ConnectorRun(
                     id=new_id("crn"),
@@ -679,8 +687,17 @@ class ConnectorWorker:
         finally:
             self._active_connectors.discard(claimed.connector_id)
 
-    def _record_fenced_outcome(self, claimed: ClaimedConnector, t0: float) -> PollCycleOutcome:
+    async def _record_fenced_outcome(
+        self,
+        claimed: ClaimedConnector,
+        t0: float,
+        *,
+        started: dt.datetime | None = None,
+        trace_id: str | None = None,
+    ) -> PollCycleOutcome:
+        finished = utc_now()
         duration_ms = round((time.perf_counter() - t0) * 1000.0, 2)
+        error_msg = "worker lease was preempted by a newer fencing token; checkpoint update aborted"
         metrics = get_metrics()
         metrics.counter("drillai.connector.polls_total", "total connector poll cycles").inc(
             1, protocol_profile=claimed.protocol_profile, status="fenced"
@@ -696,6 +713,36 @@ class ConnectorWorker:
                 "fencing_token": claimed.fencing_token,
             },
         )
+        with contextlib.suppress(Exception):
+            async with self.database.session() as fenced_session:
+                run_row = ConnectorRun(
+                    id=new_id("crn"),
+                    org_id=claimed.org_id,
+                    connector_id=claimed.connector_id,
+                    well_id=claimed.well_id,
+                    worker_id=self.worker_id,
+                    fencing_token=claimed.fencing_token,
+                    config_version=claimed.config_version,
+                    run_kind="poll",
+                    status="fenced",
+                    started_at=started or finished,
+                    finished_at=finished,
+                    duration_ms=duration_ms,
+                    cursor_before=claimed.cursor_before,
+                    cursor_after=claimed.cursor_before,
+                    error_category="lease_fenced",
+                    error_message=error_msg,
+                    trace_id=trace_id or new_id("trc"),
+                    details={
+                        "checkpoint_status": "fenced",
+                        "policy_revision": self.last_policy_revision,
+                    },
+                )
+                fenced_session.add(run_row)
+                await fenced_session.flush()
+                await self._prune_runs(fenced_session, claimed.connector_id)
+                await fenced_session.commit()
+
         return PollCycleOutcome(
             connector_id=claimed.connector_id,
             protocol_profile=claimed.protocol_profile,
@@ -704,7 +751,7 @@ class ConnectorWorker:
             cursor_before=claimed.cursor_before,
             cursor_after=claimed.cursor_before,
             error_category="lease_fenced",
-            error_message="worker lease was preempted by a newer fencing token; checkpoint update aborted",
+            error_message=error_msg,
             duration_ms=duration_ms,
         )
 
@@ -740,7 +787,9 @@ class ConnectorWorker:
                 or row_lease_exp <= finished
             ):
                 await err_session.rollback()
-                return self._record_fenced_outcome(claimed, t0)
+                return await self._record_fenced_outcome(
+                    claimed, t0, started=started, trace_id=trace_id
+                )
 
             cfg = dict(row.config or {})
             max_failures = int(cfg.get("max_consecutive_failures", 5))
@@ -795,7 +844,9 @@ class ConnectorWorker:
             )
             if (fenced_err_update.rowcount or 0) != 1:
                 await err_session.rollback()
-                return self._record_fenced_outcome(claimed, t0)
+                return await self._record_fenced_outcome(
+                    claimed, t0, started=started, trace_id=trace_id
+                )
 
             run_row = ConnectorRun(
                 id=new_id("crn"),
