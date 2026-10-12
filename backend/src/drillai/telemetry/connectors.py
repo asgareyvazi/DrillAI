@@ -131,11 +131,23 @@ SYSTEM_EGRESS_POLICY_KEY = "global"
 SYSTEM_EGRESS_POLICY_SCOPE = "system"
 SYSTEM_EGRESS_POLICY_ORG_ID = "__system__"
 
+EGRESS_POLICY_STATES: tuple[str, ...] = (
+    "active",
+    "transient_store_error",
+    "corrupt_policy_record",
+    "inactive_policy",
+    "missing_policy_record",
+    "forced_test_failure",
+)
+
 _custom_dns_resolver: Callable[[str, int], Sequence[str]] | None = None
 _HARNESS_OWNED_ENDPOINTS: set[tuple[str, int]] = set()
 _active_egress_policy_snapshot: dict[str, Any] | None = None
+_egress_policy_state: str = "active"
 _egress_policy_store_failed: bool = False
 _egress_policy_store_error: str | None = None
+_egress_policy_recovered_at: str | None = None
+_ever_synced_database_policy: bool = False
 
 
 def set_custom_dns_resolver(
@@ -151,9 +163,14 @@ def set_egress_policy_store_failure_for_test(
     reason: str | None = "authoritative egress policy store unavailable",
 ) -> None:
     """Force or clear fail-closed policy store unavailability state for testing."""
-    global _egress_policy_store_failed, _egress_policy_store_error
+    global _egress_policy_state, _egress_policy_store_failed, _egress_policy_store_error
     _egress_policy_store_failed = bool(failed)
-    _egress_policy_store_error = reason if failed else None
+    if failed:
+        _egress_policy_state = "forced_test_failure"
+        _egress_policy_store_error = reason or "authoritative egress policy store unavailable"
+    else:
+        _egress_policy_state = "active"
+        _egress_policy_store_error = None
 
 
 def register_harness_endpoint(host: str, port: int) -> None:
@@ -385,6 +402,7 @@ def _format_egress_policy_dict(snapshot: dict[str, Any]) -> dict[str, Any]:
         "policy_key": snapshot.get("policy_key", SYSTEM_EGRESS_POLICY_KEY),
         "scope": snapshot.get("scope", SYSTEM_EGRESS_POLICY_SCOPE),
         "status": snapshot.get("status", "active"),
+        "policy_state": snapshot.get("policy_state", _egress_policy_state),
         "source": snapshot.get("source", "env_default"),
         "revision": int(snapshot.get("revision", 1)),
         "is_production": settings.is_production,
@@ -400,19 +418,22 @@ def _format_egress_policy_dict(snapshot: dict[str, Any]) -> dict[str, Any]:
         "updated_by_org_id": snapshot.get("updated_by_org_id"),
         "reason": snapshot.get("reason", "initial environment baseline"),
         "last_synced_at": snapshot.get("last_synced_at"),
+        "recovered_at": snapshot.get("recovered_at") or _egress_policy_recovered_at,
     }
 
 
 def get_egress_policy(*, fail_closed: bool = False) -> dict[str, Any]:
     """Return the active connector outbound network egress policy snapshot."""
-    if _egress_policy_store_failed:
+    if _egress_policy_store_failed or _egress_policy_state != "active":
+        err_label = _egress_policy_store_error or _egress_policy_state or "store_error"
         if fail_closed:
             raise ValidationFailed(
-                f"authoritative connector egress policy store is unavailable ({_egress_policy_store_error or 'store_error'}); failing closed",
+                f"authoritative connector egress policy store is unavailable ({err_label}); failing closed",
                 details={
                     "field": "egress_policy",
                     "reason": "ssrf_blocked",
-                    "policy_error": _egress_policy_store_error or "store_error",
+                    "policy_state": _egress_policy_state,
+                    "policy_error": err_label,
                 },
             )
         settings = get_settings()
@@ -421,6 +442,7 @@ def get_egress_policy(*, fail_closed: bool = False) -> dict[str, Any]:
             "policy_key": SYSTEM_EGRESS_POLICY_KEY,
             "scope": SYSTEM_EGRESS_POLICY_SCOPE,
             "status": "unavailable_fail_closed",
+            "policy_state": _egress_policy_state,
             "source": "fail_closed",
             "revision": 0,
             "is_production": settings.is_production,
@@ -434,8 +456,9 @@ def get_egress_policy(*, fail_closed: bool = False) -> dict[str, Any]:
             "updated_by_id": None,
             "updated_by_display": None,
             "updated_by_org_id": None,
-            "reason": _egress_policy_store_error or "policy store unavailable",
+            "reason": err_label,
             "last_synced_at": None,
+            "recovered_at": _egress_policy_recovered_at,
         }
     if _active_egress_policy_snapshot is not None:
         return _format_egress_policy_dict(_active_egress_policy_snapshot)
@@ -445,6 +468,7 @@ def get_egress_policy(*, fail_closed: bool = False) -> dict[str, Any]:
         "policy_key": SYSTEM_EGRESS_POLICY_KEY,
         "scope": SYSTEM_EGRESS_POLICY_SCOPE,
         "status": "active",
+        "policy_state": "active",
         "source": "env_default",
         "revision": 1,
         "allowed_hosts": list(settings.connector_allowed_host_list),
@@ -466,18 +490,33 @@ async def sync_egress_policy_from_db(
 ) -> dict[str, Any]:
     """Load the authoritative system-wide egress policy from the database and update the local snapshot.
 
-    Fails closed if the database store cannot be queried or contains an inactive/corrupt policy row.
+    Separates temporary database read errors (`transient_store_error`) from invalid/inactive persisted
+    policy records (`corrupt_policy_record` / `inactive_policy`):
+    - Always fails closed on any read error or invalid/inactive DB row (never uses stale or unrestricted policy).
+    - Always re-queries the database on subsequent calls (unless `set_egress_policy_store_failure_for_test`
+      is explicitly active) so the same process recovers automatically once the database is reachable
+      and a valid active policy row is read.
+    - Never silently falls back from a previously loaded database-backed policy to `env_default` if the
+      authoritative database row disappears.
     """
-    global _active_egress_policy_snapshot, _egress_policy_store_failed, _egress_policy_store_error
-    if _egress_policy_store_failed and fail_closed_on_error:
-        raise ValidationFailed(
-            f"authoritative connector egress policy store is unavailable ({_egress_policy_store_error or 'store_error'}); failing closed",
-            details={
-                "field": "egress_policy",
-                "reason": "ssrf_blocked",
-                "policy_error": _egress_policy_store_error or "store_error",
-            },
-        )
+    global _active_egress_policy_snapshot, _egress_policy_state
+    global _egress_policy_store_failed, _egress_policy_store_error
+    global _egress_policy_recovered_at, _ever_synced_database_policy
+
+    if _egress_policy_state == "forced_test_failure":
+        if fail_closed_on_error:
+            raise ValidationFailed(
+                f"authoritative connector egress policy store is unavailable ({_egress_policy_store_error or 'store_error'}); failing closed",
+                details={
+                    "field": "egress_policy",
+                    "reason": "ssrf_blocked",
+                    "policy_state": "forced_test_failure",
+                    "policy_error": _egress_policy_store_error or "store_error",
+                },
+            )
+        return get_egress_policy(fail_closed=False)
+
+    was_unhealthy = _egress_policy_state != "active" or _egress_policy_store_failed
     now_iso = utc_now().isoformat()
     try:
         row = (
@@ -488,6 +527,7 @@ async def sync_egress_policy_from_db(
             )
         ).scalar_one_or_none()
     except Exception as exc:
+        _egress_policy_state = "transient_store_error"
         _egress_policy_store_failed = True
         _egress_policy_store_error = f"database_read_error: {type(exc).__name__}"
         if fail_closed_on_error:
@@ -496,32 +536,61 @@ async def sync_egress_policy_from_db(
                 details={
                     "field": "egress_policy",
                     "reason": "ssrf_blocked",
+                    "policy_state": "transient_store_error",
                     "policy_error": _egress_policy_store_error,
                 },
             ) from exc
         return get_egress_policy(fail_closed=False)
 
     if row is None:
+        if _ever_synced_database_policy or (
+            _active_egress_policy_snapshot is not None
+            and _active_egress_policy_snapshot.get("source") == "database"
+        ):
+            _egress_policy_state = "missing_policy_record"
+            _egress_policy_store_failed = True
+            _egress_policy_store_error = "missing_authoritative_policy_row"
+            if fail_closed_on_error:
+                raise ValidationFailed(
+                    "authoritative database egress policy row is missing after database policy initialization; failing closed",
+                    details={
+                        "field": "egress_policy",
+                        "reason": "ssrf_blocked",
+                        "policy_state": "missing_policy_record",
+                        "policy_error": "missing_authoritative_policy_row",
+                    },
+                )
+            return get_egress_policy(fail_closed=False)
+
         if (
             _active_egress_policy_snapshot is not None
             and _active_egress_policy_snapshot.get("source") == "runtime"
         ):
+            _egress_policy_state = "active"
             _egress_policy_store_failed = False
             _egress_policy_store_error = None
+            if was_unhealthy:
+                _egress_policy_recovered_at = now_iso
+            _active_egress_policy_snapshot["policy_state"] = "active"
             _active_egress_policy_snapshot["last_synced_at"] = now_iso
             return _format_egress_policy_dict(_active_egress_policy_snapshot)
+
         settings = get_settings()
         validated_hosts, validated_cidrs = validate_egress_policy_candidate(
             allowed_hosts=settings.connector_allowed_host_list,
             allowed_private_cidrs=settings.connector_allowed_private_cidr_list,
         )
+        _egress_policy_state = "active"
         _egress_policy_store_failed = False
         _egress_policy_store_error = None
+        if was_unhealthy:
+            _egress_policy_recovered_at = now_iso
         _active_egress_policy_snapshot = {
             "policy_id": "cep_env_default",
             "policy_key": SYSTEM_EGRESS_POLICY_KEY,
             "scope": SYSTEM_EGRESS_POLICY_SCOPE,
             "status": "active",
+            "policy_state": "active",
             "source": "env_default",
             "revision": 1,
             "allowed_hosts": validated_hosts,
@@ -532,49 +601,61 @@ async def sync_egress_policy_from_db(
             "updated_by_org_id": None,
             "reason": "initial environment baseline",
             "last_synced_at": now_iso,
+            "recovered_at": _egress_policy_recovered_at,
         }
         return _format_egress_policy_dict(_active_egress_policy_snapshot)
 
     if row.status != "active":
+        _egress_policy_state = "inactive_policy"
         _egress_policy_store_failed = True
         _egress_policy_store_error = f"policy_status_{row.status}"
-        raise ValidationFailed(
-            f"authoritative connector egress policy is not active (status={row.status!r}); failing closed",
-            details={
-                "field": "egress_policy",
-                "reason": "ssrf_blocked",
-                "policy_status": row.status,
-            },
-        )
+        if fail_closed_on_error:
+            raise ValidationFailed(
+                f"authoritative connector egress policy is not active (status={row.status!r}); failing closed",
+                details={
+                    "field": "egress_policy",
+                    "reason": "ssrf_blocked",
+                    "policy_state": "inactive_policy",
+                    "policy_status": row.status,
+                },
+            )
+        return get_egress_policy(fail_closed=False)
 
     try:
-        validated_hosts, validated_cidrs = validate_egress_policy_candidate(
-            allowed_hosts=row.allowed_hosts if isinstance(row.allowed_hosts, list) else None,
-            allowed_private_cidrs=(
-                row.allowed_private_cidrs if isinstance(row.allowed_private_cidrs, list) else None
-            ),
-        )
         if not isinstance(row.allowed_hosts, list) or not isinstance(row.allowed_private_cidrs, list):
             raise ValidationFailed("corrupt egress policy JSON columns")
+        validated_hosts, validated_cidrs = validate_egress_policy_candidate(
+            allowed_hosts=row.allowed_hosts,
+            allowed_private_cidrs=row.allowed_private_cidrs,
+        )
     except Exception as exc:
+        _egress_policy_state = "corrupt_policy_record"
         _egress_policy_store_failed = True
         _egress_policy_store_error = "corrupt_policy_record"
-        raise ValidationFailed(
-            "authoritative connector egress policy record in database is invalid; failing closed",
-            details={
-                "field": "egress_policy",
-                "reason": "ssrf_blocked",
-                "policy_error": "corrupt_policy_record",
-            },
-        ) from exc
+        if fail_closed_on_error:
+            raise ValidationFailed(
+                "authoritative connector egress policy record in database is invalid; failing closed",
+                details={
+                    "field": "egress_policy",
+                    "reason": "ssrf_blocked",
+                    "policy_state": "corrupt_policy_record",
+                    "policy_error": "corrupt_policy_record",
+                },
+            ) from exc
+        return get_egress_policy(fail_closed=False)
 
+    _egress_policy_state = "active"
     _egress_policy_store_failed = False
     _egress_policy_store_error = None
+    _ever_synced_database_policy = True
+    if was_unhealthy:
+        _egress_policy_recovered_at = now_iso
     _active_egress_policy_snapshot = {
         "policy_id": row.id,
         "policy_key": row.policy_key,
         "scope": row.scope,
         "status": row.status,
+        "policy_state": "active",
         "source": "database",
         "revision": int(row.revision or 1),
         "allowed_hosts": validated_hosts,
@@ -585,6 +666,7 @@ async def sync_egress_policy_from_db(
         "updated_by_org_id": row.updated_by_org_id,
         "reason": row.reason,
         "last_synced_at": now_iso,
+        "recovered_at": _egress_policy_recovered_at,
     }
     return _format_egress_policy_dict(_active_egress_policy_snapshot)
 
@@ -601,9 +683,12 @@ async def update_egress_policy_in_db(
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """Atomically validate and persist a new system-wide egress policy revision with SQL CAS.
 
+    Supports governed repair of a corrupt or inactive persisted policy row when explicit valid
+    candidate values are supplied, while failing closed if the database store itself cannot be read.
     Returns ``(before_policy, committed_snapshot_candidate)`` inside the active transaction;
     callers must commit the transaction before publishing the snapshot to the process cache.
     """
+    global _egress_policy_state, _egress_policy_store_failed, _egress_policy_store_error
     from sqlalchemy.exc import IntegrityError
 
     if not reason or not reason.strip():
@@ -612,8 +697,115 @@ async def update_egress_policy_in_db(
             details={"field": "reason", "reason": "reason_required"},
         )
 
-    before_policy = await sync_egress_policy_from_db(session)
-    current_rev = int(before_policy.get("revision", 1))
+    if _egress_policy_state == "forced_test_failure":
+        raise ValidationFailed(
+            f"authoritative connector egress policy store is unavailable ({_egress_policy_store_error or 'store_error'}); failing closed",
+            details={
+                "field": "egress_policy",
+                "reason": "ssrf_blocked",
+                "policy_state": "forced_test_failure",
+                "policy_error": _egress_policy_store_error or "store_error",
+            },
+        )
+
+    try:
+        row = (
+            await session.execute(
+                select(ConnectorEgressPolicy).where(
+                    ConnectorEgressPolicy.policy_key == SYSTEM_EGRESS_POLICY_KEY
+                )
+            )
+        ).scalar_one_or_none()
+    except Exception as exc:
+        _egress_policy_state = "transient_store_error"
+        _egress_policy_store_failed = True
+        _egress_policy_store_error = f"database_read_error: {type(exc).__name__}"
+        raise ValidationFailed(
+            "authoritative connector egress policy could not be loaded from database; failing closed",
+            details={
+                "field": "egress_policy",
+                "reason": "ssrf_blocked",
+                "policy_state": "transient_store_error",
+                "policy_error": _egress_policy_store_error,
+            },
+        ) from exc
+
+    if row is None:
+        settings = get_settings()
+        base_hosts, base_cidrs = validate_egress_policy_candidate(
+            allowed_hosts=settings.connector_allowed_host_list,
+            allowed_private_cidrs=settings.connector_allowed_private_cidr_list,
+        )
+        current_rev = 1
+        before_policy = _format_egress_policy_dict(
+            {
+                "policy_id": "cep_env_default",
+                "policy_key": SYSTEM_EGRESS_POLICY_KEY,
+                "scope": SYSTEM_EGRESS_POLICY_SCOPE,
+                "status": "active",
+                "policy_state": "active",
+                "source": "env_default",
+                "revision": 1,
+                "allowed_hosts": base_hosts,
+                "allowed_private_cidrs": base_cidrs,
+                "reason": "initial environment baseline",
+            }
+        )
+        fallback_hosts: list[str] = base_hosts
+        fallback_cidrs: list[str] = base_cidrs
+    else:
+        current_rev = int(row.revision or 1)
+        row_is_valid = False
+        existing_hosts: list[str] = []
+        existing_cidrs: list[str] = []
+        try:
+            if isinstance(row.allowed_hosts, list) and isinstance(row.allowed_private_cidrs, list):
+                existing_hosts, existing_cidrs = validate_egress_policy_candidate(
+                    allowed_hosts=row.allowed_hosts,
+                    allowed_private_cidrs=row.allowed_private_cidrs,
+                )
+                row_is_valid = True
+        except Exception:
+            row_is_valid = False
+
+        if not row_is_valid:
+            # Governed repair of a corrupt policy record: never inherit corrupt fields as fallbacks
+            fallback_hosts = []
+            fallback_cidrs = []
+            before_policy = {
+                "policy_id": row.id,
+                "policy_key": row.policy_key,
+                "scope": row.scope,
+                "status": row.status,
+                "policy_state": "corrupt_policy_record",
+                "source": "database",
+                "revision": current_rev,
+                "allowed_hosts": [],
+                "allowed_private_cidrs": [],
+                "reason": row.reason,
+            }
+        else:
+            fallback_hosts = existing_hosts
+            fallback_cidrs = existing_cidrs
+            before_policy = _format_egress_policy_dict(
+                {
+                    "policy_id": row.id,
+                    "policy_key": row.policy_key,
+                    "scope": row.scope,
+                    "status": row.status,
+                    "policy_state": "active" if row.status == "active" else "inactive_policy",
+                    "source": "database",
+                    "revision": current_rev,
+                    "allowed_hosts": existing_hosts,
+                    "allowed_private_cidrs": existing_cidrs,
+                    "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+                    "updated_by_id": row.updated_by_id,
+                    "updated_by_display": row.updated_by_display,
+                    "updated_by_org_id": row.updated_by_org_id,
+                    "reason": row.reason,
+                }
+            )
+
     if expected_revision is not None and int(expected_revision) != current_rev:
         raise Conflict(
             "connector egress policy was modified by another administrator",
@@ -628,19 +820,12 @@ async def update_egress_policy_in_db(
     validated_hosts, validated_cidrs = validate_egress_policy_candidate(
         allowed_hosts=allowed_hosts,
         allowed_private_cidrs=allowed_private_cidrs,
-        fallback_hosts=before_policy.get("allowed_hosts", []),
-        fallback_cidrs=before_policy.get("allowed_private_cidrs", []),
+        fallback_hosts=fallback_hosts,
+        fallback_cidrs=fallback_cidrs,
     )
 
     now = utc_now()
     next_rev = current_rev + 1
-    row = (
-        await session.execute(
-            select(ConnectorEgressPolicy).where(
-                ConnectorEgressPolicy.policy_key == SYSTEM_EGRESS_POLICY_KEY
-            )
-        )
-    ).scalar_one_or_none()
 
     actor_id = getattr(principal, "id", None)
     actor_display = (
@@ -733,6 +918,7 @@ async def update_egress_policy_in_db(
         "policy_key": SYSTEM_EGRESS_POLICY_KEY,
         "scope": SYSTEM_EGRESS_POLICY_SCOPE,
         "status": "active",
+        "policy_state": "active",
         "source": "database",
         "revision": next_rev,
         "allowed_hosts": validated_hosts,
@@ -749,10 +935,20 @@ async def update_egress_policy_in_db(
 
 def publish_committed_egress_policy_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
     """Publish a committed egress policy snapshot to the current process cache."""
-    global _active_egress_policy_snapshot, _egress_policy_store_failed, _egress_policy_store_error
+    global _active_egress_policy_snapshot, _egress_policy_state
+    global _egress_policy_store_failed, _egress_policy_store_error
+    global _egress_policy_recovered_at, _ever_synced_database_policy
+    was_unhealthy = _egress_policy_state != "active" or _egress_policy_store_failed
+    _egress_policy_state = "active"
     _egress_policy_store_failed = False
     _egress_policy_store_error = None
+    _ever_synced_database_policy = True
+    if was_unhealthy:
+        _egress_policy_recovered_at = snapshot.get("last_synced_at") or utc_now().isoformat()
     _active_egress_policy_snapshot = dict(snapshot)
+    _active_egress_policy_snapshot["policy_state"] = "active"
+    if _egress_policy_recovered_at:
+        _active_egress_policy_snapshot["recovered_at"] = _egress_policy_recovered_at
     return _format_egress_policy_dict(_active_egress_policy_snapshot)
 
 
@@ -763,7 +959,8 @@ def set_egress_policy(
     reason: str = "in-process policy update",
 ) -> dict[str, Any]:
     """Atomically validate and update the active egress policy snapshot (validating all hosts and CIDRs before mutation)."""
-    global _active_egress_policy_snapshot, _egress_policy_store_failed, _egress_policy_store_error
+    global _active_egress_policy_snapshot, _egress_policy_state
+    global _egress_policy_store_failed, _egress_policy_store_error
     current = get_egress_policy(fail_closed=False)
     validated_hosts, validated_cidrs = validate_egress_policy_candidate(
         allowed_hosts=allowed_hosts,
@@ -773,6 +970,7 @@ def set_egress_policy(
     )
     now_iso = utc_now().isoformat()
     next_rev = int(current.get("revision", 1)) + 1
+    _egress_policy_state = "active"
     _egress_policy_store_failed = False
     _egress_policy_store_error = None
     _active_egress_policy_snapshot = {
@@ -780,6 +978,7 @@ def set_egress_policy(
         "policy_key": SYSTEM_EGRESS_POLICY_KEY,
         "scope": SYSTEM_EGRESS_POLICY_SCOPE,
         "status": "active",
+        "policy_state": "active",
         "source": "runtime",
         "revision": next_rev,
         "allowed_hosts": validated_hosts,
@@ -796,10 +995,15 @@ def set_egress_policy(
 
 def reset_egress_policy() -> None:
     """Reset runtime egress policy snapshot and error flags back to environment settings."""
-    global _active_egress_policy_snapshot, _egress_policy_store_failed, _egress_policy_store_error
+    global _active_egress_policy_snapshot, _egress_policy_state
+    global _egress_policy_store_failed, _egress_policy_store_error
+    global _egress_policy_recovered_at, _ever_synced_database_policy
     _active_egress_policy_snapshot = None
+    _egress_policy_state = "active"
     _egress_policy_store_failed = False
     _egress_policy_store_error = None
+    _egress_policy_recovered_at = None
+    _ever_synced_database_policy = False
 
 FORBIDDEN_SECRET_KEY_PATTERNS: tuple[str, ...] = (
     "password",

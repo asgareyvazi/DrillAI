@@ -26,6 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from drillai.core.clock import utc_now
 from drillai.core.config import Settings, get_settings
+from drillai.core.errors import ValidationFailed
 from drillai.core.ids import new_id
 from drillai.core.logging import configure_logging, get_logger
 from drillai.db.models import Connector, ConnectorRun
@@ -935,6 +936,10 @@ class ConnectorWorker:
     async def run_once(self) -> list[PollCycleOutcome]:
         """Discover all due connectors, claim them with CAS + fencing tokens, and execute one poll cycle."""
         async with self.database.session() as session:
+            with contextlib.suppress(ValidationFailed):
+                active_pol = await sync_egress_policy_from_db(session, fail_closed_on_error=True)
+                self.last_policy_revision = int(active_pol.get("revision", 1))
+                self.last_policy_sync_at = active_pol.get("last_synced_at")
             candidate_ids = await self.discover_candidate_ids(session)
 
         if not candidate_ids:
