@@ -34,6 +34,7 @@ from drillai.observability.tracing import get_metrics
 from drillai.telemetry.adapters import ingest_frames
 from drillai.telemetry.connectors import (
     ConnectorService,
+    build_and_reconcile_poll_manifest,
     classify_connector_error,
     redact_sensitive_text,
     resolve_secret_refs,
@@ -497,60 +498,24 @@ class ConnectorWorker:
                 else:
                     checkpoint_status = "unchanged"
 
-                if protocol_disp is not None:
-                    protocol_manifest = protocol_disp.to_dict()
-                else:
-                    protocol_manifest = {
-                        "pages_or_messages_received": 1 if frames_received > 0 else 0,
-                        "source_records_discovered": frames_received + protocol_dups,
-                        "mapped_frames_emitted": frames_received,
-                        "unmapped_skipped": 0,
-                        "unsubscribed_skipped": 0,
-                        "watermark_suppressed": protocol_dups,
-                        "in_batch_duplicates": 0,
-                        "deferred_over_cap": 0,
-                        "rejected_malformed_timestamp": 0,
-                        "rejected_unsupported_index": 0,
-                        "rejected_invalid_value": 0,
-                        "rejected_non_finite_value": 0,
-                        "rejected_unknown_channel": 0,
-                        "total_protocol_rejected": 0,
-                        "total_filtered": 0,
-                        "truncated_by_limit": False,
-                        "partial_more_available": False,
-                        "reconciled": True,
-                        "protocol_rejections": [],
-                        "per_source_channel": {},
-                    }
-
-                discovered_count = int(protocol_manifest.get("source_records_discovered", 0))
-                if discovered_count == 0 and frames_received == 0 and rejected == 0:
-                    data_outcome = "no_data"
-                elif (accepted + duplicates + revised) == 0 and rejected > 0:
-                    data_outcome = "rejected_only"
-                elif (accepted + duplicates + revised) > 0 and rejected > 0:
-                    data_outcome = "partial_with_rejections"
-                elif has_more_deferred:
-                    data_outcome = "partial_batch_capped"
-                else:
-                    data_outcome = "all_valid_accepted"
-
-                run_manifest: dict[str, Any] = {
-                    **protocol_manifest,
-                    "checkpoint_status": checkpoint_status,
-                    "data_outcome": data_outcome,
-                    "points_accepted": accepted,
-                    "points_duplicates": duplicates,
-                    "points_revised": revised,
-                    "points_rejected": rejected,
-                    "service_rejected": service_rejected,
-                    "conflicts": conflicts_count,
-                    "out_of_order": out_of_order_count,
-                    "late": late_count,
-                    "low_quality_count": low_quality_count,
-                    "quality_counts": quality_totals,
-                    "policy_revision": self.last_policy_revision,
-                }
+                run_manifest = build_and_reconcile_poll_manifest(
+                    protocol_disp=protocol_disp,
+                    protocol_dups=protocol_dups,
+                    frames_received=frames_received,
+                    accepted=accepted,
+                    service_duplicates=int(totals.get("duplicates", 0)),
+                    revised=revised,
+                    service_rejected=service_rejected,
+                    has_more_deferred=has_more_deferred,
+                    checkpoint_status=checkpoint_status,
+                    conflicts_count=conflicts_count,
+                    out_of_order_count=out_of_order_count,
+                    late_count=late_count,
+                    low_quality_count=low_quality_count,
+                    quality_totals=quality_totals,
+                    policy_revision=self.last_policy_revision,
+                    dry_run=False,
+                )
 
                 finished = utc_now()
                 duration_ms = round((time.perf_counter() - t0) * 1000.0, 2)

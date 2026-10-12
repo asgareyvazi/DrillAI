@@ -72,9 +72,11 @@ from drillai.telemetry.vocabulary import CHANNEL_DIMENSIONS, TRUSTWORTHY_QUALITY
 
 __all__ = [
     "ALLOWED_SECRET_SLOTS",
+    "ALL_TEST_CONNECTION_STAGES",
     "CONNECTOR_DESIRED_STATES",
     "CONNECTOR_PROFILES",
     "CONNECTOR_RUNTIME_STATUSES",
+    "POLL_DATA_OUTCOMES",
     "PROTOCOL_PROFILE_SPECS",
     "SYSTEM_EGRESS_POLICY_KEY",
     "SYSTEM_EGRESS_POLICY_ORG_ID",
@@ -85,8 +87,10 @@ __all__ = [
     "PinnedEndpoint",
     "ProtocolPollDisposition",
     "ProtocolProfileSpec",
+    "build_and_reconcile_poll_manifest",
     "classify_connector_error",
     "clear_harness_endpoints",
+    "compute_poll_data_outcome",
     "connector_out",
     "connector_run_out",
     "enforce_connect_time_ssrf",
@@ -961,6 +965,233 @@ class ProtocolPollDisposition:
             "protocol_rejections": list(self.protocol_rejections[:50]),
             "per_source_channel": dict(sorted(self.per_source_channel.items())),
         }
+
+
+ALL_TEST_CONNECTION_STAGES: tuple[str, ...] = (
+    "endpoint_policy_validated",
+    "socket_connected",
+    "tls_verified",
+    "protocol_encoding_negotiated",
+    "session_established",
+    "channels_discovered",
+    "mapping_verified",
+    "data_frame_decoded",
+    "disposition_validated",
+    "transaction_committed",
+)
+
+POLL_DATA_OUTCOMES: tuple[str, ...] = (
+    "no_data",
+    "filtered_only",
+    "all_valid_accepted",
+    "duplicates_only",
+    "revisions_only",
+    "partial_with_rejections",
+    "rejected_only",
+    "partial_batch_capped",
+)
+
+
+def compute_poll_data_outcome(
+    *,
+    source_records_discovered: int,
+    frames_received: int,
+    points_accepted: int,
+    points_duplicates: int,
+    points_revised: int,
+    points_rejected: int,
+    total_filtered: int,
+    has_more_deferred: bool,
+    dry_run: bool = False,
+) -> str:
+    """Classify the exact, mutually-exclusive data outcome of a poll or replay run.
+
+    Never returns ``all_valid_accepted`` when ``points_accepted == 0`` on a real ingestion run.
+    """
+    if source_records_discovered == 0 and frames_received == 0 and points_rejected == 0:
+        return "no_data"
+    if (points_accepted + points_duplicates + points_revised) == 0 and points_rejected > 0:
+        return "rejected_only"
+    if (points_accepted + points_duplicates + points_revised) > 0 and points_rejected > 0:
+        return "partial_with_rejections"
+    if has_more_deferred:
+        if frames_received == 0 and total_filtered > 0 and points_accepted == 0 and points_duplicates == 0:
+            return "filtered_only"
+        return "partial_batch_capped"
+    if points_accepted > 0:
+        return "all_valid_accepted"
+    if points_revised > 0:
+        return "revisions_only"
+    if frames_received == 0 and total_filtered > 0:
+        return "filtered_only"
+    if points_duplicates > 0:
+        return "duplicates_only"
+    if total_filtered > 0:
+        return "filtered_only"
+    if dry_run and frames_received > 0:
+        return "all_valid_accepted"
+    return "no_data"
+
+
+def build_and_reconcile_poll_manifest(
+    *,
+    protocol_disp: ProtocolPollDisposition | dict[str, Any] | None,
+    protocol_dups: int,
+    frames_received: int,
+    accepted: int,
+    service_duplicates: int,
+    revised: int,
+    service_rejected: int,
+    has_more_deferred: bool,
+    checkpoint_status: str,
+    conflicts_count: int = 0,
+    out_of_order_count: int = 0,
+    late_count: int = 0,
+    low_quality_count: int = 0,
+    quality_totals: dict[str, int] | None = None,
+    policy_revision: int | None = None,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """Construct a complete poll/replay manifest and enforce both protocol and ingestion reconciliation invariants."""
+    if isinstance(protocol_disp, ProtocolPollDisposition):
+        base: dict[str, Any] = protocol_disp.to_dict()
+    elif isinstance(protocol_disp, dict):
+        base = dict(protocol_disp)
+    else:
+        base = {
+            "pages_or_messages_received": 1 if frames_received > 0 else 0,
+            "source_records_discovered": frames_received + protocol_dups,
+            "mapped_frames_emitted": frames_received,
+            "unmapped_skipped": 0,
+            "unsubscribed_skipped": 0,
+            "watermark_suppressed": protocol_dups,
+            "in_batch_duplicates": 0,
+            "deferred_over_cap": 0,
+            "rejected_malformed_timestamp": 0,
+            "rejected_unsupported_index": 0,
+            "rejected_invalid_value": 0,
+            "rejected_non_finite_value": 0,
+            "rejected_unknown_channel": 0,
+            "total_protocol_rejected": 0,
+            "total_filtered": 0,
+            "truncated_by_limit": False,
+            "partial_more_available": False,
+            "reconciled": True,
+            "protocol_rejections": [],
+            "per_source_channel": {},
+        }
+
+    discovered = int(base.get("source_records_discovered", 0))
+    emitted = int(base.get("mapped_frames_emitted", 0))
+    unmapped = int(base.get("unmapped_skipped", 0))
+    unsubscribed = int(base.get("unsubscribed_skipped", 0))
+    wm_suppressed = int(base.get("watermark_suppressed", 0))
+    in_batch_dups = int(base.get("in_batch_duplicates", 0))
+    deferred = int(base.get("deferred_over_cap", 0))
+    proto_rejected = (
+        int(base.get("rejected_malformed_timestamp", 0))
+        + int(base.get("rejected_unsupported_index", 0))
+        + int(base.get("rejected_invalid_value", 0))
+        + int(base.get("rejected_non_finite_value", 0))
+        + int(base.get("rejected_unknown_channel", 0))
+    )
+    total_filtered = unmapped + unsubscribed
+    base["total_protocol_rejected"] = proto_rejected
+    base["total_filtered"] = total_filtered
+
+    expected_discovered = (
+        emitted
+        + unmapped
+        + unsubscribed
+        + wm_suppressed
+        + in_batch_dups
+        + deferred
+        + proto_rejected
+    )
+    per_channel_ok = True
+    for ch_stats in (base.get("per_source_channel") or {}).values():
+        if isinstance(ch_stats, dict):
+            ch_disc = int(ch_stats.get("discovered", 0))
+            ch_sum = (
+                int(ch_stats.get("emitted", 0))
+                + int(ch_stats.get("unmapped_skipped", 0))
+                + int(ch_stats.get("unsubscribed_skipped", 0))
+                + int(ch_stats.get("watermark_suppressed", 0))
+                + int(ch_stats.get("in_batch_duplicates", 0))
+                + int(ch_stats.get("deferred_over_cap", 0))
+                + int(ch_stats.get("rejected", 0))
+            )
+            if ch_disc != ch_sum:
+                per_channel_ok = False
+                break
+
+    protocol_reconciled = bool(discovered == expected_discovered and per_channel_ok)
+    effective_proto_dups = wm_suppressed + in_batch_dups if protocol_disp is not None else protocol_dups
+    points_duplicates = service_duplicates + effective_proto_dups
+    points_rejected = service_rejected + proto_rejected
+
+    if dry_run:
+        ingestion_reconciled = bool(emitted == frames_received)
+    else:
+        service_total = accepted + service_duplicates + revised + service_rejected
+        end_to_end_total = (
+            accepted
+            + points_duplicates
+            + revised
+            + points_rejected
+            + unmapped
+            + unsubscribed
+            + deferred
+        )
+        ingestion_reconciled = bool(
+            emitted == frames_received
+            and frames_received == service_total
+            and discovered == end_to_end_total
+        )
+
+    reconciled = bool(protocol_reconciled and ingestion_reconciled)
+    data_outcome = compute_poll_data_outcome(
+        source_records_discovered=discovered,
+        frames_received=frames_received,
+        points_accepted=accepted,
+        points_duplicates=points_duplicates,
+        points_revised=revised,
+        points_rejected=points_rejected,
+        total_filtered=total_filtered,
+        has_more_deferred=has_more_deferred,
+        dry_run=dry_run,
+    )
+
+    manifest: dict[str, Any] = {
+        **base,
+        "protocol_reconciled": protocol_reconciled,
+        "ingestion_reconciled": ingestion_reconciled,
+        "reconciled": reconciled,
+        "checkpoint_status": checkpoint_status,
+        "data_outcome": data_outcome,
+        "points_accepted": accepted,
+        "points_duplicates": points_duplicates,
+        "points_revised": revised,
+        "points_rejected": points_rejected,
+        "service_rejected": service_rejected,
+        "conflicts": conflicts_count,
+        "out_of_order": out_of_order_count,
+        "late": late_count,
+        "low_quality_count": low_quality_count,
+        "quality_counts": dict(quality_totals or {}),
+    }
+    if policy_revision is not None:
+        manifest["policy_revision"] = int(policy_revision)
+    if dry_run:
+        manifest["dry_run"] = True
+    if not reconciled:
+        manifest["reconciliation_error"] = (
+            f"manifest count invariant mismatch (discovered={discovered}, "
+            f"expected_discovered={expected_discovered}, emitted={emitted}, "
+            f"frames_received={frames_received}, accepted={accepted}, "
+            f"duplicates={points_duplicates}, revised={revised}, rejected={points_rejected})"
+        )
+    return manifest
 
 
 def parse_channel_mappings(raw_mappings: Any) -> list[ChannelMappingSpec]:
@@ -3311,11 +3542,11 @@ class ConnectorService:
         milestones: list[dict[str, Any]] = []
         try:
             await sync_egress_policy_from_db(self.session)
-            pinned = resolve_and_pin_endpoint(
+            pinned = await resolve_and_pin_endpoint_async(
                 row.endpoint_url,
                 row.protocol_profile,
                 allow_loopback=allow_loopback,
-                require_dns_resolution=False,
+                require_dns_resolution=(row.protocol_profile != "synthetic.v1"),
             )
             milestones.append(
                 {
@@ -3380,18 +3611,37 @@ class ConnectorService:
                 )
                 batch_frames = getattr(last_batch, "frames", None)
                 disp = getattr(last_batch, "disposition", None)
+                frame_count = len(batch_frames) if batch_frames is not None else 0
+                if row.protocol_profile == "synthetic.v1":
+                    frame_status = "passed"
+                    frame_detail = f"synthetic_channels={len(descriptors)}"
+                elif frame_count > 0:
+                    frame_status = "passed"
+                    frame_detail = f"frames={frame_count}"
+                else:
+                    frame_status = "not_applicable"
+                    frame_detail = "frames=0 (no sample frames in probe window)"
                 milestones.append(
                     {
                         "stage": "data_frame_decoded",
-                        "status": "passed",
-                        "detail": f"frames={len(batch_frames) if batch_frames is not None else 0}",
+                        "status": frame_status,
+                        "detail": frame_detail,
                     }
                 )
+                if disp is not None and not disp.reconciled:
+                    raise ValidationFailed(
+                        "protocol poll disposition failed reconciliation invariant during connection test",
+                        details={"field": "disposition", "reason": "disposition_unreconciled"},
+                    )
                 milestones.append(
                     {
                         "stage": "disposition_validated",
-                        "status": "passed" if (disp is None or disp.reconciled) else "failed",
-                        "detail": f"reconciled={disp.reconciled if disp is not None else True}",
+                        "status": "passed" if disp is not None else "not_applicable",
+                        "detail": (
+                            f"reconciled={disp.reconciled}"
+                            if disp is not None
+                            else "no protocol disposition required"
+                        ),
                     }
                 )
                 milestones.append(
@@ -3481,9 +3731,25 @@ class ConnectorService:
             duration_ms = round((time.perf_counter() - t0) * 1000.0, 2)
             category = classify_connector_error(exc)
             safe_msg = redact_sensitive_text(str(exc), resolved_secrets) or "connection test failed"
+            parsed_scheme = (urlparse(str(row.endpoint_url or "")).scheme or "").lower()
+            is_tls_scheme = parsed_scheme in ("https", "wss")
             if not milestones:
                 failed_stage = "endpoint_policy_validated"
-            elif len(milestones) == 1 and category in ("auth_failure", "protocol_error"):
+            elif len(milestones) == 1 and category == "tls_error":
+                milestones.append(
+                    {
+                        "stage": "socket_connected",
+                        "status": "passed",
+                        "detail": "TCP socket connected prior to TLS handshake rejection",
+                    }
+                )
+                failed_stage = "tls_verified"
+            elif len(milestones) == 1 and category in (
+                "auth_failure",
+                "protocol_error",
+                "malformed_payload",
+                "oversized_payload",
+            ):
                 milestones.append(
                     {
                         "stage": "socket_connected",
@@ -3491,11 +3757,42 @@ class ConnectorService:
                         "detail": "TCP socket connected prior to handshake/session rejection",
                     }
                 )
-                failed_stage = "session_established"
+                milestones.append(
+                    {
+                        "stage": "tls_verified",
+                        "status": "passed" if is_tls_scheme else "not_applicable",
+                        "detail": f"scheme={parsed_scheme or 'plain'}",
+                    }
+                )
+                lower_msg = safe_msg.lower()
+                if (
+                    "unexpected text websocket frame" in lower_msg
+                    or "subprotocol" in lower_msg
+                    or "binary decode error" in lower_msg
+                ):
+                    failed_stage = "protocol_encoding_negotiated"
+                else:
+                    milestones.append(
+                        {
+                            "stage": "protocol_encoding_negotiated",
+                            "status": "passed",
+                            "detail": spec.wire_encoding if spec else row.protocol_profile,
+                        }
+                    )
+                    failed_stage = "session_established"
             elif len(milestones) == 1:
                 failed_stage = "socket_connected"
             else:
-                failed_stage = "session_established"
+                last_stage = milestones[-1]["stage"]
+                try:
+                    last_idx = ALL_TEST_CONNECTION_STAGES.index(last_stage)
+                    failed_stage = (
+                        ALL_TEST_CONNECTION_STAGES[last_idx + 1]
+                        if (last_idx + 1) < len(ALL_TEST_CONNECTION_STAGES)
+                        else "session_established"
+                    )
+                except ValueError:
+                    failed_stage = "session_established"
             milestones.append(
                 {
                     "stage": failed_stage,
@@ -3503,6 +3800,20 @@ class ConnectorService:
                     "detail": f"{category}: {safe_msg}",
                 }
             )
+            recorded_stages = {m["stage"] for m in milestones}
+            for stg in ALL_TEST_CONNECTION_STAGES:
+                if stg not in recorded_stages:
+                    milestones.append(
+                        {
+                            "stage": stg,
+                            "status": "not_applicable" if stg == "transaction_committed" else "not_reached",
+                            "detail": (
+                                "connection test does not persist telemetry points"
+                                if stg == "transaction_committed"
+                                else f"not reached after {failed_stage} failure"
+                            ),
+                        }
+                    )
             row.last_error = safe_msg
             row.last_error_category = category
             row.last_error_at = finished
@@ -3707,24 +4018,24 @@ class ConnectorService:
                 protocol_disp = getattr(last_batch, "disposition", None)
                 protocol_dups = int(getattr(last_batch, "duplicates_suppressed", 0) or 0)
                 protocol_rejected = int(getattr(protocol_disp, "total_protocol_rejected", 0) or 0)
-                manifest = (
-                    protocol_disp.to_dict()
-                    if protocol_disp is not None
-                    else {
-                        "pages_or_messages_received": 1 if frames else 0,
-                        "source_records_discovered": len(frames) + protocol_dups,
-                        "mapped_frames_emitted": len(frames),
-                        "unmapped_skipped": 0,
-                        "unsubscribed_skipped": 0,
-                        "watermark_suppressed": protocol_dups,
-                        "in_batch_duplicates": 0,
-                        "deferred_over_cap": 0,
-                        "total_protocol_rejected": 0,
-                        "reconciled": True,
-                    }
+                has_more_dry = bool(
+                    getattr(protocol_disp, "partial_more_available", False)
+                    or getattr(protocol_disp, "truncated_by_limit", False)
+                    or (int(getattr(protocol_disp, "deferred_over_cap", 0) or 0) > 0)
                 )
-                manifest["dry_run"] = True
-                manifest["checkpoint_status"] = "unchanged"
+                manifest = build_and_reconcile_poll_manifest(
+                    protocol_disp=protocol_disp,
+                    protocol_dups=protocol_dups,
+                    frames_received=len(frames),
+                    accepted=0,
+                    service_duplicates=0,
+                    revised=0,
+                    service_rejected=0,
+                    has_more_deferred=has_more_dry,
+                    checkpoint_status="unchanged",
+                    policy_revision=int(get_egress_policy(fail_closed=False).get("revision", 1)),
+                    dry_run=True,
+                )
                 finished = utc_now()
                 duration_ms = round((time.perf_counter() - t0) * 1000.0, 2)
                 run_row = ConnectorRun(
@@ -3851,34 +4162,28 @@ class ConnectorService:
             conflicts_count += len(getattr(ch_rep, "conflicts", None) or [])
 
         checkpoint_status = "complete" if merged_cursor != cursor_before else "unchanged"
-        base_manifest = (
-            protocol_disp.to_dict()
-            if protocol_disp is not None
-            else {
-                "pages_or_messages_received": 1 if frames_received > 0 else 0,
-                "source_records_discovered": frames_received + protocol_dups,
-                "mapped_frames_emitted": frames_received,
-                "unmapped_skipped": 0,
-                "unsubscribed_skipped": 0,
-                "watermark_suppressed": protocol_dups,
-                "in_batch_duplicates": 0,
-                "deferred_over_cap": 0,
-                "total_protocol_rejected": 0,
-                "reconciled": True,
-            }
+        has_more_replay = bool(
+            merged_cursor.get("has_more_deferred")
+            or getattr(protocol_disp, "partial_more_available", False)
+            or getattr(protocol_disp, "truncated_by_limit", False)
+            or (int(getattr(protocol_disp, "deferred_over_cap", 0) or 0) > 0)
         )
-        run_manifest = {
-            **base_manifest,
-            "checkpoint_status": checkpoint_status,
-            "points_accepted": accepted,
-            "points_duplicates": duplicates,
-            "points_revised": revised,
-            "points_rejected": rejected,
-            "service_rejected": service_rejected,
-            "conflicts": conflicts_count,
-            "out_of_order": out_of_order_count,
-            "late": late_count,
-        }
+        run_manifest = build_and_reconcile_poll_manifest(
+            protocol_disp=protocol_disp,
+            protocol_dups=protocol_dups,
+            frames_received=frames_received,
+            accepted=accepted,
+            service_duplicates=int(totals.get("duplicates", 0)),
+            revised=revised,
+            service_rejected=service_rejected,
+            has_more_deferred=has_more_replay,
+            checkpoint_status=checkpoint_status,
+            conflicts_count=conflicts_count,
+            out_of_order_count=out_of_order_count,
+            late_count=late_count,
+            policy_revision=int(get_egress_policy(fail_closed=False).get("revision", 1)),
+            dry_run=False,
+        )
 
         finished = utc_now()
         duration_ms = round((time.perf_counter() - t0) * 1000.0, 2)
