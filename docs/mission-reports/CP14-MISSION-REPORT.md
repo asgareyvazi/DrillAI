@@ -16,7 +16,7 @@ Checkpoint 14 (**CP14**) closed the publication gap from the end of CP13, certif
 | **CP14-E** | `fa3051cea10145b8ed4f228132920879224a9606` | Enforced normative ETP 1.2 binary Avro index metadata validation, `MSG_FLAG_COMPRESSED` & unrequested compression fail-closed rejection, `TruncateChannels` handling, official schema/golden wire vectors, and honest peer-verification metadata (`test_cp14_etp_binary_normative.py`). |
 | **CP14-F** | `94f6448ecf21244440f4654f2ab42a3355607cae` | Persisted bounded `ConnectorRun(status="fenced")` ledger entries on post-fetch lease fencing (`test_cp14_worker_fenced_ledger_and_races.py`) and expanded `scripts/verify_stack.py` to verify cross-process egress policy sync and API restart durability. |
 | **CP14-G** | `b8c8ec5899bf94293f875d8c2e87d8e14115b9c2` | Surfaced durable egress-policy scope/revision banner, worker `last_policy_revision` badge, 8-state `data_outcome` labels, and `not_reached`/`not_applicable` milestones in EN/FA with unit and Playwright E2E coverage (Journeys 33, 34, 39). Certified on GitHub Actions Run `38230898896` (`conclusion: success` in `30m25s`). |
-| **CP14-H** | `HEAD` (parent `b8c8ec5899bf94293f875d8c2e87d8e14115b9c2`) | Finalized `CP14-SOURCE-AUDIT.md`, `CP14-MISSION-REPORT.md`, and `FRONTEND-MISSION.md` for CP14 release closure. |
+| **CP14-H** | `9b67ac5aee93240b2e3dab652432f2ea61e38db0` | Finalized `CP14-SOURCE-AUDIT.md`, `CP14-MISSION-REPORT.md`, and `FRONTEND-MISSION.md` for CP14 release closure. Certified on GitHub Actions Run `38255799539` (Job `114833418775`, `conclusion: success` in `23m56s`). |
 
 ---
 
