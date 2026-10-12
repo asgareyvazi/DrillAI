@@ -153,6 +153,13 @@ export function ConnectorsPage() {
     queryFn: ({ signal }) => drillingApi.connectorProfiles(signal),
   })
 
+  const egressPolicyQuery = useQuery({
+    queryKey: ['connector-egress-policy', devRoles],
+    queryFn: ({ signal }) => drillingApi.getConnectorEgressPolicy(signal),
+    enabled: typeof drillingApi.getConnectorEgressPolicy === 'function',
+    retry: false,
+  })
+
   const connectorsQuery = useQuery({
     queryKey: ['connectors', devRoles, { wellFilter, profileFilter, statusFilter }],
     queryFn: ({ signal }) =>
@@ -557,6 +564,39 @@ export function ConnectorsPage() {
         >
           {t('connectors.readOnlyBanner')}
         </div>
+      )}
+
+      {egressPolicyQuery.data && (
+        <Card className="p-3" data-testid="connector-egress-policy-banner">
+          <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-semibold text-slate-200">
+                {t('connectors.egressPolicyTitle')}:
+              </span>
+              <Badge tone="info" data-testid="egress-policy-scope">
+                {egressPolicyQuery.data.scope ?? 'system'}
+              </Badge>
+              <Badge tone="ok" data-testid="egress-policy-revision">
+                rev #{egressPolicyQuery.data.revision ?? 1}
+              </Badge>
+            </div>
+            <div className="flex flex-wrap items-center gap-3 text-slate-300" dir="ltr">
+              <span data-testid="egress-policy-hosts">
+                hosts:{' '}
+                {egressPolicyQuery.data.allowed_hosts.length > 0
+                  ? egressPolicyQuery.data.allowed_hosts.join(', ')
+                  : 'default (public HTTPS/WSS)'}
+              </span>
+              <span>•</span>
+              <span data-testid="egress-policy-cidrs">
+                private CIDRs:{' '}
+                {egressPolicyQuery.data.allowed_private_cidrs.length > 0
+                  ? egressPolicyQuery.data.allowed_private_cidrs.join(', ')
+                  : 'none'}
+              </span>
+            </div>
+          </div>
+        </Card>
       )}
 
       {/* Protocol Profile Capability & Verification Honesty Cards */}
@@ -1585,6 +1625,14 @@ export function ConnectorsPage() {
                       data-testid="detail-fencing-token"
                     >
                       #{selected.worker.fencing_token} (v{selected.config_version})
+                      {selected.worker.last_policy_revision != null && (
+                        <span
+                          className="ms-1.5 text-[10px] text-sky-300"
+                          data-testid="detail-worker-policy-revision"
+                        >
+                          [policy r{selected.worker.last_policy_revision}]
+                        </span>
+                      )}
                     </div>
                   </div>
 
@@ -2096,14 +2144,17 @@ export function ConnectorsPage() {
                                     'all_valid_accepted'
                                       ? 'ok'
                                       : inspectedManifest.data_outcome ===
-                                          'rejected_only'
-                                        ? 'danger'
+                                          'revisions_only'
+                                        ? 'info'
                                         : inspectedManifest.data_outcome ===
-                                              'partial_with_rejections' ||
-                                            inspectedManifest.data_outcome ===
-                                              'partial_batch_capped'
-                                          ? 'warning'
-                                          : 'neutral'
+                                            'rejected_only'
+                                          ? 'danger'
+                                          : inspectedManifest.data_outcome ===
+                                                'partial_with_rejections' ||
+                                              inspectedManifest.data_outcome ===
+                                                'partial_batch_capped'
+                                            ? 'warning'
+                                            : 'neutral'
                                   }
                                   data-testid="manifest-data-outcome"
                                 >
@@ -2119,7 +2170,16 @@ export function ConnectorsPage() {
                                         : inspectedManifest.data_outcome ===
                                             'partial_batch_capped'
                                           ? t('connectors.dataOutcomePartialCapped')
-                                          : t('connectors.dataOutcomeNoData')}
+                                          : inspectedManifest.data_outcome ===
+                                              'filtered_only'
+                                            ? t('connectors.dataOutcomeFilteredOnly')
+                                            : inspectedManifest.data_outcome ===
+                                                'duplicates_only'
+                                              ? t('connectors.dataOutcomeDuplicatesOnly')
+                                              : inspectedManifest.data_outcome ===
+                                                  'revisions_only'
+                                                ? t('connectors.dataOutcomeRevisionsOnly')
+                                                : t('connectors.dataOutcomeNoData')}
                                 </Badge>
                               )}
                               <Badge

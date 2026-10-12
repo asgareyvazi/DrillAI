@@ -1659,12 +1659,18 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
     })
     expect(adminResp1.ok()).toBeTruthy()
     const policy1 = (await adminResp1.json()) as {
+      policy_id: string
+      scope: string
+      revision: number
       allowed_hosts: string[]
       allowed_private_cidrs: string[]
     }
+    expect(policy1.policy_id).toMatch(/^cep_/)
+    expect(policy1.scope).toBe('system')
+    expect(policy1.revision).toBeGreaterThanOrEqual(2)
     expect(policy1.allowed_private_cidrs).toContain('10.42.0.0/16')
 
-    // Replaying with the same Idempotency-Key returns the exact same response
+    // Replaying with the same Idempotency-Key returns the exact same response & revision
     const adminResp2 = await request.fetch('/api/v1/connectors/egress-policy', {
       method: 'PUT',
       headers: {
@@ -1678,6 +1684,39 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
       },
     })
     expect(adminResp2.ok()).toBeTruthy()
+    const policy2 = (await adminResp2.json()) as { revision: number }
+    expect(policy2.revision).toBe(policy1.revision)
+
+    // Reusing the same Idempotency-Key with a different payload returns 409 Conflict
+    const conflictIdem = await request.fetch('/api/v1/connectors/egress-policy', {
+      method: 'PUT',
+      headers: {
+        'X-Dev-Roles': 'admin',
+        'Idempotency-Key': idemKey,
+      },
+      data: {
+        allowed_hosts: ['different-host.internal.example.com'],
+        allowed_private_networks: ['10.42.0.0/16'],
+        reason: 'Mismatched payload under same idempotency key',
+      },
+    })
+    expect(conflictIdem.status()).toBe(409)
+
+    // Stale expected_revision returns 409 Conflict
+    const staleRev = await request.fetch('/api/v1/connectors/egress-policy', {
+      method: 'PUT',
+      headers: {
+        'X-Dev-Roles': 'admin',
+        'Idempotency-Key': `egress-stale-${Date.now()}`,
+      },
+      data: {
+        expected_revision: 1,
+        allowed_hosts: [],
+        allowed_private_networks: [],
+        reason: 'Stale revision check',
+      },
+    })
+    expect(staleRev.status()).toBe(409)
 
     // Reset egress policy back to empty so subsequent tests see clean defaults
     await request.fetch('/api/v1/connectors/egress-policy', {
@@ -1687,6 +1726,7 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
         'Idempotency-Key': `egress-reset-${Date.now()}`,
       },
       data: {
+        expected_revision: policy1.revision,
         allowed_hosts: [],
         allowed_private_networks: [],
         reason: 'Reset egress policy after test',
@@ -1738,7 +1778,11 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
 
     await expect(page.getByTestId('connector-test-result')).toContainText('Connection test failed')
     await expect(page.getByTestId('test-milestone-endpoint_policy_validated')).toContainText('passed')
+    await expect(page.getByTestId('test-milestone-tls_verified')).toContainText('not_applicable')
     await expect(page.getByTestId('test-milestone-session_established')).toContainText('failed')
+    await expect(page.getByTestId('test-milestone-channels_discovered')).toContainText('not_reached')
+    await expect(page.getByTestId('test-milestone-disposition_validated')).toContainText('not_reached')
+    await expect(page.getByTestId('test-milestone-transaction_committed')).toContainText('not_applicable')
 
     // Secret token must never appear in page content
     const html = await page.content()
@@ -1938,4 +1982,64 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
     expect(unnamed).toEqual([])
     expect(appConsoleErrors(consoleErrors)).toEqual([])
   })
+
+  test('Journey 39 (CP14 Durable Egress Banner, Worker Policy Sync & Truthful filtered_only Data-Outcome): Unmapped poll records filtered_only and never all_valid_accepted', async ({
+    page,
+    request,
+    wellId,
+    consoleErrors,
+  }) => {
+    const harness = await apiPost<HarnessSnapshot>(request, '/connectors/harness/ensure', {}, 'engineer')
+    await apiPost(
+      request,
+      '/connectors/harness/configure',
+      { protocol: 'etp_binary', fault_mode: 'ok', reset_rows: true },
+      'engineer',
+    )
+
+    const connKey = `e2e-cp14-filtered-${Date.now().toString(36)}`
+    const created = await apiPost<ConnectorDto>(
+      request,
+      '/connectors',
+      {
+        key: connKey,
+        name: 'ETP Binary Unmapped Filtered Stream',
+        protocol_profile: 'etp.1.2.binary_ws',
+        well_id: wellId,
+        endpoint_url: harness.etp_binary.endpoint_url,
+        config: {
+          auth_mode: 'bearer',
+          tls_verify: true,
+          poll_interval_seconds: 1.0,
+          channel_mappings: [
+            {
+              source_mnemonic: 'NON_EXISTENT_MNEMONIC',
+              channel_key: 'spp',
+              name: 'Standpipe Pressure',
+              dimension: 'pressure',
+              unit: 'psi',
+            },
+          ],
+        },
+        secret_refs: harness.etp_binary.secret_refs,
+      },
+      'engineer',
+    )
+    await apiPost(request, `/connectors/${created.id}/start`, { reason: 'Start filtered-only ETP binary stream' }, 'engineer')
+    await apiPost(request, `/connectors/${created.id}/poll`, {}, 'engineer')
+
+    await page.goto(`/connectors?wellId=${wellId}`)
+    await expect(page.getByTestId('connector-egress-policy-banner')).toBeVisible()
+    await expect(page.getByTestId('egress-policy-scope')).toHaveText('system')
+    await expect(page.getByTestId('egress-policy-revision')).toContainText('rev #')
+
+    await page.getByTestId(`connector-row-${connKey}`).click()
+    await expect(page.getByTestId('detail-worker-policy-revision')).toContainText('[policy r')
+    await expect(page.getByTestId('manifest-data-outcome')).toHaveText(
+      'Filtered only (unmapped/unsubscribed, 0 accepted)',
+    )
+
+    expect(appConsoleErrors(consoleErrors)).toEqual([])
+  })
 })
+

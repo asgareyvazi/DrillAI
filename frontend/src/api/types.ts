@@ -2021,6 +2021,8 @@ export interface ConnectorProfileSpec {
   production_supported?: boolean
   local_harness_verified: boolean
   conformance_verified?: boolean
+  independent_peer_verified?: boolean
+  evidence_tier?: string
   external_vendor_verified: boolean
   limitations: string
 }
@@ -2051,6 +2053,8 @@ export interface ConnectorWorkerLease {
   last_heartbeat_at: string | null
   fencing_token: number
   lease_active: boolean
+  last_policy_revision?: number | null
+  last_policy_sync_at?: string | null
 }
 
 export interface ConnectorHealthSummary {
@@ -2192,7 +2196,7 @@ export interface ConnectorRunsPage {
 
 export interface ConnectorTestMilestone {
   stage: string
-  status: 'passed' | 'failed' | 'not_applicable' | string
+  status: 'passed' | 'failed' | 'not_applicable' | 'not_reached' | string
   detail: string
 }
 
@@ -2291,13 +2295,19 @@ export interface ConnectorRunManifest {
   partial_page_or_stream?: boolean
   truncated_by_limit?: boolean
   partial_more_available?: boolean
+  protocol_reconciled?: boolean
+  ingestion_reconciled?: boolean
   reconciled?: boolean
+  policy_revision?: number | null
   checkpoint_status?: 'complete' | 'partial' | 'unchanged' | 'advanced' | 'partial_page_deferred' | string
   data_outcome?:
     | 'all_valid_accepted'
     | 'partial_with_rejections'
     | 'rejected_only'
     | 'partial_batch_capped'
+    | 'filtered_only'
+    | 'duplicates_only'
+    | 'revisions_only'
     | 'no_data'
     | string
   dry_run?: boolean
@@ -2369,6 +2379,12 @@ export interface ProtocolHarnessStatus {
 }
 
 export interface ConnectorEgressPolicy {
+  policy_id?: string
+  scope?: string
+  revision?: number
+  updated_at?: string | null
+  updated_by?: string | null
+  reason?: string | null
   allowed_hosts: string[]
   allowed_private_cidrs: string[]
   allow_loopback: boolean

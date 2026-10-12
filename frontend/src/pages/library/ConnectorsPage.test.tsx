@@ -28,12 +28,14 @@ const mockDisableConnector = vi.fn()
 const mockPollConnector = vi.fn()
 const mockReplayConnector = vi.fn()
 const mockEnsureProtocolHarness = vi.fn()
+const mockGetConnectorEgressPolicy = vi.fn()
 
 vi.mock('../../api/endpoints', () => ({
   drillingApi: {
     identity: (...args: unknown[]) => mockIdentity(...args),
     listWells: (...args: unknown[]) => mockListWells(...args),
     connectorProfiles: (...args: unknown[]) => mockConnectorProfiles(...(args as [])),
+    getConnectorEgressPolicy: (...args: unknown[]) => mockGetConnectorEgressPolicy(...args),
     listConnectors: (...args: unknown[]) => mockListConnectors(...(args as [])),
     getConnector: (...args: unknown[]) => mockGetConnector(...(args as [])),
     listConnectorRuns: (...args: unknown[]) => mockListConnectorRuns(...args),
@@ -246,6 +248,16 @@ beforeEach(() => {
     allowed_secret_slots: ['username', 'password', 'bearer_token'],
     desired_states: ['enabled', 'stopped', 'disabled'],
     runtime_statuses: ['configured', 'running', 'stopped', 'failed', 'disabled'],
+  })
+  mockGetConnectorEgressPolicy.mockResolvedValue({
+    policy_id: 'cep_system_default',
+    scope: 'system',
+    revision: 2,
+    allowed_hosts: ['witsml.rig01.example.com'],
+    allowed_private_cidrs: ['10.24.0.0/16'],
+    allow_loopback: false,
+    harness_owned_endpoints: [],
+    is_production: false,
   })
   mockListConnectors.mockResolvedValue({
     items: [sampleWitsmlConnector],
@@ -485,4 +497,82 @@ describe('ConnectorsPage', () => {
       expect(screen.getByTestId('connector-replay-result')).toHaveTextContent('DRY RUN')
     })
   })
+
+  it('renders CP14 egress policy revision banner, worker policy sync badge, and filtered_only data_outcome', async () => {
+    mockIdentity.mockResolvedValue({
+      principal_id: 'usr_eng',
+      permissions: ['connector.read', 'connector.manage', 'connector.control', 'connector.test'],
+    })
+    mockGetConnector.mockResolvedValue({
+      ...sampleWitsmlConnector,
+      worker: {
+        ...sampleWitsmlConnector.worker,
+        last_policy_revision: 2,
+        last_policy_sync_at: '2026-10-12T08:00:00Z',
+      },
+    })
+    mockListConnectorRuns.mockResolvedValue({
+      items: [
+        {
+          id: 'cnr_filtered_01',
+          org_id: 'org_default',
+          connector_id: 'cnc_witsml_01',
+          well_id: 'wel_01',
+          worker_id: 'wrk_01',
+          fencing_token: 4,
+          config_version: 2,
+          run_kind: 'poll',
+          status: 'succeeded',
+          started_at: '2026-10-12T08:01:00Z',
+          finished_at: '2026-10-12T08:01:01Z',
+          duration_ms: 48,
+          frames_received: 0,
+          points_accepted: 0,
+          points_duplicates: 0,
+          points_revised: 0,
+          points_rejected: 0,
+          alerts_raised: 0,
+          alerts_cleared: 0,
+          cursor_before: {},
+          cursor_after: {},
+          error_category: null,
+          error_message: null,
+          trace_id: 'trc_filtered_01',
+          details: {
+            manifest: {
+              source_records_discovered: 4,
+              mapped_frames_emitted: 0,
+              unmapped_skipped: 4,
+              watermark_suppressed: 0,
+              deferred_over_cap: 0,
+              reconciled: true,
+              checkpoint_status: 'unchanged',
+              data_outcome: 'filtered_only',
+            },
+          },
+        },
+      ],
+      total: 1,
+      limit: 25,
+    })
+
+    renderWorkspace()
+
+    await waitFor(() => {
+      expect(screen.getByTestId('connector-egress-policy-banner')).toBeInTheDocument()
+      expect(screen.getByTestId('detail-worker-policy-revision')).toHaveTextContent(
+        '[policy r2]',
+      )
+      expect(screen.getByTestId('manifest-data-outcome')).toHaveTextContent(
+        'Filtered only (unmapped/unsubscribed, 0 accepted)',
+      )
+    })
+    expect(screen.getByTestId('egress-policy-scope')).toHaveTextContent('system')
+    expect(screen.getByTestId('egress-policy-revision')).toHaveTextContent('rev #2')
+    expect(screen.getByTestId('egress-policy-hosts')).toHaveTextContent(
+      'witsml.rig01.example.com',
+    )
+    expect(screen.getByTestId('egress-policy-cidrs')).toHaveTextContent('10.24.0.0/16')
+  })
 })
+
