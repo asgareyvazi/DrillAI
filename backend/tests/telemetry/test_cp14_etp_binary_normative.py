@@ -21,10 +21,10 @@ from __future__ import annotations
 
 import asyncio
 import json
-from pathlib import Path
 import struct
-from typing import Any
 import uuid
+from pathlib import Path
+from typing import Any
 
 import pytest
 import websockets
