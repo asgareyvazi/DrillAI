@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import asyncio
 import concurrent.futures
+import contextlib
 import datetime as dt
 import ipaddress
 import os
@@ -101,6 +102,7 @@ __all__ = [
     "mask_secret_refs",
     "parse_channel_mappings",
     "parse_private_cidr_list",
+    "redact_egress_policy_for_principal",
     "redact_sensitive_text",
     "register_harness_endpoint",
     "reset_dns_executor_state",
@@ -422,6 +424,73 @@ def _format_egress_policy_dict(snapshot: dict[str, Any]) -> dict[str, Any]:
         "last_synced_at": snapshot.get("last_synced_at"),
         "recovered_at": snapshot.get("recovered_at") or _egress_policy_recovered_at,
     }
+
+
+def redact_egress_policy_for_principal(
+    policy: dict[str, Any],
+    *,
+    principal: Principal | None,
+    org_id: str | None = None,
+    surface: str = "egress_policy",
+) -> dict[str, Any]:
+    """Enforce least-privilege redaction on system-scope egress policy responses.
+
+    - Platform administrators (`admin` / `system_admin` role or `system.egress_policy.read` permission)
+      receive the full unredacted policy (`redacted: False`, `actor_redacted: False`).
+    - Non-admin principals from a different tenant organization (`org_id != updated_by_org_id`),
+      or read-only principals without `connector.manage` inspecting `GET /connectors/profiles`,
+      have `allowed_hosts`, `allowed_private_cidrs`, `allowed_private_networks`, and `reason`
+      redacted while preserving `revision`, `status`, `policy_state`, `scope`, `source`, and counts
+      (`allowed_hosts_count`, `allowed_private_cidrs_count`) for operational diagnosis.
+    - Non-admin principals also have cross-tenant actor identifiers (`updated_by_id`,
+      `updated_by_display`, `updated_by_org_id`) redacted.
+    """
+    out = dict(policy)
+    hosts = list(out.get("allowed_hosts") or [])
+    cidrs = list(out.get("allowed_private_cidrs") or [])
+    out["allowed_hosts_count"] = len(hosts)
+    out["allowed_private_cidrs_count"] = len(cidrs)
+
+    role_keys = tuple(getattr(principal, "role_keys", None) or ()) if principal is not None else ()
+    is_platform_admin = ("admin" in role_keys) or ("system_admin" in role_keys)
+    has_manage = bool(
+        is_platform_admin
+        or ("org_admin" in role_keys)
+        or ("engineer" in role_keys)
+        or ("drilling_supervisor" in role_keys)
+        or ("well_manager" in role_keys)
+        or ("data_manager" in role_keys)
+        or (principal is not None and permission_granted(principal, "connector.manage"))
+    )
+
+    updated_by_org = out.get("updated_by_org_id")
+    is_cross_tenant = bool(
+        updated_by_org
+        and updated_by_org != SYSTEM_EGRESS_POLICY_ORG_ID
+        and org_id
+        and str(org_id) != str(updated_by_org)
+    )
+
+    if is_platform_admin:
+        out["redacted"] = False
+        out["actor_redacted"] = False
+        return out
+
+    # Redact actor identity for non-platform-admin readers
+    out["updated_by_id"] = None
+    out["updated_by_display"] = None
+    out["updated_by_org_id"] = None
+    out["actor_redacted"] = True
+
+    if is_cross_tenant or (surface == "profiles" and not has_manage):
+        out["allowed_hosts"] = []
+        out["allowed_private_cidrs"] = []
+        out["allowed_private_networks"] = []
+        out["reason"] = None
+        out["redacted"] = True
+    else:
+        out["redacted"] = False
+    return out
 
 
 def get_egress_policy(*, fail_closed: bool = False) -> dict[str, Any]:
@@ -815,6 +884,7 @@ async def update_egress_policy_in_db(
                 "policy_key": SYSTEM_EGRESS_POLICY_KEY,
                 "expected_revision": int(expected_revision),
                 "stored_revision": current_rev,
+                "current_revision": current_rev,
             },
         )
 
@@ -2192,10 +2262,8 @@ def _rotate_dns_executor_locked() -> None:
         max_workers=_DNS_EXECUTOR_WORKERS,
         thread_name_prefix=f"drillai-dns-g{_dns_generation}",
     )
-    try:
+    with contextlib.suppress(Exception):
         old_executor.shutdown(wait=False, cancel_futures=True)
-    except Exception:
-        pass
 
 
 def get_dns_executor_stats() -> dict[str, int]:
@@ -3291,6 +3359,12 @@ def connector_out(
             "lease_active": health["lease_active"],
             "last_policy_revision": (row.attributes or {}).get("last_policy_revision"),
             "last_policy_sync_at": (row.attributes or {}).get("last_policy_sync_at"),
+            "system_policy_revision": int(_active_egress_policy_snapshot.get("revision", 1)),
+            "policy_stale": bool(
+                (row.attributes or {}).get("last_policy_revision") is not None
+                and int((row.attributes or {}).get("last_policy_revision") or 0)
+                < int(_active_egress_policy_snapshot.get("revision", 1))
+            ),
         },
         "health": {
             **health,

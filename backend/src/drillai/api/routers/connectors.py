@@ -14,6 +14,7 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Header, Query, Request
 from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from drillai.api.deps import AuthContext, OptionalFilter, get_db, require
@@ -21,7 +22,9 @@ from drillai.core.audit import record_audit
 from drillai.core.clock import utc_now
 from drillai.core.errors import PermissionDenied, ValidationFailed
 from drillai.core.idempotency import complete, replay_or_reserve
+from drillai.db.models import Organization
 from drillai.security.actions import authorize
+from drillai.security.rbac import permission_granted
 from drillai.telemetry.connectors import (
     ALLOWED_SECRET_SLOTS,
     CONNECTOR_DESIRED_STATES,
@@ -34,6 +37,7 @@ from drillai.telemetry.connectors import (
     ConnectorService,
     _format_egress_policy_dict,
     publish_committed_egress_policy_snapshot,
+    redact_egress_policy_for_principal,
     sync_egress_policy_from_db,
     update_egress_policy_in_db,
 )
@@ -117,10 +121,58 @@ class EgressPolicyUpdateRequest(BaseModel):
     expected_revision: int | None = Field(default=None, ge=1)
 
 
+async def _authorize_system_egress_policy_update(
+    session: AsyncSession,
+    auth: AuthContext,
+) -> None:
+    """Enforce explicit platform/system administrator authority for system-wide egress policy mutations."""
+    role_keys = tuple(auth.principal.role_keys or ())
+    if "org_admin" in role_keys and "admin" not in role_keys and "system_admin" not in role_keys:
+        raise PermissionDenied(
+            "tenant organization administrators may not modify system-wide outbound network egress policy",
+            details={
+                "reason": "system_egress_policy_permission_required",
+                "role_keys": list(role_keys),
+            },
+        )
+    if "admin" not in role_keys and "system_admin" not in role_keys:
+        raise PermissionDenied(
+            "only platform administrators may modify outbound connector network egress policy",
+            details={"reason": "admin_role_required", "role_keys": list(role_keys)},
+        )
+    if auth.principal.permissions and not permission_granted(
+        auth.principal, "system.egress_policy.manage"
+    ):
+        raise PermissionDenied(
+            "missing permission: system.egress_policy.manage",
+            details={
+                "reason": "system_egress_policy_permission_required",
+                "missing": ["system.egress_policy.manage"],
+            },
+        )
+    if auth.org_id:
+        org_row = (
+            await session.execute(select(Organization).where(Organization.id == auth.org_id))
+        ).scalar_one_or_none()
+        if (
+            org_row is not None
+            and isinstance(org_row.settings, dict)
+            and (
+                org_row.settings.get("allow_system_egress_policy_admin") is False
+                or org_row.settings.get("tenant_tier") == "isolated_tenant"
+                or org_row.settings.get("scope") == "tenant_only"
+            )
+        ):
+            raise PermissionDenied(
+                "tenant organization is not authorized for system-scope egress policy administration",
+                details={"reason": "system_scope_required", "org_id": auth.org_id},
+            )
+
+
 @router.get("/connectors/profiles", summary="Supported telemetry connector protocol profiles")
 async def list_connector_profiles(
     session: Annotated[AsyncSession, Depends(get_db)],
-    _: Annotated[AuthContext, Depends(require("connector.read"))],
+    auth: Annotated[AuthContext, Depends(require("connector.read"))],
 ) -> dict[str, Any]:
     policy = await sync_egress_policy_from_db(session)
     return {
@@ -128,7 +180,12 @@ async def list_connector_profiles(
         "allowed_secret_slots": list(ALLOWED_SECRET_SLOTS),
         "desired_states": list(CONNECTOR_DESIRED_STATES),
         "runtime_statuses": list(CONNECTOR_RUNTIME_STATUSES),
-        "egress_policy": policy,
+        "egress_policy": redact_egress_policy_for_principal(
+            policy,
+            principal=auth.principal,
+            org_id=auth.org_id,
+            surface="profiles",
+        ),
     }
 
 
@@ -138,14 +195,20 @@ async def list_connector_profiles(
 )
 async def inspect_egress_policy(
     session: Annotated[AsyncSession, Depends(get_db)],
-    _: Annotated[AuthContext, Depends(require("connector.read"))],
+    auth: Annotated[AuthContext, Depends(require("connector.read"))],
 ) -> dict[str, Any]:
-    return await sync_egress_policy_from_db(session)
+    policy = await sync_egress_policy_from_db(session)
+    return redact_egress_policy_for_principal(
+        policy,
+        principal=auth.principal,
+        org_id=auth.org_id,
+        surface="egress_policy",
+    )
 
 
 @router.put(
     "/connectors/egress-policy",
-    summary="Update outbound network egress policy (admin only, audited, durable & versioned)",
+    summary="Update outbound network egress policy (platform admin only, audited, durable & versioned)",
 )
 async def update_egress_policy(
     body: EgressPolicyUpdateRequest,
@@ -153,11 +216,7 @@ async def update_egress_policy(
     auth: Annotated[AuthContext, Depends(require("connector.manage"))],
     idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key", max_length=160)] = None,
 ) -> dict[str, Any]:
-    if "admin" not in (auth.principal.role_keys or ()):
-        raise PermissionDenied(
-            "only administrators may modify outbound connector network egress policy",
-            details={"reason": "admin_role_required"},
-        )
+    await _authorize_system_egress_policy_update(session, auth)
     actor_org_id = auth.org_id or ""
     scope = "connector.egress_policy.update"
     cidrs = (

@@ -1666,10 +1666,21 @@ class EtpBinaryWebSocketClient:
                             )
                             if end_dt is None:
                                 continue
-                            # Clamp pre-existing cursor watermark if truncated back before it
+                            # Clamp pre-existing cursor watermark and prune recent_points if truncated back before it
                             prev_dt = prev_channel_dt.get(tmapping.channel_key)
                             if prev_dt is not None and prev_dt > end_dt:
                                 prev_channel_dt[tmapping.channel_key] = end_dt
+                            rec_map = prev_channel_recent.get(tmapping.channel_key)
+                            if isinstance(rec_map, dict):
+                                for r_ts in list(rec_map.keys()):
+                                    try:
+                                        parsed_r_dt = dt.datetime.fromisoformat(str(r_ts))
+                                        if parsed_r_dt.tzinfo is None:
+                                            parsed_r_dt = parsed_r_dt.replace(tzinfo=dt.UTC)
+                                        if parsed_r_dt > end_dt:
+                                            rec_map.pop(r_ts, None)
+                                    except ValueError:
+                                        pass
                             # Drop any already-buffered frames in the current batch after newEndIndex
                             kept_frames: list[SourceFrame] = []
                             dropped_count = 0
@@ -1688,6 +1699,19 @@ class EtpBinaryWebSocketClient:
                                 )
                                 disposition.watermark_suppressed += dropped_count
                                 duplicates_suppressed += dropped_count
+                                trunc_src_label = (
+                                    tmeta.source_mnemonic
+                                    if tmeta is not None and tmeta.source_mnemonic
+                                    else (tmapping.source_mnemonic if tmapping is not None else f"CH_{tcid}")
+                                )
+                                ch_entry = disposition.per_source_channel.get(trunc_src_label)
+                                if isinstance(ch_entry, dict):
+                                    ch_entry["emitted"] = max(
+                                        0, int(ch_entry.get("emitted", 0)) - dropped_count
+                                    )
+                                    ch_entry["watermark_suppressed"] = (
+                                        int(ch_entry.get("watermark_suppressed", 0)) + dropped_count
+                                    )
                         continue
                     if mtype == "CloseSession":
                         break

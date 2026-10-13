@@ -254,11 +254,27 @@ ROLE_CATALOGUE: tuple[Role, ...] = (
         max_action_level=ActionLevel.OBSERVE,
     ),
     Role(
+        key="org_admin",
+        name="Organization administrator",
+        description="Manages tenant users, connectors, and projects within a single organization; no system-wide egress policy authority.",
+        permissions=(
+            "registry.read",
+            "user.*",
+            "connector.*",
+            "audit.read",
+            "*.read",
+            "project.write",
+        ),
+        max_action_level=ActionLevel.EXECUTE_WITH_APPROVAL,
+    ),
+    Role(
         key="admin",
         name="Platform administrator",
         description="Manages users, roles, integrations and registries; not an engineering authority.",
         permissions=(
             "admin.**",
+            "system.egress_policy.manage",
+            "system.egress_policy.read",
             "registry.*",
             "user.*",
             "role.*",

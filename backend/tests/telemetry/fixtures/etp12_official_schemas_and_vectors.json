@@ -7,7 +7,10 @@
     "conformance_verified": true,
     "independent_peer_verified": false,
     "external_vendor_verified": false,
-    "note": "Verified against official Energistics ETP v1.2 Avro schema field ordering, union branch indices, enum symbol tables, fixed(16) UUID layout, and byte-exact wire vectors. Live third-party commercial ETP 1.2 servers are not reachable in the isolated CI sandbox."
+    "note": "Verified against official Energistics ETP v1.2 Avro schema field ordering, union branch indices, enum symbol tables, fixed(16) UUID layout, and byte-exact wire vectors using an independent recursive schema-driven Avro datum verifier. Live third-party commercial ETP 1.2 servers are not reachable in the isolated CI sandbox."
+  },
+  "fixed": {
+    "Energistics.Etp.v12.Datatypes.Uuid": 16
   },
   "enums": {
     "Energistics.Etp.v12.Datatypes.ChannelData.ChannelIndexKind": [
@@ -76,6 +79,10 @@
       "Energistics.Etp.v12.Datatypes.ArrayOfBytes",
       "bytes",
       "Energistics.Etp.v12.Datatypes.AnySparseArray"
+    ],
+    "Energistics.Etp.v12.Protocol.Core.ProtocolException.error": [
+      "null",
+      "Energistics.Etp.v12.Datatypes.ErrorInfo"
     ]
   },
   "records": {
@@ -86,53 +93,158 @@
       {"name": "messageId", "type": "long"},
       {"name": "messageFlags", "type": "int"}
     ],
+    "Energistics.Etp.v12.Datatypes.Version": [
+      {"name": "major", "type": "int"},
+      {"name": "minor", "type": "int"},
+      {"name": "revision", "type": "int"},
+      {"name": "patch", "type": "int"}
+    ],
+    "Energistics.Etp.v12.Datatypes.PassIndexedDepth": [
+      {"name": "pass", "type": "long"},
+      {"name": "direction", "type": "Energistics.Etp.v12.Datatypes.PassDirection"},
+      {"name": "depth", "type": "double"}
+    ],
+    "Energistics.Etp.v12.Datatypes.IndexValue": [
+      {"name": "item", "type": "Energistics.Etp.v12.Datatypes.IndexValue.item"}
+    ],
+    "Energistics.Etp.v12.Datatypes.DataValue": [
+      {"name": "item", "type": "Energistics.Etp.v12.Datatypes.DataValue.item"}
+    ],
+    "Energistics.Etp.v12.Datatypes.DataAttribute": [
+      {"name": "attributeId", "type": "int"},
+      {"name": "attributeValue", "type": "Energistics.Etp.v12.Datatypes.DataValue"}
+    ],
+    "Energistics.Etp.v12.Datatypes.SupportedProtocol": [
+      {"name": "protocol", "type": "int"},
+      {"name": "protocolVersion", "type": "Energistics.Etp.v12.Datatypes.Version"},
+      {"name": "role", "type": "string"},
+      {"name": "protocolCapabilities", "type": "map<Energistics.Etp.v12.Datatypes.DataValue>"}
+    ],
+    "Energistics.Etp.v12.Datatypes.SupportedDataObject": [
+      {"name": "qualifiedType", "type": "string"},
+      {"name": "dataObjectCapabilities", "type": "map<Energistics.Etp.v12.Datatypes.DataValue>"}
+    ],
+    "Energistics.Etp.v12.Datatypes.ErrorInfo": [
+      {"name": "message", "type": "string"},
+      {"name": "code", "type": "int"}
+    ],
     "Energistics.Etp.v12.Protocol.Core.RequestSession": [
       {"name": "applicationName", "type": "string"},
       {"name": "applicationVersion", "type": "string"},
       {"name": "clientInstanceId", "type": "Energistics.Etp.v12.Datatypes.Uuid"},
-      {"name": "requestedProtocols", "type": "array<SupportedProtocol>"},
-      {"name": "supportedDataObjects", "type": "array<SupportedDataObject>"},
+      {"name": "requestedProtocols", "type": "array<Energistics.Etp.v12.Datatypes.SupportedProtocol>"},
+      {"name": "supportedDataObjects", "type": "array<Energistics.Etp.v12.Datatypes.SupportedDataObject>"},
       {"name": "supportedCompression", "type": "array<string>"},
       {"name": "supportedFormats", "type": "array<string>"},
       {"name": "currentDateTime", "type": "long"},
       {"name": "earliestRetainedChangeTime", "type": "long"},
       {"name": "serverAuthorizationRequired", "type": "boolean"},
-      {"name": "endpointCapabilities", "type": "map<DataValue>"}
+      {"name": "endpointCapabilities", "type": "map<Energistics.Etp.v12.Datatypes.DataValue>"}
     ],
     "Energistics.Etp.v12.Protocol.Core.OpenSession": [
       {"name": "applicationName", "type": "string"},
       {"name": "applicationVersion", "type": "string"},
       {"name": "serverInstanceId", "type": "Energistics.Etp.v12.Datatypes.Uuid"},
-      {"name": "supportedProtocols", "type": "array<SupportedProtocol>"},
-      {"name": "supportedDataObjects", "type": "array<SupportedDataObject>"},
+      {"name": "supportedProtocols", "type": "array<Energistics.Etp.v12.Datatypes.SupportedProtocol>"},
+      {"name": "supportedDataObjects", "type": "array<Energistics.Etp.v12.Datatypes.SupportedDataObject>"},
       {"name": "supportedCompression", "type": "string"},
       {"name": "supportedFormats", "type": "array<string>"},
       {"name": "currentDateTime", "type": "long"},
       {"name": "earliestRetainedChangeTime", "type": "long"},
       {"name": "sessionId", "type": "Energistics.Etp.v12.Datatypes.Uuid"},
-      {"name": "endpointCapabilities", "type": "map<DataValue>"}
+      {"name": "endpointCapabilities", "type": "map<Energistics.Etp.v12.Datatypes.DataValue>"}
+    ],
+    "Energistics.Etp.v12.Protocol.Core.CloseSession": [
+      {"name": "reason", "type": "string"}
+    ],
+    "Energistics.Etp.v12.Protocol.Core.Ping": [
+      {"name": "currentDateTime", "type": "long"}
+    ],
+    "Energistics.Etp.v12.Protocol.Core.Pong": [
+      {"name": "currentDateTime", "type": "long"}
+    ],
+    "Energistics.Etp.v12.Protocol.Core.ProtocolException": [
+      {"name": "error", "type": "Energistics.Etp.v12.Protocol.Core.ProtocolException.error"},
+      {"name": "errors", "type": "map<Energistics.Etp.v12.Datatypes.ErrorInfo>"}
+    ],
+    "Energistics.Etp.v12.Protocol.Core.Acknowledge": [],
+    "Energistics.Etp.v12.Datatypes.Object.IndexInterval": [
+      {"name": "startIndex", "type": "Energistics.Etp.v12.Datatypes.IndexValue"},
+      {"name": "endIndex", "type": "Energistics.Etp.v12.Datatypes.IndexValue"},
+      {"name": "uom", "type": "string"},
+      {"name": "depthDatum", "type": "string"}
+    ],
+    "Energistics.Etp.v12.Datatypes.ChannelData.IndexMetadataRecord": [
+      {"name": "indexKind", "type": "Energistics.Etp.v12.Datatypes.ChannelData.ChannelIndexKind"},
+      {"name": "interval", "type": "Energistics.Etp.v12.Datatypes.Object.IndexInterval"},
+      {"name": "direction", "type": "Energistics.Etp.v12.Datatypes.ChannelData.IndexDirection"},
+      {"name": "name", "type": "string"},
+      {"name": "uom", "type": "string"},
+      {"name": "depthDatum", "type": "string"},
+      {"name": "indexPropertyKindUri", "type": "string"},
+      {"name": "filterable", "type": "boolean"}
+    ],
+    "Energistics.Etp.v12.Datatypes.ChannelData.AttributeMetadataRecord": [
+      {"name": "attributeId", "type": "int"},
+      {"name": "attributeName", "type": "string"},
+      {"name": "dataKind", "type": "Energistics.Etp.v12.Datatypes.ChannelData.ChannelDataKind"},
+      {"name": "uom", "type": "string"},
+      {"name": "depthDatum", "type": "string"},
+      {"name": "attributePropertyKindUri", "type": "string"},
+      {"name": "axisVectorLengths", "type": "array<int>"}
     ],
     "Energistics.Etp.v12.Datatypes.ChannelData.ChannelMetadataRecord": [
       {"name": "uri", "type": "string"},
       {"name": "id", "type": "long"},
-      {"name": "indexes", "type": "array<IndexMetadataRecord>"},
+      {"name": "indexes", "type": "array<Energistics.Etp.v12.Datatypes.ChannelData.IndexMetadataRecord>"},
       {"name": "channelName", "type": "string"},
-      {"name": "dataKind", "type": "ChannelDataKind"},
+      {"name": "dataKind", "type": "Energistics.Etp.v12.Datatypes.ChannelData.ChannelDataKind"},
       {"name": "uom", "type": "string"},
       {"name": "depthDatum", "type": "string"},
       {"name": "channelClassUri", "type": "string"},
-      {"name": "status", "type": "ActiveStatusKind"},
+      {"name": "status", "type": "Energistics.Etp.v12.Datatypes.Object.ActiveStatusKind"},
       {"name": "source", "type": "string"},
       {"name": "axisVectorLengths", "type": "array<int>"},
-      {"name": "attributeMetadata", "type": "array<AttributeMetadataRecord>"},
-      {"name": "customData", "type": "map<DataValue>"}
+      {"name": "attributeMetadata", "type": "array<Energistics.Etp.v12.Datatypes.ChannelData.AttributeMetadataRecord>"},
+      {"name": "customData", "type": "map<Energistics.Etp.v12.Datatypes.DataValue>"}
+    ],
+    "Energistics.Etp.v12.Protocol.ChannelStreaming.ChannelMetadata": [
+      {"name": "channels", "type": "array<Energistics.Etp.v12.Datatypes.ChannelData.ChannelMetadataRecord>"}
     ],
     "Energistics.Etp.v12.Datatypes.ChannelData.DataItem": [
       {"name": "channelId", "type": "long"},
-      {"name": "indexes", "type": "array<IndexValue>"},
-      {"name": "value", "type": "DataValue"},
-      {"name": "valueAttributes", "type": "array<DataAttribute>"}
+      {"name": "indexes", "type": "array<Energistics.Etp.v12.Datatypes.IndexValue>"},
+      {"name": "value", "type": "Energistics.Etp.v12.Datatypes.DataValue"},
+      {"name": "valueAttributes", "type": "array<Energistics.Etp.v12.Datatypes.DataAttribute>"}
+    ],
+    "Energistics.Etp.v12.Protocol.ChannelStreaming.ChannelData": [
+      {"name": "data", "type": "array<Energistics.Etp.v12.Datatypes.ChannelData.DataItem>"}
+    ],
+    "Energistics.Etp.v12.Protocol.ChannelStreaming.StartStreaming": [],
+    "Energistics.Etp.v12.Protocol.ChannelStreaming.StopStreaming": [],
+    "Energistics.Etp.v12.Datatypes.ChannelData.TruncateInfo": [
+      {"name": "channelId", "type": "long"},
+      {"name": "newEndIndex", "type": "Energistics.Etp.v12.Datatypes.IndexValue"}
+    ],
+    "Energistics.Etp.v12.Protocol.ChannelStreaming.TruncateChannels": [
+      {"name": "channels", "type": "array<Energistics.Etp.v12.Datatypes.ChannelData.TruncateInfo>"}
     ]
+  },
+  "message_dispatch": {
+    "0:1": "Energistics.Etp.v12.Protocol.Core.RequestSession",
+    "0:2": "Energistics.Etp.v12.Protocol.Core.OpenSession",
+    "0:5": "Energistics.Etp.v12.Protocol.Core.CloseSession",
+    "0:8": "Energistics.Etp.v12.Protocol.Core.Ping",
+    "0:9": "Energistics.Etp.v12.Protocol.Core.Pong",
+    "0:1000": "Energistics.Etp.v12.Protocol.Core.ProtocolException",
+    "0:1001": "Energistics.Etp.v12.Protocol.Core.Acknowledge",
+    "1:1": "Energistics.Etp.v12.Protocol.ChannelStreaming.ChannelMetadata",
+    "1:2": "Energistics.Etp.v12.Protocol.ChannelStreaming.ChannelData",
+    "1:3": "Energistics.Etp.v12.Protocol.ChannelStreaming.StartStreaming",
+    "1:4": "Energistics.Etp.v12.Protocol.ChannelStreaming.StopStreaming",
+    "1:5": "Energistics.Etp.v12.Protocol.ChannelStreaming.TruncateChannels",
+    "1:1000": "Energistics.Etp.v12.Protocol.Core.ProtocolException",
+    "1:1001": "Energistics.Etp.v12.Protocol.Core.Acknowledge"
   },
   "golden_vectors": [
     {
