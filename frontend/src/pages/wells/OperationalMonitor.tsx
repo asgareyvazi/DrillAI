@@ -1115,6 +1115,22 @@ export function OperationalMonitor({
                     <span dir="ltr" className="font-mono">
                       #{conn.worker.fencing_token}
                     </span>
+                    {conn.worker.last_policy_revision != null && (
+                      <>
+                        <span>·</span>
+                        <span dir="ltr" className="font-mono">
+                          policy:r{conn.worker.last_policy_revision}
+                        </span>
+                      </>
+                    )}
+                    {conn.worker.policy_stale && (
+                      <Badge
+                        tone="warning"
+                        data-testid={`monitor-connector-policy-stale-${conn.key}`}
+                      >
+                        {t('connectors.workerPolicyStaleBadge')}
+                      </Badge>
+                    )}
                   </div>
                   {conn.health.last_error && (
                     <div

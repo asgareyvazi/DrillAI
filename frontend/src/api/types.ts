@@ -2157,6 +2157,7 @@ export interface ConnectorProfilesCatalogue {
   allowed_secret_slots: string[]
   desired_states: string[]
   runtime_statuses: string[]
+  egress_policy?: ConnectorEgressPolicy
 }
 
 export interface ConnectorRunRow {
@@ -2305,6 +2306,7 @@ export interface ConnectorRunManifest {
   rolled_back?: boolean
   reconciliation_error?: string | null
   policy_revision?: number | null
+  egress_policy_revision?: number | null
   checkpoint_status?:
     | 'complete'
     | 'partial'
@@ -2400,6 +2402,7 @@ export interface ConnectorEgressPolicy {
   scope?: string
   status?: string
   policy_state?: string
+  policy_store_failed?: boolean
   source?: string
   revision?: number
   updated_at?: string | null

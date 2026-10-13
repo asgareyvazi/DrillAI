@@ -518,6 +518,8 @@ export function ConnectorsPage() {
 
   const getRemediationText = (category: string | null | undefined): string => {
     switch (category) {
+      case 'reconciliation_error':
+        return t('connectors.remediationReconciliation')
       case 'ssrf_blocked':
         return t('connectors.remediationSsrf')
       case 'dns_failure':
@@ -537,6 +539,129 @@ export function ConnectorsPage() {
     }
   }
 
+  const getDataOutcomeTone = (
+    outcome: string | null | undefined,
+  ): 'neutral' | 'info' | 'ok' | 'warning' | 'danger' => {
+    switch (outcome) {
+      case 'reconciliation_error':
+      case 'all_rejected':
+      case 'rejected_only':
+        return 'danger'
+      case 'dry_run_preview':
+      case 'revisions_only':
+      case 'all_revised':
+      case 'revisions_and_duplicates':
+        return 'info'
+      case 'all_valid_accepted':
+        return 'ok'
+      case 'partial_with_rejections':
+      case 'partial_deferred_or_capped':
+      case 'partial_batch_capped':
+      case 'filtered_only':
+      case 'duplicates_only':
+        return 'warning'
+      case 'empty_batch':
+      case 'no_new_data':
+      case '':
+      case null:
+      case undefined:
+        return 'neutral'
+      default:
+        return 'warning'
+    }
+  }
+
+  const getDataOutcomeLabel = (outcome: string | null | undefined): string => {
+    switch (outcome) {
+      case 'reconciliation_error':
+        return t('connectors.dataOutcomeReconciliationError')
+      case 'dry_run_preview':
+        return t('connectors.dataOutcomeDryRunPreview')
+      case 'all_valid_accepted':
+        return t('connectors.dataOutcomeAllValid')
+      case 'partial_with_rejections':
+        return t('connectors.dataOutcomePartialRejections')
+      case 'all_rejected':
+      case 'rejected_only':
+        return t('connectors.dataOutcomeRejectedOnly')
+      case 'partial_deferred_or_capped':
+      case 'partial_batch_capped':
+        return t('connectors.dataOutcomePartialCapped')
+      case 'filtered_only':
+        return t('connectors.dataOutcomeFilteredOnly')
+      case 'duplicates_only':
+        return t('connectors.dataOutcomeDuplicatesOnly')
+      case 'revisions_only':
+      case 'all_revised':
+        return t('connectors.dataOutcomeRevisionsOnly')
+      case 'revisions_and_duplicates':
+        return t('connectors.dataOutcomeRevisionsAndDuplicates')
+      case 'empty_batch':
+      case 'no_new_data':
+      case '':
+      case null:
+      case undefined:
+        return t('connectors.dataOutcomeNoData')
+      default:
+        return `${t('connectors.dataOutcomeUnknown')} (${outcome})`
+    }
+  }
+
+  const getEgressPolicyStateTone = (
+    state: string | null | undefined,
+    policyStoreFailed?: boolean,
+  ): 'ok' | 'danger' => {
+    if (
+      policyStoreFailed === true ||
+      state === 'transient_store_error' ||
+      state === 'corrupt_or_invalid_policy' ||
+      state === 'inactive_policy' ||
+      state === 'store_unavailable'
+    ) {
+      return 'danger'
+    }
+    if (
+      !state ||
+      state === 'active' ||
+      state === 'healthy_db_synced' ||
+      state === 'healthy_env_default' ||
+      state === 'missing_policy_row'
+    ) {
+      return 'ok'
+    }
+    return 'danger'
+  }
+
+  const getEgressPolicyStateLabel = (
+    state: string | null | undefined,
+    policyStoreFailed?: boolean,
+  ): string => {
+    if (state === 'corrupt_or_invalid_policy') {
+      return t('connectors.egressPolicyStateCorrupt')
+    }
+    if (state === 'inactive_policy') {
+      return t('connectors.egressPolicyStateInactive')
+    }
+    if (state === 'store_unavailable') {
+      return t('connectors.egressPolicyStateUnavailable')
+    }
+    if (policyStoreFailed === true || state === 'transient_store_error') {
+      return t('connectors.egressPolicyStateTransientError')
+    }
+    if (
+      !state ||
+      state === 'active' ||
+      state === 'healthy_db_synced' ||
+      state === 'healthy_env_default' ||
+      state === 'missing_policy_row'
+    ) {
+      return t('connectors.egressPolicyStateActive')
+    }
+    return `${t('connectors.egressPolicyStateUnknown')} (${state})`
+  }
+
+  const activeEgressPolicy =
+    egressPolicyQuery.data ?? profilesQuery.data?.egress_policy ?? null
   const selected = selectedDetailQuery.data ?? null
   const runsList: ConnectorRunRow[] = selectedRunsQuery.data?.items ?? []
   const inspectedRun: ConnectorRunRow | null =
@@ -566,7 +691,7 @@ export function ConnectorsPage() {
         </div>
       )}
 
-      {egressPolicyQuery.data && (
+      {activeEgressPolicy && (
         <Card className="p-3" data-testid="connector-egress-policy-banner">
           <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
             <div className="flex flex-wrap items-center gap-2">
@@ -574,25 +699,50 @@ export function ConnectorsPage() {
                 {t('connectors.egressPolicyTitle')}:
               </span>
               <Badge tone="info" data-testid="egress-policy-scope">
-                {egressPolicyQuery.data.scope ?? 'system'}
+                {activeEgressPolicy.scope ?? 'system'}
               </Badge>
               <Badge tone="ok" data-testid="egress-policy-revision">
-                rev #{egressPolicyQuery.data.revision ?? 1}
+                rev #{activeEgressPolicy.revision ?? 1}
               </Badge>
+              <Badge
+                tone={getEgressPolicyStateTone(
+                  activeEgressPolicy.policy_state,
+                  activeEgressPolicy.policy_store_failed,
+                )}
+                data-testid="egress-policy-state"
+              >
+                {getEgressPolicyStateLabel(
+                  activeEgressPolicy.policy_state,
+                  activeEgressPolicy.policy_store_failed,
+                )}
+              </Badge>
+              {activeEgressPolicy.redacted && (
+                <Badge tone="warning" data-testid="egress-policy-redacted-badge">
+                  {t('connectors.egressPolicyRedactedBadge')}
+                </Badge>
+              )}
             </div>
             <div className="flex flex-wrap items-center gap-3 text-slate-300" dir="ltr">
               <span data-testid="egress-policy-hosts">
                 hosts:{' '}
-                {egressPolicyQuery.data.allowed_hosts.length > 0
-                  ? egressPolicyQuery.data.allowed_hosts.join(', ')
-                  : 'default (public HTTPS/WSS)'}
+                {activeEgressPolicy.redacted
+                  ? t('connectors.egressPolicyRedactedHosts', {
+                      count: activeEgressPolicy.allowed_hosts_count ?? 0,
+                    })
+                  : activeEgressPolicy.allowed_hosts.length > 0
+                    ? activeEgressPolicy.allowed_hosts.join(', ')
+                    : 'default (public HTTPS/WSS)'}
               </span>
               <span>•</span>
               <span data-testid="egress-policy-cidrs">
                 private CIDRs:{' '}
-                {egressPolicyQuery.data.allowed_private_cidrs.length > 0
-                  ? egressPolicyQuery.data.allowed_private_cidrs.join(', ')
-                  : 'none'}
+                {activeEgressPolicy.redacted
+                  ? t('connectors.egressPolicyRedactedCidrs', {
+                      count: activeEgressPolicy.allowed_private_cidrs_count ?? 0,
+                    })
+                  : activeEgressPolicy.allowed_private_cidrs.length > 0
+                    ? activeEgressPolicy.allowed_private_cidrs.join(', ')
+                    : 'none'}
               </span>
             </div>
           </div>
@@ -1633,6 +1783,22 @@ export function ConnectorsPage() {
                           [policy r{selected.worker.last_policy_revision}]
                         </span>
                       )}
+                      {(selected.worker.policy_stale === true ||
+                        (selected.worker.last_policy_revision != null &&
+                          (selected.worker.system_policy_revision ??
+                            activeEgressPolicy?.revision ??
+                            0) > selected.worker.last_policy_revision)) && (
+                        <div className="mt-1">
+                          <Badge tone="warning" data-testid="worker-policy-stale-badge">
+                            {t('connectors.workerPolicyStaleBadge')} (r
+                            {selected.worker.last_policy_revision ?? 0} &lt; r
+                            {selected.worker.system_policy_revision ??
+                              activeEgressPolicy?.revision ??
+                              1}
+                            )
+                          </Badge>
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -2139,59 +2305,66 @@ export function ConnectorsPage() {
                             <div className="flex flex-wrap items-center gap-1.5">
                               {inspectedManifest.data_outcome && (
                                 <Badge
-                                  tone={
-                                    inspectedManifest.data_outcome ===
-                                    'all_valid_accepted'
-                                      ? 'ok'
-                                      : inspectedManifest.data_outcome ===
-                                          'revisions_only'
-                                        ? 'info'
-                                        : inspectedManifest.data_outcome ===
-                                            'rejected_only'
-                                          ? 'danger'
-                                          : inspectedManifest.data_outcome ===
-                                                'partial_with_rejections' ||
-                                              inspectedManifest.data_outcome ===
-                                                'partial_batch_capped'
-                                            ? 'warning'
-                                            : 'neutral'
-                                  }
+                                  tone={getDataOutcomeTone(inspectedManifest.data_outcome)}
                                   data-testid="manifest-data-outcome"
                                 >
-                                  {inspectedManifest.data_outcome ===
-                                  'all_valid_accepted'
-                                    ? t('connectors.dataOutcomeAllValid')
-                                    : inspectedManifest.data_outcome ===
-                                        'partial_with_rejections'
-                                      ? t('connectors.dataOutcomePartialRejections')
-                                      : inspectedManifest.data_outcome ===
-                                          'rejected_only'
-                                        ? t('connectors.dataOutcomeRejectedOnly')
-                                        : inspectedManifest.data_outcome ===
-                                            'partial_batch_capped'
-                                          ? t('connectors.dataOutcomePartialCapped')
-                                          : inspectedManifest.data_outcome ===
-                                              'filtered_only'
-                                            ? t('connectors.dataOutcomeFilteredOnly')
-                                            : inspectedManifest.data_outcome ===
-                                                'duplicates_only'
-                                              ? t('connectors.dataOutcomeDuplicatesOnly')
-                                              : inspectedManifest.data_outcome ===
-                                                  'revisions_only'
-                                                ? t('connectors.dataOutcomeRevisionsOnly')
-                                                : t('connectors.dataOutcomeNoData')}
+                                  {getDataOutcomeLabel(inspectedManifest.data_outcome)}
                                 </Badge>
                               )}
                               <Badge
-                                tone={inspectedManifest.reconciled ? 'ok' : 'warning'}
+                                tone={inspectedManifest.reconciled ? 'ok' : 'danger'}
+                                data-testid="manifest-reconciled-badge"
                               >
                                 {inspectedManifest.reconciled
                                   ? t('connectors.manifestReconciled')
                                   : t('connectors.manifestNotReconciled')}
                               </Badge>
+                              <Badge
+                                tone={
+                                  !inspectedManifest.reconciled ||
+                                  inspectedManifest.data_outcome ===
+                                    'reconciliation_error' ||
+                                  inspectedRun.status === 'failed'
+                                    ? 'danger'
+                                    : inspectedManifest.dry_run === true ||
+                                        inspectedManifest.persisted === false ||
+                                        inspectedManifest.data_outcome ===
+                                          'dry_run_preview' ||
+                                        inspectedRun.run_kind === 'replay_dry_run' ||
+                                        inspectedRun.run_kind === 'preview'
+                                      ? 'info'
+                                      : 'ok'
+                                }
+                                data-testid="manifest-persisted-badge"
+                              >
+                                {!inspectedManifest.reconciled ||
+                                inspectedManifest.data_outcome ===
+                                  'reconciliation_error' ||
+                                inspectedRun.status === 'failed'
+                                  ? t('connectors.manifestRolledBack')
+                                  : inspectedManifest.dry_run === true ||
+                                      inspectedManifest.persisted === false ||
+                                      inspectedManifest.data_outcome ===
+                                        'dry_run_preview' ||
+                                      inspectedRun.run_kind === 'replay_dry_run' ||
+                                      inspectedRun.run_kind === 'preview'
+                                    ? t('connectors.manifestDryRunOnly')
+                                    : t('connectors.manifestPersisted')}
+                              </Badge>
                               {inspectedManifest.checkpoint_status && (
-                                <Badge tone="info">
+                                <Badge tone="info" data-testid="manifest-checkpoint-status">
                                   {inspectedManifest.checkpoint_status}
+                                </Badge>
+                              )}
+                              {(inspectedManifest.policy_revision ??
+                                inspectedManifest.egress_policy_revision) != null && (
+                                <Badge
+                                  tone="neutral"
+                                  data-testid="manifest-policy-revision"
+                                >
+                                  {t('connectors.manifestPolicyRevisionLabel')}:v
+                                  {inspectedManifest.policy_revision ??
+                                    inspectedManifest.egress_policy_revision}
                                 </Badge>
                               )}
                             </div>

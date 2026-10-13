@@ -569,10 +569,292 @@ describe('ConnectorsPage', () => {
     })
     expect(screen.getByTestId('egress-policy-scope')).toHaveTextContent('system')
     expect(screen.getByTestId('egress-policy-revision')).toHaveTextContent('rev #2')
+    expect(screen.getByTestId('egress-policy-state')).toHaveTextContent('Active policy')
     expect(screen.getByTestId('egress-policy-hosts')).toHaveTextContent(
       'witsml.rig01.example.com',
     )
     expect(screen.getByTestId('egress-policy-cidrs')).toHaveTextContent('10.24.0.0/16')
   })
+
+  it('renders CP15 reconciliation_error outcome, rolled-back persistence badge, manifest policy revision, and remediation guidance', async () => {
+    mockIdentity.mockResolvedValue({
+      principal_id: 'usr_eng',
+      permissions: ['connector.read', 'connector.manage', 'connector.control', 'connector.test'],
+    })
+    mockGetConnector.mockResolvedValue({
+      ...sampleWitsmlConnector,
+      status: 'backing_off',
+      health: {
+        ...sampleWitsmlConnector.health,
+        health_state: 'degraded',
+        last_error_category: 'reconciliation_error',
+        last_error: 'Manifest reconciliation invariant violated; rolled back telemetry.',
+      },
+    })
+    mockListConnectorRuns.mockResolvedValue({
+      items: [
+        {
+          id: 'cnr_reconcile_err_01',
+          org_id: 'org_default',
+          connector_id: 'cnc_witsml_01',
+          well_id: 'wel_01',
+          worker_id: 'wrk_01',
+          fencing_token: 5,
+          config_version: 2,
+          run_kind: 'poll',
+          status: 'failed',
+          started_at: '2026-10-13T08:00:00Z',
+          finished_at: '2026-10-13T08:00:01Z',
+          duration_ms: 39,
+          frames_received: 3,
+          points_accepted: 0,
+          points_duplicates: 0,
+          points_revised: 0,
+          points_rejected: 0,
+          alerts_raised: 0,
+          alerts_cleared: 0,
+          cursor_before: { cursor_timestamp: '2026-10-10T10:00:00Z' },
+          cursor_after: { cursor_timestamp: '2026-10-10T10:00:00Z' },
+          error_category: 'reconciliation_error',
+          error_message: 'Manifest reconciliation failed',
+          trace_id: 'trc_reconcile_err_01',
+          details: {
+            manifest: {
+              source_records_discovered: 5,
+              mapped_frames_emitted: 3,
+              unmapped_skipped: 0,
+              watermark_suppressed: 0,
+              deferred_over_cap: 0,
+              reconciled: false,
+              persisted: false,
+              dry_run: false,
+              checkpoint_status: 'retained_on_error',
+              data_outcome: 'reconciliation_error',
+              egress_policy_revision: 4,
+            },
+          },
+        },
+      ],
+      total: 1,
+      limit: 25,
+    })
+
+    renderWorkspace()
+
+    await waitFor(() => {
+      expect(screen.getByTestId('manifest-data-outcome')).toHaveTextContent(
+        'Reconciliation error (rolled back, 0 persisted)',
+      )
+    })
+    expect(screen.getByTestId('manifest-reconciled-badge')).toHaveTextContent('Unreconciled')
+    expect(screen.getByTestId('manifest-persisted-badge')).toHaveTextContent(
+      'Rolled back (0 persisted)',
+    )
+    expect(screen.getByTestId('manifest-policy-revision')).toHaveTextContent('Policy rev:v4')
+    expect(screen.getByTestId('detail-error-remediation')).toHaveTextContent(
+      'The run manifest count invariant failed; the ingestion transaction was rolled back and the previous watermark cursor was retained.',
+    )
+  })
+
+  it('renders CP15 dry_run_preview, revisions_and_duplicates, and safe unknown data_outcome fallback', async () => {
+    mockIdentity.mockResolvedValue({
+      principal_id: 'usr_eng',
+      permissions: ['connector.read', 'connector.manage', 'connector.control', 'connector.test'],
+    })
+    mockListConnectorRuns.mockResolvedValue({
+      items: [
+        {
+          id: 'cnr_dry_01',
+          org_id: 'org_default',
+          connector_id: 'cnc_witsml_01',
+          well_id: 'wel_01',
+          worker_id: null,
+          fencing_token: 5,
+          config_version: 2,
+          run_kind: 'replay_dry_run',
+          status: 'succeeded',
+          started_at: '2026-10-13T08:05:00Z',
+          finished_at: '2026-10-13T08:05:01Z',
+          duration_ms: 21,
+          frames_received: 4,
+          points_accepted: 0,
+          points_duplicates: 0,
+          points_revised: 0,
+          points_rejected: 0,
+          alerts_raised: 0,
+          alerts_cleared: 0,
+          cursor_before: { cursor_timestamp: '2026-10-10T10:00:00Z' },
+          cursor_after: { cursor_timestamp: '2026-10-10T10:00:00Z' },
+          error_category: null,
+          error_message: null,
+          trace_id: 'trc_dry_01',
+          details: {
+            manifest: {
+              source_records_discovered: 4,
+              mapped_frames_emitted: 4,
+              reconciled: true,
+              persisted: false,
+              dry_run: true,
+              checkpoint_status: 'unchanged',
+              data_outcome: 'dry_run_preview',
+            },
+          },
+        },
+        {
+          id: 'cnr_rev_dup_02',
+          org_id: 'org_default',
+          connector_id: 'cnc_witsml_01',
+          well_id: 'wel_01',
+          worker_id: 'wrk_01',
+          fencing_token: 5,
+          config_version: 2,
+          run_kind: 'poll',
+          status: 'succeeded',
+          started_at: '2026-10-13T08:04:00Z',
+          finished_at: '2026-10-13T08:04:01Z',
+          duration_ms: 25,
+          frames_received: 4,
+          points_accepted: 0,
+          points_duplicates: 2,
+          points_revised: 2,
+          points_rejected: 0,
+          alerts_raised: 0,
+          alerts_cleared: 0,
+          cursor_before: {},
+          cursor_after: {},
+          error_category: null,
+          error_message: null,
+          trace_id: 'trc_rev_dup_02',
+          details: {
+            manifest: {
+              source_records_discovered: 4,
+              mapped_frames_emitted: 4,
+              reconciled: true,
+              persisted: true,
+              dry_run: false,
+              checkpoint_status: 'unchanged',
+              data_outcome: 'revisions_and_duplicates',
+            },
+          },
+        },
+        {
+          id: 'cnr_unknown_03',
+          org_id: 'org_default',
+          connector_id: 'cnc_witsml_01',
+          well_id: 'wel_01',
+          worker_id: 'wrk_01',
+          fencing_token: 5,
+          config_version: 2,
+          run_kind: 'poll',
+          status: 'succeeded',
+          started_at: '2026-10-13T08:03:00Z',
+          finished_at: '2026-10-13T08:03:01Z',
+          duration_ms: 19,
+          frames_received: 1,
+          points_accepted: 1,
+          points_duplicates: 0,
+          points_revised: 0,
+          points_rejected: 0,
+          alerts_raised: 0,
+          alerts_cleared: 0,
+          cursor_before: {},
+          cursor_after: {},
+          error_category: null,
+          error_message: null,
+          trace_id: 'trc_unknown_03',
+          details: {
+            manifest: {
+              source_records_discovered: 1,
+              mapped_frames_emitted: 1,
+              reconciled: true,
+              persisted: true,
+              dry_run: false,
+              checkpoint_status: 'advanced',
+              data_outcome: 'future_outcome_v9',
+            },
+          },
+        },
+      ],
+      total: 3,
+      limit: 25,
+    })
+
+    renderWorkspace()
+
+    await waitFor(() => {
+      expect(screen.getByTestId('manifest-data-outcome')).toHaveTextContent(
+        'Dry-run preview (not persisted)',
+      )
+    })
+    expect(screen.getByTestId('manifest-persisted-badge')).toHaveTextContent(
+      'Dry-run / preview only (not persisted)',
+    )
+
+    await userEvent.click(screen.getByTestId('inspect-run-cnr_rev_dup_02'))
+    await waitFor(() => {
+      expect(screen.getByTestId('manifest-data-outcome')).toHaveTextContent(
+        'Revisions & duplicates only (0 new points)',
+      )
+    })
+    expect(screen.getByTestId('manifest-persisted-badge')).toHaveTextContent('Persisted')
+
+    await userEvent.click(screen.getByTestId('inspect-run-cnr_unknown_03'))
+    await waitFor(() => {
+      expect(screen.getByTestId('manifest-data-outcome')).toHaveTextContent(
+        'Unknown data outcome (future_outcome_v9)',
+      )
+    })
+    expect(screen.getByTestId('manifest-data-outcome')).not.toHaveTextContent(
+      'All valid points accepted',
+    )
+  })
+
+  it('renders CP15 redacted egress policy details, transient_store_error state, and stale worker policy badge', async () => {
+    mockIdentity.mockResolvedValue({
+      principal_id: 'usr_viewer',
+      permissions: ['connector.read', 'well.read'],
+    })
+    mockGetConnectorEgressPolicy.mockResolvedValue({
+      policy_id: 'cep_system_default',
+      scope: 'system',
+      revision: 5,
+      policy_state: 'transient_store_error',
+      policy_store_failed: true,
+      redacted: true,
+      allowed_hosts: [],
+      allowed_hosts_count: 2,
+      allowed_private_cidrs: [],
+      allowed_private_cidrs_count: 1,
+      allow_loopback: false,
+      harness_owned_endpoints: [],
+      is_production: false,
+    })
+    mockGetConnector.mockResolvedValue({
+      ...sampleWitsmlConnector,
+      worker: {
+        ...sampleWitsmlConnector.worker,
+        last_policy_revision: 2,
+        system_policy_revision: 5,
+        policy_stale: true,
+      },
+    })
+
+    renderWorkspace()
+
+    await waitFor(() => {
+      expect(screen.getByTestId('egress-policy-state')).toHaveTextContent(
+        'Transient store error (fail-closed)',
+      )
+      expect(screen.getByTestId('worker-policy-stale-badge')).toHaveTextContent(
+        'Worker policy behind system revision',
+      )
+    })
+    expect(screen.getByTestId('egress-policy-redacted-badge')).toHaveTextContent(
+      'Redacted policy details',
+    )
+    expect(screen.getByTestId('egress-policy-hosts')).toHaveTextContent('redacted (count: 2)')
+    expect(screen.getByTestId('egress-policy-cidrs')).toHaveTextContent('redacted (count: 1)')
+  })
 })
+
 
