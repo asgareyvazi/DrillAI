@@ -2041,5 +2041,197 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
 
     expect(appConsoleErrors(consoleErrors)).toEqual([])
   })
+
+  test('Journey 40 (CP15 Dry-Run Replay Non-Persistence vs Live Replay & Manifest Policy Revision): Dry-run replay renders dry_run_preview and non-persisted badge without advancing cursor', async ({
+    page,
+    request,
+    wellId,
+    consoleErrors,
+  }) => {
+    const harness = await apiPost<HarnessSnapshot>(request, '/connectors/harness/ensure', {}, 'engineer')
+    await apiPost(
+      request,
+      '/connectors/harness/configure',
+      { protocol: 'witsml', fault_mode: 'ok', reset_rows: true },
+      'engineer',
+    )
+
+    const connKey = `e2e-cp15-dryrun-${Date.now().toString(36)}`
+    const created = await apiPost<ConnectorDto>(
+      request,
+      '/connectors',
+      {
+        key: connKey,
+        name: 'CP15 Dry-Run vs Live Replay WITSML Store',
+        protocol_profile: 'witsml.1.4.1.1.soap_http',
+        well_id: wellId,
+        endpoint_url: harness.witsml.endpoint_url,
+        config: {
+          auth_mode: 'basic',
+          tls_verify: true,
+          poll_interval_seconds: 1.0,
+          channel_mappings: [
+            {
+              source_mnemonic: 'SPP',
+              channel_key: 'spp',
+              name: 'Standpipe Pressure',
+              dimension: 'pressure',
+              unit: 'psi',
+            },
+          ],
+        },
+        secret_refs: harness.witsml.secret_refs,
+      },
+      'engineer',
+    )
+    await apiPost(request, `/connectors/${created.id}/start`, { reason: 'Start CP15 replay verification' }, 'engineer')
+    await apiPost(request, `/connectors/${created.id}/poll`, {}, 'engineer')
+
+    await page.goto(`/connectors?wellId=${wellId}`)
+    await page.getByTestId(`connector-row-${connKey}`).click()
+
+    await expect(page.getByTestId('manifest-data-outcome')).toHaveText('All valid points accepted')
+    await expect(page.getByTestId('manifest-persisted-badge')).toHaveText('Persisted')
+    await expect(page.getByTestId('manifest-policy-revision')).toContainText('Policy rev:v')
+
+    await page.getByTestId('connector-replay-from-ts').fill('2020-01-01T00:00:00Z')
+    await page.getByTestId('connector-replay-reason').fill('CP15 dry-run non-persistence check')
+    await page.getByTestId('connector-replay-dryrun-btn').click()
+
+    await expect(page.getByTestId('connector-replay-result')).toContainText('DRY RUN')
+    await expect(page.getByTestId('manifest-data-outcome')).toHaveText(
+      'Dry-run preview (not persisted)',
+    )
+    await expect(page.getByTestId('manifest-persisted-badge')).toHaveText(
+      'Dry-run / preview only (not persisted)',
+    )
+
+    await page.getByTestId('connector-replay-reason').fill('CP15 live backfill verification')
+    await page.getByTestId('connector-replay-execute-btn').click()
+
+    await expect(page.getByTestId('connector-replay-result')).toContainText('LIVE BACKFILL')
+    await expect(page.getByTestId('manifest-persisted-badge')).toHaveText('Persisted')
+
+    expect(appConsoleErrors(consoleErrors)).toEqual([])
+  })
+
+  test('Journey 41 (CP15 System-Scope Egress Policy RBAC, Policy State Badge & Stale Worker Policy Sync): Rejects org_admin mutation, surfaces worker-policy-stale-badge on admin bump, and clears on next poll', async ({
+    page,
+    request,
+    wellId,
+    consoleErrors,
+  }) => {
+    const harness = await apiPost<HarnessSnapshot>(request, '/connectors/harness/ensure', {}, 'engineer')
+    const connKey = `e2e-cp15-polsync-${Date.now().toString(36)}`
+    const created = await apiPost<ConnectorDto>(
+      request,
+      '/connectors',
+      {
+        key: connKey,
+        name: 'CP15 Policy Sync Verification Store',
+        protocol_profile: 'witsml.1.4.1.1.soap_http',
+        well_id: wellId,
+        endpoint_url: harness.witsml.endpoint_url,
+        config: {
+          auth_mode: 'basic',
+          tls_verify: true,
+          poll_interval_seconds: 1.0,
+          channel_mappings: [
+            {
+              source_mnemonic: 'SPP',
+              channel_key: 'spp',
+              name: 'Standpipe Pressure',
+              dimension: 'pressure',
+              unit: 'psi',
+            },
+          ],
+        },
+        secret_refs: harness.witsml.secret_refs,
+      },
+      'engineer',
+    )
+    await apiPost(request, `/connectors/${created.id}/start`, { reason: 'Start CP15 policy sync connector' }, 'engineer')
+    await apiPost(request, `/connectors/${created.id}/poll`, {}, 'engineer')
+
+    // 1. org_admin without system.egress_policy.manage is denied (403)
+    const deniedRes = await request.fetch('/api/v1/connectors/egress-policy', {
+      method: 'PUT',
+      headers: {
+        'content-type': 'application/json',
+        'X-Dev-Roles': 'org_admin',
+        'Idempotency-Key': `e2e-cp15-pol-deny-${Date.now()}`,
+      },
+      data: {
+        allowed_hosts: ['witsml.rig01.example.com'],
+        allowed_private_cidrs: [],
+        reason: 'Attempted org_admin mutation without system scope',
+      },
+    })
+    expect(deniedRes.status()).toBe(403)
+
+    // 2. Platform admin updates system egress policy, advancing revision above worker's last_policy_revision
+    const currentPolicy = await apiGet<{
+      revision: number
+      allowed_hosts: string[]
+      allowed_private_cidrs: string[]
+    }>(request, '/connectors/egress-policy', 'admin')
+    const updatedPolicyRes = await request.fetch('/api/v1/connectors/egress-policy', {
+      method: 'PUT',
+      headers: {
+        'content-type': 'application/json',
+        'X-Dev-Roles': 'admin',
+        'Idempotency-Key': `e2e-cp15-pol-ok-${Date.now()}`,
+      },
+      data: {
+        expected_revision: currentPolicy.revision,
+        allowed_hosts: currentPolicy.allowed_hosts,
+        allowed_private_cidrs: currentPolicy.allowed_private_cidrs,
+        reason: 'CP15 E2E governed egress policy revision bump',
+      },
+    })
+    expect(updatedPolicyRes.status()).toBe(200)
+    const updatedPolicy = (await updatedPolicyRes.json()) as { revision: number }
+    expect(updatedPolicy.revision).toBeGreaterThan(currentPolicy.revision)
+
+    await page.goto(`/connectors?wellId=${wellId}`)
+    await expect(page.getByTestId('egress-policy-state')).toHaveText('Active policy')
+    await expect(page.getByTestId('egress-policy-revision')).toHaveText(
+      `rev #${updatedPolicy.revision}`,
+    )
+
+    await page.getByTestId(`connector-row-${connKey}`).click()
+    await expect(page.getByTestId('worker-policy-stale-badge')).toContainText(
+      'Worker policy behind system revision',
+    )
+
+    // Poll now -> worker syncs to latest policy revision and stale badge clears
+    await page.getByTestId('connector-poll-now-btn').click()
+    await expect(page.getByTestId('detail-worker-policy-revision')).toHaveText(
+      `[policy r${updatedPolicy.revision}]`,
+    )
+    await expect(page.getByTestId('worker-policy-stale-badge')).toHaveCount(0)
+
+    expect(appConsoleErrors(consoleErrors)).toEqual([])
+  })
+
+  test('Journey 42 (CP15 Bilingual Persian FA RTL Rendering of Policy State, Persistence Badge & Policy Revision): Renders localized CP15 badges in RTL with zero raw translation markers', async ({
+    page,
+    wellId,
+    consoleErrors,
+  }) => {
+    await page.goto(`/connectors?wellId=${wellId}`)
+    await page.getByTestId('locale-switch').selectOption('fa')
+
+    await expect(page.locator('html')).toHaveAttribute('dir', 'rtl')
+    await expect(page.getByTestId('egress-policy-state')).toHaveText('سیاست فعال')
+    await expect(page.getByTestId('manifest-persisted-badge')).toBeVisible()
+    await expect(page.getByTestId('manifest-policy-revision')).toContainText('نسخهٔ سیاست:v')
+
+    const bodyText = await page.locator('body').innerText()
+    expect(bodyText).not.toContain('⟦')
+
+    await page.getByTestId('locale-switch').selectOption('en')
+    expect(appConsoleErrors(consoleErrors)).toEqual([])
+  })
 })
 
