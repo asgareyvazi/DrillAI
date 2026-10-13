@@ -2055,6 +2055,8 @@ export interface ConnectorWorkerLease {
   lease_active: boolean
   last_policy_revision?: number | null
   last_policy_sync_at?: string | null
+  system_policy_revision?: number | null
+  policy_stale?: boolean
 }
 
 export interface ConnectorHealthSummary {
@@ -2217,6 +2219,7 @@ export interface ConnectorTestResult {
     is_realtime: boolean
   }>
   milestones?: ConnectorTestMilestone[]
+  policy_revision?: number | null
   error_category: string | null
   error_message: string | null
   trace_id: string | null
@@ -2298,9 +2301,21 @@ export interface ConnectorRunManifest {
   protocol_reconciled?: boolean
   ingestion_reconciled?: boolean
   reconciled?: boolean
+  persisted?: boolean
+  rolled_back?: boolean
+  reconciliation_error?: string | null
   policy_revision?: number | null
-  checkpoint_status?: 'complete' | 'partial' | 'unchanged' | 'advanced' | 'partial_page_deferred' | string
+  checkpoint_status?:
+    | 'complete'
+    | 'partial'
+    | 'unchanged'
+    | 'advanced'
+    | 'partial_page_deferred'
+    | 'rolled_back'
+    | string
   data_outcome?:
+    | 'reconciliation_error'
+    | 'dry_run_preview'
     | 'all_valid_accepted'
     | 'partial_with_rejections'
     | 'rejected_only'
@@ -2308,6 +2323,7 @@ export interface ConnectorRunManifest {
     | 'filtered_only'
     | 'duplicates_only'
     | 'revisions_only'
+    | 'revisions_and_duplicates'
     | 'no_data'
     | string
   dry_run?: boolean
@@ -2380,15 +2396,28 @@ export interface ProtocolHarnessStatus {
 
 export interface ConnectorEgressPolicy {
   policy_id?: string
+  policy_key?: string
   scope?: string
+  status?: string
+  policy_state?: string
+  source?: string
   revision?: number
   updated_at?: string | null
   updated_by?: string | null
+  updated_by_id?: string | null
+  updated_by_display?: string | null
+  updated_by_org_id?: string | null
+  recovered_at?: string | null
   reason?: string | null
   allowed_hosts: string[]
   allowed_private_cidrs: string[]
+  allowed_hosts_count?: number
+  allowed_private_cidrs_count?: number
+  redacted?: boolean
+  actor_redacted?: boolean
   allow_loopback: boolean
-  harness_owned_endpoints: string[]
+  harness_owned_endpoints?: string[]
+  harness_ports?: number[]
   is_production: boolean
 }
 
