@@ -2136,4 +2136,24 @@ Full audit details and verification matrices are recorded in `docs/mission-repor
 | **CP14-E** | `fa3051cea10145b8ed4f228132920879224a9606` | ETP 1.2 binary Avro normative index validation, `MSG_FLAG_COMPRESSED` & unrequested compression fail-closed rejection, `TruncateChannels`, official schema/golden wire vectors, and honest peer-verification metadata | **Yes** |
 | **CP14-F** | `94f6448ecf21244440f4654f2ab42a3355607cae` | Bounded `ConnectorRun(status="fenced")` ledger persistence and expanded multi-process `scripts/verify_stack.py` | **Yes** |
 | **CP14-G** | `b8c8ec5899bf94293f875d8c2e87d8e14115b9c2` | Operator UI egress-policy banner, worker policy sync badge, 8-state `data_outcome` labels (EN/FA), unit tests (`309 passed`), and Playwright E2E Journeys 33, 34, 39 (`39` connector journeys, `116` total E2E journeys); certified on GitHub Actions Run `38230898896` | **Yes (`b8c8ec58`)** |
-| **CP14-H** | `HEAD` (parent `b8c8ec5899bf94293f875d8c2e87d8e14115b9c2`) | CP14 documentation closure (`CP14-SOURCE-AUDIT.md`, `CP14-MISSION-REPORT.md`, `FRONTEND-MISSION.md`) | **Yes** |
+| **CP14-H** | `9b67ac5aee93240b2e3dab652432f2ea61e38db0` | CP14 documentation closure (`CP14-SOURCE-AUDIT.md`, `CP14-MISSION-REPORT.md`, `FRONTEND-MISSION.md`); certified on GitHub Actions Run `38255799539` (`conclusion: success` in `23m56s`) | **Yes (`9b67ac5a`)** |
+
+---
+
+### CP15 — CP14 Release Closure, Durable Egress Recovery, Fail-Closed Reconciliation, DNS Executor Resilience & Full Production Certification
+
+Full audit details and verification matrices are recorded in `docs/mission-reports/CP15-SOURCE-AUDIT.md` and `docs/mission-reports/CP15-MISSION-REPORT.md`.
+
+| Checkpoint | Commit SHA | Summary | Remote `git ls-remote` Verified |
+| --- | --- | --- | --- |
+| **Gate 0 (`CP14-H`)** | `9b67ac5aee93240b2e3dab652432f2ea61e38db0` | Reconciled and published CP14-H; certified on GitHub Actions Run `38255799539` (`conclusion: success` in `23m56s`) | **Yes** |
+| **CP15-A** | `01805b160729b4f902fe09b127fc038577ed3282` | Source-backed CP14-H audit register (`docs/mission-reports/CP15-SOURCE-AUDIT.md`, `F-CP15-01` through `F-CP15-10`) | **Yes** |
+| **CP15-B** | `6ecb6b372acf9e3fd73e636d883fb69af7f45e9c` | Durable egress-policy recovery state machine (`EGRESS_POLICY_STATES`) & 12-scenario PostgreSQL/worker recovery suite (`test_cp15_egress_policy_recovery.py`) | **Yes** |
+| **CP15-C & CP15-D** | `d02508f8fd524713c338149b012a724b8b5eb55f` | Fail-closed manifest reconciliation rollback & 11-state `POLL_DATA_OUTCOMES` truth table (`test_cp15_reconciliation_and_outcomes.py`) | **Yes** |
+| **CP15-E** | `63ecebbf09c1b39b734ede2e43b83e1bafd268e6` | Exact-once `_DnsPermitGuard` & generation-scoped DNS executor recovery (`test_cp15_dns_executor_resilience.py`) | **Yes** |
+| **CP15-F & Backend CP15-G** | `f1384f44e97762470341dee42e4f47ef1d6cbb5d` | System-scope egress policy RBAC, cross-tenant redaction, pre-connect worker fencing, ETP 1.2 `TruncateChannels` per-channel reconciliation & `_IndependentSchemaAvroVerifier` (`test_cp15_system_auth_and_worker_fencing.py`, `test_cp14_etp_binary_normative.py`) | **Yes** |
+| **CP15-G Types** | `eaca032513c924c603c12653c54a1e9376ad3b61` | Frontend TypeScript contracts (`frontend/src/api/types.ts`) for 11-state `data_outcome`, `policy_state`, `policy_stale`, `persisted`, `rolled_back` | **Yes** |
+| **CP15-G1** | `84a3fff2dbbed907f808a8bb2b308c95b0890c8f` | Rendered 11-state `data_outcome`, persistence state (`manifest-persisted-badge`), `manifest-policy-revision`, egress `policy_state`, redaction (`egress-policy-redacted-badge`), and stale worker policy (`worker-policy-stale-badge`) in EN/FA UI (`312 passed` Vitest unit tests) | **Yes** |
+| **CP15-G2** | `ced758947d3b267454118e67d1b6e73dc427ae58` | Added real-stack Playwright E2E Journeys 40–42 (`connectors-platform.spec.ts`, `42` connector journeys, `119` total E2E journeys across `chromium`, `chromium-faults`, `chromium-auth`) | **Yes** |
+| **CP15-H1** | `eaaa29d74d6ece9da6e9e2799cca0e69bdc8dcde` | 16-scenario multi-process stack verification and 32-cycle soak (`scripts/verify_stack.py`); certified on GitHub Actions Run `38382687361` (`conclusion: success` in `24m00s`) | **Yes** |
+| **CP15-H2** | `HEAD` (parent `eaaa29d74d6ece9da6e9e2799cca0e69bdc8dcde`) | Future-safe soak timestamps in `scripts/verify_stack.py` and finalized CP15 documentation (`CP15-SOURCE-AUDIT.md`, `CP15-MISSION-REPORT.md`, `FRONTEND-MISSION.md`) | **Yes** |

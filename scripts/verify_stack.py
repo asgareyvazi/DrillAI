@@ -23,6 +23,7 @@ Certifies all 16 multi-process scenarios:
 from __future__ import annotations
 
 import asyncio
+import datetime as dt
 import json
 import os
 import resource
@@ -667,9 +668,12 @@ async def _run_verification() -> int:
                         cursor_before_fault = dict(c_before.cursor or {})
                         await s_pre.commit()
 
+                    soak_base_ts = (dt.datetime.now(dt.UTC) + dt.timedelta(hours=1)).replace(
+                        microsecond=0
+                    )
                     witsml_server.rows.append(
                         WitsmlSampleRow(
-                            timestamp="2026-10-13T12:00:00Z",
+                            timestamp=soak_base_ts.isoformat().replace("+00:00", "Z"),
                             depth_md=2750.0,
                             values={"SPP": 3456.0},
                             quality="good",
@@ -790,7 +794,9 @@ async def _run_verification() -> int:
 
                     for cycle in range(total_cycles):
                         if cycle % 4 == 0:
-                            ts_iso = f"2026-10-13T12:{10 + cycle:02d}:00Z"
+                            ts_iso = (
+                                soak_base_ts + dt.timedelta(minutes=10 + cycle)
+                            ).isoformat().replace("+00:00", "Z")
                             witsml_server.rows.append(
                                 WitsmlSampleRow(
                                     timestamp=ts_iso,
@@ -852,6 +858,8 @@ async def _run_verification() -> int:
                     dns_after_soak = get_dns_executor_stats()
                     assert dns_after_soak["available_permits"] == dns_after_soak["max_concurrency"]
                     assert reconciliation_failures == 0
+                    assert witsml_points_accepted >= 8
+                    assert etp_binary_points_accepted >= 8
 
                     # Scenario 16: Clean connector stop and bounded run ledger retention check (`<= 25`)
                     for cid in (cid_witsml, cid_etp_bin):
