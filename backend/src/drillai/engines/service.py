@@ -31,6 +31,85 @@ from drillai.engines.registry import EngineRegistry, load_default_engines
 __all__ = ["EngineExecution", "engine_catalogue", "execute_engine"]
 
 
+def _infer_si_unit_for_field_name(name: str) -> str | None:
+    if name.endswith("_deg_per_30m"):
+        return "deg/30m"
+    if name.endswith("_deg"):
+        return "deg"
+    if name.endswith("_psi"):
+        return "psi"
+    if name.endswith("_ppg"):
+        return "ppg"
+    if name.endswith("_kpa"):
+        return "kPa"
+    if name.endswith("_lpm"):
+        return "L/min"
+    if name.endswith("_m3_per_m") or name.endswith("_capacity_si"):
+        return "m3/m"
+    if not name.endswith("_si"):
+        return None
+    if any(
+        tok in name
+        for tok in (
+            "pressure",
+            "sidpp",
+            "sicp",
+            "maasp",
+            "mse",
+            "strength",
+            "modulus",
+            "yield_point",
+            "stress",
+            "integrity",
+        )
+    ):
+        return "Pa"
+    if any(tok in name for tok in ("mud_weight", "ecd", "density")):
+        return "kg/m3"
+    if any(tok in name for tok in ("flow_rate", "kill_rate")):
+        return "m3/s"
+    if "rop" in name:
+        return "m/h"
+    if "velocity" in name:
+        return "m/s"
+    if any(tok in name for tok in ("wob", "hookload", "tension", "drag", "force", "weight_air", "weight_buoyed")):
+        return "N"
+    if "torque" in name:
+        return "N.m"
+    if "horsepower_per_area" in name:
+        return "W/m2"
+    if "horsepower" in name:
+        return "W"
+    if "plastic_viscosity" in name:
+        return "Pa.s"
+    if "area" in name or name == "tfa_si":
+        return "m2"
+    if any(tok in name for tok in ("volume", "pit_gain", "output_per_stroke")):
+        return "m3"
+    if "time" in name:
+        return "s"
+    if "gradient" in name:
+        return "Pa/m"
+    if "linear_mass" in name:
+        return "kg/m"
+    if "rpm" in name:
+        return "rpm"
+    return "m"
+
+
+def _extract_model_units(model_cls: type[BaseModel]) -> dict[str, str]:
+    units: dict[str, str] = {}
+    for fname, finfo in model_cls.model_fields.items():
+        extra = finfo.json_schema_extra
+        if isinstance(extra, dict) and isinstance(extra.get("unit"), str):
+            units[fname] = extra["unit"]
+        else:
+            inferred = _infer_si_unit_for_field_name(fname)
+            if inferred is not None:
+                units[fname] = inferred
+    return units
+
+
 @dataclass
 class EngineExecution:
     """The engine result plus the audit trail that was written for it."""
@@ -46,12 +125,20 @@ class EngineExecution:
     inputs_hash: str = ""
     outputs_hash: str = ""
     engine_run_id: str | None = None
+    validation_status: str = "verified_against_reference"
+    domain_pack: str = ""
+    category: str = ""
+    units: dict[str, Any] = field(default_factory=dict)
 
     def to_payload(self) -> dict[str, Any]:
         """Canonical response body (also the shape a workflow node exposes to references)."""
         return {
             "engine_key": self.engine_key,
             "engine_version": self.engine_version,
+            "domain_pack": self.domain_pack,
+            "category": self.category,
+            "validation_status": self.validation_status,
+            "units": self.units,
             "result": self.outputs,
             "is_feasible": self.is_feasible,
             "warnings": self.warnings,
@@ -96,6 +183,11 @@ async def execute_engine(
     output_payload = result.outputs.model_dump(mode="json")
     inputs_hash = content_hash(input_payload)
     outputs_hash = content_hash(output_payload)
+    units_map: dict[str, Any] = {
+        "unit_system": "SI",
+        "input_units": _extract_model_units(spec.inputs_model),
+        "output_units": _extract_model_units(spec.outputs_model),
+    }
 
     engine_run_id: str | None = None
     if persist:
@@ -117,7 +209,7 @@ async def execute_engine(
             outputs=output_payload,
             inputs_hash=inputs_hash,
             outputs_hash=outputs_hash,
-            units={},
+            units=units_map,
             assumptions=list(result.assumptions_applied),
             limitations=list(spec.limitations),
             warnings=list(result.warnings),
@@ -148,6 +240,10 @@ async def execute_engine(
         inputs_hash=inputs_hash,
         outputs_hash=outputs_hash,
         engine_run_id=engine_run_id,
+        validation_status=spec.validation_status,
+        domain_pack=spec.domain_pack,
+        category=spec.category,
+        units=units_map,
     )
 
 

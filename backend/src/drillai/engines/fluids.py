@@ -308,6 +308,10 @@ def compute_capacity(inputs: CapacityEngineInput) -> EngineResult:
         if string_strokes is not None:
             circulation_time = (string_strokes + (annulus_strokes or 0.0)) / stroke_rate * 60.0
     if inputs.flow_rate_si:
+        if bottoms_up_volume is None and inputs.current_depth_si > 0:
+            _, bottoms_up_volume = _annulus_volume_below(inputs.elements, inputs.current_depth_si)
+        if bottoms_up_time is None and bottoms_up_volume is not None:
+            bottoms_up_time = bottoms_up_volume / inputs.flow_rate_si
         circulation_time = (string_volume + annulus_volume) / inputs.flow_rate_si
 
     outputs = CapacityEngineOutput(
