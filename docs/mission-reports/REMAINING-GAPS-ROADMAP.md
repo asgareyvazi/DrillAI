@@ -1,33 +1,29 @@
-# DrillAI CP16 — Remaining Gaps & Post-CP16 Engineering Roadmap
+# DrillAI CP20 — Remaining Gaps & Field Commissioning Roadmap
 
-All in-scope P0, P1, and P2 engineering, security, async event-loop, physics, deployment, and documentation findings identified during the CP16 adversarial audit (**F-CP16-01 through F-CP16-08**) have been closed with regression tests. This document records the remaining external dependencies, configuration-shaped infrastructure boundaries, and future roadmap items with complete honesty.
-
----
-
-## 1. Blocked by External Evidence (`BLOCKED_BY_EXTERNAL_EVIDENCE`)
-
-| Gap ID | Area | Current State | Why Blocked in Sandbox / CI | Operator Execution Path |
-| --- | --- | --- | --- | --- |
-| **GAP-EXT-01** | **Live Commercial WITSML 1.4.1.1 Store Interoperability (`witsml.1.4.1.1.soap_http`)** | `conformance_verified: true`, `local_harness_verified: true`, **`external_vendor_verified: false`** | CI and the Arena sandbox have no network route or license credentials to a live third-party commercial WITSML 1.4.1.1 rig server (Kongsberg SiteCom, Pason, Halliburton Sperry, SLB). | Provision network access in a staging/rig environment, set `DRILLAI_EXTERNAL_WITSML_URL`, `DRILLAI_EXTERNAL_WITSML_USERNAME`, and `DRILLAI_EXTERNAL_WITSML_PASSWORD`, and execute `backend/.venv/bin/python scripts/verify_external_vendor_interop.py --mode external --require-external`. |
-| **GAP-EXT-02** | **Live Commercial ETP v1.2 Store Interoperability (`etp.1.2.binary_ws`)** | `conformance_verified: true`, `local_harness_verified: true`, **`external_vendor_verified: false`** | CI and the Arena sandbox have no network route or license credentials to a live third-party commercial ETP v1.2 server. | Provision network access in a staging/rig environment, set `DRILLAI_EXTERNAL_ETP_URL` and `DRILLAI_EXTERNAL_ETP_TOKEN`, and execute `backend/.venv/bin/python scripts/verify_external_vendor_interop.py --mode external --require-external`. |
+**Repository**: `asgareyvazi/DrillAI`  
+**Branch**: `arena/01a0dca0-drillai` (`main` untouched at `bfa066b28e0071880cb9191a4f1d47fdaa143e04`)  
+**Phase**: CP17–CP20 End-to-End Engineering Program  
+**Date**: 2026-10-17  
 
 ---
 
-## 2. Explicit Configuration & Infrastructure Boundaries
+## 1. Closed Capabilities in CP17–CP20 (No Longer Gaps)
 
-| Gap ID | Area | Current Implementation | Production Activation Requirement |
-| --- | --- | --- | --- |
-| **GAP-INF-01** | **Vector Retrieval Backend (`DRILLAI_VECTOR_BACKEND`)** | Defaults to deterministic in-memory vector search (`memory`) alongside lexical/hybrid and metadata-scoped retrieval. | Set `DRILLAI_VECTOR_BACKEND=pgvector` against a PostgreSQL instance with the `vector` extension installed and indexed. |
-| **GAP-INF-02** | **Outbound Notification Delivery (`output.notify`)** | Workflow `output.notify` nodes enforce L4 approval gates and record structured notification audit payloads via deterministic adapter stubs. | Configure production webhook/SMTP/Telegram/WhatsApp credentials in deployment environment variables when external alerting is enabled. |
-| **GAP-INF-03** | **LLM & Embedding Providers (`DRILLAI_LLM_PROVIDER`)** | Defaults to deterministic, offline-verifiable provider (`stub` / `deterministic`) while enforcing prompt budgets, citations, and L2 agent ceilings. | Configure enterprise LLM/embedding provider endpoints and API keys via secret references (`secret_ref:*` or `env:DRILLAI_SECRET_*`). |
+The following items from earlier checkpoints have been implemented, verified by automated tests, and closed in CP17–CP20:
+- **Native Windows Developer & CI Path (Closed in `CP17-WIN`)**: Added `scripts/bootstrap.ps1`, cross-platform Node/Python helpers, `docs/WINDOWS-SETUP.md`, and the GitHub-hosted `windows-certification` job in `.github/workflows/ci.yml`.
+- **PostgreSQL Logical Backup, Restore & Migration Recovery Drill (Closed in `CP18-OPS`)**: Implemented `scripts/verify_postgres_dr_drill.py` (`pg_dump --format=custom` + `pg_restore` + `alembic upgrade head` + `alembic check` + corrupt-archive failure detection) and `backend/tests/db/test_cp18_postgres_backup_restore.py`, and fixed cold-start `connector_out()` snapshot handling.
+- **Independent Reference Validation & Unit Provenance Across All 14 Engines (Closed in `CP19-ENG`)**: Validated all 14 engines and 121 units in `backend/tests/engines/test_cp19_engineering_validation.py` and persisted `EngineRun.units` (`input_units`, `output_units`, `unit_system: "SI"`).
+- **PostgreSQL `pgvector` Retriever & Outbound Notification Adapters (Closed in `CP20-INTEGRATION`)**: Implemented native PostgreSQL `pgvector` `<=>` cosine distance retrieval (`backend/src/drillai/rag/retriever.py`) and outbound Webhook/SMTP/In-App notification adapters (`backend/src/drillai/workflow/notifications.py`) verified in `backend/tests/test_cp20_integration_completeness.py`.
 
 ---
 
-## 3. Intentionally Out-of-Scope Protocol & Physics Extensions (Future Roadmap)
+## 2. Remaining External Commissioning & Operational Items (`BLOCKED` / `PARTIAL` / `NOT IMPLEMENTED`)
 
-1. **WITSML Write Operations & Depth-Indexed Logs**:
-   - DrillAI telemetry connectors are strictly read-only (`WMLS_GetVersion`, `WMLS_GetCap`, `WMLS_GetFromStore` on time-indexed `<log>` objects). `WMLS_AddToStore`, `WMLS_UpdateInStore`, `WMLS_DeleteFromStore`, and depth-indexed log polling are intentionally excluded and fail closed.
-2. **Additional ETP v1.2 Protocols & Compression**:
-   - `etp.1.2.binary_ws` implements ETP v1.2 Protocol 0 (`Core`) and Protocol 1 (`ChannelStreaming`) with uncompressed binary Avro frames over subprotocol `energistics-tp`. Protocol 3 (`Discovery`), Protocol 4 (`Store`), Protocol 21 (`ChannelSubscribe`), and `gzip`/`lz4` payload compression are rejected with `ProtocolException` (messageType `1000`).
-3. **Advanced Non-Steady-State & Finite-Element Physics**:
-   - Current engineering engines implement deterministic industry-standard analytical formulations (API TR 5C3 pipe-body ratings, Johancsik soft-string torque & drag, Bingham/Power-Law steady-state laminar hydraulics, Wait-and-Weight kill sheet). Coupled thermal-multiphase transient hydraulics, finite-element stiff-string buckling, and thread/coupling connection ratings remain future domain-pack extensions.
+| Item ID | Classification | Category | Description & Root Cause | Required Environment / Access | Exact Exit Criteria |
+|---|---|---|---|---|---|
+| **GAP-EXT-01** | **BLOCKED** | External Commercial WITSML 1.4.1.1 Certification | `witsml.1.4.1.1.soap_http` is verified against the in-repo SOAP harness (`conformance_verified: true`, `local_harness_verified: true`), but `external_vendor_verified` is `false` because no live commercial WITSML 1.4.1.1 server (Kongsberg SiteCom, Pason, Halliburton Sperry, SLB) is reachable from the sandboxed CI environment. | Network route to staging/rig WITSML 1.4.1.1 store + `DRILLAI_EXTERNAL_WITSML_URL`, `DRILLAI_EXTERNAL_WITSML_USERNAME`, `DRILLAI_EXTERNAL_WITSML_PASSWORD`. | `python scripts/verify_external_vendor_interop.py --mode external --require-external` exits `0` with a non-empty `witsml_external.transcript_sha256` and redacted wire transcript archived. |
+| **GAP-EXT-02** | **BLOCKED** | External Commercial ETP v1.2 Certification | `etp.1.2.binary_ws` is verified against the 12 official Energistics ETP v1.2 Avro schemas and `LocalEtpBinaryWebSocketServer`, but `external_vendor_verified` is `false` pending live rig/vendor ETP 1.2 server access. | Network route to staging/rig ETP v1.2 store + `DRILLAI_EXTERNAL_ETP_URL`, `DRILLAI_EXTERNAL_ETP_TOKEN`. | `python scripts/verify_external_vendor_interop.py --mode external --require-external` exits `0` with `etp_external.session_established: true` and `transcript_sha256` archived. |
+| **GAP-EXT-03** | **BLOCKED** | Live Third-Party Notification SaaS Certification | `WebhookNotificationAdapter` and `EmailSmtpNotificationAdapter` are verified against local HTTP and RFC 5321 SMTP servers (`test_cp20_02`), while `external_provider_verified` remains `false` for third-party SaaS endpoints (Slack, Microsoft Teams, PagerDuty, SendGrid). | Outbound internet route + staging webhook URL / SMTP relay credentials (`DRILLAI_NOTIFY_SECRET_*`, `DRILLAI_SMTP_URL`). | Live test notification delivered to target staging webhook/SMTP relay with `status == "sent"` and provider receipt ID recorded in `OutboundMessage.provider_message_id`. |
+| **GAP-OPS-01** | **PARTIAL** | Physical Host-Loss & Cloud PITR Disaster Recovery | Logical `pg_dump` / `pg_restore` and Alembic migration recovery are verified on PostgreSQL 16.2 (`POSTGRES_DR_DRILL_OK`), whereas physical base-backup + WAL archive Point-in-Time Recovery (`pgBackRest` / `WAL-G`) and multi-node failover require cloud/on-prem infrastructure. | Production PostgreSQL cluster with continuous WAL archiving to S3/GCS/Azure Blob and standby replica. | Execute quarterly PITR restore to a target timestamp $t_{\text{target}}$ on staging infrastructure and verify RPO $\le 5\text{ min}$ and RTO $\le 30\text{ min}$. |
+| **GAP-WIN-01** | **PARTIAL** | Native Windows Embedded `pgserver` Wheel Support | `pgserver` only ships prebuilt PostgreSQL binaries for Linux and macOS; `@pytest.mark.postgres` (`7` tests) cannot use `pgserver` natively on Windows without Docker or WSL2. | Windows host with Docker Desktop (`pgvector/pgvector:pg16`) or WSL2 Ubuntu 24.04. | Set `DRILLAI_TEST_DATABASE_URL` to a running PostgreSQL 16 + `pgvector` container on Windows when executing `@pytest.mark.postgres` tests outside WSL2. |
+| **GAP-EXT-04** | **NOT IMPLEMENTED** | Out-of-Scope Protocol & Transient Physics Extensions | WITSML write operations (`WMLS_AddToStore`), depth-indexed WITSML polling, ETP v1.2 Protocols `3`/`4`/`21`, `gzip`/`lz4` ETP compression, transient multiphase gas-kick hydraulics, and stiff-string FEA torque/drag are intentionally excluded from the v1.x scope. | Future domain-pack engineering specification and reference benchmark datasets. | Dedicated domain-pack specifications, reference validation suites (`rel_tol <= 1e-4`), and security gates added in future releases. |
