@@ -300,3 +300,160 @@ jobs:
             frontend/test-results/
           if-no-files-found: ignore
           retention-days: 14
+
+  windows-certification:
+    name: native Windows PowerShell install, backend, stack, and Playwright E2E certification
+    runs-on: windows-latest
+    timeout-minutes: 75
+    env:
+      # Embedded pgserver PostgreSQL tests run in the Linux certification job; Windows certifies the
+      # full SQLite backend suite (-m "not postgres"), multi-process stack, frontend, and Playwright E2E.
+      DRILLAI_TEST_POSTGRES: '0'
+    steps:
+      - name: Check out the commit under test
+        uses: actions/checkout@v7
+
+      - name: Provenance (Windows PowerShell)
+        shell: pwsh
+        run: |
+          Write-Host "commit:  $(git rev-parse HEAD)"
+          Write-Host "branch:  $(git branch --show-current)"
+          Write-Host "subject: $(git log -1 --oneline)"
+          Write-Host "os:      $([System.Environment]::OSVersion.VersionString)"
+          Write-Host "pwsh:    $($PSVersionTable.PSVersion)"
+          git status --porcelain
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v7
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Set up Node ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Record Windows toolchain
+        shell: pwsh
+        run: |
+          python --version
+          python -m pip --version
+          node --version
+          npm --version
+
+      - name: Bootstrap Windows workspace (scripts/bootstrap.ps1)
+        shell: pwsh
+        run: |
+          powershell -ExecutionPolicy Bypass -File scripts/bootstrap.ps1
+
+      - name: Frontend typecheck (Windows)
+        working-directory: frontend
+        shell: pwsh
+        run: npm run typecheck
+
+      - name: Frontend lint (Windows)
+        working-directory: frontend
+        shell: pwsh
+        run: npm run lint
+
+      - name: Frontend unit and component tests (Windows)
+        working-directory: frontend
+        shell: pwsh
+        run: |
+          $logFile = Join-Path $env:RUNNER_TEMP "win-frontend-tests.log"
+          npm test 2>&1 | Tee-Object -FilePath $logFile
+          if ($LASTEXITCODE -ne 0) { throw "Frontend unit tests failed on Windows" }
+          $plain = (Get-Content $logFile -Raw) -replace "\x1b\[[0-9;]*[a-zA-Z]", ""
+          if ($plain -notmatch "Tests\s+\d+\s+passed") {
+            throw "Frontend unit tests did not print pass summary on Windows"
+          }
+
+      - name: Frontend production build (Windows)
+        working-directory: frontend
+        shell: pwsh
+        run: npm run build
+
+      - name: Backend lint (Windows)
+        working-directory: backend
+        shell: pwsh
+        run: .\.venv\Scripts\python.exe -m ruff check .
+
+      - name: Migration check on fresh SQLite database (Windows)
+        working-directory: backend
+        shell: pwsh
+        run: |
+          $migDb = (Join-Path $env:RUNNER_TEMP "win-ci-migration.db") -replace "\\", "/"
+          if (Test-Path $migDb) { Remove-Item -Force $migDb }
+          $env:DRILLAI_DATABASE_URL = "sqlite+aiosqlite:///$migDb"
+          .\.venv\Scripts\python.exe -m alembic upgrade head
+          if ($LASTEXITCODE -ne 0) { throw "alembic upgrade head failed on Windows" }
+          .\.venv\Scripts\python.exe -m alembic check
+          if ($LASTEXITCODE -ne 0) { throw "alembic check failed on Windows" }
+
+      - name: Backend SQLite test suite (Windows)
+        working-directory: backend
+        shell: pwsh
+        run: |
+          $logFile = Join-Path $env:RUNNER_TEMP "win-backend-tests.log"
+          .\.venv\Scripts\python.exe -m pytest -m "not postgres" 2>&1 | Tee-Object -FilePath $logFile
+          if ($LASTEXITCODE -ne 0) { throw "Backend pytest failed on Windows" }
+          $plain = (Get-Content $logFile -Raw) -replace "\x1b\[[0-9;]*[a-zA-Z]", ""
+          if ($plain -match "\d+\s+skipped" -or $plain -match "\d+\s+failed") {
+            throw "Backend SQLite suite had skips or failures on Windows"
+          }
+          if ($plain -notmatch "\d+\s+passed") {
+            throw "Backend SQLite suite did not print pass summary on Windows"
+          }
+
+      - name: Multi-process stack verification on Windows (scripts/verify_stack.py)
+        shell: pwsh
+        run: |
+          $logFile = Join-Path $env:RUNNER_TEMP "win-verify-stack.log"
+          .\backend\.venv\Scripts\python.exe scripts/verify_stack.py 2>&1 | Tee-Object -FilePath $logFile
+          if ($LASTEXITCODE -ne 0) { throw "scripts/verify_stack.py exited non-zero on Windows" }
+          $content = Get-Content $logFile -Raw
+          if ($content -notmatch "STACK_VERIFICATION_OK") {
+            throw "scripts/verify_stack.py did not print STACK_VERIFICATION_OK on Windows"
+          }
+
+      - name: External vendor interop runner on Windows (scripts/verify_external_vendor_interop.py)
+        shell: pwsh
+        run: |
+          .\backend\.venv\Scripts\python.exe scripts/verify_external_vendor_interop.py --mode harness
+          if ($LASTEXITCODE -ne 0) { throw "verify_external_vendor_interop.py --mode harness failed on Windows" }
+          .\backend\.venv\Scripts\python.exe scripts/verify_external_vendor_interop.py --mode external
+          if ($LASTEXITCODE -ne 0) { throw "verify_external_vendor_interop.py --mode external failed on Windows" }
+
+      - name: Playwright E2E certification across main, faults, and auth stacks (Windows)
+        working-directory: frontend
+        shell: pwsh
+        run: |
+          $logFile = Join-Path $env:RUNNER_TEMP "win-e2e.log"
+          npm run e2e -- e2e/app.spec.ts e2e/connectors-platform.spec.ts e2e/error-faults.spec.ts e2e/error-auth.spec.ts 2>&1 | Tee-Object -FilePath $logFile
+          if ($LASTEXITCODE -ne 0) { throw "Playwright E2E failed on Windows" }
+          $plain = (Get-Content $logFile -Raw) -replace "\x1b\[[0-9;]*[a-zA-Z]", ""
+          foreach ($proj in @("chromium", "chromium-faults", "chromium-auth")) {
+            if ($plain -notmatch "\[$proj\]") {
+              throw "Playwright project [$proj] did not run on Windows"
+            }
+          }
+          if ($plain -match "\d+\s+(failed|flaky|skipped)") {
+            throw "Playwright E2E had failed, flaky, or skipped tests on Windows"
+          }
+          if ($plain -notmatch "\d+\s+passed") {
+            throw "Playwright E2E did not print pass summary on Windows"
+          }
+
+      - name: Upload Windows Playwright evidence on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows-playwright-evidence-${{ github.run_id }}
+          path: |
+            frontend/playwright-report/
+            frontend/test-results/
+          if-no-files-found: ignore
+          retention-days: 14
+

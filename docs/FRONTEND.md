@@ -32,7 +32,11 @@ the client.
 Demo data comes from the backend's seeder, never from the frontend:
 
 ```bash
-cd backend && source .venv/bin/activate && python ../../scripts/seed_demo.py --reset
+# Unix / macOS / WSL2 (from the repository root)
+cd backend && ./.venv/bin/python ../scripts/seed_demo.py --reset
+
+# Windows PowerShell (from the repository root)
+cd backend; .\.venv\Scripts\python.exe ..\scripts\seed_demo.py --reset
 ```
 
 ## Structure

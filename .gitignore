@@ -36,6 +36,9 @@ drillai.db*
 .vscode/
 .DS_Store
 Thumbs.db
+Desktop.ini
+*.swp
+*~
 
 # --- node ---
 node_modules/

@@ -1075,8 +1075,11 @@ async def _async_main(once: bool = False) -> int:
 
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGINT, signal.SIGTERM):
-        with contextlib.suppress(NotImplementedError):
+        try:
             loop.add_signal_handler(sig, worker._stop_event.set)
+        except NotImplementedError:  # pragma: no cover - Windows ProactorEventLoop fallback
+            with contextlib.suppress(ValueError, OSError):
+                signal.signal(sig, lambda *_: loop.call_soon_threadsafe(worker._stop_event.set))
 
     try:
         if once:

@@ -12,9 +12,13 @@ Two persistence modes are supported:
 from __future__ import annotations
 
 import os
-import resource
 import shutil
 import tempfile
+
+try:
+    import resource
+except ImportError:  # pragma: no cover - Windows does not provide POSIX resource module
+    resource = None  # type: ignore[assignment]
 
 import pytest
 import pytest_asyncio
@@ -27,6 +31,8 @@ from drillai.db.session import dispose_all_databases
 
 def pytest_configure(config: pytest.Config) -> None:
     """Ensure sufficient file descriptor budget across 1,000+ async SQLite/PostgreSQL tests."""
+    if resource is None:
+        return
     try:
         soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
         target = min(65536, hard) if hard > 0 else 65536

@@ -17,7 +17,7 @@
  */
 
 import { spawn, spawnSync } from 'node:child_process'
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -37,8 +37,31 @@ const seed = process.env.DRILLAI_E2E_SEED !== 'false'
 
 mkdirSync(path.join(dataDir, 'blobs'), { recursive: true })
 
-const python = process.env.DRILLAI_PYTHON ?? path.join(backendRoot, '.venv', 'bin', 'python')
-const databaseUrl = `sqlite+aiosqlite:///${path.join(dataDir, 'e2e.db')}`
+function resolvePython(backendDir) {
+  if (process.env.DRILLAI_PYTHON && existsSync(process.env.DRILLAI_PYTHON)) {
+    return process.env.DRILLAI_PYTHON
+  }
+  const candidates =
+    process.platform === 'win32'
+      ? [
+          path.join(backendDir, '.venv', 'Scripts', 'python.exe'),
+          path.join(backendDir, '.venv', 'bin', 'python'),
+        ]
+      : [
+          path.join(backendDir, '.venv', 'bin', 'python'),
+          path.join(backendDir, '.venv', 'Scripts', 'python.exe'),
+        ]
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) {
+      return candidate
+    }
+  }
+  return process.platform === 'win32' ? 'python' : 'python3'
+}
+
+const python = resolvePython(backendRoot)
+const dbFilePosix = path.join(dataDir, 'e2e.db').replace(/\\/g, '/')
+const databaseUrl = `sqlite+aiosqlite:///${dbFilePosix}`
 
 /**
  * The fixtures the seed produced, when this instance seeds at all.

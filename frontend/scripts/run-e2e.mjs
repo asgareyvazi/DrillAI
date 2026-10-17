@@ -69,8 +69,8 @@ for (const [label, port] of PORTS) {
 const executable = await resolve('--print-path')
 const libs = await resolve('--print-libs')
 
-const playwright = path.join(frontendRoot, 'node_modules', '.bin', 'playwright')
-const child = spawn(playwright, ['test', ...process.argv.slice(2)], {
+const playwrightCli = path.join(frontendRoot, 'node_modules', '@playwright', 'test', 'cli.js')
+const child = spawn(process.execPath, [playwrightCli, 'test', ...process.argv.slice(2)], {
   cwd: frontendRoot,
   stdio: 'inherit',
   env: {

@@ -40,6 +40,27 @@ async function resolveExecutable() {
     return process.env.DRILLAI_CHROMIUM_PATH
   }
 
+  // On Windows or macOS, @sparticuz/chromium (an Amazon Linux 2023 x86_64 ELF binary) cannot run natively.
+  // Resolve Playwright's native Chromium binary and install it automatically if not yet downloaded.
+  if (process.platform !== 'linux') {
+    const { chromium: pwChromium } = await import('@playwright/test')
+    let executablePath = ''
+    try {
+      executablePath = pwChromium.executablePath()
+    } catch {
+      executablePath = ''
+    }
+    if (!executablePath || !existsSync(executablePath)) {
+      const playwrightCli = path.join(frontendRoot, 'node_modules', '@playwright', 'test', 'cli.js')
+      execFileSync(process.execPath, [playwrightCli, 'install', 'chromium'], {
+        cwd: frontendRoot,
+        stdio: 'inherit',
+      })
+      executablePath = pwChromium.executablePath()
+    }
+    return executablePath
+  }
+
   const packageDir = path.join(frontendRoot, 'node_modules', '@sparticuz', 'chromium')
   const bundle = path.join(packageDir, 'bin')
   if (!existsSync(bundle)) {
@@ -66,7 +87,7 @@ async function resolveExecutable() {
 }
 
 const executable = await resolveExecutable()
-const libs = existsSync(path.join(LIB_ROOT, 'lib')) ? path.join(LIB_ROOT, 'lib') : ''
+const libs = process.platform === 'linux' && existsSync(path.join(LIB_ROOT, 'lib')) ? path.join(LIB_ROOT, 'lib') : ''
 
 const mode = process.argv[2] ?? ''
 if (mode === '--print-path') console.log(executable)

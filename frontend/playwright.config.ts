@@ -49,10 +49,11 @@ const AUTH_WEB_URL = `http://127.0.0.1:${AUTH_WEB_PORT}`
 const chromiumPath = process.env.DRILLAI_CHROMIUM_PATH
 const chromiumLibs = process.env.DRILLAI_CHROMIUM_LIBS
 
-/** Flags needed when running a container-oriented Chromium build without a user namespace. */
-const containerArgs = chromiumPath
-  ? ['--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu', '--disable-setuid-sandbox']
-  : []
+/** Flags needed when running a container-oriented Chromium build without a user namespace on Linux. */
+const containerArgs =
+  chromiumPath && process.platform === 'linux'
+    ? ['--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu', '--disable-setuid-sandbox']
+    : []
 
 export default defineConfig({
   testDir: './e2e',
@@ -114,7 +115,7 @@ export default defineConfig({
       },
     },
     {
-      command: `npx vite --host 127.0.0.1 --port ${WEB_PORT} --strictPort`,
+      command: `node ./node_modules/vite/bin/vite.js --host 127.0.0.1 --port ${WEB_PORT} --strictPort`,
       url: `${WEB_URL}/`,
       // Same reason as the API: a dev server left running serves the previous revision's modules.
       reuseExistingServer: false,
@@ -141,7 +142,7 @@ export default defineConfig({
       },
     },
     {
-      command: `npx vite --host 127.0.0.1 --port ${FAULT_WEB_PORT} --strictPort`,
+      command: `node ./node_modules/vite/bin/vite.js --host 127.0.0.1 --port ${FAULT_WEB_PORT} --strictPort`,
       url: `${FAULT_WEB_URL}/`,
       reuseExistingServer: false,
       timeout: 120_000,
@@ -169,7 +170,7 @@ export default defineConfig({
       },
     },
     {
-      command: `npx vite --host 127.0.0.1 --port ${AUTH_WEB_PORT} --strictPort`,
+      command: `node ./node_modules/vite/bin/vite.js --host 127.0.0.1 --port ${AUTH_WEB_PORT} --strictPort`,
       url: `${AUTH_WEB_URL}/`,
       reuseExistingServer: false,
       timeout: 120_000,

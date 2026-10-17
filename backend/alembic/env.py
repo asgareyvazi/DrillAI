@@ -35,7 +35,10 @@ def _database_url() -> str:
     other component in the process would then share.
     """
     configured = context.config.get_main_option("sqlalchemy.url") or ""
-    return configured if configured.strip() else get_settings().sqlalchemy_url()
+    url = configured if configured.strip() else get_settings().sqlalchemy_url()
+    if url.startswith("sqlite") and ":memory:" not in url:
+        url = url.replace("\\", "/")
+    return url
 
 
 def run_migrations_offline() -> None:

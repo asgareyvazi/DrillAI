@@ -208,14 +208,20 @@ class Settings(BaseSettings):
         return ports
 
     def sqlalchemy_url(self) -> str:
-        """Return a SQLAlchemy async URL (SQLite paths are made absolute)."""
+        """Return a SQLAlchemy async URL (SQLite paths are made absolute and POSIX-normalized)."""
         url = self.database_url
         if url.startswith("sqlite+aiosqlite:///"):
             raw = url.removeprefix("sqlite+aiosqlite:///")
-            if raw and raw != ":memory:" and not raw.startswith("/"):
-                absolute = (REPO_ROOT / "backend" / raw).resolve()
-                absolute.parent.mkdir(parents=True, exist_ok=True)
-                return f"sqlite+aiosqlite:///{absolute}"
+            if raw and raw != ":memory:":
+                is_abs = raw.startswith("/") or (len(raw) >= 2 and raw[1] == ":") or Path(raw).is_absolute()
+                if not is_abs:
+                    absolute = (REPO_ROOT / "backend" / raw).resolve()
+                    absolute.parent.mkdir(parents=True, exist_ok=True)
+                    return f"sqlite+aiosqlite:///{absolute.as_posix()}"
+                norm_raw = raw.replace("\\", "/")
+                with __import__("contextlib").suppress(OSError):
+                    Path(raw).parent.mkdir(parents=True, exist_ok=True)
+                return f"sqlite+aiosqlite:///{norm_raw}"
         return url
 
     def ensure_directories(self) -> None:

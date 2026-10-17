@@ -23,10 +23,10 @@ Certifies all 16 multi-process scenarios:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import datetime as dt
 import json
 import os
-import resource
 import socket
 import subprocess
 import sys
@@ -36,12 +36,36 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import patch
 
+try:
+    import resource
+except ImportError:  # pragma: no cover - Windows does not provide POSIX resource module
+    resource = None  # type: ignore[assignment]
+
+try:
+    import psutil
+except ImportError:  # pragma: no cover
+    psutil = None  # type: ignore[assignment]
+
 import httpx
 from sqlalchemy import func, select
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 BACKEND_DIR = REPO_ROOT / "backend"
 sys.path.insert(0, str(BACKEND_DIR / "src"))
+
+
+def _resolve_venv_python() -> str:
+    """Resolve the backend virtualenv Python interpreter across Windows and POSIX."""
+    override = os.environ.get("DRILLAI_PYTHON")
+    if override and Path(override).exists():
+        return override
+    for candidate in (
+        BACKEND_DIR / ".venv" / "Scripts" / "python.exe",
+        BACKEND_DIR / ".venv" / "bin" / "python",
+    ):
+        if candidate.exists():
+            return str(candidate)
+    return sys.executable
 
 
 def _free_port() -> int:
@@ -51,10 +75,15 @@ def _free_port() -> int:
 
 
 def _rss_mb() -> float:
-    usage = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
-    if sys.platform == "darwin":
-        return round(usage / (1024 * 1024), 2)
-    return round(usage / 1024, 2)
+    if psutil is not None:
+        with contextlib.suppress(Exception):
+            return round(psutil.Process(os.getpid()).memory_info().rss / (1024.0 * 1024.0), 2)
+    if resource is not None:
+        usage = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+        if sys.platform == "darwin":
+            return round(usage / (1024 * 1024), 2)
+        return round(usage / 1024, 2)
+    return 0.0
 
 
 async def _run_verification() -> int:
@@ -76,16 +105,15 @@ async def _run_verification() -> int:
     from drillai.telemetry.protocols.witsml import LocalWitsmlSoapServer, WitsmlSampleRow
     from drillai.telemetry.worker import ConnectorWorker
 
-    python_bin = str(BACKEND_DIR / ".venv" / "bin" / "python")
-    alembic_bin = str(BACKEND_DIR / ".venv" / "bin" / "alembic")
+    python_bin = _resolve_venv_python()
     scenario_results: list[dict[str, Any]] = []
 
     def record_scenario(num: int, name: str, detail: str) -> None:
         scenario_results.append({"scenario": num, "name": name, "status": "PASSED", "detail": detail})
 
-    with tempfile.TemporaryDirectory(prefix="drillai_stack_") as tmpdir:
+    with tempfile.TemporaryDirectory(prefix="drillai_stack_", ignore_cleanup_errors=True) as tmpdir:
         db_path = Path(tmpdir) / "stack.db"
-        db_url = f"sqlite+aiosqlite:///{db_path}"
+        db_url = f"sqlite+aiosqlite:///{db_path.as_posix()}"
         api_port = _free_port()
 
         witsml_server = LocalWitsmlSoapServer(
@@ -129,8 +157,8 @@ async def _run_verification() -> int:
             )
 
             # Scenario 1: Clean DB migration initialization (`alembic upgrade head && alembic check`)
-            subprocess.run([alembic_bin, "upgrade", "head"], cwd=str(BACKEND_DIR), env=env, check=True)
-            subprocess.run([alembic_bin, "check"], cwd=str(BACKEND_DIR), env=env, check=True)
+            subprocess.run([python_bin, "-m", "alembic", "upgrade", "head"], cwd=str(BACKEND_DIR), env=env, check=True)
+            subprocess.run([python_bin, "-m", "alembic", "check"], cwd=str(BACKEND_DIR), env=env, check=True)
             record_scenario(1, "clean_db_migration_init", "alembic upgrade head & check passed")
 
             # Scenario 2: Start FastAPI backend server process + readiness checks

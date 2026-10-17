@@ -30,6 +30,7 @@ import os
 import pathlib
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.error
 import urllib.request
@@ -37,10 +38,20 @@ import urllib.request
 REPO = pathlib.Path(__file__).resolve().parents[1]
 BACKEND = REPO / "backend"
 OUT = REPO / "frontend/src/test/fixtures"
-DATA = pathlib.Path("/tmp/drillai-fixture-capture")
+DATA = pathlib.Path(tempfile.gettempdir()) / "drillai-fixture-capture"
 PORT = 8093
 BASE = f"http://127.0.0.1:{PORT}/api/v1"
-DB_URL = f"sqlite+aiosqlite:///{DATA / 'capture.db'}"
+DB_URL = f"sqlite+aiosqlite:///{(DATA / 'capture.db').as_posix()}"
+
+
+def _resolve_venv_python() -> str:
+    for candidate in (
+        BACKEND / ".venv" / "Scripts" / "python.exe",
+        BACKEND / ".venv" / "bin" / "python",
+    ):
+        if candidate.exists():
+            return str(candidate)
+    return sys.executable
 MAX_STRING = 2000
 MAX_LIST_ITEMS = 5
 
@@ -88,9 +99,10 @@ def main() -> int:
     DATA.mkdir(parents=True, exist_ok=True)
     OUT.mkdir(parents=True, exist_ok=True)
 
+    python_bin = _resolve_venv_python()
     seeded = subprocess.run(
         [
-            str(BACKEND / ".venv/bin/python"),
+            python_bin,
             str(REPO / "scripts/seed_demo.py"),
             "--reset",
             "--database-url",
@@ -112,7 +124,7 @@ def main() -> int:
     log = (DATA / "uvicorn.log").open("w")
     server = subprocess.Popen(
         [
-            str(BACKEND / ".venv/bin/python"),
+            python_bin,
             "-m",
             "uvicorn",
             "--factory",

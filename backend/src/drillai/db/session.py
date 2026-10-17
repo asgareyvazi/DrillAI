@@ -39,7 +39,10 @@ class Database:
 
     def __init__(self, url: str | None = None, *, echo: bool | None = None, settings: Settings | None = None) -> None:
         self.settings = settings or get_settings()
-        self.url = url or self.settings.sqlalchemy_url()
+        resolved_url = url or self.settings.sqlalchemy_url()
+        if resolved_url.startswith("sqlite") and ":memory:" not in resolved_url:
+            resolved_url = resolved_url.replace("\\", "/")
+        self.url = resolved_url
         self.echo = self.settings.db_echo if echo is None else echo
         self._engine: AsyncEngine | None = None
         self._session_factory: async_sessionmaker[AsyncSession] | None = None
