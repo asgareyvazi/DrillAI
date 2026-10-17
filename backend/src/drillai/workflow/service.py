@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from drillai.core.clock import UTC
 from drillai.core.errors import Conflict, NotFound, ValidationFailed, WorkflowDefinitionInvalid
 from drillai.db.models import Workflow, WorkflowRun, WorkflowVersion
+from drillai.documents.scope import DocumentScope, DocumentScopeResolver
 from drillai.security.actions import Principal
 from drillai.workflow.graph import ValidationReport, WorkflowGraph, graph_summary, validate_graph
 from drillai.workflow.nodes import registered_node_types
@@ -60,6 +61,10 @@ class WorkflowService:
         ).scalar_one_or_none()
         if existing is not None:
             raise Conflict(f"workflow key {key!r} already exists", details={"workflow_id": existing.id})
+        if project_id is not None:
+            await DocumentScopeResolver(self.session, org_id=self.org_id).resolve(
+                DocumentScope(project_id=project_id)
+            )
         workflow = Workflow(
             org_id=self.org_id,
             key=key,
@@ -191,9 +196,12 @@ class WorkflowService:
         return workflow
 
     async def get_version(self, workflow_id: str, version: int | None = None) -> WorkflowVersion:
-        stmt = select(WorkflowVersion).where(WorkflowVersion.workflow_id == workflow_id)
+        workflow = await self._workflow(workflow_id)
+        stmt = select(WorkflowVersion).where(
+            WorkflowVersion.workflow_id == workflow_id,
+            WorkflowVersion.org_id == self.org_id,
+        )
         if version is None:
-            workflow = await self._workflow(workflow_id)
             if workflow.published_version_id:
                 stmt = stmt.where(WorkflowVersion.id == workflow.published_version_id)
             else:
@@ -232,6 +240,34 @@ class WorkflowService:
         workflow = await self._workflow(workflow_id)
         version_row = await self.get_version(workflow_id, version)
         graph = WorkflowGraph.model_validate(version_row.graph)
+        effective_scope = scope
+        if scope is not None and any(
+            (
+                scope.project_id,
+                scope.well_id,
+                scope.wellbore_id,
+                scope.section_id,
+                scope.operation_id,
+            )
+        ):
+            resolved_doc_scope = await DocumentScopeResolver(
+                self.session, org_id=self.org_id
+            ).resolve(
+                DocumentScope(
+                    project_id=scope.project_id or workflow.project_id,
+                    well_id=scope.well_id,
+                    wellbore_id=scope.wellbore_id,
+                    section_id=scope.section_id,
+                    operation_id=scope.operation_id,
+                )
+            )
+            effective_scope = RunScope(
+                project_id=resolved_doc_scope.project_id,
+                well_id=resolved_doc_scope.well_id,
+                wellbore_id=resolved_doc_scope.wellbore_id,
+                section_id=resolved_doc_scope.section_id,
+                operation_id=resolved_doc_scope.operation_id,
+            )
         runtime = WorkflowRuntime(
             self.session,
             org_id=self.org_id,
@@ -244,7 +280,7 @@ class WorkflowService:
             workflow_version_id=version_row.id,
             workflow_key=workflow.key,
             version=version_row.version,
-            scope=scope,
+            scope=effective_scope,
             inputs=inputs,
             trigger_type=trigger_type,
             trigger_ref=trigger_ref,
@@ -274,10 +310,14 @@ class WorkflowService:
         ]
 
     async def history(self, workflow_id: str, limit: int = 50) -> list[dict[str, Any]]:
+        await self._workflow(workflow_id)
         rows = (
             await self.session.execute(
                 select(WorkflowVersion)
-                .where(WorkflowVersion.workflow_id == workflow_id)
+                .where(
+                    WorkflowVersion.workflow_id == workflow_id,
+                    WorkflowVersion.org_id == self.org_id,
+                )
                 .order_by(WorkflowVersion.version.desc())
                 .limit(limit)
             )

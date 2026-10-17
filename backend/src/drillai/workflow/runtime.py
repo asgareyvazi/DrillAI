@@ -186,21 +186,47 @@ class WorkflowRuntime:
         decided_by: str | None = None,
     ) -> WorkflowRun:
         """Resume a waiting/paused run, recording the human decision that unblocked it."""
-        run = (await self.session.execute(select(WorkflowRun).where(WorkflowRun.id == run_id))).scalar_one_or_none()
+        run = (
+            await self.session.execute(
+                select(WorkflowRun).where(
+                    WorkflowRun.id == run_id,
+                    WorkflowRun.org_id == self.org_id,
+                )
+            )
+        ).scalar_one_or_none()
         if run is None:
             raise NodeExecutionFailed(f"workflow run {run_id!r} not found")
         if run.status not in {"waiting_approval", "paused"}:
             raise NodeExecutionFailed(f"run {run_id!r} is {run.status}, not waiting or paused")
 
         approvals = dict((run.attributes or {}).get("approvals") or {})
-        if approval_id:
+        resumed_breakpoints = list((run.attributes or {}).get("resumed_breakpoints") or [])
+        effective_approval_id = approval_id or (
+            run.pending_approval_id if run.status == "waiting_approval" else None
+        )
+        if run.status == "waiting_approval" and not effective_approval_id:
+            raise ApprovalRequired(
+                f"run {run_id!r} is waiting for approval and cannot be resumed without a decided approval"
+            )
+        if effective_approval_id:
             approval = (
-                await self.session.execute(select(ApprovalRequest).where(ApprovalRequest.id == approval_id))
+                await self.session.execute(
+                    select(ApprovalRequest).where(
+                        ApprovalRequest.id == effective_approval_id,
+                        ApprovalRequest.org_id == self.org_id,
+                    )
+                )
             ).scalar_one_or_none()
             if approval is None:
-                raise NodeExecutionFailed(f"approval {approval_id!r} not found")
+                raise NodeExecutionFailed(f"approval {effective_approval_id!r} not found")
+            if approval.run_id != run.id or (
+                run.pending_approval_id is not None and approval.id != run.pending_approval_id
+            ):
+                raise NodeExecutionFailed(
+                    f"approval {effective_approval_id!r} does not belong to run {run_id!r}"
+                )
             if approval.status == "pending":
-                raise ApprovalRequired(f"approval {approval_id!r} has not been decided yet")
+                raise ApprovalRequired(f"approval {effective_approval_id!r} has not been decided yet")
             if approval.status != "approved":
                 run.status = "cancelled"
                 run.finished_at = dt.datetime.now(tz=UTC)
@@ -217,7 +243,15 @@ class WorkflowRuntime:
                 node_id=approval.node_id,
                 payload={"decision_note": approval.decision_note, "decided_by": approval.decided_by},
             )
-        run.attributes = {**(run.attributes or {}), "approvals": approvals}
+        elif run.status == "paused" and run.cursor_node_id:
+            if run.cursor_node_id not in resumed_breakpoints:
+                resumed_breakpoints.append(run.cursor_node_id)
+
+        run.attributes = {
+            **(run.attributes or {}),
+            "approvals": approvals,
+            "resumed_breakpoints": resumed_breakpoints,
+        }
         run.status = "running"
         run.pending_approval_id = None
         await self._event(run, "run_resumed", message=f"resumed with decision {decision or 'approved'}")
@@ -282,7 +316,8 @@ class WorkflowRuntime:
             for edge in graph.edges:
                 if not edge.is_loop_back or edge.source != node.id:
                     continue
-                if edge.id and edge.id not in state.taken_edges:
+                loop_key = edge.id or f"{edge.source}->{edge.target}:loop"
+                if loop_key not in state.taken_edges and (not edge.id or edge.id not in state.taken_edges):
                     continue
                 target_loop = state.loop_counts.get(edge.target, 0) + 1
                 state.loop_counts[edge.target] = target_loop
@@ -349,7 +384,11 @@ class WorkflowRuntime:
         if not incoming:
             # Entry node: run, unless this is a resume and the node was already resolved.
             return node.id not in (run.resolved_node_ids or []) or invalidate_from == node.id
-        return any(edge.id in state.taken_edges for edge in incoming)
+        return any(
+            (edge.id in state.taken_edges if edge.id else False)
+            or f"{edge.source}->{edge.target}:{edge.condition or ''}" in state.taken_edges
+            for edge in incoming
+        )
 
     def _apply_branch(self, node: GraphNode, outcome: NodeOutcome, graph: WorkflowGraph, state: _Traversal) -> None:
         # Loop-back edges are taken when their source ran without failing (that is what "loop back

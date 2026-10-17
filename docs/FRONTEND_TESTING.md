@@ -11,8 +11,8 @@ is confined to unit and component tests, where it isolates a boundary rather tha
 | Types | `cd frontend && npm run typecheck` | strict TypeScript over the app, the tests and the e2e specs |
 | Lint | `cd frontend && npm run lint` | no unused code, no `any` slipping in, React rules |
 | Build | `cd frontend && npm run build` | `tsc -b` plus a production Vite build |
-| Unit + component | `cd frontend && npm test` | values, units, the API boundary, cancellation, permissions, the shared UI states, and the pages' contracts |
-| End-to-end | `cd frontend && npm run e2e` | the real stack through a browser, in three deployments |
+| Unit + component | `cd frontend && npm test` | 312 passed in 29 files: values, units, the API boundary, cancellation, permissions, the shared UI states, and the pages' contracts |
+| End-to-end | `cd frontend && npm run e2e` | 119 passed in 17 spec files: the real stack through a browser, in three deployments |
 | Backend | `cd backend && .venv/bin/python -m pytest` | the APIs the frontend reads (and the rest of the platform) |
 | Backend lint | `cd backend && .venv/bin/python -m ruff check .` | backend style and import hygiene |
 | Migrations | `cd backend && .venv/bin/python -m alembic upgrade head && .venv/bin/python -m alembic check` | no model/migration drift — against a **fresh** database |
@@ -23,12 +23,14 @@ binary in environments that provide one.
 
 ### PostgreSQL-backed tests
 
-Three tests assert against a real PostgreSQL: two in `tests/db/test_persistence.py` (JSON and
+Five tests assert against a real PostgreSQL: two in `tests/db/test_persistence.py` (JSON and
 timestamp behaviour SQLite cannot prove, and that the Alembic baseline creates exactly the schema the
-models declare) and one in `tests/db/test_migrations_postgres.py` that applies the whole migration chain
+models declare), one in `tests/db/test_migrations_postgres.py` that applies the whole migration chain
 to head, checks for drift, reverses and re-applies the asset-identity revision, and asserts a database
-already holding two wells with one regulator identifier is refused with the offending rows named. That
-last one exists because the revision failed on PostgreSQL and passed on SQLite — a boolean column
+already holding two wells with one regulator identifier is refused with the offending rows named, one
+in `tests/telemetry/test_connector_worker.py` (`test_competing_workers_fencing_on_postgres`), and one in
+`tests/telemetry/test_cp13_witsml_and_worker_races.py` (`test_phase6_postgres_concurrent_sql_cas_races`).
+That migration check exists because the revision failed on PostgreSQL and passed on SQLite — a boolean column
 compared to `1` — so the dialect that accepts such a comparison is not the dialect that may certify it.
 They skip unless the repository's own embedded PostgreSQL is switched on:
 
@@ -36,11 +38,11 @@ They skip unless the repository's own embedded PostgreSQL is switched on:
 cd backend && DRILLAI_TEST_POSTGRES=1 .venv/bin/python -m pytest
 ```
 
-With it, the suite reports **1031 passed** (including `test_competing_workers_fencing_on_postgres` in
+With it, the suite reports **1067 passed** across 77 test files (including `test_competing_workers_fencing_on_postgres` in
 `tests/telemetry/test_connector_worker.py` and `test_phase6_postgres_concurrent_sql_cas_races` in
-`tests/telemetry/test_cp13_witsml_and_worker_races.py`); without it, **1026 passed, 5 skipped**. CI
+`tests/telemetry/test_cp13_witsml_and_worker_races.py`); without it, **1062 passed, 5 skipped**. CI
 runs them (the `pgserver` dev dependency is already in `backend/pyproject.toml`), so the certificate
-is the 1031-test one. Nothing is replaced with SQLite to make them pass, and the tests are never
+is the 1067-test one. Nothing is replaced with SQLite to make them pass, and the tests are never
 deleted.
 
 ## Unit and component tests
@@ -102,13 +104,13 @@ third of the suite, so all three projects run.
 
 ### The journeys
 
-115 journeys in 17 spec files. The list is the coverage; the counts are what the suite reports.
+119 journeys in 17 spec files. The list is the coverage; the counts are what the suite reports.
 
 | Spec | Journeys | Covers |
 | --- | --- | --- |
 | `well-cockpit.spec.ts` | 4 | list → cockpit → NPT → missing data → timeline → reload → unknown well → unknown route |
 | `live-operations.spec.ts` | 3 | CP10 live operational vertical slice: synthetic telemetry commissioning → automatic rule evaluation on ingestion → live KPI strip & bounded channel history chart → historical `T1` alert evidence drawer unaffected by later `T2` points → server-governed `allowed_transitions` ack/clear/cancel & real 409 conflict recovery → hysteresis auto-clear → cross-well stream isolation → missing/untrustworthy quality honesty → Persian RTL token isolation |
-| `connectors-platform.spec.ts` | 38 | CP11/CP12/CP13 telemetry connectors, WITSML 1.4.1.1 SOAP, production ETP 1.2 Binary Avro (`etp.1.2.binary_ws`), & internal-test ETP 1.2 JSON (`etp.1.2.json_ws`), connection-bound SSRF & private rig-network CIDR policy, 10-stage connection-test milestones, secret minimization & redaction, reconciled run disposition manifests (`data_outcome`, per-channel `channel_cursors`), governed dry-run & live replay, 409 optimistic concurrency, mid-poll lease preemption, RBAC, and Persian RTL technical token isolation |
+| `connectors-platform.spec.ts` | 42 | CP11–CP16 telemetry connectors, WITSML 1.4.1.1 SOAP, production ETP 1.2 Binary Avro (`etp.1.2.binary_ws`), & internal-test ETP 1.2 JSON (`etp.1.2.json_ws`), connection-bound SSRF & durable private rig-network CIDR policy (`EGRESS_POLICY_STATES`, redaction, `manifest-policy-revision`, `worker-policy-stale-badge`), 10-stage connection-test milestones, secret minimization & redaction, reconciled run disposition manifests (11-state `POLL_DATA_OUTCOMES`, per-channel `channel_cursors`), governed dry-run (`dry_run_preview`) & live replay, 409 optimistic concurrency, mid-poll lease preemption, RBAC, and Persian RTL technical token isolation |
 | `documents-evidence.spec.ts` | 4 | upload → ingestion → extraction record → page/region evidence |
 | `workflow-studio.spec.ts` | 9 | create → configure → connect → validate → save → version → publish, and the draft lifecycle |
 | `run-monitor.spec.ts` | 6 | run list, node executions, the approval inbox, a run that fails and says which node failed |

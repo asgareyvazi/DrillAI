@@ -12,6 +12,7 @@ and test isolation are consistent:
 from __future__ import annotations
 
 import contextlib
+import weakref
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -23,6 +24,15 @@ from drillai.core.logging import get_logger
 
 logger = get_logger(__name__)
 
+_ACTIVE_DATABASES: weakref.WeakSet[Database] = weakref.WeakSet()
+
+
+async def dispose_all_databases() -> None:
+    """Dispose all currently live Database engines (used by test teardown to prevent fd/thread leaks)."""
+    for db in list(_ACTIVE_DATABASES):
+        with contextlib.suppress(Exception):
+            await db.dispose()
+
 
 class Database:
     """Owns an async engine and session factory."""
@@ -33,6 +43,7 @@ class Database:
         self.echo = self.settings.db_echo if echo is None else echo
         self._engine: AsyncEngine | None = None
         self._session_factory: async_sessionmaker[AsyncSession] | None = None
+        _ACTIVE_DATABASES.add(self)
 
     # ------------------------------------------------------------------ lifecycle
     @property

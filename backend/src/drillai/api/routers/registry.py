@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from drillai.api.deps import AuthContext, get_db, require
 from drillai.core.errors import NotFound
+from drillai.documents.scope import DocumentScope, DocumentScopeResolver
 from drillai.engines.service import engine_catalogue, execute_engine
 from drillai.security.actions import ACTION_LEVEL_DESCRIPTIONS, ActionLevel, authorize, registered_actions
 
@@ -71,23 +72,52 @@ async def run_engine(
         raise NotFound(f"engine {engine_key!r} is not registered", details={"known": registry.keys()})
     spec = registry.get(engine_key).spec
     authorize(auth.principal, "engine.run", required_permission="engine.run")
+    resolved_project_id = payload.project_id
+    resolved_well_id = payload.well_id
+    resolved_wellbore_id = payload.wellbore_id
+    resolved_section_id = payload.section_id
+    resolved_operation_id = payload.operation_id
+    if any(
+        (
+            payload.project_id,
+            payload.well_id,
+            payload.wellbore_id,
+            payload.section_id,
+            payload.operation_id,
+        )
+    ):
+        resolved_scope = await DocumentScopeResolver(session, org_id=_org(auth)).resolve(
+            DocumentScope(
+                project_id=payload.project_id,
+                well_id=payload.well_id,
+                wellbore_id=payload.wellbore_id,
+                section_id=payload.section_id,
+                operation_id=payload.operation_id,
+            )
+        )
+        resolved_project_id = resolved_scope.project_id
+        resolved_well_id = resolved_scope.well_id
+        resolved_wellbore_id = resolved_scope.wellbore_id
+        resolved_section_id = resolved_scope.section_id
+        resolved_operation_id = resolved_scope.operation_id
     execution = await execute_engine(
         session,
         engine_key=engine_key,
         inputs=payload.inputs,
         org_id=_org(auth),
-        subject_kind="well" if payload.well_id else "none",
-        subject_id=payload.well_id or _org(auth),
-        project_id=payload.project_id,
-        well_id=payload.well_id,
-        wellbore_id=payload.wellbore_id,
-        section_id=payload.section_id,
-        operation_id=payload.operation_id,
+        subject_kind="well" if resolved_well_id else ("project" if resolved_project_id else "none"),
+        subject_id=resolved_well_id or resolved_project_id or _org(auth),
+        project_id=resolved_project_id,
+        well_id=resolved_well_id,
+        wellbore_id=resolved_wellbore_id,
+        section_id=resolved_section_id,
+        operation_id=resolved_operation_id,
         input_source_kind="api",
         input_source_id=request.headers.get("X-Request-ID"),
         triggered_by="api",
         triggered_by_id=auth.principal.id,
         registry=registry,
+        persist=payload.persist,
     )
     body = execution.to_payload()
     body["engine"] = {"key": spec.key, "version": spec.version, "validation_status": spec.validation_status}

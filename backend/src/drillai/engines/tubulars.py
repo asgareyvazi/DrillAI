@@ -263,7 +263,13 @@ def compute_tubular_design(inputs: TubularDesignInput) -> EngineResult:
         triaxial_sf = None
         equivalent_stress = None
         if segment.internal_pressure_si or external:
-            triaxial_sf, equivalent_stress = _triaxial(segment, wall, axial_stress, segment.yield_stress_si)
+            triaxial_sf, equivalent_stress = _triaxial(
+                segment,
+                wall,
+                axial_stress,
+                segment.yield_stress_si,
+                external_pressure_si=external,
+            )
 
         checks: list[tuple[str, float | None, float]] = [
             ("burst", burst_sf, factors.burst),
@@ -394,19 +400,26 @@ def _triaxial(
     wall: float,
     axial_stress: float,
     yield_stress: float,
-) -> tuple[float, float]:
+    *,
+    external_pressure_si: float | None = None,
+) -> tuple[float | None, float]:
     """von Mises equivalent stress at the inner wall vs the yield strength."""
+    eff_external = (
+        segment.external_pressure_si
+        if external_pressure_si is None
+        else external_pressure_si
+    )
     radial, tangential, axial = inner_wall_stresses(
         segment.outer_diameter_si,
         wall,
         segment.internal_pressure_si,
-        segment.external_pressure_si,
+        eff_external,
         axial_stress,
     )
     equivalent = math.sqrt(
         0.5 * ((tangential - radial) ** 2 + (radial - axial) ** 2 + (axial - tangential) ** 2)
     )
-    safety = yield_stress / equivalent if equivalent > 1e-9 else float("inf")
+    safety = yield_stress / equivalent if equivalent > 1e-9 else None
     return safety, equivalent
 
 

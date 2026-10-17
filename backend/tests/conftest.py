@@ -12,6 +12,8 @@ Two persistence modes are supported:
 from __future__ import annotations
 
 import os
+import resource
+import shutil
 import tempfile
 
 import pytest
@@ -20,6 +22,28 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from drillai.core.clock import FixedClock
 from drillai.db.models import Base
+from drillai.db.session import dispose_all_databases
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    """Ensure sufficient file descriptor budget across 1,000+ async SQLite/PostgreSQL tests."""
+    try:
+        soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+        target = min(65536, hard) if hard > 0 else 65536
+        if soft < target:
+            resource.setrlimit(resource.RLIMIT_NOFILE, (target, hard))
+    except (ValueError, OSError):
+        pass
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def _dispose_leaked_databases(request: pytest.FixtureRequest):
+    yield
+    await dispose_all_databases()
+    if "tmp_path" in request.fixturenames:
+        tmp_dir = request.node.funcargs.get("tmp_path")
+        if tmp_dir is not None:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
 @pytest.fixture(scope="session")

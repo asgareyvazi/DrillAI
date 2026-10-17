@@ -114,7 +114,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         raise ConfigurationError("DRILLAI_AUTH_ENABLED must be true in production")
     if settings.is_production and settings.debug:
         raise ConfigurationError("DRILLAI_DEBUG must not be enabled in production")
-    if settings.is_production and settings.cors_origins.strip() == "*":
+    if settings.is_production and "*" in settings.cors_origin_list:
         raise ConfigurationError("wildcard CORS origins are not allowed in production")
     if settings.is_production and settings.e2e_faults:
         # The fault routes are unauthenticated by construction (they exist to make the client fail,

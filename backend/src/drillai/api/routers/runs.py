@@ -186,28 +186,46 @@ async def resume_run(
             f"run {run_id!r} is {run.status} and cannot be resumed",
             details={"status": run.status, "resumable": ["waiting_approval", "paused"]},
         )
-    effective_approval = approval_id or run.pending_approval_id
-    if effective_approval is None:
-        raise ValidationFailed("no approval is associated with this run and none was supplied")
-    approval = (
-        await session.execute(select(ApprovalRequest).where(ApprovalRequest.id == effective_approval))
-    ).scalar_one_or_none()
-    if approval is None:
-        raise NotFound(f"approval {effective_approval!r} not found")
-    if approval.status == "pending":
-        raise Conflict(
-            "the approval has not been decided yet",
-            details={"approval_id": approval.id, "status": approval.status},
-        )
+    approval: ApprovalRequest | None = None
+    if run.status == "waiting_approval" or approval_id is not None or run.pending_approval_id is not None:
+        effective_approval = approval_id or run.pending_approval_id
+        if effective_approval is None:
+            raise ValidationFailed("no approval is associated with this run and none was supplied")
+        approval = (
+            await session.execute(
+                select(ApprovalRequest).where(
+                    ApprovalRequest.id == effective_approval,
+                    ApprovalRequest.org_id == auth.org_id,
+                )
+            )
+        ).scalar_one_or_none()
+        if approval is None:
+            raise NotFound(f"approval {effective_approval!r} not found")
+        if approval.run_id != run.id or (
+            run.pending_approval_id is not None and approval.id != run.pending_approval_id
+        ):
+            raise ValidationFailed(
+                "approval does not belong to this run",
+                details={
+                    "run_id": run.id,
+                    "approval_id": approval.id,
+                    "pending_approval_id": run.pending_approval_id,
+                },
+            )
+        if approval.status == "pending":
+            raise Conflict(
+                "the approval has not been decided yet",
+                details={"approval_id": approval.id, "status": approval.status},
+            )
     service = WorkflowService(session, org_id=auth.org_id or "", principal=auth.principal)
     graph_row = await service.get_version(run.workflow_id, run.version)
     runtime = WorkflowRuntime(session, org_id=auth.org_id or "", principal=auth.principal)
     resumed = await runtime.resume(
         run_id,
         WorkflowGraph.model_validate(graph_row.graph),
-        approval_id=approval.id,
-        decision=approval.status,
-        decided_by=approval.decided_by,
+        approval_id=approval.id if approval else None,
+        decision=approval.status if approval else "breakpoint_resumed",
+        decided_by=approval.decided_by if approval else auth.principal.id,
     )
     return run_out(resumed)
 

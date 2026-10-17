@@ -20,11 +20,21 @@ from drillai.api.deps import AuthContext, OptionalFilter, get_db, require
 from drillai.api.serializers import twin_aspect_out
 from drillai.core.errors import NotFound, ValidationFailed
 from drillai.db.models import Well
+from drillai.documents.scope import DocumentScope, DocumentScopeResolver
 from drillai.security.actions import authorize
 from drillai.twin.aspects import ASPECTS_BY_KEY, StateKind, aspect_keys
 from drillai.twin.service import AspectRevision, TwinService
 
 router = APIRouter(tags=["twin"])
+
+
+async def _require_well(session: AsyncSession, well_id: str, org_id: str | None) -> Well:
+    well = (
+        await session.execute(select(Well).where(Well.id == well_id, Well.org_id == org_id))
+    ).scalar_one_or_none()
+    if well is None:
+        raise NotFound(f"well {well_id!r} not found")
+    return well
 
 
 class AspectWrite(BaseModel):
@@ -77,11 +87,11 @@ async def well_twin(
     include_history: bool = Query(default=False, description="Include superseded revisions"),
 ) -> dict[str, Any]:
     authorize(auth.principal, "twin.read")
-    well = (
-        await session.execute(select(Well).where(Well.id == well_id, Well.org_id == auth.org_id))
-    ).scalar_one_or_none()
-    if well is None:
-        raise NotFound(f"well {well_id!r} not found")
+    well = await _require_well(session, well_id, auth.org_id)
+    if wellbore_id or section_id:
+        await DocumentScopeResolver(session, org_id=auth.org_id or "").resolve(
+            DocumentScope(well_id=well_id, wellbore_id=wellbore_id, section_id=section_id)
+        )
     service = TwinService(session, org_id=auth.org_id or "")
     aspects = await service.list_aspects(
         well_id=well_id,
@@ -176,6 +186,7 @@ async def list_snapshots(
     auth: Annotated[AuthContext, Depends(require("twin.read"))],
     limit: int = Query(default=50, ge=1, le=200),
 ) -> dict[str, Any]:
+    await _require_well(session, well_id, auth.org_id)
     service = TwinService(session, org_id=auth.org_id or "")
     rows = await service.list_snapshots(well_id=well_id, limit=limit)
     return {
@@ -211,6 +222,7 @@ async def twin_as_of(
     Implemented over the same revision rows (``valid_from``/``valid_to``), not a separate
     store, so an as-of answer cannot disagree with the history it came from.
     """
+    await _require_well(session, well_id, auth.org_id)
     service = TwinService(session, org_id=auth.org_id or "")
     rows = await service.as_of(well_id=well_id, moment=moment, aspect_key=aspect)
     return {
@@ -239,6 +251,7 @@ async def twin_changes(
     auth: Annotated[AuthContext, Depends(require("twin.read"))],
     limit: int = Query(default=100, ge=1, le=500),
 ) -> dict[str, Any]:
+    await _require_well(session, well_id, auth.org_id)
     service = TwinService(session, org_id=auth.org_id or "")
     rows = await service.change_history(well_id=well_id, limit=limit)
     return {
@@ -275,6 +288,7 @@ async def well_engine_runs(
     from drillai.api.serializers import engine_run_out
     from drillai.db.models import EngineRun
 
+    await _require_well(session, well_id, auth.org_id)
     rows = (
         await session.execute(
             select(EngineRun)
@@ -296,6 +310,7 @@ async def well_recommendations(
     from drillai.api.serializers import recommendation_out
     from drillai.db.models import Recommendation
 
+    await _require_well(session, well_id, auth.org_id)
     stmt = select(Recommendation).where(
         Recommendation.well_id == well_id, Recommendation.org_id == auth.org_id
     )
@@ -319,31 +334,44 @@ async def well_audit(
     """
     from drillai.db.models import EngineRun, LlmCall, NodeRun, ToolCall, WorkflowRun
 
+    await _require_well(session, well_id, auth.org_id)
     engine_rows = (
         await session.execute(
-            select(EngineRun).where(EngineRun.well_id == well_id).order_by(EngineRun.created_at.desc()).limit(limit)
+            select(EngineRun)
+            .where(EngineRun.well_id == well_id, EngineRun.org_id == auth.org_id)
+            .order_by(EngineRun.created_at.desc())
+            .limit(limit)
         )
     ).scalars().all()
     run_rows = (
         await session.execute(
-            select(WorkflowRun).where(WorkflowRun.well_id == well_id).order_by(WorkflowRun.created_at.desc()).limit(limit)
+            select(WorkflowRun)
+            .where(WorkflowRun.well_id == well_id, WorkflowRun.org_id == auth.org_id)
+            .order_by(WorkflowRun.created_at.desc())
+            .limit(limit)
         )
     ).scalars().all()
     tool_rows = (
         await session.execute(
-            select(ToolCall).where(ToolCall.well_id == well_id).order_by(ToolCall.created_at.desc()).limit(limit)
+            select(ToolCall)
+            .where(ToolCall.well_id == well_id, ToolCall.org_id == auth.org_id)
+            .order_by(ToolCall.created_at.desc())
+            .limit(limit)
         )
     ).scalars().all()
     llm_rows = (
         await session.execute(
-            select(LlmCall).where(LlmCall.well_id == well_id).order_by(LlmCall.created_at.desc()).limit(limit)
+            select(LlmCall)
+            .where(LlmCall.well_id == well_id, LlmCall.org_id == auth.org_id)
+            .order_by(LlmCall.created_at.desc())
+            .limit(limit)
         )
     ).scalars().all()
     node_rows = (
         await session.execute(
             select(NodeRun)
             .join(WorkflowRun, NodeRun.run_id == WorkflowRun.id)
-            .where(WorkflowRun.well_id == well_id)
+            .where(WorkflowRun.well_id == well_id, WorkflowRun.org_id == auth.org_id)
             .order_by(NodeRun.created_at.desc())
             .limit(limit)
         )

@@ -1,0 +1,42 @@
+# DrillAI CP16 — Production Readiness Matrix & Verification Provenance Ledger
+
+## 1. Subsystem Production Readiness Matrix
+
+| Subsystem / Domain | Readiness Status | Evidence & Verification | Explicit Boundary / Notes |
+| --- | --- | --- | --- |
+| **1. Tenant Isolation, RBAC & Action Authority (L0–L5)** | **PRODUCTION READY** | `backend/src/drillai/security/`, `test_rbac_and_actions.py`, `test_cp15_system_auth_and_worker_fencing.py`, `test_cp16_adversarial_audit.py` (`test_f_cp16_02_and_03`, `test_f_cp16_04`) | 33 catalogued actions, 8 system roles (`viewer`, `engineer`, `drilling_supervisor`, `well_manager`, `integrity_engineer`, `data_manager`, `auditor`, `org_admin`, `admin`), fail-closed authorization, agent ceiling capped at `L2` (`ActionLevel.DRAFT`). |
+| **2. Asset Hierarchy & Engineering Context Builder** | **PRODUCTION READY** | `backend/src/drillai/context/`, `test_engineering_context.py`, `test_cp16_adversarial_audit.py` | Strict tenant + parent-child scope resolution (`Project -> Well -> Wellbore -> WellSection -> Operation`) via `DocumentScopeResolver`; token-budgeted, citation-backed bundles. |
+| **3. Digital Well Twin (Planned/Actual/Current/Historical/Predicted/Recommended)** | **PRODUCTION READY** | `backend/src/drillai/twin/`, `test_twin_service.py`, `test_cp16_adversarial_audit.py` | Append-only revisions with `valid_from`/`valid_to` time travel (`as_of`), tenant-isolated snapshots, snapshot comparison, and dependency-graph change impact analysis. |
+| **4. Engineering Units & 14 Deterministic Physics Engines** | **PRODUCTION READY** | `backend/src/drillai/units/registry.py`, `backend/src/drillai/engines/`, `test_registry.py`, `test_engines.py`, `test_cp16_adversarial_audit.py` (`test_f_cp16_05`, `test_f_cp16_06`) | 121 units across 33 dimensions; 14 engines benchmarked against SPE-84246, API TR 5C3 (2018), Bourgoyne et al., IWCF/IADC Kill Sheet, and Teale (1965) MSE equations. |
+| **5. Data Fabric, Document Ingestion & Provenance** | **PRODUCTION READY WITH EXPLICIT SCOPE BOUNDARY** | `backend/src/drillai/documents/`, `backend/src/drillai/retrieval/`, `test_documents.py`, `documents-evidence.spec.ts` | PDF, Excel, Word, CSV, and DDR extraction with page/region/row provenance and confidence scores. Vector retrieval defaults to deterministic in-memory storage (`DRILLAI_VECTOR_BACKEND=memory`); `pgvector` is an opt-in PostgreSQL boundary. |
+| **6. Workflow Runtime, DAG Validation, L4 Approvals & Breakpoints** | **PRODUCTION READY** | `backend/src/drillai/workflow/`, `test_graph_and_expressions.py`, `test_runtime_execution.py`, `test_cp16_adversarial_audit.py` (`test_f_cp16_04`) | Immutable published versions, Kahn topological DAG validation, bounded loop-backs, L4 human approval gates with run-bound `approval_id` verification, breakpoint pause/resume, and durable `RunEvent` streaming. |
+| **7. WITSML 1.4.1.1 SOAP & ETP 1.2 Binary Avro Telemetry Connectors** | **PRODUCTION READY (HARNESS & SCHEMA CERTIFIED)** | `backend/src/drillai/telemetry/`, `test_cp14_etp_official_schema_conformance.py`, `test_cp15_reconciliation_and_outcomes.py`, `scripts/verify_stack.py`, `scripts/verify_external_vendor_interop.py` | Verified against `LocalWitsmlSoapServer`, `LocalEtpBinaryWebSocketServer`, and 12 official Energistics ETP v1.2 Avro schemas / 7 golden wire vectors; 11-state `POLL_DATA_OUTCOMES` and 10-stage `ALL_TEST_CONNECTION_STAGES`. |
+| **8. Live External Commercial WITSML / ETP Vendor Store Certification** | **BLOCKED BY EXTERNAL EVIDENCE** | `scripts/verify_external_vendor_interop.py --mode external`, `PROTOCOL_PROFILE_SPECS[*].external_vendor_verified == False` | No live commercial rig store (Kongsberg, Pason, Halliburton, SLB) is reachable in the sandboxed CI environment. `external_vendor_verified` remains `false` in API and UI; opt-in runner is ready for staging/rig execution. |
+| **9. Connector SSRF Guard, Non-Blocking Async DNS & Durable Egress Policy** | **PRODUCTION READY** | `backend/src/drillai/telemetry/connectors.py`, `test_cp13_ssrf_and_egress.py`, `test_cp15_egress_policy_recovery.py`, `test_cp15_dns_executor_resilience.py`, `test_cp16_adversarial_audit.py` (`test_f_cp16_01`) | Non-blocking `resolve_and_pin_endpoint_async` + `validate_connector_endpoint_async`, `_DnsPermitGuard` exact-once permit release, generation-scoped DNS thread-pool rotation, socket-level IP pinning, and 6-state fail-closed `EGRESS_POLICY_STATES`. |
+| **10. Competing-Worker Leases, Fencing & Atomic Ingestion** | **PRODUCTION READY** | `backend/src/drillai/telemetry/worker.py`, `test_connector_worker.py`, `test_cp15_system_auth_and_worker_fencing.py`, `scripts/verify_stack.py` | Phase 1 pre-connect lease expiry check, background lease renewal heartbeat, Phase 2 SQL CAS fencing (`worker_id`, `fencing_token`, `config_version`, `lease_expires_at > now`), and full rollback on reconciliation mismatch. |
+| **11. Deployment, Migrations, Backup/Restore & Observability** | **PRODUCTION READY** | `docker-compose.yml`, `.env.example`, `backend/alembic/`, `test_migrations_postgres.py`, `test_cp16_adversarial_audit.py` (`test_f_cp16_07`, `test_cp16_08`) | Zero-drift Alembic migrations (`c9f1a48b2e31`), production startup guards (auth, debug, wildcard CORS, fault injection, loopback, secret master key), `/api/v1/health` vs `/api/v1/health/ready`, and verified backup/restore/migration recovery drill. |
+| **12. Bilingual (EN/FA) React Workspace & RTL Technical Token Isolation** | **PRODUCTION READY** | `frontend/src/`, `frontend/e2e/`, `ConnectorsPage.test.tsx`, `connectors-platform.spec.ts`, `rtl.spec.ts`, `a11y.spec.ts` | 312 unit/component tests in 29 files and 119 Playwright E2E browser tests across 17 spec files (`chromium`, `chromium-faults`, `chromium-auth`). |
+
+---
+
+## 2. Protocol Profile Readiness & Honesty Matrix (`PROTOCOL_PROFILE_SPECS`)
+
+| Profile Key | Standard / Version | Transport & Wire Encoding | `production_supported` | `is_test_only_encoding` | `conformance_verified` | `local_harness_verified` | `external_vendor_verified` |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `witsml.1.4.1.1.soap_http` | WITSML 1.4.1.1 | `soap_http` / `soap_xml` | `true` | `false` | `true` | `true` | **`false`** |
+| `etp.1.2.binary_ws` | Energistics ETP v1.2 | `websocket_avro_binary` / `avro_binary` (`energistics-tp`) | `true` | `false` | `true` | `true` | **`false`** |
+| `etp.1.2.json_ws` | Energistics ETP v1.2 (JSON test subset) | `websocket_json` / `json_ws_test` (`energistics-tp`) | **`false`** | **`true`** | `true` | `true` | **`false`** |
+| `synthetic.v1` | DrillAI Synthetic v1 | `in_process` / `in_memory` | `true` | `false` | `true` | `true` | **`false`** |
+
+---
+
+## 3. Canonical Commit-Stamped Verification Provenance Ledger
+
+Historical mission reports (`CP14-*`, `CP15-*`, `FRONTEND-MISSION.md`) are preserved as immutable historical records of their respective checkpoints. The table below reconciles the exact verification counts across checkpoints with commit SHAs and GitHub Actions CI run IDs:
+
+| Checkpoint | Commit SHA | GitHub Actions Run / Job | Backend Pytest (`DRILLAI_TEST_POSTGRES=1`) | Backend Test Files | `@pytest.mark.postgres` Tests | Frontend Unit (`npm test`) | Playwright E2E (`npm run e2e`) | `connectors-platform.spec.ts` Journeys | Stack Verification (`scripts/verify_stack.py`) |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| **CP13 (Historical)** | `3f86bc84` | Historical pre-CP14 | `1,031 passed` (`1,026` SQLite + `5` PG) | 73 files | 5 | `308 passed` (29 files) | `115 passed` (17 specs) | 38 journeys | 12 scenarios |
+| **CP14-H (Certified)** | `9b67ac5aee93240b2e3dab652432f2ea61e38db0` | Run `38255799539` / Job `114833418775` (`success`) | `1,000 passed` (`995` SQLite + `5` PG) | 72 files | 5 | `308 passed` (29 files) | `116 passed` (17 specs) | 39 journeys | 15 scenarios |
+| **CP15-H2 (Certified Baseline)** | `30d7952bba2d50ceca690c5b77148e8ea36b2da6` | Run `38535691325` / Job `115757887222` (`success`) | `1,057 passed` (`1,052` SQLite + `5` PG) | 76 files | 5 | `312 passed` (29 files) | `119 passed` (17 specs) | 42 journeys | 16 scenarios + 32-cycle soak |
+| **CP16 (Current Release)** | Certified on `arena/01a0dca0-drillai` | Full 10-gate GitHub Actions CI + 14 local gates | **`1,067 passed`** (`1,062` SQLite + `5` PG, `0 skipped`) | **77 files** | **5** | **`312 passed` (29 files)** | **`119 passed` (17 specs)** | **42 journeys** | **16 scenarios + 32-cycle soak (`STACK_VERIFICATION_OK`)** |

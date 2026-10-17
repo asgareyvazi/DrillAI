@@ -26,9 +26,10 @@ from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from drillai.core.clock import utc_now
-from drillai.core.errors import TwinStateError, ValidationFailed
+from drillai.core.errors import NotFound, TwinStateError, ValidationFailed
 from drillai.core.serialization import content_hash
 from drillai.db.models import ChangeRecord, Scenario, TwinAspect, TwinSnapshot
+from drillai.documents.scope import DocumentScope, DocumentScopeResolver
 from drillai.twin.aspects import ASPECTS_BY_KEY, AspectDefinition, StateKind, aspect
 
 __all__ = [
@@ -118,6 +119,11 @@ class TwinService:
         """
         definition = revision.validate()
         self._check_scope(definition, section_id)
+        resolved_scope = await DocumentScopeResolver(self.session, org_id=self.org_id).resolve(
+            DocumentScope(well_id=well_id, wellbore_id=wellbore_id, section_id=section_id)
+        )
+        wellbore_id = resolved_scope.wellbore_id
+        section_id = resolved_scope.section_id
         state_kind = StateKind(revision.state_kind)
 
         previous: TwinAspect | None = None
@@ -257,9 +263,29 @@ class TwinService:
         )
         scenario = None
         if scenario_id:
-            scenario = await self.session.get(Scenario, scenario_id)
+            scenario = (
+                await self.session.execute(
+                    select(Scenario).where(
+                        Scenario.id == scenario_id,
+                        Scenario.org_id == self.org_id,
+                        Scenario.well_id == well_id,
+                    )
+                )
+            ).scalar_one_or_none()
             if scenario is None:
                 raise ValidationFailed(f"scenario {scenario_id!r} not found")
+        if parent_snapshot_id:
+            parent_snap = (
+                await self.session.execute(
+                    select(TwinSnapshot).where(
+                        TwinSnapshot.id == parent_snapshot_id,
+                        TwinSnapshot.org_id == self.org_id,
+                        TwinSnapshot.well_id == well_id,
+                    )
+                )
+            ).scalar_one_or_none()
+            if parent_snap is None:
+                raise ValidationFailed(f"parent snapshot {parent_snapshot_id!r} not found")
         self.session.add(snapshot)
         await self.session.flush()
         for item in aspects:
@@ -378,16 +404,37 @@ class TwinService:
         Keying by aspect (not by revision id) is what makes the diff readable: superseding a plan
         shows up as *changed*, not as one aspect added and another removed.
         """
-        left = await self.session.get(TwinSnapshot, left_id)
-        right = await self.session.get(TwinSnapshot, right_id)
+        left = (
+            await self.session.execute(
+                select(TwinSnapshot).where(
+                    TwinSnapshot.id == left_id,
+                    TwinSnapshot.org_id == self.org_id,
+                )
+            )
+        ).scalar_one_or_none()
+        right = (
+            await self.session.execute(
+                select(TwinSnapshot).where(
+                    TwinSnapshot.id == right_id,
+                    TwinSnapshot.org_id == self.org_id,
+                )
+            )
+        ).scalar_one_or_none()
         if left is None or right is None:
-            raise ValidationFailed("both snapshots must exist to compare them")
+            raise NotFound("both snapshots must exist to compare them")
 
         async def _keyed(snapshot: TwinSnapshot) -> dict[str, tuple[str, str | None, str | None]]:
             ids = list(snapshot.aspect_ids or [])
             if not ids:
                 return {}
-            rows = (await self.session.execute(select(TwinAspect).where(TwinAspect.id.in_(ids)))).scalars()
+            rows = (
+                await self.session.execute(
+                    select(TwinAspect).where(
+                        TwinAspect.id.in_(ids),
+                        TwinAspect.org_id == self.org_id,
+                    )
+                )
+            ).scalars()
             keyed: dict[str, tuple[str, str | None, str | None]] = {}
             for row in rows:
                 key = f"{row.aspect}/{row.state_kind}"

@@ -118,6 +118,7 @@ __all__ = [
     "update_egress_policy_in_db",
     "validate_connector_config",
     "validate_connector_endpoint",
+    "validate_connector_endpoint_async",
     "validate_egress_policy_candidate",
     "validate_no_plaintext_secrets",
     "validate_secret_refs",
@@ -2843,13 +2844,14 @@ async def resolve_and_pin_endpoint_async(
 
         active_resolver = resolver or _custom_dns_resolver
         bounded_dns_timeout = max(0.05, min(float(dns_timeout_seconds), 15.0))
+        strict_dns = bool(require_dns_resolution or active_resolver is not None)
+        effective_dns_timeout = bounded_dns_timeout if strict_dns else min(bounded_dns_timeout, 1.5)
         if (
             hostname
             and not is_lit
             and hostname not in PROHIBITED_METADATA_HOSTS
             and not hostname.endswith(".internal")
             and not _AMBIGUOUS_NUMERIC_HOST_RE.match(hostname)
-            and (require_dns_resolution or active_resolver is not None)
         ):
             if not _DNS_SEMAPHORE.acquire(blocking=False):
                 raise ValidationFailed(
@@ -2857,6 +2859,8 @@ async def resolve_and_pin_endpoint_async(
                     details={"field": "endpoint_url", "host": hostname, "reason": "timeout"},
                 )
             guard = _DnsPermitGuard(_DNS_SEMAPHORE)
+            fut = None
+            task_state = None
             try:
                 fut, task_state = _submit_dns_lookup_task(
                     hostname,
@@ -2864,52 +2868,63 @@ async def resolve_and_pin_endpoint_async(
                     active_resolver,
                     guard,
                 )
-            except ValidationFailed:
+            except ValidationFailed as exc:
                 guard.release_once()
-                raise
+                if strict_dns or (exc.details or {}).get("reason") in ("timeout", "quarantined"):
+                    raise
+                resolved_strs: tuple[str, ...] = ()
             except Exception as exc:
                 guard.release_once()
-                raise ValidationFailed(
-                    f"endpoint_url host {hostname!r} could not be resolved: {exc}",
-                    details={"field": "endpoint_url", "host": hostname, "reason": "dns_failure"},
-                ) from exc
-
-            try:
-                resolved_strs = await asyncio.wait_for(
-                    asyncio.wrap_future(fut),
-                    timeout=bounded_dns_timeout,
-                )
-            except (TimeoutError, concurrent.futures.TimeoutError) as exc:
-                _handle_dns_future_abort(fut, task_state, guard)
-                raise ValidationFailed(
-                    f"DNS resolution timed out for {hostname!r} after {bounded_dns_timeout:.2f}s",
-                    details={"field": "endpoint_url", "host": hostname, "reason": "timeout"},
-                ) from exc
-            except (asyncio.CancelledError, concurrent.futures.CancelledError) as exc:
-                _handle_dns_future_abort(fut, task_state, guard)
-                cur_task = asyncio.current_task()
-                if cur_task is not None and cur_task.cancelling() > 0:
-                    raise
-                raise ValidationFailed(
-                    f"DNS resolution timed out for {hostname!r} after {bounded_dns_timeout:.2f}s",
-                    details={"field": "endpoint_url", "host": hostname, "reason": "timeout"},
-                ) from exc
-            except socket.gaierror as exc:
-                guard.release_once()
-                raise ValidationFailed(
-                    f"endpoint_url host {hostname!r} could not be resolved",
-                    details={"field": "endpoint_url", "host": hostname, "reason": "dns_failure"},
-                ) from exc
-            except BaseException as exc:
-                _handle_dns_future_abort(fut, task_state, guard)
-                if isinstance(exc, Exception):
+                if strict_dns:
                     raise ValidationFailed(
                         f"endpoint_url host {hostname!r} could not be resolved: {exc}",
                         details={"field": "endpoint_url", "host": hostname, "reason": "dns_failure"},
                     ) from exc
-                raise
-            finally:
-                guard.release_once()
+                resolved_strs = ()
+
+            if fut is not None and task_state is not None:
+                try:
+                    resolved_strs = await asyncio.wait_for(
+                        asyncio.wrap_future(fut),
+                        timeout=effective_dns_timeout,
+                    )
+                except (TimeoutError, concurrent.futures.TimeoutError) as exc:
+                    _handle_dns_future_abort(fut, task_state, guard)
+                    raise ValidationFailed(
+                        f"DNS resolution timed out for {hostname!r} after {effective_dns_timeout:.2f}s",
+                        details={"field": "endpoint_url", "host": hostname, "reason": "timeout"},
+                    ) from exc
+                except (asyncio.CancelledError, concurrent.futures.CancelledError) as exc:
+                    _handle_dns_future_abort(fut, task_state, guard)
+                    cur_task = asyncio.current_task()
+                    if cur_task is not None and cur_task.cancelling() > 0:
+                        raise
+                    raise ValidationFailed(
+                        f"DNS resolution timed out for {hostname!r} after {effective_dns_timeout:.2f}s",
+                        details={"field": "endpoint_url", "host": hostname, "reason": "timeout"},
+                    ) from exc
+                except socket.gaierror as exc:
+                    guard.release_once()
+                    if strict_dns:
+                        raise ValidationFailed(
+                            f"endpoint_url host {hostname!r} could not be resolved",
+                            details={"field": "endpoint_url", "host": hostname, "reason": "dns_failure"},
+                        ) from exc
+                    resolved_strs = ()
+                except BaseException as exc:
+                    _handle_dns_future_abort(fut, task_state, guard)
+                    if isinstance(exc, Exception):
+                        if not strict_dns:
+                            resolved_strs = ()
+                        else:
+                            raise ValidationFailed(
+                                f"endpoint_url host {hostname!r} could not be resolved: {exc}",
+                                details={"field": "endpoint_url", "host": hostname, "reason": "dns_failure"},
+                            ) from exc
+                    else:
+                        raise
+                finally:
+                    guard.release_once()
 
             return resolve_and_pin_endpoint(
                 endpoint_url,
@@ -2920,7 +2935,7 @@ async def resolve_and_pin_endpoint_async(
                 is_production=is_production,
                 resolver=resolver,
                 require_dns_resolution=require_dns_resolution,
-                dns_timeout_seconds=bounded_dns_timeout,
+                dns_timeout_seconds=effective_dns_timeout,
                 _pre_resolved_ips=resolved_strs,
             )
 
@@ -2958,6 +2973,33 @@ def validate_connector_endpoint(
         is_production=is_production,
         resolver=resolver,
         require_dns_resolution=False,
+        dns_timeout_seconds=dns_timeout_seconds,
+    )
+    return pinned.original_url
+
+
+async def validate_connector_endpoint_async(
+    endpoint_url: str | None,
+    protocol_profile: str,
+    *,
+    allow_loopback: bool | None = None,
+    allowed_hosts: list[str] | tuple[str, ...] | None = None,
+    allowed_private_cidrs: Sequence[str] | None = None,
+    is_production: bool | None = None,
+    resolver: Callable[[str, int], Sequence[str]] | None = None,
+    require_dns_resolution: bool = False,
+    dns_timeout_seconds: float = DEFAULT_DNS_TIMEOUT_SECONDS,
+) -> str | None:
+    """Non-blocking async validation of protocol, scheme, port, hostname, and SSRF/DNS-rebinding constraints."""
+    pinned = await resolve_and_pin_endpoint_async(
+        endpoint_url,
+        protocol_profile,
+        allow_loopback=allow_loopback,
+        allowed_hosts=allowed_hosts,
+        allowed_private_cidrs=allowed_private_cidrs,
+        is_production=is_production,
+        resolver=resolver,
+        require_dns_resolution=require_dns_resolution,
         dns_timeout_seconds=dns_timeout_seconds,
     )
     return pinned.original_url
@@ -3716,7 +3758,7 @@ class ConnectorService:
             )
 
         await sync_egress_policy_from_db(self.session)
-        validated_endpoint = validate_connector_endpoint(
+        validated_endpoint = await validate_connector_endpoint_async(
             endpoint_url, protocol_profile, allow_loopback=allow_loopback
         )
         validated_secrets = validate_secret_refs(secret_refs)
@@ -3855,7 +3897,7 @@ class ConnectorService:
         new_endpoint_url = row.endpoint_url
         if endpoint_url is not None:
             await sync_egress_policy_from_db(self.session)
-            new_endpoint_url = validate_connector_endpoint(
+            new_endpoint_url = await validate_connector_endpoint_async(
                 endpoint_url, row.protocol_profile, allow_loopback=allow_loopback
             )
 
@@ -4614,7 +4656,9 @@ class ConnectorService:
         active_pol = await sync_egress_policy_from_db(self.session)
         active_pol_rev = int(active_pol.get("revision", 1))
         resolved_secrets = await resolve_secret_refs(self.session, self.org_id, dict(row.secret_refs or {}))
-        validate_connector_endpoint(row.endpoint_url, row.protocol_profile, allow_loopback=allow_loopback)
+        await validate_connector_endpoint_async(
+            row.endpoint_url, row.protocol_profile, allow_loopback=allow_loopback
+        )
         adapter = await self.build_adapter(row, resolved_secrets=resolved_secrets)
         await adapter.connect()
         try:
@@ -4756,7 +4800,9 @@ class ConnectorService:
 
         active_pol = await sync_egress_policy_from_db(self.session)
         active_pol_rev = int(active_pol.get("revision", 1))
-        validate_connector_endpoint(row.endpoint_url, row.protocol_profile, allow_loopback=allow_loopback)
+        await validate_connector_endpoint_async(
+            row.endpoint_url, row.protocol_profile, allow_loopback=allow_loopback
+        )
         resolved_secrets = await resolve_secret_refs(
             self.session, self.org_id, dict(row.secret_refs or {})
         )

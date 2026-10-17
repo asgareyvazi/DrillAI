@@ -85,8 +85,9 @@ async def execute_engine(
     node_run_id: str | None = None,
     agent_run_id: str | None = None,
     registry: EngineRegistry | None = None,
+    persist: bool = True,
 ) -> EngineExecution:
-    """Run an engine and persist the resulting :class:`EngineRun` row."""
+    """Run an engine and persist the resulting :class:`EngineRun` row (when ``persist=True``)."""
     registry = registry or load_default_engines()
     spec, result = registry.execute(engine_key, inputs)
     input_payload = (
@@ -96,42 +97,45 @@ async def execute_engine(
     inputs_hash = content_hash(input_payload)
     outputs_hash = content_hash(output_payload)
 
-    row = EngineRun(
-        id=new_id("eng"),
-        org_id=org_id,
-        engine_key=spec.key,
-        engine_version=spec.version,
-        domain_pack=spec.domain_pack,
-        status="succeeded" if result.is_feasible else "succeeded_with_violations",
-        subject_kind=subject_kind,
-        subject_id=subject_id or well_id or project_id or org_id,
-        project_id=project_id,
-        well_id=well_id,
-        wellbore_id=wellbore_id,
-        section_id=section_id,
-        operation_id=operation_id,
-        inputs=input_payload,
-        outputs=output_payload,
-        inputs_hash=inputs_hash,
-        outputs_hash=outputs_hash,
-        units={},
-        assumptions=list(result.assumptions_applied),
-        limitations=list(spec.limitations),
-        warnings=list(result.warnings),
-        constraint_violations=[violation.model_dump(mode="json") for violation in result.violations],
-        is_feasible=result.is_feasible,
-        input_source_kind=input_source_kind,
-        input_source_id=input_source_id,
-        triggered_by=triggered_by,
-        triggered_by_id=triggered_by_id,
-        workflow_run_id=workflow_run_id,
-        node_run_id=node_run_id,
-        agent_run_id=agent_run_id,
-        started_at=dt.datetime.now(tz=UTC),
-        finished_at=dt.datetime.now(tz=UTC),
-    )
-    session.add(row)
-    await session.flush()
+    engine_run_id: str | None = None
+    if persist:
+        row = EngineRun(
+            id=new_id("eng"),
+            org_id=org_id,
+            engine_key=spec.key,
+            engine_version=spec.version,
+            domain_pack=spec.domain_pack,
+            status="succeeded" if result.is_feasible else "succeeded_with_violations",
+            subject_kind=subject_kind,
+            subject_id=subject_id or well_id or project_id or org_id,
+            project_id=project_id,
+            well_id=well_id,
+            wellbore_id=wellbore_id,
+            section_id=section_id,
+            operation_id=operation_id,
+            inputs=input_payload,
+            outputs=output_payload,
+            inputs_hash=inputs_hash,
+            outputs_hash=outputs_hash,
+            units={},
+            assumptions=list(result.assumptions_applied),
+            limitations=list(spec.limitations),
+            warnings=list(result.warnings),
+            constraint_violations=[violation.model_dump(mode="json") for violation in result.violations],
+            is_feasible=result.is_feasible,
+            input_source_kind=input_source_kind,
+            input_source_id=input_source_id,
+            triggered_by=triggered_by,
+            triggered_by_id=triggered_by_id,
+            workflow_run_id=workflow_run_id,
+            node_run_id=node_run_id,
+            agent_run_id=agent_run_id,
+            started_at=dt.datetime.now(tz=UTC),
+            finished_at=dt.datetime.now(tz=UTC),
+        )
+        session.add(row)
+        await session.flush()
+        engine_run_id = row.id
     return EngineExecution(
         engine_key=spec.key,
         engine_version=spec.version,
@@ -143,7 +147,7 @@ async def execute_engine(
         is_feasible=result.is_feasible,
         inputs_hash=inputs_hash,
         outputs_hash=outputs_hash,
-        engine_run_id=row.id,
+        engine_run_id=engine_run_id,
     )
 
 

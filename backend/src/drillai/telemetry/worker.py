@@ -26,7 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from drillai.core.clock import utc_now
 from drillai.core.config import Settings, get_settings
-from drillai.core.errors import ValidationFailed
+from drillai.core.errors import ConfigurationError, ValidationFailed
 from drillai.core.ids import new_id
 from drillai.core.logging import configure_logging, get_logger
 from drillai.db.models import Connector, ConnectorRun
@@ -40,7 +40,7 @@ from drillai.telemetry.connectors import (
     redact_sensitive_text,
     resolve_secret_refs,
     sync_egress_policy_from_db,
-    validate_connector_endpoint,
+    validate_connector_endpoint_async,
 )
 from drillai.telemetry.outbox import emit
 from drillai.telemetry.service import TelemetryService
@@ -378,7 +378,7 @@ class ConnectorWorker:
                 active_policy = await sync_egress_policy_from_db(read_session)
                 self.last_policy_revision = int(active_policy.get("revision", 1))
                 self.last_policy_sync_at = active_policy.get("last_synced_at")
-                validate_connector_endpoint(
+                await validate_connector_endpoint_async(
                     row.endpoint_url,
                     row.protocol_profile,
                     allow_loopback=self.allow_loopback,
@@ -1060,6 +1060,16 @@ class ConnectorWorker:
 async def _async_main(once: bool = False) -> int:
     settings: Settings = get_settings()
     configure_logging(level=settings.log_level, json_output=settings.log_json)
+    if settings.is_production and settings.connector_allow_loopback:
+        raise ConfigurationError("DRILLAI_CONNECTOR_ALLOW_LOOPBACK must not be enabled in production")
+    if (
+        settings.is_production
+        and settings.secret_backend == "database"
+        and not settings.secret_master_key.strip()
+    ):
+        raise ConfigurationError(
+            "DRILLAI_SECRET_MASTER_KEY is required when DRILLAI_SECRET_BACKEND=database in production"
+        )
     database = Database(settings=settings)
     worker = ConnectorWorker(database)
 

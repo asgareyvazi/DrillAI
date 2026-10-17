@@ -2,8 +2,8 @@
 
 This document specifies the production integration architecture, protocol profiles, standards gap matrix,
 checkpoint and data disposition invariants, connection-bound SSRF and private rig-network egress controls,
-fenced competing-worker execution model, deployment topology, and operator runbooks certified in CP11,
-CP12, and CP13.
+fenced competing-worker execution model, deployment topology, and operator runbooks certified across
+CP11–CP16.
 
 ---
 
@@ -105,19 +105,28 @@ Per-Well Live Stream (`/api/v1/wells/{well_id}/live/stream`), Operational Monito
 
 ## 3. Security, Connection-Bound SSRF Pinning, Private Rig-Network Policy & Secret Minimization
 
-### 3.1 Connection-Bound SSRF & DNS-Rebinding Protection (`PinnedEndpoint`)
-- `resolve_and_pin_endpoint()` validates the endpoint and returns an immutable `PinnedEndpoint` containing `pinned_ip`, `port`, `host_header`, `sni_hostname`, `connect_url`, and `is_tls`:
-  - **DNS Resolution Timeout**: Bounded by `DNS_RESOLVE_TIMEOUT_SECONDS = 3.0s` inside a worker thread (`ssrf_blocked` on timeout).
+### 3.1 Connection-Bound SSRF, Non-Blocking Async DNS Pinning & Executor Resilience (`PinnedEndpoint`)
+- `resolve_and_pin_endpoint_async()` and `validate_connector_endpoint_async()` validate the endpoint without blocking the asyncio event loop (`_DnsPermitGuard`, generation-scoped DNS thread-pool rotation `_rotate_dns_executor_locked`, `_DNS_MAX_QUARANTINED_THREADS = 16`) and return an immutable `PinnedEndpoint` containing `pinned_ip`, `port`, `host_header`, `sni_hostname`, `connect_url`, and `all_resolved_ips`:
+  - **DNS Resolution Timeout & Concurrency**: Bounded by `DEFAULT_DNS_TIMEOUT_SECONDS = 3.0s` inside a bounded worker pool (`_DNS_MAX_CONCURRENCY = 8`) with exact-once permit release across success, timeout, cancellation, and submission failure.
   - **Strict Address Validation**: Rejects non-canonical, octal, integer, or shorthand IPv4 literals (`0177.0.0.1`, `2130706433`, `127.1`), unpacks IPv4-mapped IPv6 (`::ffff:127.0.0.1`, `::ffff:169.254.169.254`, `::ffff:10.0.0.1`), 6to4, and Teredo addresses, and validates **every** resolved `A`/`AAAA` record (if any record in a multi-record response is prohibited, the connection is refused).
   - **Socket-Level Pinning**:
     - `WitsmlSoapClient` connects directly to `pinned.connect_url` (pinned IP literal) with `headers={"Host": pinned.host_header}`, `follow_redirects=False`, `trust_env=False`, and `extensions={"sni_hostname": pinned.sni_hostname}` so HTTPX never re-resolves the hostname and TLS verifies the certificate against the original hostname.
     - `EtpBinaryWebSocketClient` and `EtpWebSocketClient` pass `host=pinned.pinned_ip, port=pinned.port, proxy=None, server_hostname=pinned.sni_hostname` to `websockets.asyncio.client.connect()`, binding the TCP socket directly to the validated IP while sending the original `Host` header and TLS SNI hostname.
 
-### 3.2 Explicit Private Rig-Network Policy & Loopback Isolation
-- **No Implicit Loopback**: Ordinary user-supplied connectors cannot connect to `127.0.0.1` or `::1` unless `DRILLAI_CONNECTOR_ALLOW_LOOPBACK=true` is explicitly set. In non-production (`development`/`test`), only active `(host, port)` endpoints registered by `LocalProtocolHarnessManager` in `_HARNESS_OWNED_ENDPOINTS` (or listed in `DRILLAI_CONNECTOR_HARNESS_PORTS`) are reachable on loopback. In `DRILLAI_ENV=production`, harness endpoints are completely disabled (`403 Forbidden`).
-- **Private Rig-Network CIDR Governance (`GET / PUT /api/v1/connectors/egress-policy`)**:
-  - Private RFC-1918 and CGNAT addresses (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `100.64.0.0/10`) are blocked by default unless covered by an approved CIDR in `DRILLAI_CONNECTOR_ALLOWED_PRIVATE_NETWORKS` or configured via `PUT /api/v1/connectors/egress-policy` (admin-only `L4`, audited with operator reason).
-  - Loopback (`127.0.0.0/8`, `::1/128`), link-local/cloud metadata (`169.254.0.0/16`, `fe80::/10`), and multicast/unspecified CIDRs are rejected even if submitted to `PUT /api/v1/connectors/egress-policy`, and allowlisted hostnames (`allowed_hosts`) can never bypass loopback or metadata IP blocks.
+### 3.2 Durable Private Rig-Network Policy, Fail-Closed Recovery & Redaction
+- **No Implicit Loopback**: Ordinary user-supplied connectors cannot connect to `127.0.0.1` or `::1` unless `DRILLAI_CONNECTOR_ALLOW_LOOPBACK=true` is explicitly set. In non-production (`development`/`test`), only active `(host, port)` endpoints registered by `LocalProtocolHarnessManager` in `_HARNESS_OWNED_ENDPOINTS` (or listed in `DRILLAI_CONNECTOR_HARNESS_PORTS`) are reachable on loopback. In `DRILLAI_ENV=production`, harness endpoints and `DRILLAI_CONNECTOR_ALLOW_LOOPBACK=true` are refused at startup across both API and `ConnectorWorker`.
+- **Durable Egress Policy State Machine (`EGRESS_POLICY_STATES`)**:
+  - Authoritative egress policy is stored in `system_policies` (`SYSTEM_EGRESS_POLICY_KEY = "connector.egress_policy"`, `SYSTEM_EGRESS_POLICY_ORG_ID = "__system__"`).
+  - `sync_egress_policy_from_db()` tracks explicit `policy_state` values in `EGRESS_POLICY_STATES`:
+    - `"active"` — healthy policy loaded from the database (or initial environment default before any DB policy row is written)
+    - `"transient_store_error"` — database read error during sync; fails closed (`ssrf_blocked`) and recovers automatically to `"active"` (setting `recovered_at`) once a valid DB read succeeds
+    - `"corrupt_policy_record"` — stored policy JSON fails `validate_egress_policy_candidate()`; fails closed until repaired via `PUT /api/v1/connectors/egress-policy`
+    - `"inactive_policy"` — `SystemPolicy.is_active == False`; fails closed until re-activated
+    - `"missing_policy_record"` — authoritative database policy row deleted after initialization; fails closed
+    - `"forced_test_failure"` — deterministic fault injection state for resilience verification
+- **System-Scope Authorization & Role-Based Redaction**:
+  - `PUT /api/v1/connectors/egress-policy` requires `system.egress_policy.manage` (`L4`, platform `admin` in platform org scope; tenant `org_admin` is denied `403`).
+  - `redact_egress_policy_for_principal()` returns full `allowed_private_cidrs` and `allowed_hosts` to principals holding `system.egress_policy.read`/`system.egress_policy.manage` (or within the same dev/test org scope) and returns a redacted summary (`redacted: true`, `allowed_private_cidr_count`, `allowed_host_count`, empty CIDR/host arrays) to non-privileged callers.
 
 ### 3.3 Secret Reference Minimization (`secret_refs`)
 - Plaintext credentials in `config` or `secret_refs` are refused (`422 ValidationFailed`).
@@ -125,14 +134,15 @@ Per-Well Live Stream (`/api/v1/wells/{well_id}/live/stream`), Operational Monito
 
 ---
 
-## 4. Competing-Worker Leases, Expiry Fencing, Connection Milestones & Run Manifests
+## 4. Competing-Worker Leases, Expiry Fencing, Connection Milestones & 11-State Run Manifests
 
-### 4.1 Lease Renewal Heartbeat & Expired-Lease Fencing
-- During Phase 1 network I/O, `ConnectorWorker` runs a background `_heartbeat_watcher` task that calls `renew_lease()` every `max(0.1s, min(lease_seconds / 3, 2.0s))` to extend `lease_expires_at` while verifying `worker_id`, `fencing_token`, `config_version`, `desired_state == 'enabled'`, AND `lease_expires_at > now`.
+### 4.1 Lease Renewal Heartbeat & Phase 1 / Phase 2 Expired-Lease Fencing
+- Before Phase 1 network I/O (`adapter.connect()`), `ConnectorWorker.execute_claimed_poll()` verifies `worker_id == self.worker_id`, `fencing_token == claimed.fencing_token`, `config_version == claimed.config_version`, `is_enabled`, `desired_state == 'enabled'`, AND `lease_expires_at > now` (aborting via `await _record_fenced_outcome()` if already expired or preempted).
+- During Phase 1 network I/O, `ConnectorWorker` runs a background `_heartbeat_watcher` task that calls `renew_lease()` every `max(0.15s, min(lease_seconds / 3, 2.0s))` to extend `lease_expires_at` while verifying `worker_id`, `fencing_token`, `config_version`, `desired_state == 'enabled'`, AND `lease_expires_at > now`.
 - Both Phase 2 commit (`execute_claimed_poll`) and failure recording (`_record_failed_outcome`) verify `worker_id == self.worker_id`, `fencing_token == claimed.fencing_token`, `config_version == claimed.config_version`, AND `lease_expires_at > now` in their pre-check and SQL CAS `WHERE` clauses so an expired worker cannot commit data, advance checkpoints, or overwrite connector status even if no second worker has claimed the connector yet.
 
-### 4.2 Ten-Stage Connection-Test Milestone Pipeline (`POST /api/v1/connectors/{id}/test`)
-Every connection test returns ordered, structured `milestones`:
+### 4.2 Ten-Stage Connection-Test Milestone Pipeline (`ALL_TEST_CONNECTION_STAGES`)
+Every `POST /api/v1/connectors/{id}/test` call returns ordered, structured `milestones` across all 10 canonical stages in `ALL_TEST_CONNECTION_STAGES`:
 1. `endpoint_policy_validated`
 2. `socket_connected`
 3. `tls_verified`
@@ -144,23 +154,30 @@ Every connection test returns ordered, structured `milestones`:
 9. `disposition_validated`
 10. `transaction_committed` (marked `skipped` during non-persistent connection test)
 
-### 4.3 Reconciled Run Disposition Manifest & `data_outcome` (`ConnectorRun.details["manifest"]`)
-Every poll and replay run persists a bounded manifest (`ProtocolPollDisposition.to_dict()`) recording:
-- `data_outcome`:
-  - `"all_valid_accepted"` — all mapped frames accepted cleanly
-  - `"partial_with_rejections"` — valid points accepted alongside protocol or ingestion rejections
-  - `"rejected_only"` — source records discovered, 0 points accepted, >=1 rejected
-  - `"partial_batch_capped"` — batch capped at `max_points_per_poll` (`has_more_deferred = true`)
-  - `"no_data"` — 0 points accepted and 0 rejected
-- `reconciled` (`source_records_discovered == mapped_frames_emitted + total_filtered + total_protocol_rejected`),
-- `checkpoint_status` (`"complete"`, `"partial"`, `"unchanged"`, `"failed"`),
-- `cursor_before` and `cursor_after` (including per-channel `channel_cursors` for ETP).
+### 4.3 Reconciled Run Disposition Manifest & 11-State `POLL_DATA_OUTCOMES` (`ConnectorRun.details["manifest"]`)
+Every poll, preview, and replay operation builds and reconciles a manifest via `build_and_reconcile_poll_manifest()` and `compute_poll_data_outcome()` recording:
+- **11-State `POLL_DATA_OUTCOMES` Truth Table**:
+  1. `"reconciliation_error"` — protocol or ingestion count equation failed (`reconciled = false`); transaction rolls back telemetry points/revisions and cursor advancement (`persisted = false`, `rolled_back = true`, `checkpoint_status = "rolled_back"`)
+  2. `"dry_run_preview"` — non-persistent preview or dry-run replay (`dry_run = true`, `persisted = false`, `checkpoint_status = "unchanged"`)
+  3. `"no_data"` — `source_records_discovered == 0` (0 accepted, 0 duplicates, 0 revised, 0 rejected, 0 filtered)
+  4. `"rejected_only"` — 0 points accepted/revised/duplicated/filtered and `total_rejected > 0`
+  5. `"partial_with_rejections"` — `total_rejected > 0` alongside at least one accepted, revised, duplicate, or filtered record
+  6. `"partial_batch_capped"` — `has_more_deferred == true` (`max_points_per_poll` cap reached with zero rejections; `checkpoint_status = "partial"`)
+  7. `"filtered_only"` — `total_filtered > 0` (`unmapped_skipped + unsubscribed_skipped`) with 0 accepted, 0 revised, 0 duplicates, and 0 rejected
+  8. `"revisions_and_duplicates"` — `points_accepted == 0`, `points_revised > 0`, and `points_duplicates > 0`
+  9. `"revisions_only"` — `points_accepted == 0`, `points_revised > 0`, and `points_duplicates == 0`
+  10. `"duplicates_only"` — `points_accepted == 0`, `points_revised == 0`, and `points_duplicates > 0`
+  11. `"all_valid_accepted"` — `points_accepted > 0`, `total_rejected == 0`, and `has_more_deferred == false` (companion flags `filtered_present`, `revised_present`, and `duplicates_present` indicate whether filtered curves, revisions, or suppressed duplicates accompanied the accepted points)
+- **Strict Reconciliation Equations**:
+  - `protocol_reconciled`: `source_records_discovered == mapped_frames_emitted + unmapped_skipped + unsubscribed_skipped + watermark_suppressed + in_batch_duplicates + deferred_over_cap + total_protocol_rejected`
+  - `ingestion_reconciled`: `mapped_frames_emitted == frames_received == points_accepted + service_duplicates + points_revised + service_rejected`
+  - `policy_revision`: records the active egress policy revision enforced during the poll (`manifest-policy-revision` and `worker-policy-stale-badge` in UI).
 
 ---
 
-## 5. Deployment Security & Verification Stack
+## 5. Deployment Security, Verification Stack & Opt-In External Vendor Interoperability
 
-### 5.1 Hardened `docker-compose.yml`
+### 5.1 Hardened `docker-compose.yml` & `.env.example`
 1. Copy `.env.example` to `.env` and set a strong `POSTGRES_PASSWORD` (required — `docker-compose.yml` enforces `${POSTGRES_PASSWORD:?...}` with no default fallback password).
 2. `postgres` runs on an internal-only Docker network (`drillai_internal`, `internal: true`) with no host port published by default.
 3. `backend` and `frontend` bind to `127.0.0.1` by default (`${BIND_ADDRESS:-127.0.0.1}:8000:8000` and `${BIND_ADDRESS:-127.0.0.1}:8080:8080`).
@@ -171,6 +188,9 @@ cp .env.example .env
 docker compose up --build -d
 ```
 
-### 5.2 Multi-Process Stack Verification (`scripts/verify_stack.py`) & Docker Compose CI Smoke Gate
-- **Local Multi-Process Stack (`scripts/verify_stack.py`)**: Runs Alembic migrations, starts `uvicorn`, `LocalWitsmlSoapServer`, `LocalEtpBinaryWebSocketServer`, and standalone `python -m drillai.telemetry.worker` processes, verifies live WITSML SOAP and ETP 1.2 Binary Avro ingestion, worker restart recovery without duplicate points, and governed stop state, and prints `STACK_VERIFICATION_OK`.
+### 5.2 Multi-Process Stack Verification (`scripts/verify_stack.py`), External Interop Runner (`scripts/verify_external_vendor_interop.py`) & Docker Compose CI Smoke Gate
+- **Local Multi-Process Stack (`scripts/verify_stack.py`)**: Runs Alembic migrations, starts `uvicorn`, `LocalWitsmlSoapServer`, `LocalEtpBinaryWebSocketServer`, and standalone `python -m drillai.telemetry.worker` processes, verifies 16 scenarios including live WITSML SOAP and ETP 1.2 Binary Avro ingestion, 32-cycle soak metrics (`CP15_SOAK_METRICS`), worker restart recovery without duplicate points, and governed stop state, and prints `STACK_VERIFICATION_OK`.
+- **Safe Opt-In External Vendor Interoperability Runner (`scripts/verify_external_vendor_interop.py`)**:
+  - `--mode harness` (default): Executes offline WITSML 1.4.1.1 SOAP and ETP 1.2 Binary Avro conformance plus unsupported protocol/compression/message negative checks (`ProtocolException` msgType `1000`), making zero external network calls.
+  - `--mode external`: Executes a read-only acceptance probe against operator-supplied `DRILLAI_EXTERNAL_WITSML_URL` and/or `DRILLAI_EXTERNAL_ETP_URL` in staging/rig environments; when unset, makes zero network calls and reports `external_gate_status: "BLOCKED_BY_EXTERNAL_EVIDENCE"` with `external_vendor_verified: false`.
 - **Docker Compose CI Smoke Gate (`.github/workflows/ci.yml`)**: Validates `docker compose config -q`, builds the production `backend` and `frontend` Docker images, starts `postgres`, `migrate`, `backend`, `connector-worker`, and `frontend`, verifies `/api/v1/health/ready` and `/api/v1/connectors/profiles` (including `etp.1.2.binary_ws`) through the Nginx proxy container, and tears down cleanly.

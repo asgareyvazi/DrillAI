@@ -116,7 +116,10 @@ _REGISTRY: dict[str, Unit] = {}
 
 def register(unit: Unit) -> Unit:
     for key in (unit.symbol, *unit.aliases):
-        if key in _REGISTRY and _REGISTRY[key].symbol != unit.symbol:
+        if key in _REGISTRY and (
+            _REGISTRY[key].symbol != unit.symbol
+            or _REGISTRY[key].dimension != unit.dimension
+        ):
             raise UnitError(f"unit symbol already registered: {key}")
         _REGISTRY[key] = unit
     return unit
@@ -177,9 +180,21 @@ def canonical_unit(dimension: Dimension) -> str:
     raise UnitError(f"no canonical unit registered for {dimension}")
 
 
+def _resolve_conversion_pair(from_unit: str, to_unit: str) -> tuple[Unit, Unit]:
+    src, dst = get_unit(from_unit), get_unit(to_unit)
+    if src.dimension is not dst.dimension:
+        # SI permeability has dimensions of L^2 (m^2); allow "m2" / "m^2" as the SI target/source
+        # when paired with a PERMEABILITY unit while preserving "m2" as canonical AREA everywhere else.
+        if src.dimension is Dimension.PERMEABILITY and dst.symbol == "m2":
+            dst = get_unit("m2-perm")
+        elif dst.dimension is Dimension.PERMEABILITY and src.symbol == "m2":
+            src = get_unit("m2-perm")
+    return src, dst
+
+
 def convert(value: float, from_unit: str, to_unit: str) -> float:
     """Convert a value between units, raising on dimension mismatch."""
-    src, dst = get_unit(from_unit), get_unit(to_unit)
+    src, dst = _resolve_conversion_pair(from_unit, to_unit)
     if src.dimension is not dst.dimension:
         raise UnitError(
             f"cannot convert {from_unit!r} ({src.dimension.value}) to {to_unit!r} ({dst.dimension.value})",
@@ -192,7 +207,7 @@ def convert(value: float, from_unit: str, to_unit: str) -> float:
 
 def convert_delta(value: float, from_unit: str, to_unit: str) -> float:
     """Convert a *difference* of an affine unit (offsets do not apply)."""
-    src, dst = get_unit(from_unit), get_unit(to_unit)
+    src, dst = _resolve_conversion_pair(from_unit, to_unit)
     if src.dimension is not dst.dimension:
         raise UnitError(f"cannot convert delta {from_unit!r} to {to_unit!r}")
     if src.is_affine:
@@ -358,7 +373,7 @@ register(Unit(symbol="Pa.s", dimension=Dimension.DYNAMIC_VISCOSITY, name="pascal
 register(Unit(symbol="cP", dimension=Dimension.DYNAMIC_VISCOSITY, factor=0.001, name="centipoise", aliases=("cp",)))
 register(Unit(symbol="m2/s", dimension=Dimension.KINEMATIC_VISCOSITY, name="square metre per second", aliases=("m^2/s",)))
 register(Unit(symbol="cSt", dimension=Dimension.KINEMATIC_VISCOSITY, factor=1e-6, name="centistokes"))
-register(Unit(symbol="m2", dimension=Dimension.PERMEABILITY, name="square metre (permeability)", aliases=("m2-perm",)))
+register(Unit(symbol="m2-perm", dimension=Dimension.PERMEABILITY, name="square metre (permeability)", aliases=("m^2-perm",)))
 register(Unit(symbol="mD", dimension=Dimension.PERMEABILITY, factor=9.869233e-16, name="millidarcy"))
 register(Unit(symbol="D", dimension=Dimension.PERMEABILITY, factor=9.869233e-13, name="darcy"))
 register(Unit(symbol="Pa/m", dimension=Dimension.PRESSURE_GRADIENT, name="pascal per metre"))

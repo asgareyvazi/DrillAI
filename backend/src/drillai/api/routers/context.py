@@ -20,7 +20,7 @@ from drillai.api.deps import AuthContext, get_db, require
 from drillai.context.builder import default_context_builder, registered_section_keys
 from drillai.context.model import ContextPurpose, ContextRequest, ContextScope, UnitSystemName
 from drillai.core.errors import NotFound, ValidationFailed
-from drillai.db.models import Well, Wellbore, WellSection
+from drillai.db.models import Operation, Well, Wellbore, WellSection
 from drillai.security.actions import authorize
 
 router = APIRouter(tags=["context"])
@@ -52,23 +52,71 @@ async def well_context(
     ).scalar_one_or_none()
     if well is None:
         raise NotFound(f"well {well_id!r} not found")
-    if section_id is not None and wellbore_id is None:
-        # A section belongs to a wellbore: resolving it here keeps every provider scoped
-        # consistently instead of each one inferring the parent.
-        section = (
-            await session.execute(select(WellSection).where(WellSection.id == section_id))
-        ).scalar_one_or_none()
-        if section is None:
-            raise NotFound(f"section {section_id!r} not found")
-        wellbore_id = section.wellbore_id
     if wellbore_id is not None:
         wellbore = (
             await session.execute(
-                select(Wellbore).where(Wellbore.id == wellbore_id, Wellbore.well_id == well.id)
+                select(Wellbore).where(
+                    Wellbore.id == wellbore_id,
+                    Wellbore.well_id == well.id,
+                    Wellbore.org_id == auth.org_id,
+                )
             )
         ).scalar_one_or_none()
         if wellbore is None:
             raise NotFound(f"wellbore {wellbore_id!r} not found on well {well_id!r}")
+    if section_id is not None:
+        # A section belongs to a wellbore on this well/org: resolving it here keeps every provider
+        # scoped consistently instead of each one inferring the parent.
+        section = (
+            await session.execute(
+                select(WellSection)
+                .join(Wellbore, WellSection.wellbore_id == Wellbore.id)
+                .where(
+                    WellSection.id == section_id,
+                    WellSection.org_id == auth.org_id,
+                    Wellbore.well_id == well.id,
+                    Wellbore.org_id == auth.org_id,
+                )
+            )
+        ).scalar_one_or_none()
+        if section is None:
+            raise NotFound(f"section {section_id!r} not found")
+        if wellbore_id is not None and section.wellbore_id != wellbore_id:
+            raise ValidationFailed(
+                f"section {section_id!r} does not belong to wellbore {wellbore_id!r}",
+                details={"section_id": section_id, "wellbore_id": wellbore_id},
+            )
+        wellbore_id = section.wellbore_id
+    if operation_id is not None:
+        operation = (
+            await session.execute(
+                select(Operation).where(
+                    Operation.id == operation_id,
+                    Operation.well_id == well.id,
+                    Operation.org_id == auth.org_id,
+                )
+            )
+        ).scalar_one_or_none()
+        if operation is None:
+            raise NotFound(f"operation {operation_id!r} not found on well {well_id!r}")
+        if (
+            wellbore_id is not None
+            and operation.wellbore_id is not None
+            and operation.wellbore_id != wellbore_id
+        ):
+            raise ValidationFailed(
+                f"operation {operation_id!r} does not belong to wellbore {wellbore_id!r}",
+                details={"operation_id": operation_id, "wellbore_id": wellbore_id},
+            )
+        if (
+            section_id is not None
+            and operation.section_id is not None
+            and operation.section_id != section_id
+        ):
+            raise ValidationFailed(
+                f"operation {operation_id!r} does not belong to section {section_id!r}",
+                details={"operation_id": operation_id, "section_id": section_id},
+            )
     if depth_from_si is not None and depth_to_si is not None and depth_to_si <= depth_from_si:
         raise ValidationFailed(
             "depth_to_si must be deeper than depth_from_si",

@@ -2240,7 +2240,18 @@ class LocalEtpBinaryWebSocketServer:
                     )
                     return
 
-                msg = decode_etp_binary_frame(bytes(raw))
+                try:
+                    msg = decode_etp_binary_frame(bytes(raw))
+                except AvroBinaryDecodeError as exc:
+                    server_msg_id += 1
+                    await ws.send(
+                        build_protocol_exception_frame(
+                            correlation_id=0,
+                            message_id=server_msg_id,
+                            error={"code": 4, "message": str(exc)},
+                        )
+                    )
+                    return
                 mtype = msg.get("type")
                 client_msg_id = int(msg.get("messageId", 1))
 
@@ -2256,6 +2267,35 @@ class LocalEtpBinaryWebSocketServer:
                                 correlation_id=client_msg_id,
                                 message_id=server_msg_id,
                                 error={"code": 3, "message": "Requested ETP binary session denied"},
+                            )
+                        )
+                        return
+                    req_protos = msg.get("requestedProtocols") or []
+                    unsupported_protos = [
+                        int(p.get("protocol", -1))
+                        for p in req_protos
+                        if isinstance(p, dict) and int(p.get("protocol", -1)) not in {0, 1}
+                    ]
+                    req_comp = [
+                        str(c).strip().lower()
+                        for c in (msg.get("supportedCompression") or [])
+                        if str(c).strip()
+                    ]
+                    if unsupported_protos or (
+                        req_comp and not any(c in {"none", "identity"} for c in req_comp)
+                    ):
+                        server_msg_id += 1
+                        await ws.send(
+                            build_protocol_exception_frame(
+                                correlation_id=client_msg_id,
+                                message_id=server_msg_id,
+                                error={
+                                    "code": 2,
+                                    "message": (
+                                        f"Unsupported ETP 1.2 protocols {unsupported_protos} or compression {req_comp}; "
+                                        "only Core(0), ChannelStreaming(1) with uncompressed binary Avro are supported"
+                                    ),
+                                },
                             )
                         )
                         return
