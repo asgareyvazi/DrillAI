@@ -3401,11 +3401,11 @@ def connector_out(
             "lease_active": health["lease_active"],
             "last_policy_revision": (row.attributes or {}).get("last_policy_revision"),
             "last_policy_sync_at": (row.attributes or {}).get("last_policy_sync_at"),
-            "system_policy_revision": int(_active_egress_policy_snapshot.get("revision", 1)),
+            "system_policy_revision": int((_active_egress_policy_snapshot or get_egress_policy()).get("revision", 1)),
             "policy_stale": bool(
                 (row.attributes or {}).get("last_policy_revision") is not None
                 and int((row.attributes or {}).get("last_policy_revision") or 0)
-                < int(_active_egress_policy_snapshot.get("revision", 1))
+                < int((_active_egress_policy_snapshot or get_egress_policy()).get("revision", 1))
             ),
         },
         "health": {

@@ -194,3 +194,94 @@ docker compose up --build -d
   - `--mode harness` (default): Executes offline WITSML 1.4.1.1 SOAP and ETP 1.2 Binary Avro conformance plus unsupported protocol/compression/message negative checks (`ProtocolException` msgType `1000`), making zero external network calls.
   - `--mode external`: Executes a read-only acceptance probe against operator-supplied `DRILLAI_EXTERNAL_WITSML_URL` and/or `DRILLAI_EXTERNAL_ETP_URL` in staging/rig environments; when unset, makes zero network calls and reports `external_gate_status: "BLOCKED_BY_EXTERNAL_EVIDENCE"` with `external_vendor_verified: false`.
 - **Docker Compose CI Smoke Gate (`.github/workflows/ci.yml`)**: Validates `docker compose config -q`, builds the production `backend` and `frontend` Docker images, starts `postgres`, `migrate`, `backend`, `connector-worker`, and `frontend`, verifies `/api/v1/health/ready` and `/api/v1/connectors/profiles` (including `etp.1.2.binary_ws`) through the Nginx proxy container, and tears down cleanly.
+
+---
+
+## 6. Production Database Backup, Restore, Migration Recovery & Operations Runbook (CP18)
+
+### 6.1 Architectural Distinction: SQLite Local/Dev Backup vs PostgreSQL Production Disaster Recovery
+DrillAI explicitly distinguishes local development database snapshots from production database disaster recovery:
+- **SQLite (`sqlite+aiosqlite:///...`, Local/Dev & Fast Test Mode)**:
+  - Uses SQLite's online `sqlite3.Connection.backup(target_conn)` API (or offline file copy when all connections are disposed).
+  - Suitable **only** for local developer workstations and ephemeral single-node test runs (`production_dr_capable: false`).
+- **PostgreSQL 16 (`postgresql+asyncpg://...`, Production Deployment Mode)**:
+  - Uses `pg_dump --format=custom --no-owner --no-privileges` for transactional, MVCC-consistent logical backups (`drillai_backup.dump`) with SHA-256 integrity verification (`sha256sum`), paired with `pg_restore --no-owner --no-privileges --exit-on-error` into a clean target database and post-restore Alembic revision verification (`alembic upgrade head && alembic check`).
+  - Certified automatically by `scripts/verify_postgres_dr_drill.py` and `backend/tests/db/test_cp18_postgres_backup_restore.py` (`@pytest.mark.postgres`).
+
+### 6.2 Production PostgreSQL Backup Runbook (`pg_dump`)
+
+```bash
+# 1. Export connection URI (or run inside the docker-compose postgres container)
+export PG_URI="postgresql://drillai:${POSTGRES_PASSWORD}@127.0.0.1:5432/drillai"
+export BACKUP_FILE="drillai_$(date -u +%Y%m%dT%H%M%SZ).dump"
+
+# 2. Take a transactional custom-format logical backup
+pg_dump --format=custom --no-owner --no-privileges --file="${BACKUP_FILE}" "${PG_URI}"
+
+# 3. Record byte size and SHA-256 checksum alongside the backup artifact
+sha256sum "${BACKUP_FILE}" | tee "${BACKUP_FILE}.sha256"
+```
+
+When running under Docker Compose (`docker-compose.yml`):
+```bash
+docker compose exec -T postgres pg_dump \
+  -U "${POSTGRES_USER:-drillai}" \
+  -d "${POSTGRES_DB:-drillai}" \
+  --format=custom --no-owner --no-privileges > "drillai_backup.dump"
+sha256sum drillai_backup.dump > drillai_backup.dump.sha256
+```
+
+### 6.3 Production PostgreSQL Restore & Post-Restore Migration Verification Runbook (`pg_restore` + `alembic`)
+
+```bash
+# 1. Verify backup archive integrity before restore
+sha256sum --check "${BACKUP_FILE}.sha256"
+pg_restore --list "${BACKUP_FILE}" >/dev/null
+
+# 2. Stop active writers (connector-worker and backend API) during full database replacement
+docker compose stop connector-worker backend
+
+# 3. Recreate clean target database and restore with --exit-on-error
+docker compose exec -T postgres psql -U "${POSTGRES_USER:-drillai}" -d postgres \
+  -c "DROP DATABASE IF EXISTS drillai_restored WITH (FORCE);" \
+  -c "CREATE DATABASE drillai_restored;"
+
+docker compose exec -T postgres pg_restore \
+  -U "${POSTGRES_USER:-drillai}" \
+  -d drillai_restored \
+  --no-owner --no-privileges --exit-on-error < "${BACKUP_FILE}"
+
+# 4. Verify Alembic migration revision state and zero schema drift against the restored database
+cd backend
+DRILLAI_DATABASE_URL="postgresql+asyncpg://drillai:${POSTGRES_PASSWORD}@127.0.0.1:5432/drillai_restored" \
+  ./.venv/bin/python -m alembic current
+DRILLAI_DATABASE_URL="postgresql+asyncpg://drillai:${POSTGRES_PASSWORD}@127.0.0.1:5432/drillai_restored" \
+  ./.venv/bin/python -m alembic upgrade head
+DRILLAI_DATABASE_URL="postgresql+asyncpg://drillai:${POSTGRES_PASSWORD}@127.0.0.1:5432/drillai_restored" \
+  ./.venv/bin/python -m alembic check
+```
+
+### 6.4 Automated Isolated PostgreSQL DR Drill (`scripts/verify_postgres_dr_drill.py`)
+Operators and CI can run the end-to-end PostgreSQL 16 backup, catastrophic-loss simulation, restore, Alembic drift check, multi-tenant boundary verification, and corrupt-archive rejection drill with a single command:
+
+```bash
+backend/.venv/bin/python scripts/verify_postgres_dr_drill.py
+```
+
+### 6.5 Migration Rollback, Health Probes, Worker Supervision, Secret Rotation & Egress Policy Runbook
+- **Migration Rollback Considerations**:
+  - Always capture and checksum a `pg_dump --format=custom` backup **before** applying new Alembic revisions in staging or production.
+  - Schema-only downgrades can be executed via `python -m alembic downgrade <revision>`, but if a migration transforms or drops columns, restoring the pre-upgrade `pg_dump` archive into a clean target database is the authoritative data-preserving rollback path.
+- **Health & Readiness Checks**:
+  - Liveness (unauthenticated): `curl -fsS http://127.0.0.1:8000/api/v1/health`
+  - Readiness (verifies live database connectivity and dialect): `curl -fsS -H "Authorization: Bearer <TOKEN>" http://127.0.0.1:8000/api/v1/health/ready`
+- **Connector Worker Supervision**:
+  - Run `python -m drillai.telemetry.worker` under `systemd`, Kubernetes Deployment, or Docker Compose (`connector-worker` service with `restart: unless-stopped`).
+  - Graceful shutdown is triggered via `SIGTERM` or `SIGINT`, which sets `worker._stop_event` and disposes database pools cleanly. If a worker crashes abruptly, its lease expires after `connector_worker_lease_seconds` (default `30s`) and the next worker claim increments `fencing_token`, fencing any late writes from the old worker.
+- **Secret Rotation (`DRILLAI_SECRET_MASTER_KEY` & `env:` References)**:
+  - For `env:DRILLAI_SECRET_*` references, update the environment variable in the secret manager / container runtime and restart `backend` and `connector-worker`.
+  - For database-encrypted secrets (`DRILLAI_SECRET_BACKEND=database`), `DRILLAI_SECRET_MASTER_KEY` (Fernet key) is required in production (`ConfigurationError` on startup if missing). When rotating `DRILLAI_SECRET_MASTER_KEY`, re-encrypt stored `SecretRef` ciphertexts within a maintenance window and increment the connector `config_version` via `PATCH /api/v1/connectors/{id}` so running workers reload credentials cleanly.
+- **System-Wide Egress Policy Management**:
+  - Inspect current policy state (`active`, `transient_store_error`, `corrupt_policy_record`, `inactive_policy`, `missing_policy_record`) and revision: `GET /api/v1/connectors/egress-policy`.
+  - Update allowed hostnames and private rig CIDRs atomically with `Idempotency-Key`: `PUT /api/v1/connectors/egress-policy` (requires `admin` role). Both API and worker processes sync the updated revision from PostgreSQL before every outbound connection test or poll.
+
