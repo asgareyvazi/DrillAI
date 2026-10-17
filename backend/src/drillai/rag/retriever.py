@@ -20,6 +20,7 @@ model builds from it can be traced to a page.
 from __future__ import annotations
 
 import enum
+import hashlib
 import math
 import re
 from collections import Counter
@@ -27,6 +28,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from sqlalchemy import func, or_, select
+from sqlalchemy import text as sql_text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from drillai.core.logging import get_logger
@@ -34,7 +36,16 @@ from drillai.db.models import Document, DocumentChunk
 
 logger = get_logger(__name__)
 
-__all__ = ["RetrievalHit", "RetrievalQuery", "RetrievalResult", "RetrieveMode", "retrieve"]
+__all__ = [
+    "RetrievalHit",
+    "RetrievalQuery",
+    "RetrievalResult",
+    "RetrieveMode",
+    "ensure_pgvector_schema",
+    "expand_neighbours",
+    "index_chunk_embeddings",
+    "retrieve",
+]
 
 _TOKEN_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9\-_/]{1,}")
 _STOPWORDS = {
@@ -232,22 +243,27 @@ async def retrieve(session: AsyncSession, org_id: str, query: RetrievalQuery) ->
     query_tokens = _tokens(query.text or "")
     lexical_scores = _bm25_scores(query_tokens, [_tokens(chunk.text) for chunk in chunks]) if query_tokens and mode in {RetrieveMode.LEXICAL, RetrieveMode.HYBRID} else []
     semantic_scores: list[float] = []
+    vector_backend: str | None = None
     mode_used = str(mode)
     if mode is RetrieveMode.SEMANTIC or (mode is RetrieveMode.HYBRID and query.text):
-        semantic_scores = await _semantic_scores(session, chunks, query.text or "")
+        semantic_scores, vector_backend = await _semantic_scores_with_backend(session, chunks, query.text or "")
         if not semantic_scores:
             mode_used = "lexical"  # semantic was unavailable in either mode; degrade, never fake
             notes.append(
                 "vector search unavailable (no embedding provider configured or no stored embeddings): "
                 "fell back to lexical scoring"
             )
+        elif vector_backend == "pgvector":
+            notes.append("vector search executed via postgresql pgvector (<=> cosine distance)")
+        elif vector_backend == "python_cosine":
+            notes.append("vector search executed via portable cosine similarity")
 
     ranked: list[tuple[DocumentChunk, float, dict[str, Any]]] = []
     if mode_used == "metadata" or (not query_tokens and not semantic_scores):
         ranked = [(chunk, 1.0, {"reason": "metadata filter only, newest first"}) for chunk in chunks]
     elif mode_used == "semantic" and semantic_scores:
         ranked = [
-            (chunk, score, {"semantic": round(score, 6)})
+            (chunk, score, {"semantic": round(score, 6), "vector_backend": vector_backend or "python_cosine"})
             for chunk, score in zip(chunks, semantic_scores, strict=True)
         ]
     elif query_tokens and semantic_scores:
@@ -260,7 +276,13 @@ async def retrieve(session: AsyncSession, org_id: str, query: RetrievalQuery) ->
                 (
                     chunk,
                     score,
-                    {"rrf": round(score, 6), "lexical_rank": lexical_rank[index], "semantic_rank": semantic_rank[index]},
+                    {
+                        "rrf": round(score, 6),
+                        "lexical_rank": lexical_rank[index],
+                        "semantic_rank": semantic_rank[index],
+                        "semantic_score": round(semantic_scores[index], 6),
+                        "vector_backend": vector_backend or "python_cosine",
+                    },
                 )
             )
     else:
@@ -301,12 +323,171 @@ def _ranks(scores: list[float]) -> list[int]:
     return ranks
 
 
-async def _semantic_scores(session: AsyncSession, chunks: list[DocumentChunk], text: str) -> list[float]:
-    """Embedding search, when both an embedding provider and stored vectors exist.
+def _is_postgres(session: AsyncSession) -> bool:
+    bind = session.get_bind()
+    return bool(bind is not None and bind.dialect.name == "postgresql")
 
-    Returns an empty list when semantic retrieval is not available — callers must degrade to
-    lexical rather than pretend a vector search happened.
-    """
+
+def _format_vector_literal(vec: list[float]) -> str:
+    return "[" + ",".join(f"{float(v):.8f}" for v in vec) + "]"
+
+
+async def ensure_pgvector_schema(session: AsyncSession) -> bool:
+    """Ensure the PostgreSQL `vector` extension and `document_chunk_vectors` index table exist."""
+    if not _is_postgres(session):
+        return False
+    await session.execute(sql_text("CREATE EXTENSION IF NOT EXISTS vector"))
+    await session.execute(
+        sql_text(
+            """
+            CREATE TABLE IF NOT EXISTS document_chunk_vectors (
+                chunk_id VARCHAR(64) PRIMARY KEY REFERENCES document_chunks(id) ON DELETE CASCADE,
+                org_id VARCHAR(64) NOT NULL,
+                well_id VARCHAR(64),
+                section_id VARCHAR(64),
+                embedding_model VARCHAR(120) NOT NULL,
+                embedding_dim INTEGER NOT NULL,
+                embedding vector NOT NULL
+            )
+            """
+        )
+    )
+    await session.execute(
+        sql_text(
+            """
+            CREATE INDEX IF NOT EXISTS ix_document_chunk_vectors_scope
+            ON document_chunk_vectors (org_id, well_id, section_id)
+            """
+        )
+    )
+    return True
+
+
+async def _sync_pgvector_rows(session: AsyncSession, chunks: list[DocumentChunk]) -> bool:
+    """Upsert any chunk embeddings into `document_chunk_vectors` as native PostgreSQL `vector` rows."""
+    if not _is_postgres(session):
+        return False
+    try:
+        await ensure_pgvector_schema(session)
+        for chunk in chunks:
+            if not chunk.embedding:
+                continue
+            vec_lit = _format_vector_literal(chunk.embedding)
+            dim = len(chunk.embedding)
+            model_name = chunk.embedding_model or "default"
+            await session.execute(
+                sql_text(
+                    """
+                    INSERT INTO document_chunk_vectors (
+                        chunk_id, org_id, well_id, section_id, embedding_model, embedding_dim, embedding
+                    )
+                    VALUES (
+                        :chunk_id, :org_id, :well_id, :section_id, :model_name, :dim, CAST(:vec_lit AS vector)
+                    )
+                    ON CONFLICT (chunk_id) DO UPDATE SET
+                        embedding_model = EXCLUDED.embedding_model,
+                        embedding_dim = EXCLUDED.embedding_dim,
+                        embedding = EXCLUDED.embedding
+                    """
+                ),
+                {
+                    "chunk_id": chunk.id,
+                    "org_id": chunk.org_id,
+                    "well_id": chunk.well_id,
+                    "section_id": chunk.section_id,
+                    "model_name": model_name,
+                    "dim": dim,
+                    "vec_lit": vec_lit,
+                },
+            )
+        await session.flush()
+        return True
+    except Exception as exc:
+        logger.warning("pgvector sync failed", extra={"extra_fields": {"error": str(exc)}})
+        return False
+
+
+async def index_chunk_embeddings(
+    session: AsyncSession,
+    chunks: list[DocumentChunk],
+    *,
+    provider: Any = None,
+) -> int:
+    """Generate and persist embeddings for `chunks` (and sync to `document_chunk_vectors` on PostgreSQL)."""
+    from drillai.ai.providers import LLMCapability, provider_registry
+
+    if not chunks:
+        return 0
+    if provider is None:
+        reg = provider_registry()
+        provider = next(
+            (item for item in reg.providers().values() if item.supports(LLMCapability.EMBEDDING)),
+            None,
+        )
+    if provider is None or getattr(provider, "embed", None) is None:
+        return 0
+    texts = [c.text for c in chunks]
+    vectors = await provider.embed(texts)
+    model_name = getattr(provider, "model_name", None) or (
+        provider.models()[0].model if provider.models() else provider.name
+    )
+    count = 0
+    for chunk, vec in zip(chunks, vectors, strict=True):
+        chunk.embedding = list(vec)
+        chunk.embedding_dim = len(vec)
+        chunk.embedding_model = model_name
+        chunk.embedding_content_hash = hashlib.sha256(chunk.text.encode("utf-8")).hexdigest()
+        count += 1
+    await session.flush()
+    await _sync_pgvector_rows(session, chunks)
+    return count
+
+
+async def _pgvector_semantic_scores(
+    session: AsyncSession,
+    chunks: list[DocumentChunk],
+    query_vector: list[float],
+) -> list[float] | None:
+    """Execute cosine similarity `1 - (embedding <=> :query_vec::vector)` in PostgreSQL pgvector."""
+    if not _is_postgres(session) or not chunks or not query_vector:
+        return None
+    synced = await _sync_pgvector_rows(session, chunks)
+    if not synced:
+        return None
+    q_lit = _format_vector_literal(query_vector)
+    dim = len(query_vector)
+    org_id = chunks[0].org_id
+    chunk_ids = [c.id for c in chunks]
+    try:
+        rows = (
+            await session.execute(
+                sql_text(
+                    """
+                    SELECT chunk_id, 1.0 - (embedding <=> CAST(:q_lit AS vector)) AS cosine_sim
+                    FROM document_chunk_vectors
+                    WHERE org_id = :org_id
+                      AND embedding_dim = :dim
+                      AND chunk_id = ANY(:chunk_ids)
+                    """
+                ),
+                {"q_lit": q_lit, "org_id": org_id, "dim": dim, "chunk_ids": chunk_ids},
+            )
+        ).all()
+    except Exception as exc:
+        logger.warning("pgvector query failed", extra={"extra_fields": {"error": str(exc)}})
+        return None
+    score_by_id = {str(r[0]): float(r[1]) for r in rows if r[1] is not None}
+    if not score_by_id:
+        return None
+    return [score_by_id.get(c.id, 0.0) for c in chunks]
+
+
+async def _semantic_scores_with_backend(
+    session: AsyncSession,
+    chunks: list[DocumentChunk],
+    text: str,
+) -> tuple[list[float], str | None]:
+    """Embedding search returning `(scores, backend_name)` where `backend_name` is `'pgvector'` or `'python_cosine'`."""
     from drillai.ai.providers import LLMCapability, provider_registry
 
     registry = provider_registry()
@@ -316,24 +497,32 @@ async def _semantic_scores(session: AsyncSession, chunks: list[DocumentChunk], t
     )
     with_vectors = [chunk for chunk in chunks if chunk.embedding is not None]
     if provider is None or not with_vectors:
-        return []
+        return [], None
     embed = getattr(provider, "embed", None)
     if embed is None:
-        return []
+        return [], None
     try:
         vector = await embed([text])
     except Exception as exc:
         logger.warning("embedding failed", extra={"extra_fields": {"provider": provider.name, "error": str(exc)}})
-        return []
+        return [], None
     if not vector:
-        return []
+        return [], None
     query_vector = vector[0]
+    pg_scores = await _pgvector_semantic_scores(session, chunks, query_vector)
+    if pg_scores is not None:
+        return pg_scores, "pgvector"
     scores: list[float] = []
     for chunk in chunks:
         if chunk.embedding is None:
             scores.append(0.0)
             continue
         scores.append(_cosine(query_vector, chunk.embedding))
+    return scores, "python_cosine"
+
+
+async def _semantic_scores(session: AsyncSession, chunks: list[DocumentChunk], text: str) -> list[float]:
+    scores, _ = await _semantic_scores_with_backend(session, chunks, text)
     return scores
 
 

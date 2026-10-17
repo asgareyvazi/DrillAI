@@ -40,6 +40,7 @@ __all__ = [
     "ChatMessage",
     "CompletionRequest",
     "CompletionResponse",
+    "DeterministicEmbeddingProvider",
     "EchoProvider",
     "LLMCapability",
     "LLMProvider",
@@ -48,6 +49,7 @@ __all__ = [
     "PrivacyClass",
     "ProviderRegistry",
     "Usage",
+    "deterministic_text_embedding",
     "provider_registry",
 ]
 
@@ -249,6 +251,77 @@ class EchoProvider(LLMProvider):
         return ProviderHealth(provider=self.name, healthy=True, detail="offline provider always available")
 
 
+def deterministic_text_embedding(text: str, *, dimensions: int = 32) -> list[float]:
+    """Compute a deterministic L2-normalized feature-hashed vector from words and character 3-grams."""
+    import hashlib
+    import math
+    import re
+
+    vec = [0.0] * dimensions
+    tokens = re.findall(r"[a-z0-9][a-z0-9\-_/]{1,}", (text or "").lower())
+    features: list[tuple[str, float]] = [(tok, 2.0) for tok in tokens]
+    compact = " ".join(tokens)
+    for idx in range(max(0, len(compact) - 2)):
+        features.append((f"3g:{compact[idx : idx + 3]}", 0.5))
+    if not features:
+        vec[0] = 1.0
+        return vec
+    for feat, weight in features:
+        digest = hashlib.sha256(feat.encode("utf-8")).digest()
+        bucket = int.from_bytes(digest[:4], "big") % dimensions
+        sign = 1.0 if (digest[4] & 1) == 0 else -1.0
+        vec[bucket] += sign * weight
+    norm = math.sqrt(sum(v * v for v in vec))
+    if norm <= 0.0:
+        vec[0] = 1.0
+        return vec
+    return [round(v / norm, 8) for v in vec]
+
+
+class DeterministicEmbeddingProvider(LLMProvider):
+    """Local deterministic feature-hashing embedding provider for reproducible pgvector indexing and testing."""
+
+    name = "deterministic_embedding"
+    privacy = PrivacyClass.LOCAL
+
+    def __init__(self, *, model: str = "hash-embedding-32d-v1", dimensions: int = 32) -> None:
+        self._model = model
+        self._dimensions = dimensions
+
+    @property
+    def dimensions(self) -> int:
+        return self._dimensions
+
+    @property
+    def model_name(self) -> str:
+        return self._model
+
+    def models(self) -> list[ModelSpec]:
+        return [
+            ModelSpec(
+                provider=self.name,
+                model=self._model,
+                capabilities=frozenset({LLMCapability.EMBEDDING}),
+                privacy=PrivacyClass.LOCAL,
+                context_window_tokens=32_000,
+                max_output_tokens=0,
+                cost_per_1k_input=0.0,
+                cost_per_1k_output=0.0,
+                typical_latency_ms=1,
+                notes=f"deterministic {self._dimensions}-D L2-normalized feature-hash embedding provider",
+            )
+        ]
+
+    async def complete(self, request: CompletionRequest) -> CompletionResponse:  # pragma: no cover
+        raise ProviderError("DeterministicEmbeddingProvider only supports embeddings")
+
+    async def embed(self, texts: list[str]) -> list[list[float]]:
+        return [deterministic_text_embedding(t, dimensions=self._dimensions) for t in texts]
+
+    async def health(self) -> ProviderHealth:
+        return ProviderHealth(provider=self.name, healthy=True, detail="local deterministic embedding provider ready")
+
+
 _NUMBER_FACT = "([A-Za-z0-9_ /%().-]{2,60}?)\\s*=\\s*(-?\\d+(?:\\.\\d+)?)\\s*([A-Za-z0-9/%°._-]*)\\s*(?:\\[([^\\]]+)\\])?"
 
 
@@ -432,6 +505,31 @@ class OpenAICompatibleProvider(LLMProvider):
             raw={"id": data.get("id")},
         )
 
+    async def embed(self, texts: list[str], *, model: str | None = None) -> list[list[float]]:
+        import httpx
+
+        if not self._api_key:
+            raise ModelNotConfigured(
+                f"provider {self.name!r} has no API key configured; store one as a secret reference"
+            )
+        emb_model = model or next(
+            (m.model for m in self._models if LLMCapability.EMBEDDING in m.capabilities),
+            self._models[0].model,
+        )
+        async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
+            response = await client.post(
+                f"{self.base_url}/embeddings",
+                json={"model": emb_model, "input": texts},
+                headers={"Authorization": f"Bearer {self._api_key}"},
+            )
+        if response.status_code >= 400:
+            raise ProviderError(
+                f"{self.name} embeddings returned HTTP {response.status_code}",
+                details={"body": response.text[:500]},
+            )
+        data = response.json()
+        return [[float(x) for x in item["embedding"]] for item in (data.get("data") or [])]
+
     async def health(self) -> ProviderHealth:
         import httpx
 
@@ -499,6 +597,8 @@ def provider_registry() -> ProviderRegistry:
 def bootstrap_default_providers() -> None:
     """Register the offline provider always; HTTP providers come from configuration."""
     _REGISTRY.register(EchoProvider(), replace=True)
+    if os.environ.get("DRILLAI_ENABLE_DETERMINISTIC_EMBEDDINGS", "").strip().lower() in {"1", "true", "yes"}:
+        _REGISTRY.register(DeterministicEmbeddingProvider(), replace=True)
     base_url = os.environ.get("DRILLAI_LLM_BASE_URL")
     if base_url:
         _REGISTRY.register(

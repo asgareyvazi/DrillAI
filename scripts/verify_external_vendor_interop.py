@@ -255,10 +255,19 @@ async def _run_external_vendor_probe() -> dict[str, Any]:
     return results
 
 
+COMMISSIONING_CHECKLIST = [
+    "1. Configure authoritative egress allowlist via PUT /api/v1/connectors/egress-policy with the target WITSML/ETP host.",
+    "2. Export DRILLAI_EXTERNAL_WITSML_URL, DRILLAI_EXTERNAL_WITSML_USERNAME, DRILLAI_EXTERNAL_WITSML_PASSWORD and/or DRILLAI_EXTERNAL_ETP_URL, DRILLAI_EXTERNAL_ETP_TOKEN in the staging/rig environment.",
+    "3. Run `python scripts/verify_external_vendor_interop.py --mode external --require-external` to execute read-only WMLS_GetVersion/WMLS_GetCap and ETP RequestSession/CloseSession probes.",
+    "4. Archive the output JSON report (including transcript_sha256 digests with all credentials redacted) before flipping external_vendor_verified for that vendor profile.",
+]
+
+
 async def _async_main(mode: str, require_external: bool) -> int:
     report: dict[str, Any] = {
-        "timestamp_utc": dt.datetime.now(dt.timezone.utc).isoformat(),
+        "timestamp_utc": dt.datetime.now(dt.UTC).isoformat(),
         "mode": mode,
+        "commissioning_checklist": COMMISSIONING_CHECKLIST,
     }
     harness_report = await _run_harness_conformance()
     report["harness_conformance"] = harness_report
@@ -273,9 +282,11 @@ async def _async_main(mode: str, require_external: bool) -> int:
         report["external_vendor_probe"] = ext
         report["external_gate_status"] = ext["external_gate_status"]
         report["external_vendor_verified"] = ext["external_vendor_verified"]
+        report["network_calls_made"] = ext["network_calls_made"]
     else:
         report["external_gate_status"] = "BLOCKED_BY_EXTERNAL_EVIDENCE"
         report["external_vendor_verified"] = False
+        report["network_calls_made"] = 0
 
     print(json.dumps(report, indent=2, sort_keys=True))
     if not harness_passed:

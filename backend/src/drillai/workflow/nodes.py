@@ -713,10 +713,17 @@ class NotifyConfig(BaseModel):
     subject: str | None = None
     body: str
     connector_key: str | None = None
+    dispatch_immediately: bool = False
+    secret_ref: str | None = None
+    auth_scheme: str = "hmac_sha256"
+    timeout_seconds: float = 10.0
+    max_attempts: int = 3
+    headers: dict[str, str] = Field(default_factory=dict)
 
 
 async def _notify(context: NodeContext, config: BaseModel) -> NodeOutcome:
     from drillai.db.models import OutboundMessage
+    from drillai.workflow.notifications import dispatch_outbound_message
 
     cfg = NotifyConfig.model_validate(config)
     if context.dry_run:
@@ -727,6 +734,13 @@ async def _notify(context: NodeContext, config: BaseModel) -> NodeOutcome:
         recipient=cfg.recipient,
         subject=cfg.subject,
         body=cfg.body,
+        payload={
+            "secret_ref": cfg.secret_ref,
+            "auth_scheme": cfg.auth_scheme,
+            "timeout_seconds": cfg.timeout_seconds,
+            "headers": cfg.headers,
+        },
+        max_attempts=cfg.max_attempts,
         status="queued",
         trigger_kind="workflow",
         workflow_run_id=context.run_id,
@@ -735,6 +749,19 @@ async def _notify(context: NodeContext, config: BaseModel) -> NodeOutcome:
     )
     context.session.add(row)
     await context.session.flush()
+    if cfg.dispatch_immediately:
+        receipt = await dispatch_outbound_message(context.session, row)
+        return NodeOutcome(
+            outputs={
+                "message_id": row.id,
+                "channel": cfg.channel,
+                "status": receipt["status"],
+                "provider_message_id": receipt.get("provider_message_id"),
+                "attempts": receipt["attempts"],
+                "external_provider_verified": receipt.get("external_provider_verified", False),
+            },
+            notes=[f"notification dispatched via {cfg.channel} adapter (status={receipt['status']})"],
+        )
     return NodeOutcome(
         outputs={"message_id": row.id, "channel": cfg.channel, "status": row.status},
         notes=["message queued through the connector outbox (delivery is an integration concern)"],
