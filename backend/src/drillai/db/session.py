@@ -25,6 +25,7 @@ from drillai.core.logging import get_logger
 logger = get_logger(__name__)
 
 _ACTIVE_DATABASES: weakref.WeakSet[Database] = weakref.WeakSet()
+_ACTIVE_ENGINES: set[AsyncEngine] = set()
 
 
 async def dispose_all_databases() -> None:
@@ -34,6 +35,10 @@ async def dispose_all_databases() -> None:
     for db in list(_ACTIVE_DATABASES):
         with contextlib.suppress(TimeoutError, Exception):
             await asyncio.wait_for(db.dispose(), timeout=2.0)
+    for eng in list(_ACTIVE_ENGINES):
+        _ACTIVE_ENGINES.discard(eng)
+        with contextlib.suppress(TimeoutError, Exception):
+            await asyncio.wait_for(eng.dispose(), timeout=2.0)
 
 
 class Database:
@@ -69,10 +74,13 @@ class Database:
             engine = create_async_engine(self.url, **kwargs)
             # SQLite needs explicit FKs ON to behave like PostgreSQL.
             event.listen(engine.sync_engine, "connect", _sqlite_fk_pragma)
+            _ACTIVE_ENGINES.add(engine)
             return engine
         kwargs["pool_size"] = self.settings.db_pool_size
         kwargs["max_overflow"] = self.settings.db_max_overflow
-        return create_async_engine(self.url, **kwargs)
+        engine = create_async_engine(self.url, **kwargs)
+        _ACTIVE_ENGINES.add(engine)
+        return engine
 
     @property
     def session_factory(self) -> async_sessionmaker[AsyncSession]:
@@ -109,9 +117,11 @@ class Database:
 
     async def dispose(self) -> None:
         if self._engine is not None:
-            await self._engine.dispose()
+            eng = self._engine
             self._engine = None
             self._session_factory = None
+            _ACTIVE_ENGINES.discard(eng)
+            await eng.dispose()
 
     async def healthcheck(self) -> dict[str, Any]:
         """Readiness probe: proves the database is reachable and queryable."""
@@ -131,4 +141,7 @@ class Database:
 def _sqlite_fk_pragma(dbapi_connection, _connection_record) -> None:  # pragma: no cover - driver hook
     cursor = dbapi_connection.cursor()
     cursor.execute("PRAGMA foreign_keys=ON")
+    cursor.execute("PRAGMA synchronous=OFF")
+    cursor.execute("PRAGMA journal_mode=MEMORY")
+    cursor.execute("PRAGMA temp_store=MEMORY")
     cursor.close()

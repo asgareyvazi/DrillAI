@@ -11,6 +11,8 @@ Two persistence modes are supported:
 
 from __future__ import annotations
 
+import contextlib
+import faulthandler
 import os
 import shutil
 import tempfile
@@ -27,10 +29,13 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from drillai.core.clock import FixedClock
 from drillai.db.models import Base
 from drillai.db.session import dispose_all_databases
+from drillai.telemetry.connectors import reset_dns_executor_state
 
 
 def pytest_configure(config: pytest.Config) -> None:
     """Ensure sufficient file descriptor budget across 1,000+ async SQLite/PostgreSQL tests."""
+    with contextlib.suppress(Exception):
+        faulthandler.enable()
     if resource is None:
         return
     try:
@@ -42,10 +47,27 @@ def pytest_configure(config: pytest.Config) -> None:
         pass
 
 
+def pytest_runtest_setup(item: pytest.Item) -> None:
+    with contextlib.suppress(Exception):
+        faulthandler.dump_traceback_later(60, exit=True)
+
+
+def pytest_runtest_teardown(item: pytest.Item, nextitem: pytest.Item | None) -> None:
+    with contextlib.suppress(Exception):
+        faulthandler.cancel_dump_traceback_later()
+
+
+def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
+    with contextlib.suppress(Exception):
+        reset_dns_executor_state()
+        faulthandler.dump_traceback_later(15, exit=True)
+
+
 @pytest_asyncio.fixture(autouse=True)
 async def _dispose_leaked_databases(request: pytest.FixtureRequest):
     yield
     await dispose_all_databases()
+    reset_dns_executor_state()
     if "tmp_path" in request.fixturenames:
         tmp_dir = request.node.funcargs.get("tmp_path")
         if tmp_dir is not None:

@@ -48,6 +48,10 @@ from drillai.ingestion.storage import blob_store_from_settings
 
 logger = get_logger(__name__)
 
+_COMPILED_ROUTER_ROUTES: dict[tuple[str, bool], list[Any]] = {}
+_CACHED_WARMED_CATALOGUES: dict[str, int] | None = None
+
+
 def _warm_registries() -> dict[str, int]:
     """Import the registries that every request may need, and report what got loaded.
 
@@ -55,6 +59,9 @@ def _warm_registries() -> dict[str, int]:
     register themselves on import, and a missing import would surface as an empty catalogue to a
     user rather than as a startup failure.
     """
+    global _CACHED_WARMED_CATALOGUES
+    if _CACHED_WARMED_CATALOGUES is not None:
+        return dict(_CACHED_WARMED_CATALOGUES)
     from drillai.ai.agents import agent_catalogue, install_default_agents
     from drillai.ai.tools import registered_tools
     from drillai.context.builder import registered_section_keys
@@ -67,7 +74,7 @@ def _warm_registries() -> dict[str, int]:
     install_default_agents()
     engines = load_default_engines()
     catalogue = agent_catalogue()
-    return {
+    _CACHED_WARMED_CATALOGUES = {
         "engines": len(engines),
         "agents": len(catalogue["agents"]),
         "skills": len(catalogue["skills"]),
@@ -77,6 +84,7 @@ def _warm_registries() -> dict[str, int]:
         "context_sections": len(registered_section_keys()),
         "extractors": len(extractor_catalogue()),
     }
+    return dict(_CACHED_WARMED_CATALOGUES)
 
 
 def _jsonable_issues(errors: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -208,28 +216,36 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     _install_request_middleware(app)
 
     prefix = settings.api_prefix
-    app.include_router(health.router, prefix=prefix)
-    app.include_router(platform.router, prefix=prefix)
-    app.include_router(assets.router, prefix=prefix)
-    app.include_router(context.router, prefix=prefix)
-    app.include_router(documents.router, prefix=prefix)
-    app.include_router(evidence.router, prefix=prefix)
-    app.include_router(operations.router, prefix=prefix)
-    app.include_router(timeseries.router, prefix=prefix)
-    app.include_router(connectors.router, prefix=prefix)
-    app.include_router(alerts.router, prefix=prefix)
-    app.include_router(live.router, prefix=prefix)
-    app.include_router(registry.router, prefix=prefix)
-    app.include_router(workflows.router, prefix=prefix)
-    app.include_router(runs.router, prefix=prefix)
-    app.include_router(twin.router, prefix=prefix)
-    app.include_router(drilling.router, prefix=prefix)
-
+    route_cache_key = (prefix, bool(settings.e2e_faults))
     if settings.e2e_faults:
-        from drillai.api.routers import faults
-
         logger.warning("e2e fault injection is enabled: /faults endpoints are mounted")
-        app.include_router(faults.router, prefix=prefix)
+    cached_routes = _COMPILED_ROUTER_ROUTES.get(route_cache_key)
+    if cached_routes is not None:
+        app.router.routes.extend(cached_routes)
+    else:
+        before_idx = len(app.router.routes)
+        app.include_router(health.router, prefix=prefix)
+        app.include_router(platform.router, prefix=prefix)
+        app.include_router(assets.router, prefix=prefix)
+        app.include_router(context.router, prefix=prefix)
+        app.include_router(documents.router, prefix=prefix)
+        app.include_router(evidence.router, prefix=prefix)
+        app.include_router(operations.router, prefix=prefix)
+        app.include_router(timeseries.router, prefix=prefix)
+        app.include_router(connectors.router, prefix=prefix)
+        app.include_router(alerts.router, prefix=prefix)
+        app.include_router(live.router, prefix=prefix)
+        app.include_router(registry.router, prefix=prefix)
+        app.include_router(workflows.router, prefix=prefix)
+        app.include_router(runs.router, prefix=prefix)
+        app.include_router(twin.router, prefix=prefix)
+        app.include_router(drilling.router, prefix=prefix)
+
+        if settings.e2e_faults:
+            from drillai.api.routers import faults
+
+            app.include_router(faults.router, prefix=prefix)
+        _COMPILED_ROUTER_ROUTES[route_cache_key] = list(app.router.routes[before_idx:])
 
     @app.get("/", include_in_schema=False)
     async def root() -> dict[str, object]:

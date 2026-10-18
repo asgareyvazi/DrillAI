@@ -167,8 +167,15 @@ DDR_BYTES = (
 )
 
 
+_FABRIC_TEMPLATE_CACHE: tuple[bytes, dict[str, str], dict[str, object], dict[str, object]] | None = None
+
+
 @pytest_asyncio.fixture
 async def fabric(tmp_path, monkeypatch) -> AsyncIterator[Fabric]:
+    global _FABRIC_TEMPLATE_CACHE
+    from dataclasses import asdict
+    from pathlib import Path
+
     from drillai.api.app import _warm_registries, create_app
     from drillai.core.config import get_settings, reset_settings_cache
     from drillai.db.models import (
@@ -181,17 +188,34 @@ async def fabric(tmp_path, monkeypatch) -> AsyncIterator[Fabric]:
     )
     from drillai.security.passwords import hash_password, new_api_token
 
+    db_file = Path(tmp_path) / "fabric.db"
     monkeypatch.setenv("DRILLAI_ENVIRONMENT", "test")
     monkeypatch.setenv("DRILLAI_AUTH_ENABLED", "true")
     monkeypatch.setenv("DRILLAI_BLOB_BACKEND", "memory")
-    monkeypatch.setenv("DRILLAI_DATABASE_URL", f"sqlite+aiosqlite:///{tmp_path}/fabric.db")
+    monkeypatch.setenv("DRILLAI_DATABASE_URL", f"sqlite+aiosqlite:///{db_file.as_posix()}")
     monkeypatch.setenv("DRILLAI_SCHEDULER_ENABLED", "false")
     reset_settings_cache()
+
+    if _FABRIC_TEMPLATE_CACHE is not None:
+        raw_bytes, _cached_tokens, alpha_data, bravo_data = _FABRIC_TEMPLATE_CACHE
+        db_file.write_bytes(raw_bytes)
+        application = create_app(get_settings())
+        application.state.catalogues = _warm_registries()
+        transport = httpx.ASGITransport(app=application)
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as http:
+            alpha = Tenant(**alpha_data, extra_well_ids=list(alpha_data.get("extra_well_ids", [])))  # type: ignore[arg-type]
+            bravo = Tenant(**bravo_data, extra_well_ids=list(bravo_data.get("extra_well_ids", [])))  # type: ignore[arg-type]
+            yield Fabric(http=http, alpha=alpha, bravo=bravo, app=application)
+        await application.state.database.dispose()
+        reset_settings_cache()
+        return
+
     application = create_app(get_settings())
     async with application.state.database.engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)
     application.state.catalogues = _warm_registries()
 
+    pw_hash = hash_password("correct-horse-battery-staple")
     tokens: dict[str, str] = {}
     async with application.state.database.session_factory() as session:
         for slug in ("alpha", "bravo"):
@@ -200,7 +224,7 @@ async def fabric(tmp_path, monkeypatch) -> AsyncIterator[Fabric]:
                 id=f"usr_{slug}",
                 email=f"{slug}@example.com",
                 display_name=slug.title(),
-                password_hash=hash_password("correct-horse-battery-staple"),
+                password_hash=pw_hash,
             )
             session.add_all([organization, user])
             await session.flush()
@@ -242,6 +266,11 @@ async def fabric(tmp_path, monkeypatch) -> AsyncIterator[Fabric]:
         result = Fabric(http=http, alpha=alpha, bravo=bravo, app=application)
         for tenant in (alpha, bravo):
             await result.create_tree(tenant)
+        alpha_snapshot = asdict(alpha)
+        alpha_snapshot.pop("extra_well_ids", None)
+        bravo_snapshot = asdict(bravo)
+        bravo_snapshot.pop("extra_well_ids", None)
+        _FABRIC_TEMPLATE_CACHE = (db_file.read_bytes(), dict(tokens), alpha_snapshot, bravo_snapshot)
         yield result
     await application.state.database.dispose()
     reset_settings_cache()

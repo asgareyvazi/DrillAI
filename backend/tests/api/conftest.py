@@ -27,9 +27,33 @@ from drillai.core.config import get_settings, reset_settings_cache
 from drillai.db.models import Base
 from drillai.db.session import Database
 
+_EMPTY_SQLITE_SCHEMA_BYTES: bytes | None = None
+
+
+def _seed_sqlite_schema_file(db_path) -> None:
+    """Write a pre-initialized empty SQLite schema file so per-test setup skips 90 DDL round-trips."""
+    global _EMPTY_SQLITE_SCHEMA_BYTES
+    from pathlib import Path
+
+    target = Path(db_path)
+    if _EMPTY_SQLITE_SCHEMA_BYTES is None:
+        import tempfile
+
+        from sqlalchemy import create_engine
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmpl = Path(tmp) / "template.db"
+            sync_eng = create_engine(f"sqlite:///{tmpl.as_posix()}")
+            Base.metadata.create_all(sync_eng)
+            sync_eng.dispose()
+            _EMPTY_SQLITE_SCHEMA_BYTES = tmpl.read_bytes()
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(_EMPTY_SQLITE_SCHEMA_BYTES)
+
 
 @pytest.fixture
 def api_settings(tmp_path, monkeypatch):
+    _seed_sqlite_schema_file(tmp_path / "api.db")
     monkeypatch.setenv("DRILLAI_ENVIRONMENT", "test")
     monkeypatch.setenv("DRILLAI_AUTH_ENABLED", "false")
     monkeypatch.setenv("DRILLAI_BLOB_BACKEND", "memory")
@@ -47,8 +71,6 @@ async def app(api_settings):
     from drillai.api.app import _warm_registries, create_app
 
     application = create_app(api_settings)
-    async with application.state.database.engine.begin() as connection:
-        await connection.run_sync(Base.metadata.create_all)
     application.state.catalogues = _warm_registries()
     yield application
     await application.state.database.dispose()
