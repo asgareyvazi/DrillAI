@@ -51,16 +51,35 @@ def _clean_resolvers_and_policy():
     reset_settings_cache()
 
 
+def _resolve_openssl_bin() -> str:
+    import shutil
+    from pathlib import Path
+
+    found = shutil.which("openssl")
+    if found:
+        return found
+    for candidate in (
+        r"C:\Program Files\Git\usr\bin\openssl.exe",
+        r"C:\Program Files\OpenSSL\bin\openssl.exe",
+        r"C:\Program Files\OpenSSL-Win64\bin\openssl.exe",
+    ):
+        if Path(candidate).is_file():
+            return candidate
+    return "openssl"
+
+
 def _generate_self_signed_tls_contexts(
     san_dns_name: str,
     tmp_path: Any,
 ) -> tuple[ssl.SSLContext, ssl.SSLContext]:
     """Create a real X.509 certificate for `san_dns_name` via `openssl` and return (server_ssl_ctx, client_ssl_ctx)."""
+    import os
+
     cert_path = tmp_path / f"{san_dns_name}.crt.pem"
     key_path = tmp_path / f"{san_dns_name}.key.pem"
     subprocess.run(
         [
-            "openssl",
+            _resolve_openssl_bin(),
             "req",
             "-x509",
             "-newkey",
@@ -77,6 +96,7 @@ def _generate_self_signed_tls_contexts(
             "-addext",
             f"subjectAltName=DNS:{san_dns_name}",
         ],
+        env={**os.environ, "MSYS_NO_PATHCONV": "1"},
         stdin=subprocess.DEVNULL,
         timeout=15,
         check=True,

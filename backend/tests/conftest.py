@@ -59,8 +59,8 @@ def pytest_runtest_teardown(item: pytest.Item, nextitem: pytest.Item | None) -> 
 
 def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
     with contextlib.suppress(Exception):
+        faulthandler.cancel_dump_traceback_later()
         reset_dns_executor_state()
-        faulthandler.dump_traceback_later(15, exit=True)
 
 
 @pytest_asyncio.fixture(autouse=True)

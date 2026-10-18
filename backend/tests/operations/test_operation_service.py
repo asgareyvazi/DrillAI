@@ -685,6 +685,6 @@ def test_operation_rows_are_never_deleted_by_the_service() -> None:
         / "drillai"
         / "operations"
         / "service.py"
-    ).read_text()
+    ).read_text(encoding="utf-8")
     assert "session.delete" not in source
     assert "DELETE FROM" not in source

@@ -51,14 +51,32 @@ def _clean_dns_and_ssrf_state():
     reset_settings_cache()
 
 
+def _resolve_openssl_bin() -> str:
+    import shutil
+
+    found = shutil.which("openssl")
+    if found:
+        return found
+    for candidate in (
+        r"C:\Program Files\Git\usr\bin\openssl.exe",
+        r"C:\Program Files\OpenSSL\bin\openssl.exe",
+        r"C:\Program Files\OpenSSL-Win64\bin\openssl.exe",
+    ):
+        if Path(candidate).is_file():
+            return candidate
+    return "openssl"
+
+
 def _generate_self_signed_tls_contexts(
     common_name: str, tmp_path: Path
 ) -> tuple[ssl.SSLContext, ssl.SSLContext]:
+    import os
+
     cert_file = tmp_path / f"{common_name}.crt"
     key_file = tmp_path / f"{common_name}.key"
     subprocess.run(
         [
-            "openssl",
+            _resolve_openssl_bin(),
             "req",
             "-x509",
             "-newkey",
@@ -75,6 +93,7 @@ def _generate_self_signed_tls_contexts(
             "-addext",
             f"subjectAltName=DNS:{common_name}",
         ],
+        env={**os.environ, "MSYS_NO_PATHCONV": "1"},
         stdin=subprocess.DEVNULL,
         timeout=15,
         check=True,

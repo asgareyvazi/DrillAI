@@ -364,7 +364,7 @@ def _declared_keys(interface: str) -> set[str]:
     import re
     from pathlib import Path
 
-    source = (Path(__file__).resolve().parents[3] / "frontend" / "src" / "api" / "types.ts").read_text()
+    source = (Path(__file__).resolve().parents[3] / "frontend" / "src" / "api" / "types.ts").read_text(encoding="utf-8")
     body = re.search(rf"export interface {interface} \{{(.*?)\n\}}", source, re.S)
     assert body is not None, f"interface {interface} is not declared in types.ts"
     required: set[str] = set()

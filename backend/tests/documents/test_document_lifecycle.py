@@ -238,7 +238,7 @@ def test_no_function_maps_a_job_status_onto_a_document_status() -> None:
     """
     module = (
         pathlib.Path(__file__).resolve().parents[2] / "src" / "drillai" / "documents" / "lifecycle.py"
-    ).read_text()
+    ).read_text(encoding="utf-8")
     assert "def job_status" not in module
     # And the one place the pipeline touches both does so by *deciding*, not by mapping: it names the
     # document status from what happened and then names the job status from the document status.
@@ -248,5 +248,5 @@ def test_no_function_maps_a_job_status_onto_a_document_status() -> None:
         / "drillai"
         / "ingestion"
         / "pipeline.py"
-    ).read_text()
+    ).read_text(encoding="utf-8")
     assert 'status="partial" if document.status == "partially_extracted" else "succeeded"' in pipeline

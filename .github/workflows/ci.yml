@@ -309,6 +309,8 @@ jobs:
       # Embedded pgserver PostgreSQL tests run in the Linux certification job; Windows certifies the
       # full SQLite backend suite (-m "not postgres"), multi-process stack, frontend, and Playwright E2E.
       DRILLAI_TEST_POSTGRES: '0'
+      PYTHONUTF8: '1'
+      PYTHONIOENCODING: 'utf-8'
     steps:
       - name: Check out the commit under test
         uses: actions/checkout@v7
@@ -400,13 +402,16 @@ jobs:
           $ErrorActionPreference = "Continue"
           $logFile = Join-Path $env:RUNNER_TEMP "win-backend-tests.log"
           .\.venv\Scripts\python.exe -m pytest -m "not postgres" 2>&1 | Tee-Object -FilePath $logFile
-          if ($LASTEXITCODE -ne 0) { throw "Backend pytest failed on Windows" }
+          $pytestExit = $LASTEXITCODE
           $plain = (Get-Content $logFile -Raw) -replace "\x1b\[[0-9;]*[a-zA-Z]", ""
-          if ($plain -match "\d+\s+skipped" -or $plain -match "\d+\s+failed") {
-            throw "Backend SQLite suite had skips or failures on Windows"
-          }
-          if ($plain -notmatch "\d+\s+passed") {
-            throw "Backend SQLite suite did not print pass summary on Windows"
+          $lines = $plain -split "\r?\n" | Where-Object { $_.Trim() -ne "" }
+          $summary = ($lines | Where-Object { $_ -match "\d+\s+(passed|failed|skipped|error)" } | Select-Object -Last 1)
+          Write-Host "pytest summary: $summary (exit=$pytestExit)"
+          if ($pytestExit -ne 0 -or -not $summary -or $summary -match "\d+\s+(skipped|failed|error)" -or $summary -notmatch "\d+\s+passed") {
+            $failLines = ($lines | Where-Object { $_ -match "^(FAILED|ERROR|E\s+)" } | Select-Object -First 25) -join " | "
+            $tailLines = ($lines | Select-Object -Last 25) -join " | "
+            Write-Output "::error title=WindowsPytestFailure::exit=$pytestExit summary=$summary failures=[$failLines] tail=[$tailLines]"
+            throw "Backend pytest failed on Windows: $summary"
           }
 
       - name: Multi-process stack verification on Windows (scripts/verify_stack.py)

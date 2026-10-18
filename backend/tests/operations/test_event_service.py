@@ -598,7 +598,7 @@ async def test_events_are_never_deleted_by_the_service() -> None:
 
     source = (
         Path(__file__).resolve().parents[2] / "src" / "drillai" / "operations" / "events.py"
-    ).read_text()
+    ).read_text(encoding="utf-8")
     assert "session.delete" not in source
     assert "DELETE FROM" not in source
 
