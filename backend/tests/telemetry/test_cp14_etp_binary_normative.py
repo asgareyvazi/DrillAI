@@ -20,6 +20,7 @@ Covers:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import struct
 import uuid
@@ -611,4 +612,5 @@ async def test_missing_index_metadata_never_invents_datetime_and_truncate_channe
         assert emitted_values == [2800.0, 2850.0]
     finally:
         server.close()
-        await server.wait_closed()
+        with contextlib.suppress(Exception):
+            await asyncio.wait_for(server.wait_closed(), timeout=1.0)

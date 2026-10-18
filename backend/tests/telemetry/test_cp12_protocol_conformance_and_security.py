@@ -5,6 +5,7 @@ Phase D (SSRF/DNS-Rebinding & Secret Minimization), and Phase F2 (Governed Repla
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import datetime as dt
 import html
 import json
@@ -212,7 +213,8 @@ async def test_b1_b3_independent_witsml_1411_soap_conformance_and_negative_fixtu
             await writer.drain()
         finally:
             writer.close()
-            await writer.wait_closed()
+            with contextlib.suppress(Exception):
+                await asyncio.wait_for(writer.wait_closed(), timeout=0.5)
 
     srv = await asyncio.start_server(_raw_http_handler, "127.0.0.1", 0)
     port = int(srv.sockets[0].getsockname()[1])
@@ -293,7 +295,8 @@ async def test_b1_b3_independent_witsml_1411_soap_conformance_and_negative_fixtu
     finally:
         unregister_harness_endpoint("127.0.0.1", port)
         srv.close()
-        await srv.wait_closed()
+        with contextlib.suppress(Exception):
+            await asyncio.wait_for(srv.wait_closed(), timeout=1.0)
 
 
 # ---------------------------------------------------------------------------

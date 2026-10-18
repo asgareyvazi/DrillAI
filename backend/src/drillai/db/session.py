@@ -29,9 +29,11 @@ _ACTIVE_DATABASES: weakref.WeakSet[Database] = weakref.WeakSet()
 
 async def dispose_all_databases() -> None:
     """Dispose all currently live Database engines (used by test teardown to prevent fd/thread leaks)."""
+    import asyncio
+
     for db in list(_ACTIVE_DATABASES):
-        with contextlib.suppress(Exception):
-            await db.dispose()
+        with contextlib.suppress(TimeoutError, Exception):
+            await asyncio.wait_for(db.dispose(), timeout=2.0)
 
 
 class Database:

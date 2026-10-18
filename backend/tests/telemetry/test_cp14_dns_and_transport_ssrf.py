@@ -7,6 +7,7 @@ and `WitsmlSoapClient` (`F-CP14-03` and `F-CP14-04`).
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import socket
 import ssl
 import subprocess
@@ -57,7 +58,7 @@ def _generate_self_signed_tls_contexts(
     key_file = tmp_path / f"{common_name}.key"
     subprocess.run(
         [
-            "/usr/bin/openssl",
+            "openssl",
             "req",
             "-x509",
             "-newkey",
@@ -74,6 +75,8 @@ def _generate_self_signed_tls_contexts(
             "-addext",
             f"subjectAltName=DNS:{common_name}",
         ],
+        stdin=subprocess.DEVNULL,
+        timeout=15,
         check=True,
         capture_output=True,
     )
@@ -406,7 +409,8 @@ async def test_etp_binary_socket_pinning_rebinding_tls_sni_and_proxy_ignore(
         finally:
             unregister_harness_endpoint("127.0.0.1", tls_port)
             tls_ws_srv.close()
-            await tls_ws_srv.wait_closed()
+            with contextlib.suppress(TimeoutError, Exception):
+                await asyncio.wait_for(tls_ws_srv.wait_closed(), timeout=1.0)
 
         assert proxy_hits == 0
         assert unrelated_hits == 0
@@ -414,6 +418,8 @@ async def test_etp_binary_socket_pinning_rebinding_tls_sni_and_proxy_ignore(
         await etp_bin_srv.stop()
         await witsml_srv.stop()
         proxy_srv.close()
-        await proxy_srv.wait_closed()
+        with contextlib.suppress(TimeoutError, Exception):
+            await asyncio.wait_for(proxy_srv.wait_closed(), timeout=1.0)
         unrelated_srv.close()
-        await unrelated_srv.wait_closed()
+        with contextlib.suppress(TimeoutError, Exception):
+            await asyncio.wait_for(unrelated_srv.wait_closed(), timeout=1.0)

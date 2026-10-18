@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import contextlib
 import datetime as dt
 import html
 import io
@@ -1171,7 +1172,8 @@ class LocalWitsmlSoapServer:
         if self._server is not None:
             unregister_harness_endpoint(self.host, self.port)
             self._server.close()
-            await self._server.wait_closed()
+            with contextlib.suppress(TimeoutError, Exception):
+                await asyncio.wait_for(self._server.wait_closed(), timeout=1.0)
             self._server = None
 
     async def __aenter__(self) -> LocalWitsmlSoapServer:
@@ -1399,7 +1401,7 @@ class LocalWitsmlSoapServer:
         finally:
             try:
                 writer.close()
-                await writer.wait_closed()
+                await asyncio.wait_for(writer.wait_closed(), timeout=0.5)
             except Exception:
                 pass
 

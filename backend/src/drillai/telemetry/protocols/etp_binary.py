@@ -2186,7 +2186,8 @@ class LocalEtpBinaryWebSocketServer:
         if self._server is not None:
             unregister_harness_endpoint(self.host, self.port)
             self._server.close()
-            await self._server.wait_closed()
+            with contextlib.suppress(TimeoutError, Exception):
+                await asyncio.wait_for(self._server.wait_closed(), timeout=1.0)
             self._server = None
 
     async def __aenter__(self) -> LocalEtpBinaryWebSocketServer:

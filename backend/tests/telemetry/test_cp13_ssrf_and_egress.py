@@ -7,6 +7,7 @@ Covers all 16 required adversarial SSRF and egress governance scenarios at the s
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import socket
 import ssl
 import subprocess
@@ -76,6 +77,8 @@ def _generate_self_signed_tls_contexts(
             "-addext",
             f"subjectAltName=DNS:{san_dns_name}",
         ],
+        stdin=subprocess.DEVNULL,
+        timeout=15,
         check=True,
         capture_output=True,
     )
@@ -173,7 +176,8 @@ async def test_s1_s2_s3_toctou_dns_rebinding_and_socket_pinning_prevent_unvalida
         )
         await writer.drain()
         writer.close()
-        await writer.wait_closed()
+        with contextlib.suppress(TimeoutError, Exception):
+            await asyncio.wait_for(writer.wait_closed(), timeout=0.5)
 
     trap_hits = 0
 
@@ -181,7 +185,8 @@ async def test_s1_s2_s3_toctou_dns_rebinding_and_socket_pinning_prevent_unvalida
         nonlocal trap_hits
         trap_hits += 1
         writer.close()
-        await writer.wait_closed()
+        with contextlib.suppress(TimeoutError, Exception):
+            await asyncio.wait_for(writer.wait_closed(), timeout=0.5)
 
     legit_srv = await asyncio.start_server(_legit_http_handler, "127.0.0.1", 0)
     port = int(legit_srv.sockets[0].getsockname()[1])
@@ -214,8 +219,10 @@ async def test_s1_s2_s3_toctou_dns_rebinding_and_socket_pinning_prevent_unvalida
         unregister_harness_endpoint("127.0.0.1", port)
         legit_srv.close()
         trap_srv.close()
-        await legit_srv.wait_closed()
-        await trap_srv.wait_closed()
+        with contextlib.suppress(TimeoutError, Exception):
+            await asyncio.wait_for(legit_srv.wait_closed(), timeout=1.0)
+        with contextlib.suppress(TimeoutError, Exception):
+            await asyncio.wait_for(trap_srv.wait_closed(), timeout=1.0)
 
 
 async def test_s4_s5_dns_rebinding_across_consecutive_polls_and_websocket_reconnects():
@@ -275,7 +282,8 @@ async def test_s6_http_301_302_307_308_redirects_to_loopback_or_metadata_are_blo
         writer.write(head)
         await writer.drain()
         writer.close()
-        await writer.wait_closed()
+        with contextlib.suppress(TimeoutError, Exception):
+            await asyncio.wait_for(writer.wait_closed(), timeout=0.5)
 
     srv = await asyncio.start_server(_redirect_srv_handler, "127.0.0.1", 0)
     port = int(srv.sockets[0].getsockname()[1])
@@ -303,7 +311,8 @@ async def test_s6_http_301_302_307_308_redirects_to_loopback_or_metadata_are_blo
     finally:
         unregister_harness_endpoint("127.0.0.1", port)
         srv.close()
-        await srv.wait_closed()
+        with contextlib.suppress(TimeoutError, Exception):
+            await asyncio.wait_for(srv.wait_closed(), timeout=1.0)
 
 
 # ---------------------------------------------------------------------------
@@ -321,7 +330,8 @@ async def test_s7_ordinary_connector_cannot_use_loopback_when_harness_runs_on_an
         nonlocal unrelated_hits
         unrelated_hits += 1
         writer.close()
-        await writer.wait_closed()
+        with contextlib.suppress(TimeoutError, Exception):
+            await asyncio.wait_for(writer.wait_closed(), timeout=0.5)
 
     unrelated_srv = await asyncio.start_server(_unrelated_local_service, "127.0.0.1", 0)
     unrelated_port = int(unrelated_srv.sockets[0].getsockname()[1])
@@ -358,7 +368,8 @@ async def test_s7_ordinary_connector_cannot_use_loopback_when_harness_runs_on_an
             assert unrelated_hits == 0
     finally:
         unrelated_srv.close()
-        await unrelated_srv.wait_closed()
+        with contextlib.suppress(TimeoutError, Exception):
+            await asyncio.wait_for(unrelated_srv.wait_closed(), timeout=1.0)
 
 
 def test_s8_s9_s10_s13_s15_s16_ipv6_mapped_noncanonical_metadata_credentials_timeouts_and_prod():
@@ -662,4 +673,5 @@ async def test_s14_tls_hostname_verification_on_approved_pinned_ip(tmp_path: Any
     finally:
         unregister_harness_endpoint("127.0.0.1", port)
         srv.close()
-        await srv.wait_closed()
+        with contextlib.suppress(TimeoutError, Exception):
+            await asyncio.wait_for(srv.wait_closed(), timeout=1.0)

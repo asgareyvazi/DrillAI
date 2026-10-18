@@ -17,6 +17,7 @@ Verifies:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import datetime as dt
 import hashlib
 import hmac
@@ -286,7 +287,8 @@ class _LocalWebhookServer:
     async def __aexit__(self, *exc: Any) -> None:
         if self._server:
             self._server.close()
-            await self._server.wait_closed()
+            with contextlib.suppress(Exception):
+                await asyncio.wait_for(self._server.wait_closed(), timeout=1.0)
 
     @property
     def url(self) -> str:
@@ -294,7 +296,7 @@ class _LocalWebhookServer:
 
     async def _handle(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         try:
-            raw_head = await reader.readuntil(b"\r\n\r\n")
+            raw_head = await asyncio.wait_for(reader.readuntil(b"\r\n\r\n"), timeout=5.0)
             lines = raw_head.decode("latin-1").split("\r\n")
             headers: dict[str, str] = {}
             for line in lines[1:]:
@@ -302,7 +304,11 @@ class _LocalWebhookServer:
                     k, v = line.split(":", 1)
                     headers[k.strip().lower()] = v.strip()
             content_len = int(headers.get("content-length", "0"))
-            body = await reader.readexactly(content_len) if content_len > 0 else b""
+            body = (
+                await asyncio.wait_for(reader.readexactly(content_len), timeout=5.0)
+                if content_len > 0
+                else b""
+            )
             self.requests.append({"headers": headers, "body": body})
             if self.response_queue:
                 code, resp_obj = self.response_queue.pop(0)
@@ -319,9 +325,12 @@ class _LocalWebhookServer:
             ).encode("latin-1") + resp_bytes
             writer.write(reply)
             await writer.drain()
+        except Exception:
+            pass
         finally:
             writer.close()
-            await writer.wait_closed()
+            with contextlib.suppress(Exception):
+                await asyncio.wait_for(writer.wait_closed(), timeout=0.5)
 
 
 class _LocalSmtpServer:
@@ -340,7 +349,8 @@ class _LocalSmtpServer:
     async def __aexit__(self, *exc: Any) -> None:
         if self._server:
             self._server.close()
-            await self._server.wait_closed()
+            with contextlib.suppress(Exception):
+                await asyncio.wait_for(self._server.wait_closed(), timeout=1.0)
 
     @property
     def url(self) -> str:
@@ -353,7 +363,7 @@ class _LocalSmtpServer:
             in_data = False
             buf: list[str] = []
             while not reader.at_eof():
-                line_bytes = await reader.readline()
+                line_bytes = await asyncio.wait_for(reader.readline(), timeout=5.0)
                 if not line_bytes:
                     break
                 line = line_bytes.decode("utf-8", errors="replace")
@@ -382,9 +392,12 @@ class _LocalSmtpServer:
                 else:
                     writer.write(b"250 OK\r\n")
                 await writer.drain()
+        except Exception:
+            pass
         finally:
             writer.close()
-            await writer.wait_closed()
+            with contextlib.suppress(Exception):
+                await asyncio.wait_for(writer.wait_closed(), timeout=0.5)
 
 
 async def test_cp20_02_outbound_webhook_and_smtp_notification_adapters_idempotency_and_retries(
