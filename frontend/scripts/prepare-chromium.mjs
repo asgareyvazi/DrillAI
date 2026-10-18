@@ -99,11 +99,28 @@ else if (mode === '--print-env') {
   console.log(`chromium: ${executable}`)
   console.log(`libraries: ${libs || '(system default)'}`)
   try {
-    const version = execFileSync(executable, ['--version'], {
-      env: { ...process.env, ...(libs ? { LD_LIBRARY_PATH: libs } : {}) },
-      encoding: 'utf8',
-    }).trim()
-    console.log(`verified: ${version}`)
+    if (process.platform === 'win32') {
+      // On Windows, chrome.exe is compiled with the Windows GUI subsystem and ignores `--version`
+      // on stdout (opening a background window that does not exit). Verify the binary exists on disk
+      // and confirm the Playwright CLI version instead.
+      if (!existsSync(executable)) {
+        throw new Error(`Chromium executable does not exist at ${executable}`)
+      }
+      const playwrightCli = path.join(frontendRoot, 'node_modules', '@playwright', 'test', 'cli.js')
+      const pwVersion = execFileSync(process.execPath, [playwrightCli, '--version'], {
+        cwd: frontendRoot,
+        encoding: 'utf8',
+        timeout: 15000,
+      }).trim()
+      console.log(`verified: ${executable} (${pwVersion})`)
+    } else {
+      const version = execFileSync(executable, ['--version'], {
+        env: { ...process.env, ...(libs ? { LD_LIBRARY_PATH: libs } : {}) },
+        encoding: 'utf8',
+        timeout: 15000,
+      }).trim()
+      console.log(`verified: ${version}`)
+    }
   } catch (error) {
     console.error(`could not run the browser: ${error.message}`)
     process.exitCode = 1

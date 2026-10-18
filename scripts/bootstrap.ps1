@@ -81,7 +81,7 @@ if ($NeedNpmInstall) {
 Write-Host "==> Preparing headless Chromium for Playwright E2E..."
 Push-Location $FrontendDir
 try {
-    & node scripts/prepare-chromium.mjs | Out-Null
+    & node scripts/prepare-chromium.mjs
     if ($LASTEXITCODE -ne 0) { throw "Playwright Chromium preparation failed." }
 } finally {
     Pop-Location

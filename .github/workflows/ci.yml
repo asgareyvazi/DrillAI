@@ -346,7 +346,7 @@ jobs:
       - name: Bootstrap Windows workspace (scripts/bootstrap.ps1)
         shell: pwsh
         run: |
-          powershell -ExecutionPolicy Bypass -File scripts/bootstrap.ps1
+          & ./scripts/bootstrap.ps1
 
       - name: Frontend typecheck (Windows)
         working-directory: frontend
@@ -362,6 +362,7 @@ jobs:
         working-directory: frontend
         shell: pwsh
         run: |
+          $ErrorActionPreference = "Continue"
           $logFile = Join-Path $env:RUNNER_TEMP "win-frontend-tests.log"
           npm test 2>&1 | Tee-Object -FilePath $logFile
           if ($LASTEXITCODE -ne 0) { throw "Frontend unit tests failed on Windows" }
@@ -396,6 +397,7 @@ jobs:
         working-directory: backend
         shell: pwsh
         run: |
+          $ErrorActionPreference = "Continue"
           $logFile = Join-Path $env:RUNNER_TEMP "win-backend-tests.log"
           .\.venv\Scripts\python.exe -m pytest -m "not postgres" 2>&1 | Tee-Object -FilePath $logFile
           if ($LASTEXITCODE -ne 0) { throw "Backend pytest failed on Windows" }
@@ -410,6 +412,7 @@ jobs:
       - name: Multi-process stack verification on Windows (scripts/verify_stack.py)
         shell: pwsh
         run: |
+          $ErrorActionPreference = "Continue"
           $logFile = Join-Path $env:RUNNER_TEMP "win-verify-stack.log"
           .\backend\.venv\Scripts\python.exe scripts/verify_stack.py 2>&1 | Tee-Object -FilePath $logFile
           if ($LASTEXITCODE -ne 0) { throw "scripts/verify_stack.py exited non-zero on Windows" }
@@ -430,6 +433,7 @@ jobs:
         working-directory: frontend
         shell: pwsh
         run: |
+          $ErrorActionPreference = "Continue"
           $logFile = Join-Path $env:RUNNER_TEMP "win-e2e.log"
           npm run e2e -- e2e/app.spec.ts e2e/connectors-platform.spec.ts e2e/error-faults.spec.ts e2e/error-auth.spec.ts 2>&1 | Tee-Object -FilePath $logFile
           if ($LASTEXITCODE -ne 0) { throw "Playwright E2E failed on Windows" }

@@ -93,8 +93,11 @@ if (seed) {
   // The seed prints the fixtures as pretty-printed JSON, but a logging line can precede them (the
   // logger emits one JSON object per line). The fixtures object is the last one printed at column 0,
   // so it is found by its own indentation rather than by the first brace in the output.
-  const start = seeded.stdout.lastIndexOf('\n{\n')
-  const json = start === -1 ? seeded.stdout.slice(seeded.stdout.indexOf('{')) : seeded.stdout.slice(start + 1)
+  // Normalize Windows CRLF line endings first so `\n{\n` matches on both POSIX and Windows.
+  const normalizedStdout = seeded.stdout.replace(/\r\n/g, '\n')
+  const start = normalizedStdout.lastIndexOf('\n{\n')
+  const json =
+    start === -1 ? normalizedStdout.slice(normalizedStdout.indexOf('{')) : normalizedStdout.slice(start + 1)
   fixtures = JSON.parse(json)
   writeFileSync(path.join(dataDir, 'fixtures.json'), JSON.stringify(fixtures, null, 2))
 }

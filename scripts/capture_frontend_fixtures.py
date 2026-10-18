@@ -214,10 +214,24 @@ def main() -> int:
                 print(f"{name} was not captured (the request failed)", file=sys.stderr)
                 return 1
 
+        check_only = "--check" in sys.argv[1:]
         for name, payload in captured.items():
-            (OUT / name).write_text(
-                json.dumps(trim(payload), indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
-            )
+            trimmed = trim(payload)
+            target = OUT / name
+            if check_only:
+                if not target.is_file():
+                    print(f"{name} is missing from {OUT}", file=sys.stderr)
+                    return 1
+                existing = json.loads(target.read_text(encoding="utf-8"))
+                if isinstance(trimmed, dict) and isinstance(existing, dict):
+                    missing_keys = set(existing.keys()) - set(trimmed.keys())
+                    if missing_keys:
+                        print(f"{name} missing keys in live capture: {sorted(missing_keys)}", file=sys.stderr)
+                        return 1
+            else:
+                target.write_text(
+                    json.dumps(trimmed, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+                )
         print(
             json.dumps(
                 {

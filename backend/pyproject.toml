@@ -37,7 +37,7 @@ dev = [
   "pytest-asyncio>=0.24",
   "pytest-cov>=6.0",
   "ruff>=0.8",
-  "pgserver>=0.1.4",   # embedded PostgreSQL for real-Postgres integration tests
+  "pgserver>=0.1.4; sys_platform != 'win32'",   # embedded PostgreSQL for real-Postgres integration tests (Linux/macOS/WSL2)
 ]
 # Optional heavy adapters — enabled only when the deployment needs them.
 vector = ["pgvector>=0.3"]
