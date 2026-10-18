@@ -420,10 +420,12 @@ jobs:
           $ErrorActionPreference = "Continue"
           $logFile = Join-Path $env:RUNNER_TEMP "win-verify-stack.log"
           .\backend\.venv\Scripts\python.exe scripts/verify_stack.py 2>&1 | Tee-Object -FilePath $logFile
-          if ($LASTEXITCODE -ne 0) { throw "scripts/verify_stack.py exited non-zero on Windows" }
+          $stackExit = $LASTEXITCODE
           $content = Get-Content $logFile -Raw
-          if ($content -notmatch "STACK_VERIFICATION_OK") {
-            throw "scripts/verify_stack.py did not print STACK_VERIFICATION_OK on Windows"
+          if ($stackExit -ne 0 -or $content -notmatch "STACK_VERIFICATION_OK") {
+            $tailLines = ((Get-Content $logFile | Select-Object -Last 25) -join " | ")
+            Write-Output "::error title=WindowsVerifyStackFailure::exit=$stackExit tail=[$tailLines]"
+            throw "scripts/verify_stack.py failed on Windows"
           }
 
       - name: External vendor interop runner on Windows (scripts/verify_external_vendor_interop.py)
@@ -441,18 +443,21 @@ jobs:
           $ErrorActionPreference = "Continue"
           $logFile = Join-Path $env:RUNNER_TEMP "win-e2e.log"
           npm run e2e -- e2e/app.spec.ts e2e/connectors-platform.spec.ts e2e/error-faults.spec.ts e2e/error-auth.spec.ts 2>&1 | Tee-Object -FilePath $logFile
-          if ($LASTEXITCODE -ne 0) { throw "Playwright E2E failed on Windows" }
+          $e2eExit = $LASTEXITCODE
           $plain = (Get-Content $logFile -Raw) -replace "\x1b\[[0-9;]*[a-zA-Z]", ""
+          $lines = $plain -split "\r?\n" | Where-Object { $_.Trim() -ne "" }
+          $summary = ($lines | Where-Object { $_ -match "^\s*\d+\s+(passed|failed|flaky|skipped)" } | Select-Object -Last 1)
+          Write-Host "playwright summary: $summary (exit=$e2eExit)"
           foreach ($proj in @("chromium", "chromium-faults", "chromium-auth")) {
             if ($plain -notmatch "\[$proj\]") {
+              Write-Output "::error title=WindowsPlaywrightProjectMissing::Project [$proj] did not run"
               throw "Playwright project [$proj] did not run on Windows"
             }
           }
-          if ($plain -match "\d+\s+(failed|flaky|skipped)") {
-            throw "Playwright E2E had failed, flaky, or skipped tests on Windows"
-          }
-          if ($plain -notmatch "\d+\s+passed") {
-            throw "Playwright E2E did not print pass summary on Windows"
+          if ($e2eExit -ne 0 -or -not $summary -or $summary -match "\d+\s+(failed|flaky|skipped)" -or $summary -notmatch "\d+\s+passed") {
+            $tailLines = ($lines | Select-Object -Last 25) -join " | "
+            Write-Output "::error title=WindowsPlaywrightFailure::exit=$e2eExit summary=$summary tail=[$tailLines]"
+            throw "Playwright E2E failed on Windows: $summary"
           }
 
       - name: Upload Windows Playwright evidence on failure

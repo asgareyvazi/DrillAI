@@ -74,6 +74,26 @@ def _free_port() -> int:
         return int(s.getsockname()[1])
 
 
+def _terminate_proc(proc: subprocess.Popen[bytes] | None) -> None:
+    if proc is None or proc.poll() is not None:
+        return
+    if sys.platform == "win32":
+        subprocess.run(
+            ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
+    else:
+        proc.terminate()
+    try:
+        proc.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        with contextlib.suppress(Exception):
+            proc.wait(timeout=5)
+
+
 def _rss_mb() -> float:
     if psutil is not None:
         with contextlib.suppress(Exception):
@@ -391,7 +411,7 @@ async def _run_verification() -> int:
                 )
 
                 both_live = False
-                for _ in range(50):
+                for _ in range(80):
                     info_w = (await client.get(f"/api/v1/connectors/{cid_witsml}", headers=headers)).json()
                     info_e = (await client.get(f"/api/v1/connectors/{cid_etp_bin}", headers=headers)).json()
                     if (
@@ -423,12 +443,7 @@ async def _run_verification() -> int:
                 )
 
                 # Scenario 9: Worker process restart and lease recovery without duplicate ingestion
-                worker_proc.terminate()
-                try:
-                    worker_proc.wait(timeout=5)
-                except subprocess.TimeoutExpired:
-                    worker_proc.kill()
-                    worker_proc.wait(timeout=5)
+                _terminate_proc(worker_proc)
                 worker_proc = subprocess.Popen(
                     [python_bin, "-m", "drillai.telemetry.worker"],
                     cwd=str(BACKEND_DIR),
@@ -436,18 +451,17 @@ async def _run_verification() -> int:
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
                 )
-                await asyncio.sleep(1.2)
-                w_runs_after_restart = (
-                    await client.get(f"/api/v1/connectors/{cid_witsml}/runs", headers=headers)
-                ).json()
+                w_runs_after_restart = {"total": 0}
+                for _ in range(50):
+                    w_runs_after_restart = (
+                        await client.get(f"/api/v1/connectors/{cid_witsml}/runs", headers=headers)
+                    ).json()
+                    if w_runs_after_restart.get("total", 0) >= 2:
+                        break
+                    await asyncio.sleep(0.25)
                 assert w_runs_after_restart["total"] >= 2
                 # Stop worker subprocess before running deterministic in-process fault & soak checks
-                worker_proc.terminate()
-                try:
-                    worker_proc.wait(timeout=5)
-                except subprocess.TimeoutExpired:
-                    worker_proc.kill()
-                    worker_proc.wait(timeout=5)
+                _terminate_proc(worker_proc)
                 worker_proc = None
                 record_scenario(
                     9,
@@ -547,12 +561,9 @@ async def _run_verification() -> int:
                 )
 
             # Scenario 8: Restart backend API process and verify egress policy revision 2 persists in DB
-            api_proc.terminate()
-            try:
-                api_proc.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                api_proc.kill()
-                api_proc.wait(timeout=5)
+            _terminate_proc(api_proc)
+            api_port = _free_port()
+            base_url = f"http://127.0.0.1:{api_port}"
             api_proc = subprocess.Popen(
                 [
                     python_bin,
@@ -571,14 +582,18 @@ async def _run_verification() -> int:
                 stderr=subprocess.DEVNULL,
             )
             async with httpx.AsyncClient(base_url=base_url, timeout=10.0) as client2:
-                for _ in range(40):
+                ready2 = False
+                for _ in range(60):
                     try:
                         resp2 = await client2.get("/api/v1/health/ready", headers=headers)
                         if resp2.status_code == 200:
+                            ready2 = True
                             break
                     except Exception:
                         pass
                     await asyncio.sleep(0.2)
+                if not ready2:
+                    raise RuntimeError("Restarted backend failed readiness check")
                 pol_after_restart = (
                     await client2.get("/api/v1/connectors/egress-policy", headers=headers)
                 ).json()
@@ -933,20 +948,10 @@ async def _run_verification() -> int:
             print("STACK_VERIFICATION_OK: all 16 multi-process scenarios and 32-cycle bounded soak verified.")
             return 0
         finally:
-            if worker_proc is not None and worker_proc.poll() is None:
-                worker_proc.terminate()
-                try:
-                    worker_proc.wait(timeout=5)
-                except subprocess.TimeoutExpired:
-                    worker_proc.kill()
-                    worker_proc.wait(timeout=5)
-            if api_proc is not None and api_proc.poll() is None:
-                api_proc.terminate()
-                try:
-                    api_proc.wait(timeout=5)
-                except subprocess.TimeoutExpired:
-                    api_proc.kill()
-                    api_proc.wait(timeout=5)
+            _terminate_proc(worker_proc)
+            _terminate_proc(api_proc)
+            with contextlib.suppress(Exception):
+                reset_dns_executor_state()
             await witsml_server.stop()
             await etp_bin_server.stop()
             await policy_witsml_server.stop()

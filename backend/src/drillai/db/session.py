@@ -141,7 +141,6 @@ class Database:
 def _sqlite_fk_pragma(dbapi_connection, _connection_record) -> None:  # pragma: no cover - driver hook
     cursor = dbapi_connection.cursor()
     cursor.execute("PRAGMA foreign_keys=ON")
+    cursor.execute("PRAGMA busy_timeout=30000")
     cursor.execute("PRAGMA synchronous=OFF")
-    cursor.execute("PRAGMA journal_mode=MEMORY")
-    cursor.execute("PRAGMA temp_store=MEMORY")
     cursor.close()
