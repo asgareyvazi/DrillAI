@@ -213,6 +213,8 @@ class TubularDesignOutput(BaseModel):
     governing_segment: str | None = None
     governed_by: str | None = None
     minimum_safety_factor: float | None = None
+    scope_classification: str = "pipe_body_only_connections_not_rated"
+    connection_verification_required: bool = True
     violations: list[ConstraintViolation] = Field(default_factory=list)
     notes: list[str]
 

@@ -195,6 +195,7 @@ class HydraulicsEngineOutput(BaseModel):
     cutting_transport_ratio: float | None = None
     cuttings_concentration_volume_fraction: float | None = None
     turbulent_intervals: list[str]
+    regime_validity: str = "laminar_valid"
     stages: list[HydraulicsStage] = []
     rheology_model: str = "bingham_plastic_laminar_exact"
     assumptions: list[str]
@@ -643,6 +644,7 @@ def compute_hydraulics(inputs: HydraulicsEngineInput) -> EngineResult:
         cutting_transport_ratio=transport_ratio,
         cuttings_concentration_volume_fraction=cuttings_concentration,
         turbulent_intervals=turbulent_intervals,
+        regime_validity="non_certified_turbulent_exceedance" if turbulent_intervals else "laminar_valid",
         stages=stages,
         assumptions=[
             "laminar Bingham-plastic flow solved exactly (implicit equation, bisection)",

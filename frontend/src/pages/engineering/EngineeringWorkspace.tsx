@@ -40,6 +40,42 @@ const OILFIELD_SUFFIX: Record<string, string> = {
   _kpa: 'kPa',
 }
 
+export function inferOutputUnit(key: string): string | null {
+  const lower = key.toLowerCase()
+  if (lower.endsWith('_kpa')) return 'kPa'
+  if (lower.endsWith('_ppg')) return 'ppg'
+  if (lower.endsWith('_psi')) return 'psi'
+  if (lower.endsWith('_lpm')) return 'L/min'
+  if (lower.endsWith('_deg')) return 'deg'
+  if (lower.includes('dls') || lower.includes('dogleg')) return 'deg/m'
+  if (lower.includes('mud_weight') || lower.includes('ecd') || lower.includes('density') || lower.includes('equivalent_si')) {
+    return 'kg/m3'
+  }
+  if (
+    lower.includes('pressure') ||
+    lower.includes('sidpp') ||
+    lower.includes('sicp') ||
+    lower.includes('maasp') ||
+    lower.includes('mse') ||
+    lower.includes('stress') ||
+    lower.includes('margin_si')
+  ) {
+    return 'Pa'
+  }
+  if (lower.includes('capacity_at_shoe')) return 'm2'
+  if (lower.includes('volume') || lower.includes('pit_gain') || lower.includes('kick_tolerance_si')) return 'm3'
+  if (lower.includes('flow_rate') || lower.includes('kill_rate')) return 'm3/s'
+  if (lower.includes('velocity')) return 'm/s'
+  if (lower.includes('rop')) return 'm/h'
+  if (lower.includes('wob') || lower.includes('hookload') || lower.includes('tension') || lower.includes('drag') || lower.includes('force')) {
+    return 'N'
+  }
+  if (lower.includes('torque')) return 'N.m'
+  if (lower.includes('time') && lower.endsWith('_si')) return 's'
+  if (lower.endsWith('_si')) return 'm'
+  return null
+}
+
 function statusTone(status: string): 'ok' | 'warning' | 'danger' | 'neutral' {
   if (status === 'verified_against_reference') return 'ok'
   if (status === 'formula_derived') return 'warning'
@@ -62,7 +98,7 @@ function OutputTable({ outputs, onEvidence }: { outputs: Record<string, unknown>
             key={key}
             label={key}
             value={value}
-            unit={key.endsWith('_si') ? 'Pa' : key.includes('velocity') ? 'm/s' : null}
+            unit={typeof value === 'number' ? inferOutputUnit(key) : null}
             unitSystem={unitSystem}
             source={`engine output · ${key}`}
             onEvidence={onEvidence}

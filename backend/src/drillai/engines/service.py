@@ -61,6 +61,7 @@ def _infer_si_unit_for_field_name(name: str) -> str | None:
             "yield_point",
             "stress",
             "integrity",
+            "shoe_margin",
         )
     ):
         return "Pa"
@@ -82,9 +83,9 @@ def _infer_si_unit_for_field_name(name: str) -> str | None:
         return "W"
     if "plastic_viscosity" in name:
         return "Pa.s"
-    if "area" in name or name == "tfa_si":
+    if "area" in name or name == "tfa_si" or "capacity_at_shoe" in name:
         return "m2"
-    if any(tok in name for tok in ("volume", "pit_gain", "output_per_stroke")):
+    if any(tok in name for tok in ("volume", "volumetric", "pit_gain", "output_per_stroke")):
         return "m3"
     if "time" in name:
         return "s"
