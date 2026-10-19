@@ -18,6 +18,7 @@ dependencies = [
   # --- contracts / validation ---
   "pydantic>=2.9,<3",
   "pydantic-settings>=2.6",
+  "cryptography>=44.0",
   # --- persistence ---
   "SQLAlchemy>=2.0.36,<2.1",
   "alembic>=1.13",

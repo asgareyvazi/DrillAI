@@ -99,7 +99,7 @@ it holds to and `docs/FRONTEND_TESTING.md` lists what is verified and how.
 | Frontend lint | `cd frontend && npm run lint` | unused code, `any`, React rules |
 | Frontend unit/component | `cd frontend && npm test` | 315 passed in 29 files |
 | Frontend build | `cd frontend && npm run build` | `tsc -b` plus the production Vite build |
-| Backend tests | `cd backend && DRILLAI_TEST_POSTGRES=1 .venv/bin/python -m pytest -o addopts=""` | 1,086 passed in 82 files, including 7 PostgreSQL persistence, migration, backup/restore DR drill, pgvector retrieval, competing-worker fencing & concurrent SQL CAS race tests |
+| Backend tests | `cd backend && DRILLAI_TEST_POSTGRES=1 .venv/bin/python -m pytest -o addopts=""` | 1,090 passed in 83 files, including 7 PostgreSQL persistence, migration, backup/restore DR drill, pgvector retrieval, competing-worker fencing & concurrent SQL CAS race tests |
 | Backend lint | `cd backend && .venv/bin/python -m ruff check .` | style and import hygiene |
 | Migrations | `cd backend && .venv/bin/python -m alembic upgrade head && .venv/bin/python -m alembic check` | no model/migration drift, against a fresh database |
 | Stack verification | `backend/.venv/bin/python scripts/verify_stack.py` | 16 multi-process scenarios: clean migration, backend, dedicated `connector-worker`, real WITSML 1.4.1.1 SOAP & ETP 1.2 Binary Avro ingest, soak metrics, restart recovery & stop |
@@ -109,7 +109,7 @@ it holds to and `docs/FRONTEND_TESTING.md` lists what is verified and how.
 
 Set `DRILLAI_TEST_POSTGRES=1` to run the PostgreSQL-backed persistence, competing-worker fencing,
 and concurrent SQL CAS race tests through the repository's own embedded PostgreSQL (`pgserver`);
-without it they skip, and the suite reports **1079 passed, 7 skipped** rather than **1,086 passed**.
+without it they skip, and the suite reports **1083 passed, 7 skipped** rather than **1,090 passed**.
 See `docs/WINDOWS-SETUP.md`, `docs/mission-reports/PRODUCTION-READINESS-MATRIX.md`, and `docs/mission-reports/CP16-MISSION-REPORT.md`
 for commit-stamped and CI-run-stamped verification provenance across CP13, CP14, CP15, CP16, CP17, and CP18.
 

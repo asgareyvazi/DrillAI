@@ -54,10 +54,11 @@ from drillai.db.models import (
 from drillai.db.session import Database
 from drillai.security.passwords import (
     hash_password,
+    hash_password_async,
     hash_token,
     needs_rehash,
     new_api_token,
-    verify_password,
+    verify_password_async,
     verify_token,
 )
 from drillai.security.rbac import (
@@ -361,7 +362,7 @@ async def bootstrap_admin(
         id=new_id("usr"),
         email=email_norm,
         display_name=body.display_name.strip(),
-        password_hash=hash_password(body.password),
+        password_hash=await hash_password_async(body.password),
         is_active=True,
         last_login_at=dt.datetime.now(tz=UTC),
     )
@@ -469,7 +470,7 @@ async def login(
     ).scalar_one_or_none()
 
     if user is None or not user.password_hash:
-        verify_password(body.password, _DUMMY_PASSWORD_HASH)
+        await verify_password_async(body.password, _DUMMY_PASSWORD_HASH)
         await _record_rate_limit_failure(database, buckets)
         await _record_audit_independent(
             database,
@@ -485,7 +486,7 @@ async def login(
         )
         raise AuthenticationRequired("invalid email or password")
 
-    if not verify_password(body.password, user.password_hash):
+    if not await verify_password_async(body.password, user.password_hash):
         await _record_rate_limit_failure(database, buckets)
         await _record_audit_independent(
             database,
@@ -506,7 +507,7 @@ async def login(
         raise AuthenticationRequired("user account is deactivated")
 
     if needs_rehash(user.password_hash):
-        user.password_hash = hash_password(body.password)
+        user.password_hash = await hash_password_async(body.password)
 
     now = dt.datetime.now(tz=UTC)
     mbr_rows = (
@@ -771,10 +772,10 @@ async def change_password(
     ).scalar_one_or_none()
     if user is None or not user.password_hash:
         raise AuthenticationRequired("authenticated user record does not support password change")
-    if not verify_password(body.current_password, user.password_hash):
+    if not await verify_password_async(body.current_password, user.password_hash):
         raise AuthenticationRequired("current password is incorrect")
 
-    user.password_hash = hash_password(body.new_password)
+    user.password_hash = await hash_password_async(body.new_password)
     now = dt.datetime.now(tz=UTC)
     other_sessions = (
         await session.execute(
@@ -928,7 +929,7 @@ async def redeem_password_reset_token(
         raise AuthenticationRequired("target user account is not active")
 
     row.used_at = now
-    user.password_hash = hash_password(body.new_password)
+    user.password_hash = await hash_password_async(body.new_password)
 
     active_sessions = (
         await session.execute(
@@ -1044,7 +1045,7 @@ async def create_org_user(
         email=email_norm,
         display_name=body.display_name.strip(),
         job_title=body.job_title,
-        password_hash=hash_password(body.password),
+        password_hash=await hash_password_async(body.password),
         unit_system=body.unit_system or "field_us",
         is_active=True,
     )

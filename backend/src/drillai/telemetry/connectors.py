@@ -2193,6 +2193,25 @@ async def resolve_secret_refs(
                         },
                     )
                 resolved[slot] = val
+            elif row.backend == "db_encrypted":
+                from drillai.security.secrets import decrypt_secret_value
+
+                try:
+                    resolved[slot] = decrypt_secret_value(
+                        row.locator,
+                        org_id=org_id,
+                        secret_key=row.key,
+                    )
+                except ValidationFailed as exc:
+                    raise ValidationFailed(
+                        f"encrypted secret_ref for slot {slot!r} could not be decrypted",
+                        details={
+                            "field": f"secret_refs.{slot}",
+                            "slot": slot,
+                            "backend": "db_encrypted",
+                            "reason": (exc.details or {}).get("reason", "secret_decryption_failed"),
+                        },
+                    ) from exc
             else:
                 raise ValidationFailed(
                     f"SecretRef backend {row.backend!r} is not supported",

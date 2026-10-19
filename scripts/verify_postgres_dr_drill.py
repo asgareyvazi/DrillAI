@@ -119,6 +119,7 @@ async def _collect_table_counts_and_revision(async_db_url: str) -> tuple[dict[st
         ExtractedRecord,
         Organization,
         Project,
+        SecretRef,
         TimeSeries,
         TimeSeriesPoint,
         TwinAspect,
@@ -152,6 +153,7 @@ async def _collect_table_counts_and_revision(async_db_url: str) -> tuple[dict[st
         ("time_series_points", TimeSeriesPoint),
         ("connector_runs", ConnectorRun),
         ("connector_egress_policies", ConnectorEgressPolicy),
+        ("secret_refs", SecretRef),
     ]
     eng = create_async_engine(async_db_url, pool_size=2, max_overflow=0)
     try:
@@ -477,7 +479,29 @@ async def _seed_multi_tenant_dr_dataset(async_db_url: str) -> dict[str, Any]:
             )
             session.add(crun_a)
 
+            from drillai.core.config import Settings
+            from drillai.db.models import SecretRef
+            from drillai.security.secrets import encrypt_secret_value
             from drillai.telemetry.connectors import SYSTEM_EGRESS_POLICY_KEY
+
+            dr_master_key = "dr-drill-master-key-32-bytes-minimum-2026!!"
+            enc_envelope, _ = encrypt_secret_value(
+                "witsml-rig-pass-alpha-secret-99",
+                org_id=org_a.id,
+                secret_key="rig_alpha_witsml_pass",
+                settings=Settings(secret_master_key=dr_master_key),
+            )
+            sref_a = SecretRef(
+                org_id=org_a.id,
+                key="rig_alpha_witsml_pass",
+                backend="db_encrypted",
+                locator=enc_envelope,
+                description="Encrypted WITSML password for Alpha Rig",
+                scope="connector",
+                last_rotated_at=now,
+                is_active=True,
+            )
+            session.add(sref_a)
 
             pol = ConnectorEgressPolicy(
                 policy_key=SYSTEM_EGRESS_POLICY_KEY,
@@ -544,6 +568,50 @@ async def _verify_restored_relationships_and_tenant_isolation(
             snaps_cross = await twin_b.list_snapshots(well_id=seeded_ids["well_a_id"])
             assert snaps_cross == []
 
+            # Verify encrypted SecretRef row survived pg_dump/pg_restore and decrypts only with master key + matching org AAD
+            from drillai.core.errors import ValidationFailed
+            from drillai.db.models import SecretRef
+            from drillai.security.secrets import decrypt_secret_value
+
+            sref_row = (
+                await session.execute(
+                    select(SecretRef).where(
+                        SecretRef.org_id == seeded_ids["org_a_id"],
+                        SecretRef.key == "rig_alpha_witsml_pass",
+                    )
+                )
+            ).scalar_one()
+            dr_master_key = "dr-drill-master-key-32-bytes-minimum-2026!!"
+            decrypted_secret = decrypt_secret_value(
+                sref_row.locator,
+                org_id=seeded_ids["org_a_id"],
+                secret_key="rig_alpha_witsml_pass",
+                settings=Settings(secret_master_key=dr_master_key),
+            )
+            assert decrypted_secret == "witsml-rig-pass-alpha-secret-99"
+            # Without master key -> fails closed
+            try:
+                decrypt_secret_value(
+                    sref_row.locator,
+                    org_id=seeded_ids["org_a_id"],
+                    secret_key="rig_alpha_witsml_pass",
+                    settings=Settings(secret_master_key=""),
+                )
+                raise AssertionError("decrypt_secret_value must fail when master key is missing")
+            except ValidationFailed:
+                pass
+            # With wrong org_id AAD -> fails closed
+            try:
+                decrypt_secret_value(
+                    sref_row.locator,
+                    org_id=seeded_ids["org_b_id"],
+                    secret_key="rig_alpha_witsml_pass",
+                    settings=Settings(secret_master_key=dr_master_key),
+                )
+                raise AssertionError("decrypt_secret_value must fail when org_id AAD mismatches")
+            except ValidationFailed:
+                pass
+
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url="http://dr-verify.local") as client:
             headers_sup = {"X-Dev-Roles": "drilling_supervisor,admin"}
@@ -593,6 +661,7 @@ async def _verify_restored_relationships_and_tenant_isolation(
             "tenant_b_isolated": True,
             "twin_snapshot_restored": True,
             "egress_policy_revision_restored": 2,
+            "encrypted_secret_ref_restored_and_verified": True,
         }
     finally:
         await app.state.database.dispose()

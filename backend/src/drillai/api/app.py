@@ -19,6 +19,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.middleware.gzip import GZipMiddleware
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from drillai.api.routers import (
     alerts,
@@ -123,8 +124,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         raise ConfigurationError("DRILLAI_AUTH_ENABLED must be true in production")
     if settings.is_production and settings.debug:
         raise ConfigurationError("DRILLAI_DEBUG must not be enabled in production")
-    if settings.is_production and "*" in settings.cors_origin_list:
-        raise ConfigurationError("wildcard CORS origins are not allowed in production")
+    if settings.is_production and ("*" in settings.cors_origin_list or not settings.cors_origin_list):
+        raise ConfigurationError("wildcard or empty CORS origins are not allowed in production")
     if settings.is_production and settings.e2e_faults:
         # The fault routes are unauthenticated by construction (they exist to make the client fail,
         # not to be authorised), so a deployment that enabled them by accident must not start at all.
@@ -134,10 +135,37 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     if (
         settings.is_production
         and settings.secret_backend == "database"
-        and not settings.secret_master_key.strip()
+        and len(settings.secret_master_key.strip()) < 32
     ):
         raise ConfigurationError(
-            "DRILLAI_SECRET_MASTER_KEY is required when DRILLAI_SECRET_BACKEND=database in production"
+            "DRILLAI_SECRET_MASTER_KEY is required (at least 32 characters) when DRILLAI_SECRET_BACKEND=database in production"
+        )
+    if settings.is_production and ("*" in settings.allowed_host_list or not settings.allowed_host_list):
+        raise ConfigurationError(
+            "wildcard or empty DRILLAI_ALLOWED_HOSTS ('*') is not allowed in production; configure explicit trusted hosts"
+        )
+    if settings.is_production and not settings.session_cookie_secure:
+        raise ConfigurationError("DRILLAI_SESSION_COOKIE_SECURE must be true in production")
+    if settings.is_production and (
+        not settings.session_csrf_secret.strip()
+        or settings.session_csrf_secret.strip() == "drillai-dev-csrf-synchronizer-key"
+        or len(settings.session_csrf_secret.strip()) < 32
+    ):
+        raise ConfigurationError(
+            "DRILLAI_SESSION_CSRF_SECRET must be set to a non-default secret of at least 32 characters in production"
+        )
+    if settings.is_production and any(
+        placeholder in settings.database_url.lower()
+        for placeholder in (
+            "change_me",
+            "changeme",
+            "drillai:drillai@",
+            "postgres:postgres@",
+            "sample_password",
+        )
+    ):
+        raise ConfigurationError(
+            "DRILLAI_DATABASE_URL contains a default or placeholder credential in production"
         )
 
     @contextlib.asynccontextmanager
@@ -202,6 +230,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         from drillai.api.routers import faults
 
         app.add_middleware(faults.FaultInjectorMiddleware)
+
+    if "*" not in settings.allowed_host_list and settings.allowed_host_list:
+        app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.allowed_host_list)
 
     app.add_middleware(GZipMiddleware, minimum_size=1024)
     app.add_middleware(

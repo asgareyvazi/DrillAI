@@ -49,9 +49,9 @@ import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from drillai.core.clock import UTC
+from drillai.core.clock import UTC, utc_now
 from drillai.core.errors import ValidationFailed
-from drillai.db.models import OutboundMessage
+from drillai.db.models import OutboundMessage, SecretRef
 from drillai.telemetry.connectors import (
     sync_egress_policy_from_db,
     validate_connector_endpoint_async,
@@ -69,6 +69,7 @@ __all__ = [
     "dispatch_outbound_message",
     "dispatch_pending_notifications",
     "resolve_notification_secret",
+    "resolve_notification_secret_async",
 ]
 
 DELIVERY_STATUSES = (
@@ -100,6 +101,43 @@ def resolve_notification_secret(secret_ref: str | None) -> str | None:
         return os.environ.get(env_name)
     env_prefixed = f"DRILLAI_NOTIFY_SECRET_{key.upper().replace('-', '_').replace('.', '_')}"
     return os.environ.get(env_prefixed) or os.environ.get(key)
+
+
+async def resolve_notification_secret_async(
+    session: AsyncSession,
+    org_id: str,
+    secret_ref: str | None,
+) -> str | None:
+    """Resolve a notification secret from either ``secret_ref:<key>`` (DB SecretRef) or environment."""
+    if not secret_ref or not secret_ref.strip():
+        return None
+    ref = secret_ref.strip()
+    if ref.startswith("secret_ref:"):
+        key = ref.removeprefix("secret_ref:").strip()
+        row = (
+            await session.execute(
+                select(SecretRef).where(
+                    SecretRef.org_id == org_id,
+                    SecretRef.key == key,
+                    SecretRef.is_active.is_(True),
+                )
+            )
+        ).scalar_one_or_none()
+        if row is None:
+            return None
+        row.last_used_at = utc_now()
+        if row.backend == "env":
+            env_name = row.locator.removeprefix("env:").strip()
+            return os.environ.get(env_name) or None
+        if row.backend == "db_encrypted":
+            from drillai.security.secrets import decrypt_secret_value
+
+            try:
+                return decrypt_secret_value(row.locator, org_id=org_id, secret_key=row.key)
+            except ValidationFailed:
+                return None
+        return None
+    return resolve_notification_secret(ref)
 
 
 @dataclass(frozen=True)
@@ -177,13 +215,17 @@ class WebhookNotificationAdapter(NotificationAdapter):
         cfg_payload = dict(message.payload or {})
         timeout_seconds = float(cfg_payload.get("timeout_seconds") or 10.0)
         secret_ref = cfg_payload.get("secret_ref")
-        secret_val = resolve_notification_secret(secret_ref) if isinstance(secret_ref, str) else None
+        secret_val = (
+            await resolve_notification_secret_async(session, message.org_id, secret_ref)
+            if isinstance(secret_ref, str)
+            else None
+        )
         if secret_ref and secret_val is None:
             return DeliveryAttemptOutcome(
                 status="failed_terminal",
                 retryable=False,
                 error_code="secret_ref_unresolved",
-                error=f"secret_ref {secret_ref!r} could not be resolved from environment",
+                error=f"secret_ref {secret_ref!r} could not be resolved",
                 latency_ms=(time.perf_counter() - started) * 1000.0,
             )
 
@@ -314,13 +356,17 @@ class EmailSmtpNotificationAdapter(NotificationAdapter):
         timeout_seconds = float(cfg.get("timeout_seconds") or 10.0)
         sender = str(cfg.get("from_address") or os.environ.get("DRILLAI_SMTP_FROM") or "noreply@drillai.local")
         secret_ref = cfg.get("secret_ref")
-        password = resolve_notification_secret(secret_ref) if isinstance(secret_ref, str) else None
+        password = (
+            await resolve_notification_secret_async(session, message.org_id, secret_ref)
+            if isinstance(secret_ref, str)
+            else None
+        )
         if secret_ref and password is None:
             return DeliveryAttemptOutcome(
                 status="failed_terminal",
                 retryable=False,
                 error_code="secret_ref_unresolved",
-                error=f"secret_ref {secret_ref!r} could not be resolved from environment",
+                error=f"secret_ref {secret_ref!r} could not be resolved",
             )
 
         msg = EmailMessage()

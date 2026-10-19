@@ -9,12 +9,23 @@ static document that can drift from the code.
 
 from __future__ import annotations
 
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, status
+from pydantic import BaseModel, Field
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from drillai.api.deps import AuthContext, require
+from drillai.api.deps import AuthContext, get_db, require
+from drillai.core.clock import utc_now
 from drillai.core.config import get_settings
+from drillai.core.errors import NotFound, ValidationFailed
+from drillai.db.models import AuditLog, SecretRef
+from drillai.security.secrets import (
+    encrypt_secret_value,
+    mask_secret_ref_row,
+    rotate_secret_envelope,
+)
 
 router = APIRouter(tags=["platform"])
 
@@ -329,3 +340,214 @@ async def integrations(
             },
         ]
     }
+
+
+class SecretRefUpsertRequest(BaseModel):
+    key: str = Field(..., min_length=1, max_length=160, pattern=r"^[A-Za-z0-9_.\-]+$")
+    backend: Literal["env", "db_encrypted"] = "db_encrypted"
+    secret_value: str | None = Field(default=None, min_length=1, max_length=300)
+    env_var: str | None = Field(default=None, min_length=1, max_length=160)
+    description: str | None = Field(default=None, max_length=500)
+    scope: str | None = Field(default="connector", max_length=80)
+
+
+class SecretRefRotateRequest(BaseModel):
+    secret_value: str | None = Field(default=None, min_length=1, max_length=300)
+
+
+@router.get("/platform/secrets", summary="List tenant secret references (masked metadata only)")
+async def list_secret_refs(
+    auth: Annotated[AuthContext, Depends(require("secret.manage"))],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, Any]:
+    rows = (
+        await session.execute(
+            select(SecretRef)
+            .where(SecretRef.org_id == auth.org_id)
+            .order_by(SecretRef.key.asc())
+        )
+    ).scalars().all()
+    return {"items": [mask_secret_ref_row(r) for r in rows]}
+
+
+@router.post(
+    "/platform/secrets",
+    status_code=status.HTTP_201_CREATED,
+    summary="Create or update a tenant-scoped SecretRef (env or AES-256-GCM db_encrypted)",
+)
+async def upsert_secret_ref(
+    body: SecretRefUpsertRequest,
+    auth: Annotated[AuthContext, Depends(require("secret.manage"))],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, Any]:
+    now = utc_now()
+    if body.backend == "db_encrypted":
+        if not body.secret_value:
+            raise ValidationFailed(
+                "secret_value is required when backend='db_encrypted'",
+                details={"field": "secret_value"},
+            )
+        locator, kv = encrypt_secret_value(
+            body.secret_value,
+            org_id=auth.org_id,
+            secret_key=body.key,
+        )
+    else:
+        if not body.env_var or not body.env_var.startswith("DRILLAI_"):
+            raise ValidationFailed(
+                "env_var starting with 'DRILLAI_' is required when backend='env'",
+                details={"field": "env_var"},
+            )
+        locator = f"env:{body.env_var}"
+        kv = None
+
+    row = (
+        await session.execute(
+            select(SecretRef).where(
+                SecretRef.org_id == auth.org_id,
+                SecretRef.key == body.key,
+            )
+        )
+    ).scalar_one_or_none()
+    if row is None:
+        row = SecretRef(
+            org_id=auth.org_id,
+            key=body.key,
+            backend=body.backend,
+            locator=locator,
+            description=body.description,
+            scope=body.scope,
+            last_rotated_at=now,
+            created_by=auth.principal.id,
+            is_active=True,
+        )
+        session.add(row)
+    else:
+        row.backend = body.backend
+        row.locator = locator
+        if body.description is not None:
+            row.description = body.description
+        if body.scope is not None:
+            row.scope = body.scope
+        row.last_rotated_at = now
+        row.is_active = True
+
+    await session.flush()
+    session.add(
+        AuditLog(
+            org_id=auth.org_id,
+            actor_id=auth.principal.id,
+            actor_kind=auth.principal.kind,
+            action="security.secret_ref.upsert",
+            action_level="L4",
+            resource_kind="secret_ref",
+            resource_id=row.id,
+            outcome="allowed",
+            details={
+                "key": row.key,
+                "backend": row.backend,
+                "key_version": kv,
+                "scope": row.scope,
+            },
+            occurred_at=now,
+        )
+    )
+    return mask_secret_ref_row(row)
+
+
+@router.post(
+    "/platform/secrets/{secret_key}/rotate",
+    summary="Rotate an encrypted database SecretRef to a new value or active master key version",
+)
+async def rotate_secret_ref(
+    secret_key: str,
+    body: SecretRefRotateRequest,
+    auth: Annotated[AuthContext, Depends(require("secret.manage"))],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, Any]:
+    row = (
+        await session.execute(
+            select(SecretRef).where(
+                SecretRef.org_id == auth.org_id,
+                SecretRef.key == secret_key,
+                SecretRef.is_active.is_(True),
+            )
+        )
+    ).scalar_one_or_none()
+    if row is None:
+        raise NotFound(f"secret_ref {secret_key!r} not found")
+    if row.backend != "db_encrypted":
+        raise ValidationFailed(
+            "only db_encrypted SecretRef rows support cryptographic key rotation",
+            details={"key": secret_key, "backend": row.backend},
+        )
+    new_envelope, prev_kv, new_kv = rotate_secret_envelope(
+        row.locator,
+        org_id=auth.org_id,
+        secret_key=row.key,
+        new_plaintext=body.secret_value,
+    )
+    now = utc_now()
+    row.locator = new_envelope
+    row.last_rotated_at = now
+    session.add(
+        AuditLog(
+            org_id=auth.org_id,
+            actor_id=auth.principal.id,
+            actor_kind=auth.principal.kind,
+            action="security.secret_ref.rotate",
+            action_level="L4",
+            resource_kind="secret_ref",
+            resource_id=row.id,
+            outcome="allowed",
+            details={
+                "key": row.key,
+                "previous_key_version": prev_kv,
+                "new_key_version": new_kv,
+                "value_replaced": body.secret_value is not None,
+            },
+            occurred_at=now,
+        )
+    )
+    return mask_secret_ref_row(row)
+
+
+@router.delete(
+    "/platform/secrets/{secret_key}",
+    summary="Revoke a tenant SecretRef and wipe stored ciphertext",
+)
+async def revoke_secret_ref(
+    secret_key: str,
+    auth: Annotated[AuthContext, Depends(require("secret.manage"))],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, Any]:
+    row = (
+        await session.execute(
+            select(SecretRef).where(
+                SecretRef.org_id == auth.org_id,
+                SecretRef.key == secret_key,
+            )
+        )
+    ).scalar_one_or_none()
+    if row is None:
+        raise NotFound(f"secret_ref {secret_key!r} not found")
+    now = utc_now()
+    row.is_active = False
+    row.locator = "revoked"
+    row.last_rotated_at = now
+    session.add(
+        AuditLog(
+            org_id=auth.org_id,
+            actor_id=auth.principal.id,
+            actor_kind=auth.principal.kind,
+            action="security.secret_ref.revoke",
+            action_level="L4",
+            resource_kind="secret_ref",
+            resource_id=row.id,
+            outcome="allowed",
+            details={"key": row.key, "backend": row.backend},
+            occurred_at=now,
+        )
+    )
+    return mask_secret_ref_row(row)
+
