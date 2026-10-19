@@ -146,7 +146,7 @@ async def test_a2_witsml_over_cap_mid_row_and_multipage_zero_data_loss(
             worker1 = ConnectorWorker(
                 app.state.database,
                 worker_id="wrk_a2_1",
-                lease_seconds=1.0,
+                lease_seconds=15.0,
                 allow_loopback=True,
             )
             app.state.connector_worker = worker1

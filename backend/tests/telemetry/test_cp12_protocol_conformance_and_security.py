@@ -710,6 +710,7 @@ async def test_c1_c2_f2_atomic_cas_lease_heartbeat_preemption_and_governed_repla
                 assert elapsed < 1.8
 
                 # Restart connector and run a normal poll to advance cursor to t0 + 15s
+                worker.lease_seconds = 15.0
                 server.fault_mode = "ok"
                 await client.post(
                     f"/api/v1/connectors/{cid}/restart",
