@@ -49,7 +49,7 @@ def pytest_configure(config: pytest.Config) -> None:
 
 def pytest_runtest_setup(item: pytest.Item) -> None:
     with contextlib.suppress(Exception):
-        faulthandler.dump_traceback_later(60, exit=True)
+        faulthandler.dump_traceback_later(180, exit=True)
 
 
 def pytest_runtest_teardown(item: pytest.Item, nextitem: pytest.Item | None) -> None:

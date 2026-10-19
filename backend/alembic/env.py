@@ -75,6 +75,27 @@ async def run_async_migrations() -> None:
 
 
 def run_migrations_online() -> None:
+    url = _database_url()
+    if url.startswith("sqlite"):
+        from sqlalchemy import create_engine, event
+
+        sync_url = url.replace("+aiosqlite", "")
+        connectable = create_engine(sync_url, poolclass=pool.NullPool)
+
+        @event.listens_for(connectable, "connect")
+        def _set_sqlite_pragma(dbapi_connection, _connection_record) -> None:
+            cursor = dbapi_connection.cursor()
+            cursor.execute("PRAGMA busy_timeout=30000")
+            cursor.execute("PRAGMA synchronous=OFF")
+            cursor.execute("PRAGMA journal_mode=MEMORY")
+            cursor.execute("PRAGMA temp_store=MEMORY")
+            cursor.close()
+
+        with connectable.connect() as connection:
+            do_run_migrations(connection)
+            connection.commit()
+        connectable.dispose()
+        return
     asyncio.run(run_async_migrations())
 
 

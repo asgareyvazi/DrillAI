@@ -162,6 +162,7 @@ async def _run_verification() -> int:
                     "DRILLAI_ENVIRONMENT": "staging",
                     "DRILLAI_AUTH_ENABLED": "false",
                     "DRILLAI_DATABASE_URL": db_url,
+                    "DRILLAI_MULTI_PROCESS_SQLITE": "1",
                     "DRILLAI_BLOB_BACKEND": "filesystem",
                     "DRILLAI_BLOB_ROOT": str(Path(tmpdir) / "blobs"),
                     "DRILLAI_SCHEDULER_ENABLED": "false",
