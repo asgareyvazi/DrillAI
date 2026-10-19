@@ -178,6 +178,7 @@ export function isRefusalCode(code: number | null | undefined): boolean {
 export interface StreamUrlIdentity {
   token?: string | null
   devRoles?: string | null
+  sessionId?: string | null
 }
 
 export interface StreamUrlOptions {
@@ -225,11 +226,14 @@ export function runEventStreamUrl(
   const url = new URL(`${origin}${path}`)
 
   url.searchParams.set('after_seq', String(Math.max(0, Math.trunc(afterSeq))))
-  if (identity.token) {
-    // A browser cannot set an Authorization header on a WebSocket handshake, so the token goes in the
-    // query string; the backend reads it from either.
-    url.searchParams.set('token', identity.token)
-  } else if (identity.devRoles && (options.allowDevRoles ?? !import.meta.env.PROD)) {
+  // Browser sessions authenticate via the HttpOnly session cookie (`drillai_session`) sent
+  // automatically on same-origin WebSocket upgrades; credentials are never placed in query strings.
+  if (
+    !identity.token &&
+    !identity.sessionId &&
+    identity.devRoles &&
+    (options.allowDevRoles ?? !import.meta.env.PROD)
+  ) {
     url.searchParams.set('dev_roles', identity.devRoles)
   }
   return url.toString()

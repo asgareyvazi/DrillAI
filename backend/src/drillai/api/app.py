@@ -23,6 +23,7 @@ from starlette.middleware.gzip import GZipMiddleware
 from drillai.api.routers import (
     alerts,
     assets,
+    auth,
     connectors,
     context,
     documents,
@@ -40,7 +41,7 @@ from drillai.api.routers import (
 )
 from drillai.api.version import API_VERSION
 from drillai.core.config import REPO_ROOT, Settings, get_settings
-from drillai.core.errors import AuthenticationRequired, ConfigurationError, DrillAIError
+from drillai.core.errors import AuthenticationRequired, ConfigurationError, DrillAIError, RateLimited
 from drillai.core.ids import new_id
 from drillai.core.logging import clear_log_context, configure_logging, get_logger, set_log_context
 from drillai.db.session import Database
@@ -225,6 +226,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     else:
         before_idx = len(app.router.routes)
         app.include_router(health.router, prefix=prefix)
+        app.include_router(auth.router, prefix=prefix)
         app.include_router(platform.router, prefix=prefix)
         app.include_router(assets.router, prefix=prefix)
         app.include_router(context.router, prefix=prefix)
@@ -303,6 +305,8 @@ def _install_error_handlers(app: FastAPI) -> None:
         headers = {"Content-Language": _language(request), "X-Request-ID": trace_id}
         if isinstance(exc, AuthenticationRequired):
             headers["WWW-Authenticate"] = "Bearer"
+        if isinstance(exc, RateLimited) and exc.details.get("retry_after_seconds"):
+            headers["Retry-After"] = str(int(exc.details["retry_after_seconds"]))
         return JSONResponse(exc.to_payload(trace_id=trace_id), status_code=exc.http_status, headers=headers)
 
     @app.exception_handler(RequestValidationError)

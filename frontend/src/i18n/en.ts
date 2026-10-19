@@ -959,6 +959,24 @@ export const en = {
     remediationTimeout: 'The remote endpoint timed out or closed the socket mid-stream. The worker will retry with bounded exponential backoff.',
     remediationDefault: 'Inspect the run ledger manifest and trace ID for detailed transport diagnostics before restarting the connector.',
   },
+  auth: {
+    signIn: 'Sign in',
+    signOut: 'Sign out',
+    signingIn: 'Signing in…',
+    signingOut: 'Signing out…',
+    notSignedIn: 'Not signed in',
+    sessionActive: 'Session active',
+    title: 'Sign in to DrillAI',
+    subtitle: 'Authenticate with your organization credentials to establish a secure per-user session.',
+    emailLabel: 'Work email',
+    emailPlaceholder: 'engineer@demo.drillai.local',
+    passwordLabel: 'Password',
+    passwordPlaceholder: 'Enter your password',
+    orgSlugLabel: 'Organization slug (optional)',
+    orgSlugPlaceholder: 'demo-operator',
+    submitBtn: 'Sign in to workspace',
+    securityNotice: 'Credentials establish an HttpOnly session cookie protected by a per-session CSRF synchronizer token.',
+  },
 } as const
 
 export type MessageKey = string

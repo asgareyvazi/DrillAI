@@ -997,8 +997,8 @@ def test_cp16_10_documentation_and_contract_consistency_guard():
     assert len(backend_test_files) >= 78
     assert f"{len(backend_test_files)} files" in readme_text or f"{len(backend_test_files)} test files" in readme_text
 
-    assert "119 passed" in readme_text
-    assert "312 passed" in readme_text
-    assert "119 passed" in fe_testing_text
+    assert "120 passed" in readme_text
+    assert "315 passed" in readme_text
+    assert "120 passed" in fe_testing_text
     assert "42" in fe_testing_text
 

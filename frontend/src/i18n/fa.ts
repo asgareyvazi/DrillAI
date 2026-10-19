@@ -954,6 +954,24 @@ export const fa = {
     remediationTimeout: 'پاسخ سرور با اتمام مهلت زمانی یا قطع ارتباط مواجه شد. کارگر با تأخیر نمایی محدود دوباره تلاش خواهد کرد.',
     remediationDefault: 'پیش از راه‌اندازی مجدد اتصال‌دهنده، کاربرگ اجرا و شناسهٔ رهگیری (Trace ID) را بررسی کنید.',
   },
+  auth: {
+    signIn: 'ورود به حساب',
+    signOut: 'خروج از حساب',
+    signingIn: 'در حال ورود…',
+    signingOut: 'در حال خروج…',
+    notSignedIn: 'وارد نشده',
+    sessionActive: 'نشست فعال',
+    title: 'ورود به سامانه دریل‌ای‌آی',
+    subtitle: 'برای ایجاد نشست امن اختصاصی کاربر، با اطلاعات حساب سازمانی خود وارد شوید.',
+    emailLabel: 'ایمیل سازمانی',
+    emailPlaceholder: 'مثال: engineer@demo.drillai.local',
+    passwordLabel: 'گذرواژه',
+    passwordPlaceholder: 'گذرواژهٔ خود را وارد کنید',
+    orgSlugLabel: 'شناسهٔ سازمان (اختیاری)',
+    orgSlugPlaceholder: 'مثال: demo-operator',
+    submitBtn: 'ورود به کارگاه مهندسی',
+    securityNotice: 'ورود موفق یک کوکی نشست HttpOnly همراه با توکن محافظ CSRF اختصاصی ایجاد می‌کند.',
+  },
 } as const
 
 export default fa

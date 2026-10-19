@@ -11,8 +11,8 @@ is confined to unit and component tests, where it isolates a boundary rather tha
 | Types | `cd frontend && npm run typecheck` | strict TypeScript over the app, the tests and the e2e specs |
 | Lint | `cd frontend && npm run lint` | no unused code, no `any` slipping in, React rules |
 | Build | `cd frontend && npm run build` | `tsc -b` plus a production Vite build |
-| Unit + component | `cd frontend && npm test` | 312 passed in 29 files: values, units, the API boundary, cancellation, permissions, the shared UI states, and the pages' contracts |
-| End-to-end | `cd frontend && npm run e2e` | 119 passed in 17 spec files: the real stack through a browser, in three deployments |
+| Unit + component | `cd frontend && npm test` | 315 passed in 29 files: values, units, the API boundary, cancellation, permissions, the shared UI states, and the pages' contracts |
+| End-to-end | `cd frontend && npm run e2e` | 120 passed in 17 spec files: the real stack through a browser, in three deployments |
 | Backend | `cd backend && .venv/bin/python -m pytest` | the APIs the frontend reads (and the rest of the platform) |
 | Backend lint | `cd backend && .venv/bin/python -m ruff check .` | backend style and import hygiene |
 | Migrations | `cd backend && .venv/bin/python -m alembic upgrade head && .venv/bin/python -m alembic check` | no model/migration drift — against a **fresh** database |

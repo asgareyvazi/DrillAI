@@ -257,15 +257,25 @@ describe('runEventStreamUrl: derived from the configured API base', () => {
     expect(url).toContain('/runs/run%2F1%202/events/stream')
   })
 
-  it('carries the token when one is configured, and the development role when one is not', () => {
+  it('never places bearer or session tokens in the WebSocket query string, and only sends dev_roles when unauthenticated in dev', () => {
     const withToken = runEventStreamUrl(
       'run_1',
       0,
       { token: 'tok_123', devRoles: 'engineer' },
       { apiBase: '/api/v1', location: page },
     )
-    expect(withToken).toContain('token=tok_123')
+    expect(withToken).not.toContain('token=')
+    expect(withToken).not.toContain('tok_123')
     expect(withToken).not.toContain('dev_roles')
+
+    const withSession = runEventStreamUrl(
+      'run_1',
+      0,
+      { token: null, sessionId: 'ses_123', devRoles: 'engineer' },
+      { apiBase: '/api/v1', location: page, allowDevRoles: true },
+    )
+    expect(withSession).not.toContain('token=')
+    expect(withSession).not.toContain('dev_roles')
 
     const withDevRoles = runEventStreamUrl(
       'run_1',

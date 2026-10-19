@@ -256,7 +256,18 @@ async def _seed_workflows(api: Api, well_id: str) -> dict[str, Any]:
     }
 
 
+DEMO_USERS: tuple[tuple[str, str, str, list[str]], ...] = (
+    ("supervisor@demo.drillai.local", "Demo Drilling Supervisor (synthetic)", "Drilling Supervisor", ["drilling_supervisor"]),
+    ("engineer@demo.drillai.local", "Demo Drilling Engineer (synthetic)", "Drilling Engineer", ["engineer"]),
+    ("viewer@demo.drillai.local", "Demo Viewer (synthetic)", "Operations Observer", ["viewer"]),
+    ("admin@demo.drillai.local", "Demo Org Admin (synthetic)", "Organization Administrator", ["org_admin"]),
+    ("manager@demo.drillai.local", "Demo Well Manager (synthetic)", "Well Manager", ["well_manager"]),
+)
+
+
 async def seed(database_url: str, *, reset: bool, blob_dir: pathlib.Path) -> dict[str, Any]:
+    if os.environ.get("DRILLAI_ENVIRONMENT", "").strip().lower() == "production":
+        raise SeedError("Refusing to seed synthetic demo data or demo credentials in production environment")
     os.environ["DRILLAI_ENVIRONMENT"] = "development"
     os.environ["DRILLAI_AUTH_ENABLED"] = "false"
     os.environ["DRILLAI_DATABASE_URL"] = database_url
@@ -301,6 +312,23 @@ async def seed(database_url: str, *, reset: bool, blob_dir: pathlib.Path) -> dic
             if existing.get("total") and not reset:
                 summary["skipped"] = "database already contains wells; pass --reset to rebuild"
                 return summary
+
+            demo_password = os.environ.get("DRILLAI_DEMO_PASSWORD", "DrillAI-Dev-Only-Pass!2026")
+            seeded_users: list[str] = []
+            for email, display_name, job_title, role_keys in DEMO_USERS:
+                created_user = await api.call(
+                    "POST",
+                    "/auth/users",
+                    json_body={
+                        "email": email,
+                        "display_name": display_name,
+                        "job_title": job_title,
+                        "password": demo_password,
+                        "role_keys": role_keys,
+                    },
+                )
+                seeded_users.append(created_user["email"])
+            summary["demo_users"] = seeded_users
 
             project = (
                 await api.call(

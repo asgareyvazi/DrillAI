@@ -98,11 +98,19 @@ def _live_filters() -> tuple[float, float, int, int, int, int]:
 
 
 class _HeaderShim:
-    """The HTTP auth dependency, reused for a handshake that cannot carry headers from a browser."""
+    """The HTTP auth dependency, reused for a WebSocket handshake carrying cookies or headers."""
 
-    def __init__(self, headers: dict[str, str], query: dict[str, str] | None = None) -> None:
+    def __init__(
+        self,
+        headers: dict[str, str],
+        query: dict[str, str] | None = None,
+        *,
+        cookies: dict[str, str] | None = None,
+    ) -> None:
         self.headers = headers
         self.query_params = query or {}
+        self.cookies = cookies or {}
+        self.method = "GET"
 
     @property
     def url(self) -> Any:  # pragma: no cover - only used by error handlers
@@ -211,18 +219,24 @@ async def stream_well_live(
 
     await websocket.accept()
     database = websocket.app.state.database
-    token = websocket.query_params.get("token")
+    if websocket.query_params.get("token"):
+        await websocket.close(
+            code=4401,
+            reason="query-string bearer tokens are forbidden; use HttpOnly session cookie or Authorization header",
+        )
+        return
+    auth_header = websocket.headers.get("authorization")
     dev_roles = websocket.headers.get("x-dev-roles") or websocket.query_params.get("dev_roles")
     initial_gap: dict[str, Any] | None = None
     effective_after_seq = after_seq
     try:
         async with database.session() as session:
             headers = {}
-            if token:
-                headers["authorization"] = f"Bearer {token}"
+            if auth_header:
+                headers["authorization"] = auth_header
             if dev_roles:
                 headers["x-dev-roles"] = dev_roles
-            request = _HeaderShim(headers, dict(websocket.query_params))
+            request = _HeaderShim(headers, dict(websocket.query_params), cookies=dict(websocket.cookies))
             auth = await current_auth(request, session)  # type: ignore[arg-type]
             if not auth.principal.has_permission("live.read"):
                 await websocket.close(code=4403, reason="live.read is required")

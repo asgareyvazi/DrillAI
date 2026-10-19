@@ -34,17 +34,34 @@ class WebSocketSession:
     quietly polling the event log for a browser that no longer exists.
     """
 
-    def __init__(self, app, path: str, query: dict[str, str] | None = None, *, timeout: float = 10.0) -> None:
+    def __init__(
+        self,
+        app,
+        path: str,
+        query: dict[str, str] | None = None,
+        *,
+        timeout: float = 10.0,
+        cookies: dict[str, str] | None = None,
+        headers: dict[str, str] | None = None,
+    ) -> None:
         self.app = app
         self.path = path
         self.query = query or {}
         self.timeout = timeout
+        self.cookies = cookies or {}
+        self.headers = headers or {}
         self._inbound: asyncio.Queue[dict] = asyncio.Queue()
         self._outbound: asyncio.Queue[dict] = asyncio.Queue()
         self._task: asyncio.Task | None = None
         self.closed_with: dict | None = None
 
     async def __aenter__(self) -> WebSocketSession:
+        raw_headers = [(b"host", b"testserver"), (b"connection", b"upgrade")]
+        for k, v in self.headers.items():
+            raw_headers.append((k.lower().encode("latin-1"), v.encode("latin-1")))
+        if self.cookies:
+            cookie_str = "; ".join(f"{k}={v}" for k, v in self.cookies.items())
+            raw_headers.append((b"cookie", cookie_str.encode("latin-1")))
         scope = {
             "type": "websocket",
             "asgi": {"version": "3.0", "spec_version": "2.3"},
@@ -54,7 +71,7 @@ class WebSocketSession:
             "raw_path": self.path.encode(),
             "query_string": urlencode(self.query).encode(),
             "root_path": "",
-            "headers": [(b"host", b"testserver"), (b"connection", b"upgrade")],
+            "headers": raw_headers,
             "client": ("127.0.0.1", 52345),
             "server": ("testserver", 80),
             "subprotocols": [],

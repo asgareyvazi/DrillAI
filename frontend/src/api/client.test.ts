@@ -19,11 +19,14 @@ import {
   DEFAULT_TIMEOUT_MS,
   api,
   canRetry,
+  clearSessionAuth,
   isAbortError,
   request,
   setIdentity,
+  setSessionAuth,
   shouldRetryRequest,
 } from './client'
+import { assertSafeFrontendEnv, validateFrontendEnvSecurity } from '../lib/envSecurity'
 
 function jsonResponse(body: unknown, init: { status?: number; headers?: Record<string, string> } = {}) {
   return new Response(JSON.stringify(body), {
@@ -44,7 +47,8 @@ const fetchMock = vi.fn()
 
 beforeEach(() => {
   vi.stubGlobal('fetch', fetchMock)
-  setIdentity({ token: null, devRoles: 'engineer' })
+  clearSessionAuth()
+  setIdentity({ token: null, devRoles: 'engineer', csrfToken: null, sessionId: null })
   fetchMock.mockReset()
 })
 
@@ -475,3 +479,47 @@ describe('retry policy', () => {
     expect(canRetry(abort)).toBe(false)
   })
 })
+
+describe('session cookie CSRF & build-time env security guard (CP21)', () => {
+  it('captures csrf_token from session responses and attaches X-CSRF-Token on state-changing requests only', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        session_id: 'ses_abc',
+        csrf_token: 'csrf_sync_token_999',
+        principal: { principal_id: 'usr_1' },
+      }),
+    )
+    await api.get('/platform/identity')
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }))
+    await api.get('/wells')
+    const [, getInit] = fetchMock.mock.calls[1] as [string, RequestInit]
+    expect((getInit.headers as Record<string, string>)['X-CSRF-Token']).toBeUndefined()
+    expect((getInit.headers as Record<string, string>)['X-Dev-Roles']).toBeUndefined()
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ id: 'wel_1' }))
+    await api.post('/wells', { name: 'W-1' })
+    const [, postInit] = fetchMock.mock.calls[2] as [string, RequestInit]
+    expect((postInit.headers as Record<string, string>)['X-CSRF-Token']).toBe('csrf_sync_token_999')
+
+    setSessionAuth({ sessionId: null, csrfToken: null })
+  })
+
+  it('rejects VITE_API_TOKEN in production builds and rejects server secret names under VITE_* in all modes', () => {
+    expect(() =>
+      assertSafeFrontendEnv({ VITE_API_TOKEN: 'dk_prod_secret' }, { command: 'build', mode: 'production' }),
+    ).toThrow(/VITE_API_TOKEN is set during a production frontend build/)
+
+    expect(() =>
+      assertSafeFrontendEnv(
+        { VITE_SECRET_MASTER_KEY: 'master_123' },
+        { command: 'serve', mode: 'development' },
+      ),
+    ).toThrow(/VITE_SECRET_MASTER_KEY/)
+
+    expect(
+      validateFrontendEnvSecurity({ VITE_API_BASE: '/api/v1' }, { command: 'build', mode: 'production' }),
+    ).toEqual([])
+  })
+})
+

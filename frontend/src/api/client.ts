@@ -59,29 +59,79 @@ const PREVIEW_LIMIT = 400
 export interface ApiClientIdentity {
   token?: string | null
   devRoles?: string | null
+  csrfToken?: string | null
+  sessionId?: string | null
+}
+
+const SESSION_ID_STORAGE_KEY = 'drillai.auth.session_id'
+const CSRF_STORAGE_KEY = 'drillai.auth.csrf_token'
+
+function readSessionStorage(key: string): string | null {
+  try {
+    return typeof window !== 'undefined' ? window.sessionStorage.getItem(key) : null
+  } catch {
+    return null
+  }
+}
+
+function writeSessionStorage(key: string, value: string | null): void {
+  try {
+    if (typeof window === 'undefined') return
+    if (value) {
+      window.sessionStorage.setItem(key, value)
+    } else {
+      window.sessionStorage.removeItem(key)
+    }
+  } catch {
+    // Ignore storage quota/privacy failures; in-memory state still works.
+  }
 }
 
 let identity: ApiClientIdentity = {
-  token: (import.meta.env.VITE_API_TOKEN as string | undefined) ?? null,
+  token: null,
   devRoles: null,
+  csrfToken: readSessionStorage(CSRF_STORAGE_KEY),
+  sessionId: readSessionStorage(SESSION_ID_STORAGE_KEY),
 }
 
 const identityListeners = new Set<() => void>()
 
 /** The identity as a single comparable string, for consumers that need to react to it changing. */
-export function identityKey(identity: ApiClientIdentity = getIdentity()): string {
-  return `${identity.token ? 'token' : ''}|${identity.devRoles ?? ''}`
+export function identityKey(current: ApiClientIdentity = getIdentity()): string {
+  return `${current.token ? 'token' : ''}|${current.sessionId ?? ''}|${current.devRoles ?? ''}`
 }
 
 export function setIdentity(next: ApiClientIdentity): void {
   const before = identityKey(identity)
-  identity = next
+  identity = {
+    ...identity,
+    ...next,
+  }
   if (identityKey(identity) === before) return
   // The identity is external mutable state, and one consumer — the event stream — has to react to it
   // whether or not anything else re-renders. TanStack Query's structural sharing means a refetch that
   // returns the same data can leave a component untouched, so "a render will happen" is not a
   // dependency: this is.
   for (const listener of identityListeners) listener()
+}
+
+export function setSessionAuth(session: { sessionId: string | null; csrfToken: string | null }): void {
+  writeSessionStorage(SESSION_ID_STORAGE_KEY, session.sessionId)
+  writeSessionStorage(CSRF_STORAGE_KEY, session.csrfToken)
+  setIdentity({
+    sessionId: session.sessionId,
+    csrfToken: session.csrfToken,
+  })
+}
+
+export function clearSessionAuth(): void {
+  writeSessionStorage(SESSION_ID_STORAGE_KEY, null)
+  writeSessionStorage(CSRF_STORAGE_KEY, null)
+  setIdentity({
+    sessionId: null,
+    csrfToken: null,
+    token: null,
+  })
 }
 
 /** Subscribe to identity changes; returns the unsubscribe function. */
@@ -427,9 +477,15 @@ function readEnvelope(payload: unknown, status: number, statusText: string): Env
 }
 
 export async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  const method = (options.method ?? 'GET').toUpperCase()
   const headers: Record<string, string> = { Accept: 'application/json' }
   if (identity.token) headers.Authorization = `Bearer ${identity.token}`
-  else if (identity.devRoles) headers['X-Dev-Roles'] = identity.devRoles
+  else if (identity.devRoles && !identity.sessionId && !import.meta.env.PROD) {
+    headers['X-Dev-Roles'] = identity.devRoles
+  }
+  if (identity.csrfToken && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+    headers['X-CSRF-Token'] = identity.csrfToken
+  }
   if (options.idempotencyKey) headers['Idempotency-Key'] = options.idempotencyKey
 
   const init: RequestInit = {
@@ -569,6 +625,17 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
     }
   }
 
+  if (isRecord(payload)) {
+    if (typeof payload.csrf_token === 'string' && payload.csrf_token) {
+      setSessionAuth({
+        sessionId: typeof payload.session_id === 'string' ? payload.session_id : (identity.sessionId ?? null),
+        csrfToken: payload.csrf_token,
+      })
+    } else if (path === '/auth/logout') {
+      clearSessionAuth()
+    }
+  }
+
   return payload as T
 }
 
@@ -608,6 +675,8 @@ export const api = {
    */
   patch: <T>(path: string, body?: unknown, options: Omit<RequestOptions, 'method' | 'body'> = {}) =>
     request<T>(path, { ...options, method: 'PATCH', body }),
+  delete: <T>(path: string, options: Omit<RequestOptions, 'method' | 'body'> = {}) =>
+    request<T>(path, { ...options, method: 'DELETE' }),
   /** Multipart upload through the same boundary, so it inherits the timeout and the error contract. */
   upload: <T>(path: string, form: FormData, options: Omit<RequestOptions, 'method' | 'body'> = {}) =>
     request<T>(path, { ...options, method: 'POST', form }),

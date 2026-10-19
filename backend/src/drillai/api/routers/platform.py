@@ -94,10 +94,13 @@ async def identity(
 
     settings = get_settings()
     principal = auth.principal
-    return {
+    payload: dict[str, Any] = {
         "principal_id": principal.id,
         "principal_kind": getattr(principal, "kind", "user"),
+        "display_name": principal.display_name,
+        "user_email": auth.user_email,
         "org_id": auth.org_id,
+        "session_id": auth.session_id,
         "role_keys": list(principal.role_keys),
         "roles": [
             {
@@ -120,16 +123,20 @@ async def identity(
             for role in ROLE_CATALOGUE
         ],
         "permissions": sorted(principal.permissions),
+        "scopes": list(principal.scopes),
         "max_action_level": principal.max_action_level.value,
         "auth_enabled": settings.auth_enabled,
-        "identity_source": "bearer_token" if settings.auth_enabled else "development_header",
-        "development_presets": list(DEV_ROLE_PRESETS),
+        "identity_source": auth.identity_source if settings.auth_enabled else "development_header",
+        "development_presets": [] if settings.auth_enabled else list(DEV_ROLE_PRESETS),
         "locale": auth.locale,
         "note": (
             "Permissions are patterns (for example 'well.*'). The server evaluates them on every "
             "request; the UI uses them only to avoid offering actions that will be refused."
         ),
     }
+    if auth.csrf_token:
+        payload["csrf_token"] = auth.csrf_token
+    return payload
 
 
 @router.get("/platform/providers", summary="LLM providers and models")

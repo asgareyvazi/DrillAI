@@ -16,6 +16,8 @@ Security rules enforced here (and nowhere else):
 from __future__ import annotations
 
 import datetime as dt
+import hashlib
+import hmac
 from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass
 from typing import Annotated, Any
@@ -30,16 +32,17 @@ from drillai.core.clock import UTC
 from drillai.core.config import get_settings
 from drillai.core.errors import AuthenticationRequired, PermissionDenied
 from drillai.core.ids import new_id
-from drillai.db.models import ApiToken, Membership, Organization, User
+from drillai.db.models import ApiToken, Membership, Organization, User, UserSession
 from drillai.db.session import Database
 from drillai.security.actions import ActionLevel, Principal
-from drillai.security.rbac import ROLE_CATALOGUE, SYSTEM_ROLES, principal_from_roles, require_permissions
+from drillai.security.rbac import SYSTEM_ROLES, principal_from_roles, require_permissions
 
 __all__ = [
     "AuthContext",
     "OptionalFilter",
     "current_auth",
     "current_principal",
+    "derive_session_csrf_token",
     "get_database",
     "get_db",
     "require",
@@ -83,13 +86,25 @@ async def get_db(request: Request) -> AsyncIterator[AsyncSession]:
 
 @dataclass(frozen=True)
 class AuthContext:
-    """The authenticated request: principal plus the token record that identified it."""
+    """The authenticated request: principal plus the session or token record that identified it."""
 
     principal: Principal
     org_id: str | None
     token_id: str | None = None
+    session_id: str | None = None
+    identity_source: str = "development_header"
+    user_email: str | None = None
+    csrf_token: str | None = None
     locale: str = "en"
     unit_system: str = "field_us"
+
+
+def derive_session_csrf_token(session_id: str, session_token_hash: str) -> str:
+    """Derive the per-session CSRF synchronizer token bound to the server's CSRF key and session digest."""
+    settings = get_settings()
+    key = (settings.session_csrf_secret or settings.secret_master_key or "drillai-csrf-key").encode("utf-8")
+    msg = f"csrf:v1:{session_id}:{session_token_hash}".encode()
+    return hmac.new(key, msg, hashlib.sha256).hexdigest()
 
 
 def _dev_principal(org_id: str, role_keys: list[str]) -> Principal:
@@ -124,8 +139,13 @@ async def _resolve_token(session: AsyncSession, token: str) -> tuple[ApiToken, U
     ).scalar_one_or_none()
     if row is None or row.revoked_at is not None:
         raise AuthenticationRequired("token is not recognised")
-    if row.expires_at is not None and row.expires_at <= dt.datetime.now(tz=UTC):
-        raise AuthenticationRequired("token has expired")
+    now = dt.datetime.now(tz=UTC)
+    expires_at = row.expires_at
+    if expires_at is not None:
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=UTC)
+        if expires_at <= now:
+            raise AuthenticationRequired("token has expired")
     from drillai.security.passwords import verify_token
 
     if not verify_token(token, row.token_prefix, row.token_hash):
@@ -133,8 +153,57 @@ async def _resolve_token(session: AsyncSession, token: str) -> tuple[ApiToken, U
     user = (await session.execute(select(User).where(User.id == row.user_id))).scalar_one_or_none()
     if user is None or not user.is_active:
         raise AuthenticationRequired("token owner is not active")
-    row.last_used_at = dt.datetime.now(tz=UTC)
+    org = (
+        await session.execute(select(Organization).where(Organization.id == row.org_id))
+    ).scalar_one_or_none()
+    if org is None or not org.is_active:
+        raise AuthenticationRequired("token organization is not active")
+    row.last_used_at = now
     return row, user
+
+
+async def _resolve_session(session: AsyncSession, cookie_token: str) -> tuple[UserSession, User, str]:
+    parts = cookie_token.split("_")
+    if len(parts) < 3 or parts[0] != "ds":
+        raise AuthenticationRequired("malformed session cookie")
+    token_prefix = parts[1]
+    candidates = (
+        await session.execute(
+            select(UserSession).where(UserSession.session_token_prefix == token_prefix)
+        )
+    ).scalars().all()
+    if not candidates:
+        raise AuthenticationRequired("session is not recognised")
+    from drillai.security.passwords import constant_time_equals, hash_token, verify_token
+
+    matched: UserSession | None = None
+    for row in candidates:
+        if verify_token(cookie_token, row.session_token_prefix, row.session_token_hash):
+            matched = row
+            break
+    if matched is None or matched.revoked_at is not None:
+        raise AuthenticationRequired("session is not active or has been revoked")
+    now = dt.datetime.now(tz=UTC)
+    expires_at = matched.expires_at
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=UTC)
+    if expires_at <= now:
+        raise AuthenticationRequired("session has expired")
+    user = (
+        await session.execute(select(User).where(User.id == matched.user_id))
+    ).scalar_one_or_none()
+    if user is None or not user.is_active:
+        raise AuthenticationRequired("session user is not active")
+    org = (
+        await session.execute(select(Organization).where(Organization.id == matched.org_id))
+    ).scalar_one_or_none()
+    if org is None or not org.is_active:
+        raise AuthenticationRequired("session organization is not active")
+    csrf_token = derive_session_csrf_token(matched.id, matched.session_token_hash)
+    if not constant_time_equals(hash_token("csrf", csrf_token), matched.csrf_token_hash):
+        raise AuthenticationRequired("session CSRF binding is invalid")
+    matched.last_seen_at = now
+    return matched, user, csrf_token
 
 
 async def _membership_roles(session: AsyncSession, user: User, org_id: str | None) -> list[Any]:
@@ -143,14 +212,14 @@ async def _membership_roles(session: AsyncSession, user: User, org_id: str | Non
     stmt = select(Membership).where(Membership.user_id == user.id, Membership.org_id == org_id)
     rows = (await session.execute(stmt)).scalars().all()
     now = dt.datetime.now(tz=UTC)
-    keys = [
-        row.role_key
-        for row in rows
-        if row.expires_at is None or row.expires_at > now
-    ]
-    return [SYSTEM_ROLES[key] for key in keys if key in SYSTEM_ROLES] or [
-        role for role in ROLE_CATALOGUE if role.key == "viewer"
-    ]
+    keys: list[str] = []
+    for row in rows:
+        exp = row.expires_at
+        if exp is not None and exp.tzinfo is None:
+            exp = exp.replace(tzinfo=UTC)
+        if exp is None or exp > now:
+            keys.append(row.role_key)
+    return [SYSTEM_ROLES[key] for key in keys if key in SYSTEM_ROLES]
 
 
 async def current_auth(
@@ -158,30 +227,72 @@ async def current_auth(
     session: Annotated[AsyncSession, Depends(get_db)],
     authorization: Annotated[str | None, Header()] = None,
     x_dev_roles: Annotated[str | None, Header()] = None,
+    x_csrf_token: Annotated[str | None, Header()] = None,
     accept_language: Annotated[str | None, Header()] = None,
 ) -> AuthContext:
     settings = get_settings()
+    if accept_language is None and hasattr(request, "headers"):
+        accept_language = request.headers.get("accept-language")
     locale = (accept_language or "en").split(",")[0].split("-")[0].strip() or "en"
 
     if settings.auth_enabled:
-        if not authorization or not authorization.lower().startswith("bearer "):
-            raise AuthenticationRequired("a bearer token is required")
-        token_row, user = await _resolve_token(session, authorization.split(" ", 1)[1].strip())
-        roles = await _membership_roles(session, user, token_row.org_id)
-        principal = principal_from_roles(
-            principal_id=user.id,
-            org_id=token_row.org_id,
-            roles=roles,
-            display_name=user.display_name,
-            scopes=tuple(token_row.scopes or ()),
-        )
-        return AuthContext(
-            principal=principal,
-            org_id=token_row.org_id,
-            token_id=token_row.id,
-            locale=locale,
-            unit_system=user.unit_system or "field_us",
-        )
+        if authorization is None and hasattr(request, "headers"):
+            authorization = request.headers.get("authorization")
+        if authorization and authorization.lower().startswith("bearer "):
+            token_row, user = await _resolve_token(session, authorization.split(" ", 1)[1].strip())
+            roles = await _membership_roles(session, user, token_row.org_id)
+            principal = principal_from_roles(
+                principal_id=user.id,
+                org_id=token_row.org_id,
+                roles=roles,
+                display_name=user.display_name,
+                scopes=tuple(token_row.scopes or ()),
+            )
+            return AuthContext(
+                principal=principal,
+                org_id=token_row.org_id,
+                token_id=token_row.id,
+                identity_source="bearer_token",
+                user_email=user.email,
+                locale=locale,
+                unit_system=user.unit_system or "field_us",
+            )
+
+        cookies = getattr(request, "cookies", None) or {}
+        cookie_token = cookies.get(settings.session_cookie_name)
+        if cookie_token:
+            session_row, user, expected_csrf = await _resolve_session(session, cookie_token.strip())
+            method = (getattr(request, "method", "GET") or "GET").upper()
+            if method in {"POST", "PUT", "PATCH", "DELETE"}:
+                supplied_csrf = x_csrf_token
+                if supplied_csrf is None and hasattr(request, "headers"):
+                    supplied_csrf = request.headers.get("x-csrf-token")
+                from drillai.security.passwords import constant_time_equals
+
+                if not supplied_csrf or not constant_time_equals(supplied_csrf.strip(), expected_csrf):
+                    raise PermissionDenied(
+                        "CSRF synchronizer token is missing or invalid for cookie-authenticated state change",
+                        details={"reason": "csrf_validation_failed", "header": "X-CSRF-Token"},
+                    )
+            roles = await _membership_roles(session, user, session_row.org_id)
+            principal = principal_from_roles(
+                principal_id=user.id,
+                org_id=session_row.org_id,
+                roles=roles,
+                display_name=user.display_name,
+            )
+            return AuthContext(
+                principal=principal,
+                org_id=session_row.org_id,
+                session_id=session_row.id,
+                identity_source="session_cookie",
+                user_email=user.email,
+                csrf_token=expected_csrf,
+                locale=locale,
+                unit_system=user.unit_system or "field_us",
+            )
+
+        raise AuthenticationRequired("a bearer token or active session cookie is required")
 
     if settings.is_production:  # pragma: no cover - defensive, config validator also guards this
         raise AuthenticationRequired("authentication cannot be disabled in production")

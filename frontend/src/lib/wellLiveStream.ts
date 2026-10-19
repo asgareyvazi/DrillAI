@@ -345,9 +345,14 @@ export function wellLiveStreamUrl(
   if (cursorState.cursor) {
     url.searchParams.set('cursor', cursorState.cursor)
   }
-  if (identity.token) {
-    url.searchParams.set('token', identity.token)
-  } else if (identity.devRoles && (options.allowDevRoles ?? !import.meta.env.PROD)) {
+  // Browser sessions authenticate via the HttpOnly session cookie (`drillai_session`) sent
+  // automatically on same-origin WebSocket upgrades; credentials are never placed in query strings.
+  if (
+    !identity.token &&
+    !identity.sessionId &&
+    identity.devRoles &&
+    (options.allowDevRoles ?? !import.meta.env.PROD)
+  ) {
     url.searchParams.set('dev_roles', identity.devRoles)
   }
   return url.toString()

@@ -67,4 +67,74 @@ test.describe('an authentication-enabled deployment', () => {
 
     expect(appConsoleErrors(consoleErrors), `console errors: ${consoleErrors.join(' | ')}`).toEqual([])
   })
+
+  test('interactive per-user login, HttpOnly cookie session, RBAC role ceiling, WebSocket cookie auth, and server-side logout invalidation', async ({
+    page,
+    consoleErrors,
+  }) => {
+    const wsUrls: string[] = []
+    page.on('websocket', (ws) => {
+      if (ws.url().includes('/api/v1/')) wsUrls.push(ws.url())
+    })
+
+    await page.goto('/wells')
+    await expect(page.getByTestId('shell-unauthenticated')).toBeVisible()
+    await expect(page.getByTestId('shell-role-switch')).toHaveCount(0)
+
+    // Navigate to the login page via the shell Sign in link
+    await page.getByTestId('shell-login-link').click()
+    await expect(page.getByTestId('login-form')).toBeVisible()
+
+    // 1. Invalid password produces a 401 unauthenticated error on the login form
+    await page.getByTestId('login-email-input').fill('viewer@demo.drillai.local')
+    await page.getByTestId('login-password-input').fill('WrongPassword!2026')
+    await page.getByTestId('login-submit-button').click()
+    await expect(errorState(page)).toHaveAttribute('data-error-kind', 'unauthenticated')
+
+    // 2. Sign in as Viewer (`viewer@demo.drillai.local`)
+    await page.getByTestId('login-password-input').fill('DrillAI-Dev-Only-Pass!2026')
+    await page.getByTestId('login-submit-button').click()
+
+    await expect(page).toHaveURL(/\/wells$/)
+    await expect(page.getByTestId('shell-auth-principal')).toContainText('Demo Viewer')
+    await expect(page.getByTestId('shell-identity')).toHaveAttribute('data-ceiling', 'L0')
+    await expect(page.getByTestId('shell-role-switch')).toHaveCount(0)
+
+    // Verify document.cookie does NOT expose the HttpOnly drillai_session cookie to JS
+    const jsCookie = await page.evaluate(() => document.cookie)
+    expect(jsCookie).not.toContain('drillai_session')
+
+    // 3. Sign out as Viewer and verify `/wells` immediately returns to 401 unauthenticated
+    await page.getByTestId('shell-logout-button').click()
+    await expect(page.getByTestId('shell-unauthenticated')).toBeVisible()
+    await expect(errorState(page).first()).toHaveAttribute('data-error-kind', 'unauthenticated')
+
+    // 4. Sign in as Drilling Supervisor (`supervisor@demo.drillai.local`) and verify L4 ceiling + CSRF mutation + WebSocket cookie auth
+    await page.getByTestId('shell-login-link').click()
+    await page.getByTestId('login-email-input').fill('supervisor@demo.drillai.local')
+    await page.getByTestId('login-password-input').fill('DrillAI-Dev-Only-Pass!2026')
+    await page.getByTestId('login-submit-button').click()
+
+    await expect(page.getByTestId('shell-auth-principal')).toContainText('Demo Drilling Supervisor')
+    await expect(page.getByTestId('shell-identity')).toHaveAttribute('data-ceiling', 'L4')
+
+    // Open the seeded well's cockpit live stream and verify WebSocket connects via HttpOnly cookie with NO ?token= in URL
+    const wellLink = page.locator('a[href*="/wells/"][href$="/cockpit"]').first()
+    await expect(wellLink).toBeVisible()
+    const cockpitHref = await wellLink.getAttribute('href')
+    expect(cockpitHref).toBeTruthy()
+    await page.goto(`${cockpitHref}?tab=live`)
+    await expect(page.getByTestId('live-transport-state')).toHaveText(/LIVE/i, { timeout: 20_000 })
+    expect(wsUrls.length).toBeGreaterThan(0)
+    for (const url of wsUrls) {
+      expect(url).not.toContain('token=')
+      expect(url).not.toContain('dev_roles=')
+    }
+
+    // Final logout invalidates the server-side session
+    await page.getByTestId('shell-logout-button').click()
+    await expect(page.getByTestId('shell-unauthenticated')).toBeVisible()
+
+    expect(appConsoleErrors(consoleErrors), `console errors: ${consoleErrors.join(' | ')}`).toEqual([])
+  })
 })

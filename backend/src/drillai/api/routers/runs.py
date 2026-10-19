@@ -411,19 +411,23 @@ async def stream_run_events(websocket: WebSocket, run_id: str, after_seq: int = 
     await websocket.accept()
     settings = websocket.app.state.settings
     database = websocket.app.state.database
-    token = websocket.query_params.get("token")
-    # Headers first (a native client can set them), then the query string, which is the only channel a
-    # browser has during a WebSocket handshake. `current_auth` accepts the latter in development only.
+    if websocket.query_params.get("token"):
+        await websocket.close(
+            code=4401,
+            reason="query-string bearer tokens are forbidden; use HttpOnly session cookie or Authorization header",
+        )
+        return
+    auth_header = websocket.headers.get("authorization")
     dev_roles = websocket.headers.get("x-dev-roles") or websocket.query_params.get("dev_roles")
     principal_ok = False
     try:
         async with database.session() as session:
             headers = {}
-            if token:
-                headers["authorization"] = f"Bearer {token}"
+            if auth_header:
+                headers["authorization"] = auth_header
             if dev_roles:
                 headers["x-dev-roles"] = dev_roles
-            request = _HeaderShim(headers, dict(websocket.query_params))
+            request = _HeaderShim(headers, dict(websocket.query_params), cookies=dict(websocket.cookies))
             auth = await current_auth(request, session)  # type: ignore[arg-type]
             if not auth.principal.has_permission("workflow.read"):
                 await websocket.close(code=4403, reason="workflow.read is required")
@@ -523,14 +527,22 @@ async def _watch_client_disconnect(websocket: WebSocket) -> None:
 class _HeaderShim:
     """Minimal request-like object so the HTTP auth dependency can be reused for WebSockets.
 
-    A WebSocket handshake cannot carry arbitrary request headers from a browser, so the query string
-    is part of the shim: that is where a browser hands over its bearer token, and — in development
-    only — the identity it wants to act as. The dependency itself decides whether either is trusted.
+    Browser sessions authenticate via the HttpOnly session cookie carried automatically on the
+    WebSocket handshake (`websocket.cookies`), while native clients may send `Authorization: Bearer`
+    in handshake headers, and development mode (`DRILLAI_AUTH_ENABLED=false`) accepts `dev_roles`.
     """
 
-    def __init__(self, headers: dict[str, str], query: dict[str, str] | None = None) -> None:
+    def __init__(
+        self,
+        headers: dict[str, str],
+        query: dict[str, str] | None = None,
+        *,
+        cookies: dict[str, str] | None = None,
+    ) -> None:
         self.headers = headers
         self.query_params = query or {}
+        self.cookies = cookies or {}
+        self.method = "GET"
 
     @property
     def url(self) -> Any:  # pragma: no cover - only used by error handlers

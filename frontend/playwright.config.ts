@@ -154,8 +154,8 @@ export default defineConfig({
       },
     },
     {
-      // The same API with authentication enabled: every request without a credential is refused by
-      // the real authorization path. No fixtures — the 401 journey never gets far enough to need data.
+      // The same API with authentication enabled: anonymous requests are refused with 401, and
+      // interactive browser login/session/RBAC/WebSocket/logout journeys run against seeded demo users.
       command: 'node e2e/start-api.mjs',
       url: `${AUTH_API_URL}/api/v1/health`,
       reuseExistingServer: false,
@@ -166,7 +166,7 @@ export default defineConfig({
         DRILLAI_E2E_API_PORT: String(AUTH_API_PORT),
         DRILLAI_E2E_DATA_DIR: '.e2e-auth',
         DRILLAI_E2E_AUTH: 'true',
-        DRILLAI_E2E_SEED: 'false',
+        DRILLAI_E2E_SEED: 'true',
       },
     },
     {

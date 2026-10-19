@@ -125,6 +125,17 @@ class Settings(BaseSettings):
     dev_org_slug: str = "demo-operator"
     secret_backend: Literal["env", "database"] = "env"
     secret_master_key: str = ""  # required for the database secret backend
+    secret_previous_master_keys: str = ""  # comma-separated versioned keys (e.g. v1:<key>) for rotation
+    secret_active_key_version: int = 1
+    session_cookie_name: str = "drillai_session"
+    session_cookie_secure: bool = False
+    session_cookie_samesite: Literal["lax", "strict", "none"] = "lax"
+    session_ttl_hours: int = 12
+    session_csrf_secret: str = "drillai-dev-csrf-synchronizer-key"
+    auth_rate_limit_window_seconds: int = 300
+    auth_rate_limit_max_failures: int = 5
+    auth_rate_limit_lockout_seconds: int = 300
+    password_kdf_max_concurrency: int = 4
 
     # ------------------------------------------------------------------ integrations
     email_provider: Literal["disabled", "smtp"] = "disabled"

@@ -176,8 +176,16 @@ class Principal:
         return self.kind == "anonymous" or not self.id
 
     def has_permission(self, permission: str) -> bool:
-        """Pattern-aware: ``engine.*`` in the role must satisfy ``engine.run``."""
-        return permission_matches(self.permissions, permission)
+        """Pattern-aware: ``engine.*`` in the role must satisfy ``engine.run``.
+
+        When a principal is authenticated via a scoped API token (`scopes` non-empty), the effective
+        grant is the intersection of the user's role permissions and the token's declared scopes.
+        """
+        if not permission_matches(self.permissions, permission):
+            return False
+        if self.scopes:
+            return permission_matches(self.scopes, permission)
+        return True
 
 
 def envelope_allows(

@@ -1,14 +1,15 @@
 /// <reference types="vite/client" />
 
 /**
- * Environment variables the browser bundle reads.
+ * Public environment variables the browser bundle reads.
  *
- * `VITE_API_TOKEN` is for deployments where the UI is served behind an authenticated gateway that
- * injects a token; it must never be set to a long-lived credential in a public build.
+ * Security invariant: privileged server secrets and shared bearer tokens (`VITE_API_TOKEN`) must
+ * NEVER be exposed under `VITE_*` in production builds (`drillai-env-security-guard` rejects them
+ * at build time). Browser authentication uses per-user HttpOnly session cookies + CSRF tokens.
  */
 interface ImportMetaEnv {
   readonly VITE_API_BASE?: string
-  readonly VITE_API_TOKEN?: string
+  readonly VITE_API_TIMEOUT_MS?: string
 }
 
 interface ImportMeta {

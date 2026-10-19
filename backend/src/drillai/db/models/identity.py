@@ -19,6 +19,7 @@ from drillai.db.base import (
     Base,
     CreatedAtMixin,
     IdMixin,
+    IntType,
     JsonType,
     OrgScopedMixin,
     TextType,
@@ -235,3 +236,51 @@ class ApiToken(Base, IdMixin, CreatedAtMixin, OrgScopedMixin):
     expires_at: Mapped[dt.datetime | None] = mapped_column(UtcDateTime)
     last_used_at: Mapped[dt.datetime | None] = mapped_column(UtcDateTime)
     revoked_at: Mapped[dt.datetime | None] = mapped_column(UtcDateTime)
+
+
+class UserSession(Base, IdMixin, TimestampMixin, OrgScopedMixin):
+    """Interactive browser session backed by an HttpOnly cookie and CSRF synchronizer token."""
+
+    __tablename__ = "user_sessions"
+    id_prefix = "ses"
+
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    session_token_prefix: Mapped[str] = mapped_column(String(16), nullable=False, index=True)
+    session_token_hash: Mapped[str] = mapped_column(String(128), unique=True, nullable=False, index=True)
+    csrf_token_hash: Mapped[str] = mapped_column(String(128), nullable=False)
+    ip_address: Mapped[str | None] = mapped_column(String(64))
+    user_agent: Mapped[str | None] = mapped_column(String(300))
+    expires_at: Mapped[dt.datetime] = mapped_column(UtcDateTime, nullable=False, index=True)
+    last_seen_at: Mapped[dt.datetime] = mapped_column(UtcDateTime, nullable=False)
+    revoked_at: Mapped[dt.datetime | None] = mapped_column(UtcDateTime, index=True)
+    revoked_reason: Mapped[str | None] = mapped_column(String(120))
+
+
+class PasswordResetToken(Base, IdMixin, CreatedAtMixin, OrgScopedMixin):
+    """Single-use, time-bounded password reset / invitation token (only digest is stored)."""
+
+    __tablename__ = "password_reset_tokens"
+    id_prefix = "prt"
+
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    token_prefix: Mapped[str] = mapped_column(String(16), nullable=False, index=True)
+    token_hash: Mapped[str] = mapped_column(String(128), unique=True, nullable=False)
+    issued_by_id: Mapped[str | None] = mapped_column(String(64))
+    expires_at: Mapped[dt.datetime] = mapped_column(UtcDateTime, nullable=False, index=True)
+    used_at: Mapped[dt.datetime | None] = mapped_column(UtcDateTime)
+    revoked_at: Mapped[dt.datetime | None] = mapped_column(UtcDateTime)
+
+
+class AuthRateLimitBucket(Base, IdMixin, TimestampMixin):
+    """Multi-worker durable rate-limit bucket for authentication, password reset, and token minting."""
+
+    __tablename__ = "auth_rate_limits"
+    id_prefix = "arl"
+
+    bucket_key: Mapped[str] = mapped_column(String(200), unique=True, nullable=False, index=True)
+    scope: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
+    window_started_at: Mapped[dt.datetime] = mapped_column(UtcDateTime, nullable=False)
+    failure_count: Mapped[int] = mapped_column(IntType, default=0, nullable=False)
+    blocked_until: Mapped[dt.datetime | None] = mapped_column(UtcDateTime, index=True)
+    last_attempt_at: Mapped[dt.datetime] = mapped_column(UtcDateTime, nullable=False)
+

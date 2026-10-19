@@ -302,7 +302,11 @@ permissions_match = permission_matches
 
 
 def permission_granted(principal: Principal, permission: str) -> bool:
-    return permissions_match(principal.permissions, permission)
+    if not permissions_match(principal.permissions, permission):
+        return False
+    if principal.scopes:
+        return permissions_match(principal.scopes, permission)
+    return True
 
 
 def require_permissions(principal: Principal, *permissions: str) -> None:

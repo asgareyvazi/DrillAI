@@ -24,6 +24,7 @@ import RunMonitor from './pages/workflow/RunMonitor'
 import LibraryPage from './pages/library/LibraryPage'
 import ConnectorsPage from './pages/library/ConnectorsPage'
 import PlatformPage from './pages/library/PlatformPage'
+import LoginPage from './pages/auth/LoginPage'
 import NotFound from './pages/NotFound'
 
 class PageErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
@@ -80,6 +81,14 @@ export function App() {
     <Routes>
       <Route element={<AppShell />}>
         <Route index element={<Navigate to="/wells" replace />} />
+        <Route
+          path="/login"
+          element={
+            <PageErrorBoundary>
+              <LoginPage />
+            </PageErrorBoundary>
+          }
+        />
         <Route
           path="/wells"
           element={

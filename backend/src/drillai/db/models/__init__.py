@@ -92,7 +92,17 @@ from drillai.db.models.equipment import (
     Service,
     ServiceCompany,
 )
-from drillai.db.models.identity import SYSTEM_ROLES, ApiToken, Membership, Organization, Role, User
+from drillai.db.models.identity import (
+    SYSTEM_ROLES,
+    ApiToken,
+    AuthRateLimitBucket,
+    Membership,
+    Organization,
+    PasswordResetToken,
+    Role,
+    User,
+    UserSession,
+)
 from drillai.db.models.operations import (
     CAUSE_BASES,
     CLASSIFICATION_SOURCES,
@@ -178,7 +188,7 @@ from drillai.db.models.workflow import (
 
 ALL_MODELS = [
     # identity & tenancy
-    Organization, User, Role, Membership, ApiToken,
+    Organization, User, Role, Membership, ApiToken, UserSession, PasswordResetToken, AuthRateLimitBucket,
     # assets & well physical description
     Project, Field, Rig, Well, Wellbore, Formation, WellFormationMarker, WellSection,
     Trajectory, TrajectoryStation,
@@ -281,6 +291,7 @@ __all__ = [
     "Artifact",
     "ArtifactVersion",
     "AuditLog",
+    "AuthRateLimitBucket",
     "Base",
     "BomRequirement",
     "CandidateSolution",
@@ -329,6 +340,7 @@ __all__ = [
     "OutboxEvent",
     "OutboxSequence",
     "OutboxWellSequence",
+    "PasswordResetToken",
     "PolicyBinding",
     "Project",
     "PromptTemplate",
@@ -362,6 +374,7 @@ __all__ = [
     "TwinAspect",
     "TwinSnapshot",
     "User",
+    "UserSession",
     "ValidationFinding",
     "Well",
     "WellFormationMarker",

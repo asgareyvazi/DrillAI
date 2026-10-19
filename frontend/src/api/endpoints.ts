@@ -48,6 +48,9 @@ import type {
   NodeRunState,
   RunDetail,
   PlatformIdentity,
+  AuthSessionResponse,
+  AuthMeResponse,
+  ApiTokenMetadata,
   NodeTypeCatalogue,
   NptSummary,
   OperationRow,
@@ -571,6 +574,17 @@ export const drillingApi = {
   getWorkflow: (workflowId: string, params: { version?: number; include_graph?: boolean } = {}, signal?: AbortSignal) =>
     api.get<WorkflowDetail>(`/workflows/${enc(workflowId)}`, { query: params, signal }),
   identity: (signal?: AbortSignal) => api.get<PlatformIdentity>('/platform/identity', { signal }),
+  login: (body: { email: string; password: string; org_slug?: string }) =>
+    api.post<AuthSessionResponse>('/auth/login', body),
+  logout: () => api.post<{ status: string; session_id: string | null }>('/auth/logout', {}),
+  authMe: (signal?: AbortSignal) => api.get<AuthMeResponse>('/auth/me', { signal }),
+  changePassword: (body: { current_password: string; new_password: string }) =>
+    api.post<{ status: string; revoked_other_sessions: number }>('/auth/password/change', body),
+  listApiTokens: (signal?: AbortSignal) =>
+    api.get<{ items: ApiTokenMetadata[]; total: number }>('/auth/tokens', { signal }),
+  createApiToken: (body: { name: string; scopes?: string[]; expires_in_days?: number; user_id?: string }) =>
+    api.post<ApiTokenMetadata>('/auth/tokens', body),
+  revokeApiToken: (tokenId: string) => api.delete<ApiTokenMetadata>(`/auth/tokens/${enc(tokenId)}`),
   workflowVersions: (workflowId: string, params: { limit?: number } = {}, signal?: AbortSignal) =>
     api.get<{ items: WorkflowVersionHistoryRow[]; total: number }>(`/workflows/${enc(workflowId)}/versions`, {
       query: params, signal, validate: expect.paged() }),

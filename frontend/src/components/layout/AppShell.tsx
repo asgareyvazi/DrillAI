@@ -6,15 +6,15 @@
  * with unreachable screens.
  */
 
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import clsx from 'clsx'
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { NavLink, Outlet, useParams } from 'react-router-dom'
-import { ApiError, isAbortError } from '../../api/client'
+import { ApiError, clearSessionAuth, isAbortError } from '../../api/client'
 import { drillingApi } from '../../api/endpoints'
 import { LOCALES, LOCALE_LABELS, useI18n, type Locale } from '../../i18n'
 import { useSession, selectedRoleKeys } from '../../stores/session'
-import { Badge } from '../common'
+import { Badge, Button } from '../common'
 import { formatActionLevel } from '../../lib/format'
 
 export interface NavItem {
@@ -76,8 +76,9 @@ function LocaleSwitch() {
  */
 function IdentityControls() {
   const { t } = useI18n()
+  const queryClient = useQueryClient()
   const { devRoles, setDevRoles, unitSystem, setUnitSystem } = useSession()
-  const tokenConfigured = Boolean(import.meta.env.VITE_API_TOKEN)
+  const [loggingOut, setLoggingOut] = useState(false)
   // The same query key the studio reads: one identity, one cached answer, shared.
   const identity = useQuery({ queryKey: ['identity', devRoles], queryFn: ({ signal }) => drillingApi.identity(signal) })
 
@@ -97,6 +98,23 @@ function IdentityControls() {
     .map((role) => role.name)
     .join(', ')
 
+  const isAuthEnabled = identity.data?.auth_enabled === true
+  const isUnauthenticated = identity.error instanceof ApiError && identity.error.isUnauthenticated
+  const showDevSwitcher = !import.meta.env.PROD && !isAuthEnabled && !isUnauthenticated
+
+  async function handleLogout() {
+    setLoggingOut(true)
+    try {
+      await drillingApi.logout()
+    } catch {
+      // Even if the network call fails, clear local session state and reset cached queries.
+    } finally {
+      clearSessionAuth()
+      await queryClient.resetQueries()
+      setLoggingOut(false)
+    }
+  }
+
   return (
     <div className="flex flex-wrap items-center gap-3">
       <label className="flex items-center gap-1.5 text-xs">
@@ -110,9 +128,37 @@ function IdentityControls() {
           <option value="oilfield">Oilfield</option>
         </select>
       </label>
-      {tokenConfigured ? (
-        <Badge tone="ok">{t('roles.bearerConfigured')}</Badge>
-      ) : (
+      {isAuthEnabled && identity.data && (
+        <div className="flex items-center gap-2">
+          <Badge tone="ok" data-testid="shell-auth-principal">
+            {identity.data.display_name || identity.data.user_email || identity.data.principal_id}
+          </Badge>
+          <Button
+            size="sm"
+            variant="default"
+            disabled={loggingOut}
+            onClick={() => void handleLogout()}
+            data-testid="shell-logout-button"
+          >
+            {loggingOut ? t('auth.signingOut') : t('auth.signOut')}
+          </Button>
+        </div>
+      )}
+      {isUnauthenticated && (
+        <div className="flex items-center gap-2">
+          <Badge tone="warning" data-testid="shell-unauthenticated">
+            {t('auth.notSignedIn')}
+          </Badge>
+          <NavLink
+            to="/login"
+            data-testid="shell-login-link"
+            className="rounded border border-signal bg-signal px-2.5 py-1 text-xs font-medium text-white hover:bg-signal-deep"
+          >
+            {t('auth.signIn')}
+          </NavLink>
+        </div>
+      )}
+      {showDevSwitcher && (
         <label className="flex items-center gap-1.5 text-xs" title={t('roles.note')}>
           <span className="text-graphite-500">{t('roles.title')}</span>
           <select
@@ -145,7 +191,7 @@ function IdentityControls() {
           {roleNames || t('roles.none')} · {formatActionLevel(ceiling)}
         </span>
       )}
-      {identity.error && !tokenConfigured && (
+      {Boolean(identity.error) && !isUnauthenticated && !isAuthEnabled && (
         <span className="text-[11px] text-warning" data-testid="roles-not-read">
           {t('roles.notRead')}
         </span>

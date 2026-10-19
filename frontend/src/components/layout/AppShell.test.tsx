@@ -184,6 +184,23 @@ describe('the identity controls', () => {
     expect(select).toHaveValue('engineer,admin')
     expect(screen.queryByTestId('shell-identity')).toBeNull()
   })
+
+  it('hides the development role switcher when auth_enabled is true or when 401 unauthenticated', async () => {
+    api.getWell.mockResolvedValue(wellPayload as never)
+    api.identity.mockResolvedValue({
+      ...identityPayload,
+      auth_enabled: true,
+      identity_source: 'session_cookie',
+      display_name: 'Alice Supervisor',
+      user_email: 'alice@example.com',
+      development_presets: [],
+    } as never)
+    renderShell('/wells')
+
+    await waitFor(() => expect(screen.getByTestId('shell-auth-principal')).toHaveTextContent('Alice Supervisor'))
+    expect(screen.queryByTestId('shell-role-switch')).toBeNull()
+    expect(screen.getByTestId('shell-logout-button')).toBeVisible()
+  })
 })
 
 /**

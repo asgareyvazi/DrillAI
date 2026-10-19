@@ -1277,17 +1277,95 @@ export interface IdentityRole {
 export interface PlatformIdentity {
   principal_id: string
   principal_kind: string
+  display_name?: string | null
+  user_email?: string | null
   org_id: string | null
+  session_id?: string | null
   role_keys: string[]
   roles: IdentityRole[]
   available_roles: Array<IdentityRole & { permissions: string[] }>
   permissions: string[]
+  scopes?: string[]
   max_action_level: ActionLevel
   auth_enabled: boolean
-  identity_source: 'bearer_token' | 'development_header'
+  identity_source: 'session_cookie' | 'bearer_token' | 'development_header'
   development_presets: string[]
   locale: string
   note: string
+  csrf_token?: string | null
+}
+
+export interface AuthUserSummary {
+  id: string
+  email: string | null
+  display_name: string | null
+  job_title?: string | null
+  locale?: string
+  unit_system?: string
+}
+
+export interface AuthOrgSummary {
+  id: string | null
+  slug: string | null
+  name: string | null
+}
+
+export interface AuthSessionResponse {
+  session_id: string
+  csrf_token: string
+  expires_at: string
+  user: AuthUserSummary
+  organization: AuthOrgSummary
+  organizations?: AuthOrgSummary[]
+  principal: {
+    principal_id: string
+    principal_kind?: string
+    display_name?: string | null
+    user_email?: string | null
+    org_id: string | null
+    role_keys: string[]
+    roles?: IdentityRole[]
+    permissions: string[]
+    max_action_level: ActionLevel
+    auth_enabled?: boolean
+    identity_source: 'session_cookie' | 'bearer_token' | 'development_header'
+  }
+}
+
+export interface AuthMeResponse {
+  authenticated: boolean
+  auth_enabled: boolean
+  identity_source: 'session_cookie' | 'bearer_token' | 'development_header'
+  session_id: string | null
+  csrf_token?: string
+  user: AuthUserSummary
+  organization: AuthOrgSummary
+  principal: {
+    principal_id: string
+    principal_kind: string
+    display_name: string | null
+    org_id: string | null
+    role_keys: string[]
+    roles: IdentityRole[]
+    permissions: string[]
+    scopes: string[]
+    max_action_level: ActionLevel
+  }
+}
+
+export interface ApiTokenMetadata {
+  id: string
+  org_id: string
+  user_id: string
+  name: string
+  token_prefix: string
+  scopes: string[]
+  created_at: string | null
+  expires_at: string | null
+  last_used_at: string | null
+  revoked_at: string | null
+  is_active: boolean
+  token?: string
 }
 
 export interface NodeTypeSpec {
