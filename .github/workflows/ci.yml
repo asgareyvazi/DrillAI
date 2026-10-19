@@ -61,7 +61,7 @@ jobs:
     timeout-minutes: 75
     steps:
       - name: Check out the commit under test
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # Provenance first, so every number in the log below is tied to a commit rather than to a
       # branch name that has since moved.
@@ -74,12 +74,12 @@ jobs:
           git status --porcelain
 
       - name: Set up Python ${{ env.PYTHON_VERSION }}
-        uses: actions/setup-python@v7
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Set up Node ${{ env.NODE_VERSION }}
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
@@ -100,7 +100,7 @@ jobs:
       - name: Install the backend (editable, dev extras)
         run: |
           python -m venv backend/.venv
-          backend/.venv/bin/python -m pip install --upgrade pip
+          backend/.venv/bin/python -m pip install --upgrade pip "setuptools>=83.0.0"
           backend/.venv/bin/python -m pip install -e "backend[dev]"
 
       # The lockfile is authoritative: `npm ci` installs exactly what is committed and fails if the
@@ -149,6 +149,9 @@ jobs:
       - name: Frontend production build
         working-directory: frontend
         run: npm run build
+
+      - name: Supply-chain, SHA-pinning, and secret-leakage verification
+        run: backend/.venv/bin/python scripts/verify_supply_chain_and_secrets.py
 
       # ------------------------------------------------------------------ backend gates
       # No `-q` on the command line: `pyproject.toml` already sets it, and a second one suppresses the
@@ -239,6 +242,8 @@ jobs:
           done
           curl -fsS http://127.0.0.1:8000/api/v1/health/ready | grep -q '"status":"ok"'
           curl -fsS http://127.0.0.1:8080/api/v1/health/ready | grep -q '"status":"ok"'
+          curl -fsSI http://127.0.0.1:8080/api/v1/health/ready | grep -iq 'x-content-type-options: nosniff'
+          curl -fsSI http://127.0.0.1:8080/api/v1/health/ready | grep -iq 'content-security-policy:'
           curl -fsS -H "X-Dev-Roles: viewer" http://127.0.0.1:8080/api/v1/connectors/profiles | grep -q '"witsml.1.4.1.1.soap_http"'
           docker compose ps --format json
           {
@@ -292,7 +297,7 @@ jobs:
       # outcome of the run: the step above has already failed the job.
       - name: Upload Playwright evidence
         if: failure()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: playwright-evidence-${{ github.run_id }}
           path: |
@@ -313,7 +318,7 @@ jobs:
       PYTHONIOENCODING: 'utf-8'
     steps:
       - name: Check out the commit under test
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Provenance (Windows PowerShell)
         shell: pwsh
@@ -326,12 +331,12 @@ jobs:
           git status --porcelain
 
       - name: Set up Python ${{ env.PYTHON_VERSION }}
-        uses: actions/setup-python@v7
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Set up Node ${{ env.NODE_VERSION }}
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
@@ -377,6 +382,12 @@ jobs:
         working-directory: frontend
         shell: pwsh
         run: npm run build
+
+      - name: Supply-chain, SHA-pinning, and secret-leakage verification (Windows)
+        shell: pwsh
+        run: |
+          .\backend\.venv\Scripts\python.exe scripts/verify_supply_chain_and_secrets.py
+          if ($LASTEXITCODE -ne 0) { throw "verify_supply_chain_and_secrets.py failed on Windows" }
 
       - name: Backend lint (Windows)
         working-directory: backend
@@ -462,7 +473,7 @@ jobs:
 
       - name: Upload Windows Playwright evidence on failure
         if: failure()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: windows-playwright-evidence-${{ github.run_id }}
           path: |

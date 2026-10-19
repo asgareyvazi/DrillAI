@@ -294,7 +294,26 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     return app
 
 
+DEFAULT_CSP_HEADER = (
+    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
+    "img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' ws: wss:; "
+    "frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+)
+
+
+def _apply_security_headers(headers: Any, *, is_production: bool = False, is_https: bool = False) -> None:
+    headers.setdefault("X-Content-Type-Options", "nosniff")
+    headers.setdefault("X-Frame-Options", "DENY")
+    headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+    headers.setdefault("Content-Security-Policy", DEFAULT_CSP_HEADER)
+    if is_production or is_https:
+        headers.setdefault("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload")
+
+
 def _install_request_middleware(app: FastAPI) -> None:
+    is_prod = bool(getattr(app.state.settings, "is_production", False))
+
     @app.middleware("http")
     async def correlation(request: Request, call_next):  # type: ignore[no-untyped-def]
         request_id = request.headers.get("X-Request-ID") or new_id("req")
@@ -311,6 +330,11 @@ def _install_request_middleware(app: FastAPI) -> None:
             clear_log_context()
         response.headers["X-Request-ID"] = request_id
         response.headers["X-Response-Time-Ms"] = f"{(time.perf_counter() - started) * 1000:.1f}"
+        _apply_security_headers(
+            response.headers,
+            is_production=is_prod,
+            is_https=request.url.scheme == "https" or request.headers.get("X-Forwarded-Proto") == "https",
+        )
         return response
 
 
@@ -334,6 +358,11 @@ def _install_error_handlers(app: FastAPI) -> None:
                 extra={"extra_fields": {"code": exc.code, "path": request.url.path, "message": exc.message}},
             )
         headers = {"Content-Language": _language(request), "X-Request-ID": trace_id}
+        _apply_security_headers(
+            headers,
+            is_production=bool(getattr(app.state.settings, "is_production", False)),
+            is_https=request.url.scheme == "https" or request.headers.get("X-Forwarded-Proto") == "https",
+        )
         if isinstance(exc, AuthenticationRequired):
             headers["WWW-Authenticate"] = "Bearer"
         if isinstance(exc, RateLimited) and exc.details.get("retry_after_seconds"):

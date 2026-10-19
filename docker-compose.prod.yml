@@ -1,0 +1,54 @@
+# Hardened production Docker Compose overlay.
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+#
+# Enforces:
+# - PostgreSQL 16 and FastAPI backend remain strictly on internal Docker networks with zero host port mappings.
+# - Only the Nginx reverse-proxy (`frontend`) binds to 127.0.0.1:${FRONTEND_PORT:-8080} behind an upstream TLS terminator.
+# - Fail-closed production environment variables (`POSTGRES_PASSWORD`, `DRILLAI_SESSION_CSRF_SECRET`,
+#   `DRILLAI_SECRET_MASTER_KEY`, `DRILLAI_CORS_ORIGINS`, `DRILLAI_ALLOWED_HOSTS`) are mandatory.
+
+services:
+  postgres:
+    security_opt:
+      - no-new-privileges:true
+    ports: !reset []
+
+  migrate:
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      DRILLAI_ENVIRONMENT: production
+
+  backend:
+    security_opt:
+      - no-new-privileges:true
+    ports: !reset []
+    environment:
+      DRILLAI_ENVIRONMENT: production
+      DRILLAI_DEBUG: "false"
+      DRILLAI_AUTH_ENABLED: "true"
+      DRILLAI_E2E_FAULTS: "false"
+      DRILLAI_CONNECTOR_ALLOW_LOOPBACK: "false"
+      DRILLAI_SESSION_COOKIE_SECURE: "true"
+      DRILLAI_CORS_ORIGINS: ${DRILLAI_CORS_ORIGINS:?DRILLAI_CORS_ORIGINS must be set to explicit HTTPS origins in production}
+      DRILLAI_ALLOWED_HOSTS: ${DRILLAI_ALLOWED_HOSTS:?DRILLAI_ALLOWED_HOSTS must be set to explicit hostnames in production}
+      DRILLAI_SESSION_CSRF_SECRET: ${DRILLAI_SESSION_CSRF_SECRET:?DRILLAI_SESSION_CSRF_SECRET (>=32 chars) must be set in production}
+      DRILLAI_SECRET_MASTER_KEY: ${DRILLAI_SECRET_MASTER_KEY:?DRILLAI_SECRET_MASTER_KEY (>=32 chars) must be set in production}
+      DRILLAI_SECRET_MASTER_KEY_VERSION: ${DRILLAI_SECRET_MASTER_KEY_VERSION:-1}
+
+  connector-worker:
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      DRILLAI_ENVIRONMENT: production
+      DRILLAI_DEBUG: "false"
+      DRILLAI_CONNECTOR_ALLOW_LOOPBACK: "false"
+      DRILLAI_SECRET_MASTER_KEY: ${DRILLAI_SECRET_MASTER_KEY:?DRILLAI_SECRET_MASTER_KEY (>=32 chars) must be set in production}
+      DRILLAI_SECRET_MASTER_KEY_VERSION: ${DRILLAI_SECRET_MASTER_KEY_VERSION:-1}
+
+  frontend:
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - "127.0.0.1:${FRONTEND_PORT:-8080}:8080"

@@ -357,7 +357,7 @@ class SecretRefRotateRequest(BaseModel):
 
 @router.get("/platform/secrets", summary="List tenant secret references (masked metadata only)")
 async def list_secret_refs(
-    auth: Annotated[AuthContext, Depends(require("secret.manage"))],
+    auth: Annotated[AuthContext, Depends(require("vault.manage"))],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict[str, Any]:
     rows = (
@@ -377,7 +377,7 @@ async def list_secret_refs(
 )
 async def upsert_secret_ref(
     body: SecretRefUpsertRequest,
-    auth: Annotated[AuthContext, Depends(require("secret.manage"))],
+    auth: Annotated[AuthContext, Depends(require("vault.manage"))],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict[str, Any]:
     now = utc_now()
@@ -462,7 +462,7 @@ async def upsert_secret_ref(
 async def rotate_secret_ref(
     secret_key: str,
     body: SecretRefRotateRequest,
-    auth: Annotated[AuthContext, Depends(require("secret.manage"))],
+    auth: Annotated[AuthContext, Depends(require("vault.manage"))],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict[str, Any]:
     row = (
@@ -518,7 +518,7 @@ async def rotate_secret_ref(
 )
 async def revoke_secret_ref(
     secret_key: str,
-    auth: Annotated[AuthContext, Depends(require("secret.manage"))],
+    auth: Annotated[AuthContext, Depends(require("vault.manage"))],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict[str, Any]:
     row = (

@@ -260,7 +260,7 @@ ROLE_CATALOGUE: tuple[Role, ...] = (
         permissions=(
             "registry.read",
             "user.*",
-            "secret.*",
+            "vault.*",
             "connector.*",
             "audit.read",
             "*.read",
@@ -279,7 +279,7 @@ ROLE_CATALOGUE: tuple[Role, ...] = (
             "registry.*",
             "user.*",
             "role.*",
-            "secret.*",
+            "vault.*",
             "integration.*",
             "connector.*",
             "audit.read",

@@ -47,7 +47,7 @@ if (-not (Test-Path $VenvPython)) {
 }
 
 Write-Host "==> Installing backend (editable + dev extras)..."
-& $VenvPython -m pip install --quiet --upgrade pip
+& $VenvPython -m pip install --quiet --upgrade pip "setuptools>=83.0.0"
 if ($LASTEXITCODE -ne 0) { throw "Failed to upgrade pip in backend\.venv" }
 & $VenvPython -m pip install --quiet -e "${BackendDir}[dev]"
 if ($LASTEXITCODE -ne 0) { throw "Failed to install backend[dev] in backend\.venv" }
