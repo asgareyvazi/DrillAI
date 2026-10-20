@@ -391,7 +391,23 @@ async def test_cp21_04_tenant_user_provisioning_password_reset_and_scoped_api_to
             )
             assert redeem_again.status_code == 401
 
-            # 5. Scoped API token: org_admin cannot mint `system.egress_policy.manage` or `**`
+            # 5. Scoped API tokens must be non-empty and tenant admins cannot widen a one-level
+            # permission such as `user.*` into a recursive `user.**` token scope.
+            empty_scope = await client.post(
+                "/api/v1/auth/tokens",
+                headers=hdrs_a,
+                json={"name": "unscoped"},
+            )
+            assert empty_scope.status_code == 422
+
+            recursive_scope = await client.post(
+                "/api/v1/auth/tokens",
+                headers=hdrs_a,
+                json={"name": "recursive-user", "scopes": ["user.**"]},
+            )
+            assert recursive_scope.status_code == 403
+
+            # org_admin cannot mint `system.egress_policy.manage` or `**`
             bad_scope = await client.post(
                 "/api/v1/auth/tokens",
                 headers=hdrs_a,

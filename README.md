@@ -13,7 +13,7 @@ engineering arithmetic, and it never invents engineering values.
 | --- | --- |
 | `backend/` | Python 3.11 service: domain models, engines, data fabric, workflow runtime, AI/LLM abstraction, WITSML 1.4.1.1 SOAP & ETP 1.2 WebSocket connectors, durable connector worker, FastAPI |
 | `scripts/` | Operator/repository tooling (`bootstrap.sh` setup, `seed_demo.py` demo data, `smoke_e2e.py` API smoke check, `verify_stack.py` multi-process stack verification) |
-| `frontend/` | React/TypeScript client: the drilling intelligence workspace & telemetry connector registry (see `docs/FRONTEND.md`) |
+| `frontend/` | React/TypeScript client: drilling intelligence workspace, telemetry connector registry, and organization security settings for users and scoped API tokens (see `docs/FRONTEND.md`) |
 | `docs/` | Frontend, connector/protocol & operational runbook documentation (`docs/CONNECTORS_AND_OPERATIONS.md`) and mission reports (`docs/mission-reports/`) |
 | `docker-compose.yml` | Reproducible multi-service deployment stack (`postgres`, `migrate`, `backend`, `connector-worker`, `frontend` Nginx proxy) with `.env.example` |
 
@@ -97,19 +97,19 @@ it holds to and `docs/FRONTEND_TESTING.md` lists what is verified and how.
 | --- | --- | --- |
 | Frontend types | `cd frontend && npm run typecheck` | strict TypeScript over app, tests and specs |
 | Frontend lint | `cd frontend && npm run lint` | unused code, `any`, React rules |
-| Frontend unit/component | `cd frontend && npm test` | 315 passed in 29 files |
+| Frontend unit/component | `cd frontend && npm test` | 318 passed in 30 files |
 | Frontend build | `cd frontend && npm run build` | `tsc -b` plus the production Vite build |
-| Backend tests | `cd backend && DRILLAI_TEST_POSTGRES=1 .venv/bin/python -m pytest -o addopts=""` | 1,099 passed in 85 files, including 7 PostgreSQL persistence, migration, backup/restore DR drill, pgvector retrieval, competing-worker fencing & concurrent SQL CAS race tests |
+| Backend tests | `cd backend && DRILLAI_TEST_POSTGRES=1 .venv/bin/python -m pytest -o addopts=""` | 1,104 passed in 86 files, including 7 PostgreSQL persistence, migration, backup/restore DR drill, pgvector retrieval, competing-worker fencing & concurrent SQL CAS race tests |
 | Backend lint | `cd backend && .venv/bin/python -m ruff check .` | style and import hygiene |
 | Migrations | `cd backend && .venv/bin/python -m alembic upgrade head && .venv/bin/python -m alembic check` | no model/migration drift, against a fresh database |
 | Stack verification | `backend/.venv/bin/python scripts/verify_stack.py` | 16 multi-process scenarios: clean migration, backend, dedicated `connector-worker`, real WITSML 1.4.1.1 SOAP & ETP 1.2 Binary Avro ingest, soak metrics, restart recovery & stop |
 | Vendor interop runner | `backend/.venv/bin/python scripts/verify_external_vendor_interop.py --mode harness` | offline WITSML 1.4.1.1 SOAP & ETP 1.2 Binary Avro conformance + opt-in `--mode external` vendor probe |
 | Docker Compose smoke gate | `POSTGRES_PASSWORD=... docker compose up -d --build` | multi-container PostgreSQL, Alembic migrate, backend, `connector-worker`, and Nginx frontend proxy |
-| End-to-end | `cd frontend && npm run e2e` | 120 passed browser journeys in 17 spec files (including 42 connector journeys in `connectors-platform.spec.ts`) against the real stack |
+| End-to-end | `cd frontend && npm run e2e` | 121 passed browser journeys in 17 spec files (including 42 connector journeys in `connectors-platform.spec.ts`) against the real stack |
 
 Set `DRILLAI_TEST_POSTGRES=1` to run the PostgreSQL-backed persistence, competing-worker fencing,
 and concurrent SQL CAS race tests through the repository's own embedded PostgreSQL (`pgserver`);
-without it they skip, and the suite reports **1092 passed, 7 skipped** rather than **1,099 passed**.
+without it they skip, and the suite reports **1,097 passed, 7 skipped** rather than **1,104 passed**.
 See `docs/WINDOWS-SETUP.md`, `docs/mission-reports/PRODUCTION-READINESS-MATRIX.md`, and `docs/mission-reports/CP16-MISSION-REPORT.md`
 for commit-stamped and CI-run-stamped verification provenance across CP13, CP14, CP15, CP16, CP17, and CP18.
 
@@ -129,7 +129,7 @@ config-guarded injector. The only browser-level interception is two socket-level
 journeys, which exist so a spec can state exactly when a live stream failed: they forward to the real
 backend and fabricate no frames.
 
-CI runs that whole sequence on every push to `arena/01a0dca0-drillai` (`.github/workflows/ci.yml`):
+CI runs that whole sequence on every push to `arena/**` session branches (`.github/workflows/ci.yml`):
 install → frontend typecheck, lint, tests, build → backend tests (with PostgreSQL), lint, migration
 check → multi-process stack verification (`scripts/verify_stack.py`) → Docker Compose smoke gate →
 the complete end-to-end suite, with Playwright evidence uploaded only when a run has failed.

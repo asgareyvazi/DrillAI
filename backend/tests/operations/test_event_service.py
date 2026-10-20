@@ -635,6 +635,7 @@ async def test_an_engineer_can_read_the_events_they_recorded(fabric: Fabric) -> 
                 name="engineer token",
                 token_prefix=prefix,
                 token_hash=digest,
+                scopes=["event.read", "operation.read"],
             )
         )
         await session.commit()

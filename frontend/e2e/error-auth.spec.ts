@@ -137,4 +137,42 @@ test.describe('an authentication-enabled deployment', () => {
 
     expect(appConsoleErrors(consoleErrors), `console errors: ${consoleErrors.join(' | ')}`).toEqual([])
   })
+
+  test('tenant administrator manages users and issues a one-time scoped API token', async ({ page, consoleErrors }) => {
+    await page.goto('/wells')
+    await page.getByTestId('shell-login-link').click()
+    await page.getByTestId('login-email-input').fill('admin@demo.drillai.local')
+    await page.getByTestId('login-password-input').fill('DrillAI-Dev-Only-Pass!2026')
+    await page.getByTestId('login-submit-button').click()
+    await expect(page.getByTestId('shell-auth-principal')).toContainText('Demo Org Admin')
+
+    const securityLink = page.getByRole('link', { name: 'Identity & Access' })
+    await expect(securityLink).toBeVisible()
+    await securityLink.click()
+    await expect(page.getByTestId('auth-user-table')).toBeVisible()
+
+    const email = `cp26-ui-${Date.now()}@demo.drillai.local`
+    await page.getByLabel('Work email').fill(email)
+    await page.getByLabel('Display name').fill('CP26 UI Provisioned User')
+    await page.getByLabel(/Initial password/).fill('Temporary-E2E-User!2026')
+    await page.getByTestId('create-user-submit').click()
+    await expect(page.getByTestId('auth-user-table').getByText(email)).toBeVisible()
+
+    const tokenName = `cp26-ui-${Date.now()}`
+    await page.getByLabel('Token name').fill(tokenName)
+    await page.getByTestId('create-token-submit').click()
+    const oneTimeToken = page.getByTestId('one-time-token')
+    await expect(oneTimeToken).toBeVisible()
+    await expect(oneTimeToken.locator('code')).toContainText(/^dk_/)
+    await oneTimeToken.getByRole('button', { name: 'I saved the token' }).click()
+    await expect(oneTimeToken).toHaveCount(0)
+
+    const tokenRow = page.locator('[data-testid^="api-token-tok_"]').filter({ hasText: tokenName })
+    await expect(tokenRow).toBeVisible()
+    await tokenRow.getByRole('button', { name: 'Revoke' }).click()
+    await tokenRow.getByRole('button', { name: 'Confirm revoke' }).click()
+    await expect(tokenRow).toContainText('Revoked')
+
+    expect(appConsoleErrors(consoleErrors), `console errors: ${consoleErrors.join(' | ')}`).toEqual([])
+  })
 })

@@ -1304,6 +1304,22 @@ export interface AuthUserSummary {
   unit_system?: string
 }
 
+export interface ManagedAuthUser {
+  id: string
+  email: string
+  display_name: string
+  job_title: string | null
+  is_active: boolean
+  role_keys: string[]
+  last_login_at: string | null
+  created_at: string | null
+}
+
+export interface ManagedAuthUsersResponse {
+  items: ManagedAuthUser[]
+  total: number
+}
+
 export interface AuthOrgSummary {
   id: string | null
   slug: string | null

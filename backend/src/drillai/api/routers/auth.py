@@ -52,6 +52,7 @@ from drillai.db.models import (
     UserSession,
 )
 from drillai.db.session import Database
+from drillai.security.actions import Principal
 from drillai.security.passwords import (
     hash_password,
     hash_password_async,
@@ -96,12 +97,15 @@ def _validate_password_strength(password: str) -> None:
 
 
 def _client_ip(request: Request) -> str:
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        return forwarded.split(",")[0].strip()[:64]
-    if request.client and request.client.host:
-        return str(request.client.host)[:64]
-    return "unknown"
+    """Return the transport peer resolved by the ASGI server, never a caller-supplied header.
+
+    Uvicorn only rewrites ``request.client.host`` from X-Forwarded-For when the immediate peer is
+    explicitly listed in ``FORWARDED_ALLOW_IPS``. The Compose deployment pins that peer to the Nginx
+    frontend address. Reading X-Forwarded-For here would let any direct client choose its own rate-limit
+    bucket and forge security-audit IP addresses.
+    """
+    client_host = request.client.host if request.client is not None else None
+    return str(client_host)[:64] if client_host else "unknown"
 
 
 def _user_agent(request: Request) -> str:
@@ -843,6 +847,21 @@ async def issue_password_reset_token(
     if user is None:
         raise NotFound(f"user {body.user_id!r} not found")
 
+    # Passwords are global to the account rather than scoped to one organization. A tenant admin must
+    # not be able to reset a shared identity used by another organization.
+    other_org_membership = (
+        await session.execute(
+            select(Membership.id)
+            .where(Membership.user_id == user.id, Membership.org_id != org_id)
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    if other_org_membership is not None:
+        raise PermissionDenied(
+            "cannot issue an organization-scoped password reset for a user who belongs to another organization",
+            details={"reason": "cross_organization_account"},
+        )
+
     now = dt.datetime.now(tz=UTC)
     raw_token, token_prefix, token_hash = new_api_token(prefix="prt")
     expires_at = now + dt.timedelta(minutes=body.ttl_minutes)
@@ -976,13 +995,17 @@ def _validate_assignable_roles(auth: AuthContext, role_keys: list[str]) -> list[
             f"unknown role_key(s): {', '.join(unknown)}",
             details={"unknown_roles": unknown, "available_roles": sorted(SYSTEM_ROLES)},
         )
-    # Tenant org_admin cannot assign the platform-wide `admin` role or any role whose permissions
-    # exceed the caller's own permissions.
+    # Only the explicit platform-admin role may delegate platform-wide administration or the
+    # wildcard/L5 well-manager role. A permission wildcard such as `**` on a tenant role is not itself
+    # proof of platform-admin authority: that distinction must not be erased by permission matching.
+    is_platform_admin = "admin" in auth.principal.role_keys and permission_granted(
+        auth.principal, "system.egress_policy.manage"
+    )
     for key in role_keys:
-        if key == "admin" and not permission_granted(auth.principal, "system.egress_policy.manage"):
+        if key in {"admin", "well_manager"} and not is_platform_admin:
             raise PermissionDenied(
-                "tenant administrators cannot grant the platform-wide 'admin' role",
-                details={"forbidden_role": "admin"},
+                "tenant administrators cannot grant platform-wide or wildcard automation roles",
+                details={"forbidden_role": key},
             )
     return list(dict.fromkeys(role_keys))
 
@@ -1143,9 +1166,27 @@ async def update_org_user(
         new_roles = sorted({m.role_key for m in existing_mbrs})
 
     if body.is_active is not None:
+        if body.is_active is False:
+            if user.id == auth.principal.id:
+                raise PermissionDenied("cannot deactivate your own account through tenant user management")
+            # `User.is_active`, sessions and API tokens are global to an identity. An organization
+            # administrator may not use a tenant-scoped endpoint to disable a shared account or revoke
+            # credentials used in another organization's membership.
+            other_org_membership = (
+                await session.execute(
+                    select(Membership.id)
+                    .where(Membership.user_id == user.id, Membership.org_id != org_id)
+                    .limit(1)
+                )
+            ).scalar_one_or_none()
+            if other_org_membership is not None:
+                raise PermissionDenied(
+                    "cannot deactivate a user who belongs to another organization",
+                    details={"reason": "cross_organization_account"},
+                )
         user.is_active = body.is_active
         if not body.is_active:
-            # Immediately revoke all active sessions and API tokens for this user in this org
+            # Immediately revoke all active sessions and API tokens for this now-disabled identity.
             sessions_to_revoke = (
                 await session.execute(
                     select(UserSession).where(
@@ -1199,6 +1240,17 @@ async def update_org_user(
 
 
 # --------------------------------------------------------------------------- API token lifecycle
+
+
+def _principal_may_delegate_scope(principal: Principal, scope: str) -> bool:
+    """A token scope may narrow a principal, but a wildcard may not broaden one."""
+    if "*" in scope:
+        held = set(principal.permissions)
+        if scope not in held and not ({"*", "**"} & held):
+            return False
+        scoped_grants = set(principal.scopes)
+        return not principal.scopes or scope in scoped_grants or bool({"*", "**"} & scoped_grants)
+    return permission_granted(principal, scope)
 
 
 def _token_metadata_out(row: ApiToken) -> dict[str, Any]:
@@ -1290,19 +1342,21 @@ async def create_api_token(
 
     # Every requested scope must be held by BOTH the caller and the token owner; wildcard or
     # system-wide egress scopes cannot be minted by a tenant admin who lacks them.
-    requested_scopes = [s.strip() for s in body.scopes if s.strip()]
+    requested_scopes = list(dict.fromkeys(s.strip() for s in body.scopes if s.strip()))
+    if not requested_scopes:
+        raise ValidationFailed("at least one explicit API token scope must be specified")
     for scope_pat in requested_scopes:
         if scope_pat in {"*", "**"} and not permission_granted(auth.principal, "system.egress_policy.manage"):
             raise PermissionDenied(
                 f"cannot mint API token with unrestricted wildcard scope {scope_pat!r}",
                 details={"forbidden_scope": scope_pat},
             )
-        if not permission_granted(auth.principal, scope_pat):
+        if not _principal_may_delegate_scope(auth.principal, scope_pat):
             raise PermissionDenied(
                 f"caller does not hold requested token scope {scope_pat!r}",
                 details={"forbidden_scope": scope_pat},
             )
-        if not permission_granted(target_principal, scope_pat):
+        if not _principal_may_delegate_scope(target_principal, scope_pat):
             raise PermissionDenied(
                 f"target user does not hold requested token scope {scope_pat!r}",
                 details={"forbidden_scope": scope_pat},

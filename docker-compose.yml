@@ -43,6 +43,8 @@ services:
       DRILLAI_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-drillai}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@postgres:5432/${POSTGRES_DB:-drillai}
       DRILLAI_CORS_ORIGINS: ${DRILLAI_CORS_ORIGINS:-http://localhost:8080}
       DRILLAI_ALLOWED_HOSTS: ${DRILLAI_ALLOWED_HOSTS:-*}
+      # Uvicorn trusts forwarded headers only from the static Nginx peer (never `*`).
+      FORWARDED_ALLOW_IPS: ${DRILLAI_UVICORN_FORWARDED_ALLOW_IPS:-172.31.240.10}
       DRILLAI_SESSION_COOKIE_SECURE: ${DRILLAI_SESSION_COOKIE_SECURE:-false}
       DRILLAI_SESSION_CSRF_SECRET: ${DRILLAI_SESSION_CSRF_SECRET:-drillai-dev-csrf-synchronizer-key}
       DRILLAI_SECRET_MASTER_KEY: ${DRILLAI_SECRET_MASTER_KEY:-}
@@ -114,7 +116,8 @@ services:
     ports:
       - "${BIND_ADDRESS:-127.0.0.1}:${FRONTEND_PORT:-8080}:8080"
     networks:
-      - drillai_edge
+      drillai_edge:
+        ipv4_address: ${DRILLAI_FRONTEND_PROXY_IP:-172.31.240.10}
     depends_on:
       backend:
         condition: service_healthy
@@ -128,6 +131,9 @@ networks:
   drillai_internal:
     internal: true
   drillai_edge:
+    ipam:
+      config:
+        - subnet: ${DRILLAI_EDGE_SUBNET:-172.31.240.0/28}
 
 volumes:
   drillai_pgdata:

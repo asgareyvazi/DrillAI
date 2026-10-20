@@ -111,6 +111,11 @@ unit in the header and another in a table.
   replays (`dry_run` preview vs live backfill), and manage approved private rig-network CIDRs &
   hostnames (`egress-policy-card`, admin `L4`).
 
+## Identity & Security Settings
+
+- **Security settings (`/security`)**: lets an authenticated user change their own password and, when authorized by the backend, manage users and role memberships in their organization. It also supports creating, listing, and revoking scoped API tokens. A newly issued token is shown once in the current page state and is never persisted to browser storage; the backend remains authoritative for role, tenant, token-scope, expiry, and revocation checks. User-management controls are permission-gated in the UI, but every operation is independently authorized by the API and remains CSRF-protected for cookie sessions.
+- **API contract**: `/api/v1/auth/users`, `/api/v1/auth/tokens`, and the current-user password endpoint are typed in `src/api/endpoints.ts`; English and Persian labels live in the shared locale catalogues.
+
 ## Known limitations
 
 - **External commercial WITSML/ETP vendor certification**: `witsml.1.4.1.1.soap_http` and

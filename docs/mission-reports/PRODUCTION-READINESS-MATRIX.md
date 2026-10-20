@@ -3,7 +3,9 @@
 **Repository**: `asgareyvazi/DrillAI`  
 **Branch**: `arena/01a0dca0-drillai` (`main` untouched at `bfa066b28e0071880cb9191a4f1d47fdaa143e04`)  
 **Phase**: CP17–CP20 End-to-End Engineering Program  
-**Date**: 2026-10-17  
+**Date**: 2026-10-17 (historical CP20 snapshot)
+
+> **Current-release correction (2026-10-20):** The matrix and provenance rows below record prior CP20 evidence and are not certification of the CP25/CP26 release candidate. Current status and blockers are recorded in §3; the latest pushed SHA must be checked against its own Linux/Windows Actions run before claiming release certification.
 
 ---
 
@@ -45,3 +47,17 @@
 | **CP18-OPS** | `712f64a28bc8f1a1b3d8e61535c54a061c091c4d` | Pushed on `arena/01a0dca0-drillai` | `1,073 passed` (`1,067` SQLite + `6` PG) | 79 files | 6 | `312 passed` (29 files) | `119 passed` (17 specs) | `POSTGRES_DR_DRILL_OK` (`pg_dump`/`pg_restore`) |
 | **CP19-ENG** | `80aee9fcae920ead6fe4ae6159eead36a19762e7` | Pushed on `arena/01a0dca0-drillai` | `1,077 passed` (`1,071` SQLite + `6` PG) | 80 files | 6 | `312 passed` (29 files) | `119 passed` (17 specs) | All 14 engines & 121 units benchmarked |
 | **CP20-FINAL** | Certified on `arena/01a0dca0-drillai` | Linux `certification` + Windows `windows-certification` | **`1,081 passed`** (`1,074` SQLite + `7` PG, `0 skipped`) | **81 files** | **7** | **`312 passed` (29 files)** | **`119 passed` (17 specs)** | `STACK_VERIFICATION_OK` + `POSTGRES_DR_DRILL_OK` |
+
+---
+
+## 3. Current CP25/CP26 Release-Candidate Snapshot (2026-10-20)
+
+**Active session branch:** `arena/9d8f5568-drillai`. CP25 source `9c5db2f45d6c489aaf87392892b82cd8438cb684` and evidence tip `c01fa06aebd1badc4860c462e1483d680e67c6ea` are published. CP25 local Linux gates passed, but its post-push Actions query was empty because the workflow push trigger omitted this session branch. The current release candidate adds the `arena/**` trigger and makes Windows E2E unfiltered; final CI status must be based on the exact resulting pushed SHA.
+
+| Area | Current local evidence | Current release status / boundary |
+|---|---|---|
+| CP25 baseline regressions | Global model-ID prefix and telemetry SELECT-budget regressions fixed; full backend suite now **1,104 passed** with embedded PostgreSQL. | Locally verified; final remote certification pending. |
+| CP26 identity/security | Trusted-proxy peer handling, role/tenant boundaries, non-empty scoped tokens, and `/security` user/token UI. | Backend **1,104 passed**; focused auth/API set **65 passed**; UI suite **318 passed**; full Playwright **121 passed**. |
+| Linux deployment/stack | SQLite Alembic upgrade/check, Ruff, supply-chain/secrets, 16 stack scenarios + 32-cycle soak, offline WITSML/ETP harness. | Local gates pass. Docker Compose runtime was not run on this host. |
+| Native Windows / exact-SHA CI | Windows workflow now runs the unfiltered Playwright suite and the SQLite backend. | **Pending** until the updated workflow completes on the exact pushed SHA. |
+| External/production evidence | Local protocol harness and PostgreSQL logical backup/restore tests. | Live vendor and notification delivery remain blocked; physical/PITR DR and field certification are not implied. |

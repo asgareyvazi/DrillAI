@@ -945,7 +945,7 @@ async def test_auth_enabled_requires_a_bearer_token(tmp_path, monkeypatch):
                 name="test token",
                 token_prefix=token_id,
                 token_hash=token_hash,
-                scopes=[],
+                scopes=["project.read"],
                 created_at=None,
             )
         )

@@ -39,6 +39,7 @@ export const NAV_ITEMS: NavItem[] = [
   { to: '/library', labelKey: 'nav.library', scope: 'global' },
   { to: '/connectors', labelKey: 'nav.connectors', scope: 'global' },
   { to: '/platform', labelKey: 'nav.platform', scope: 'global' },
+  { to: '/security', labelKey: 'nav.security', scope: 'global' },
 ]
 
 function LocaleSwitch() {
@@ -238,6 +239,12 @@ export function AppShell() {
   const { t } = useI18n()
   const params = useParams<{ wellId?: string }>()
   const wellId = params.wellId
+  const { devRoles } = useSession()
+  const authIdentity = useQuery({
+    queryKey: ['identity', devRoles],
+    queryFn: ({ signal }) => drillingApi.identity(signal),
+  })
+  const hasAuthenticatedUser = authIdentity.data?.auth_enabled === true && Boolean(authIdentity.data.user_email)
   const well = useQuery({
     queryKey: ['well', wellId],
     queryFn: ({ signal }) => drillingApi.getWell(wellId as string, signal),
@@ -245,7 +252,11 @@ export function AppShell() {
     retry: false,
   })
 
-  const visible = NAV_ITEMS.filter((item) => item.scope === 'global' || Boolean(wellId))
+  const visible = NAV_ITEMS.filter(
+    (item) =>
+      (item.scope === 'global' || Boolean(wellId)) &&
+      (item.to !== '/security' || hasAuthenticatedUser),
+  )
 
   return (
     <div className="flex min-h-screen bg-graphite-50 text-graphite-900 dark:bg-graphite-950 dark:text-graphite-100">

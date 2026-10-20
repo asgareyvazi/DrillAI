@@ -3,7 +3,9 @@
 **Repository**: `asgareyvazi/DrillAI`  
 **Branch**: `arena/01a0dca0-drillai` (`main` untouched at `bfa066b28e0071880cb9191a4f1d47fdaa143e04`)  
 **Phase**: CP17–CP20 End-to-End Engineering Program  
-**Date**: 2026-10-17  
+**Date**: 2026-10-17 (historical CP20 snapshot)
+
+> **Current-release update (2026-10-20):** CP25/CP26 local Linux evidence and authentication remediation are documented in `CP25-BASELINE-AND-GAP-AUDIT.md` and `CP26-AUTH-BOUNDARY-AND-IDENTITY-UI.md`. The updated workflow targets `arena/**` and runs the full Windows browser suite, but Windows, Docker Compose, and exact-SHA GitHub Actions results remain pending until that workflow completes on the final pushed commit. External vendor delivery, physical/PITR disaster recovery, and owner-selected license constraints below remain open.
 
 ---
 

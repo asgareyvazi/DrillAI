@@ -750,6 +750,7 @@ async def two_tenant_client(tmp_path, monkeypatch):
                     name=f"{slug} token",
                     token_prefix=prefix,
                     token_hash=digest,
+                    scopes=["well.*", "field.*", "project.read"],
                 )
             )
             tokens[slug] = token

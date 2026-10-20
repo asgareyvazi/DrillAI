@@ -11,8 +11,8 @@ is confined to unit and component tests, where it isolates a boundary rather tha
 | Types | `cd frontend && npm run typecheck` | strict TypeScript over the app, the tests and the e2e specs |
 | Lint | `cd frontend && npm run lint` | no unused code, no `any` slipping in, React rules |
 | Build | `cd frontend && npm run build` | `tsc -b` plus a production Vite build |
-| Unit + component | `cd frontend && npm test` | 315 passed in 29 files: values, units, the API boundary, cancellation, permissions, the shared UI states, and the pages' contracts |
-| End-to-end | `cd frontend && npm run e2e` | 120 passed in 17 spec files: the real stack through a browser, in three deployments |
+| Unit + component | `cd frontend && npm test` | 318 passed in 30 files: values, units, the API boundary, cancellation, permissions, identity settings, the shared UI states, and the pages' contracts |
+| End-to-end | `cd frontend && npm run e2e` | 121 passed in 17 spec files: the real stack through a browser, in three deployments |
 | Backend | `cd backend && .venv/bin/python -m pytest` | the APIs the frontend reads (and the rest of the platform) |
 | Backend lint | `cd backend && .venv/bin/python -m ruff check .` | backend style and import hygiene |
 | Migrations | `cd backend && .venv/bin/python -m alembic upgrade head && .venv/bin/python -m alembic check` | no model/migration drift — against a **fresh** database |
@@ -104,7 +104,7 @@ third of the suite, so all three projects run.
 
 ### The journeys
 
-119 journeys in 17 spec files. The list is the coverage; the counts are what the suite reports.
+121 journeys in 17 spec files. The list is the coverage; the counts are what the suite reports.
 
 | Spec | Journeys | Covers |
 | --- | --- | --- |
@@ -117,7 +117,7 @@ third of the suite, so all three projects run.
 | `run-events.spec.ts` | 5 | the durable run-event WebSocket: live events, cursors, reconnect, REST reconciliation, run switching |
 | `error-matrix.spec.ts` | 5 | 409 stale decisions, permission refusals, not-found, and the surfaces that used to report a quiet success |
 | `error-faults.spec.ts` | 4 | real timeout, malformed body, unhandled 500, and the recovery each one offers |
-| `error-auth.spec.ts` | 1 | an authentication-enabled deployment refusing the client |
+| `error-auth.spec.ts` | 3 | real unauthenticated refusals, browser login/session/RBAC/logout, and organization user plus one-time scoped-token management |
 | `identity-permissions.spec.ts` | 7 | the role catalogue against backend authority, ceiling vs permission refusals, identity switching without a reload, socket termination on switch |
 | `context-deeplinks.spec.ts` | 6 | deep links and reload: run in the address, cross-well document, unknown document/workflow/run |
 | `rtl.spec.ts` | 5 | Persian layout, numerals that still equal the API's numbers, mixed-direction identifiers, the operational record in Persian with its identifiers LTR, graph geometry |

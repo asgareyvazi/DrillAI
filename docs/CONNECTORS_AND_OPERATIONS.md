@@ -182,6 +182,8 @@ Every poll, preview, and replay operation builds and reconciles a manifest via `
 2. `postgres` runs on an internal-only Docker network (`drillai_internal`, `internal: true`) with no host port published by default.
 3. `backend` and `frontend` bind to `127.0.0.1` by default (`${BIND_ADDRESS:-127.0.0.1}:8000:8000` and `${BIND_ADDRESS:-127.0.0.1}:8080:8080`).
 4. `DRILLAI_CONNECTOR_ALLOW_LOOPBACK` defaults to `false`; private rig networks are configured via `DRILLAI_CONNECTOR_ALLOWED_PRIVATE_NETWORKS` and `DRILLAI_CONNECTOR_ALLOWED_HOSTS`.
+5. The frontend Nginx proxy has the static peer address `172.31.240.10` on the dedicated `172.31.240.0/28` edge subnet by default. Uvicorn trusts forwarded headers only from that peer (`FORWARDED_ALLOW_IPS`); do not broaden this to `*`. If the subnet overlaps your host network, choose a non-overlapping subnet and keep the proxy address inside it; update `DRILLAI_EDGE_SUBNET`, `DRILLAI_FRONTEND_PROXY_IP`, and `DRILLAI_UVICORN_FORWARDED_ALLOW_IPS` together. Direct client-supplied forwarding headers are not trusted by the authentication rate-limit/audit code, and Nginx access logs omit the raw forwarded-for chain.
+6. Treat a successful config parse or local harness as static evidence only. The actual Compose proxy path, trusted peer identity, and deployed edge exposure still require the Docker Compose smoke gate on a Docker-capable host.
 
 ```bash
 cp .env.example .env

@@ -245,6 +245,7 @@ async def fabric(tmp_path, monkeypatch) -> AsyncIterator[Fabric]:
                     name=f"{slug} token",
                     token_prefix=prefix,
                     token_hash=digest,
+                    scopes=["**"],
                 )
             )
             session.add(

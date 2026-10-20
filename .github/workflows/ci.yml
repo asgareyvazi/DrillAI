@@ -28,7 +28,8 @@ name: CI
 
 on:
   push:
-    branches: [arena/01a0dca0-drillai]
+    # Arena session branches are independent release candidates; certify the active working branch too.
+    branches: ['arena/**']
   pull_request:
     branches: [arena/01a0dca0-drillai, main]
   # Manual runs, so the pipeline can be re-certified at a chosen commit without pushing anything.
@@ -453,7 +454,7 @@ jobs:
         run: |
           $ErrorActionPreference = "Continue"
           $logFile = Join-Path $env:RUNNER_TEMP "win-e2e.log"
-          npm run e2e -- e2e/app.spec.ts e2e/connectors-platform.spec.ts e2e/error-faults.spec.ts e2e/error-auth.spec.ts 2>&1 | Tee-Object -FilePath $logFile
+          npm run e2e 2>&1 | Tee-Object -FilePath $logFile
           $e2eExit = $LASTEXITCODE
           $plain = (Get-Content $logFile -Raw) -replace "\x1b\[[0-9;]*[a-zA-Z]", ""
           $lines = $plain -split "\r?\n" | Where-Object { $_.Trim() -ne "" }

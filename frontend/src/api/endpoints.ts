@@ -51,6 +51,8 @@ import type {
   AuthSessionResponse,
   AuthMeResponse,
   ApiTokenMetadata,
+  ManagedAuthUser,
+  ManagedAuthUsersResponse,
   NodeTypeCatalogue,
   NptSummary,
   OperationRow,
@@ -580,9 +582,22 @@ export const drillingApi = {
   authMe: (signal?: AbortSignal) => api.get<AuthMeResponse>('/auth/me', { signal }),
   changePassword: (body: { current_password: string; new_password: string }) =>
     api.post<{ status: string; revoked_other_sessions: number }>('/auth/password/change', body),
+  listAuthUsers: (signal?: AbortSignal) => api.get<ManagedAuthUsersResponse>('/auth/users', { signal }),
+  createAuthUser: (body: {
+    email: string
+    display_name: string
+    job_title?: string | null
+    password: string
+    role_keys: string[]
+    unit_system?: string
+  }) => api.post<ManagedAuthUser>('/auth/users', body),
+  updateAuthUser: (
+    userId: string,
+    body: { display_name?: string; job_title?: string | null; is_active?: boolean; role_keys?: string[] },
+  ) => api.patch<ManagedAuthUser>(`/auth/users/${enc(userId)}`, body),
   listApiTokens: (signal?: AbortSignal) =>
     api.get<{ items: ApiTokenMetadata[]; total: number }>('/auth/tokens', { signal }),
-  createApiToken: (body: { name: string; scopes?: string[]; expires_in_days?: number; user_id?: string }) =>
+  createApiToken: (body: { name: string; scopes?: string[]; expires_in_days?: number | null; user_id?: string }) =>
     api.post<ApiTokenMetadata>('/auth/tokens', body),
   revokeApiToken: (tokenId: string) => api.delete<ApiTokenMetadata>(`/auth/tokens/${enc(tokenId)}`),
   workflowVersions: (workflowId: string, params: { limit?: number } = {}, signal?: AbortSignal) =>

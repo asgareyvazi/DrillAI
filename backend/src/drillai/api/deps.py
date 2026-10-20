@@ -149,6 +149,10 @@ async def _resolve_token(session: AsyncSession, token: str) -> tuple[ApiToken, U
     row, user, org = matched
     if row.revoked_at is not None:
         raise AuthenticationRequired("token is not recognised")
+    if not row.scopes:
+        # An empty scope list must never mean "no restriction". Empty-scope legacy credentials fail
+        # closed; new token creation also requires at least one explicit scope.
+        raise AuthenticationRequired("token has no authorization scopes")
     now = dt.datetime.now(tz=UTC)
     expires_at = row.expires_at
     if expires_at is not None:

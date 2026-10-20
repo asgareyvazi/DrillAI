@@ -24,6 +24,7 @@ import RunMonitor from './pages/workflow/RunMonitor'
 import LibraryPage from './pages/library/LibraryPage'
 import ConnectorsPage from './pages/library/ConnectorsPage'
 import PlatformPage from './pages/library/PlatformPage'
+import SecuritySettingsPage from './pages/auth/SecuritySettingsPage'
 import LoginPage from './pages/auth/LoginPage'
 import NotFound from './pages/NotFound'
 
@@ -117,6 +118,7 @@ export function App() {
         <Route path="/library" element={<PageErrorBoundary><LibraryPage /></PageErrorBoundary>} />
         <Route path="/connectors" element={<PageErrorBoundary><ConnectorsPage /></PageErrorBoundary>} />
         <Route path="/platform" element={<PageErrorBoundary><PlatformPage /></PageErrorBoundary>} />
+        <Route path="/security" element={<PageErrorBoundary><SecuritySettingsPage /></PageErrorBoundary>} />
         <Route path="*" element={<NotFound />} />
       </Route>
     </Routes>
