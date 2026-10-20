@@ -3,7 +3,9 @@
 **Repository:** `asgareyvazi/DrillAI`
 **Session branch:** `arena/9d8f5568-drillai` (the active Arena branch; the mission's named `arena/01a0dca0-drillai` remains a separate remote branch at the baseline)
 **Base SHA:** `bfea530602a23bcc08efca85a136240f61c44a0d`
-**Code commit:** pending publication at the time of this report; exact SHA will be added after commit.
+**CP25 source commit:** `9c5db2f45d6c489aaf87392892b82cd8438cb684` (`fix(cp25): resolve id collision and query budget regression`).
+**Push verification (2026-10-20 UTC):** `origin/arena/9d8f5568-drillai` resolved to `9c5db2f45d6c489aaf87392892b82cd8438cb684`; the separately named `origin/arena/01a0dca0-drillai` remained at `bfea530602a23bcc08efca85a136240f61c44a0d`; `origin/main` remained at `bfa066b28e0071880cb9191a4f1d47fdaa143e04`. The working tree was clean after the push.
+**CI on session branch at verification:** `gh run list --branch arena/9d8f5568-drillai --limit 10` returned `[]`; the workflow's push trigger currently only includes the separate `arena/01a0dca0-drillai` branch. This is not a passing CI run.
 **Known baseline CI:** [run 39217548722](https://github.com/asgareyvazi/DrillAI/actions/runs/39217548722), failure on `bfea530602a23bcc08efca85a136240f61c44a0d`.
 
 ## 1. Findings and corrections
@@ -73,4 +75,4 @@ The local source results above do **not** certify Windows, Docker deployment, or
 
 ## 4. Checkpoint closure
 
-CP25-A and CP25-B: **implemented and locally verified**. No regression tests were removed or weakened; the telemetry budget was tightened from six to five and now checks that authorization remains live. CP25 publication/remote CI status is pending the code commit and push; remote verification and final CI status will be added after publication.
+CP25-A and CP25-B: **implemented, locally verified, committed, and pushed** as `9c5db2f45d6c489aaf87392892b82cd8438cb684`; the remote session branch ref was checked against the exact SHA and the separate `main` ref was unchanged. No regression tests were removed or weakened; the telemetry budget was tightened from six to five and now checks that authorization remains live. **No GitHub Actions run was created for the session branch**, so this checkpoint is not Windows-certified or CI-certified; the workflow branch trigger and Windows E2E filter must be corrected before final exact-SHA certification.
