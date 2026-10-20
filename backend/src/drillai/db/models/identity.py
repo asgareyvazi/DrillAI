@@ -275,7 +275,8 @@ class AuthRateLimitBucket(Base, IdMixin, TimestampMixin):
     """Multi-worker durable rate-limit bucket for authentication, password reset, and token minting."""
 
     __tablename__ = "auth_rate_limits"
-    id_prefix = "arl"
+    # `arl` is AlertRule's persisted identifier family; rate-limit buckets were added later.
+    id_prefix = "rlb"
 
     bucket_key: Mapped[str] = mapped_column(String(200), unique=True, nullable=False, index=True)
     scope: Mapped[str] = mapped_column(String(40), nullable=False, index=True)

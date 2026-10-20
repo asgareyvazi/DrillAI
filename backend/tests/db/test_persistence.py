@@ -15,6 +15,8 @@ from sqlalchemy.exc import IntegrityError
 from drillai.core.ids import is_id
 from drillai.db.models import (
     ALL_MODELS,
+    AlertRule,
+    AuthRateLimitBucket,
     Base,
     Document,
     Organization,
@@ -110,6 +112,31 @@ def test_every_model_declares_a_short_id_prefix():
         assert prefix.islower() and 2 <= len(prefix) <= 5, f"{model.__name__}: suspicious prefix {prefix!r}"
         assert prefix not in prefixes, f"{model.__name__} reuses {prefix!r} from {prefixes[prefix].__name__}"
         prefixes[prefix] = model
+
+
+async def test_auth_rate_limit_bucket_uses_a_unique_prefix_and_keeps_alert_rule_ids_stable():
+    """The newer auth limiter must not mint ids in the established alert-rule namespace."""
+    from drillai.db.session import Database
+
+    assert AlertRule.id_prefix == "arl", "existing persisted alert-rule ids retain their type prefix"
+    assert AuthRateLimitBucket.id_prefix == "rlb"
+
+    db = Database("sqlite+aiosqlite:///:memory:")
+    try:
+        await db.create_all()
+        now = dt.datetime.now(tz=dt.UTC)
+        async with db.session() as session:
+            bucket = AuthRateLimitBucket(
+                bucket_key="login:prefix-regression",
+                scope="login",
+                window_started_at=now,
+                last_attempt_at=now,
+            )
+            session.add(bucket)
+            await session.flush()
+            assert is_id(bucket.id, "rlb")
+    finally:
+        await db.dispose()
 
 
 async def test_well_unique_per_project_and_json_round_trip():

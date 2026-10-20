@@ -161,7 +161,7 @@ async def _record_rate_limit_failure(
                 blocked_until = now + lockout_delta if failure_count >= max_failures else None
                 rl_session.add(
                     AuthRateLimitBucket(
-                        id=new_id("arl"),
+                        id=new_id("rlb"),
                         bucket_key=bucket_key,
                         scope=scope,
                         window_started_at=now,

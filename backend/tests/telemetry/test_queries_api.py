@@ -432,9 +432,15 @@ async def test_a_window_read_issues_no_more_statements_than_it_needs(fabric: Fab
         )
         assert response.status_code == 200, response.text
     selects = [item for item in statements if item.lower().startswith("select")]
-    # The channel lookup, the count of the range, and the page itself — plus the tenant/audit reads the
-    # surrounding platform does. A per-point read would be fifty.
-    assert len(selects) <= 6, "\n".join(selects)
+    # The live credential/owner/organization join and membership lookup, channel lookup, range count,
+    # and page are five bounded reads. This asserts query shape as well as a ceiling: an auth cache that
+    # hid revoked tokens or changed memberships would not satisfy the membership-query assertion.
+    assert len(selects) <= 5, "\n".join(selects)
+    credential_queries = [item for item in selects if "FROM api_tokens" in item]
+    assert len(credential_queries) == 1
+    credential_query = credential_queries[0].upper()
+    assert "JOIN USERS" in credential_query and "JOIN ORGANIZATIONS" in credential_query
+    assert sum("FROM MEMBERSHIPS" in item.upper() for item in selects) == 1
     assert len(response.json()["items"]) == 10
 
 

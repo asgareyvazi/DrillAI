@@ -13,6 +13,7 @@ from tests.api.ws import WebSocketRefused, WebSocketSession
 from drillai.api.app import create_app
 from drillai.core.clock import UTC
 from drillai.core.config import get_settings, reset_settings_cache
+from drillai.core.ids import is_id
 from drillai.db.models import (
     AuditLog,
     AuthRateLimitBucket,
@@ -501,6 +502,7 @@ async def test_cp21_05_multi_worker_db_rate_limiting_and_lockout(
         async with app.state.database.session() as session:
             buckets = (await session.execute(select(AuthRateLimitBucket))).scalars().all()
             assert len(buckets) >= 2
+            assert all(is_id(bucket.id, "rlb") for bucket in buckets)
             assert any(b.failure_count >= 3 and b.blocked_until is not None for b in buckets)
             audits = (
                 await session.execute(

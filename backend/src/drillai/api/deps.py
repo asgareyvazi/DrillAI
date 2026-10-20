@@ -134,10 +134,20 @@ async def _resolve_token(session: AsyncSession, token: str) -> tuple[ApiToken, U
     if len(parts) < 3:
         raise AuthenticationRequired("malformed bearer token")
     token_prefix = parts[1]
-    row = (
-        await session.execute(select(ApiToken).where(ApiToken.token_prefix == token_prefix))
-    ).scalar_one_or_none()
-    if row is None or row.revoked_at is not None:
+    # Resolve the credential and the two records whose active state gates it in one round trip. This
+    # is not an authorization cache: every request still observes revocation, expiry, account state,
+    # organization state, and the live membership query below.
+    result = await session.execute(
+        select(ApiToken, User, Organization)
+        .join(User, User.id == ApiToken.user_id)
+        .join(Organization, Organization.id == ApiToken.org_id)
+        .where(ApiToken.token_prefix == token_prefix)
+    )
+    matched = result.one_or_none()
+    if matched is None:
+        raise AuthenticationRequired("token is not recognised")
+    row, user, org = matched
+    if row.revoked_at is not None:
         raise AuthenticationRequired("token is not recognised")
     now = dt.datetime.now(tz=UTC)
     expires_at = row.expires_at
@@ -150,13 +160,9 @@ async def _resolve_token(session: AsyncSession, token: str) -> tuple[ApiToken, U
 
     if not verify_token(token, row.token_prefix, row.token_hash):
         raise AuthenticationRequired("token verification failed")
-    user = (await session.execute(select(User).where(User.id == row.user_id))).scalar_one_or_none()
-    if user is None or not user.is_active:
+    if not user.is_active:
         raise AuthenticationRequired("token owner is not active")
-    org = (
-        await session.execute(select(Organization).where(Organization.id == row.org_id))
-    ).scalar_one_or_none()
-    if org is None or not org.is_active:
+    if not org.is_active:
         raise AuthenticationRequired("token organization is not active")
     row.last_used_at = now
     return row, user
