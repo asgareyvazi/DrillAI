@@ -19,7 +19,7 @@
 
 | Gate | Result |
 |---|---|
-| Backend full suite | `DRILLAI_TEST_POSTGRES=1 .venv/bin/python -m pytest` — **1,104 passed**, including the PostgreSQL-marked tests; one non-failing `XDG_RUNTIME_DIR` warning from `platformdirs`. |
+| Backend full suite | `DRILLAI_TEST_POSTGRES=1 .venv/bin/python -m pytest` — **1,104 passed** at this checkpoint; **1,108 passed** at the CP31 tip, including the PostgreSQL-marked tests; one non-failing `XDG_RUNTIME_DIR` warning from `platformdirs`. |
 | Backend lint | `.venv/bin/python -m ruff check .` — passed. |
 | Focused regression/integration set | CP21/CP26 auth tests plus affected API, tenant and event tests — **65 passed**. |
 | Fresh SQLite migration | `alembic upgrade head` then `alembic check` — passed; `No new upgrade operations detected`. No schema migration was required. |
@@ -35,11 +35,18 @@
 
 The workflow previously pushed only on `arena/01a0dca0-drillai`, so CP25 publication to the active Arena session branch had no automatic Actions run. The workflow now matches `arena/**`; the Windows Playwright command is unfiltered so it runs the same complete spec suite rather than a file subset. This change is intended to provide publication-bound Linux and Windows evidence, not to claim it in advance.
 
-The sandbox is Linux and has no Docker CLI/daemon or native Windows host. Therefore, until GitHub Actions completes against the exact pushed commit:
+GitHub Actions run **39414613792** then executed the exact CP26 commit `c6453c6f4550fb13b445df9c96b270448dd68dbb` on 2026-10-20T11:23:32Z:
 
-- Native Windows certification: **pending**.
-- Docker Compose config/build/runtime smoke gate: **pending**.
-- Exact-SHA GitHub Actions certification: **pending**.
+- **`windows-certification` (job `118600471702`): PASSED** in 12m29s — full frontend typecheck, lint, 318 unit tests, build, supply-chain scan, backend lint, migration check, stack verification, external-vendor runner, and the complete Playwright E2E suite across the main, faults and auth deployments.
+- **`certification` (Linux, job `118600471494`): FAILED** at the `Docker Compose deployment smoke gate (docker-compose.yml)` step with exit code **22**. Every preceding Linux step succeeded; the Playwright E2E step was skipped because the gate failed first.
+
+The Linux failure was **not** a defect in the CP26 authentication changes. The gate's header probes used `curl -fsSI` (a **HEAD** request) against `/api/v1/health/ready`, which FastAPI registers for `GET` only; the probe was answered with `405`, which `curl -f` reports as exit code 22. The defect was reproduced locally and corrected in **CP31**, which also adds a regression guard that compares every workflow probe with the routes the application actually serves. See `CP31-CI-DEPLOYMENT-PROBE-CONTRACT.md`.
+
+Consequently, CP26's own exact-SHA certification status is:
+
+- Native Windows certification: **passed** on `c6453c6` (run `39414613792`, job `118600471702`).
+- Docker Compose config/build/runtime smoke gate: **failed on `c6453c6`** for the probe reason above; the corrected gate has not yet been certified on any SHA.
+- Exact-SHA GitHub Actions certification for CP26: **partial** — the Windows half passed, the Linux half did not.
 
 ## 4. Remaining external and owner-dependent limits
 

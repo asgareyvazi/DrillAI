@@ -232,19 +232,32 @@ jobs:
             docker compose down -v --remove-orphans || true
           }
           trap cleanup EXIT
+          # Name the command that failed. `curl -f` reports an HTTP error as exit code 22, which
+          # on its own says nothing about *which* probe failed — the failure that this gate reported
+          # as a bare "exit code 22" before the probe was proven against the application.
+          trap 'echo "DEPLOYMENT_GATE_FAILED at line $LINENO: $BASH_COMMAND" >&2' ERR
           docker compose config -q
           docker compose up -d --build
+          ready=0
           for attempt in $(seq 1 45); do
             if curl -fsS http://127.0.0.1:8000/api/v1/health/ready >/dev/null 2>&1 && \
                curl -fsS http://127.0.0.1:8080/api/v1/health/ready >/dev/null 2>&1; then
+              ready=1
               break
             fi
             sleep 2
           done
+          if [ "$ready" -ne 1 ]; then
+            echo "DEPLOYMENT_GATE_FAILED: the stack did not become ready within 90 seconds." >&2
+            exit 1
+          fi
           curl -fsS http://127.0.0.1:8000/api/v1/health/ready | grep -q '"status":"ok"'
           curl -fsS http://127.0.0.1:8080/api/v1/health/ready | grep -q '"status":"ok"'
-          curl -fsSI http://127.0.0.1:8080/api/v1/health/ready | grep -iq 'x-content-type-options: nosniff'
-          curl -fsSI http://127.0.0.1:8080/api/v1/health/ready | grep -iq 'content-security-policy:'
+          # The header probes use GET, not HEAD: these routes are registered for GET only, and a
+          # HEAD request is answered with 405, which `curl -f` turns into a hard failure. `-D -`
+          # writes the response headers to stdout so the same assertions run against a 200 reply.
+          curl -fsS -D - -o /dev/null http://127.0.0.1:8080/api/v1/health/ready | grep -iq 'x-content-type-options: nosniff'
+          curl -fsS -D - -o /dev/null http://127.0.0.1:8080/api/v1/health/ready | grep -iq 'content-security-policy:'
           curl -fsS -H "X-Dev-Roles: viewer" http://127.0.0.1:8080/api/v1/connectors/profiles | grep -q '"witsml.1.4.1.1.soap_http"'
           docker compose ps --format json
           {

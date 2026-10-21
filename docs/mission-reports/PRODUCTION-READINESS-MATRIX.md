@@ -50,14 +50,19 @@
 
 ---
 
-## 3. Current CP25/CP26 Release-Candidate Snapshot (2026-10-20)
+## 3. Current CP25/CP26/CP31 Release-Candidate Snapshot (2026-10-21)
 
-**Active session branch:** `arena/9d8f5568-drillai`. CP25 source `9c5db2f45d6c489aaf87392892b82cd8438cb684` and evidence tip `c01fa06aebd1badc4860c462e1483d680e67c6ea` are published. CP25 local Linux gates passed, but its post-push Actions query was empty because the workflow push trigger omitted this session branch. The current release candidate adds the `arena/**` trigger and makes Windows E2E unfiltered; final CI status must be based on the exact resulting pushed SHA.
+**Active session branch:** `arena/9d8f5568-drillai`. CP25 source `9c5db2f45d6c489aaf87392892b82cd8438cb684` and evidence tip `c01fa06aebd1badc4860c462e1483d680e67c6ea` are published, followed by CP26 tip `c6453c6f4550fb13b445df9c96b270448dd68dbb`.
+
+**GitHub Actions run `39414613792`** executed the exact CP26 SHA `c6453c6` on 2026-10-20T11:23:32Z. The `windows-certification` job (`118600471702`) **PASSED** in 12m29s with the full frontend typecheck/lint/318 unit tests/build, supply-chain scan, backend lint, migration check, stack verification, external-vendor runner and the complete Playwright E2E suite. The Linux `certification` job (`118600471494`) **FAILED** at the `Docker Compose deployment smoke gate (docker-compose.yml)` step with exit code **22**; every preceding Linux step succeeded and the E2E step was skipped because the gate failed first.
+
+That Linux failure was a malformed probe, not a deployment defect: the gate sent `curl -fsSI` (**HEAD**) against `/api/v1/health/ready`, which FastAPI registers for `GET` only, so the request was answered with `405` and `curl -f` reported exit code 22. The defect was reproduced locally and is corrected and guarded in **CP31** (`CP31-CI-DEPLOYMENT-PROBE-CONTRACT.md`). The corrected gate has **not** yet been certified on any SHA.
 
 | Area | Current local evidence | Current release status / boundary |
 |---|---|---|
 | CP25 baseline regressions | Global model-ID prefix and telemetry SELECT-budget regressions fixed; full backend suite now **1,104 passed** with embedded PostgreSQL. | Locally verified; final remote certification pending. |
-| CP26 identity/security | Trusted-proxy peer handling, role/tenant boundaries, non-empty scoped tokens, and `/security` user/token UI. | Backend **1,104 passed**; focused auth/API set **65 passed**; UI suite **318 passed**; full Playwright **121 passed**. |
-| Linux deployment/stack | SQLite Alembic upgrade/check, Ruff, supply-chain/secrets, 16 stack scenarios + 32-cycle soak, offline WITSML/ETP harness. | Local gates pass. Docker Compose runtime was not run on this host. |
-| Native Windows / exact-SHA CI | Windows workflow now runs the unfiltered Playwright suite and the SQLite backend. | **Pending** until the updated workflow completes on the exact pushed SHA. |
+| CP26 identity/security | Trusted-proxy peer handling, role/tenant boundaries, non-empty scoped tokens, and `/security` user/token UI. | Backend **1,104 passed**; focused auth/API set **65 passed**; UI suite **318 passed**; full Playwright **121 passed**. **Windows CI PASSED** on `c6453c6` (run `39414613792`, job `118600471702`). |
+| CP31 CI deployment gate | Compose-gate probes corrected to `GET`; explicit readiness timeout and an `ERR` trap that names the failing probe; new regression guard compares every workflow probe with the application's real route table and replays each probe's `grep` assertion. | Local gates pass; guard **fails on the uncorrected workflow** by construction. Backend **1,108 passed** in 87 files; Playwright **121 passed**. Exact-SHA Linux certification pending. |
+| Linux deployment/stack | SQLite Alembic upgrade/check, Ruff, supply-chain/secrets, 16 stack scenarios + 32-cycle soak, offline WITSML/ETP harness, and a local rehearsal of all four Compose-gate HTTP assertions against a live server. | Local gates pass. **Docker Compose runtime was not run on this host** (no Docker CLI/daemon); the rehearsal is not a container-runtime test. |
+| Native Windows / exact-SHA CI | Windows workflow runs the unfiltered Playwright suite and the SQLite backend. | Windows **passed** on the CP26 SHA. A fresh Windows job and a Linux job must certify the final pushed SHA. |
 | External/production evidence | Local protocol harness and PostgreSQL logical backup/restore tests. | Live vendor and notification delivery remain blocked; physical/PITR DR and field certification are not implied. |

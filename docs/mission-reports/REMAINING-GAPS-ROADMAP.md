@@ -5,7 +5,7 @@
 **Phase**: CP17–CP20 End-to-End Engineering Program  
 **Date**: 2026-10-17 (historical CP20 snapshot)
 
-> **Current-release update (2026-10-20):** CP25/CP26 local Linux evidence and authentication remediation are documented in `CP25-BASELINE-AND-GAP-AUDIT.md` and `CP26-AUTH-BOUNDARY-AND-IDENTITY-UI.md`. The updated workflow targets `arena/**` and runs the full Windows browser suite, but Windows, Docker Compose, and exact-SHA GitHub Actions results remain pending until that workflow completes on the final pushed commit. External vendor delivery, physical/PITR disaster recovery, and owner-selected license constraints below remain open.
+> **Current-release update (2026-10-21):** CP25/CP26 local Linux evidence and authentication remediation are documented in `CP25-BASELINE-AND-GAP-AUDIT.md` and `CP26-AUTH-BOUNDARY-AND-IDENTITY-UI.md`. GitHub Actions run `39414613792` then executed the exact CP26 commit `c6453c6`: the **Windows job passed** (job `118600471702`, full frontend and browser suite), while the **Linux job failed** at the Docker Compose deployment smoke gate with exit code 22. That failure was a malformed probe rather than a deployment defect — the gate sent `curl -fsSI` (HEAD) against the GET-only `/api/v1/health/ready` route and received `405` — and it is corrected and guarded in `CP31-CI-DEPLOYMENT-PROBE-CONTRACT.md`. A green Linux **and** Windows run on the final pushed SHA, the Docker Compose container-runtime gate, external vendor delivery, physical/PITR disaster recovery, and the owner-selected license constraint below remain open.
 
 ---
 

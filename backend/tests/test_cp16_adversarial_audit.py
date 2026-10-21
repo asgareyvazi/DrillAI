@@ -22,6 +22,7 @@ from __future__ import annotations
 import asyncio
 import json
 import math
+import re
 import shutil
 import sys
 import time
@@ -996,6 +997,29 @@ def test_cp16_10_documentation_and_contract_consistency_guard():
     backend_test_files = sorted((REPO_ROOT / "backend" / "tests").rglob("test_*.py"))
     assert len(backend_test_files) >= 78
     assert f"{len(backend_test_files)} files" in readme_text or f"{len(backend_test_files)} test files" in readme_text
+
+    # The two backend totals the README quotes must reconcile: the suite with PostgreSQL enabled and
+    # the same suite with the PostgreSQL-marked tests skipped describe the same number of tests.
+    # A stale skip count makes the two claims disagree while each still looks plausible in
+    # isolation, which is exactly how the previous "1,097 passed, 7 skipped" claim drifted away
+    # from the real split.
+    backend_totals = re.findall(r"\*\*([\d,]+) passed(?:, ([\d,]+) skipped)?\*\*", readme_text)
+    assert backend_totals, "README.md must quote the backend test totals"
+    with_postgres = None
+    without_postgres = None
+    for passed, skipped in backend_totals:
+        passed_count = int(passed.replace(",", ""))
+        if skipped:
+            without_postgres = passed_count + int(skipped.replace(",", ""))
+        else:
+            with_postgres = passed_count
+    assert with_postgres is not None and without_postgres is not None, (
+        "README.md must quote both the PostgreSQL-enabled total and the skipped variant"
+    )
+    assert with_postgres == without_postgres, (
+        f"README.md backend totals disagree: {with_postgres} tests with PostgreSQL versus "
+        f"{without_postgres} tests without it. Both describe the same suite, so they must be equal."
+    )
 
     assert "121 passed" in readme_text
     assert "318 passed" in readme_text
