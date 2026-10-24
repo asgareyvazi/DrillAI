@@ -108,7 +108,11 @@ def test_cp32_every_journey_uses_the_shared_contract(spec: Path) -> None:
     """A journey that collects console errors must assert them through the shared contract."""
     source = _read(spec)
     if "consoleErrors" not in source:
-        pytest.skip(f"{spec.name} does not collect console errors")
+        # A spec that never collects console errors has nothing to assert through the contract.
+        # This returns rather than skipping: both certification jobs require the backend suite to
+        # report no skips at all, and "this journey has no console assertion" is not a skipped test
+        # — the check ran, and found nothing in this spec to check.
+        return
     if "const consoleErrors: string[] = []" in source:
         # The checkpoint journey collects the list itself rather than through the shared fixture.
         assert SHARED_CONTRACT in source or "appConsoleErrors" in source, (
@@ -242,6 +246,45 @@ def test_cp32_ci_reports_the_playwright_failure_message() -> None:
             f"the {name} end-to-end step must copy the Playwright failure messages into its "
             "annotation, so a red run says which assertion failed instead of only how many did."
         )
+
+
+def test_cp32_no_guard_in_this_suite_reports_a_skip() -> None:
+    """A guard may not skip: both certification jobs reject a backend suite that reports skips.
+
+    This is not a style rule. The Linux job fails the build when the summary says *skipped*, and the
+    Windows job fails it on the same word, so a skip call inside a guard turns a green suite red for
+    a reason that has nothing to do with the product — which is exactly what happened when this
+    module first skipped the specs that collect no console errors. A guard that has nothing to check
+    for one input returns from that case instead.
+    """
+    # The marker words are assembled rather than written out, so this scan does not match its own
+    # source and report itself.
+    skip_markers = ("skip(", "importorskip(", "xfail(")
+    offenders = []
+    for path in sorted((REPO_ROOT / "backend" / "tests").rglob("test_*.py")):
+        source = _read(path)
+        for marker in skip_markers:
+            if "pytest." + marker in source:
+                offenders.append(f"{path.relative_to(REPO_ROOT)} calls pytest.{marker[:-1]}")
+    assert not offenders, (
+        "these tests would report a skip and fail the certification jobs: " + "; ".join(offenders)
+    )
+
+
+def test_cp32_the_certification_jobs_reject_skips() -> None:
+    """The rule above is enforced by CI; this asserts CI still enforces it."""
+    workflow = yaml.safe_load(_read(WORKFLOW_PATH))
+    jobs = workflow["jobs"]
+
+    linux_step = _step_text(jobs["certification"], "Backend tests")
+    windows_step = _step_text(jobs["windows-certification"], "Backend SQLite test suite")
+
+    assert "*skipped*" in linux_step, (
+        "the Linux backend step must fail the job when the suite reports a skipped test"
+    )
+    assert "skipped" in windows_step, (
+        "the Windows backend step must fail the job when the summary reports a skipped test"
+    )
 
 
 def _step_text(job: dict, step_name_prefix: str) -> str:

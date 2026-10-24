@@ -135,7 +135,11 @@ logged it*, and it additionally failed on the browser's own network log. The new
 same HTTP failures — measured on the response rather than on the browser's wording, so it also
 catches a failure the browser did not log — and still fails on every application error.
 
-All **30** raw assertions across the eight journeys were replaced with the shared contract.
+Across the eight journeys, **34** `expect(consoleErrors…)` assertions were replaced with the shared
+contract, together with **two** further raw judgements that were not written as an `expect` — a
+`consoleErrors.filter(…)` in `live-operations` and a `for (const error of consoleErrors)` loop in
+`well-cockpit`. The commit message for this change quotes 30; the measured figure is 34 + 2, and
+this paragraph is the correction.
 
 ### 3.2 The journeys are compiled before they run
 
@@ -187,10 +191,14 @@ reaches CI:
 5. **The journeys are type-checked**: `frontend/tsconfig.e2e.json` exists, includes `e2e`, is
    `strict`, and is referenced from `frontend/tsconfig.json`.
 6. **CI reports the failure message**: both end-to-end steps extract the Playwright failure lines.
+7. **No backend test skips**, and both certification jobs still reject a reported skip — see §6.
 
-**Negative test.** Re-introducing the pre-fix oracle in one studio journey makes
+**Negative tests.** Re-introducing the pre-fix oracle in one studio journey makes
 `test_cp32_no_journey_judges_the_raw_console_error_list[workflow-studio.spec.ts]` fail with the
-intended message; restoring it makes the guard pass again.
+intended message; injecting a skip makes `test_cp32_no_guard_in_this_suite_reports_a_skip` fail with
+`… calls pytest.skip`; restoring the files makes both pass again. The CP16 documentation guard was
+also verified against a stale README count: with `1,156 passed, 8 skipped` it reports
+`README.md backend totals disagree: {1161, 1164}`.
 
 ## 5. Local verification
 
@@ -200,8 +208,8 @@ intended message; restoring it makes the guard pass again.
 | `npm run lint` | **pass** |
 | `npm test` (Vitest) | **318 passed in 30 files** |
 | `npm run e2e` (Playwright, all three deployments) | **121 passed** — 114 in `chromium`, 4 in `chromium-faults`, 3 in `chromium-auth` |
-| `pytest` (backend, embedded PostgreSQL) | **1,161 passed, 3 skipped** in 88 files (`DRILLAI_TEST_POSTGRES=1`) |
-| `pytest -m "not postgres"` (backend, SQLite) | **1,153 passed, 3 skipped, 8 deselected**; without the environment variable at all the same 8 tests skip themselves and the suite reports **1,153 passed, 11 skipped** |
+| `pytest` (backend, embedded PostgreSQL) | **1,166 passed, 0 skipped** in 88 files (`DRILLAI_TEST_POSTGRES=1`) |
+| `pytest -m "not postgres"` (backend, SQLite) | **1,158 passed, 8 deselected**; without the environment variable at all the same 8 tests skip themselves and the suite reports **1,158 passed, 8 skipped** |
 | `ruff check .` | **pass** |
 | `alembic upgrade head` / `alembic check` on a fresh SQLite database | **pass** |
 | `scripts/verify_stack.py` | `STACK_VERIFICATION_OK` — 16 scenarios and a 32-cycle soak |
@@ -212,7 +220,32 @@ The full E2E suite was also run **before** the correction (121 passed on Linux) 
 used to judge the browser's network log now judge the product's own responses, and every deliberate
 refusal is still accounted for by name.
 
-## 6. Open items
+## 6. The skip regression this checkpoint caused in CI, and its guard
+
+The first CI run of this checkpoint (run `40079792254` on `1fda9be`) **failed both jobs** in the
+backend step, with the Linux annotation:
+
+> the suite skipped tests; the PostgreSQL integration tests must execute
+
+The cause was in this checkpoint, not in the product. The new guard skipped the three specs that
+collect no console errors (`a11y`, `master-data`, `rtl`), and the certification jobs reject a backend
+suite that reports **any** skip: the Linux step fails on `*skipped*` in the summary and the Windows
+step fails on `\d+\s+(skipped|failed|error)`. A suite that had been `1,108 passed` with no skips
+became `1,161 passed, 3 skipped` and turned both jobs red.
+
+The fix is that a guard with nothing to check for one input **returns** from that case instead of
+skipping it — the check ran and found nothing in that spec to check, which is not a skipped test.
+The suite is back to **0 skipped**.
+
+Two guards now hold it:
+
+- `test_cp32_no_guard_in_this_suite_reports_a_skip` scans every backend test file for a skip call,
+  so a future guard cannot reintroduce this class of red build. Verified by injecting a skip: the
+  guard fails with `… calls pytest.skip`; restoring the file makes it pass.
+- `test_cp32_the_certification_jobs_reject_skips` asserts that both jobs still fail on a reported
+  skip, so the rule cannot be quietly relaxed in the workflow either.
+
+## 7. Open items
 
 - **Exact-SHA certification** — the Linux and Windows jobs for the published CP32 commit are the
   authority; the results are recorded in `PRODUCTION-READINESS-MATRIX.md`.
