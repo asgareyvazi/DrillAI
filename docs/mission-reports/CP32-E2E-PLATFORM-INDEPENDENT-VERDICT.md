@@ -300,6 +300,7 @@ code:
 |---|---|---|
 | `448b8a2` (certification record) | `40087070667` | Linux `120852077973` 10:43:57 → 10:55:31 · Windows `120852077882` 10:43:57 → 10:59:41 — both **pass** |
 | `df9a1f8` (tip certification record) | `40088126918` | Linux `120855119661` 11:00:16 → 11:11:34 · Windows `120855119554` 11:00:16 → 11:16:26 — both **pass** |
+| `0547d9f` (tip certification record) | `40089277512` | Linux `120858446431` 11:17:05 → 11:26:11 · Windows `120858446123` 11:17:05 → 11:28:27 — both **pass**, zero non-success steps |
 
 Each failure is recorded with its cause because a release claim is only as good as the chain of
 evidence behind it. The `1fda9be` failure was caused by this checkpoint and is fixed in `dded419`,
