@@ -245,16 +245,64 @@ Two guards now hold it:
 - `test_cp32_the_certification_jobs_reject_skips` asserts that both jobs still fail on a reported
   skip, so the rule cannot be quietly relaxed in the workflow either.
 
-## 7. Open items
+## 7. Exact-SHA certification
 
-- **Exact-SHA certification** — the Linux and Windows jobs for the published CP32 commit are the
-  authority; the results are recorded in `PRODUCTION-READINESS-MATRIX.md`.
-- **Docker Compose runtime evidence** — the Compose deployment gate is exercised only in CI; no
-  Docker daemon is available in this sandbox, so the container runtime remains unverified locally.
-- **Remaining platform-dependent oracles** — the journeys that use `appConsoleErrors` without the
-  shared contract (the seven that provoke deliberate failures) now tolerate the browser's network
-  log, but they do not yet assert on the recorded responses. That is the natural next step and is
-  recorded in `REMAINING-GAPS-ROADMAP.md`.
+**GitHub Actions run `40081444618`** executed the exact CP32 commit
+`dded419fbafb16a5d0ef364058c913ba9b0a8821` on 2026-10-24T09:18:43Z. **Both jobs passed**, and the
+run's overall conclusion is `success`. This is the first fully green Linux **and** Windows run in
+this release series.
+
+| Job | Job ID | Result | Duration |
+|---|---|---|---|
+| `certification` (Linux) | `120835678251` | **PASSED** — overall `success`, no failure annotation | 09:18:45 → 09:28:53 |
+| `windows-certification` (Windows) | `120835678069` | **PASSED** — overall `success`, no failure annotation | 09:18:45 → 09:28:53 |
+
+Every step succeeded in both jobs, including the two that failed earlier in the series:
+
+- **Linux `Docker Compose deployment smoke gate (docker-compose.yml)`** — passed. This is the gate
+  that failed with exit code 22 on `c6453c6` (CP31's root cause) and it is the only
+  container-runtime evidence in this series: the sandbox has no Docker daemon, so the gate's
+  authority is CI.
+- **Linux and Windows end-to-end suites** — passed on all three deployments (main, faults, auth).
+  The Windows job ran the `Playwright E2E certification across main, faults, and auth stacks` step
+  to success, which is the step that failed on `919da0f` with six studio journeys.
+
+Also green on the exact SHA: frontend typecheck (now including the `e2e/` specs on both platforms),
+lint, 318 unit tests, production build, supply-chain/SHA-pinning/secret scan, backend lint, Alembic
+migration check on a fresh database, the backend suite on both dialects, `verify_stack.py`'s 16
+multi-process scenarios and 32-cycle soak, and the external-vendor interop runner.
+
+The two `Upload … Playwright evidence` steps are reported as `skipped` in both jobs. That is their
+designed behaviour — they are `if: failure()` — and is not a skipped test: no suite skipped
+anything on this run.
+
+### The path to green, stated plainly
+
+| SHA | Run | Linux | Windows | Why |
+|---|---|---|---|---|
+| `bfea530` (baseline) | `39217548722` | fail | fail | the regressions CP25 was created to fix |
+| `c6453c6` (CP26) | `39414613792` | fail | pass | Linux: HEAD probe against a GET-only route (exit 22) |
+| `919da0f` (CP31) | `39563150524` | **pass** | fail | Windows: six journeys judged the browser's network log |
+| `1fda9be` (CP32) | `40079792254` | fail | fail | this checkpoint's guard introduced three test skips |
+| `dded419` (CP32 fix) | `40081444618` | **pass** | **pass** | — |
+
+Each failure is recorded with its cause because a release claim is only as good as the chain of
+evidence behind it. The `1fda9be` failure was caused by this checkpoint and is fixed in `dded419`,
+not written off.
+
+## 8. Open items
+
+- **Docker Compose runtime evidence** — the Compose deployment gate **passed in CI** on the
+  certified SHA (run `40081444618`, Linux job `120835678251`). No Docker daemon exists in this
+  sandbox, so the container runtime was never exercised on the development host itself; the CI
+  result is the only container-runtime evidence and it is not a deployment to a real environment.
+- **Remaining platform-dependent oracles** — the seven journeys that provoke deliberate failures
+  (`checkpoint5`, `connectors-platform`, `context-deeplinks`, `error-auth`, `error-matrix`,
+  `identity-permissions`, and two `error-faults` journeys) still assert only through
+  `appConsoleErrors` and do not assert on the recorded failing responses. They tolerate the
+  browser's network log but do not yet prove that an unprovoked call never failed. Giving each the
+  refusal it provokes as an explicit allowlist is the bounded next step, recorded in
+  `REMAINING-GAPS-ROADMAP.md`.
 - **External blockers unchanged** — real vendor connectivity, real notification delivery,
   physical-host and PITR recovery, and licence verification remain outside this repository's
   reach, and are stated as such in the readiness matrix.

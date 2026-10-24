@@ -47,7 +47,7 @@ Consequently, CP26's own exact-SHA certification status is:
 - Native Windows certification: **passed** on `c6453c6` (run `39414613792`, job `118600471702`).
 - Docker Compose config/build/runtime smoke gate: **failed on `c6453c6`** for the probe reason above; the corrected gate then **passed** on `919da0f` in run `39563150524` (Linux job `119098935547`), together with the full Playwright E2E suite.
 - That same run `39563150524` saw the **Windows job fail** at the Playwright E2E step (115 passed, 6 failed), not for anything in CP26 or CP31: six studio journeys judged the *browser's* network log, which Chromium words differently on the Windows runner. Corrected and guarded in `CP32-E2E-PLATFORM-INDEPENDENT-VERDICT.md`.
-- Exact-SHA GitHub Actions certification for CP26: **partial** — the Windows half passed on its own SHA, and the Linux half passed on the later SHA once the compose probe was corrected.
+- Exact-SHA GitHub Actions certification for CP26: **passed on both platforms**, though not on the same SHA — the Windows half passed on `c6453c6`, the Linux half on `919da0f` (compose probe corrected). The series then reached a fully green run on both platforms at one SHA: `dded419` (run `40081444618`).
 
 ## 4. Remaining external and owner-dependent limits
 
