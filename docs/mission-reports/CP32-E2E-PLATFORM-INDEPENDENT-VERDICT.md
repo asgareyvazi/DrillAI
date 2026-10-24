@@ -292,6 +292,11 @@ Each failure is recorded with its cause because a release claim is only as good 
 evidence behind it. Two of these failures were caused by this checkpoint (`1fda9be`, and the flake
 that `34979de` exposed); both are fixed and named, not written off.
 
+**Documentation tips are certified too.** Run `40087070667` executed `448b8a2` — the commit that
+recorded this certification — and both jobs passed again (Linux `120852077973`, 10:43:57 → 10:55:31;
+Windows `120852077882`, 10:43:57 → 10:59:41). So the green result is not limited to the commit that
+happened to fix the code: the repository's tip passes both platforms with nothing uncommitted.
+
 Each failure is recorded with its cause because a release claim is only as good as the chain of
 evidence behind it. The `1fda9be` failure was caused by this checkpoint and is fixed in `dded419`,
 not written off.
@@ -442,3 +447,8 @@ two regression tests.
 - **External blockers unchanged** — real vendor connectivity, real notification delivery,
   physical-host and PITR recovery, and licence verification remain outside this repository's
   reach, and are stated as such in the readiness matrix.
+- **What "certified" does and does not mean here** — both CI jobs are green on the exact SHA, which
+  is platform, toolchain and journey certification of this repository. It is not a deployment to a
+  production environment, not vendor interoperability, not disaster-recovery evidence for a physical
+  host, not field validation of any engineering output, and not a licence decision. Those remain
+  blocked and are recorded as blocked.
