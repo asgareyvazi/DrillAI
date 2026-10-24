@@ -292,10 +292,14 @@ Each failure is recorded with its cause because a release claim is only as good 
 evidence behind it. Two of these failures were caused by this checkpoint (`1fda9be`, and the flake
 that `34979de` exposed); both are fixed and named, not written off.
 
-**Documentation tips are certified too.** Run `40087070667` executed `448b8a2` — the commit that
-recorded this certification — and both jobs passed again (Linux `120852077973`, 10:43:57 → 10:55:31;
-Windows `120852077882`, 10:43:57 → 10:59:41). So the green result is not limited to the commit that
-happened to fix the code: the repository's tip passes both platforms with nothing uncommitted.
+**Documentation tips are certified too.** Every documentation commit after the code was fixed has
+also run green on both platforms, so the result is not limited to the commit that happened to fix the
+code:
+
+| SHA | Run | Job results |
+|---|---|---|
+| `448b8a2` (certification record) | `40087070667` | Linux `120852077973` 10:43:57 → 10:55:31 · Windows `120852077882` 10:43:57 → 10:59:41 — both **pass** |
+| `df9a1f8` (tip certification record) | `40088126918` | Linux `120855119661` 11:00:16 → 11:11:34 · Windows `120855119554` 11:00:16 → 11:16:26 — both **pass** |
 
 Each failure is recorded with its cause because a release claim is only as good as the chain of
 evidence behind it. The `1fda9be` failure was caused by this checkpoint and is fixed in `dded419`,
