@@ -28,6 +28,7 @@ from drillai.api.deps import AuthContext, OptionalFilter, get_db, require
 from drillai.api.serializers import channel_out, point_out
 from drillai.core.clock import utc_now
 from drillai.core.idempotency import complete, replay_or_reserve
+from drillai.core.ids import new_id
 from drillai.security.actions import authorize
 from drillai.telemetry.adapters import (
     AdapterRunner,
@@ -416,7 +417,15 @@ async def commission_synthetic_telemetry(
         ]
         for item in payload.channels
     }
-    adapter = SyntheticAdapter(descriptors, plan, start=default_start)
+    # Each commissioning run is its own declaration of measurements, so its points get their own
+    # identity. Ingestion is idempotent on `source_point_id`, which is right for a source replaying
+    # the same readings — but with a fixed identity per plan index, a second commissioning run into
+    # the same series was silently counted as a duplicate replay: nothing was written, no rule was
+    # evaluated, and the caller was told no alert had been raised. A retried or repeated commission
+    # must produce fresh measurements, so the run is named once here and every frame is scoped to it.
+    adapter = SyntheticAdapter(
+        descriptors, plan, start=default_start, run_id=new_id("cmr")
+    )
 
     @contextlib.asynccontextmanager
     async def _borrowed_session():

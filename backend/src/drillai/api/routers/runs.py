@@ -480,6 +480,23 @@ async def stream_run_events(websocket: WebSocket, run_id: str, after_seq: int = 
                     sequence = max(sequence, row.seq)
                     await websocket.send_json({"type": "run_event", "event": run_event_out(row)})
                 if run is not None and run.status in {"succeeded", "failed", "timed_out", "cancelled"}:
+                    # The events and the terminal status are written by one transaction, but they are
+                    # read here by two statements. If that transaction commits between them, the
+                    # status is visible while the events it wrote are not — and closing now would end
+                    # the stream without ever sending the run's last events to the socket that was
+                    # watching it. Once the status is terminal, every event of that run is committed,
+                    # so one more read is guaranteed to be complete.
+                    trailing = (
+                        await session.execute(
+                            select(RunEvent)
+                            .where(RunEvent.run_id == run_id, RunEvent.seq > sequence)
+                            .order_by(RunEvent.seq)
+                            .limit(200)
+                        )
+                    ).scalars().all()
+                    for row in trailing:
+                        sequence = max(sequence, row.seq)
+                        await websocket.send_json({"type": "run_event", "event": run_event_out(row)})
                     await websocket.send_json({"type": "stream_closed", "status": run.status})
                     await websocket.close()
                     return

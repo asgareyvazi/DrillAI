@@ -639,6 +639,141 @@ async def test_scoped_cursor_resumes_and_multiple_consumers_observe_deterministi
     assert _sequences(tail_frames) == [max(_sequences(frames_one)) + 1]
 
 
+async def test_repeated_synthetic_commissioning_is_two_sets_of_measurements(client) -> None:
+    """Two commissioning runs are two declarations, not a replay of the first.
+
+    Ingestion is idempotent on ``source_point_id``, which is what makes a source replaying the same
+    readings safe. The synthetic adapter derived that identity from ``(channel, plan index)`` alone,
+    so commissioning the same plan twice into the same channel produced the *same* identities: the
+    second run's points were counted as duplicates, nothing was written, no rule was evaluated, and
+    the response said ``alerts_raised: 0``. A caller repeating a commissioning run — a retried test,
+    an operator pressing the button again — was told nothing had happened, and the second set of
+    measurements silently did not exist.
+
+    Each run is now scoped by its own run id, so the second run writes its own points and its own
+    alert. An explicit ``Idempotency-Key`` still replays, because that is the caller saying the same
+    request is the same request.
+    """
+
+    project = await client.post(
+        f"{PREFIX}/projects", json={"name": "Repeat commissioning"}, headers=headers("well_manager")
+    )
+    well = await client.post(
+        f"{PREFIX}/wells",
+        json={"project_id": project.json()["id"], "name": "COMM-REPEAT-1"},
+        headers=headers("well_manager"),
+    )
+    assert well.status_code == 201, well.text
+    well_id = well.json()["id"]
+
+    rule_resp = await client.post(
+        f"{PREFIX}/alert-rules",
+        json={
+            "rule_key": "spp-high-repeat",
+            "name": "Standpipe Pressure High",
+            "channel_key": "spp",
+            "well_id": well_id,
+            "operator": "gt",
+            "threshold": 4000.0,
+            "unit": "psi",
+            "severity": "high",
+            "sustain_seconds": 0.0,
+            "cooldown_seconds": 0.0,
+        },
+        headers=headers("engineer"),
+    )
+    assert rule_resp.status_code == 201, rule_resp.text
+
+    body = {
+        "channels": [
+            {
+                "channel_key": "spp",
+                "name": "Standpipe Pressure",
+                "dimension": "pressure",
+                "unit": "psi",
+                "values": [3500.0, 4200.0],
+                "start": BASE_TS.isoformat(),
+                "step_seconds": 5.0,
+            }
+        ]
+    }
+    first = await client.post(
+        f"{PREFIX}/wells/{well_id}/timeseries/commission-synthetic",
+        json=body,
+        headers=headers("engineer"),
+    )
+    assert first.status_code == 201, first.text
+    assert first.json()["report"]["totals"]["accepted"] == 2
+    assert first.json()["report"]["alerts_raised"] == 1
+
+    # The same plan, commissioned again without an idempotency key: its own measurements. Before the
+    # fix these points carried the identities of the first run's, so they were counted as duplicates
+    # and nothing was written.
+    second = await client.post(
+        f"{PREFIX}/wells/{well_id}/timeseries/commission-synthetic",
+        json=body,
+        headers=headers("engineer"),
+    )
+    assert second.status_code == 201, second.text
+    report = second.json()["report"]
+    assert report["totals"]["accepted"] == 2, "a repeat run must write its own points"
+    assert report["totals"]["duplicates"] == 0, "a repeat run is not a replay of the first"
+
+    # The rule is still breaching and its alert is still open, so the second run records the
+    # observation on that alert instead of raising a second one for the same condition. That is the
+    # product's documented behaviour, and it is asserted here so the distinction between "the points
+    # were written" and "a duplicate alert was raised" stays explicit.
+    still_open = await client.get(f"{PREFIX}/alerts?well_id={well_id}", headers=headers("engineer"))
+    assert still_open.status_code == 200, still_open.text
+    assert len(still_open.json()["items"]) == 1, "one open condition is one alert"
+
+    # A new rule over the same channel — which is what a retried journey creates, because its rule
+    # key carries the run's own timestamp — must be raised by a run commissioned after it. This is
+    # the case that failed: the fresh points did not exist, so the new rule had nothing new to judge.
+    second_rule = await client.post(
+        f"{PREFIX}/alert-rules",
+        json={
+            "rule_key": "spp-high-repeat-second",
+            "name": "Standpipe Pressure High (second rule)",
+            "channel_key": "spp",
+            "well_id": well_id,
+            "operator": "gt",
+            "threshold": 4000.0,
+            "unit": "psi",
+            "severity": "high",
+            "sustain_seconds": 0.0,
+            "cooldown_seconds": 0.0,
+        },
+        headers=headers("engineer"),
+    )
+    assert second_rule.status_code == 201, second_rule.text
+    third = await client.post(
+        f"{PREFIX}/wells/{well_id}/timeseries/commission-synthetic",
+        json=body,
+        headers=headers("engineer"),
+    )
+    assert third.status_code == 201, third.text
+    assert third.json()["report"]["totals"]["accepted"] == 2
+    assert third.json()["report"]["alerts_raised"] == 1, (
+        "a rule added after the first run must be raised by the next run's own measurements"
+    )
+
+    # An explicit idempotency key still replays: the caller said this is the same request.
+    keyed = await client.post(
+        f"{PREFIX}/wells/{well_id}/timeseries/commission-synthetic",
+        json=body,
+        headers={**headers("engineer"), "Idempotency-Key": "commission-repeat-1"},
+    )
+    assert keyed.status_code == 201, keyed.text
+    replay = await client.post(
+        f"{PREFIX}/wells/{well_id}/timeseries/commission-synthetic",
+        json=body,
+        headers={**headers("engineer"), "Idempotency-Key": "commission-repeat-1"},
+    )
+    assert replay.status_code == 201, replay.text
+    assert replay.json() == keyed.json(), "the same key is the same request, and replays"
+
+
 async def test_synthetic_commissioning_and_live_snapshot_endpoint(client, websocket) -> None:
     """POST /wells/{well_id}/timeseries/commission-synthetic runs SyntheticAdapter via AdapterRunner,
     auto-raises alerts, emits outbox events to the live stream, and GET /wells/{well_id}/live/snapshot

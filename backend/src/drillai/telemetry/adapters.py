@@ -157,6 +157,13 @@ class SyntheticAdapter:
     frames whose offset has been passed since the last poll *relative to the adapter's own cursor*, not
     to wall time. A caller can therefore drive a whole well's worth of telemetry through the real
     ingestion path at whatever speed it likes and get exactly the same measurements every run.
+
+    ``run_id`` scopes the *identity* of the measurements, not their values. Ingestion is idempotent on
+    ``source_point_id``, which is right for a source that replays the same readings — but two separate
+    commissioning runs are two separate declarations, and giving them the same identity made the
+    second one a silent replay: the points were counted as duplicates, nothing was written, no rule
+    was evaluated, and the run reported that it had raised no alerts. A caller that wants two runs to
+    be two sets of measurements passes a fresh ``run_id`` for each.
     """
 
     key = "synthetic"
@@ -169,6 +176,7 @@ class SyntheticAdapter:
         *,
         start: dt.datetime | None = None,
         quality: str = "good",
+        run_id: str | None = None,
     ) -> None:
         self._channels = {channel.channel_key: channel for channel in channels}
         unknown = {key for key in plan if key not in self._channels}
@@ -180,6 +188,8 @@ class SyntheticAdapter:
         self._plan = {key: list(entries) for key, entries in plan.items()}
         self._start = start or dt.datetime(2026, 1, 1, tzinfo=dt.UTC)
         self._quality = quality
+        #: Scopes the identity of this run's measurements; see the class docstring.
+        self._run_id = run_id
         #: The plan offset the adapter has released so far. The plan is in seconds relative to
         #: ``start``; the cursor is deliberately *not* wall-clock time, so a caller controls the pace.
         self._cursor: float | None = None
@@ -204,6 +214,11 @@ class SyntheticAdapter:
                 details={"unknown": sorted(unknown)},
             )
         self._subscribed = set(channel_keys)
+
+    def _source_point_id(self, channel_key: str, index: int) -> str:
+        """The identity of one planned measurement, scoped to this run when a run id was given."""
+        prefix = f"{self.key}:{self._run_id}" if self._run_id else self.key
+        return f"{prefix}:{channel_key}:{index}"
 
     async def poll(self) -> Sequence[SourceFrame]:
         """The next due batch of frames from the plan — never a wall-clock slice of it.
@@ -243,7 +258,7 @@ class SyntheticAdapter:
                     value=value,
                     unit=self._channels[channel_key].unit,
                     quality=self._quality,
-                    source_point_id=f"{self.key}:{channel_key}:{index}",
+                    source_point_id=self._source_point_id(channel_key, index),
                     source_ref=f"plan[{index}]",
                     sequence=index,
                 )

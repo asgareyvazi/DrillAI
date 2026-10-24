@@ -208,8 +208,8 @@ also verified against a stale README count: with `1,156 passed, 8 skipped` it re
 | `npm run lint` | **pass** |
 | `npm test` (Vitest) | **318 passed in 30 files** |
 | `npm run e2e` (Playwright, all three deployments) | **121 passed** — 114 in `chromium`, 4 in `chromium-faults`, 3 in `chromium-auth` |
-| `pytest` (backend, embedded PostgreSQL) | **1,166 passed, 0 skipped** in 88 files (`DRILLAI_TEST_POSTGRES=1`) |
-| `pytest -m "not postgres"` (backend, SQLite) | **1,158 passed, 8 deselected**; without the environment variable at all the same 8 tests skip themselves and the suite reports **1,158 passed, 8 skipped** |
+| `pytest` (backend, embedded PostgreSQL) | **1,168 passed, 0 skipped** in 88 files (`DRILLAI_TEST_POSTGRES=1`) |
+| `pytest -m "not postgres"` (backend, SQLite) | **1,160 passed, 8 deselected**; without the environment variable at all the same 8 tests skip themselves and the suite reports **1,160 passed, 8 skipped** |
 | `ruff check .` | **pass** |
 | `alembic upgrade head` / `alembic check` on a fresh SQLite database | **pass** |
 | `scripts/verify_stack.py` | `STACK_VERIFICATION_OK` — 16 scenarios and a 32-cycle soak |
@@ -285,12 +285,143 @@ anything on this run.
 | `919da0f` (CP31) | `39563150524` | **pass** | fail | Windows: six journeys judged the browser's network log |
 | `1fda9be` (CP32) | `40079792254` | fail | fail | this checkpoint's guard introduced three test skips |
 | `dded419` (CP32 fix) | `40081444618` | **pass** | **pass** | — |
+| `34979de` (CP32 docs) | `40082345895` | pass | fail | Windows: a flake, not a regression — a retried journey's commissioning was a duplicate replay; root-caused and fixed in §8 |
 
 Each failure is recorded with its cause because a release claim is only as good as the chain of
 evidence behind it. The `1fda9be` failure was caused by this checkpoint and is fixed in `dded419`,
 not written off.
 
-## 8. Open items
+## 8. The Windows E2E failure on the docs-only commit, and its root cause
+
+Run `40082345895` executed `34979de` — a documentation-only commit — and the Windows job failed the
+Playwright step with **120 passed, 1 failed**. The same code had passed on `dded419` minutes earlier,
+so the run was not evidence of a regression in that commit; it was a flake. It was investigated
+rather than re-run, because a re-run is not available (`gh run rerun` refuses this workflow and the
+REST endpoint returns 403 for this token) and because a flake with a nameable cause is a defect.
+
+### What the annotation showed
+
+Two different assertions failed in the same journey, one per attempt:
+
+| Attempt | Failed at | What it means |
+|---|---|---|
+| first | a `toHaveText` assertion inside the CP10 journey | the journey got *past* the alert assertion; the alert had been raised |
+| retry (`retries: 1`) | `live-operations.spec.ts:99`, `alerts_raised` — expected `>= 1`, received `0` | the retry's commissioning run raised nothing |
+
+A retry that fails at a point the first attempt passed is a statement about the **state the first
+attempt left behind**, not about the code.
+
+### Reproduced locally, deterministically
+
+Running the journey twice against one database — exactly what a retry does — reproduces it:
+
+```
+npx playwright test e2e/live-operations.spec.ts --repeat-each=2
+  ✓ repeat 0   … (passed)
+  ✘ repeat 1   … expect(commissionResp.report.alerts_raised).toBeGreaterThanOrEqual(1)
+                  Expected: >= 1   Received: 0
+```
+
+### Root cause
+
+`SyntheticAdapter` derived each frame's `source_point_id` from `(channel, plan index)` alone:
+
+```python
+source_point_id=f"{self.key}:{channel_key}:{index}"   # "synthetic:spp:0", "synthetic:spp:1"
+```
+
+Ingestion is idempotent on `source_point_id`, which is right for a source replaying the same
+readings. But two *commissioning runs* are two declarations of measurements, and they produced the
+**same identities**. So the second run's points were counted as duplicates: nothing was written, no
+rule was evaluated over new data, and the response honestly reported `alerts_raised: 0`. The database
+after the failing run shows it — the second run's rule exists, and no alert was ever raised for it,
+because its points never arrived.
+
+The Windows failure is this: the first attempt failed on a UI assertion, leaving an open alert
+behind; the retry commissioned the same plan, its points were duplicates, and a *new* rule (the
+journey's rule key carries `Date.now()`) had no new data to judge.
+
+### The fix
+
+The adapter takes a `run_id` that scopes the **identity** of its measurements, not their values:
+
+```python
+def _source_point_id(self, channel_key: str, index: int) -> str:
+    prefix = f"{self.key}:{self._run_id}" if self._run_id else self.key
+    return f"{prefix}:{channel_key}:{index}"
+```
+
+`POST /wells/{well_id}/timeseries/commission-synthetic` passes a fresh `new_id("cmr")` for each run,
+so two commissioning runs write two sets of points and each is evaluated. The measurements stay
+exactly as deterministic as before — same timestamps, values, units and qualities — and a caller that
+does not pass a run id keeps the historical `"synthetic:spp:0"` identity. An explicit
+`Idempotency-Key` still replays, because that is the caller saying the same request is the same
+request.
+
+Regression coverage:
+
+- `tests/api/test_live_stream.py::test_repeated_synthetic_commissioning_is_two_sets_of_measurements`
+  — a second run writes its own points (`accepted: 2`, `duplicates: 0`); one open condition stays one
+  alert; a rule added after the first run is raised by the next run's own measurements; the same
+  idempotency key still replays. **Verified to fail without the fix**
+  (`AssertionError: a repeat run must write its own points`) and to pass with it.
+- `tests/telemetry/test_adapters.py::test_a_run_id_scopes_the_identity_of_the_measurements` — the
+  identity differs per run, the historical identity is unchanged when no run id is given, and the
+  measurement itself is untouched.
+- The journey itself, run three times against one database
+  (`--repeat-each=3`): **9 passed**, where it previously failed on the second repeat.
+
+## 9. Two more defects the investigation surfaced
+
+Neither was reported by CI; both were found while making the Windows failure reproducible.
+
+### 9.1 A run's last events could be lost when its stream closed
+
+`tests/api/test_run_event_stream.py::test_the_socket_tails_the_durable_log_and_closes_when_the_run_ends`
+failed once during a full-suite run (`1 failed, 1167 passed`) and passed in isolation. The failure was
+`min() arg is an empty sequence` — the socket replayed the durable log and then delivered
+`stream_closed` **without a single live event**, so the run's final events never arrived on the socket
+that was watching it.
+
+The cause is a two-statement read in the stream endpoint:
+
+```python
+rows = await session.execute(select(RunEvent).where(RunEvent.seq > sequence, ...))   # statement 1
+run  = await session.execute(select(WorkflowRun).where(WorkflowRun.id == run_id))    # statement 2
+if run.status in TERMINAL:
+    await websocket.send_json({"type": "stream_closed", ...}); await websocket.close()
+```
+
+The events and the terminal status are written by **one** transaction, but they are read by **two**
+statements under READ COMMITTED. If that transaction commits between them, the status read shows the
+run finished while the event read — already done — does not contain what it wrote. The loop then
+closes the stream and the tail is lost from the stream. The events stay in the durable log, so a
+client that reconnects with `after_seq` recovers them; what is broken is the promise that the stream
+tails the log and closes at the end.
+
+The fix reads the log once more before closing, which is guaranteed to be complete because a terminal
+status means everything the run wrote is committed:
+
+```python
+if run is not None and run.status in TERMINAL:
+    trailing = await session.execute(select(RunEvent).where(RunEvent.seq > sequence, ...))
+    for row in trailing: ...send...
+    await websocket.send_json({"type": "stream_closed", "status": run.status})
+```
+
+**Honest limit:** this race is not deterministically reproducible in a test — it needs a commit to
+land between two statements of the same tick. The existing test asserts the contract (the stream
+delivers the whole log, in order, once, and then closes) and caught it once under full-suite load; no
+new test was added that claims to force the interleaving, because one that cannot fail reliably would
+be a false guard.
+
+### 9.2 The suite's own duplicate-replay defect
+
+See §8: `SyntheticAdapter` gave every commissioning run the same point identities, so a repeated or
+retried run was a silent duplicate replay. That one **is** deterministically reproducible and now has
+two regression tests.
+
+## 10. Open items
 
 - **Docker Compose runtime evidence** — the Compose deployment gate **passed in CI** on the
   certified SHA (run `40081444618`, Linux job `120835678251`). No Docker daemon exists in this

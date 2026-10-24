@@ -113,6 +113,41 @@ async def test_a_synthetic_adapter_satisfies_the_protocol_and_is_deterministic(s
     assert repeats == [[(START, 3500.0)]]
 
 
+async def test_a_run_id_scopes_the_identity_of_the_measurements(session) -> None:
+    """Two runs over the same plan are two sets of measurements, not one replayed twice.
+
+    Ingestion treats ``source_point_id`` as identity, so the value the adapter puts there decides
+    whether a second commissioning run writes points or is silently counted as a duplicate replay of
+    the first. The identity is therefore scoped by the run, while the measurements themselves stay
+    exactly as deterministic as before.
+    """
+    plan = {"spp": [(0.0, 3500.0), (1.0, 3520.0)]}
+
+    bare = SyntheticAdapter([_spp()], plan, start=START)
+    await bare.connect()
+    bare_frames = await bare.poll()
+
+    run_one = SyntheticAdapter([_spp()], plan, start=START, run_id="run-one")
+    await run_one.connect()
+    run_one_frames = await run_one.poll()
+
+    run_two = SyntheticAdapter([_spp()], plan, start=START, run_id="run-two")
+    await run_two.connect()
+    run_two_frames = await run_two.poll()
+
+    # Without a run id the identity is the historical one, so an existing caller is unaffected.
+    assert bare_frames[0].source_point_id == "synthetic:spp:0"
+    # With one, the identity names the run — and the two runs cannot collide.
+    assert run_one_frames[0].source_point_id == "synthetic:run-one:spp:0"
+    assert run_two_frames[0].source_point_id == "synthetic:run-two:spp:0"
+    assert run_one_frames[0].source_point_id != run_two_frames[0].source_point_id
+
+    # The measurement is unchanged: same timestamp, same value, same unit, same quality.
+    assert (run_one_frames[0].ts, run_one_frames[0].value) == (bare_frames[0].ts, bare_frames[0].value)
+    assert run_two_frames[0].unit == bare_frames[0].unit
+    assert run_two_frames[0].quality == bare_frames[0].quality
+
+
 async def test_polling_before_connecting_is_refused(session) -> None:
     adapter = SyntheticAdapter([_spp()], {"spp": [(0.0, 1.0)]})
     with pytest.raises(ValidationFailed) as failure:
