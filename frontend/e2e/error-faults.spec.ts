@@ -24,10 +24,11 @@ import {
   apiPost,
   appConsoleErrors,
   clearPendingApproval,
+  expect,
+  expectNoFailures,
   seededIds,
   startRunFromStudio,
   test,
-  expect,
 } from './fixtures'
 import type { APIRequestContext, Page } from '@playwright/test'
 
@@ -123,7 +124,7 @@ test.describe('failures the server must be asked to produce', () => {
   test('a response that is not the contract is a protocol failure with a request id, not an outage', async ({
     page,
     request,
-    consoleErrors,
+    consoleErrors, failedResponses,
   }) => {
     const wellsPath = '/api/v1/wells'
     await arm(request, { method: 'GET', path: wellsPath, mode: 'malformed' })
@@ -147,7 +148,7 @@ test.describe('failures the server must be asked to produce', () => {
     await page.reload()
     await expect(errorState(page)).toHaveCount(0, { timeout: 30_000 })
     await expect(page.getByRole('table').or(page.getByText(/no wells/i)).first()).toBeVisible()
-    expect(consoleErrors, `console errors: ${consoleErrors.join(' | ')}`).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses)
   })
 
   test('an unhandled server fault names the request, says it was the server, and can be retried', async ({
@@ -199,7 +200,7 @@ test.describe('failures the server must be asked to produce', () => {
   test('a slow read the operator navigates away from is cancelled, not reported, and cannot replace the screen', async ({
     page,
     request,
-    consoleErrors,
+    consoleErrors, failedResponses,
   }) => {
     // Two real runs, started the way an operator starts them, so there is something to switch between.
     const { workflowId, wellId } = await seededIds(request)
@@ -282,6 +283,6 @@ test.describe('failures the server must be asked to produce', () => {
     await expect(errorState(page)).toHaveCount(0)
 
     await disarm(request)
-    expect(consoleErrors, `console errors: ${consoleErrors.join(' | ')}`).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses)
   })
 })

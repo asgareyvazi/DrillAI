@@ -15,7 +15,15 @@
  */
 
 import { holdsPermission } from '../src/lib/permissions'
-import { apiGet, apiPost, selectRole, test, expect } from './fixtures'
+import {
+  apiGet,
+  apiPost,
+  expectNoFailures,
+  selectRole,
+  test,
+  expect,
+  type ApiRequest,
+} from './fixtures'
 import type { Page } from '@playwright/test'
 
 type Workflow = {
@@ -72,13 +80,13 @@ type WorkflowDetail = {
   }
 }
 
-async function detail(request: Parameters<typeof apiGet>[1], workflowId: string): Promise<WorkflowDetail> {
+async function detail(request: ApiRequest, workflowId: string): Promise<WorkflowDetail> {
   return apiGet<WorkflowDetail>(request, `/workflows/${workflowId}`)
 }
 
 /** A workflow that has never been saved has no version; the API answers 404 until the first save. */
 /** The newest saved version number, from the history rather than from a default. */
-async function newestVersion(request: Parameters<typeof apiGet>[1], workflowId: string): Promise<number> {
+async function newestVersion(request: ApiRequest, workflowId: string): Promise<number> {
   const history = await apiGet<{ items: Array<{ version: number }>; total: number }>(
     request,
     `/workflows/${workflowId}/versions?limit=1`,
@@ -88,7 +96,7 @@ async function newestVersion(request: Parameters<typeof apiGet>[1], workflowId: 
 }
 
 async function hasVersion(
-  request: Parameters<typeof apiGet>[1],
+  request: ApiRequest,
   workflowId: string,
 ): Promise<boolean> {
   const response = await request.get(`/api/v1/workflows/${workflowId}`, {
@@ -115,7 +123,7 @@ async function openStoredWorkflow(page: Page, workflowId: string, version: numbe
   await expect(page.getByText('saved', { exact: true })).toBeVisible()
 }
 
-async function createWorkflow(request: Parameters<typeof apiPost>[1], suffix: string): Promise<Workflow> {
+async function createWorkflow(request: ApiRequest, suffix: string): Promise<Workflow> {
   return apiPost<Workflow>(request, '/workflows', {
     key: `e2e.studio-${suffix}`,
     name: `Studio journey ${suffix}`,
@@ -128,6 +136,7 @@ test.describe('workflow studio: create, edit, validate, save, publish', () => {
     page,
     request,
     consoleErrors,
+    failedResponses,
   }) => {
     const suffix = `${Date.now()}`
     const before = await apiGet<{ items: Workflow[]; total: number }>(request, '/workflows')
@@ -160,13 +169,17 @@ test.describe('workflow studio: create, edit, validate, save, publish', () => {
     // Nothing has been typed, so nothing is unsaved: an empty draft against an empty server graph.
     await expect(page.getByText('saved', { exact: true })).toBeVisible()
 
-    expect(consoleErrors, `console errors: ${consoleErrors.join(' | ')}`).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses, {
+      scope: '/api/v1/workflows',
+      allowed: ['/publish'],
+    })
   })
 
   test('an unchanged save creates no version, and the version numbers come from the server', async ({
     page,
     request,
     consoleErrors,
+    failedResponses,
   }) => {
     const workflow = await createWorkflow(request, `unchanged-${Date.now()}`)
     expect(await hasVersion(request, workflow.id)).toBe(false)
@@ -202,13 +215,17 @@ test.describe('workflow studio: create, edit, validate, save, publish', () => {
     expect((await detail(request, workflow.id)).version.version).toBe(2)
     await expect(page.getByText('saved', { exact: true })).toBeVisible()
 
-    expect(consoleErrors, `console errors: ${consoleErrors.join(' | ')}`).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses, {
+      scope: '/api/v1/workflows',
+      allowed: ['/publish'],
+    })
   })
 
   test('add, configure, connect, validate, save and publish — the server decides each step', async ({
     page,
     request,
     consoleErrors,
+    failedResponses,
   }) => {
     const workflow = await createWorkflow(request, `lifecycle-${Date.now()}`)
     await page.goto(`/workflows?workflow=${workflow.id}`)
@@ -261,9 +278,12 @@ test.describe('workflow studio: create, edit, validate, save, publish', () => {
     const refused = await detail(request, workflow.id)
     expect(refused.version.published_at).toBeNull()
     expect(refused.workflow.published_version_id).toBeNull()
-    // Publishing a draft the server rejects is a deliberate failure, and the browser logs the failed
-    // request. It is the only such failure this journey provokes; anything else still fails the test.
-    const expectedRefusal = consoleErrors.filter((error) => /status of 4\d\d/.test(error))
+    // Publishing a draft the server rejects is a deliberate failure, and it is the only one this
+    // journey provokes. The response says so on every platform; the browser's console line for it
+    // does not, because Chromium words a failed request differently on different runners.
+    const refusals = failedResponses.filter((response) => response.url.includes('/publish'))
+    expect(refusals.length, 'the refused publish is the only expected failure').toBe(1)
+    expect(refusals[0].status).toBe(400)
 
     // 5. Fix it in the inspector. The field writes the same config the JSON view shows.
     await page.locator('.react-flow__node', { hasText: 'Build report' }).click()
@@ -297,18 +317,17 @@ test.describe('workflow studio: create, edit, validate, save, publish', () => {
     await expect(page.getByTestId('published-version')).toHaveAttribute('data-published-at', /.+/)
     await expect(page.getByText('saved', { exact: true })).toBeVisible()
 
-    expect(expectedRefusal.length, 'the refused publish is the only expected failure').toBeLessThanOrEqual(1)
-    for (const error of consoleErrors) {
-      if (!expectedRefusal.includes(error)) {
-        expect(error, `unexpected console error: ${error}`).toMatch(/status of 4\d\d/)
-      }
-    }
+    expectNoFailures(consoleErrors, failedResponses, {
+      scope: '/api/v1/workflows',
+      allowed: ['/publish'],
+    })
   })
 
   test('publishing is offered only to an identity the server would accept it from', async ({
     page,
     request,
     consoleErrors,
+    failedResponses,
   }) => {
     const workflow = await createWorkflow(request, `permissions-${Date.now()}`)
     await page.goto(`/workflows?workflow=${workflow.id}`)
@@ -352,13 +371,17 @@ test.describe('workflow studio: create, edit, validate, save, publish', () => {
     const detail = await apiGet<WorkflowDetail>(request, `/workflows/${workflow.id}`, 'supervisor')
     expect(detail.version.published_at).not.toBeNull()
 
-    expect(consoleErrors, `console errors: ${consoleErrors.join(' | ')}`).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses, {
+      scope: '/api/v1/workflows',
+      allowed: ['/publish'],
+    })
   })
 
   test('the version history loads an older version without overwriting the newest', async ({
     page,
     request,
     consoleErrors,
+    failedResponses,
   }) => {
     const workflows = await apiGet<{ items: Workflow[] }>(request, '/workflows')
     const target = workflows.items.find((item) => item.current_version > 1)
@@ -389,13 +412,17 @@ test.describe('workflow studio: create, edit, validate, save, publish', () => {
     expect(after.items[0].version).toBe(newest.version)
     expect(after.items[0].graph_hash).toBe(newest.graph_hash)
 
-    expect(consoleErrors, `console errors: ${consoleErrors.join(' | ')}`).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses, {
+      scope: '/api/v1/workflows',
+      allowed: ['/publish'],
+    })
   })
 
   test('a published graph keeps every field the editor does not display', async ({
     page,
     request,
     consoleErrors,
+    failedResponses,
   }) => {
     const workflows = await apiGet<{ items: Workflow[] }>(request, '/workflows')
     const target = workflows.items.find((item) => item.published_version_id !== null && item.current_version > 0)
@@ -451,10 +478,13 @@ test.describe('workflow studio: create, edit, validate, save, publish', () => {
     // The label that was typed is really on the edge.
     expect(after.graph.edges.some((edge) => edge.label === 'reviewed edge')).toBe(true)
 
-    expect(consoleErrors, `console errors: ${consoleErrors.join(' | ')}`).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses, {
+      scope: '/api/v1/workflows',
+      allowed: ['/publish'],
+    })
   })
 
-  test('an unsaved draft is not discarded without being asked', async ({ page, request, consoleErrors }) => {
+  test('an unsaved draft is not discarded without being asked', async ({ page, request, consoleErrors, failedResponses }) => {
     // Both definitions are created here rather than taken from the list. The draft has to be dirty
     // against the graph the editor loaded: adding a node the stored graph already contains leaves the
     // graph equal to the saved one, so nothing is unsaved and the warning under test never appears —
@@ -506,10 +536,13 @@ test.describe('workflow studio: create, edit, validate, save, publish', () => {
     expect(untouched.graph.edges).toHaveLength(0)
     expect(await hasVersion(request, second.id)).toBe(false)
 
-    expect(consoleErrors, `console errors: ${consoleErrors.join(' | ')}`).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses, {
+      scope: '/api/v1/workflows',
+      allowed: ['/publish'],
+    })
   })
 
-  test('a run is scoped to the well the user chose, and to no other', async ({ page, request, consoleErrors }) => {
+  test('a run is scoped to the well the user chose, and to no other', async ({ page, request, consoleErrors, failedResponses }) => {
     const workflows = await apiGet<{ items: Workflow[] }>(request, '/workflows')
     const target = workflows.items.find((item) => item.published_version_id !== null)
     expect(target, 'a published workflow is needed to start a run').toBeTruthy()
@@ -562,13 +595,17 @@ test.describe('workflow studio: create, edit, validate, save, publish', () => {
     const otherRun = await apiGet<{ run: { well_id: string | null } }>(request, `/runs/${otherRunId}`)
     expect(otherRun.run.well_id).toBe(other.id)
 
-    expect(consoleErrors, `console errors: ${consoleErrors.join(' | ')}`).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses, {
+      scope: '/api/v1/workflows',
+      allowed: ['/publish'],
+    })
   })
 
   test('the palette is the node registry, not a list copied into the frontend', async ({
     page,
     request,
     consoleErrors,
+    failedResponses,
   }) => {
     const catalogue = await apiGet<{
       items: Array<{ key: string; name: string; family: string }>
@@ -586,6 +623,9 @@ test.describe('workflow studio: create, edit, validate, save, publish', () => {
     // without a frontend change.
     await expect(page.getByRole('tab', { name: /node palette/i })).toContainText(String(catalogue.total))
 
-        expect(consoleErrors, `console errors: ${consoleErrors.join(' | ')}`).toEqual([])
+        expectNoFailures(consoleErrors, failedResponses, {
+      scope: '/api/v1/workflows',
+      allowed: ['/publish'],
+    })
   })
 })

@@ -126,6 +126,30 @@ third of the suite, so all three projects run.
 | `operations-workspace.spec.ts` | 5 | the operational record: the operations the API lists, an operation's actual hours and the document it was promoted from (the link really opens it), the transitions the server allows and a terminal record offering none, an event's NPT charge from its own category and hours, and the merged timeline deep-linking to its source document |
 | `master-data.spec.ts` | 3 | the asset spine end to end: project → field → well → wellbore → section, then rename, move, transition, sidetrack and activate with every id and the attached document preserved; the refusals (a viewer's 403, a stale write's 409, the lineage rules); and well creation from the interface read back from the server |
 
+### What a journey asserts about the product
+
+A journey that says "nothing went wrong" asserts two things, and it asserts them on oracles that
+are the same on every platform:
+
+1. **The application produced no error of its own** — `appConsoleErrors(consoleErrors)` is empty.
+   A React error, an unhandled rejection or a `console.error` from the product fails the journey.
+2. **No call the journey did not provoke failed** — the shared fixture records every response the
+   page received with a failing status, and `expectNoFailures` requires that list to be empty. A
+   journey that provokes a refusal on purpose names it, so it is accounted for rather than
+   tolerated by accident.
+
+The browser's own line for a resource that failed to load (`Failed to load resource: …`) is
+deliberately **not** an oracle. The application shell cancels its background reads whenever the
+reader navigates, and Chromium writes that cancellation differently on different runners —
+`net::ERR_ABORTED` on the Linux CI job, a dropped connection on the Windows one — so a verdict that
+reads that line is a verdict about the runner. It is the reason the Windows certification job once
+failed six studio journeys that the Linux job passed on the same commit. The contract is held in
+place by `backend/tests/security/test_cp32_e2e_console_error_contract.py`.
+
+The journeys are also **compiled** before they run: `frontend/tsconfig.e2e.json` type-checks `e2e/`
+in strict mode and `frontend/tsconfig.json` references it, so `npm run typecheck` — which CI runs on
+both platforms — compiles the specs as well as the app.
+
 ### What is mocked, and where
 
 Nothing, in this layer. The specs drive the real UI; the UI calls the real API; the API reads a real

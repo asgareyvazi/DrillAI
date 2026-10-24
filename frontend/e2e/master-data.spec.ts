@@ -38,6 +38,8 @@ interface WellRow {
   status: string
   well_type: string
   updated_at: string
+  /** The operator/regulator identifier the server canonicalises to upper case on write. */
+  uwi: string | null
   allowed_transitions?: string[]
 }
 

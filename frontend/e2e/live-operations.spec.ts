@@ -6,7 +6,14 @@
  * service, transactional outbox, rule evaluation engine, and Vite client.
  */
 
-import { apiGet, apiPost, expect, test, wellPath } from './fixtures'
+import {
+  apiGet,
+  apiPost,
+  expect,
+  expectNoFailures,
+  test,
+  wellPath,
+} from './fixtures'
 
 type ChannelDto = {
   id: string
@@ -29,6 +36,7 @@ test.describe('CP10 live operational vertical slice (Journeys A–I)', () => {
     request,
     wellId,
     consoleErrors,
+    failedResponses,
   }) => {
     // 1. Register a deterministic high-SPP alert rule on the seeded well
     const ruleKey = `e2e_spp_high_${Date.now()}`
@@ -197,15 +205,16 @@ test.describe('CP10 live operational vertical slice (Journeys A–I)', () => {
     await expect(page).toHaveURL(new RegExp(`/wells/${wellId}/advisor\\?alert=${alertId}`))
     await expect(page.getByTestId('advisor-linked-alert-badge')).toBeVisible()
 
-    const unexpectedErrors = consoleErrors.filter((msg) => !msg.includes('409 (Conflict)'))
-    expect(unexpectedErrors, `console errors: ${unexpectedErrors.join(' | ')}`).toEqual([])
+    // The journey clears an alert that is already being worked on, and the server refuses that on
+    // purpose: the refusal is the one failure this journey provokes, and nothing else may fail.
+    expectNoFailures(consoleErrors, failedResponses, { allowed: ['/alerts/'] })
   })
 
   test('Journeys F, G & I: cross-well stream isolation, missing/untrustworthy channel honesty, and Persian RTL token isolation', async ({
     page,
     request,
     wellId,
-    consoleErrors,
+    consoleErrors, failedResponses,
   }) => {
     // Journey G: Create a channel with no readings (missing) and a channel with a 'bad' quality point
     const missingKey = `rop_empty_${Date.now()}`
@@ -321,14 +330,14 @@ test.describe('CP10 live operational vertical slice (Journeys A–I)', () => {
     await expect(page.getByTestId('operational-monitor')).toBeVisible()
     await expect(page.getByTestId('kpi-value-spp')).toHaveAttribute('dir', 'ltr')
 
-    expect(consoleErrors, `console errors: ${consoleErrors.join(' | ')}`).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses)
   })
 
   test('Journey E & UI Commissioning: hysteresis auto-clear on recovery point and UI synthetic commissioning button', async ({
     page,
     request,
     wellId,
-    consoleErrors,
+    consoleErrors, failedResponses,
   }) => {
     const ruleKey = `e2e_wob_hyst_${Date.now()}`
     await apiPost(
@@ -436,6 +445,6 @@ test.describe('CP10 live operational vertical slice (Journeys A–I)', () => {
     await expect(page.getByTestId(`alert-status-${wobAlert!.id}`)).toHaveText(/cleared/i)
     await expect(page.getByTestId(`alert-ack-btn-${wobAlert!.id}`)).toHaveCount(0)
 
-    expect(consoleErrors, `console errors: ${consoleErrors.join(' | ')}`).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses)
   })
 })

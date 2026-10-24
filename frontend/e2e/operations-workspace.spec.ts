@@ -14,7 +14,13 @@
  * * a cause's basis travels with the cause (`cause_basis`).
  */
 
-import { apiGet, expect, test, wellPath } from './fixtures'
+import {
+  apiGet,
+  expect,
+  expectNoFailures,
+  test,
+  wellPath,
+} from './fixtures'
 
 type OperationPage = {
   items: {
@@ -51,7 +57,7 @@ type EventPage = {
 }
 
 type TimelinePage = {
-  entries: { kind: string; id: string; document_id: string | null }[]
+  entries: { kind: string; id: string; title: string; document_id: string | null }[]
   count: number
   kinds_available: string[]
   next_cursor: string | null
@@ -62,7 +68,7 @@ test.describe('the operational workspace built from the real records', () => {
     page,
     request,
     wellId,
-    consoleErrors,
+    consoleErrors, failedResponses,
   }) => {
     const operations = await apiGet<OperationPage>(
       request,
@@ -84,14 +90,14 @@ test.describe('the operational workspace built from the real records', () => {
       const line = page.getByRole('row').filter({ hasText: row.name })
       await expect(line.getByText(row.is_planned ? 'Plan' : 'Actual')).toBeVisible()
     }
-    expect(consoleErrors).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses)
   })
 
   test('shows an operation’s actual hours in the actual column and the document behind it', async ({
     page,
     request,
     wellId,
-    consoleErrors,
+    consoleErrors, failedResponses,
   }) => {
     const operations = await apiGet<OperationPage>(
       request,
@@ -122,14 +128,14 @@ test.describe('the operational workspace built from the real records', () => {
     await link.click()
     await expect(page).toHaveURL(new RegExp(`/wells/${wellId}/documents\\?document=${source}`))
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
-    expect(consoleErrors).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses)
   })
 
   test('offers the transitions the server allows and says so when a record is terminal', async ({
     page,
     request,
     wellId,
-    consoleErrors,
+    consoleErrors, failedResponses,
   }) => {
     const operations = await apiGet<OperationPage>(
       request,
@@ -157,14 +163,14 @@ test.describe('the operational workspace built from the real records', () => {
         ).toBeVisible()
       }
     }
-    expect(consoleErrors).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses)
   })
 
   test('charges NPT from the event’s own hours and keeps the cause’s basis with the cause', async ({
     page,
     request,
     wellId,
-    consoleErrors,
+    consoleErrors, failedResponses,
   }) => {
     const events = await apiGet<EventPage>(request, `/events?well_id=${wellId}&limit=20`)
     expect(events.total).toBeGreaterThan(0)
@@ -193,14 +199,14 @@ test.describe('the operational workspace built from the real records', () => {
     await page.goto(wellPath(`/operations?tab=events&event=${first.id}`))
     const drawer = page.getByRole('dialog')
     await expect(drawer.getByText(first.title)).toBeVisible()
-    expect(consoleErrors).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses)
   })
 
   test('merges the timeline and deep-links an entry to its document', async ({
     page,
     request,
     wellId,
-    consoleErrors,
+    consoleErrors, failedResponses,
   }) => {
     // The workspace pages the timeline at 100 entries per read, so the assertion asks the API for the
     // same page the screen asked for rather than for a different one.
@@ -233,6 +239,6 @@ test.describe('the operational workspace built from the real records', () => {
     await expect(link).toHaveAttribute('href', new RegExp(`document=${source}`))
     await link.click()
     await expect(page).toHaveURL(new RegExp(`/wells/${wellId}/documents\\?document=${source}`))
-    expect(consoleErrors).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses)
   })
 })

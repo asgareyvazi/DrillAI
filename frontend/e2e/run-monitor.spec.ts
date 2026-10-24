@@ -18,7 +18,17 @@
  *     node failure rather than a mocked error.
  */
 
-import { apiGet, apiPost, fixtures, selectRole, test, expect, waitForLoaded } from './fixtures'
+import {
+  apiGet,
+  apiPost,
+  expect,
+  expectNoFailures,
+  fixtures,
+  selectRole,
+  test,
+  waitForLoaded,
+  type ApiRequest,
+} from './fixtures'
 import type { Page } from '@playwright/test'
 
 type RunRow = {
@@ -84,7 +94,7 @@ type RunEnvelope = {
   resumable: boolean
 }
 
-function runEnvelope(request: Parameters<typeof apiGet>[1], runId: string, role: Parameters<typeof apiGet>[2] = 'engineer') {
+function runEnvelope(request: ApiRequest, runId: string, role: Parameters<typeof apiGet>[2] = 'engineer') {
   return apiGet<RunEnvelope>(request, `/runs/${runId}`, role)
 }
 
@@ -105,7 +115,7 @@ test.describe('run monitor: a run that stops for a human decision', () => {
   test('a published definition runs on a real well and stops at its approval gate', async ({
     page,
     request,
-    consoleErrors,
+    consoleErrors, failedResponses,
     wellId,
   }) => {
     const { workflow_id } = fixtures()
@@ -149,13 +159,13 @@ test.describe('run monitor: a run that stops for a human decision', () => {
     await expect(page.getByTestId('run-status')).toHaveText(/waiting approval/i)
     await expect(page.getByTestId('approval-card')).toBeVisible()
 
-    expect(consoleErrors, `console errors: ${consoleErrors.join(' | ')}`).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses)
   })
 
   test('a decision taken by another identity resumes the run and is recorded with its note', async ({
     page,
     request,
-    consoleErrors,
+    consoleErrors, failedResponses,
     wellId,
   }) => {
     const { workflow_id } = fixtures()
@@ -222,10 +232,10 @@ test.describe('run monitor: a run that stops for a human decision', () => {
     // A decided approval is not offered for a second decision.
     await expect(recordPanel.getByTestId('approval-approve')).toHaveCount(0)
 
-    expect(consoleErrors, `console errors: ${consoleErrors.join(' | ')}`).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses)
   })
 
-  test('a rejection cancels the run instead of resuming it', async ({ page, request, consoleErrors, wellId }) => {
+  test('a rejection cancels the run instead of resuming it', async ({ page, request, consoleErrors, failedResponses, wellId }) => {
     const { workflow_id } = fixtures()
     const runId = await startRunFromStudio(page, workflow_id, wellId)
 
@@ -244,7 +254,7 @@ test.describe('run monitor: a run that stops for a human decision', () => {
     const byId = new Map(envelope.node_runs.map((row) => [row.node_id, row]))
     expect(byId.get('daily_report')?.status ?? 'skipped').toBe('skipped')
 
-    expect(consoleErrors, `console errors: ${consoleErrors.join(' | ')}`).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses)
   })
 })
 
@@ -252,7 +262,7 @@ test.describe('run monitor: the approval inbox', () => {
   test('lists what is waiting and can be widened to the decisions already taken', async ({
     page,
     request,
-    consoleErrors,
+    consoleErrors, failedResponses,
   }) => {
     const waiting = await apiGet<{ items: Array<{ id: string; title: string }>; total: number }>(
       request,
@@ -283,7 +293,7 @@ test.describe('run monitor: the approval inbox', () => {
       await expect(page.getByText(String(withNote.decision_note))).toBeVisible()
     }
 
-    expect(consoleErrors, `console errors: ${consoleErrors.join(' | ')}`).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses)
   })
 })
 
@@ -291,7 +301,7 @@ test.describe('run monitor: the run list and a real failure', () => {
   test('the list shows the runs the API returns, with their own scope and status', async ({
     page,
     request,
-    consoleErrors,
+    consoleErrors, failedResponses,
   }) => {
     const listed = await apiGet<{ items: RunRow[]; total: number }>(request, '/runs?limit=50', 'supervisor')
     expect(listed.total).toBeGreaterThan(0)
@@ -306,10 +316,10 @@ test.describe('run monitor: the run list and a real failure', () => {
     // The run count in the tab comes from the API's `total`, not from the row count of one page.
     await expect(page.getByRole('tab', { name: 'Runs' })).toContainText(String(listed.total))
 
-    expect(consoleErrors, `console errors: ${consoleErrors.join(' | ')}`).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses)
   })
 
-  test('a run that fails says which node failed and why', async ({ page, request, consoleErrors, wellId }) => {
+  test('a run that fails says which node failed and why', async ({ page, request, consoleErrors, failedResponses, wellId }) => {
     const { failing_workflow_id } = fixtures()
     const started = await apiPost<RunRow>(
       request,
@@ -336,6 +346,6 @@ test.describe('run monitor: the run list and a real failure', () => {
     await expect(page.getByText(failed?.node_name ?? (failed?.node_id as string), { exact: true })).toBeVisible()
     await expect(page.getByText('Failed', { exact: true }).first()).toBeVisible()
 
-    expect(consoleErrors, `console errors: ${consoleErrors.join(' | ')}`).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses)
   })
 })

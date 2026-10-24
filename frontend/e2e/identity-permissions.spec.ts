@@ -38,6 +38,7 @@ import {
   test,
   waitForLoaded,
   type RoleKey,
+  type ApiRequest,
 } from './fixtures'
 
 /** `/platform/identity` as the server answers it for one development identity. */
@@ -58,7 +59,7 @@ interface ErrorEnvelope {
 }
 
 function serverIdentity(
-  request: Parameters<typeof apiGet>[1],
+  request: ApiRequest,
   role: RoleKey,
 ): Promise<ServerIdentity> {
   return apiGet<ServerIdentity>(request, '/platform/identity', role)

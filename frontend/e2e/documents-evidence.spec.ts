@@ -10,7 +10,13 @@
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { apiGet, test, expect, wellPath } from './fixtures'
+import {
+  apiGet,
+  expect,
+  expectNoFailures,
+  test,
+  wellPath,
+} from './fixtures'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const UPLOAD_NAME = 'synthetic_program_upload.txt'
@@ -75,7 +81,7 @@ test.describe('documents → ingestion → records → evidence', () => {
     page,
     request,
     wellId,
-    consoleErrors,
+    consoleErrors, failedResponses,
   }) => {
     const documents = await apiGet<DocumentPage>(request, `/documents?well_id=${wellId}`)
     expect(documents.total, 'the seeder must have produced documents').toBeGreaterThan(0)
@@ -109,14 +115,14 @@ test.describe('documents → ingestion → records → evidence', () => {
     await expect(page.getByText(/method not recorded/)).toHaveCount(0)
     await expect(page.getByText('record', { exact: true })).toHaveCount(0)
 
-    expect(consoleErrors, `console errors: ${consoleErrors.join(' | ')}`).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses)
   })
 
   test('an extracted value can be traced back to its page and its evidence', async ({
     page,
     request,
     wellId,
-    consoleErrors,
+    consoleErrors, failedResponses,
   }) => {
     const documents = await apiGet<DocumentPage>(request, `/documents?well_id=${wellId}`)
     const target = documents.items.find((row) => row.extraction_summary.records > 0)
@@ -150,14 +156,14 @@ test.describe('documents → ingestion → records → evidence', () => {
       await expect(page.getByText(firstLine, { exact: false }).first()).toBeVisible()
     }
 
-    expect(consoleErrors, `console errors: ${consoleErrors.join(' | ')}`).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses)
   })
 
   test('uploading a new report runs the real pipeline, and identical bytes are not ingested twice', async ({
     page,
     request,
     wellId,
-    consoleErrors,
+    consoleErrors, failedResponses,
   }) => {
     const before = await apiGet<DocumentPage>(request, `/documents?well_id=${wellId}`)
 
@@ -207,7 +213,7 @@ test.describe('documents → ingestion → records → evidence', () => {
     const afterDuplicate = await apiGet<DocumentPage>(request, `/documents?well_id=${wellId}`)
     expect(afterDuplicate.total, 'a duplicate upload must not add a document').toBe(after.total)
 
-    expect(consoleErrors, `console errors: ${consoleErrors.join(' | ')}`).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses)
   })
 })
 

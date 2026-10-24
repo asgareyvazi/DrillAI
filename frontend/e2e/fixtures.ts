@@ -99,6 +99,15 @@ export async function apiGet<T>(
   return (await response.json()) as T
 }
 
+/**
+ * The request context the API helpers take.
+ *
+ * A spec that writes its own helper needs the type of that first argument. Naming it here keeps
+ * every spec from re-deriving it — and from re-deriving it wrongly, which is what an index into
+ * `Parameters<typeof apiGet>` does: index 0 is the request context, index 1 is the path.
+ */
+export type ApiRequest = Parameters<typeof apiGet>[0]
+
 export async function apiPost<T>(
   request: APIRequestContext,
   pathname: string,
@@ -158,14 +167,34 @@ export async function apiPatch<T>(
 }
 
 /**
- * The suite's own `test`, extended with the two things every journey needs.
+ * A response the browser received with a failing status.
+ *
+ * The browser's own console line for it (`Failed to load resource: ...`) says *that* something
+ * failed but not *which* call, and it is written differently on different platforms — Chromium
+ * reports a cancelled request as `net::ERR_ABORTED` on one and as a dropped connection on another.
+ * The response itself is the same everywhere, so a journey that wants to know whether the product
+ * misbehaved asserts on this list rather than on the console text.
+ */
+export interface FailedResponse {
+  status: number
+  method: string
+  url: string
+}
+
+/**
+ * The suite's own `test`, extended with the things every journey needs.
  *
  * `consoleErrors` exists because a page that renders its values while throwing in the background is
  * not working; collecting the list in a fixture means a spec has to assert on it rather than being
- * able to ignore it. `wellId` comes from the seed rather than from a literal, so the journey still
- * breaks if the seeder stops producing a well a user can open.
+ * able to ignore it. `failedResponses` is the same idea measured at the wire: every response the
+ * page received with a failing status. `wellId` comes from the seed rather than from a literal, so
+ * the journey still breaks if the seeder stops producing a well a user can open.
  */
-export const test = base.extend<{ consoleErrors: string[]; wellId: string }>({
+export const test = base.extend<{
+  consoleErrors: string[]
+  failedResponses: FailedResponse[]
+  wellId: string
+}>({
   consoleErrors: async ({ page }, use) => {
     const errors: string[] = []
     page.on('console', (message) => {
@@ -173,6 +202,19 @@ export const test = base.extend<{ consoleErrors: string[]; wellId: string }>({
     })
     page.on('pageerror', (error) => errors.push(error.message))
     await use(errors)
+  },
+  failedResponses: async ({ page }, use) => {
+    const failed: FailedResponse[] = []
+    page.on('response', (response) => {
+      if (response.status() >= 400) {
+        failed.push({
+          status: response.status(),
+          method: response.request().method(),
+          url: response.url(),
+        })
+      }
+    })
+    await use(failed)
   },
   // Playwright requires the first argument to be a destructuring pattern, and this fixture has no
   // dependencies; the empty pattern is the library's documented form.
@@ -183,6 +225,7 @@ export const test = base.extend<{ consoleErrors: string[]; wellId: string }>({
 })
 
 export { expect } from '@playwright/test'
+export type { Page } from '@playwright/test'
 
 /**
  * Wait until a page has finished its first data load.
@@ -266,7 +309,58 @@ export async function clearPendingApproval(
  * error by itself — on the stacks that produce those on purpose, that line is the harness talking,
  * not the product. Anything else (a React error, an unhandled rejection, a thrown exception) still
  * counts, which is what the check is for.
+ *
+ * The line itself is not a reliable oracle for *what* failed: Chromium words a cancelled request as
+ * `net::ERR_ABORTED` on one platform and as a dropped connection on another, and the application
+ * shell cancels its own background reads whenever the reader navigates. A journey that needs to know
+ * whether a particular call failed asserts on `failedResponses` instead, which is the response and
+ * therefore the same on every platform.
  */
 export function appConsoleErrors(errors: string[]): string[] {
   return errors.filter((text) => !/Failed to load resource/.test(text))
+}
+
+/**
+ * What every journey asserts on when it says "nothing went wrong".
+ *
+ * Two questions, two oracles, and both of them are the same on every platform:
+ *
+ *  * *Did the application misbehave?* — the console lines the product itself wrote: a React error,
+ *    an unhandled rejection, a `console.error` from the product's own code.
+ *  * *Did a call fail?* — the responses the page received with a failing status.
+ *
+ * The browser's own line for a failed resource (`Failed to load resource: ...`) is deliberately not
+ * an oracle: it is written differently on different platforms, and the application shell cancels
+ * its background reads whenever the reader navigates, so the same product behaviour produces that
+ * line on one runner and none on the next. A verdict that depends on it is a verdict about the
+ * runner, not about the product.
+ *
+ * `scope` narrows the response check to one part of the API, for a journey whose page also makes
+ * calls the product answers with a refusal for reasons of its own. `allowed` names the failures the
+ * journey provokes on purpose.
+ */
+export function expectNoFailures(
+  consoleErrors: string[],
+  failedResponses: FailedResponse[],
+  options: { scope?: string; allowed?: string[] } = {},
+): void {
+  expect(
+    appConsoleErrors(consoleErrors),
+    `console errors: ${consoleErrors.join(' | ')}`,
+  ).toEqual([])
+  const inScope = options.scope
+    ? failedResponses.filter((response) => response.url.includes(options.scope as string))
+    : failedResponses
+  const unexpected = inScope.filter(
+    (response) => !(options.allowed ?? []).some((prefix) => response.url.includes(prefix)),
+  )
+  expect(
+    unexpected.map((response) => `${response.method} ${response.url} -> ${response.status}`),
+    'a call this journey did not provoke must not fail',
+  ).toEqual([])
+  const serverErrors = failedResponses.filter((response) => response.status >= 500)
+  expect(
+    serverErrors.map((response) => `${response.method} ${response.url} -> ${response.status}`),
+    'the product must not answer with a server error',
+  ).toEqual([])
 }

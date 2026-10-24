@@ -19,10 +19,18 @@
  *    position in both locales.
  */
 
-import { fixtures, apiGet, expect, test, waitForLoaded, type Page } from './fixtures'
+import {
+  fixtures,
+  apiGet,
+  expect,
+  test,
+  waitForLoaded,
+  type Page,
+  type ApiRequest,
+} from './fixtures'
 
 /** The well's NPT roll-up, as the platform's own engine computed it for this well. */
-async function apiGetNpt(request: Parameters<typeof apiGet>[1], wellId: string): Promise<number> {
+async function apiGetNpt(request: ApiRequest, wellId: string): Promise<number> {
   const payload = await apiGet<{ npt: { total_hours: number } }>(request, `/wells/${wellId}/npt`, 'engineer')
   return payload.npt.total_hours
 }

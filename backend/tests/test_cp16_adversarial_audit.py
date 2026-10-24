@@ -998,27 +998,29 @@ def test_cp16_10_documentation_and_contract_consistency_guard():
     assert len(backend_test_files) >= 78
     assert f"{len(backend_test_files)} files" in readme_text or f"{len(backend_test_files)} test files" in readme_text
 
-    # The two backend totals the README quotes must reconcile: the suite with PostgreSQL enabled and
-    # the same suite with the PostgreSQL-marked tests skipped describe the same number of tests.
-    # A stale skip count makes the two claims disagree while each still looks plausible in
-    # isolation, which is exactly how the previous "1,097 passed, 7 skipped" claim drifted away
-    # from the real split.
-    backend_totals = re.findall(r"\*\*([\d,]+) passed(?:, ([\d,]+) skipped)?\*\*", readme_text)
-    assert backend_totals, "README.md must quote the backend test totals"
-    with_postgres = None
-    without_postgres = None
-    for passed, skipped in backend_totals:
-        passed_count = int(passed.replace(",", ""))
-        if skipped:
-            without_postgres = passed_count + int(skipped.replace(",", ""))
-        else:
-            with_postgres = passed_count
-    assert with_postgres is not None and without_postgres is not None, (
-        "README.md must quote both the PostgreSQL-enabled total and the skipped variant"
+    # The backend totals the README quotes must reconcile: the suite with PostgreSQL enabled and the
+    # same suite with the PostgreSQL-marked tests skipped describe the same number of tests, so
+    # passed + skipped + deselected must be the same figure in both claims. A stale count makes the
+    # claims disagree while each still looks plausible in isolation, which is exactly how the
+    # previous "1,097 passed, 7 skipped" claim drifted away from the real split. Every term is
+    # counted, because a suite that also has unconditional skips cannot be reconciled by comparing
+    # the passed counts alone.
+    backend_totals = re.findall(
+        r"\*\*([\d,]+) passed(?:, ([\d,]+) skipped)?(?:, ([\d,]+) deselected)?\*\*", readme_text
     )
-    assert with_postgres == without_postgres, (
-        f"README.md backend totals disagree: {with_postgres} tests with PostgreSQL versus "
-        f"{without_postgres} tests without it. Both describe the same suite, so they must be equal."
+    assert len(backend_totals) >= 2, (
+        "README.md must quote the backend totals twice: once with PostgreSQL enabled and once with "
+        "the PostgreSQL-marked tests skipped"
+    )
+    totals = []
+    for passed, skipped, deselected in backend_totals:
+        counts = [
+            int(value.replace(",", "")) if value else 0 for value in (passed, skipped, deselected)
+        ]
+        totals.append(sum(counts))
+    assert len(set(totals)) == 1, (
+        f"README.md backend totals disagree: {totals}. Each claim describes the same suite — "
+        "passed + skipped + deselected must be the same figure in every claim."
     )
 
     assert "121 passed" in readme_text

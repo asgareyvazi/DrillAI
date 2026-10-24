@@ -25,12 +25,14 @@ import {
   apiGet,
   apiPost,
   clearPendingApproval,
+  expect,
+  expectNoFailures,
   fixtures,
   selectRole,
   startRunFromStudio,
   test,
-  expect,
   waitForLoaded,
+  type ApiRequest,
 } from './fixtures'
 import type { Page } from '@playwright/test'
 
@@ -106,7 +108,7 @@ async function displayedSequences(page: Page): Promise<string[]> {
   return rows.evaluateAll((elements) => elements.map((element) => element.getAttribute('data-seq') ?? ''))
 }
 
-function envelopeEvents(request: Parameters<typeof apiGet>[1], runId: string, role: Parameters<typeof apiGet>[2]) {
+function envelopeEvents(request: ApiRequest, runId: string, role: Parameters<typeof apiGet>[2]) {
   return apiGet<RunEnvelope>(request, `/runs/${runId}`, role)
 }
 
@@ -114,7 +116,7 @@ test.describe('run monitor: live events over the real socket', () => {
   test('the socket opens, streams, survives a drop, and ends up equal to the API log', async ({
     page,
     request,
-    consoleErrors,
+    consoleErrors, failedResponses,
     wellId,
   }) => {
     const sockets = await observeStreamSockets(page)
@@ -194,13 +196,13 @@ test.describe('run monitor: live events over the real socket', () => {
     // person makes: reload, open the log, compare it with the API.
     expect((await displayedSequences(page)).map(Number)).toEqual(finishedSequences)
 
-    expect(consoleErrors, `console errors: ${consoleErrors.join(' | ')}`).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses)
   })
 
   test('leaving the run closes the socket instead of leaving it watching', async ({
     page,
     request,
-    consoleErrors,
+    consoleErrors, failedResponses,
     wellId,
   }) => {
     const sockets = await observeStreamSockets(page)
@@ -224,13 +226,13 @@ test.describe('run monitor: live events over the real socket', () => {
     expect(sockets.length).toBe(1)
 
     await clearPendingApproval(request, runId, 'Cleanup after the closed-socket journey.')
-    expect(consoleErrors, `console errors: ${consoleErrors.join(' | ')}`).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses)
   })
 
   test('changing identity replaces the socket rather than reusing another principal’s stream', async ({
     page,
     request,
-    consoleErrors,
+    consoleErrors, failedResponses,
     wellId,
   }) => {
     const sockets = await observeStreamSockets(page)
@@ -255,13 +257,13 @@ test.describe('run monitor: live events over the real socket', () => {
     expect(envelope.run.status).toBe('waiting_approval')
 
     await clearPendingApproval(request, runId, 'Cleanup after the identity-switch journey.')
-    expect(consoleErrors, `console errors: ${consoleErrors.join(' | ')}`).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses)
   })
 
   test('moving to another run closes the first socket and never mixes the two logs', async ({
     page,
     request,
-    consoleErrors,
+    consoleErrors, failedResponses,
     wellId,
   }) => {
     const sockets = await observeStreamSockets(page)
@@ -297,10 +299,10 @@ test.describe('run monitor: live events over the real socket', () => {
 
     await clearPendingApproval(request, runA, 'Cleanup after the run-switch journey (A).')
     await clearPendingApproval(request, runB, 'Cleanup after the run-switch journey (B).')
-    expect(consoleErrors, `console errors: ${consoleErrors.join(' | ')}`).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses)
   })
 
-  test('a run that has already finished is not streamed at all', async ({ page, request, consoleErrors, wellId }) => {
+  test('a run that has already finished is not streamed at all', async ({ page, request, consoleErrors, failedResponses, wellId }) => {
     const sockets = await observeStreamSockets(page)
     const runId = await startRunFromStudio(page, fixtures().workflow_id, wellId)
 
@@ -334,6 +336,6 @@ test.describe('run monitor: live events over the real socket', () => {
     await page.waitForTimeout(1500)
     expect(sockets.length, 'a finished run needs no socket').toBe(socketsBefore)
 
-    expect(consoleErrors, `console errors: ${consoleErrors.join(' | ')}`).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses)
   })
 })

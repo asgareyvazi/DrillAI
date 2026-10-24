@@ -9,7 +9,13 @@
  * product stops reporting the real value — and it can never pass because a number was typed in.
  */
 
-import { apiGet, test, expect, wellPath } from './fixtures'
+import {
+  apiGet,
+  expect,
+  expectNoFailures,
+  test,
+  wellPath,
+} from './fixtures'
 
 type WellState = {
   state: {
@@ -44,7 +50,7 @@ test.describe('well cockpit built from the real well context', () => {
     page,
     request,
     wellId,
-    consoleErrors,
+    consoleErrors, failedResponses,
   }) => {
     await page.goto('/wells')
     await expect(page.getByRole('heading', { level: 1 }).first()).toBeVisible()
@@ -58,14 +64,14 @@ test.describe('well cockpit built from the real well context', () => {
     await row.getByRole('link').first().click()
 
     await expect(page).toHaveURL(new RegExp(`/wells/${wellId}`))
-    expect(consoleErrors, `console errors: ${consoleErrors.join(' | ')}`).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses)
   })
 
   test('shows measured progress, NPT and missing-data honesty from the API', async ({
     page,
     request,
     wellId,
-    consoleErrors,
+    consoleErrors, failedResponses,
   }) => {
     const { state } = await apiGet<WellState>(request, `/wells/${wellId}/state`)
     const { npt } = await apiGet<WellNpt>(request, `/wells/${wellId}/npt`)
@@ -96,14 +102,14 @@ test.describe('well cockpit built from the real well context', () => {
       await expect(page.getByText(item.how_to_supply).first()).toBeVisible()
     }
 
-    expect(consoleErrors, `console errors: ${consoleErrors.join(' | ')}`).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses)
   })
 
   test('the operation timeline merges documents, operations and events', async ({
     page,
     request,
     wellId,
-    consoleErrors,
+    consoleErrors, failedResponses,
   }) => {
     const timeline = await apiGet<{
       count: number
@@ -125,12 +131,13 @@ test.describe('well cockpit built from the real well context', () => {
     // Every entry is on the axis: a truncated timeline would hide NPT from the user.
     await expect(page.locator('li').filter({ hasText: operation?.title ?? '' }).first()).toBeVisible()
 
-    expect(consoleErrors, `console errors: ${consoleErrors.join(' | ')}`).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses)
   })
 
   test('deep links survive a reload and an unknown well is a not-found, not a blank page', async ({
     page,
     consoleErrors,
+    failedResponses,
   }) => {
     await page.goto(wellPath('/cockpit'))
     await expect(page.getByRole('heading', { level: 1 }).first()).toBeVisible()
@@ -146,10 +153,9 @@ test.describe('well cockpit built from the real well context', () => {
     await expect(page.getByRole('heading', { level: 1 })).toContainText(/not found/i)
 
     // This journey asks the API for a well that does not exist and opens a route that does not
-    // exist, so the browser is expected to log the two missing resources. Anything else — a thrown
-    // error, a React warning, a failed asset — still fails the test.
-    for (const error of consoleErrors) {
-      expect(error, `unexpected console error: ${error}`).toMatch(/status of 404/)
-    }
+    // exist, so the browser is expected to log the two missing resources. The refusal is the one
+    // failure this journey provokes; anything else — a thrown error, a React warning, a failed
+    // asset, a call that failed for another reason — still fails the test.
+    expectNoFailures(consoleErrors, failedResponses, { allowed: ['/wells/wel_does_not_exist'] })
   })
 })
