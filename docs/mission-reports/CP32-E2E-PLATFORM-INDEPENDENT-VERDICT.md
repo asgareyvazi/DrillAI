@@ -247,34 +247,34 @@ Two guards now hold it:
 
 ## 7. Exact-SHA certification
 
-**GitHub Actions run `40081444618`** executed the exact CP32 commit
-`dded419fbafb16a5d0ef364058c913ba9b0a8821` on 2026-10-24T09:18:43Z. **Both jobs passed**, and the
-run's overall conclusion is `success`. This is the first fully green Linux **and** Windows run in
-this release series.
+**GitHub Actions run `40085939081`** executed the exact CP32 commit
+`08edab3682f7e3877288d819f5189f646ac59d2d` on 2026-10-24T10:26:48Z. **Both jobs passed** and the run's
+overall conclusion is `success`. This is the certified release candidate for this series.
 
 | Job | Job ID | Result | Duration |
 |---|---|---|---|
-| `certification` (Linux) | `120835678251` | **PASSED** — overall `success`, no failure annotation | 09:18:45 → 09:28:53 |
-| `windows-certification` (Windows) | `120835678069` | **PASSED** — overall `success`, no failure annotation | 09:18:45 → 09:28:53 |
+| `certification` (Linux) | `120848768971` | **PASSED** — no failure annotation | 10:26:50 → 10:38:16 |
+| `windows-certification` (Windows) | `120848768814` | **PASSED** — no failure annotation | 10:26:52 → 10:43:10 |
 
-Every step succeeded in both jobs, including the two that failed earlier in the series:
+Every step succeeded in both jobs, including the three that had failed earlier in the series:
 
 - **Linux `Docker Compose deployment smoke gate (docker-compose.yml)`** — passed. This is the gate
-  that failed with exit code 22 on `c6453c6` (CP31's root cause) and it is the only
-  container-runtime evidence in this series: the sandbox has no Docker daemon, so the gate's
-  authority is CI.
-- **Linux and Windows end-to-end suites** — passed on all three deployments (main, faults, auth).
-  The Windows job ran the `Playwright E2E certification across main, faults, and auth stacks` step
-  to success, which is the step that failed on `919da0f` with six studio journeys.
+  that failed with exit code 22 on `c6453c6` (CP31's root cause), and it is the only container-runtime
+  evidence in this series: the sandbox has no Docker daemon, so the gate's authority is CI.
+- **The end-to-end suites in both jobs** — passed on all three deployments (main, faults, auth). The
+  Windows job ran `Playwright E2E certification across main, faults, and auth stacks` to success: the
+  step that failed on `919da0f` with six studio journeys and again on `34979de` with the retried
+  commissioning journey.
+- **`Backend tests (SQLite + embedded PostgreSQL)` (Linux) and `Backend SQLite test suite` (Windows)**
+  — passed with **0 skips**, which the Linux step enforces explicitly.
 
-Also green on the exact SHA: frontend typecheck (now including the `e2e/` specs on both platforms),
-lint, 318 unit tests, production build, supply-chain/SHA-pinning/secret scan, backend lint, Alembic
-migration check on a fresh database, the backend suite on both dialects, `verify_stack.py`'s 16
-multi-process scenarios and 32-cycle soak, and the external-vendor interop runner.
+Also green on the exact SHA: frontend typecheck (compiling the `e2e/` specs on both platforms), lint,
+318 unit tests, production build, supply-chain/SHA-pinning/secret scan, backend lint, Alembic
+migration check on a fresh database, `verify_stack.py`'s 16 multi-process scenarios and 32-cycle
+soak, and the external-vendor interop runner.
 
-The two `Upload … Playwright evidence` steps are reported as `skipped` in both jobs. That is their
-designed behaviour — they are `if: failure()` — and is not a skipped test: no suite skipped
-anything on this run.
+The two `Upload … Playwright evidence` steps report `skipped` because they are `if: failure()`. That
+is the step's design and not a skipped test: no suite skipped anything on this run.
 
 ### The path to green, stated plainly
 
@@ -284,8 +284,13 @@ anything on this run.
 | `c6453c6` (CP26) | `39414613792` | fail | pass | Linux: HEAD probe against a GET-only route (exit 22) |
 | `919da0f` (CP31) | `39563150524` | **pass** | fail | Windows: six journeys judged the browser's network log |
 | `1fda9be` (CP32) | `40079792254` | fail | fail | this checkpoint's guard introduced three test skips |
-| `dded419` (CP32 fix) | `40081444618` | **pass** | **pass** | — |
+| `dded419` (CP32 fix) | `40081444618` | **pass** | **pass** | first fully green run of the series |
 | `34979de` (CP32 docs) | `40082345895` | pass | fail | Windows: a flake, not a regression — a retried journey's commissioning was a duplicate replay; root-caused and fixed in §8 |
+| `08edab3` (CP32 fixes) | `40085939081` | **pass** | **pass** | **certified** — every step green on both platforms |
+
+Each failure is recorded with its cause because a release claim is only as good as the chain of
+evidence behind it. Two of these failures were caused by this checkpoint (`1fda9be`, and the flake
+that `34979de` exposed); both are fixed and named, not written off.
 
 Each failure is recorded with its cause because a release claim is only as good as the chain of
 evidence behind it. The `1fda9be` failure was caused by this checkpoint and is fixed in `dded419`,
