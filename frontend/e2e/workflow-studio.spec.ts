@@ -171,7 +171,15 @@ test.describe('workflow studio: create, edit, validate, save, publish', () => {
 
     expectNoFailures(consoleErrors, failedResponses, {
       scope: '/api/v1/workflows',
-      allowed: ['/publish'],
+      allowed: [
+        {
+          method: 'POST',
+          url: '/publish',
+          status: 400,
+          reason:
+            'the journey publishes a draft the server refuses, and asserts the refusal on screen',
+        },
+      ],
     })
   })
 
@@ -217,7 +225,15 @@ test.describe('workflow studio: create, edit, validate, save, publish', () => {
 
     expectNoFailures(consoleErrors, failedResponses, {
       scope: '/api/v1/workflows',
-      allowed: ['/publish'],
+      allowed: [
+        {
+          method: 'POST',
+          url: '/publish',
+          status: 400,
+          reason:
+            'the journey publishes a draft the server refuses, and asserts the refusal on screen',
+        },
+      ],
     })
   })
 
@@ -319,7 +335,15 @@ test.describe('workflow studio: create, edit, validate, save, publish', () => {
 
     expectNoFailures(consoleErrors, failedResponses, {
       scope: '/api/v1/workflows',
-      allowed: ['/publish'],
+      allowed: [
+        {
+          method: 'POST',
+          url: '/publish',
+          status: 400,
+          reason:
+            'the journey publishes a draft the server refuses, and asserts the refusal on screen',
+        },
+      ],
     })
   })
 
@@ -373,7 +397,15 @@ test.describe('workflow studio: create, edit, validate, save, publish', () => {
 
     expectNoFailures(consoleErrors, failedResponses, {
       scope: '/api/v1/workflows',
-      allowed: ['/publish'],
+      allowed: [
+        {
+          method: 'POST',
+          url: '/publish',
+          status: 400,
+          reason:
+            'the journey publishes a draft the server refuses, and asserts the refusal on screen',
+        },
+      ],
     })
   })
 
@@ -414,7 +446,15 @@ test.describe('workflow studio: create, edit, validate, save, publish', () => {
 
     expectNoFailures(consoleErrors, failedResponses, {
       scope: '/api/v1/workflows',
-      allowed: ['/publish'],
+      allowed: [
+        {
+          method: 'POST',
+          url: '/publish',
+          status: 400,
+          reason:
+            'the journey publishes a draft the server refuses, and asserts the refusal on screen',
+        },
+      ],
     })
   })
 
@@ -480,7 +520,15 @@ test.describe('workflow studio: create, edit, validate, save, publish', () => {
 
     expectNoFailures(consoleErrors, failedResponses, {
       scope: '/api/v1/workflows',
-      allowed: ['/publish'],
+      allowed: [
+        {
+          method: 'POST',
+          url: '/publish',
+          status: 400,
+          reason:
+            'the journey publishes a draft the server refuses, and asserts the refusal on screen',
+        },
+      ],
     })
   })
 
@@ -538,7 +586,15 @@ test.describe('workflow studio: create, edit, validate, save, publish', () => {
 
     expectNoFailures(consoleErrors, failedResponses, {
       scope: '/api/v1/workflows',
-      allowed: ['/publish'],
+      allowed: [
+        {
+          method: 'POST',
+          url: '/publish',
+          status: 400,
+          reason:
+            'the journey publishes a draft the server refuses, and asserts the refusal on screen',
+        },
+      ],
     })
   })
 
@@ -597,7 +653,15 @@ test.describe('workflow studio: create, edit, validate, save, publish', () => {
 
     expectNoFailures(consoleErrors, failedResponses, {
       scope: '/api/v1/workflows',
-      allowed: ['/publish'],
+      allowed: [
+        {
+          method: 'POST',
+          url: '/publish',
+          status: 400,
+          reason:
+            'the journey publishes a draft the server refuses, and asserts the refusal on screen',
+        },
+      ],
     })
   })
 
@@ -625,7 +689,15 @@ test.describe('workflow studio: create, edit, validate, save, publish', () => {
 
         expectNoFailures(consoleErrors, failedResponses, {
       scope: '/api/v1/workflows',
-      allowed: ['/publish'],
+      allowed: [
+        {
+          method: 'POST',
+          url: '/publish',
+          status: 400,
+          reason:
+            'the journey publishes a draft the server refuses, and asserts the refusal on screen',
+        },
+      ],
     })
   })
 })

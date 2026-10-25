@@ -321,6 +321,49 @@ export function appConsoleErrors(errors: string[]): string[] {
 }
 
 /**
+ * A failure a journey provokes on purpose, and the reason it does.
+ *
+ * This is not a way to silence the oracle. An entry names the request it tolerates — as narrowly as
+ * the journey allows: a path, and the method and status the journey actually asserts on screen — and
+ * `reason` says why the journey asks for it. A tolerance nobody can explain is the thing this type
+ * exists to prevent, so the reason is required rather than optional, and every entry in the suite is
+ * an object: `backend/tests/security/test_cp33_e2e_response_oracle_coverage.py` refuses a bare
+ * string, which is what a hastily silenced journey would be written with.
+ */
+export interface ProvokedFailure {
+  /** A substring of the request URL, e.g. `/api/v1/documents/`. */
+  url?: string
+  /** The HTTP method, when only one of them is provoked. */
+  method?: string
+  /** The status — or the set of statuses — the journey expects for that request. */
+  status?: number | number[]
+  /** Why the journey provokes this refusal. Written for the next reader. */
+  reason: string
+}
+
+/**
+ * The entry that covers a recorded failure, if the journey named it.
+ *
+ * Every field of an entry is a condition: an entry with a method and a status tolerates only that
+ * method and that status, which is how a journey that provokes a `409` on a `PATCH` still fails if
+ * something `POST`s its way into a `500`.
+ */
+export function provokedFailure(
+  response: FailedResponse,
+  allowed: readonly ProvokedFailure[],
+): ProvokedFailure | undefined {
+  return allowed.find((entry) => {
+    if (entry.url !== undefined && !response.url.includes(entry.url)) return false
+    if (entry.method !== undefined && response.method !== entry.method) return false
+    if (entry.status !== undefined) {
+      const statuses = Array.isArray(entry.status) ? entry.status : [entry.status]
+      if (!statuses.includes(response.status)) return false
+    }
+    return true
+  })
+}
+
+/**
  * What every journey asserts on when it says "nothing went wrong".
  *
  * Two questions, two oracles, and both of them are the same on every platform:
@@ -337,13 +380,14 @@ export function appConsoleErrors(errors: string[]): string[] {
  *
  * `scope` narrows the response check to one part of the API, for a journey whose page also makes
  * calls the product answers with a refusal for reasons of its own. `allowed` names the failures the
- * journey provokes on purpose.
+ * journey provokes on purpose — each one a request it expects to be refused, with the reason.
  */
 export function expectNoFailures(
   consoleErrors: string[],
   failedResponses: FailedResponse[],
-  options: { scope?: string; allowed?: string[] } = {},
+  options: { scope?: string; allowed?: readonly ProvokedFailure[] } = {},
 ): void {
+  const allowed = options.allowed ?? []
   expect(
     appConsoleErrors(consoleErrors),
     `console errors: ${consoleErrors.join(' | ')}`,
@@ -351,14 +395,16 @@ export function expectNoFailures(
   const inScope = options.scope
     ? failedResponses.filter((response) => response.url.includes(options.scope as string))
     : failedResponses
-  const unexpected = inScope.filter(
-    (response) => !(options.allowed ?? []).some((prefix) => response.url.includes(prefix)),
-  )
+  const unexpected = inScope.filter((response) => provokedFailure(response, allowed) === undefined)
   expect(
     unexpected.map((response) => `${response.method} ${response.url} -> ${response.status}`),
     'a call this journey did not provoke must not fail',
   ).toEqual([])
-  const serverErrors = failedResponses.filter((response) => response.status >= 500)
+  // A server error is only tolerable when the journey named it: an injected fault, or a refusal the
+  // server answers with a 5xx on purpose. Everything else is the product failing at what it does.
+  const serverErrors = failedResponses.filter(
+    (response) => response.status >= 500 && provokedFailure(response, allowed) === undefined,
+  )
   expect(
     serverErrors.map((response) => `${response.method} ${response.url} -> ${response.status}`),
     'the product must not answer with a server error',

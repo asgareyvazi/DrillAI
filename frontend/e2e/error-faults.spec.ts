@@ -22,7 +22,6 @@
 
 import {
   apiPost,
-  appConsoleErrors,
   clearPendingApproval,
   expect,
   expectNoFailures,
@@ -73,6 +72,7 @@ test.describe('failures the server must be asked to produce', () => {
     page,
     request,
     consoleErrors,
+    failedResponses,
   }) => {
     const wellsPath = '/api/v1/wells'
     const requests = countRequests(page, wellsPath)
@@ -118,7 +118,7 @@ test.describe('failures the server must be asked to produce', () => {
     await state.getByRole('button', { name: /retry/i }).click()
     await expect(errorState(page)).toHaveCount(0, { timeout: 30_000 })
     await expect(page.getByRole('table').or(page.getByText(/no wells/i)).first()).toBeVisible()
-    expect(appConsoleErrors(consoleErrors), `console errors: ${consoleErrors.join(' | ')}`).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses)
   })
 
   test('a response that is not the contract is a protocol failure with a request id, not an outage', async ({
@@ -155,6 +155,7 @@ test.describe('failures the server must be asked to produce', () => {
     page,
     request,
     consoleErrors,
+    failedResponses,
   }) => {
     const wellsPath = '/api/v1/wells'
     await arm(request, { method: 'GET', path: wellsPath, mode: 'unhandled' })
@@ -194,7 +195,18 @@ test.describe('failures the server must be asked to produce', () => {
     await state.getByRole('button', { name: /retry/i }).click()
     await expect(errorState(page)).toHaveCount(0, { timeout: 30_000 })
     await expect(page.getByRole('table').or(page.getByText(/no wells/i)).first()).toBeVisible()
-    expect(appConsoleErrors(consoleErrors), `console errors: ${consoleErrors.join(' | ')}`).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses, {
+      allowed: [
+        {
+          method: 'GET',
+          url: '/wells',
+          status: 500,
+          reason:
+            'the journey turns on fault injection for the wells list and asserts that the ' +
+            'interface reports the server error it asked for',
+        },
+      ],
+    })
   })
 
   test('a slow read the operator navigates away from is cancelled, not reported, and cannot replace the screen', async ({

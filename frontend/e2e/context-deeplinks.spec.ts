@@ -27,8 +27,8 @@
 import {
   apiGet,
   clearPendingApproval,
-  appConsoleErrors,
   expect,
+  expectNoFailures,
   fixtures,
   startRunFromStudio,
   test,
@@ -46,6 +46,7 @@ test.describe('context, deep links and reloads', () => {
     request,
     wellId,
     consoleErrors,
+    failedResponses,
   }) => {
     const workflowId = fixtures().workflow_id
     const runId = await startRunFromStudio(page, workflowId, wellId)
@@ -68,7 +69,7 @@ test.describe('context, deep links and reloads', () => {
     // And it is the run the server has, not a plausible reconstruction of it.
     const envelope = await apiGet<RunEnvelope>(request, `/runs/${runId}`, 'engineer')
     await expect(page.getByTestId('run-scope')).toContainText(envelope.run.well_id ?? '')
-    expect(appConsoleErrors(consoleErrors)).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses)
 
     // The suite shares one seeded database, and an approval left pending is not inert: it appears in
     // the inbox a later journey asserts on. A journey that starts runs closes the gates it opened.
@@ -130,6 +131,7 @@ test.describe('context, deep links and reloads', () => {
     page,
     request,
     consoleErrors,
+    failedResponses,
   }) => {
     const documentId = fixtures().document_ids[0]
     const document = await apiGet<{ document: { id: string; well_id: string; title: string } }>(
@@ -153,7 +155,16 @@ test.describe('context, deep links and reloads', () => {
     // The document itself is nowhere on the page: no title, no extraction card, no evidence.
     await expect(page.getByText(document.document.title)).toHaveCount(0)
     await expect(page.getByText(/Extraction|provenance|evidence links/i)).toHaveCount(0)
-    expect(appConsoleErrors(consoleErrors)).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses, {
+      allowed: [
+        {
+          url: '/wells/wel_not_a_well',
+          status: 404,
+          reason:
+            'the journey opens a deep link naming a well that does not exist',
+        },
+      ],
+    })
   })
 
   test('a document id that names nothing is reported, not shown as “nothing selected”', async ({
@@ -174,6 +185,7 @@ test.describe('context, deep links and reloads', () => {
   test('a workflow id that is not in the list is reported, and a workflow is not bound to a well', async ({
     page,
     consoleErrors,
+    failedResponses,
   }) => {
     await page.goto('/workflows?workflow=wfl_not_a_workflow')
     await waitForLoaded(page)
@@ -191,7 +203,7 @@ test.describe('context, deep links and reloads', () => {
     expect(new URL(page.url()).pathname).toBe('/workflows')
     await expect(page.getByLabel('Run context')).toBeVisible()
     await expect(page.getByRole('button', { name: /start run/i })).toBeVisible()
-    expect(appConsoleErrors(consoleErrors)).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses)
   })
 
   test('a run that does not exist reads as not found, and offers no false retry', async ({ page }) => {

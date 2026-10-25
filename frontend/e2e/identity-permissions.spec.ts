@@ -28,17 +28,17 @@
  */
 
 import {
-  CATALOGUED_ROLES,
-  ROLES,
   apiGet,
-  appConsoleErrors,
+  CATALOGUED_ROLES,
   expect,
+  expectNoFailures,
+  ROLES,
   selectRole,
   startRunFromStudio,
   test,
   waitForLoaded,
-  type RoleKey,
   type ApiRequest,
+  type RoleKey,
 } from './fixtures'
 
 /** `/platform/identity` as the server answers it for one development identity. */
@@ -226,6 +226,7 @@ test.describe('identity, permission and action level', () => {
     request,
     wellId,
     consoleErrors,
+    failedResponses,
   }) => {
     await page.goto(`/wells/${wellId}/engineering`)
     await waitForLoaded(page)
@@ -258,7 +259,7 @@ test.describe('identity, permission and action level', () => {
     // showed a computation, not a rendering of the inputs.
     expect(recorded?.outputs).toHaveProperty('overall_state')
 
-    expect(appConsoleErrors(consoleErrors)).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses)
   })
 
   test('switching identity replaces the previous identity\'s answers in place, without reloading', async ({

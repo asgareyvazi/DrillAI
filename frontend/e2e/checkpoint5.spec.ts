@@ -20,9 +20,9 @@
 
 import {
   apiGet,
-  appConsoleErrors,
   clearPendingApproval,
   expect,
+  expectNoFailures,
   fixtures,
   ROLES,
   selectRole,
@@ -73,11 +73,9 @@ test.describe('checkpoint 5, integrated', () => {
     page,
     request,
     wellId,
+    consoleErrors,
+    failedResponses,
   }) => {
-    const consoleErrors: string[] = []
-    page.on('console', (message) => {
-      if (message.type() === 'error') consoleErrors.push(message.text())
-    })
 
     // A real run, started the way an operator starts one.
     const runId = await startRunFromStudio(page, fixtures().workflow_id, wellId)
@@ -137,7 +135,7 @@ test.describe('checkpoint 5, integrated', () => {
         expect(rendered, `event ${seq} of the run in the address is on screen`).toContain(seq)
       }
 
-      expect(appConsoleErrors(consoleErrors)).toEqual([])
+      expectNoFailures(consoleErrors, failedResponses)
     } finally {
       await clearPendingApproval(
         request,

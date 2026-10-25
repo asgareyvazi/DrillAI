@@ -474,13 +474,12 @@ the sense of wrong engineering output; two of them were defects in what the test
   certified SHA (run `40081444618`, Linux job `120835678251`). No Docker daemon exists in this
   sandbox, so the container runtime was never exercised on the development host itself; the CI
   result is the only container-runtime evidence and it is not a deployment to a real environment.
-- **Remaining platform-dependent oracles** — the seven journeys that provoke deliberate failures
+- ~~**Remaining platform-dependent oracles**~~ — **closed by CP33.** The seven journeys named here
   (`checkpoint5`, `connectors-platform`, `context-deeplinks`, `error-auth`, `error-matrix`,
-  `identity-permissions`, and two `error-faults` journeys) still assert only through
-  `appConsoleErrors` and do not assert on the recorded failing responses. They tolerate the
-  browser's network log but do not yet prove that an unprovoked call never failed. Giving each the
-  refusal it provokes as an explicit allowlist is the bounded next step, recorded in
-  `REMAINING-GAPS-ROADMAP.md`.
+  `identity-permissions`, and the two `error-faults` journeys) asserted only through
+  `appConsoleErrors`. Every one of the suite's 54 remaining raw assertions now uses
+  `expectNoFailures`, and the tolerances are objects that name the request and the status and say
+  why. See `CP33-RESPONSE-ORACLE-COVERAGE.md`.
 - **External blockers unchanged** — real vendor connectivity, real notification delivery,
   physical-host and PITR recovery, and licence verification remain outside this repository's
   reach, and are stated as such in the readiness matrix.

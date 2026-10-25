@@ -13,7 +13,7 @@
  * the page does not behave as though it had been accepted.
  */
 
-import { appConsoleErrors, test, expect } from './fixtures'
+import { expect, expectNoFailures, test } from './fixtures'
 import type { Page } from '@playwright/test'
 
 const errorState = (page: Page) => page.getByTestId('error-state')
@@ -23,6 +23,7 @@ test.describe('an authentication-enabled deployment', () => {
     page,
     request,
     consoleErrors,
+    failedResponses,
   }) => {
     // First: the server really refuses an anonymous read. Without this the journey could pass against
     // a service that simply answers 200 to everything.
@@ -65,12 +66,24 @@ test.describe('an authentication-enabled deployment', () => {
     await expect(errorState(page).first()).toHaveAttribute('data-error-kind', 'unauthenticated')
     await expect(page.getByTestId('live-transport-state')).toHaveText(/ERROR/i)
 
-    expect(appConsoleErrors(consoleErrors), `console errors: ${consoleErrors.join(' | ')}`).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses, {
+      allowed: [
+        {
+          url: '/api/v1/',
+          status: 401,
+          reason:
+            'the journey runs against an authentication-enabled deployment, where an ' +
+            'anonymous read is refused with 401 — the state the journey asserts the ' +
+            'interface explains',
+        },
+      ],
+    })
   })
 
   test('interactive per-user login, HttpOnly cookie session, RBAC role ceiling, WebSocket cookie auth, and server-side logout invalidation', async ({
     page,
     consoleErrors,
+    failedResponses,
   }) => {
     const wsUrls: string[] = []
     page.on('websocket', (ws) => {
@@ -135,10 +148,20 @@ test.describe('an authentication-enabled deployment', () => {
     await page.getByTestId('shell-logout-button').click()
     await expect(page.getByTestId('shell-unauthenticated')).toBeVisible()
 
-    expect(appConsoleErrors(consoleErrors), `console errors: ${consoleErrors.join(' | ')}`).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses, {
+      allowed: [
+        {
+          url: '/api/v1/',
+          status: 401,
+          reason:
+            'the journey is unsigned-in before it logs in, and a refused sign-in is a 401 ' +
+            'the journey asserts is reported as such rather than as an outage',
+        },
+      ],
+    })
   })
 
-  test('tenant administrator manages users and issues a one-time scoped API token', async ({ page, consoleErrors }) => {
+  test('tenant administrator manages users and issues a one-time scoped API token', async ({ page, consoleErrors, failedResponses }) => {
     await page.goto('/wells')
     await page.getByTestId('shell-login-link').click()
     await page.getByTestId('login-email-input').fill('admin@demo.drillai.local')
@@ -173,6 +196,16 @@ test.describe('an authentication-enabled deployment', () => {
     await tokenRow.getByRole('button', { name: 'Confirm revoke' }).click()
     await expect(tokenRow).toContainText('Revoked')
 
-    expect(appConsoleErrors(consoleErrors), `console errors: ${consoleErrors.join(' | ')}`).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses, {
+      allowed: [
+        {
+          url: '/api/v1/',
+          status: 401,
+          reason:
+            'the journey starts from the signed-out state of an authentication-enabled ' +
+            'deployment, where every read before sign-in is refused with 401',
+        },
+      ],
+    })
   })
 })

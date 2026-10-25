@@ -13,8 +13,8 @@ import {
   apiGet,
   apiPatch,
   apiPost,
-  appConsoleErrors,
   expect,
+  expectNoFailures,
   selectRole,
   test,
   wellPath,
@@ -66,6 +66,7 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
     page,
     wellId,
     consoleErrors,
+    failedResponses,
   }) => {
     await page.goto(`/connectors?wellId=${wellId}`)
     await expect(page.getByTestId('connectors-workspace')).toBeVisible()
@@ -105,7 +106,7 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
     await expect(page.getByTestId('connector-preview-result')).toBeVisible()
     await expect(page.getByTestId('connector-preview-result')).toContainText('spp')
 
-    expect(appConsoleErrors(consoleErrors)).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses)
   })
 
   test('Journey 2 (Scenarios 3 & 4): start WITSML connector, poll real SOAP XML frames into TelemetryService, and verify Operational Monitor KPI & LIVE connector banner', async ({
@@ -113,6 +114,7 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
     request,
     wellId,
     consoleErrors,
+    failedResponses,
   }) => {
     const harness = await apiPost<HarnessSnapshot>(request, '/connectors/harness/ensure', {}, 'engineer')
     await apiPost(
@@ -173,7 +175,7 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
     await expect(bannerRow).toContainText('running')
     await expect(bannerRow).toContainText('LIVE')
 
-    expect(appConsoleErrors(consoleErrors)).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses)
   })
 
   test('Journey 3 (Scenario 5): automatic alert evaluation triggered by WITSML connector ingestion', async ({
@@ -181,6 +183,7 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
     request,
     wellId,
     consoleErrors,
+    failedResponses,
   }) => {
     const ruleKey = `e2e_witsml_spp_${Date.now()}`
     await apiPost(
@@ -247,7 +250,7 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
     await page.goto(wellPath('/cockpit?tab=live'))
     await expect(page.getByTestId('operational-alerts-list')).toContainText('WITSML Auto Alert High SPP')
 
-    expect(appConsoleErrors(consoleErrors)).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses)
   })
 
   test('Journey 4 (Scenario 6): stopping a running connector requires a reason and transitions status to stopped (never LIVE)', async ({
@@ -255,6 +258,7 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
     request,
     wellId,
     consoleErrors,
+    failedResponses,
   }) => {
     const harness = await apiPost<HarnessSnapshot>(request, '/connectors/harness/ensure', {}, 'engineer')
     const connKey = `e2e-witsml-stop-${Date.now().toString(36)}`
@@ -296,7 +300,7 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
     await expect(page.getByTestId('detail-health-state')).toHaveText('stopped')
     await expect(page.getByTestId('detail-health-state')).not.toHaveText('LIVE')
 
-    expect(appConsoleErrors(consoleErrors)).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses)
   })
 
   test('Journey 5 (Scenarios 7 & 8): source failure transitions connector to backing_off with safe error diagnostics, then recovers on next poll without duplicate points', async ({
@@ -304,6 +308,7 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
     request,
     wellId,
     consoleErrors,
+    failedResponses,
   }) => {
     const harness = await apiPost<HarnessSnapshot>(request, '/connectors/harness/ensure', {}, 'engineer')
     await apiPost(
@@ -369,13 +374,14 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
     await expect(page.getByTestId('detail-health-state')).toHaveText('LIVE')
     await expect(page.getByTestId('detail-watermark-cursor')).toContainText('cursor_timestamp')
 
-    expect(appConsoleErrors(consoleErrors)).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses)
   })
 
   test('Journey 6 (Scenario 9): create and run real ETP 1.2 WebSocket connector session & subscription flow', async ({
     page,
     wellId,
     consoleErrors,
+    failedResponses,
   }) => {
     await page.goto(`/connectors?wellId=${wellId}`)
     await page.getByTestId('preset-local-etp').click()
@@ -396,7 +402,7 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
     await expect(page.getByTestId('detail-health-state')).toHaveText('LIVE')
     await expect(page.getByTestId('connector-runs-table')).toContainText('succeeded')
 
-    expect(appConsoleErrors(consoleErrors)).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses)
   })
 
   test('Journey 7 (Scenario 10): ETP 1.2 WebSocket disconnect, reconnect tracking, and duplicate prevention on replay', async ({
@@ -404,6 +410,7 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
     request,
     wellId,
     consoleErrors,
+    failedResponses,
   }) => {
     const harness = await apiPost<HarnessSnapshot>(request, '/connectors/harness/ensure', {}, 'engineer')
     await apiPost(
@@ -461,7 +468,7 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
     )
     expect(runsData.items.some((r) => r.points_duplicates >= 1 && r.points_accepted === 0)).toBeTruthy()
 
-    expect(appConsoleErrors(consoleErrors)).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses)
   })
 
   test('Journey 8 (Scenario 11): bad-quality source telemetry sets connector health to low_quality_data (never LIVE)', async ({
@@ -469,6 +476,7 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
     request,
     wellId,
     consoleErrors,
+    failedResponses,
   }) => {
     const harness = await apiPost<HarnessSnapshot>(request, '/connectors/harness/ensure', {}, 'engineer')
     await apiPost(
@@ -528,7 +536,7 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
       'engineer',
     )
 
-    expect(appConsoleErrors(consoleErrors)).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses)
   })
 
   test('Journey 9 (Scenario 12): viewer role is strictly read-only in UI and refused by backend on connector mutations', async ({
@@ -536,6 +544,7 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
     request,
     wellId,
     consoleErrors,
+    failedResponses,
   }) => {
     await page.goto(`/connectors?wellId=${wellId}`)
     await selectRole(page, 'viewer')
@@ -558,7 +567,7 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
     expect(attempt.status).toBe(403)
 
     await selectRole(page, 'engineer')
-    expect(appConsoleErrors(consoleErrors)).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses)
   })
 
   test('Journey 10 (Scenario 13): optimistic concurrency conflict (409) when editing connector configuration in UI', async ({
@@ -566,6 +575,7 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
     request,
     wellId,
     consoleErrors,
+    failedResponses,
   }) => {
     const connKey = `e2e-conflict-${Date.now().toString(36)}`
     const created = await apiPost<ConnectorDto>(
@@ -611,13 +621,25 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
     await expect(page.getByTestId('connector-conflict-banner')).toBeVisible()
     await expect(page.getByTestId('connector-name-input')).toHaveValue('Updated By Concurrent Operator')
 
-    expect(appConsoleErrors(consoleErrors)).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses, {
+      allowed: [
+        {
+          method: 'PATCH',
+          url: '/connectors/',
+          status: 409,
+          reason:
+            'the journey edits a connector from a revision the server has moved past and ' +
+            'asserts the optimistic-concurrency conflict',
+        },
+      ],
+    })
   })
 
   test('Journey 11 (Scenario 14): SSRF protection rejects cloud metadata and private RFC-1918 endpoints in UI', async ({
     page,
     wellId,
     consoleErrors,
+    failedResponses,
   }) => {
     await page.goto(`/connectors?wellId=${wellId}`)
 
@@ -629,13 +651,25 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
     await expect(page.getByTestId('connector-form-error')).toBeVisible()
     await expect(page.getByTestId('connector-form-error')).toContainText('169.254.169.254')
 
-    expect(appConsoleErrors(consoleErrors)).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses, {
+      allowed: [
+        {
+          method: 'POST',
+          url: '/connectors',
+          status: 422,
+          reason:
+            'the journey submits cloud-metadata and RFC-1918 destinations that the SSRF ' +
+            'policy must refuse',
+        },
+      ],
+    })
   })
 
   test('Journey 12 (Scenario 15): Persian (fa) RTL localization and technical token LTR isolation on Connectors & Monitor', async ({
     page,
     wellId,
     consoleErrors,
+    failedResponses,
   }) => {
     await page.goto(`/connectors?wellId=${wellId}`)
     await page.getByTestId('locale-switch').selectOption('fa')
@@ -653,13 +687,14 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
     await expect(page.getByTestId('detail-watermark-cursor')).toHaveAttribute('dir', 'ltr')
 
     await page.getByTestId('locale-switch').selectOption('en')
-    expect(appConsoleErrors(consoleErrors)).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses)
   })
 
   test('Journey 13 (Scenario 16): accessibility & keyboard navigation across Connector Registry controls', async ({
     page,
     wellId,
     consoleErrors,
+    failedResponses,
   }) => {
     await page.goto(`/connectors?wellId=${wellId}`)
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
@@ -673,13 +708,14 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
     await page.keyboard.press('Tab')
     await expect(page.getByTestId('filter-connector-profile')).toBeFocused()
 
-    expect(appConsoleErrors(consoleErrors)).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses)
   })
 
   test('Journey 14 (Scenario 17): synthetic commissioning source vs external protocol honesty badges & vendor verification disclosure', async ({
     page,
     wellId,
     consoleErrors,
+    failedResponses,
   }) => {
     await page.goto(`/connectors?wellId=${wellId}`)
 
@@ -698,7 +734,7 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
 
     await expect(page.getByTestId(`connector-row-${synthKey}`)).toContainText('SYNTHETIC / TEST SOURCE')
 
-    expect(appConsoleErrors(consoleErrors)).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses)
   })
 
   test('Journey 15 (CP12 Scenario 3): WITSML over-cap batch (max_points_per_poll=3) defers remaining curves with zero silent data loss and surfaces partial_page_deferred in UI manifest', async ({
@@ -706,6 +742,7 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
     request,
     wellId,
     consoleErrors,
+    failedResponses,
   }) => {
     const harness = await apiPost<HarnessSnapshot>(request, '/connectors/harness/ensure', {}, 'engineer')
     await apiPost(
@@ -765,7 +802,7 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
     await expect(page.getByTestId('manifest-deferred-over-cap')).toHaveText('0')
     await expect(page.getByTestId('selected-run-manifest')).toContainText('complete')
 
-    expect(appConsoleErrors(consoleErrors)).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses)
   })
 
   test('Journey 16 (CP12 Scenario 4): ETP 1.2 per-channel watermarks (channel_cursors) preserve independent channel progress in UI', async ({
@@ -773,6 +810,7 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
     request,
     wellId,
     consoleErrors,
+    failedResponses,
   }) => {
     const harness = await apiPost<HarnessSnapshot>(request, '/connectors/harness/ensure', {}, 'engineer')
     await apiPost(
@@ -820,7 +858,7 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
     await expect(page.getByTestId('detail-watermark-cursor')).toContainText('spp')
     await expect(page.getByTestId('detail-watermark-cursor')).toContainText('wob')
 
-    expect(appConsoleErrors(consoleErrors)).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses)
   })
 
   test('Journey 17 (CP12 Scenarios 5 & 6): Governed Dry-Run Replay and Live Replay/Backfill in UI preserve non-regressing watermarks and deduplicate points', async ({
@@ -828,6 +866,7 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
     request,
     wellId,
     consoleErrors,
+    failedResponses,
   }) => {
     const harness = await apiPost<HarnessSnapshot>(request, '/connectors/harness/ensure', {}, 'engineer')
     await apiPost(
@@ -886,13 +925,14 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
     await expect(page.getByTestId('connector-replay-result')).toContainText('LIVE BACKFILL')
     await expect(page.getByTestId('connector-runs-table')).toContainText('replay')
 
-    expect(appConsoleErrors(consoleErrors)).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses)
   })
 
   test('Journey 18 (CP12 Scenario 7): SSRF defense blocks IPv4-mapped IPv6 (::ffff:127.0.0.1) and non-canonical octal IPv4 (0177.0.0.1) in UI', async ({
     page,
     wellId,
     consoleErrors,
+    failedResponses,
   }) => {
     await page.goto(`/connectors?wellId=${wellId}`)
 
@@ -908,7 +948,18 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
     await page.getByTestId('connector-submit-btn').click()
     await expect(page.getByTestId('connector-form-error')).toBeVisible()
 
-    expect(appConsoleErrors(consoleErrors)).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses, {
+      allowed: [
+        {
+          method: 'POST',
+          url: '/connectors',
+          status: 422,
+          reason:
+            'the journey submits IPv4-mapped and non-canonical loopback forms that the SSRF ' +
+            'policy must refuse',
+        },
+      ],
+    })
   })
 
   test('Journey 19 (CP12 Scenario 8): Secret reference minimization ensures raw DRILLAI_SECRET_* env names never leak in connector detail or API response', async ({
@@ -916,6 +967,7 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
     request,
     wellId,
     consoleErrors,
+    failedResponses,
   }) => {
     const harness = await apiPost<HarnessSnapshot>(request, '/connectors/harness/ensure', {}, 'engineer')
     const connKey = `e2e-sec-min-${Date.now().toString(36)}`
@@ -955,7 +1007,7 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
     await expect(page.getByTestId('detail-secret-refs')).toContainText('username: env:********')
     await expect(page.getByTestId('detail-secret-refs')).not.toContainText('DRILLAI_SECRET_HARNESS_WITSML_USER')
 
-    expect(appConsoleErrors(consoleErrors)).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses)
   })
 
   test('Journey 20 (CP12 Scenario 9): Malformed XML / SOAP Fault surfaces protocol_error and Operator Remediation Guidance in UI', async ({
@@ -963,6 +1015,7 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
     request,
     wellId,
     consoleErrors,
+    failedResponses,
   }) => {
     const harness = await apiPost<HarnessSnapshot>(request, '/connectors/harness/ensure', {}, 'engineer')
     await apiPost(
@@ -1009,7 +1062,7 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
     await expect(page.getByTestId('detail-error-remediation')).toBeVisible()
     await expect(page.getByTestId('detail-error-remediation')).toContainText('Operator Remediation Guidance')
 
-    expect(appConsoleErrors(consoleErrors)).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses)
   })
 
   test('Journey 21 (CP12 Scenario 10): ETP protocol_exception transitions connector to backing_off with remediation guidance, then recovers cleanly', async ({
@@ -1017,6 +1070,7 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
     request,
     wellId,
     consoleErrors,
+    failedResponses,
   }) => {
     const harness = await apiPost<HarnessSnapshot>(request, '/connectors/harness/ensure', {}, 'engineer')
     await apiPost(
@@ -1065,7 +1119,7 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
     await expect(page.getByTestId('detail-runtime-status')).toHaveText('running')
     await expect(page.getByTestId('detail-health-state')).toHaveText('LIVE')
 
-    expect(appConsoleErrors(consoleErrors)).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses)
   })
 
   test('Journey 22 (CP12 Scenario 11): Bad-quality telemetry is surfaced in run manifest without triggering false threshold alerts', async ({
@@ -1073,6 +1127,7 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
     request,
     wellId,
     consoleErrors,
+    failedResponses,
   }) => {
     const ruleKey = `e2e_badq_noraise_${Date.now()}`
     await apiPost(
@@ -1145,13 +1200,14 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
     await page.goto(wellPath('/cockpit?tab=live'))
     await expect(page.getByTestId('operational-alerts-list')).not.toContainText('Bad Quality Must Not Raise Alert')
 
-    expect(appConsoleErrors(consoleErrors)).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses)
   })
 
   test('Journey 23 (CP12 Scenario 12): Operational Monitor Manage Connectors link navigates to well-filtered Connector Workspace', async ({
     page,
     wellId,
     consoleErrors,
+    failedResponses,
   }) => {
     await page.goto(wellPath('/cockpit?tab=live'))
     await expect(page.getByTestId('monitor-connectors-card')).toBeVisible()
@@ -1160,7 +1216,7 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
     await expect(page.getByTestId('connectors-workspace')).toBeVisible()
     await expect(page.getByTestId('filter-connector-well')).toHaveValue(wellId)
 
-    expect(appConsoleErrors(consoleErrors)).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses)
   })
 
   test('Journey 24 (CP12 Scenario 13): Disabled connector reports disabled health state on both Connector Workspace and Operational Monitor banner', async ({
@@ -1168,6 +1224,7 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
     request,
     wellId,
     consoleErrors,
+    failedResponses,
   }) => {
     const connKey = `e2e-disabled-banner-${Date.now().toString(36)}`
     const created = await apiPost<ConnectorDto>(
@@ -1195,7 +1252,7 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
     await expect(bannerRow).toContainText('disabled')
     await expect(bannerRow).not.toContainText('LIVE')
 
-    expect(appConsoleErrors(consoleErrors)).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses)
   })
 
   test('Journey 25 (CP12 Scenario 15): Interactive Run Manifest Inspector switches between historical runs in the Run Ledger', async ({
@@ -1203,6 +1260,7 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
     request,
     wellId,
     consoleErrors,
+    failedResponses,
   }) => {
     const harness = await apiPost<HarnessSnapshot>(request, '/connectors/harness/ensure', {}, 'engineer')
     await apiPost(
@@ -1248,13 +1306,14 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
 
     await expect(page.getByTestId('selected-run-manifest')).toContainText(olderRunId)
 
-    expect(appConsoleErrors(consoleErrors)).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses)
   })
 
   test('Journey 26 (CP12 Scenarios 16 & 17): Persian (fa) RTL & keyboard accessibility on Run Manifest Inspector and Governed Replay Workbench', async ({
     page,
     wellId,
     consoleErrors,
+    failedResponses,
   }) => {
     await page.goto(`/connectors?wellId=${wellId}`)
     await page.getByTestId('locale-switch').selectOption('fa')
@@ -1269,7 +1328,7 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
     expect(bodyText).not.toContain('⟦')
 
     await page.getByTestId('locale-switch').selectOption('en')
-    expect(appConsoleErrors(consoleErrors)).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses)
   })
 
   test('Journey 27 (CP13 Scenarios 1 & 2): register ETP 1.2 Binary Avro connector (etp.1.2.binary_ws), verify capability & test-only honesty badges, inspect 10 connection test milestones, preview, start, observe LIVE on Operational Monitor, and stop', async ({
@@ -1277,6 +1336,7 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
     request,
     wellId,
     consoleErrors,
+    failedResponses,
   }) => {
     await page.goto(`/connectors?wellId=${wellId}`)
     await expect(page.getByTestId('connectors-workspace')).toBeVisible()
@@ -1354,7 +1414,7 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
       'engineer',
     )
 
-    expect(appConsoleErrors(consoleErrors)).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses)
   })
 
   test('Journey 28 (CP13 Scenario 3): ETP 1.2 Binary Avro per-channel watermarks (channel_cursors) preserve slow + fast channel progression without skipping slow-channel points', async ({
@@ -1362,6 +1422,7 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
     request,
     wellId,
     consoleErrors,
+    failedResponses,
   }) => {
     const harness = await apiPost<HarnessSnapshot>(request, '/connectors/harness/ensure', {}, 'engineer')
     await apiPost(
@@ -1424,7 +1485,7 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
     await expect(page.getByTestId('detail-watermark-cursor')).toContainText('spp')
     await expect(page.getByTestId('detail-watermark-cursor')).toContainText('wob')
 
-    expect(appConsoleErrors(consoleErrors)).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses)
   })
 
   test('Journey 29 (CP13 Scenario 4): ETP 1.2 Binary Avro ProtocolException fault surfaces structured protocol_error and recovers cleanly', async ({
@@ -1432,6 +1493,7 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
     request,
     wellId,
     consoleErrors,
+    failedResponses,
   }) => {
     const harness = await apiPost<HarnessSnapshot>(request, '/connectors/harness/ensure', {}, 'engineer')
     const connKey = `e2e-etp-bin-fault-${Date.now().toString(36)}`
@@ -1483,7 +1545,7 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
     await expect(page.getByTestId('detail-runtime-status')).toHaveText('running')
     await expect(page.getByTestId('detail-health-state')).toHaveText('LIVE')
 
-    expect(appConsoleErrors(consoleErrors)).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses)
   })
 
   test('Journey 30 (CP13 Scenario 5): WITSML tight batch cap (max_points_per_poll=1) surfaces Partial batch (over-cap deferred) in manifest-data-outcome and drains cleanly', async ({
@@ -1491,6 +1553,7 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
     request,
     wellId,
     consoleErrors,
+    failedResponses,
   }) => {
     const harness = await apiPost<HarnessSnapshot>(request, '/connectors/harness/ensure', {}, 'engineer')
     await apiPost(
@@ -1534,7 +1597,7 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
     )
     await expect(page.getByTestId('manifest-deferred-over-cap')).not.toHaveText('0')
 
-    expect(appConsoleErrors(consoleErrors)).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses)
   })
 
   test('Journey 31 (CP13 Scenario 6): Mixed valid and invalid points surface Partial: valid accepted, invalid rejected in manifest-data-outcome rather than All valid points accepted', async ({
@@ -1542,6 +1605,7 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
     request,
     wellId,
     consoleErrors,
+    failedResponses,
   }) => {
     const harness = await apiPost<HarnessSnapshot>(request, '/connectors/harness/ensure', {}, 'engineer')
     await apiPost(
@@ -1599,13 +1663,14 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
     )
     await expect(page.getByTestId('manifest-rejected')).not.toHaveText('0')
 
-    expect(appConsoleErrors(consoleErrors)).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses)
   })
 
   test('Journey 32 (CP13 Scenario 7): SSRF connection-bound enforcement rejects non-harness loopback port, link-local metadata, and unapproved private RFC-1918 IP', async ({
     page,
     wellId,
     consoleErrors,
+    failedResponses,
   }) => {
     await page.goto(`/connectors?wellId=${wellId}`)
 
@@ -1622,7 +1687,18 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
     await page.getByTestId('connector-submit-btn').click()
     await expect(page.getByTestId('connector-form-error')).toContainText('10.42.0.10')
 
-    expect(appConsoleErrors(consoleErrors)).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses, {
+      allowed: [
+        {
+          method: 'POST',
+          url: '/connectors',
+          status: 422,
+          reason:
+            'the journey submits a loopback port outside the approved harness and asserts ' +
+            'the connection-bound SSRF refusal',
+        },
+      ],
+    })
   })
 
   test('Journey 33 (CP13 Scenario 8): Private rig-network egress policy (PUT /connectors/egress-policy) enforces admin-only RBAC and Idempotency-Key replay safety', async ({
@@ -1739,6 +1815,7 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
     request,
     wellId,
     consoleErrors,
+    failedResponses,
   }) => {
     const harness = await apiPost<HarnessSnapshot>(request, '/connectors/harness/ensure', {}, 'engineer')
     const connKey = `e2e-cp13-redact-${Date.now().toString(36)}`
@@ -1796,7 +1873,7 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
       'engineer',
     )
 
-    expect(appConsoleErrors(consoleErrors)).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses)
   })
 
   test('Journey 35 (CP13 Scenarios 11 & 12): Governed start/restart/stop transitions increment fencing_token on ETP binary connector and reject stale expected_config_version with 409', async ({
@@ -1873,6 +1950,7 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
     page,
     wellId,
     consoleErrors,
+    failedResponses,
   }) => {
     await page.goto(`/connectors?wellId=${wellId}`)
     await selectRole(page, 'viewer')
@@ -1884,7 +1962,7 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
     await expect(page.getByTestId('connector-replay-card')).toHaveCount(0)
 
     await selectRole(page, 'engineer')
-    expect(appConsoleErrors(consoleErrors)).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses)
   })
 
   test('Journey 37 (CP13 Scenario 14): Historical replay dry-run and live execute on ETP 1.2 Binary Avro connector verify reconciled manifest and data_outcome', async ({
@@ -1892,6 +1970,7 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
     request,
     wellId,
     consoleErrors,
+    failedResponses,
   }) => {
     const harness = await apiPost<HarnessSnapshot>(request, '/connectors/harness/ensure', {}, 'engineer')
     await apiPost(
@@ -1935,13 +2014,14 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
     await page.getByTestId('connector-replay-dryrun-btn').click()
 
     await expect(page.getByTestId('connector-replay-result')).toContainText('DRY RUN')
-    expect(appConsoleErrors(consoleErrors)).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses)
   })
 
   test('Journey 38 (CP13 Scenarios 15 & 16): Persian (fa) RTL rendering of ETP 1.2 Binary Avro & test-only honesty badges plus zero unnamed interactive accessibility controls', async ({
     page,
     wellId,
     consoleErrors,
+    failedResponses,
   }) => {
     await page.goto(`/connectors?wellId=${wellId}`)
     await page.getByTestId('locale-switch').selectOption('fa')
@@ -1980,7 +2060,7 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
       }
     }
     expect(unnamed).toEqual([])
-    expect(appConsoleErrors(consoleErrors)).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses)
   })
 
   test('Journey 39 (CP14 Durable Egress Banner, Worker Policy Sync & Truthful filtered_only Data-Outcome): Unmapped poll records filtered_only and never all_valid_accepted', async ({
@@ -1988,6 +2068,7 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
     request,
     wellId,
     consoleErrors,
+    failedResponses,
   }) => {
     const harness = await apiPost<HarnessSnapshot>(request, '/connectors/harness/ensure', {}, 'engineer')
     await apiPost(
@@ -2039,7 +2120,7 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
       'Filtered only (unmapped/unsubscribed, 0 accepted)',
     )
 
-    expect(appConsoleErrors(consoleErrors)).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses)
   })
 
   test('Journey 40 (CP15 Dry-Run Replay Non-Persistence vs Live Replay & Manifest Policy Revision): Dry-run replay renders dry_run_preview and non-persisted badge without advancing cursor', async ({
@@ -2047,6 +2128,7 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
     request,
     wellId,
     consoleErrors,
+    failedResponses,
   }) => {
     const harness = await apiPost<HarnessSnapshot>(request, '/connectors/harness/ensure', {}, 'engineer')
     await apiPost(
@@ -2112,7 +2194,7 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
     await expect(page.getByTestId('connector-replay-result')).toContainText('LIVE BACKFILL')
     await expect(page.getByTestId('manifest-persisted-badge')).toHaveText('Persisted')
 
-    expect(appConsoleErrors(consoleErrors)).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses)
   })
 
   test('Journey 41 (CP15 System-Scope Egress Policy RBAC, Policy State Badge & Stale Worker Policy Sync): Rejects org_admin mutation, surfaces worker-policy-stale-badge on admin bump, and clears on next poll', async ({
@@ -2120,6 +2202,7 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
     request,
     wellId,
     consoleErrors,
+    failedResponses,
   }) => {
     const harness = await apiPost<HarnessSnapshot>(request, '/connectors/harness/ensure', {}, 'engineer')
     const connKey = `e2e-cp15-polsync-${Date.now().toString(36)}`
@@ -2211,13 +2294,14 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
     )
     await expect(page.getByTestId('worker-policy-stale-badge')).toHaveCount(0)
 
-    expect(appConsoleErrors(consoleErrors)).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses)
   })
 
   test('Journey 42 (CP15 Bilingual Persian FA RTL Rendering of Policy State, Persistence Badge & Policy Revision): Renders localized CP15 badges in RTL with zero raw translation markers', async ({
     page,
     wellId,
     consoleErrors,
+    failedResponses,
   }) => {
     await page.goto(`/connectors?wellId=${wellId}`)
     await page.getByTestId('locale-switch').selectOption('fa')
@@ -2231,7 +2315,7 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
     expect(bodyText).not.toContain('⟦')
 
     await page.getByTestId('locale-switch').selectOption('en')
-    expect(appConsoleErrors(consoleErrors)).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses)
   })
 })
 

@@ -156,6 +156,14 @@ test.describe('well cockpit built from the real well context', () => {
     // exist, so the browser is expected to log the two missing resources. The refusal is the one
     // failure this journey provokes; anything else — a thrown error, a React warning, a failed
     // asset, a call that failed for another reason — still fails the test.
-    expectNoFailures(consoleErrors, failedResponses, { allowed: ['/wells/wel_does_not_exist'] })
+    expectNoFailures(consoleErrors, failedResponses, {
+      allowed: [
+        {
+          url: '/wells/wel_does_not_exist',
+          status: 404,
+          reason: 'the journey opens a deep link naming a well that does not exist',
+        },
+      ],
+    })
   })
 })

@@ -207,7 +207,18 @@ test.describe('CP10 live operational vertical slice (Journeys A–I)', () => {
 
     // The journey clears an alert that is already being worked on, and the server refuses that on
     // purpose: the refusal is the one failure this journey provokes, and nothing else may fail.
-    expectNoFailures(consoleErrors, failedResponses, { allowed: ['/alerts/'] })
+    expectNoFailures(consoleErrors, failedResponses, {
+      allowed: [
+        {
+          method: 'POST',
+          url: '/alerts/',
+          status: 409,
+          reason:
+            'the journey clears an alert another operator is already working on, which the ' +
+            'server refuses as a conflict',
+        },
+      ],
+    })
   })
 
   test('Journeys F, G & I: cross-well stream isolation, missing/untrustworthy channel honesty, and Persian RTL token isolation', async ({

@@ -17,13 +17,13 @@
 
 import {
   apiGet,
-  appConsoleErrors,
   clearPendingApproval,
+  expect,
+  expectNoFailures,
   fixtures,
   selectRole,
   startRunFromStudio,
   test,
-  expect,
   waitForLoaded,
 } from './fixtures'
 import type { Page } from '@playwright/test'
@@ -68,6 +68,7 @@ test.describe('the error matrix: what the interface says when a request fails', 
     page,
     request,
     consoleErrors,
+    failedResponses,
   }) => {
     // A run parked at its gate, started the way an operator starts one.
     const runId = await startRunFromStudio(page, fixtures().workflow_id, well())
@@ -99,12 +100,23 @@ test.describe('the error matrix: what the interface says when a request fails', 
     await expect(page.getByText(runId, { exact: false }).first()).toBeVisible()
 
     await clearPendingApproval(request, runId, 'Cleanup after the permission journey.')
-    expect(appConsoleErrors(consoleErrors), `console errors: ${consoleErrors.join(' | ')}`).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses, {
+      allowed: [
+        {
+          method: 'POST',
+          url: '/approvals/',
+          status: 403,
+          reason:
+            'the journey presses decide as an identity the server does not allow to decide',
+        },
+      ],
+    })
   })
 
   test('an upload the server rejects says what was wrong with it, not that the backend is down', async ({
     page,
     consoleErrors,
+    failedResponses,
   }) => {
     await page.goto(`/wells/${well()}/documents`)
     await expect(page.getByRole('heading', { level: 1 }).first()).toBeVisible()
@@ -125,7 +137,17 @@ test.describe('the error matrix: what the interface says when a request fails', 
     await expect(state).not.toContainText(/unreachable/i)
     // A rejected payload is about the payload: the same file will be rejected again.
     await expect(state.getByRole('button', { name: /retry/i })).toHaveCount(0)
-    expect(appConsoleErrors(consoleErrors), `console errors: ${consoleErrors.join(' | ')}`).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses, {
+      allowed: [
+        {
+          method: 'POST',
+          url: '/documents',
+          status: 422,
+          reason:
+            'the journey uploads an empty file, which the server must reject',
+        },
+      ],
+    })
   })
 
   test('a decision somebody else already took reads as a conflict and reconciles to the record', async ({
@@ -133,6 +155,7 @@ test.describe('the error matrix: what the interface says when a request fails', 
     context,
     request,
     consoleErrors,
+    failedResponses,
   }) => {
     const runId = await startRunFromStudio(page, fixtures().workflow_id, well())
     const envelope = await apiGet<{ run: { status: string }; pending_approval?: { id: string } | null }>(
@@ -201,13 +224,14 @@ test.describe('the error matrix: what the interface says when a request fails', 
     expect(decided.approval.status).toBe('approved')
 
     await other.close()
-    expect(appConsoleErrors(consoleErrors), `console errors: ${consoleErrors.join(' | ')}`).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses)
   })
 
   test('a network that goes away is a connection problem, and it recovers when the network returns', async ({
     page,
     context,
     consoleErrors,
+    failedResponses,
   }) => {
     // Both screens are visited while the network is up, so the failure under test is a data read and
     // not a module the browser could not fetch.
@@ -235,6 +259,6 @@ test.describe('the error matrix: what the interface says when a request fails', 
     await state.getByRole('button', { name: /retry/i }).click()
     await expect(errorState(page)).toHaveCount(0, { timeout: 30_000 })
     await expect(page.getByRole('table').or(page.getByText(/no workflow runs yet/i)).first()).toBeVisible()
-    expect(appConsoleErrors(consoleErrors), `console errors: ${consoleErrors.join(' | ')}`).toEqual([])
+    expectNoFailures(consoleErrors, failedResponses)
   })
 })
