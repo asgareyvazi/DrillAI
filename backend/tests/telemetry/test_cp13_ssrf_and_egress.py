@@ -51,6 +51,36 @@ def _clean_resolvers_and_policy():
     reset_settings_cache()
 
 
+def test_the_certificate_fixture_never_treats_a_slow_machine_as_a_tls_failure() -> None:
+    """The certificate is real; the patience must be generous.
+
+    `openssl req -newkey rsa:2048` exceeded a fixed fifteen-second bound on the Windows runner — a
+    first invocation of a freshly installed binary, no cached entropy, an antivirus scanning it — and
+    the backend suite went red for a reason that has nothing to do with the TLS hostname verification
+    this fixture supports. Both certificate fixtures in the telemetry tests therefore share one
+    generous bound, and this asserts neither has drifted back to a stopwatch.
+    """
+    from pathlib import Path
+
+    assert _OPENSSL_TIMEOUT_SECONDS >= 60, "key generation needs room on a slow machine"
+    here = Path(__file__).resolve().parent
+    for module in (Path(__file__).resolve(), here / "test_cp14_dns_and_transport_ssrf.py"):
+        text = module.read_text(encoding="utf-8")
+        assert "timeout=_OPENSSL_TIMEOUT_SECONDS" in text, (
+            f"{module.name} must bound certificate generation with the shared generous timeout"
+        )
+        # Assembled rather than written out, so this scan does not match its own source.
+        stopwatch = "timeout=" + "15,"
+        assert stopwatch not in text, (
+            f"{module.name} must not time certificate generation with a fixed fifteen seconds"
+        )
+
+
+#: How long the certificate fixture may take to generate a key. Generous on purpose: this bounds a
+#: hung tool, it does not assert how fast a machine can create an RSA key.
+_OPENSSL_TIMEOUT_SECONDS = 120
+
+
 def _resolve_openssl_bin() -> str:
     import shutil
     from pathlib import Path
@@ -98,7 +128,13 @@ def _generate_self_signed_tls_contexts(
         ],
         env={**os.environ, "MSYS_NO_PATHCONV": "1"},
         stdin=subprocess.DEVNULL,
-        timeout=15,
+        # Generating the key is the slowest part of this fixture, and it is the machine that is slow,
+        # not the check: on the Windows runner `openssl req -newkey rsa:2048` has been observed to
+        # take longer than fifteen seconds (first invocation, antivirus scanning a fresh executable,
+        # no cached entropy). A timeout here fails the *test*, which is about TLS hostname
+        # verification against an approved pinned IP — so a fixed 15 s turned a slow key generation
+        # into a red backend suite. The certificate is real either way; only the patience is larger.
+        timeout=_OPENSSL_TIMEOUT_SECONDS,
         check=True,
         capture_output=True,
     )

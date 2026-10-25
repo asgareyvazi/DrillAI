@@ -67,6 +67,11 @@ def _resolve_openssl_bin() -> str:
     return "openssl"
 
 
+#: How long the certificate fixture may take to generate a key. Generous on purpose: this bounds a
+#: hung tool, it does not assert how fast a machine can create an RSA key.
+_OPENSSL_TIMEOUT_SECONDS = 120
+
+
 def _generate_self_signed_tls_contexts(
     common_name: str, tmp_path: Path
 ) -> tuple[ssl.SSLContext, ssl.SSLContext]:
@@ -95,7 +100,9 @@ def _generate_self_signed_tls_contexts(
         ],
         env={**os.environ, "MSYS_NO_PATHCONV": "1"},
         stdin=subprocess.DEVNULL,
-        timeout=15,
+        # The certificate is real; only the patience is generous. Key generation has been observed
+        # to exceed fifteen seconds on the Windows runner, and a slow machine is not a TLS failure.
+        timeout=_OPENSSL_TIMEOUT_SECONDS,
         check=True,
         capture_output=True,
     )

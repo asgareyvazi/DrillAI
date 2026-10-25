@@ -208,8 +208,8 @@ also verified against a stale README count: with `1,156 passed, 8 skipped` it re
 | `npm run lint` | **pass** |
 | `npm test` (Vitest) | **318 passed in 30 files** |
 | `npm run e2e` (Playwright, all three deployments) | **121 passed** — 114 in `chromium`, 4 in `chromium-faults`, 3 in `chromium-auth` |
-| `pytest` (backend, embedded PostgreSQL) | **1,168 passed, 0 skipped** in 88 files (`DRILLAI_TEST_POSTGRES=1`) |
-| `pytest -m "not postgres"` (backend, SQLite) | **1,160 passed, 8 deselected**; without the environment variable at all the same 8 tests skip themselves and the suite reports **1,160 passed, 8 skipped** |
+| `pytest` (backend, embedded PostgreSQL) | **1,169 passed, 0 skipped** in 88 files (`DRILLAI_TEST_POSTGRES=1`) |
+| `pytest -m "not postgres"` (backend, SQLite) | **1,161 passed, 8 deselected**; without the environment variable at all the same 8 tests skip themselves and the suite reports **1,161 passed, 8 skipped** |
 | `ruff check .` | **pass** |
 | `alembic upgrade head` / `alembic check` on a fresh SQLite database | **pass** |
 | `scripts/verify_stack.py` | `STACK_VERIFICATION_OK` — 16 scenarios and a 32-cycle soak |
@@ -287,6 +287,8 @@ is the step's design and not a skipped test: no suite skipped anything on this r
 | `dded419` (CP32 fix) | `40081444618` | **pass** | **pass** | first fully green run of the series |
 | `34979de` (CP32 docs) | `40082345895` | pass | fail | Windows: a flake, not a regression — a retried journey's commissioning was a duplicate replay; root-caused and fixed in §8 |
 | `08edab3` (CP32 fixes) | `40085939081` | **pass** | **pass** | **certified** — every step green on both platforms |
+| `0547d9f` (CP32 docs) | `40089277512` | pass | pass | — |
+| `0ff991f` (CP32 docs) | `40090092673` | pass | fail | Windows: a third flake — an `openssl` key-generation stopwatch in the backend suite; fixed in §10 |
 
 Each failure is recorded with its cause because a release claim is only as good as the chain of
 evidence behind it. Two of these failures were caused by this checkpoint (`1fda9be`, and the flake
@@ -436,7 +438,37 @@ See §8: `SyntheticAdapter` gave every commissioning run the same point identiti
 retried run was a silent duplicate replay. That one **is** deterministically reproducible and now has
 two regression tests.
 
-## 10. Open items
+## 10. A third flake: a stopwatch on key generation
+
+Run `40090092673` executed `0ff991f` — another documentation commit — and the **Windows backend step**
+failed on an unrelated test:
+
+```
+tests/telemetry/test_cp13_ssrf_and_egress.py::test_s14_tls_hostname_verification_on_approved_pinned_ip
+subprocess.TimeoutExpired: openssl req -x509 -newkey rsa:2048 ... timed out after 15 seconds
+1 failed, 1159 passed, 8 deselected
+```
+
+The test is about TLS hostname verification against an approved pinned IP. Its fixture generates a
+real self-signed certificate with `openssl req -newkey rsa:2048` and bounded that call at **15
+seconds**. On the Windows runner the key generation alone exceeded that — a first invocation of a
+freshly installed binary with no cached entropy, on a machine that also runs an antivirus. The TLS
+behaviour being tested was never reached; the suite went red because a machine was slow.
+
+Both certificate fixtures (in `test_cp13_ssrf_and_egress.py` and
+`test_cp14_dns_and_transport_ssrf.py`) now bound the call with one shared
+`_OPENSSL_TIMEOUT_SECONDS = 120`. The certificate is exactly as real; only the patience is larger,
+and it still bounds a hung tool. A guard,
+`test_the_certificate_fixture_never_treats_a_slow_machine_as_a_tls_failure`, asserts the bound is
+generous and that neither fixture has drifted back to a stopwatch.
+
+That is three flakes in this series, each with a different cause and each fixed at its cause rather
+than retried: the browser's platform-dependent network log (CP32's main subject), a duplicate-replay
+commissioning run (§8), and a stopwatch on key generation (§10). None of them was a product defect in
+the sense of wrong engineering output; two of them were defects in what the tests measured, and one
+(the silent duplicate replay) was a real defect in the commissioning path.
+
+## 11. Open items
 
 - **Docker Compose runtime evidence** — the Compose deployment gate **passed in CI** on the
   certified SHA (run `40081444618`, Linux job `120835678251`). No Docker daemon exists in this
