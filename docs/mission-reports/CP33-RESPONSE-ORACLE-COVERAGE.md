@@ -174,6 +174,7 @@ release claim is only as good as the chain of evidence behind it:
 | `0ff991f` | `40090092673` | pass | fail | an `openssl` key-generation stopwatch in the backend suite (CP32 §10) |
 | `c09ce79` | `40165921576` | **pass** | **pass** | the bound replaced with `_OPENSSL_TIMEOUT_SECONDS = 120` — certified |
 | `a2b1dd8` (CP33) | `40167836917` | **pass** | **pass** | **certified** — every step green on both platforms |
+| `a3a76f9` (CP33 docs) | `40168841714` | **pass** | **pass** | the certification record itself: Linux job `121095369272` (24 steps), Windows job `121095369532` (23 steps), no non-success step |
 
 ## 8. Open items
 
