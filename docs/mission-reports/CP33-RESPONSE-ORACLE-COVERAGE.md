@@ -154,12 +154,26 @@ checkpoint, and none of the external boundaries in `REMAINING-GAPS-ROADMAP.md` m
 
 ## 7. Certification
 
-Exact-SHA certification is recorded in the run below; the SHA is the commit that carries this
-checkpoint and its documentation.
+Run **40167836917** executed the exact CP33 commit `a2b1dd8858d10d5c37a1ccdbaedde19d20230677` on
+2026-10-25T06:04:58Z and **both jobs passed**, every step green:
 
-| Commit | Run | Linux job | Windows job |
+| Job | Job ID | Window (UTC) | Steps |
 |---|---|---|---|
-| CP33 (see `git log`) | recorded below | recorded below | recorded below |
+| `certification` (Linux) | `121092408399` | 06:05:00 → 06:14:26 | 24, all successful — including the Docker Compose deployment smoke gate and the full Playwright suite on all three deployments |
+| `windows-certification` (Windows) | `121092408591` | 06:05:00 → 06:14:26 | 23, all successful — including the native PowerShell bootstrap, the SQLite backend suite, the multi-process stack verification, and the full Playwright suite |
+
+The Windows job is the one that matters for this checkpoint's class of defect: the converted journeys
+ran there with the response oracle, and the whole suite passed on a platform that had failed the
+console-only verdict twice.
+
+**Path to this certification, in order.** Each failure below is recorded with its cause, because a
+release claim is only as good as the chain of evidence behind it:
+
+| Commit | Run | Linux | Windows | Cause |
+|---|---|---|---|---|
+| `0ff991f` | `40090092673` | pass | fail | an `openssl` key-generation stopwatch in the backend suite (CP32 §10) |
+| `c09ce79` | `40165921576` | **pass** | **pass** | the bound replaced with `_OPENSSL_TIMEOUT_SECONDS = 120` — certified |
+| `a2b1dd8` (CP33) | `40167836917` | **pass** | **pass** | **certified** — every step green on both platforms |
 
 ## 8. Open items
 

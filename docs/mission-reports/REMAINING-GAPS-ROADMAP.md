@@ -9,6 +9,8 @@
 >
 > **Internal gap after CP32 — CLOSED by CP33.** CP32 left seven journeys (`checkpoint5`, `connectors-platform`, `context-deeplinks`, `error-auth`, `error-faults`, `error-matrix`, `identity-permissions`) asserting only on `appConsoleErrors(consoleErrors)`. CP33 converted all **54** of those assertions to the platform-independent response oracle: the suite was run with the failing responses recorded per journey (121 journeys, 20 with a response ≥400), and every journey that provokes a refusal now names that exact request — method, URL and status — with a written `reason`. The other **101** journeys assert with no tolerance at all, which is a stronger statement than the console-only verdict ever made. A tolerance is an object by construction: a bare string would tolerate every method and every status at a URL, and the guard `backend/tests/security/test_cp33_e2e_response_oracle_coverage.py` refuses one. See `CP33-RESPONSE-ORACLE-COVERAGE.md`.
 >
+> **CP33 certified on both platforms.** Run `40167836917` executed the exact CP33 commit `a2b1dd8` and both jobs passed with every step green — Linux `121092408399`, Windows `121092408591` — including the Docker Compose gate and the full Playwright suite against the converted journeys. The openssl fixture fix that preceded it (`c09ce79`) is certified by run `40165921576`.
+>
 > **Still open in the E2E suite (by choice).** `frontend/tsconfig.e2e.json` is `strict` but relaxes `noUncheckedIndexedAccess`; the journeys index into API arrays and assert on the element, and the product's own configuration keeps the rule on. Nothing in the E2E suite tolerates a `500` that a journey does not name, and nothing tolerates a failure at a URL without a status.
 
 ---

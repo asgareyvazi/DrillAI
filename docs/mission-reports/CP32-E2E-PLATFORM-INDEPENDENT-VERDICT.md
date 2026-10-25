@@ -289,6 +289,7 @@ is the step's design and not a skipped test: no suite skipped anything on this r
 | `08edab3` (CP32 fixes) | `40085939081` | **pass** | **pass** | **certified** — every step green on both platforms |
 | `0547d9f` (CP32 docs) | `40089277512` | pass | pass | — |
 | `0ff991f` (CP32 docs) | `40090092673` | pass | fail | Windows: a third flake — an `openssl` key-generation stopwatch in the backend suite; fixed in §10 |
+| `c09ce79` (CP32 fix) | `40165921576` | **pass** | **pass** | **certified** — the openssl bound, every step green on both platforms (Linux job `121086820132`, Windows job `121086819921`) |
 
 Each failure is recorded with its cause because a release claim is only as good as the chain of
 evidence behind it. Two of these failures were caused by this checkpoint (`1fda9be`, and the flake
@@ -467,6 +468,13 @@ than retried: the browser's platform-dependent network log (CP32's main subject)
 commissioning run (§8), and a stopwatch on key generation (§10). None of them was a product defect in
 the sense of wrong engineering output; two of them were defects in what the tests measured, and one
 (the silent duplicate replay) was a real defect in the commissioning path.
+
+### The openssl bound, certified
+
+Run `40165921576` executed `c09ce79` — the commit that replaced the fifteen-second stopwatch — and
+**both jobs passed**, every step green: Linux `121086820132` and Windows `121086819921`. The
+`test_s14_tls_hostname_verification_on_approved_pinned_ip` test that had failed on Windows now runs
+in the Windows backend suite with the certificate it always generated.
 
 ## 11. Open items
 
