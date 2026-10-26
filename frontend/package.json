@@ -13,6 +13,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "e2e": "node scripts/run-e2e.mjs",
+    "e2e:verify-shape": "node scripts/verify-e2e-shape.mjs",
     "browser:prepare": "node scripts/prepare-chromium.mjs"
   },
   "dependencies": {

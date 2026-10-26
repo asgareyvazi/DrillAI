@@ -126,7 +126,7 @@ class EngineExecution:
     inputs_hash: str = ""
     outputs_hash: str = ""
     engine_run_id: str | None = None
-    validation_status: str = "verified_against_reference"
+    validation_status: str = "formula_derived"
     domain_pack: str = ""
     category: str = ""
     units: dict[str, Any] = field(default_factory=dict)

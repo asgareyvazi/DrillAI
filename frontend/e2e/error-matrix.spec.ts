@@ -38,7 +38,12 @@ const errorState = (page: Page) => page.getByTestId('error-state')
 const well = () => fixtures().well_id
 
 test.describe('the error matrix: what the interface says when a request fails', () => {
-  test('a deep link to a run that does not exist is "not found", not an outage', async ({ page, request }) => {
+  test('a deep link to a run that does not exist is "not found", not an outage', async ({
+    page,
+    request,
+    consoleErrors,
+    failedResponses,
+  }) => {
     const missing = 'run_e2e_does_not_exist'
     const answer = await request.get(`/api/v1/runs/${missing}`, { headers: { 'X-Dev-Roles': 'engineer' } })
     expect(answer.status(), 'the server must really answer 404 for this journey to mean anything').toBe(404)
@@ -62,6 +67,20 @@ test.describe('the error matrix: what the interface says when a request fails', 
     await expect(errorState(page)).toHaveCount(0)
     await expect(page.getByText(/select a run to inspect it/i)).toBeVisible()
     expect(page.url()).not.toContain('run=')
+    expectNoFailures(consoleErrors, failedResponses, {
+      allowed: [
+        {
+          kind: 'http',
+          method: 'GET',
+          pathname: '/api/v1/runs/run_e2e_does_not_exist',
+          query: '',
+          status: 404,
+          maxMatches: 2,
+          reason:
+            'the journey deep-links an absent run and asserts both bounded page reads are real HTTP 404 responses',
+        },
+      ],
+    })
   })
 
   test('an identity that may not decide an approval is told so, with the resource still on screen', async ({
@@ -103,9 +122,12 @@ test.describe('the error matrix: what the interface says when a request fails', 
     expectNoFailures(consoleErrors, failedResponses, {
       allowed: [
         {
+          kind: 'http',
           method: 'POST',
-          url: '/approvals/',
+          pathname: '/api/v1/approvals/:approvalId/decide',
+          query: '',
           status: 403,
+          maxMatches: 1,
           reason:
             'the journey presses decide as an identity the server does not allow to decide',
         },
@@ -140,9 +162,12 @@ test.describe('the error matrix: what the interface says when a request fails', 
     expectNoFailures(consoleErrors, failedResponses, {
       allowed: [
         {
+          kind: 'http',
           method: 'POST',
-          url: '/documents',
+          pathname: '/api/v1/documents',
+          query: '',
           status: 422,
+          maxMatches: 1,
           reason:
             'the journey uploads an empty file, which the server must reject',
         },
@@ -164,7 +189,8 @@ test.describe('the error matrix: what the interface says when a request fails', 
       'supervisor',
     )
     expect(envelope.run.status).toBe('waiting_approval')
-    const approvalId = envelope.pending_approval?.id as string
+    const approvalId = envelope.pending_approval?.id
+    if (!approvalId) throw new Error('the waiting-approval run must expose its pending approval id')
 
     // Two operators, one run, the same approval open on both screens. The second screen has to stay on
     // the snapshot it read *before* the decision — a stale screen is the state under test — so the one
@@ -224,7 +250,20 @@ test.describe('the error matrix: what the interface says when a request fails', 
     expect(decided.approval.status).toBe('approved')
 
     await other.close()
-    expectNoFailures(consoleErrors, failedResponses)
+    expectNoFailures(consoleErrors, failedResponses, {
+      allowed: [
+        {
+          kind: 'http',
+          method: 'POST',
+          pathname: '/api/v1/approvals/:approvalId/decide',
+          query: '',
+          status: 409,
+          maxMatches: 1,
+          reason:
+            'the second operator submits a stale approval decision and asserts the server rejects it as a conflict',
+        },
+      ],
+    })
   })
 
   test('a network that goes away is a connection problem, and it recovers when the network returns', async ({
@@ -259,6 +298,29 @@ test.describe('the error matrix: what the interface says when a request fails', 
     await state.getByRole('button', { name: /retry/i }).click()
     await expect(errorState(page)).toHaveCount(0, { timeout: 30_000 })
     await expect(page.getByRole('table').or(page.getByText(/no workflow runs yet/i)).first()).toBeVisible()
-    expectNoFailures(consoleErrors, failedResponses)
+    expectNoFailures(consoleErrors, failedResponses, {
+      allowed: [
+        {
+          kind: 'network',
+          method: 'GET',
+          pathname: '/api/v1/runs',
+          query: '?limit=100',
+          errorText: 'net::ERR_INTERNET_DISCONNECTED',
+          maxMatches: 4,
+          reason:
+            'the journey takes the browser offline while loading runs, then verifies the connection error and recovery',
+        },
+        {
+          kind: 'network',
+          method: 'GET',
+          pathname: '/api/v1/approvals',
+          query: '?status=pending',
+          errorText: 'net::ERR_INTERNET_DISCONNECTED',
+          maxMatches: 4,
+          reason:
+            'the offline runs screen also loads its pending-approval count and recovers after reconnecting',
+        },
+      ],
+    })
   })
 })

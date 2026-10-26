@@ -127,6 +127,58 @@ def test_invalid_node_config_is_reported_with_the_field():
     assert any(issue.code == "invalid_node_config" and "condition" in issue.message for issue in report.issues)
 
 
+def test_workflow_graph_rejects_credential_headers_without_echoing_the_secret():
+    secret_canary = "workflow-header-secret-canary"
+    graph = WorkflowGraph(
+        nodes=[
+            GraphNode(
+                id="fetch",
+                type="integration.http_fetch",
+                config={
+                    "url": "https://public.example.invalid/data",
+                    "headers": {"Authorization": f"Bearer {secret_canary}"},
+                },
+            )
+        ]
+    )
+    report = validate_graph(graph, node_types=registered_node_types())
+    assert not report.is_valid
+    issue = next(issue for issue in report.errors if issue.code == "invalid_node_config")
+    assert "credential-bearing HTTP header names" in issue.message
+    assert secret_canary not in issue.message
+
+
+def test_action_level_override_cannot_lower_a_node_minimum_or_claim_l5():
+    lowered = WorkflowGraph(
+        nodes=[
+            GraphNode(
+                id="fetch",
+                type="integration.http_fetch",
+                action_level="L0",
+                config={"url": "https://example.invalid"},
+            )
+        ]
+    )
+    lowered_report = validate_graph(lowered, node_types=registered_node_types())
+    assert not lowered_report.is_valid
+    issue = next(issue for issue in lowered_report.errors if issue.code == "action_level_below_node_minimum")
+    assert issue.details == {"node_type": "integration.http_fetch", "minimum": "L4", "declared": "L0"}
+
+    forged_l5 = WorkflowGraph(
+        nodes=[
+            GraphNode(
+                id="report",
+                type="output.report",
+                action_level="L5",
+                config={"title": "Daily report"},
+            )
+        ]
+    )
+    forged_l5_report = validate_graph(forged_l5, node_types=registered_node_types())
+    assert not forged_l5_report.is_valid
+    assert any(issue.code == "unsupported_action_level_override" for issue in forged_l5_report.errors)
+
+
 def test_cycles_are_detected_and_loop_back_edges_are_honoured():
     cyclic = graph(
         ("a", "logic.set_variables", {}),

@@ -1024,7 +1024,7 @@ def test_cp16_10_documentation_and_contract_consistency_guard():
     )
 
     assert "121 passed" in readme_text
-    assert "318 passed" in readme_text
+    assert "329 passed" in readme_text
     assert "121 passed" in fe_testing_text
     assert "42" in fe_testing_text
 

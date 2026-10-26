@@ -55,7 +55,13 @@ class GraphNode(BaseModel):
     is_breakpoint: bool = False
     notes: str | None = None
     position: dict[str, float] | None = Field(default=None, description="editor coordinates")
-    action_level: str | None = Field(default=None, description="override; defaults to the node type's level")
+    action_level: str | None = Field(
+        default=None,
+        description=(
+            "optional escalation from the registered node type level; cannot lower that minimum, "
+            "and L5 is reserved to node types registered for autonomous execution"
+        ),
+    )
 
 
 class GraphEdge(BaseModel):
@@ -253,14 +259,41 @@ def validate_graph(
                             node_id=node.id,
                         )
                     )
-        if node.action_level is not None and node.action_level not in {"L0", "L1", "L2", "L3", "L4", "L5"}:
-            issues.append(
-                GraphIssue(
-                    code="invalid_action_level",
-                    message=f"{node.id}: action_level {node.action_level!r} is not L0–L5",
-                    node_id=node.id,
+        if node.action_level is not None:
+            allowed_levels = {"L0", "L1", "L2", "L3", "L4", "L5"}
+            if node.action_level not in allowed_levels:
+                issues.append(
+                    GraphIssue(
+                        code="invalid_action_level",
+                        message=f"{node.id}: action_level {node.action_level!r} is not L0–L5",
+                        node_id=node.id,
+                    )
                 )
-            )
+            else:
+                registered_level = getattr(spec, "action_level", None)
+                minimum = getattr(registered_level, "value", registered_level)
+                if isinstance(minimum, str) and minimum in allowed_levels:
+                    if int(node.action_level[1:]) < int(minimum[1:]):
+                        issues.append(
+                            GraphIssue(
+                                code="action_level_below_node_minimum",
+                                message=f"{node.id}: action_level {node.action_level} cannot lower node type {node.type!r} below {minimum}",
+                                node_id=node.id,
+                                details={"node_type": node.type, "minimum": minimum, "declared": node.action_level},
+                            )
+                        )
+                    elif node.action_level == "L5" and minimum != "L5":
+                        # L5 is a distinct authorization path (an automation envelope, not a per-run
+                        # human approval). A graph author cannot turn an ordinary node into L5 by
+                        # editing its serialized action_level.
+                        issues.append(
+                            GraphIssue(
+                                code="unsupported_action_level_override",
+                                message=f"{node.id}: only a node type registered as L5 may use L5 automation",
+                                node_id=node.id,
+                                details={"node_type": node.type, "minimum": minimum, "declared": node.action_level},
+                            )
+                        )
         if node.retry and not node.retry.get("max_attempts"):
             issues.append(
                 GraphIssue(

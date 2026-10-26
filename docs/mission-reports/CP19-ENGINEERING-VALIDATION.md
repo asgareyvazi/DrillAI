@@ -1,4 +1,6 @@
-# CP19 Mission Report — Independent Engineering & Physics Validation
+# CP19 Mission Report — Engineering Analytical Test-Vector Verification
+
+**CP34 independent-review note (2026-10-25):** The tests recorded below are deterministic software regression checks against hand-calculated vectors and unit conversions. They do **not** establish authoritative-edition conformance, domain-owner sign-off, field validation, third-party certification, or suitability for live operations. Earlier wording such as “independent validation” and `verified_against_reference` was too strong for the available evidence. Current registry statuses are downgraded: engines default to `formula_derived`; `well_control.kill_sheet` and `tubulars.api_5c3` are `needs_field_validation`. Treat the per-engine “PASS” entries below only as test-vector results. This note supersedes stronger interpretations of the historical report.
 
 **Repository**: `asgareyvazi/DrillAI`  
 **Branch**: `arena/01a0dca0-drillai` (`main` untouched at `bfa066b28e0071880cb9191a4f1d47fdaa143e04`)  
@@ -9,11 +11,11 @@
 
 ## 1. Executive Summary & Classification Matrix
 
-Every engineering calculation and unit conversion in `drillai.engines` and `drillai.units` has been audited and validated against independent closed-form analytical equations, published petroleum engineering standards, and textbook formulations (`backend/tests/engines/test_cp19_engineering_validation.py` and `backend/tests/test_cp16_adversarial_audit.py`).
+The CP19 test suite exercised the registered calculations and unit conversions against deterministic hand-calculated analytical vectors and conversion references (`backend/tests/engines/test_cp19_engineering_validation.py` and `backend/tests/test_cp16_adversarial_audit.py`). This is numerical regression evidence; it is not an expert audit of every governing standard or proof of field performance.
 
 | Subsystem / Capability | Status | Evidence |
 |---|---|---|
-| **14 Registered Engineering Engines (Closed-Form Reference Benchmarks)** | **PASS** | All 14 engines verified against independent hand-derived analytical solutions (`rel_tol <= 1e-5`). |
+| **14 Registered Engineering Engines (analytical test vectors)** | **TEST PASS (not field validated)** | The test suite compares configured examples with hand-calculated values (`rel_tol <= 1e-5`); this does not establish operational suitability or standard certification. |
 | **Unit Registry (`drillai.units.registry` — 33 Dimensions)** | **PASS** | Bijective SI round-trip (`rel_tol <= 1e-11`), affine temperature (`K`, `degC`, `degF`, `degR`), and oilfield permeability (`D`, `mD`, `m2-perm`) verified. |
 | **Metamorphic Physical Invariants & Boundary Rejection** | **PASS** | Monotonicity of SPP/ECD with flow rate & mud weight, hookload with friction factor, and strict `EngineInputInvalid` on negative/degenerate inputs verified. |
 | **Strict IEEE-754 Finite JSON Serialization (`allow_nan=False`)** | **PASS** | All 14 engine outputs serialize cleanly under `json.dumps(..., allow_nan=False)` with zero `NaN`/`Inf` values. |
@@ -23,7 +25,7 @@ Every engineering calculation and unit conversion in `drillai.engines` and `dril
 
 ---
 
-## 2. Independent Reference Validation Table (All 14 Engines)
+## 2. Analytical Test-Vector Ledger (All 14 Engines; Not a Field/Certification Report)
 
 | # | Engine Key (`version`) | Governing Equation / Mathematical Model | Standard / Literature Reference | Key Assumptions & Declared Limitations | Benchmark Inputs (Canonical SI) | Reference Output vs Actual Output | Tolerance | Status |
 |---|---|---|---|---|---|---|---|---|

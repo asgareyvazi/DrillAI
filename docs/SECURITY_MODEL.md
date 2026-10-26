@@ -113,6 +113,10 @@ Defined in `backend/src/drillai/security/actions.py`, `backend/src/drillai/secur
 
 - **Fail-Closed Unknown Actions**: Any action key not registered in `catalog.py` defaults to `L4`
   and requires explicit permission.
+- **Workflow node-level floor**: a persisted `action_level` may escalate a node above its registered
+  `NodeSpec.action_level`, but cannot lower the floor or claim `L5` unless that node type is itself
+  registered for `L5`. The graph validator and runtime authorization gate both enforce this; an
+  editor-supplied `L0` cannot turn an L4 integration node into unapproved execution.
 - **Role Separation**:
   - `org_admin`: Tenant-scoped user/token administrator (`user.read`, `user.manage`, `audit.read`,
     `well.read`, `project.read`). Cannot assign the platform `admin` role or modify system-wide
@@ -128,9 +132,24 @@ Defined in `backend/src/drillai/security/actions.py`, `backend/src/drillai/secur
 
 ## 6. Secrets Management & Authenticated Encryption (`CP22-A`)
 
-DrillAI never stores raw credentials in connector configurations, workflow definitions, or logs.
-`SecretRef` rows (`secret_refs` table, scoped by `(org_id, key)`) support two production backends
-implemented in `backend/src/drillai/security/secrets.py`:
+Managed connector and notification credentials use `SecretRef` rows (`secret_refs` table, scoped
+by `(org_id, key)`) rather than literal credential fields. The environment backend accepts only
+`env:DRILLAI_SECRET_<NAME>` where `<NAME>` matches `[A-Z0-9_]{2,120}`; both creation and runtime
+resolution enforce that scope, including legacy rows. The encrypted database backend is implemented
+in `backend/src/drillai/security/secrets.py`:
+
+- Workflow `output.notify` and generic `integration.http_fetch` reject credential-bearing custom
+  header names (authorization/auth, cookies, API/access keys, tokens, secrets, passwords, private
+  keys, credentials, signatures, and bearer headers) so such values are not persisted in workflow
+  JSON. Webhook notifications use the managed `secret_ref` field and the selected bearer/HMAC scheme.
+- Generic `integration.http_fetch` has no managed arbitrary-header secret mapping; it must not be used
+  with credentials embedded in its URL, query, body, or ordinary custom headers. Free-form request
+  bodies and URL query strings remain operator-authored content and are not a general-purpose secret
+  store; do not place credentials there.
+- Notification delivery fails closed for credential-bearing custom headers in legacy `OutboundMessage`
+  payloads; use the managed reference instead. Errors avoid echoing supplied secret values.
+
+`SecretRef` rows support two production backends:
 
 1. **`backend="env"`**:
    - `SecretRef.locator` holds `env:DRILLAI_SECRET_<NAME>`, resolved at runtime from the process
@@ -146,6 +165,8 @@ implemented in `backend/src/drillai/security/secrets.py`:
    - **Envelope Format**: `enc:v1:kv=<version>:<nonce_b64>:<ciphertext_and_tag_b64>`.
    - **Key Rotation**: `POST /api/v1/platform/secrets/{secret_key}/rotate` decrypts under the envelope's
      `kv` and re-encrypts with a fresh 96-bit CSPRNG nonce under `DRILLAI_SECRET_ACTIVE_KEY_VERSION`.
+     Startup rejects duplicate active/previous key-version identifiers rather than silently replacing
+     one key in the parsed keyring.
    - **Redaction**: `GET /api/v1/platform/secrets` and all connector/notification responses return
      only `mask_secret_ref_row(...)` (`masked_preview: "********"`), never exposing `locator` or plaintext.
 
@@ -153,8 +174,9 @@ implemented in `backend/src/drillai/security/secrets.py`:
 
 ## 7. Outbound SSRF & Egress Policy Defense
 
-Implemented in `backend/src/drillai/telemetry/connectors.py` and enforced across WITSML, ETP, and
-outbound webhook notifications (`backend/src/drillai/workflow/notifications.py`):
+Implemented in `backend/src/drillai/telemetry/connectors.py` and enforced across WITSML, ETP,
+workflow `integration.http_fetch`, and outbound webhook notifications
+(`backend/src/drillai/workflow/nodes.py`, `backend/src/drillai/workflow/notifications.py`):
 
 - Rejects loopback (`127.0.0.0/8`, `::1`), link-local (`169.254.0.0/16`, cloud metadata `169.254.169.254`),
   multicast, unspecified, CGNAT (`100.64.0.0/10`), benchmark (`198.18.0.0/15`), NAT64 (`64:ff9b::/96`),
@@ -163,6 +185,10 @@ outbound webhook notifications (`backend/src/drillai/workflow/notifications.py`)
   table (`allowed_hosts` + `allowed_private_cidrs`), governed by `system.egress_policy.manage`.
 - DNS resolution executes asynchronously via a bounded thread pool with a 3-second timeout and pins
   the validated IP address at socket connect time to defeat DNS rebinding (TOCTOU).
+- Workflow HTTP and webhook clients disable environment proxy routing (`trust_env=False`), connect to
+  the pinned address while retaining the validated Host/SNI identity, and refuse redirects so a
+  permitted first hop cannot redirect to a disallowed destination. Workflow HTTP is L4 and remains
+  subject to the node's approval gate; approval does not bypass the egress policy.
 
 ---
 

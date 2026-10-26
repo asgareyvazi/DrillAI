@@ -6,10 +6,9 @@
     "moduleResolution": "bundler",
     "jsx": "react-jsx",
     "strict": true,
-    // The journeys index into the arrays the API returns and assert on the element afterwards —
-    // `expect(items[0].version).toBe(2)` says what the assertion means far better than a
-    // non-null assertion does. The unchecked-index rule stays on for the product itself.
-    "noUncheckedIndexedAccess": false,
+    // E2E journeys also consume API arrays and role catalogues: every indexed access must prove
+    // the element exists before the test uses it, just as the application code does.
+    "noUncheckedIndexedAccess": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "skipLibCheck": true,

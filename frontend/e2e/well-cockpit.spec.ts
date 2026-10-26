@@ -159,9 +159,40 @@ test.describe('well cockpit built from the real well context', () => {
     expectNoFailures(consoleErrors, failedResponses, {
       allowed: [
         {
-          url: '/wells/wel_does_not_exist',
+          kind: 'http',
+          method: 'GET',
+          pathname: '/api/v1/wells/wel_does_not_exist',
+          query: '',
           status: 404,
+          maxMatches: 1,
           reason: 'the journey opens a deep link naming a well that does not exist',
+        },
+        {
+          kind: 'http',
+          method: 'GET',
+          pathname: '/api/v1/wells/wel_does_not_exist/state',
+          query: '',
+          status: 404,
+          maxMatches: 1,
+          reason: 'the missing-well cockpit checks state without presenting a blank screen',
+        },
+        {
+          kind: 'http',
+          method: 'GET',
+          pathname: '/api/v1/wells/wel_does_not_exist/timeline',
+          query: '?limit=500',
+          status: 404,
+          maxMatches: 1,
+          reason: 'the missing-well cockpit checks its timeline and reports the real not-found result',
+        },
+        {
+          kind: 'http',
+          method: 'GET',
+          pathname: '/api/v1/wells/wel_does_not_exist/npt',
+          query: '',
+          status: 404,
+          maxMatches: 1,
+          reason: 'the missing-well cockpit checks NPT and reports the real not-found result',
         },
       ],
     })

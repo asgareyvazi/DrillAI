@@ -18,11 +18,12 @@ from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.websockets import WebSocketState
 
 from drillai.api.deps import AuthContext, OptionalFilter, current_auth, get_db, require
 from drillai.api.serializers import approval_out, node_run_out, run_event_out, run_out
 from drillai.core.clock import UTC
-from drillai.core.errors import Conflict, NotFound, ValidationFailed
+from drillai.core.errors import AuthenticationRequired, Conflict, NotFound, PermissionDenied, ValidationFailed
 from drillai.db.models import ApprovalRequest, NodeRun, RunArtifact, RunEvent, Workflow, WorkflowRun
 from drillai.security.actions import authorize
 from drillai.workflow.graph import WorkflowGraph
@@ -393,6 +394,22 @@ async def decide_approval(
 # --------------------------------------------------------------------------- websocket
 
 
+async def _close_websocket_if_connected(websocket: WebSocket, *, code: int, reason: str) -> None:
+    """Send a refusal only while the peer can still receive it.
+
+    A browser may leave during authentication or while the first frame is being sent. In that case
+    Starlette marks the socket disconnected; a second close would raise ``WebSocketDisconnected`` and
+    turn an ordinary client cancellation into an application traceback.
+    """
+    if websocket.application_state is WebSocketState.DISCONNECTED:
+        return
+    try:
+        await websocket.close(code=code, reason=reason)
+    except WebSocketDisconnect:
+        # The peer disconnected after the state check but before the close reached the transport.
+        return
+
+
 @router.websocket("/runs/{run_id}/events/stream")
 async def stream_run_events(websocket: WebSocket, run_id: str, after_seq: int = 0) -> None:
     """Stream run events over WebSocket.
@@ -412,7 +429,8 @@ async def stream_run_events(websocket: WebSocket, run_id: str, after_seq: int = 
     settings = websocket.app.state.settings
     database = websocket.app.state.database
     if websocket.query_params.get("token"):
-        await websocket.close(
+        await _close_websocket_if_connected(
+            websocket,
             code=4401,
             reason="query-string bearer tokens are forbidden; use HttpOnly session cookie or Authorization header",
         )
@@ -430,7 +448,9 @@ async def stream_run_events(websocket: WebSocket, run_id: str, after_seq: int = 
             request = _HeaderShim(headers, dict(websocket.query_params), cookies=dict(websocket.cookies))
             auth = await current_auth(request, session)  # type: ignore[arg-type]
             if not auth.principal.has_permission("workflow.read"):
-                await websocket.close(code=4403, reason="workflow.read is required")
+                await _close_websocket_if_connected(
+                    websocket, code=4403, reason="workflow.read is required"
+                )
                 return
             run = (
                 await session.execute(
@@ -440,14 +460,20 @@ async def stream_run_events(websocket: WebSocket, run_id: str, after_seq: int = 
                 )
             ).scalar_one_or_none()
             if run is None:
-                await websocket.close(code=4404, reason="run not found")
+                await _close_websocket_if_connected(websocket, code=4404, reason="run not found")
                 return
             principal_ok = True
             await websocket.send_json(
                 {"type": "stream_opened", "run_id": run_id, "status": run.status, "after_seq": after_seq}
             )
-    except Exception as exc:  # authentication/authorization failures close the socket
-        await websocket.close(code=4401, reason=f"not authorized: {exc}")
+    except WebSocketDisconnect:
+        # The client can leave while authentication is resolving or while stream_opened is sent.
+        return
+    except AuthenticationRequired:
+        await _close_websocket_if_connected(websocket, code=4401, reason="authentication required")
+        return
+    except PermissionDenied:
+        await _close_websocket_if_connected(websocket, code=4403, reason="permission denied")
         return
     if not principal_ok:  # pragma: no cover - defensive
         return

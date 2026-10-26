@@ -428,8 +428,11 @@ export const en = {
     inputs: 'Inputs',
     outputs: 'Outputs',
     result: 'Result',
-    feasible: 'Feasible',
-    infeasible: 'Infeasible',
+    feasible: 'Within modeled constraints',
+    infeasible: 'Modeled constraint violation',
+    feasibility: 'Modeled constraints',
+    feasibilityDisclaimer:
+      'This means only that no error-severity constraint was emitted by this model. It is not a safety certification or authorization to operate; review validation status, assumptions, warnings, limitations, evidence, and site procedures.',
     violations: 'Constraint violations',
     warnings: 'Warnings',
     validationStatus: 'Validation status',
@@ -452,6 +455,8 @@ export const en = {
     run: 'Optimise',
     candidates: 'Candidates evaluated',
     feasible: 'Feasible',
+    feasibilityDisclaimer:
+      'Feasible candidates satisfy only declared model constraints; unmodeled hazards, input quality, and field limits remain out of scope. A Pareto rank is not operational approval.',
     frontier: 'Pareto frontier',
     recommended: 'Recommended',
     whyNot: 'Why not this candidate?',

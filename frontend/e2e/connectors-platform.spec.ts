@@ -624,9 +624,12 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
     expectNoFailures(consoleErrors, failedResponses, {
       allowed: [
         {
+          kind: 'http',
           method: 'PATCH',
-          url: '/connectors/',
+          pathname: '/api/v1/connectors/:connectorId',
+          query: '',
           status: 409,
+          maxMatches: 1,
           reason:
             'the journey edits a connector from a revision the server has moved past and ' +
             'asserts the optimistic-concurrency conflict',
@@ -654,9 +657,12 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
     expectNoFailures(consoleErrors, failedResponses, {
       allowed: [
         {
+          kind: 'http',
           method: 'POST',
-          url: '/connectors',
+          pathname: '/api/v1/connectors',
+          query: '',
           status: 422,
+          maxMatches: 1,
           reason:
             'the journey submits cloud-metadata and RFC-1918 destinations that the SSRF ' +
             'policy must refuse',
@@ -951,9 +957,12 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
     expectNoFailures(consoleErrors, failedResponses, {
       allowed: [
         {
+          kind: 'http',
           method: 'POST',
-          url: '/connectors',
+          pathname: '/api/v1/connectors',
+          query: '',
           status: 422,
+          maxMatches: 2,
           reason:
             'the journey submits IPv4-mapped and non-canonical loopback forms that the SSRF ' +
             'policy must refuse',
@@ -1690,9 +1699,12 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
     expectNoFailures(consoleErrors, failedResponses, {
       allowed: [
         {
+          kind: 'http',
           method: 'POST',
-          url: '/connectors',
+          pathname: '/api/v1/connectors',
+          query: '',
           status: 422,
+          maxMatches: 2,
           reason:
             'the journey submits a loopback port outside the approved harness and asserts ' +
             'the connection-bound SSRF refusal',

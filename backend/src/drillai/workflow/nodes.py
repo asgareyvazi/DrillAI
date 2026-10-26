@@ -35,7 +35,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Any, ClassVar
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -43,6 +43,7 @@ from drillai.core.clock import UTC
 from drillai.core.errors import NodeExecutionFailed, ValidationFailed
 from drillai.core.logging import get_logger
 from drillai.security.actions import ActionLevel, Principal
+from drillai.security.secrets import is_credential_header_name
 
 logger = get_logger(__name__)
 
@@ -706,8 +707,17 @@ async def _report(context: NodeContext, config: BaseModel) -> NodeOutcome:
     )
 
 
+def _validate_workflow_http_headers(headers: dict[str, str]) -> dict[str, str]:
+    """Prevent credential-bearing header values from being persisted in workflow JSON."""
+    if any(is_credential_header_name(name) for name in headers):
+        raise ValueError(
+            "credential-bearing HTTP header names cannot contain inline values; use managed secrets where supported"
+        )
+    return headers
+
+
 class NotifyConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", hide_input_in_errors=True)
     channel: str = Field(description="telegram|whatsapp|email|webhook|in_app")
     recipient: str
     subject: str | None = None
@@ -719,6 +729,11 @@ class NotifyConfig(BaseModel):
     timeout_seconds: float = 10.0
     max_attempts: int = 3
     headers: dict[str, str] = Field(default_factory=dict)
+
+    @field_validator("headers")
+    @classmethod
+    def headers_cannot_store_inline_credentials(cls, headers: dict[str, str]) -> dict[str, str]:
+        return _validate_workflow_http_headers(headers)
 
 
 async def _notify(context: NodeContext, config: BaseModel) -> NodeOutcome:
@@ -1010,23 +1025,49 @@ async def _advisor_answer(context: NodeContext, config: BaseModel) -> NodeOutcom
 
 
 class HttpFetchConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", hide_input_in_errors=True)
     url: str = Field(pattern="^https?://")
     method: str = Field(default="GET", pattern="^(GET|POST)$")
     headers: dict[str, str] = Field(default_factory=dict)
     body: dict[str, Any] | None = None
     timeout_seconds: float = Field(default=30.0, gt=0, le=300)
 
+    @field_validator("headers")
+    @classmethod
+    def headers_cannot_store_inline_credentials(cls, headers: dict[str, str]) -> dict[str, str]:
+        return _validate_workflow_http_headers(headers)
+
 
 async def _http_fetch(context: NodeContext, config: BaseModel) -> NodeOutcome:
-    """Outbound HTTP is an L4 action: it runs only with an approval recorded on the run."""
+    """Outbound HTTP is L4 and connects only to a DNS-pinned, policy-approved endpoint."""
     import httpx
+
+    from drillai.telemetry.connectors import resolve_and_pin_http_endpoint_async, sync_egress_policy_from_db
 
     cfg = HttpFetchConfig.model_validate(config)
     if context.dry_run:
         return NodeOutcome(outputs={"dry_run": True, "url": cfg.url})
-    async with httpx.AsyncClient(timeout=cfg.timeout_seconds) as client:
-        response = await client.request(cfg.method, cfg.url, headers=cfg.headers, json=cfg.body)
+
+    await sync_egress_policy_from_db(context.session)
+    pinned = await resolve_and_pin_http_endpoint_async(
+        cfg.url,
+        dns_timeout_seconds=min(cfg.timeout_seconds, 5.0),
+    )
+    headers = {key: value for key, value in cfg.headers.items() if key.lower() != "host"}
+    headers["Host"] = pinned.host_header
+    extensions = {"sni_hostname": pinned.sni_hostname} if pinned.scheme == "https" else {}
+    async with httpx.AsyncClient(
+        timeout=cfg.timeout_seconds,
+        follow_redirects=False,
+        trust_env=False,
+    ) as client:
+        response = await client.request(
+            cfg.method,
+            pinned.connect_url,
+            headers=headers,
+            json=cfg.body,
+            extensions=extensions,
+        )
     return NodeOutcome(
         outputs={
             "status_code": response.status_code,
@@ -1034,7 +1075,7 @@ async def _http_fetch(context: NodeContext, config: BaseModel) -> NodeOutcome:
             "body_preview": response.text[:2000],
             "ok": response.is_success,
         },
-        notes=[f"HTTP {cfg.method} {cfg.url} -> {response.status_code}"],
+        notes=[f"HTTP {cfg.method} {pinned.scheme}://{pinned.host_header} -> {response.status_code}"],
     )
 
 

@@ -61,6 +61,7 @@ from drillai.db.models import (
 )
 from drillai.security.actions import Principal
 from drillai.security.rbac import permission_granted
+from drillai.security.secrets import ENV_SECRET_PATTERN, is_valid_env_secret_name
 from drillai.telemetry.adapters import (
     ChannelDescriptor,
     SourceAdapter,
@@ -109,6 +110,7 @@ __all__ = [
     "reset_egress_policy",
     "resolve_and_pin_endpoint",
     "resolve_and_pin_endpoint_async",
+    "resolve_and_pin_http_endpoint_async",
     "resolve_secret_refs",
     "set_custom_dns_resolver",
     "set_egress_policy",
@@ -125,7 +127,6 @@ __all__ = [
 ]
 
 ALLOWED_SECRET_SLOTS: tuple[str, ...] = ("username", "password", "bearer_token")
-ENV_SECRET_PATTERN = re.compile(r"^env:(DRILLAI_SECRET_[A-Z0-9_]{2,120})$")
 SECRET_REF_PATTERN = re.compile(r"^(?:secret_ref|secret):([a-zA-Z0-9._:-]{2,160})$")
 MASKED_SECRET_PLACEHOLDERS: frozenset[str] = frozenset(
     {"********", "env:********", "secret_ref:********", "secret:********"}
@@ -135,6 +136,9 @@ CONNECTOR_KEY_PATTERN = re.compile(r"^[a-z0-9][a-z0-9._-]{1,118}[a-z0-9]$")
 SYSTEM_EGRESS_POLICY_KEY = "global"
 SYSTEM_EGRESS_POLICY_SCOPE = "system"
 SYSTEM_EGRESS_POLICY_ORG_ID = "__system__"
+# Internal socket-pinning profile for workflow HTTP actions and webhooks. It deliberately is not
+# a selectable connector profile, but uses the same authoritative egress and DNS policy machinery.
+_WORKFLOW_HTTP_EGRESS_PROFILE = "workflow.http"
 
 EGRESS_POLICY_STATES: tuple[str, ...] = (
     "active",
@@ -2181,6 +2185,16 @@ async def resolve_secret_refs(
             row.last_used_at = utc_now()
             if row.backend == "env":
                 env_name = row.locator.removeprefix("env:").strip()
+                if not row.locator.startswith("env:") or not is_valid_env_secret_name(env_name):
+                    raise ValidationFailed(
+                        f"configured environment SecretRef for slot {slot!r} is invalid",
+                        details={
+                            "field": f"secret_refs.{slot}",
+                            "slot": slot,
+                            "backend": "env",
+                            "reason": "invalid_secret_ref",
+                        },
+                    )
                 val = os.environ.get(env_name, "")
                 if not val:
                     raise ValidationFailed(
@@ -2502,7 +2516,7 @@ def resolve_and_pin_endpoint(
     _pre_resolved_ips: Sequence[str] | None = None,
 ) -> PinnedEndpoint:
     """Validate URL, resolve all A/AAAA records with bounded timeout, enforce egress/loopback/private-CIDR policy, and pin socket IP."""
-    if protocol_profile not in PROTOCOL_PROFILE_SPECS:
+    if protocol_profile not in PROTOCOL_PROFILE_SPECS and protocol_profile != _WORKFLOW_HTTP_EGRESS_PROFILE:
         raise ValidationFailed(
             f"unsupported protocol profile {protocol_profile!r}",
             details={
@@ -2522,8 +2536,8 @@ def resolve_and_pin_endpoint(
     if allowed_private_cidrs is None:
         allowed_private_cidrs = policy["allowed_private_cidrs"]
 
-    spec = PROTOCOL_PROFILE_SPECS[protocol_profile]
-    if is_production and not getattr(spec, "production_supported", True):
+    spec = PROTOCOL_PROFILE_SPECS.get(protocol_profile)
+    if is_production and spec is not None and not getattr(spec, "production_supported", True):
         raise ValidationFailed(
             f"protocol profile {protocol_profile!r} is an internal/test-only profile and is prohibited in production; use 'etp.1.2.binary_ws'",
             details={
@@ -2571,7 +2585,7 @@ def resolve_and_pin_endpoint(
         )
 
     scheme = (parsed.scheme or "").lower()
-    if protocol_profile == "witsml.1.4.1.1.soap_http":
+    if protocol_profile in {"witsml.1.4.1.1.soap_http", _WORKFLOW_HTTP_EGRESS_PROFILE}:
         allowed_schemes = ("https",) if is_production else ("https", "http")
     elif protocol_profile in ("etp.1.2.json_ws", "etp.1.2.binary_ws"):
         allowed_schemes = ("wss",) if is_production else ("wss", "ws")
@@ -2967,6 +2981,30 @@ async def resolve_and_pin_endpoint_async(
         is_production=is_production,
         resolver=resolver,
         require_dns_resolution=require_dns_resolution,
+        dns_timeout_seconds=dns_timeout_seconds,
+    )
+
+
+async def resolve_and_pin_http_endpoint_async(
+    endpoint_url: str,
+    *,
+    allow_loopback: bool | None = None,
+    allowed_hosts: Sequence[str] | None = None,
+    allowed_private_cidrs: Sequence[str] | None = None,
+    is_production: bool | None = None,
+    resolver: Callable[[str, int], Sequence[str]] | None = None,
+    dns_timeout_seconds: float = DEFAULT_DNS_TIMEOUT_SECONDS,
+) -> PinnedEndpoint:
+    """Resolve and pin a workflow HTTP(S) destination against authoritative egress policy."""
+    return await resolve_and_pin_endpoint_async(
+        endpoint_url,
+        _WORKFLOW_HTTP_EGRESS_PROFILE,
+        allow_loopback=allow_loopback,
+        allowed_hosts=allowed_hosts,
+        allowed_private_cidrs=allowed_private_cidrs,
+        is_production=is_production,
+        resolver=resolver,
+        require_dns_resolution=True,
         dns_timeout_seconds=dns_timeout_seconds,
     )
 

@@ -92,7 +92,9 @@ async function newestVersion(request: ApiRequest, workflowId: string): Promise<n
     `/workflows/${workflowId}/versions?limit=1`,
   )
   expect(history.items.length, 'a saved version is required for this assertion').toBeGreaterThan(0)
-  return history.items[0].version
+  const newest = history.items[0]
+  if (!newest) throw new Error('a saved version is required for this assertion')
+  return newest.version
 }
 
 async function hasVersion(
@@ -169,18 +171,7 @@ test.describe('workflow studio: create, edit, validate, save, publish', () => {
     // Nothing has been typed, so nothing is unsaved: an empty draft against an empty server graph.
     await expect(page.getByText('saved', { exact: true })).toBeVisible()
 
-    expectNoFailures(consoleErrors, failedResponses, {
-      scope: '/api/v1/workflows',
-      allowed: [
-        {
-          method: 'POST',
-          url: '/publish',
-          status: 400,
-          reason:
-            'the journey publishes a draft the server refuses, and asserts the refusal on screen',
-        },
-      ],
-    })
+    expectNoFailures(consoleErrors, failedResponses)
   })
 
   test('an unchanged save creates no version, and the version numbers come from the server', async ({
@@ -223,18 +214,7 @@ test.describe('workflow studio: create, edit, validate, save, publish', () => {
     expect((await detail(request, workflow.id)).version.version).toBe(2)
     await expect(page.getByText('saved', { exact: true })).toBeVisible()
 
-    expectNoFailures(consoleErrors, failedResponses, {
-      scope: '/api/v1/workflows',
-      allowed: [
-        {
-          method: 'POST',
-          url: '/publish',
-          status: 400,
-          reason:
-            'the journey publishes a draft the server refuses, and asserts the refusal on screen',
-        },
-      ],
-    })
+    expectNoFailures(consoleErrors, failedResponses)
   })
 
   test('add, configure, connect, validate, save and publish — the server decides each step', async ({
@@ -299,7 +279,9 @@ test.describe('workflow studio: create, edit, validate, save, publish', () => {
     // does not, because Chromium words a failed request differently on different runners.
     const refusals = failedResponses.filter((response) => response.url.includes('/publish'))
     expect(refusals.length, 'the refused publish is the only expected failure').toBe(1)
-    expect(refusals[0].status).toBe(400)
+    const refusedPublish = refusals[0]
+    if (!refusedPublish) throw new Error('the expected refused publish response was not recorded')
+    expect(refusedPublish.status).toBe(400)
 
     // 5. Fix it in the inspector. The field writes the same config the JSON view shows.
     await page.locator('.react-flow__node', { hasText: 'Build report' }).click()
@@ -334,14 +316,16 @@ test.describe('workflow studio: create, edit, validate, save, publish', () => {
     await expect(page.getByText('saved', { exact: true })).toBeVisible()
 
     expectNoFailures(consoleErrors, failedResponses, {
-      scope: '/api/v1/workflows',
       allowed: [
         {
+          kind: 'http',
           method: 'POST',
-          url: '/publish',
+          pathname: '/api/v1/workflows/:workflowId/publish',
+          query: '?version=1',
           status: 400,
+          maxMatches: 1,
           reason:
-            'the journey publishes a draft the server refuses, and asserts the refusal on screen',
+            'the journey publishes an invalid first draft and asserts the server refusal before correcting it',
         },
       ],
     })
@@ -395,18 +379,7 @@ test.describe('workflow studio: create, edit, validate, save, publish', () => {
     const detail = await apiGet<WorkflowDetail>(request, `/workflows/${workflow.id}`, 'supervisor')
     expect(detail.version.published_at).not.toBeNull()
 
-    expectNoFailures(consoleErrors, failedResponses, {
-      scope: '/api/v1/workflows',
-      allowed: [
-        {
-          method: 'POST',
-          url: '/publish',
-          status: 400,
-          reason:
-            'the journey publishes a draft the server refuses, and asserts the refusal on screen',
-        },
-      ],
-    })
+    expectNoFailures(consoleErrors, failedResponses)
   })
 
   test('the version history loads an older version without overwriting the newest', async ({
@@ -418,14 +391,16 @@ test.describe('workflow studio: create, edit, validate, save, publish', () => {
     const workflows = await apiGet<{ items: Workflow[] }>(request, '/workflows')
     const target = workflows.items.find((item) => item.current_version > 1)
     expect(target, 'a definition with more than one version is needed').toBeTruthy()
-    const workflowId = target?.id as string
+    if (!target) throw new Error('a definition with more than one version is needed')
+    const workflowId = target.id
 
     const history = await apiGet<{ items: Array<{ version: number; id: string; graph_hash: string }> }>(
       request,
       `/workflows/${workflowId}/versions?limit=20`,
     )
     const newest = history.items[0]
-    const older = history.items[history.items.length - 1]
+    const older = history.items.at(-1)
+    if (!newest || !older) throw new Error('the workflow must have a newest and an older saved version')
     expect(older.version).toBeLessThan(newest.version)
 
     await page.goto(`/workflows?workflow=${workflowId}`)
@@ -441,21 +416,12 @@ test.describe('workflow studio: create, edit, validate, save, publish', () => {
       request,
       `/workflows/${workflowId}/versions?limit=20`,
     )
-    expect(after.items[0].version).toBe(newest.version)
-    expect(after.items[0].graph_hash).toBe(newest.graph_hash)
+    const reloadedNewest = after.items[0]
+    if (!reloadedNewest) throw new Error('the version history lost its newest version after loading an older one')
+    expect(reloadedNewest.version).toBe(newest.version)
+    expect(reloadedNewest.graph_hash).toBe(newest.graph_hash)
 
-    expectNoFailures(consoleErrors, failedResponses, {
-      scope: '/api/v1/workflows',
-      allowed: [
-        {
-          method: 'POST',
-          url: '/publish',
-          status: 400,
-          reason:
-            'the journey publishes a draft the server refuses, and asserts the refusal on screen',
-        },
-      ],
-    })
+    expectNoFailures(consoleErrors, failedResponses)
   })
 
   test('a published graph keeps every field the editor does not display', async ({
@@ -467,7 +433,8 @@ test.describe('workflow studio: create, edit, validate, save, publish', () => {
     const workflows = await apiGet<{ items: Workflow[] }>(request, '/workflows')
     const target = workflows.items.find((item) => item.published_version_id !== null && item.current_version > 0)
     expect(target, 'the seed must publish at least one workflow').toBeTruthy()
-    const workflowId = target?.id as string
+    if (!target) throw new Error('the seed must publish at least one workflow')
+    const workflowId = target.id
     const before = await detail(request, workflowId)
 
     await openStoredWorkflow(page, workflowId, before.version.version)
@@ -518,18 +485,7 @@ test.describe('workflow studio: create, edit, validate, save, publish', () => {
     // The label that was typed is really on the edge.
     expect(after.graph.edges.some((edge) => edge.label === 'reviewed edge')).toBe(true)
 
-    expectNoFailures(consoleErrors, failedResponses, {
-      scope: '/api/v1/workflows',
-      allowed: [
-        {
-          method: 'POST',
-          url: '/publish',
-          status: 400,
-          reason:
-            'the journey publishes a draft the server refuses, and asserts the refusal on screen',
-        },
-      ],
-    })
+    expectNoFailures(consoleErrors, failedResponses)
   })
 
   test('an unsaved draft is not discarded without being asked', async ({ page, request, consoleErrors, failedResponses }) => {
@@ -584,25 +540,15 @@ test.describe('workflow studio: create, edit, validate, save, publish', () => {
     expect(untouched.graph.edges).toHaveLength(0)
     expect(await hasVersion(request, second.id)).toBe(false)
 
-    expectNoFailures(consoleErrors, failedResponses, {
-      scope: '/api/v1/workflows',
-      allowed: [
-        {
-          method: 'POST',
-          url: '/publish',
-          status: 400,
-          reason:
-            'the journey publishes a draft the server refuses, and asserts the refusal on screen',
-        },
-      ],
-    })
+    expectNoFailures(consoleErrors, failedResponses)
   })
 
   test('a run is scoped to the well the user chose, and to no other', async ({ page, request, consoleErrors, failedResponses }) => {
     const workflows = await apiGet<{ items: Workflow[] }>(request, '/workflows')
     const target = workflows.items.find((item) => item.published_version_id !== null)
     expect(target, 'a published workflow is needed to start a run').toBeTruthy()
-    const workflowId = target?.id as string
+    if (!target) throw new Error('a published workflow is needed to start a run')
+    const workflowId = target.id
 
     const wells = await apiGet<{ items: Array<{ id: string; name: string; project_id: string | null }>; total: number }>(
       request,
@@ -610,6 +556,7 @@ test.describe('workflow studio: create, edit, validate, save, publish', () => {
     )
     expect(wells.total, 'the seed must produce a well a run can target').toBeGreaterThan(0)
     const well = wells.items[0]
+    if (!well) throw new Error('the seed must include the well a run can target')
     // The second well is created here rather than assumed: this journey is about a run carrying the
     // well it was started for, and one well cannot show that.
     const other = await apiPost<{ id: string; name: string; project_id: string | null }>(
@@ -651,18 +598,7 @@ test.describe('workflow studio: create, edit, validate, save, publish', () => {
     const otherRun = await apiGet<{ run: { well_id: string | null } }>(request, `/runs/${otherRunId}`)
     expect(otherRun.run.well_id).toBe(other.id)
 
-    expectNoFailures(consoleErrors, failedResponses, {
-      scope: '/api/v1/workflows',
-      allowed: [
-        {
-          method: 'POST',
-          url: '/publish',
-          status: 400,
-          reason:
-            'the journey publishes a draft the server refuses, and asserts the refusal on screen',
-        },
-      ],
-    })
+    expectNoFailures(consoleErrors, failedResponses)
   })
 
   test('the palette is the node registry, not a list copied into the frontend', async ({
@@ -687,17 +623,6 @@ test.describe('workflow studio: create, edit, validate, save, publish', () => {
     // without a frontend change.
     await expect(page.getByRole('tab', { name: /node palette/i })).toContainText(String(catalogue.total))
 
-        expectNoFailures(consoleErrors, failedResponses, {
-      scope: '/api/v1/workflows',
-      allowed: [
-        {
-          method: 'POST',
-          url: '/publish',
-          status: 400,
-          reason:
-            'the journey publishes a draft the server refuses, and asserts the refusal on screen',
-        },
-      ],
-    })
+        expectNoFailures(consoleErrors, failedResponses)
   })
 })

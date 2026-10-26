@@ -23,6 +23,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import hmac
+import re
 import secrets
 from typing import Any
 
@@ -34,10 +35,14 @@ from drillai.core.errors import ConfigurationError, ValidationFailed
 
 __all__ = [
     "ENVELOPE_PREFIX",
+    "ENV_SECRET_NAME_PATTERN",
+    "ENV_SECRET_PATTERN",
     "SUPPORTED_SECRET_BACKENDS",
     "decrypt_secret_value",
     "encrypt_secret_value",
     "extract_envelope_key_version",
+    "is_credential_header_name",
+    "is_valid_env_secret_name",
     "mask_secret_ref_row",
     "needs_key_rotation",
     "rotate_secret_envelope",
@@ -45,9 +50,41 @@ __all__ = [
 
 ENVELOPE_PREFIX = "enc:v1:"
 SUPPORTED_SECRET_BACKENDS = ("env", "db_encrypted")
+ENV_SECRET_NAME_PATTERN = re.compile(r"DRILLAI_SECRET_[A-Z0-9_]{2,120}")
+ENV_SECRET_PATTERN = re.compile(r"^env:(DRILLAI_SECRET_[A-Z0-9_]{2,120})$")
 _NONCE_BYTES = 12
 _MIN_MASTER_KEY_LENGTH = 16
 _MIN_PROD_MASTER_KEY_LENGTH = 32
+
+
+def is_valid_env_secret_name(name: str) -> bool:
+    """Return whether ``name`` is an allowed indirect environment SecretRef name."""
+    return ENV_SECRET_NAME_PATTERN.fullmatch(name) is not None
+
+
+def is_credential_header_name(name: str) -> bool:
+    """Return whether an HTTP header name is reserved for credentials or signature material."""
+    normalized = re.sub(r"[^a-z0-9]", "", name.strip().lower())
+    return any(
+        marker in normalized
+        for marker in (
+            "authorization",
+            "proxyauthorization",
+            "auth",
+            "cookie",
+            "password",
+            "passwd",
+            "secret",
+            "apikey",
+            "accesskey",
+            "token",
+            "credential",
+            "privatekey",
+            "clientcertificate",
+            "signature",
+            "bearer",
+        )
+    )
 
 
 def _b64(raw: bytes) -> str:
@@ -127,6 +164,11 @@ def _load_master_keyring(settings: Settings | None = None) -> tuple[int, dict[in
                     details={"reason": "invalid_previous_key_version"},
                 )
             kv = int(ver_str)
+            if kv in keyring:
+                raise ConfigurationError(
+                    f"DRILLAI_SECRET_PREVIOUS_MASTER_KEYS version v{kv} duplicates an active or previous key version",
+                    details={"reason": "duplicate_key_version", "key_version": kv},
+                )
             clean_key = key_part.strip()
             if len(clean_key) < _MIN_MASTER_KEY_LENGTH:
                 raise ConfigurationError(

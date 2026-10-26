@@ -23,6 +23,7 @@ from drillai.core.errors import NotFound, ValidationFailed
 from drillai.db.models import AuditLog, SecretRef
 from drillai.security.secrets import (
     encrypt_secret_value,
+    is_valid_env_secret_name,
     mask_secret_ref_row,
     rotate_secret_envelope,
 )
@@ -393,10 +394,10 @@ async def upsert_secret_ref(
             secret_key=body.key,
         )
     else:
-        if not body.env_var or not body.env_var.startswith("DRILLAI_"):
+        if not body.env_var or not is_valid_env_secret_name(body.env_var):
             raise ValidationFailed(
-                "env_var starting with 'DRILLAI_' is required when backend='env'",
-                details={"field": "env_var"},
+                "env_var must match 'DRILLAI_SECRET_[A-Z0-9_]{2,120}' when backend='env'",
+                details={"field": "env_var", "pattern": "DRILLAI_SECRET_[A-Z0-9_]{2,120}"},
             )
         locator = f"env:{body.env_var}"
         kv = None

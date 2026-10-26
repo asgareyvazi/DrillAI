@@ -134,6 +134,7 @@ test.describe('context, deep links and reloads', () => {
     failedResponses,
   }) => {
     const documentId = fixtures().document_ids[0]
+    if (!documentId) throw new Error('the seed must provide a document for the cross-well journey')
     const document = await apiGet<{ document: { id: string; well_id: string; title: string } }>(
       request,
       `/documents/${documentId}`,
@@ -158,10 +159,13 @@ test.describe('context, deep links and reloads', () => {
     expectNoFailures(consoleErrors, failedResponses, {
       allowed: [
         {
-          url: '/wells/wel_not_a_well',
+          kind: 'http',
+          method: 'GET',
+          pathname: '/api/v1/wells/wel_not_a_well',
+          query: '',
           status: 404,
-          reason:
-            'the journey opens a deep link naming a well that does not exist',
+          maxMatches: 1,
+          reason: 'the journey opens a deep link naming a well that does not exist',
         },
       ],
     })
@@ -170,6 +174,8 @@ test.describe('context, deep links and reloads', () => {
   test('a document id that names nothing is reported, not shown as “nothing selected”', async ({
     page,
     wellId,
+    consoleErrors,
+    failedResponses,
   }) => {
     await page.goto(`/wells/${wellId}/documents?document=doc_does_not_exist`)
     await waitForLoaded(page)
@@ -180,6 +186,20 @@ test.describe('context, deep links and reloads', () => {
     // The distinction this pins: the reader *did* select something — by URL — and telling them to
     // "select a document" would ignore that.
     await expect(page.getByText(/select a document to inspect/i)).toHaveCount(0)
+    expectNoFailures(consoleErrors, failedResponses, {
+      allowed: [
+        {
+          kind: 'http',
+          method: 'GET',
+          pathname: '/api/v1/documents/doc_does_not_exist',
+          query: '',
+          status: 404,
+          maxMatches: 2,
+          reason:
+            'the missing-document deep link produces two bounded detail reads, both of which must be HTTP 404',
+        },
+      ],
+    })
   })
 
   test('a workflow id that is not in the list is reported, and a workflow is not bound to a well', async ({
@@ -206,7 +226,11 @@ test.describe('context, deep links and reloads', () => {
     expectNoFailures(consoleErrors, failedResponses)
   })
 
-  test('a run that does not exist reads as not found, and offers no false retry', async ({ page }) => {
+  test('a run that does not exist reads as not found, and offers no false retry', async ({
+    page,
+    consoleErrors,
+    failedResponses,
+  }) => {
     // The identity is the session's development default; the read is refused by nobody, the row simply
     // is not there — which is the state this journey is about.
     await page.goto('/runs?run=run_does_not_exist')
@@ -218,5 +242,18 @@ test.describe('context, deep links and reloads', () => {
     await expect(state).toHaveAttribute('data-http-status', '404')
     // Asking again cannot make the row exist; the address is what has to change.
     await expect(state.getByRole('button', { name: /retry/i })).toHaveCount(0)
+    expectNoFailures(consoleErrors, failedResponses, {
+      allowed: [
+        {
+          kind: 'http',
+          method: 'GET',
+          pathname: '/api/v1/runs/run_does_not_exist',
+          query: '',
+          status: 404,
+          maxMatches: 1,
+          reason: 'the journey follows a deep link to a run the server confirms does not exist',
+        },
+      ],
+    })
   })
 })

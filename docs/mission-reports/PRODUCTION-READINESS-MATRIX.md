@@ -73,3 +73,23 @@ The earlier Linux deployment-gate failure (run `39414613792`, job `118600471494`
 | Linux deployment/stack | SQLite Alembic upgrade/check, Ruff, supply-chain/secrets, 16 stack scenarios + 32-cycle soak, offline WITSML/ETP harness, and a local rehearsal of all four Compose-gate HTTP assertions against a live server. | Local gates pass. The **Compose gate itself passed in CI** on `919da0f`. **Docker Compose runtime was not run on this host** (no Docker CLI/daemon); the rehearsal is not a container-runtime test. |
 | Native Windows / exact-SHA CI | Windows workflow runs the unfiltered Playwright suite and the SQLite backend. | **CERTIFIED**: Windows job `120848768814` **passed** on the exact CP32 SHA `08edab3` (run `40085939081`), and again on `c09ce79` (run `40165921576`) and on the CP33 SHA `a2b1dd8` (job `121092408591`, run `40167836917`) with every step green, including the Playwright E2E step that failed on `919da0f` and on `34979de`. The Linux job `120848768971` on the same SHA also passed. Windows had passed on the CP26 SHA and failed on the CP31 SHA for the browser-log reason above, not for a product defect. |
 | External/production evidence | Local protocol harness and PostgreSQL logical backup/restore tests. | Live vendor and notification delivery remain blocked; physical/PITR DR and field certification are not implied. |
+
+---
+
+## 4. CP34–CP42 Independent Audit Update (2026-10-26)
+
+This update supersedes the old numeric counts in §3 and any historical `PASS` label read as commercial, operational, or field certification. **Overall verdict: PARTIAL** — the local software gates below pass, but live-vendor evidence, field validation for two engines, physical/PITR recovery, and enforceable branch protection have not been established.
+
+| Gate / finding | Current evidence | Boundary |
+|---|---|---|
+| Backend, PostgreSQL enabled | **1,248 passed**, 1 warning (`XDG_RUNTIME_DIR` fallback); full suite with embedded PostgreSQL. | Linux sandbox run; Windows job intentionally excludes the 8 PostgreSQL-marked tests. |
+| Backend, PostgreSQL disabled | **1,240 passed, 8 skipped** from 1,248 collected. | The eight are not counted as passes. |
+| Frontend and real-browser E2E | **329 passed / 31 files**; typecheck, lint, production build pass; **121 passed / 17 E2E files** (Chromium 114, faults 4, auth 3). | Full local Linux E2E completed; no local Windows browser certification is inferred. |
+| TypeScript index safety | `noUncheckedIndexedAccess`: app `true`, Node/Vite `true`, E2E `true`; the prior E2E explicit `false` and Node omission are closed. | No project-level exception remains; `npm run typecheck` compiles all three. |
+| E2E failure oracle | Context-wide HTTP ≥400 + `requestfailed` observations; exact method/path/query/status-or-code/reason/maxMatches allowances; same-request abort evidence or committed same-frame navigation is required for benign cancellation. Mutation suites: CP32 66 tests, CP33 58 tests, Vitest oracle 11 tests. | Deliberate fault-injection 500s are tested; no global error suppression is used. |
+| SecretRef / workflow egress / action authority | Dedicated `DRILLAI_SECRET_*` refs, encrypted tenant-bound DB values, inline credential header rejection, DNS-pinned HTTP(S), redirects/proxy env disabled, action-level minimum and L5 override checks. | Does not constitute an external secret-manager or vendor security certification. |
+| Engineering | 14 engines, 122 unit definitions, 33 dimensions; 12 `formula_derived`, `well_control.kill_sheet` and `tubulars.api_5c3` `needs_field_validation`; bilingual feasibility disclaimer. | Formula/test-vector evidence is not field validation or an authorization to operate. |
+| Multi-process stack | `STACK_VERIFICATION_OK`: 16 scenarios + 32-cycle bounded soak. | This is not Docker Compose runtime verification. Docker CLI is absent on the local host. |
+| Vendor probe | Harness and external mode each made **0 network calls**; external mode reports `BLOCKED_BY_EXTERNAL_EVIDENCE`, `external_vendor_verified: false`. | No commercial WITSML/ETP endpoint or credentials were configured. |
+| Branch governance | Branch metadata `protected:false`; rulesets query returned no rows; branch-protection details API returned 403. | CI success and job checks do not prove branch protection or required-check enforcement. No repository policy was changed. |
+| Exact-SHA GitHub CI | Final Linux and Windows job IDs and result are recorded in the CP34 closeout response after publication. | The run ID is minted after the report commit; it is not embedded here to avoid a follow-up documentation commit invalidating the exact-SHA run. |

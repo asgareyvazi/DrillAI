@@ -65,10 +65,13 @@ creates a fresh database for it (`${{ runner.temp }}`), never reuses a developer
 Implemented and covered by tests (backend):
 
 - 90-table domain/data model with a zero-drift Alembic baseline migration.
-- Unit/dimension registry (121 units, 33 dimensions) with explicit, testable conversions.
+- Unit/dimension registry (122 registered unit definitions, 33 dimensions) with explicit, testable conversions.
 - 14 engineering engines (trajectory minimum-curvature, wellbore capacity, hydraulics, torque & drag,
   MSE, kill sheet, API 5C3 tubulars, barrier envelope, well schematic, offset similarity, readiness,
   twin reconciliation, optimisation sweep, Pareto) plus an engine registry and execution service.
+  Their current evidence is deterministic software test vectors, not field certification; statuses are
+  `formula_derived` by default, with `well_control.kill_sheet` and `tubulars.api_5c3` at
+  `needs_field_validation`.
 - Digital Well Twin with planned/actual/current/historical/predicted/recommended state kinds,
   revisions, snapshots and change history.
 - Data fabric: PDF/Excel/Word/CSV/DDR ingestion with extraction records, page/region provenance,
@@ -95,23 +98,26 @@ it holds to and `docs/FRONTEND_TESTING.md` lists what is verified and how.
 
 | Layer | Command | Scope |
 | --- | --- | --- |
-| Frontend types | `cd frontend && npm run typecheck` | strict TypeScript over app, tests and specs |
+| Frontend types | `cd frontend && npm run typecheck` | strict TypeScript with `noUncheckedIndexedAccess` across app, E2E specs and Node config |
 | Frontend lint | `cd frontend && npm run lint` | unused code, `any`, React rules |
-| Frontend unit/component | `cd frontend && npm test` | 318 passed in 30 files |
+| Frontend unit/component | `cd frontend && npm test` | 329 passed in 31 files |
 | Frontend build | `cd frontend && npm run build` | `tsc -b` plus the production Vite build |
-| Backend tests | `cd backend && DRILLAI_TEST_POSTGRES=1 .venv/bin/python -m pytest -o addopts=""` | 1,231 passed in 89 files, including 8 PostgreSQL persistence, migration, backup/restore DR drill, pgvector retrieval, competing-worker fencing & concurrent SQL CAS race tests |
+| Backend tests | `cd backend && DRILLAI_TEST_POSTGRES=1 .venv/bin/python -m pytest -o addopts=""` | 1,248 passed in 90 files, including PostgreSQL persistence, migration, backup/restore DR drill, pgvector retrieval, competing-worker fencing & concurrent SQL CAS race tests |
 | Backend lint | `cd backend && .venv/bin/python -m ruff check .` | style and import hygiene |
 | Migrations | `cd backend && .venv/bin/python -m alembic upgrade head && .venv/bin/python -m alembic check` | no model/migration drift, against a fresh database |
 | Stack verification | `backend/.venv/bin/python scripts/verify_stack.py` | 16 multi-process scenarios: clean migration, backend, dedicated `connector-worker`, real WITSML 1.4.1.1 SOAP & ETP 1.2 Binary Avro ingest, soak metrics, restart recovery & stop |
 | Vendor interop runner | `backend/.venv/bin/python scripts/verify_external_vendor_interop.py --mode harness` | offline WITSML 1.4.1.1 SOAP & ETP 1.2 Binary Avro conformance + opt-in `--mode external` vendor probe |
 | Docker Compose smoke gate | `POSTGRES_PASSWORD=... docker compose up -d --build` | multi-container PostgreSQL, Alembic migrate, backend, `connector-worker`, and Nginx frontend proxy |
-| End-to-end | `cd frontend && npm run e2e` | 121 passed browser journeys in 17 spec files (including 42 connector journeys in `connectors-platform.spec.ts`) against the real stack |
+| End-to-end | `cd frontend && npm run e2e` | 121 passed browser journeys in 17 spec files against the real stack (Chromium 114, faults 4, auth 3) |
 
-Set `DRILLAI_TEST_POSTGRES=1` to run the PostgreSQL-backed persistence, competing-worker fencing,
-and concurrent SQL CAS race tests through the repository's own embedded PostgreSQL (`pgserver`);
-without it they skip, and the suite reports **1,223 passed, 8 skipped** rather than **1,231 passed**.
-See `docs/WINDOWS-SETUP.md`, `docs/mission-reports/PRODUCTION-READINESS-MATRIX.md`, and `docs/mission-reports/CP16-MISSION-REPORT.md`
-for commit-stamped and CI-run-stamped verification provenance across CP13, CP14, CP15, CP16, CP17, and CP18.
+Set `DRILLAI_TEST_POSTGRES=1` to run the eight PostgreSQL-backed persistence, migration, backup/restore,
+pgvector, worker-fencing, and concurrent SQL-CAS tests through the repository's embedded PostgreSQL
+(`pgserver`). The complete suite reports **1,248 passed** with the flag; without it, it reports
+**1,240 passed, 8 skipped** (the same 1,248-test inventory, with no PostgreSQL test called passed).
+The native Windows CI job uses `-m "not postgres"`, so those eight tests are deselected there and are
+exercised by Linux CI instead.
+See `docs/WINDOWS-SETUP.md`, `docs/mission-reports/PRODUCTION-READINESS-MATRIX.md`, and
+`docs/mission-reports/CP16-MISSION-REPORT.md` for historical commit-stamped verification provenance.
 
 The end-to-end suite is 17 spec files across three deployments of the same product — development
 identity, deterministic fault injection, and authentication enabled — covering the cockpit,
@@ -129,10 +135,13 @@ config-guarded injector. The only browser-level interception is two socket-level
 journeys, which exist so a spec can state exactly when a live stream failed: they forward to the real
 backend and fabricate no frames.
 
-CI runs that whole sequence on every push to `arena/**` session branches (`.github/workflows/ci.yml`):
-install → frontend typecheck, lint, tests, build → backend tests (with PostgreSQL), lint, migration
-check → multi-process stack verification (`scripts/verify_stack.py`) → Docker Compose smoke gate →
-the complete end-to-end suite, with Playwright evidence uploaded only when a run has failed.
+CI is triggered on every push to `arena/**` session branches (`.github/workflows/ci.yml`). Linux runs
+frontend typecheck/lint/unit/build, the full backend suite with embedded PostgreSQL, lint/migration
+checks, multi-process stack verification, Docker Compose smoke, the reviewed E2E inventory, and all
+three Playwright projects. Native Windows runs the corresponding frontend gates, the backend suite
+excluding the eight PostgreSQL-marked cases (which are exercised on Linux), stack/vendor-harness
+checks, the same inventory, and all three E2E projects; it does not run Docker Compose. Both platforms
+require exactly 121 E2E passes (Chromium 114, faults 4, auth 3). Evidence uploads only after failure.
 Every required gate is a separate step that fails the job; there is no `continue-on-error` and no
 `|| true` in the pipeline.
 

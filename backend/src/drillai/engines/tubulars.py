@@ -459,7 +459,7 @@ TUBULAR_SPEC = EngineSpec(
     ),
     tags=("casing", "tubing", "burst", "collapse", "design"),
     action_level="L1",
-    validation_status="verified_against_reference",
+    validation_status="needs_field_validation",
 )
 
 register_engine(FunctionEngine(TUBULAR_SPEC, compute_tubular_design), aliases=("tubulars", "casing_design", "api_5c3"))

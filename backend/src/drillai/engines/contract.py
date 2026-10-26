@@ -125,7 +125,7 @@ class EngineSpec(BaseModel):
     action_level: ActionLevel = "L1"
     requires_well_context: bool = False
     validation_status: str = Field(
-        default="verified_against_reference",
+        default="formula_derived",
         description="verified_against_reference | formula_derived | needs_field_validation",
     )
 
@@ -176,6 +176,11 @@ class EngineResult(BaseModel):
 
     @property
     def is_feasible(self) -> bool:
+        """True only when this model emitted no error-severity declared constraint violation.
+
+        This model-local flag is not a safety certification, field validation, or authorization to
+        operate; unmodeled hazards and input quality remain outside its meaning.
+        """
         return not any(v.severity == "error" for v in self.violations)
 
 

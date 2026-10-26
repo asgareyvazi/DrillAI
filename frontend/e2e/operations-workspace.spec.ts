@@ -196,6 +196,7 @@ test.describe('the operational workspace built from the real records', () => {
 
     // The event drawer is a deep link too, and states where the event was recorded.
     const first = events.items[0]
+    if (!first) throw new Error('the seed must provide an event for the event drawer')
     await page.goto(wellPath(`/operations?tab=events&event=${first.id}`))
     const drawer = page.getByRole('dialog')
     await expect(drawer.getByText(first.title)).toBeVisible()

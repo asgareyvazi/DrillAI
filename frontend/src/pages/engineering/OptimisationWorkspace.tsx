@@ -167,7 +167,7 @@ function CandidateTable({
           key: 'state',
           header: t('common.status'),
           render: (row) =>
-            row.feasible ? <Badge tone="ok">feasible</Badge> : <Badge tone="danger">{row.rejected_because ?? 'infeasible'}</Badge>,
+            row.feasible ? <Badge tone="warning">feasible</Badge> : <Badge tone="danger">{row.rejected_because ?? 'infeasible'}</Badge>,
         },
         {
           key: 'selected',
@@ -423,6 +423,9 @@ export default function OptimisationWorkspace() {
                   </>
                 }
               >
+                <p className="mb-3 rounded border border-warning/40 bg-amber-50/50 p-2 text-[11px] text-warning dark:bg-amber-950/20">
+                  {t('optimisation.feasibilityDisclaimer')}
+                </p>
                 {!recommended ? (
                   <EmptyState message="No feasible candidate was found, so nothing is recommended." hint="Relax a constraint or extend the parameter ranges and re-run." />
                 ) : (

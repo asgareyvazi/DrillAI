@@ -203,6 +203,8 @@ test.describe('checkpoint 5, integrated', () => {
   test('a deep link to another well’s document fails safely and reaches the accessibility tree', async ({
     page,
     request,
+    consoleErrors,
+    failedResponses,
   }) => {
     // The seeded document belongs to the seeded well; pointing at it from another well's workspace is
     // the mismatch. It is the direction the context spec uses, and the provenance is checked here so
@@ -238,5 +240,18 @@ test.describe('checkpoint 5, integrated', () => {
 
     // And it is an answer, not a fault: there is nothing to retry.
     await expect(page.getByRole('button', { name: /Retry/i })).toHaveCount(0)
+    expectNoFailures(consoleErrors, failedResponses, {
+      allowed: [
+        {
+          kind: 'http',
+          method: 'GET',
+          pathname: '/api/v1/wells/wel_not_a_well',
+          query: '',
+          status: 404,
+          maxMatches: 1,
+          reason: 'this accessibility journey deliberately opens a document under a missing well',
+        },
+      ],
+    })
   })
 })

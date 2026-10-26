@@ -724,7 +724,7 @@ CAPACITY_SPEC = EngineSpec(
     limitations=("no eccentricity or washout", "does not resolve multiple nested strings beyond the largest OD"),
     references=("standard volumetric capacity relations", "API RP 13D (context)"),
     tags=("hydraulics", "volumes", "operations"),
-    validation_status="verified_against_reference",
+    validation_status="formula_derived",
     action_level="L1",
 )
 

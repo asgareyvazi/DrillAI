@@ -257,7 +257,8 @@ function StudioBody({
               data: {
                 ...data,
                 family: spec.family,
-                actionLevel: spec.action_level,
+                // Show a persisted escalation exactly as stored; backend validation enforces its floor.
+                actionLevel: data.source?.action_level ?? spec.action_level,
                 label: data.label || spec.name,
               } satisfies StudioNodeData,
             }

@@ -97,6 +97,8 @@ test.describe('identity, permission and action level', () => {
   test('the switcher offers exactly the roles the server catalogues, and every one is usable', async ({
     page,
     request,
+    consoleErrors,
+    failedResponses,
   }) => {
     const advertised = (await serverIdentity(request, 'engineer')).development_presets
     expect(advertised.length, 'the server must advertise its development presets').toBeGreaterThan(0)
@@ -131,11 +133,27 @@ test.describe('identity, permission and action level', () => {
     await expect(page.getByTestId('projects-unavailable')).toContainText(/permission/i)
     // The wells themselves are still there: one panel's refusal is not the screen's failure.
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+    expectNoFailures(consoleErrors, failedResponses, {
+      allowed: [
+        {
+          kind: 'http',
+          method: 'GET',
+          pathname: '/api/v1/projects',
+          query: '',
+          status: 403,
+          maxMatches: 2,
+          reason:
+            'the integrity-engineer journey renders the projects panel refusal while the well page remains usable',
+        },
+      ],
+    })
   })
 
   test('the ceiling the shell reports is the ceiling the server resolves, for every catalogued role', async ({
     page,
     request,
+    consoleErrors,
+    failedResponses,
   }) => {
     await page.goto('/wells')
     await waitForLoaded(page)
@@ -153,6 +171,20 @@ test.describe('identity, permission and action level', () => {
       // What is displayed is the ceiling the *role* carries, not a number the UI picked.
       expect(identity.roles[0]?.max_action_level).toBe(identity.max_action_level)
     }
+    expectNoFailures(consoleErrors, failedResponses, {
+      allowed: [
+        {
+          kind: 'http',
+          method: 'GET',
+          pathname: '/api/v1/projects',
+          query: '',
+          status: 403,
+          maxMatches: 1,
+          reason:
+            'one catalogued role lacks project.read, so the projects panel shows its precise refusal',
+        },
+      ],
+    })
   })
 
   test('a ceiling refusal is reported as a ceiling, and the server refuses it the same way', async ({

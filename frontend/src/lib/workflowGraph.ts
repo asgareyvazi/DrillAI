@@ -3,7 +3,8 @@
  *
  * This lives outside the React component for one reason: saving a graph must never lose information
  * the editor does not display. A `GraphNode` carries `inputs`, `on_error`, `retry`, `timeout_seconds`,
- * `is_breakpoint`, `notes` and an action-level override; an `GraphEdge` carries a `condition`, a
+ * `is_breakpoint`, `notes` and an optional action-level escalation (subject to the backend's minimum);
+ * a `GraphEdge` carries a `condition`, a
  * `label`, handles and `is_loop_back`. The canvas shows a fraction of that, so a mapping that rebuilt
  * each node from the handful of fields it renders would silently delete the rest on the next save —
  * exactly the kind of quiet data loss a workflow editor must not have.

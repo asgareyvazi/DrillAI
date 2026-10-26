@@ -644,8 +644,32 @@ class WorkflowRuntime:
         self._last_node_run = node_run
         return outcome
 
+    def _effective_node_action_level(self, node: GraphNode, spec: NodeSpec) -> ActionLevel:
+        """Resolve a workflow override without allowing it to weaken or replace the node contract."""
+        minimum = spec.action_level
+        if node.action_level is None:
+            return minimum
+        try:
+            requested = ActionLevel(node.action_level)
+        except ValueError as exc:
+            raise WorkflowDefinitionInvalid(
+                f"node {node.id} has invalid action_level {node.action_level!r}",
+                details={"node_id": node.id, "node_type": spec.key, "action_level": node.action_level},
+            ) from exc
+        if requested.rank < minimum.rank:
+            raise WorkflowDefinitionInvalid(
+                f"node {node.id} action_level {requested.value} cannot lower node type {spec.key!r} below {minimum.value}",
+                details={"node_id": node.id, "node_type": spec.key, "minimum": minimum.value, "declared": requested.value},
+            )
+        if requested is ActionLevel.AUTHORIZED_AUTOMATION and minimum is not ActionLevel.AUTHORIZED_AUTOMATION:
+            raise WorkflowDefinitionInvalid(
+                f"node {node.id} cannot claim L5 automation unless node type {spec.key!r} is registered for L5",
+                details={"node_id": node.id, "node_type": spec.key, "minimum": minimum.value, "declared": requested.value},
+            )
+        return requested
+
     def _authorize(self, run: WorkflowRun, node: GraphNode, spec: NodeSpec) -> ActionLevel:
-        level = ActionLevel(node.action_level) if node.action_level else spec.action_level
+        level = self._effective_node_action_level(node, spec)
         if self.principal.max_action_level.rank < level.rank:
             raise PermissionDenied(
                 f"principal ceiling {self.principal.max_action_level} is below node {node.id} level {level.value}",
@@ -691,7 +715,7 @@ class WorkflowRuntime:
         inbox and the resume path must not care which one produced it.
         """
         payload = (error.details if error else None) or {}
-        level = request.action_level if request else ActionLevel(spec.action_level)
+        level = request.action_level if request else self._effective_node_action_level(node, spec)
         approval = ApprovalRequest(
             org_id=self.org_id,
             kind=request.kind if request else "workflow_node",
@@ -706,7 +730,7 @@ class WorkflowRuntime:
             description=(
                 request.description
                 if request
-                else f"Node {node.id} ({spec.key}) at action level {spec.action_level.value} requires a decision."
+                else f"Node {node.id} ({spec.key}) at action level {level.value} requires a decision."
             ),
             request_payload={
                 "node_type": spec.key,

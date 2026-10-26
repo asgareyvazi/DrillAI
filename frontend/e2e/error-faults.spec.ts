@@ -73,6 +73,7 @@ test.describe('failures the server must be asked to produce', () => {
     request,
     consoleErrors,
     failedResponses,
+    networkFailures,
   }) => {
     const wellsPath = '/api/v1/wells'
     const requests = countRequests(page, wellsPath)
@@ -99,6 +100,19 @@ test.describe('failures the server must be asked to produce', () => {
 
     expect(abandoned.length, 'the deadline must cancel the request it abandoned').toBeGreaterThan(0)
     expect(abandoned.some((text) => /ABORT|ERR_/.test(text)), `browser said: ${abandoned.join(', ')}`).toBeTruthy()
+    const deadlineFailures = networkFailures.filter((failure) => {
+      const url = new URL(failure.url)
+      return url.pathname === wellsPath && url.search === '?limit=200'
+    })
+    expect(deadlineFailures.length, 'the timed-out wells reads must be observed at the transport').toBe(4)
+    expect(
+      deadlineFailures.filter((failure) => failure.signalReason === 'TimeoutError'),
+      'the three retry attempts must carry the exact client-deadline signal reason',
+    ).toHaveLength(3)
+    expect(
+      deadlineFailures.filter((failure) => failure.disposition === 'caller_abort'),
+      'the superseded duplicate request must be joined to its caller AbortError signal',
+    ).toHaveLength(1)
 
     // Retrying a deadline is reasonable; retrying it for ever is not.
     const attemptsWhenSettled = requests.count()
@@ -118,7 +132,21 @@ test.describe('failures the server must be asked to produce', () => {
     await state.getByRole('button', { name: /retry/i }).click()
     await expect(errorState(page)).toHaveCount(0, { timeout: 30_000 })
     await expect(page.getByRole('table').or(page.getByText(/no wells/i)).first()).toBeVisible()
-    expectNoFailures(consoleErrors, failedResponses)
+    expectNoFailures(consoleErrors, failedResponses, {
+      allowed: [
+        {
+          kind: 'network',
+          method: 'GET',
+          pathname: '/api/v1/wells',
+          query: '?limit=200',
+          errorText: 'net::ERR_ABORTED',
+          signalReason: 'TimeoutError',
+          maxMatches: 3,
+          reason:
+            'the three retry attempts exceed the three-second client deadline and the UI asserts timeout',
+        },
+      ],
+    })
   })
 
   test('a response that is not the contract is a protocol failure with a request id, not an outage', async ({
@@ -198,12 +226,15 @@ test.describe('failures the server must be asked to produce', () => {
     expectNoFailures(consoleErrors, failedResponses, {
       allowed: [
         {
+          kind: 'http',
           method: 'GET',
-          url: '/wells',
+          pathname: '/api/v1/wells',
+          query: '?limit=200',
           status: 500,
+          maxMatches: 4,
           reason:
-            'the journey turns on fault injection for the wells list and asserts that the ' +
-            'interface reports the server error it asked for',
+            'the journey turns on fault injection for the wells list, observes its bounded automatic ' +
+            'retry requests, and asserts that the interface reports the server error it asked for',
         },
       ],
     })
@@ -212,7 +243,9 @@ test.describe('failures the server must be asked to produce', () => {
   test('a slow read the operator navigates away from is cancelled, not reported, and cannot replace the screen', async ({
     page,
     request,
-    consoleErrors, failedResponses,
+    consoleErrors,
+    failedResponses,
+    networkFailures,
   }) => {
     // Two real runs, started the way an operator starts them, so there is something to switch between.
     const { workflowId, wellId } = await seededIds(request)
@@ -268,6 +301,17 @@ test.describe('failures the server must be asked to produce', () => {
         message: 'switching runs must cancel the request it abandoned',
       })
       .toBeGreaterThan(0)
+    await expect
+      .poll(
+        () => networkFailures.some((failure) => {
+          const url = new URL(failure.url)
+          return url.pathname === `/api/v1/runs/${first}` && failure.method === 'GET' &&
+            failure.errorText === 'net::ERR_ABORTED' && failure.signalReason === 'AbortError' &&
+            failure.disposition === 'caller_abort'
+        }),
+        { timeout: 15_000, message: 'the superseded run fetch must carry its own caller AbortError signal' },
+      )
+      .toBe(true)
 
     // The delay is shorter than this stack's own deadline, so the deadline cannot be what ended the
     // request — and a request that was merely ignored would appear here as having completed.
@@ -293,6 +337,15 @@ test.describe('failures the server must be asked to produce', () => {
     await expect(page.getByRole('heading', { level: 1 }).first()).toBeVisible()
     await page.waitForTimeout(7_000)
     await expect(errorState(page)).toHaveCount(0)
+    await expect(
+      networkFailures.some((failure) => {
+        const url = new URL(failure.url)
+        return url.pathname === `/api/v1/runs/${second}` && failure.method === 'GET' &&
+          failure.errorText === 'net::ERR_ABORTED' && failure.signalReason === 'AbortError' &&
+          failure.disposition === 'caller_abort'
+      }),
+      'leaving the run screen must abort the same fetch with a caller-owned AbortError',
+    ).toBe(true)
 
     await disarm(request)
     expectNoFailures(consoleErrors, failedResponses)

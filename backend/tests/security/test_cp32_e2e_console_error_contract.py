@@ -46,6 +46,7 @@ import yaml
 REPO_ROOT = Path(__file__).resolve().parents[3]
 E2E_DIR = REPO_ROOT / "frontend" / "e2e"
 FIXTURES_PATH = E2E_DIR / "fixtures.ts"
+FAILURE_ORACLE_PATH = E2E_DIR / "failure-oracle.ts"
 FRONTEND_TSCONFIG = REPO_ROOT / "frontend" / "tsconfig.json"
 FRONTEND_TSCONFIG_E2E = REPO_ROOT / "frontend" / "tsconfig.e2e.json"
 WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "ci.yml"
@@ -162,24 +163,24 @@ def test_cp32_the_fixture_separates_application_errors_from_the_network_log() ->
 
 
 def test_cp32_the_fixture_records_the_failing_responses() -> None:
-    """The platform-independent oracle needs the responses themselves, with their status."""
-    source = _read(FIXTURES_PATH)
-    assert "export interface FailedResponse" in source, (
-        "frontend/e2e/fixtures.ts must export the `FailedResponse` type: a journey asserts on the "
-        "response the page received, which is the same on every platform."
+    """The context-wide platform-independent oracle retains response method, URL, and status."""
+    oracle = _read(FAILURE_ORACLE_PATH)
+    fixture = _read(FIXTURES_PATH)
+    assert "export interface FailedResponse" in oracle, (
+        "frontend/e2e/failure-oracle.ts must define the `FailedResponse` record"
     )
     for member in ("status", "method", "url"):
-        assert re.search(rf"\b{member}\b", source), f"`FailedResponse` must carry the {member}"
-    assert "page.on('response'" in source, (
-        "the shared fixture must record the responses the page received with a failing status"
+        assert re.search(rf"\b{member}\b", oracle), f"`FailedResponse` must carry the {member}"
+    assert "context.on('response'" in fixture, (
+        "the shared fixture must record responses at browser-context scope, including every page"
     )
-    assert "response.status() >= 400" in source, (
-        "the shared fixture must record every response with a failing status"
+    assert "response.status() >= 400" in fixture, (
+        "the shared fixture must record every HTTP response with a failing status"
     )
 
 
 def test_cp32_the_shared_contract_exists_and_is_used() -> None:
-    """The contract itself must exist, and must assert on both oracles."""
+    """The immediate helper and automatic teardown both evaluate HTTP and transport observations."""
     source = _read(FIXTURES_PATH)
     assert f"export function {SHARED_CONTRACT}" in source, (
         f"frontend/e2e/fixtures.ts must export `{SHARED_CONTRACT}`"
@@ -189,15 +190,14 @@ def test_cp32_the_shared_contract_exists_and_is_used() -> None:
     )
     assert match, "could not find the body of `expectNoFailures`"
     body = match.group(2)
-    assert "appConsoleErrors(consoleErrors)" in body, (
-        f"`{SHARED_CONTRACT}` must assert that the application produced no error of its own"
+    assert "appConsoleErrors(consoleErrors)" in body
+    assert "evaluateFailureOracle(state.failedResponses, [], state.allowances)" in body
+    assert "result.findings" in body
+    assert "await assertFailureOracle(state, testInfo)" in source, (
+        "the auto fixture must repeat the oracle after collecting network failures, even if a journey "
+        "does not call the helper"
     )
-    assert "failedResponses" in body, (
-        f"`{SHARED_CONTRACT}` must assert that no call the journey did not provoke failed"
-    )
-    assert "status >= 500" in body, (
-        f"`{SHARED_CONTRACT}` must assert that the product never answered with a server error"
-    )
+    assert "state.networkFailures" in source
 
 
 # ---------------------------------------------------------------------------------------------

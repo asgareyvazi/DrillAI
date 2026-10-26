@@ -4,9 +4,8 @@ Implements production-grade delivery for `OutboundMessage` rows queued by the `o
 workflow node (or alerts):
 
 * **Webhook / HTTP adapter (`channel="webhook"`)**:
-  - Enforces the authoritative database-backed egress policy (`load_authoritative_egress_policy` +
-    `validate_connector_endpoint_async`) so outbound webhooks cannot be abused for SSRF or private
-    network scanning.
+  - Enforces the authoritative database-backed egress policy, resolves and pins the destination IP,
+    disables proxy-environment routing, and refuses redirects so webhooks cannot bypass SSRF checks.
   - Resolves credentials exclusively from environment/vault secret references (`secret_ref`) without
     storing raw secrets in database JSON columns.
   - Signs payloads with `X-DrillAI-Signature-256: sha256=<hmac>` when a signing secret reference is
@@ -52,9 +51,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from drillai.core.clock import UTC, utc_now
 from drillai.core.errors import ValidationFailed
 from drillai.db.models import OutboundMessage, SecretRef
+from drillai.security.secrets import is_credential_header_name, is_valid_env_secret_name
 from drillai.telemetry.connectors import (
+    resolve_and_pin_http_endpoint_async,
     sync_egress_policy_from_db,
-    validate_connector_endpoint_async,
 )
 
 __all__ = [
@@ -92,15 +92,17 @@ def _redact_error(text: str | None) -> str | None:
 
 
 def resolve_notification_secret(secret_ref: str | None) -> str | None:
-    """Resolve a secret reference from environment variables without storing raw secrets in DB rows."""
+    """Resolve an explicitly scoped notification secret, never an arbitrary process variable."""
     if not secret_ref or not secret_ref.strip():
         return None
     key = secret_ref.strip()
     if key.startswith("env:"):
         env_name = key[4:].strip()
-        return os.environ.get(env_name)
+        if not is_valid_env_secret_name(env_name):
+            return None
+        return os.environ.get(env_name) or None
     env_prefixed = f"DRILLAI_NOTIFY_SECRET_{key.upper().replace('-', '_').replace('.', '_')}"
-    return os.environ.get(env_prefixed) or os.environ.get(key)
+    return os.environ.get(env_prefixed) or None
 
 
 async def resolve_notification_secret_async(
@@ -128,6 +130,8 @@ async def resolve_notification_secret_async(
         row.last_used_at = utc_now()
         if row.backend == "env":
             env_name = row.locator.removeprefix("env:").strip()
+            if not is_valid_env_secret_name(env_name):
+                return None
             return os.environ.get(env_name) or None
         if row.backend == "db_encrypted":
             from drillai.security.secrets import decrypt_secret_value
@@ -185,7 +189,7 @@ class WebhookNotificationAdapter(NotificationAdapter):
                 error="webhook notification requires a target URL in recipient",
             )
 
-        # 1. Enforce authoritative egress policy & SSRF protection
+        # 1. Load the authoritative egress policy and pin the exact destination IP that is approved.
         try:
             allow_loopback = os.environ.get("DRILLAI_CONNECTOR_ALLOW_LOOPBACK", "").strip().lower() in {
                 "1",
@@ -193,16 +197,16 @@ class WebhookNotificationAdapter(NotificationAdapter):
                 "yes",
             }
             await sync_egress_policy_from_db(session)
-            await validate_connector_endpoint_async(
+            pinned = await resolve_and_pin_http_endpoint_async(
                 recipient_url,
-                "witsml.1.4.1.1.soap_http",  # HTTP/HTTPS transport rules
                 allow_loopback=allow_loopback,
+                dns_timeout_seconds=5.0,
             )
         except ValidationFailed as exc:
             details = exc.details or {}
             reason = str(details.get("reason") or "egress_policy_blocked")
             policy_state = str(details.get("policy_state") or "")
-            is_retryable = reason == "dns_lookup_timeout" or policy_state == "transient_store_error"
+            is_retryable = reason in {"dns_lookup_timeout", "timeout"} or policy_state == "transient_store_error"
             return DeliveryAttemptOutcome(
                 status="failed_retryable" if is_retryable else "failed_terminal",
                 retryable=is_retryable,
@@ -250,9 +254,19 @@ class WebhookNotificationAdapter(NotificationAdapter):
             headers["Idempotency-Key"] = message.idempotency_key
         extra_headers = cfg_payload.get("headers")
         if isinstance(extra_headers, dict):
+            if any(is_credential_header_name(str(name)) for name in extra_headers):
+                return DeliveryAttemptOutcome(
+                    status="failed_terminal",
+                    retryable=False,
+                    error_code="plaintext_secret_header_forbidden",
+                    error="credential-bearing custom headers must use a managed secret reference",
+                    latency_ms=(time.perf_counter() - started) * 1000.0,
+                )
             for hk, hv in extra_headers.items():
-                if hk.lower() not in {"authorization", "x-drillai-signature-256"}:
+                if str(hk).lower() != "host":
                     headers[str(hk)] = str(hv)
+        headers["Host"] = pinned.host_header
+        extensions = {"sni_hostname": pinned.sni_hostname} if pinned.scheme == "https" else {}
         if secret_val:
             auth_scheme = str(cfg_payload.get("auth_scheme") or "hmac_sha256").lower()
             if auth_scheme == "bearer":
@@ -263,8 +277,17 @@ class WebhookNotificationAdapter(NotificationAdapter):
 
         # 3. Execute HTTP POST with explicit timeout and classify response
         try:
-            async with httpx.AsyncClient(timeout=timeout_seconds, follow_redirects=False) as client:
-                response = await client.post(recipient_url, content=encoded_body, headers=headers)
+            async with httpx.AsyncClient(
+                timeout=timeout_seconds,
+                follow_redirects=False,
+                trust_env=False,
+            ) as client:
+                response = await client.post(
+                    pinned.connect_url,
+                    content=encoded_body,
+                    headers=headers,
+                    extensions=extensions,
+                )
         except httpx.TimeoutException as exc:
             return DeliveryAttemptOutcome(
                 status="failed_retryable",

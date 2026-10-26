@@ -10,8 +10,19 @@
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { expect, test as base, type APIRequestContext, type Page } from '@playwright/test'
+import { expect, test as base, type APIRequestContext, type Frame, type Page, type Request, type TestInfo } from '@playwright/test'
+import {
+  classifyNetworkFailure,
+  evaluateFailureOracle,
+  type AbortEvidence,
+  type FailureAllowance,
+  type FailedResponse,
+  type NetworkFailure,
+  type NavigationSupersessionEvidence,
+} from './failure-oracle'
 import type { E2EFixtures } from './global-setup'
+
+export type { FailedResponse, FailureAllowance, NetworkFailure } from './failure-oracle'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const FIXTURES_PATH = path.join(path.resolve(here, '..'), '.e2e', 'fixtures.json')
@@ -166,56 +177,290 @@ export async function apiPatch<T>(
   return (await response.json()) as T
 }
 
-/**
- * A response the browser received with a failing status.
- *
- * The browser's own console line for it (`Failed to load resource: ...`) says *that* something
- * failed but not *which* call, and it is written differently on different platforms — Chromium
- * reports a cancelled request as `net::ERR_ABORTED` on one and as a dropped connection on another.
- * The response itself is the same everywhere, so a journey that wants to know whether the product
- * misbehaved asserts on this list rather than on the console text.
- */
-export interface FailedResponse {
-  status: number
-  method: string
-  url: string
+const ABORT_EVIDENCE_BINDING = '__drillaiReportE2EAbort'
+
+interface FailureOracleState {
+  consoleErrors: string[]
+  failedResponses: FailedResponse[]
+  networkFailures: NetworkFailure[]
+  allowances: FailureAllowance[]
+  abortEvidence: Map<string, AbortEvidence>
+}
+
+type AbortEvidencePayload = AbortEvidence
+
+interface FailedRequestTrace {
+  request: Request
+  record: NetworkFailure
+  sequence: number
+  failureSequence: number
+}
+
+const oracleByResponses = new WeakMap<FailedResponse[], FailureOracleState>()
+
+function isAbortEvidencePayload(value: unknown): value is AbortEvidencePayload {
+  if (typeof value !== 'object' || value === null) return false
+  const candidate = value as Record<string, unknown>
+  return typeof candidate.requestId === 'string' && candidate.requestId.length > 0 &&
+    typeof candidate.url === 'string' && typeof candidate.method === 'string' &&
+    typeof candidate.reasonName === 'string'
+}
+
+function navigationForRequest(
+  request: Request,
+  sequence: number,
+  failureSequence: number,
+  latestNavigationByFrame: Map<Frame, Request>,
+  requestSequences: WeakMap<Request, number>,
+  committedNavigations: WeakSet<Request>,
+  requestFrames: WeakMap<Request, Frame>,
+): NavigationSupersessionEvidence | undefined {
+  const failedFrame = requestFrames.get(request)
+  if (!failedFrame) return undefined
+  const successor = latestNavigationByFrame.get(failedFrame)
+  if (!successor || successor === request) return undefined
+  const successorSequence = requestSequences.get(successor)
+  return {
+    startedAfterOriginalRequest: successorSequence !== undefined && successorSequence > sequence,
+    startedBeforeFailure: successorSequence !== undefined && successorSequence < failureSequence,
+    committedInSameFrame: committedNavigations.has(successor) && requestFrames.get(successor) === failedFrame,
+  }
+}
+
+async function assertFailureOracle(state: FailureOracleState, testInfo: TestInfo): Promise<void> {
+  // Let the browser-to-Node binding and request lifecycle events already queued by the test drain.
+  await new Promise<void>((resolve) => setTimeout(resolve, 0))
+  const responseResult = evaluateFailureOracle(state.failedResponses, state.networkFailures, state.allowances)
+  const consoleErrors = appConsoleErrors(state.consoleErrors)
+  if (consoleErrors.length > 0 || responseResult.findings.length > 0) {
+    const evidence = {
+      project: testInfo.project.name,
+      test: testInfo.title,
+      consoleErrors,
+      failures: responseResult.findings,
+      httpResponses: state.failedResponses.filter((response) => response.status >= 400).map((response) => ({
+        method: response.method,
+        url: safeFailureUrl(response.url),
+        status: response.status,
+      })),
+      networkFailures: state.networkFailures.filter((failure) => failure.disposition === 'unexpected').map((failure) => ({
+        method: failure.method,
+        url: safeFailureUrl(failure.url),
+        errorText: failure.errorText,
+        resourceType: failure.resourceType,
+        signalReason: failure.signalReason,
+        disposition: failure.disposition,
+      })),
+    }
+    await testInfo.attach('request-failure-oracle.json', {
+      body: JSON.stringify(evidence, null, 2),
+      contentType: 'application/json',
+    })
+  }
+  expect(consoleErrors, `application console errors: ${consoleErrors.join(' | ')}`).toEqual([])
+  expect(responseResult.findings, 'every HTTP or transport failure must be explicitly accounted for').toEqual([])
+}
+
+function safeFailureUrl(rawUrl: string): string {
+  try {
+    const url = new URL(rawUrl)
+    for (const key of [...url.searchParams.keys()]) {
+      if (/(token|secret|password|csrf|credential|authorization)/i.test(key)) url.searchParams.set(key, '[redacted]')
+    }
+    return url.href
+  } catch {
+    return '<invalid-url>'
+  }
 }
 
 /**
- * The suite's own `test`, extended with the things every journey needs.
- *
- * `consoleErrors` exists because a page that renders its values while throwing in the background is
- * not working; collecting the list in a fixture means a spec has to assert on it rather than being
- * able to ignore it. `failedResponses` is the same idea measured at the wire: every response the
- * page received with a failing status. `wellId` comes from the seed rather than from a literal, so
- * the journey still breaks if the seeder stops producing a well a user can open.
+ * The suite's test fixture owns the wire oracle for every journey, including specs that do not
+ * explicitly destructure the arrays. All pages in the test context are observed; a `context.newPage()`
+ * cannot escape the verdict. Browser failures are classified from request lifecycle evidence, never
+ * from Chromium's platform-specific console wording.
  */
 export const test = base.extend<{
   consoleErrors: string[]
   failedResponses: FailedResponse[]
+  networkFailures: NetworkFailure[]
   wellId: string
+  _failureOracle: FailureOracleState
 }>({
-  consoleErrors: async ({ page }, use) => {
-    const errors: string[] = []
-    page.on('console', (message) => {
-      if (message.type() === 'error') errors.push(message.text())
-    })
-    page.on('pageerror', (error) => errors.push(error.message))
-    await use(errors)
-  },
-  failedResponses: async ({ page }, use) => {
-    const failed: FailedResponse[] = []
-    page.on('response', (response) => {
-      if (response.status() >= 400) {
-        failed.push({
-          status: response.status(),
-          method: response.request().method(),
-          url: response.url(),
+  _failureOracle: [
+    async ({ page, context }, use, testInfo) => {
+      if (!context.pages().includes(page)) throw new Error('the fixture page must belong to its observed context')
+      const state: FailureOracleState = {
+        consoleErrors: [],
+        failedResponses: [],
+        networkFailures: [],
+        allowances: [],
+        abortEvidence: new Map(),
+      }
+      oracleByResponses.set(state.failedResponses, state)
+
+      let lifecycleSequence = 0
+      const requestSequences = new WeakMap<Request, number>()
+      const requestFrames = new WeakMap<Request, Frame>()
+      const latestNavigationByFrame = new Map<Frame, Request>()
+      const committedNavigations = new WeakSet<Request>()
+      const failedTraces: FailedRequestTrace[] = []
+      const updateTraceDisposition = (trace: FailedRequestTrace) => {
+        const evidence = trace.record.requestId
+          ? state.abortEvidence.get(trace.record.requestId)
+          : undefined
+        if (evidence && evidence.url === trace.record.url && evidence.method === trace.record.method) {
+          trace.record.signalReason = evidence.reasonName
+        }
+        const navigationEvidence = navigationForRequest(
+          trace.request,
+          trace.sequence,
+          trace.failureSequence,
+          latestNavigationByFrame,
+          requestSequences,
+          committedNavigations,
+          requestFrames,
+        )
+        trace.record.disposition = classifyNetworkFailure(trace.record, evidence, navigationEvidence)
+      }
+
+      await context.exposeBinding(ABORT_EVIDENCE_BINDING, (_source, payload: unknown) => {
+        if (typeof payload === 'object' && payload !== null && (payload as { kind?: unknown }).kind === 'flush') return true
+        if (isAbortEvidencePayload(payload)) {
+          state.abortEvidence.set(payload.requestId, payload)
+          for (const trace of failedTraces) {
+            if (trace.record.requestId === payload.requestId) updateTraceDisposition(trace)
+          }
+          return true
+        }
+        return false
+      })
+      await context.addInitScript((bindingName: string) => {
+        const originalFetch = window.fetch.bind(window)
+        const documentTag = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
+        let requestSequence = 0
+        window.fetch = (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+          const sourceUrl = input instanceof Request ? input.url : String(input)
+          const target = new URL(sourceUrl, window.location.href)
+          const method = (init?.method ?? (input instanceof Request ? input.method : 'GET')).toUpperCase()
+          // The E2E servers use Vite's same-origin `/api/v1` proxy. The marker is test-only and adds
+          // no cross-origin preflight; it lets requestfailed be joined to the *same* fetch's signal.
+          if (target.origin !== window.location.origin || !target.pathname.startsWith('/api/v1/')) {
+            return originalFetch(input, init)
+          }
+          const requestId = `e2e-${documentTag}-${++requestSequence}`
+          const headers = new Headers(input instanceof Request ? input.headers : undefined)
+          if (init?.headers) new Headers(init.headers).forEach((value, key) => headers.set(key, value))
+          headers.set('x-drillai-e2e-request-id', requestId)
+          const nextInit: RequestInit = { ...(init ?? {}), headers }
+          const signal = nextInit.signal ?? (input instanceof Request ? input.signal : undefined)
+          if (signal) {
+            const reportAbort = () => {
+              const reason: unknown = signal.reason
+              const reasonName = typeof reason === 'object' && reason !== null && 'name' in reason &&
+                typeof (reason as { name?: unknown }).name === 'string'
+                ? (reason as { name: string }).name
+                : 'AbortError'
+              const binding = (window as typeof window & Record<string, unknown>)[bindingName]
+              if (typeof binding === 'function') {
+                void Promise.resolve(binding({ requestId, url: target.href, method, reasonName })).catch(() => undefined)
+              }
+            }
+            if (signal.aborted) reportAbort()
+            else signal.addEventListener('abort', reportAbort, { once: true })
+          }
+          return originalFetch(input, nextInit)
+        }
+      }, ABORT_EVIDENCE_BINDING)
+
+
+      const collectPageErrors = (observedPage: Page) => {
+        observedPage.on('console', (message) => {
+          if (message.type() === 'error') state.consoleErrors.push(message.text())
+        })
+        observedPage.on('pageerror', (error) => state.consoleErrors.push(error.message))
+        observedPage.on('framenavigated', (frame) => {
+          const latest = latestNavigationByFrame.get(frame)
+          if (latest && frame.url() === latest.url()) {
+            committedNavigations.add(latest)
+            for (const trace of failedTraces) {
+              if (requestFrames.get(trace.request) === frame) updateTraceDisposition(trace)
+            }
+          }
         })
       }
-    })
-    await use(failed)
-  },
+      for (const openPage of context.pages()) collectPageErrors(openPage)
+      context.on('page', collectPageErrors)
+
+      context.on('request', (request) => {
+        lifecycleSequence += 1
+        requestSequences.set(request, lifecycleSequence)
+        try {
+          const frame = request.frame()
+          requestFrames.set(request, frame)
+          if (request.isNavigationRequest()) {
+            latestNavigationByFrame.set(frame, request)
+            for (const trace of failedTraces) {
+              if (requestFrames.get(trace.request) === frame) updateTraceDisposition(trace)
+            }
+          }
+        } catch {
+          // A detached-frame request has no same-frame supersession evidence and remains unexpected.
+        }
+      })
+      context.on('response', (response) => {
+        if (response.status() >= 400) {
+          state.failedResponses.push({
+            kind: 'http',
+            status: response.status(),
+            method: response.request().method(),
+            url: response.url(),
+          })
+        }
+      })
+      context.on('requestfailed', (request) => {
+        lifecycleSequence += 1
+        const failureSequence = lifecycleSequence
+        const record: NetworkFailure = {
+          kind: 'network',
+          method: request.method(),
+          url: request.url(),
+          errorText: request.failure()?.errorText ?? 'unknown network failure',
+          resourceType: request.resourceType(),
+          isNavigationRequest: request.isNavigationRequest(),
+          disposition: 'unexpected',
+        }
+        const requestId = request.headers()['x-drillai-e2e-request-id']
+        if (requestId) record.requestId = requestId
+        const sequence = requestSequences.get(request) ?? failureSequence
+        state.networkFailures.push(record)
+        const trace = { request, record, sequence, failureSequence }
+        failedTraces.push(trace)
+        updateTraceDisposition(trace)
+      })
+
+      await use(state)
+      // An awaited binding call is a per-page event-loop fence: abort reports issued before the end
+      // of the body must reach Node before the request failures are classified.
+      for (const observedPage of context.pages()) {
+        if (observedPage.isClosed()) continue
+        try {
+          await observedPage.evaluate(async (bindingName: string) => {
+            const binding = (window as typeof window & Record<string, unknown>)[bindingName]
+            if (typeof binding === 'function') await binding({ kind: 'flush' })
+          }, ABORT_EVIDENCE_BINDING)
+        } catch {
+          // A page closed or began navigating after the body; absence of abort evidence is not benign.
+        }
+      }
+      await new Promise<void>((resolve) => setTimeout(resolve, 0))
+      for (const trace of failedTraces) updateTraceDisposition(trace)
+      await assertFailureOracle(state, testInfo)
+    },
+    { auto: true },
+  ],
+  consoleErrors: async ({ _failureOracle }, use) => use(_failureOracle.consoleErrors),
+  failedResponses: async ({ _failureOracle }, use) => use(_failureOracle.failedResponses),
+  networkFailures: async ({ _failureOracle }, use) => use(_failureOracle.networkFailures),
   // Playwright requires the first argument to be a destructuring pattern, and this fixture has no
   // dependencies; the empty pattern is the library's documented form.
   // eslint-disable-next-line no-empty-pattern
@@ -321,92 +566,27 @@ export function appConsoleErrors(errors: string[]): string[] {
 }
 
 /**
- * A failure a journey provokes on purpose, and the reason it does.
+ * Assert this journey's console and wire observations and register its narrow, justified tolerances.
  *
- * This is not a way to silence the oracle. An entry names the request it tolerates — as narrowly as
- * the journey allows: a path, and the method and status the journey actually asserts on screen — and
- * `reason` says why the journey asks for it. A tolerance nobody can explain is the thing this type
- * exists to prevent, so the reason is required rather than optional, and every entry in the suite is
- * an object: `backend/tests/security/test_cp33_e2e_response_oracle_coverage.py` refuses a bare
- * string, which is what a hastily silenced journey would be written with.
- */
-export interface ProvokedFailure {
-  /** A substring of the request URL, e.g. `/api/v1/documents/`. */
-  url?: string
-  /** The HTTP method, when only one of them is provoked. */
-  method?: string
-  /** The status — or the set of statuses — the journey expects for that request. */
-  status?: number | number[]
-  /** Why the journey provokes this refusal. Written for the next reader. */
-  reason: string
-}
-
-/**
- * The entry that covers a recorded failure, if the journey named it.
- *
- * Every field of an entry is a condition: an entry with a method and a status tolerates only that
- * method and that status, which is how a journey that provokes a `409` on a `PATCH` still fails if
- * something `POST`s its way into a `500`.
- */
-export function provokedFailure(
-  response: FailedResponse,
-  allowed: readonly ProvokedFailure[],
-): ProvokedFailure | undefined {
-  return allowed.find((entry) => {
-    if (entry.url !== undefined && !response.url.includes(entry.url)) return false
-    if (entry.method !== undefined && response.method !== entry.method) return false
-    if (entry.status !== undefined) {
-      const statuses = Array.isArray(entry.status) ? entry.status : [entry.status]
-      if (!statuses.includes(response.status)) return false
-    }
-    return true
-  })
-}
-
-/**
- * What every journey asserts on when it says "nothing went wrong".
- *
- * Two questions, two oracles, and both of them are the same on every platform:
- *
- *  * *Did the application misbehave?* — the console lines the product itself wrote: a React error,
- *    an unhandled rejection, a `console.error` from the product's own code.
- *  * *Did a call fail?* — the responses the page received with a failing status.
- *
- * The browser's own line for a failed resource (`Failed to load resource: ...`) is deliberately not
- * an oracle: it is written differently on different platforms, and the application shell cancels
- * its background reads whenever the reader navigates, so the same product behaviour produces that
- * line on one runner and none on the next. A verdict that depends on it is a verdict about the
- * runner, not about the product.
- *
- * `scope` narrows the response check to one part of the API, for a journey whose page also makes
- * calls the product answers with a refusal for reasons of its own. `allowed` names the failures the
- * journey provokes on purpose — each one a request it expects to be refused, with the reason.
+ * The `auto: true` oracle fixture repeats the verdict after the test body. This immediate check gives
+ * the journey a local failure message; the teardown check ensures a test cannot omit this call or
+ * stop collecting responses/request failures and thereby pass silently.
  */
 export function expectNoFailures(
   consoleErrors: string[],
   failedResponses: FailedResponse[],
-  options: { scope?: string; allowed?: readonly ProvokedFailure[] } = {},
+  options: { allowed?: readonly FailureAllowance[] } = {},
 ): void {
-  const allowed = options.allowed ?? []
+  const state = oracleByResponses.get(failedResponses)
+  if (!state) throw new Error('expectNoFailures must receive the shared Playwright fixture arrays')
+  if (state.consoleErrors !== consoleErrors) {
+    throw new Error('consoleErrors must come from the shared Playwright fixture')
+  }
+  state.allowances.push(...(options.allowed ?? []))
+  const result = evaluateFailureOracle(state.failedResponses, [], state.allowances)
   expect(
     appConsoleErrors(consoleErrors),
-    `console errors: ${consoleErrors.join(' | ')}`,
+    `application console errors: ${consoleErrors.join(' | ')}`,
   ).toEqual([])
-  const inScope = options.scope
-    ? failedResponses.filter((response) => response.url.includes(options.scope as string))
-    : failedResponses
-  const unexpected = inScope.filter((response) => provokedFailure(response, allowed) === undefined)
-  expect(
-    unexpected.map((response) => `${response.method} ${response.url} -> ${response.status}`),
-    'a call this journey did not provoke must not fail',
-  ).toEqual([])
-  // A server error is only tolerable when the journey named it: an injected fault, or a refusal the
-  // server answers with a 5xx on purpose. Everything else is the product failing at what it does.
-  const serverErrors = failedResponses.filter(
-    (response) => response.status >= 500 && provokedFailure(response, allowed) === undefined,
-  )
-  expect(
-    serverErrors.map((response) => `${response.method} ${response.url} -> ${response.status}`),
-    'the product must not answer with a server error',
-  ).toEqual([])
+  expect(result.findings, 'every HTTP or transport failure must be explicitly accounted for').toEqual([])
 }

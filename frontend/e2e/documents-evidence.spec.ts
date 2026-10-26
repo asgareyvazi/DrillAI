@@ -86,6 +86,7 @@ test.describe('documents → ingestion → records → evidence', () => {
     const documents = await apiGet<DocumentPage>(request, `/documents?well_id=${wellId}`)
     expect(documents.total, 'the seeder must have produced documents').toBeGreaterThan(0)
     const seeded = documents.items[0]
+    if (!seeded) throw new Error('the seeder must provide a document row')
 
     await page.goto(wellPath('/documents'))
     await expect(page.getByRole('heading', { level: 1 }).first()).toBeVisible()
@@ -127,7 +128,8 @@ test.describe('documents → ingestion → records → evidence', () => {
     const documents = await apiGet<DocumentPage>(request, `/documents?well_id=${wellId}`)
     const target = documents.items.find((row) => row.extraction_summary.records > 0)
     expect(target, 'a document with extracted records is required for this journey').toBeTruthy()
-    const documentId = target?.id as string
+    if (!target) throw new Error('a document with extracted records is required for this journey')
+    const documentId = target.id
 
     const provenance = await apiGet<DocumentProvenance>(request, `/documents/${documentId}/provenance`)
     const evidence = await apiGet<{ items: EvidenceItem[]; total: number }>(
@@ -142,18 +144,26 @@ test.describe('documents → ingestion → records → evidence', () => {
 
     // Provenance tab: region → extraction → record, as the backend built it.
     await page.getByRole('tab', { name: /region/i }).click()
-    const chainRecord = provenance.chain[0].record
+    const firstChainLink = provenance.chain[0]
+    if (!firstChainLink) throw new Error('the seeded extraction must have a provenance chain')
+    const chainRecord = firstChainLink.record
     await expect(
       page.getByText(chainRecord.record_type.replace(/_/g, ' '), { exact: false }).first(),
     ).toBeVisible()
 
     // Evidence tab: the quotes the API returned, each traceable to its page.
     await page.getByRole('tab', { name: /evidence/i }).click()
-    const quotes = evidence.items.filter((item) => (item.excerpt ?? '').length > 0).slice(0, 3)
+    const quotes = evidence.items
+      .filter(
+        (item): item is EvidenceItem & { excerpt: string } =>
+          typeof item.excerpt === 'string' && item.excerpt.length > 0,
+      )
+      .slice(0, 3)
     expect(quotes.length, 'the seeded extraction must keep excerpts').toBeGreaterThan(0)
     for (const item of quotes) {
-      const firstLine = (item.excerpt as string).split('\n')[0].slice(0, 60)
-      await expect(page.getByText(firstLine, { exact: false }).first()).toBeVisible()
+      const firstLine = item.excerpt.split(/\r?\n/).find((line) => line.trim().length > 0)
+      if (!firstLine) throw new Error('each seeded evidence excerpt must contain a nonblank line')
+      await expect(page.getByText(firstLine.slice(0, 60), { exact: false }).first()).toBeVisible()
     }
 
     expectNoFailures(consoleErrors, failedResponses)

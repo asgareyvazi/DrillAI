@@ -437,7 +437,7 @@ KILL_SHEET_SPEC = EngineSpec(
     ),
     tags=("well-control", "kill-sheet", "maasp", "safety"),
     action_level="L2",
-    validation_status="verified_against_reference",
+    validation_status="needs_field_validation",
 )
 
 register_engine(FunctionEngine(KILL_SHEET_SPEC, compute_kill_sheet), aliases=("kill_sheet", "well_control"))

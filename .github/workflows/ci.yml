@@ -271,6 +271,10 @@ jobs:
       # `npm run e2e` is the repository's own wrapper: it resolves a browser, refuses ports held by a
       # stale server, and lets Playwright start the API and the web server for all three deployments.
       # The whole suite runs — main, faults and auth — not a subset.
+      - name: Verify the reviewed E2E inventory (121 tests, exact project distribution)
+        working-directory: frontend
+        run: npm run e2e:verify-shape
+
       - name: End-to-end suite (main, faults and auth stacks)
         working-directory: frontend
         run: |
@@ -294,6 +298,10 @@ jobs:
             exit 1
           fi
           echo "result: $summary"
+          if [[ ! "$summary" =~ ^[[:space:]]*121[[:space:]]+passed([[:space:]]|$) ]]; then
+            echo "::error::expected exactly 121 E2E tests to pass; got: $summary"
+            exit 1
+          fi
           case "$summary" in
             *skipped*|*failed*|*flaky*)
               # A red run is only a number without the assertion that failed. The artefact carries the
@@ -467,6 +475,13 @@ jobs:
           .\backend\.venv\Scripts\python.exe scripts/verify_external_vendor_interop.py --mode external
           if ($LASTEXITCODE -ne 0) { throw "verify_external_vendor_interop.py --mode external failed on Windows" }
 
+      - name: Verify the reviewed E2E inventory (121 tests, exact project distribution) (Windows)
+        working-directory: frontend
+        shell: pwsh
+        run: |
+          node scripts/verify-e2e-shape.mjs
+          if ($LASTEXITCODE -ne 0) { throw "Playwright E2E inventory does not match 121 tests across the reviewed projects" }
+
       - name: Playwright E2E certification across main, faults, and auth stacks (Windows)
         working-directory: frontend
         shell: pwsh
@@ -485,7 +500,7 @@ jobs:
               throw "Playwright project [$proj] did not run on Windows"
             }
           }
-          if ($e2eExit -ne 0 -or -not $summary -or $summary -match "\d+\s+(failed|flaky|skipped)" -or $summary -notmatch "\d+\s+passed") {
+          if ($e2eExit -ne 0 -or -not $summary -or $summary -notmatch '^\s*121\s+passed(?:\s|$)' -or $summary -match "\d+\s+(failed|flaky|skipped)") {
             $tailLines = ($lines | Select-Object -Last 25) -join " | "
             # The assertion that failed, not only the count of failures: the tail of the log is the
             # last journey's code frame, which says where it stopped but not what it saw.

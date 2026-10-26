@@ -13,10 +13,23 @@
  * the page does not behave as though it had been accepted.
  */
 
-import { expect, expectNoFailures, test } from './fixtures'
+import { expect, expectNoFailures, test, type FailureAllowance } from './fixtures'
 import type { Page } from '@playwright/test'
 
 const errorState = (page: Page) => page.getByTestId('error-state')
+
+function anonymousGet(pathname: string, query: string, maxMatches: number, journey: string): FailureAllowance {
+  const target = `${pathname}${query}`
+  return {
+    kind: 'http',
+    method: 'GET',
+    pathname,
+    query,
+    status: 401,
+    maxMatches,
+    reason: `${journey} asserts the anonymous browser read of ${target} is refused with HTTP 401`,
+  }
+}
 
 test.describe('an authentication-enabled deployment', () => {
   test('an unauthenticated read reads as "not signed in", not as an outage', async ({
@@ -68,14 +81,30 @@ test.describe('an authentication-enabled deployment', () => {
 
     expectNoFailures(consoleErrors, failedResponses, {
       allowed: [
-        {
-          url: '/api/v1/',
-          status: 401,
-          reason:
-            'the journey runs against an authentication-enabled deployment, where an ' +
-            'anonymous read is refused with 401 — the state the journey asserts the ' +
-            'interface explains',
-        },
+        anonymousGet('/api/v1/health/ready', '', 5, 'the anonymous-read journey'),
+        anonymousGet('/api/v1/platform/identity', '', 5, 'the anonymous-read journey'),
+        anonymousGet('/api/v1/wells', '?limit=200', 2, 'the anonymous-read journey'),
+        anonymousGet('/api/v1/projects', '', 2, 'the anonymous-read journey'),
+        anonymousGet('/api/v1/fields', '?limit=500', 1, 'the anonymous-read journey'),
+        anonymousGet('/api/v1/rigs', '', 1, 'the anonymous-read journey'),
+        anonymousGet('/api/v1/workflows', '', 1, 'the anonymous-read journey'),
+        anonymousGet('/api/v1/registry/node-types', '', 1, 'the anonymous-read journey'),
+        anonymousGet('/api/v1/evidence/summary', '?well_id=wel_unauth_probe', 2, 'the anonymous-read journey'),
+        anonymousGet(
+          '/api/v1/wells/wel_unauth_probe/timeseries/latest',
+          '?limit=100',
+          2,
+          'the anonymous cockpit journey including its live-stream reconciliation',
+        ),
+        anonymousGet(
+          '/api/v1/alerts',
+          '?well_id=wel_unauth_probe&limit=100',
+          2,
+          'the anonymous cockpit and live-stream reconciliation journey',
+        ),
+        anonymousGet('/api/v1/connectors', '?well_id=wel_unauth_probe&limit=50', 1, 'the anonymous-read journey'),
+        anonymousGet('/api/v1/wells/wel_unauth_probe/state', '', 1, 'the anonymous-read journey'),
+        anonymousGet('/api/v1/wells/wel_unauth_probe', '', 1, 'the anonymous-read journey'),
       ],
     })
   })
@@ -136,6 +165,9 @@ test.describe('an authentication-enabled deployment', () => {
     await expect(wellLink).toBeVisible()
     const cockpitHref = await wellLink.getAttribute('href')
     expect(cockpitHref).toBeTruthy()
+    if (!cockpitHref) throw new Error('the authentication seed must expose a well cockpit link')
+    const wellId = /^\/wells\/([^/]+)\/cockpit$/.exec(cockpitHref)?.[1]
+    if (!wellId) throw new Error(`expected a well-specific cockpit link, got ${cockpitHref}`)
     await page.goto(`${cockpitHref}?tab=live`)
     await expect(page.getByTestId('live-transport-state')).toHaveText(/LIVE/i, { timeout: 20_000 })
     expect(wsUrls.length).toBeGreaterThan(0)
@@ -150,13 +182,27 @@ test.describe('an authentication-enabled deployment', () => {
 
     expectNoFailures(consoleErrors, failedResponses, {
       allowed: [
+        anonymousGet('/api/v1/health/ready', '', 4, 'the login and logout journey'),
+        anonymousGet('/api/v1/wells', '?limit=200', 3, 'the login and logout journey'),
+        anonymousGet('/api/v1/projects', '', 3, 'the login and logout journey'),
+        anonymousGet('/api/v1/fields', '?limit=500', 3, 'the login and logout journey'),
+        anonymousGet('/api/v1/rigs', '', 3, 'the login and logout journey'),
+        anonymousGet('/api/v1/platform/identity', '', 4, 'the login and logout journey'),
         {
-          url: '/api/v1/',
+          kind: 'http',
+          method: 'POST',
+          pathname: '/api/v1/auth/login',
+          query: '',
           status: 401,
-          reason:
-            'the journey is unsigned-in before it logs in, and a refused sign-in is a 401 ' +
-            'the journey asserts is reported as such rather than as an outage',
+          maxMatches: 1,
+          reason: 'the journey submits an invalid password and asserts the exact unauthenticated login refusal',
         },
+        anonymousGet(`/api/v1/wells/${wellId}`, '', 1, 'the login and logout journey'),
+        anonymousGet(`/api/v1/wells/${wellId}/state`, '', 1, 'the login and logout journey'),
+        anonymousGet('/api/v1/evidence/summary', `?well_id=${wellId}`, 1, 'the login and logout journey'),
+        anonymousGet(`/api/v1/wells/${wellId}/timeseries/latest`, '?limit=100', 1, 'the login and logout journey'),
+        anonymousGet('/api/v1/alerts', `?well_id=${wellId}&limit=100`, 1, 'the login and logout journey'),
+        anonymousGet('/api/v1/connectors', `?well_id=${wellId}&limit=50`, 1, 'the login and logout journey'),
       ],
     })
   })
@@ -198,13 +244,12 @@ test.describe('an authentication-enabled deployment', () => {
 
     expectNoFailures(consoleErrors, failedResponses, {
       allowed: [
-        {
-          url: '/api/v1/',
-          status: 401,
-          reason:
-            'the journey starts from the signed-out state of an authentication-enabled ' +
-            'deployment, where every read before sign-in is refused with 401',
-        },
+        anonymousGet('/api/v1/platform/identity', '', 2, 'the tenant-admin login journey'),
+        anonymousGet('/api/v1/wells', '?limit=200', 2, 'the tenant-admin login journey'),
+        anonymousGet('/api/v1/projects', '', 2, 'the tenant-admin login journey'),
+        anonymousGet('/api/v1/fields', '?limit=500', 2, 'the tenant-admin login journey'),
+        anonymousGet('/api/v1/health/ready', '', 2, 'the tenant-admin login journey'),
+        anonymousGet('/api/v1/rigs', '', 2, 'the tenant-admin login journey'),
       ],
     })
   })

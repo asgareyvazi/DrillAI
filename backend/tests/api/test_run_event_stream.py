@@ -326,6 +326,31 @@ async def test_with_authentication_enabled_a_dev_roles_parameter_grants_nothing(
         reset_settings_cache()
 
 
+async def test_disconnect_while_sending_stream_opened_is_not_reclassified_as_auth_failure(
+    client, websocket, monkeypatch
+):
+    """A dropped client during the first frame is a transport close, not a 4401 refusal."""
+    from starlette.websockets import WebSocket, WebSocketDisconnect
+
+    run_id, _approval_id = await seed_gate_run(client, key="ws_open_disconnect")
+    send_json = WebSocket.send_json
+
+    async def disconnect_before_first_frame(self, data, mode="text"):
+        if data.get("type") == "stream_opened":
+            raise WebSocketDisconnect(code=1006)
+        await send_json(self, data, mode=mode)
+
+    monkeypatch.setattr(WebSocket, "send_json", disconnect_before_first_frame)
+    socket = websocket(
+        f"/api/v1/runs/{run_id}/events/stream", after_seq="0", dev_roles="drilling_supervisor"
+    )
+    async with socket:
+        pass
+
+    assert socket.handler_state == "returned"
+    assert socket._outbound.empty(), "a transport disconnect must not receive a misleading 4401 close frame"
+
+
 async def test_an_unknown_sequence_cursor_yields_no_replay(client, websocket):
     """A cursor past the end of the log is not an error: it is a client that is up to date."""
     run_id, _approval_id = await seed_gate_run(client, key="ws_cursor_past_end")

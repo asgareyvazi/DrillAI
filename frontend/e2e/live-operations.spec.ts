@@ -157,8 +157,18 @@ test.describe('CP10 live operational vertical slice (Journeys A–I)', () => {
       'engineer',
     )
 
-    // Re-open Evidence Drawer and verify T1 observed value is unchanged
+    // Re-open Evidence Drawer and verify T1 observed value is unchanged. Await the real alert-list
+    // reconciliation that `live-resync-btn` starts so the later optimistic write uses the version
+    // committed by T2 ingestion, not a pre-ingestion cached version.
+    const refreshedAlerts = page.waitForResponse((response) => {
+      const url = new URL(response.url())
+      return response.request().method() === 'GET' && url.pathname === '/api/v1/alerts' &&
+        url.searchParams.get('well_id') === wellId
+    })
     await page.getByTestId('live-resync-btn').click()
+    const refreshedAlertsResponse = await refreshedAlerts
+    expect(refreshedAlertsResponse.status(), 'the live resync must reload the alert list successfully').toBe(200)
+    await expect(page.getByTestId(`alert-status-${alertId}`)).toHaveText(/raised/i)
     await page.getByTestId(`alert-evidence-btn-${alertId}`).click()
     await expect(drawer).toBeVisible()
     const afterT2ObservedText = await drawer.getByTestId('evidence-observed-value').textContent()
@@ -210,9 +220,12 @@ test.describe('CP10 live operational vertical slice (Journeys A–I)', () => {
     expectNoFailures(consoleErrors, failedResponses, {
       allowed: [
         {
+          kind: 'http',
           method: 'POST',
-          url: '/alerts/',
+          pathname: '/api/v1/alerts/:alertId/clear',
+          query: '',
           status: 409,
+          maxMatches: 1,
           reason:
             'the journey clears an alert another operator is already working on, which the ' +
             'server refuses as a conflict',
@@ -335,8 +348,8 @@ test.describe('CP10 live operational vertical slice (Journeys A–I)', () => {
     await expect(page.getByTestId('kpi-card-hookload_foreign')).toHaveCount(0)
 
     // Journey I: Switch to Persian (fa) and verify RTL document direction + LTR technical token isolation
-    await page.evaluate(() => window.localStorage.setItem('drillai.locale', 'fa'))
-    await page.reload()
+    await page.getByTestId('locale-switch').selectOption('fa')
+    // The locale selector applies the change immediately; no page reload is needed.
     await expect(page.locator('html')).toHaveAttribute('dir', 'rtl')
     await expect(page.getByTestId('operational-monitor')).toBeVisible()
     await expect(page.getByTestId('kpi-value-spp')).toHaveAttribute('dir', 'ltr')

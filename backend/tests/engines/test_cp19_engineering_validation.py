@@ -1,4 +1,7 @@
-"""CP19 Independent Engineering Validation Suite across all 14 Engines & 121 Units.
+"""CP19 deterministic analytical test-vector suite across all 14 engines & 122 unit definitions.
+
+These tests measure numerical behavior against hand-calculated equations and unit references. They
+are not a field trial, domain-owner sign-off, third-party certification, or production approval.
 
 Verifies:
 1. Independent closed-form analytical benchmarks across all 14 registered engineering engines
@@ -6,7 +9,7 @@ Verifies:
    `torque_drag.soft_string`, `drilling.mse`, `well_control.kill_sheet`, `tubulars.api_5c3`,
    `integrity.barrier_envelope`, `schematic.well_model`, `offsets.similarity`,
    `readiness.assessment`, `twin.reconciliation`, `optimization.sweep`, `optimization.pareto`).
-2. Complete unit registry round-trip & affine reference accuracy across all 121 units and
+2. Complete unit registry round-trip & affine reference accuracy across all 122 registered unit definitions and
    33 dimensions (`drillai.units.registry`).
 3. Metamorphic monotonicity invariants, boundary/invalid input rejection (`EngineInputInvalid`),
    and strict `json.dumps(..., allow_nan=False)` numerical safety across all 14 engines.
@@ -42,8 +45,8 @@ def test_cp19_01_all_units_and_dimensions_round_trip_and_reference_accuracy() ->
     """Every unit in known_units() across all dimensions must round-trip accurately
     through canonical SI and reject cross-dimension conversions."""
     all_units = known_units()
-    assert len(all_units) >= 80
-    assert len(Dimension) >= 30
+    assert len(all_units) == 122, "unit count changes require updating the exact registry contract"
+    assert len(Dimension) == 33, "dimension count changes require updating the exact registry contract"
 
     for dim in Dimension:
         dim_units = [u for u in all_units if u.dimension == dim]
@@ -77,14 +80,15 @@ def test_cp19_01_all_units_and_dimensions_round_trip_and_reference_accuracy() ->
 
 
 def test_cp19_02_independent_analytical_benchmarks_for_all_14_engines() -> None:
-    """Verify all 14 registered engineering engines against independent hand-calculated equations
-    and enforce strict JSON serialization (`allow_nan=False`) on every output."""
+    """Check all 14 engines against analytical test vectors, not field certification, and enforce strict JSON safety."""
     reg = load_default_engines()
     assert len(reg.keys()) == 14
+    field_validation_required = {"tubulars.api_5c3", "well_control.kill_sheet"}
 
     def run_and_check_json(key: str, payload: dict[str, Any]) -> dict[str, Any]:
         spec, res = reg.execute(key, payload)
-        assert spec.validation_status == "verified_against_reference"
+        expected_status = "needs_field_validation" if key in field_validation_required else "formula_derived"
+        assert spec.validation_status == expected_status
         out_dict = res.outputs.model_dump(mode="json")
         # Strict IEEE-754 finite check: raises ValueError if any NaN/Inf exists anywhere in output
         encoded = json.dumps(out_dict, allow_nan=False)
@@ -609,7 +613,7 @@ async def test_cp19_04_engine_provenance_units_assumptions_and_llm_non_override(
     )
     payload = exec_res.to_payload()
     assert payload["engine_key"] == "well_control.kill_sheet"
-    assert payload["validation_status"] == "verified_against_reference"
+    assert payload["validation_status"] == "needs_field_validation"
     assert payload["domain_pack"] == "Well Control Pack"
     assert payload["category"] == "well_control"
     assert payload["units"]["unit_system"] == "SI"

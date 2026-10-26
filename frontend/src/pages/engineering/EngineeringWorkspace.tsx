@@ -304,7 +304,7 @@ function EngineRunner({ engine, wellId, wellboreId, sectionId, scope }: {
           subtitle={`${result.engine.key}@${result.engine.version} · inputs ${result.inputs_hash.slice(0, 10)}… → outputs ${result.outputs_hash.slice(0, 10)}…`}
           actions={
             <>
-              <Badge tone={result.is_feasible ? 'ok' : 'danger'}>
+              <Badge tone={result.is_feasible ? 'warning' : 'danger'}>
                 {result.is_feasible ? t('engineering.feasible') : t('engineering.infeasible')}
               </Badge>
               <Button size="sm" variant="ghost" onClick={() => setShowEvidence(true)}>
@@ -329,6 +329,9 @@ function EngineRunner({ engine, wellId, wellboreId, sectionId, scope }: {
                 ))}
               </ul>
             )}
+            <p className="rounded border border-warning/40 bg-amber-50/50 p-2 text-[11px] text-warning dark:bg-amber-950/20">
+              {t('engineering.feasibilityDisclaimer')}
+            </p>
             <p className="text-[11px] text-graphite-500">
               validation status: {formatValidationStatus(result.engine.validation_status)} · assumptions and
               limitations are the engine's own declarations, not commentary
@@ -652,12 +655,14 @@ export default function EngineeringWorkspace() {
                   },
                   {
                     key: 'feasible',
-                    header: 'Feasible',
+                    header: t('engineering.feasibility'),
                     render: (row) =>
                       row.is_feasible === null ? (
                         '—'
                       ) : (
-                        <Badge tone={row.is_feasible ? 'ok' : 'danger'}>{row.is_feasible ? 'yes' : 'no'}</Badge>
+                        <Badge tone={row.is_feasible ? 'warning' : 'danger'}>
+                          {row.is_feasible ? t('engineering.feasible') : t('engineering.infeasible')}
+                        </Badge>
                       ),
                   },
                   { key: 'violations', header: 'Violations', render: (row) => row.constraint_violations.length, align: 'end' },

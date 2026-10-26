@@ -26,7 +26,7 @@ from sqlalchemy import select
 from drillai.api.app import create_app
 from drillai.core.config import Settings, reset_settings_cache
 from drillai.core.errors import ConfigurationError, ValidationFailed
-from drillai.db.models import AuditLog, Membership, Organization, User
+from drillai.db.models import AuditLog, Membership, Organization, SecretRef, User
 from drillai.security.passwords import (
     ARGON2ID_DEFAULT_MEMORY_KIB,
     SCRYPT_DEFAULT_N,
@@ -37,6 +37,7 @@ from drillai.security.passwords import (
     verify_password_async,
 )
 from drillai.security.secrets import (
+    _load_master_keyring,
     decrypt_secret_value,
     encrypt_secret_value,
     extract_envelope_key_version,
@@ -44,9 +45,43 @@ from drillai.security.secrets import (
     rotate_secret_envelope,
 )
 from drillai.telemetry.connectors import resolve_secret_refs
-from drillai.workflow.notifications import resolve_notification_secret_async
+from drillai.workflow.notifications import resolve_notification_secret, resolve_notification_secret_async
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
+
+
+@pytest.mark.parametrize(
+    ("active_version", "previous_keys", "duplicate_version"),
+    [
+        (2, "v2:previous-master-key-that-is-long-enough", 2),
+        (3, "v1:previous-master-key-that-is-long-enough,v01:another-previous-master-key-long-enough", 1),
+    ],
+)
+def test_master_keyring_rejects_duplicate_active_or_previous_versions(
+    active_version: int, previous_keys: str, duplicate_version: int
+) -> None:
+    settings = Settings(
+        environment="production",
+        secret_master_key="active-master-key-that-is-long-enough-for-production",
+        secret_active_key_version=active_version,
+        secret_previous_master_keys=previous_keys,
+    )
+    with pytest.raises(ConfigurationError) as caught:
+        _load_master_keyring(settings)
+    assert caught.value.details == {"reason": "duplicate_key_version", "key_version": duplicate_version}
+
+
+def test_notification_environment_secret_references_are_scoped_and_validated(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("DRILLAI_DATABASE_URL", "must-not-be-exposed")
+    monkeypatch.setenv("DATABASE_URL", "also-must-not-be-exposed")
+    monkeypatch.setenv("DRILLAI_NOTIFY_SECRET_RIG_WEBHOOK_KEY", "notify-scoped-secret")
+    monkeypatch.setenv("DRILLAI_SECRET_TEST_TOKEN", "indirect-secret")
+
+    assert resolve_notification_secret("env:DRILLAI_DATABASE_URL") is None
+    assert resolve_notification_secret("DRILLAI_DATABASE_URL") is None
+    assert resolve_notification_secret("DATABASE_URL") is None
+    assert resolve_notification_secret("rig-webhook-key") == "notify-scoped-secret"
+    assert resolve_notification_secret("env:DRILLAI_SECRET_TEST_TOKEN") == "indirect-secret"
 
 
 def test_cp22_01_encrypted_secret_ref_aead_key_rotation_aad_and_redaction() -> None:
@@ -230,6 +265,33 @@ async def test_cp22_02_platform_secrets_api_rbac_connector_and_notification_reso
             assert r_login_admin_a.status_code == 200
             csrf_admin_a = r_login_admin_a.json()["csrf_token"]
 
+            # The API must accept only the same dedicated secret-name grammar that the resolver uses.
+            for invalid_env_name in ("DRILLAI_DATABASE_URL", "DRILLAI_SECRET_X"):
+                r_invalid_env = await admin_a_client.post(
+                    "/api/v1/platform/secrets",
+                    headers={"X-CSRF-Token": csrf_admin_a},
+                    json={
+                        "key": "invalid_env_secret",
+                        "backend": "env",
+                        "env_var": invalid_env_name,
+                    },
+                )
+                assert r_invalid_env.status_code == 422, r_invalid_env.text
+
+            monkeypatch.setenv("DRILLAI_SECRET_CP22_ENV", "cp22-env-secret-value")
+            r_env = await admin_a_client.post(
+                "/api/v1/platform/secrets",
+                headers={"X-CSRF-Token": csrf_admin_a},
+                json={
+                    "key": "test_env_secret",
+                    "backend": "env",
+                    "env_var": "DRILLAI_SECRET_CP22_ENV",
+                },
+            )
+            assert r_env.status_code == 201, r_env.text
+            assert r_env.json()["backend"] == "env"
+            assert "cp22-env-secret-value" not in r_env.text
+
             r_login_viewer_a = await viewer_a_client.post(
                 "/api/v1/auth/login",
                 json={"email": "viewer@cp22-alpha.local", "password": "AlphaViewerPass!2026"},
@@ -300,6 +362,42 @@ async def test_cp22_02_platform_secrets_api_rbac_connector_and_notification_reso
                 )
                 assert resolved_map["password"] == secret_clear
 
+                resolved_env = await resolve_secret_refs(
+                    session,
+                    "org_cp22_a",
+                    {"password": "env:DRILLAI_SECRET_CP22_ENV"},
+                )
+                assert resolved_env["password"] == "cp22-env-secret-value"
+
+                # A legacy or manually inserted broad environment locator must not reach notification delivery.
+                monkeypatch.setenv("DRILLAI_DATABASE_URL", "must-not-be-exposed")
+                session.add(
+                    SecretRef(
+                        org_id="org_cp22_a",
+                        key="legacy_broad_env_ref",
+                        backend="env",
+                        locator="env:DRILLAI_DATABASE_URL",
+                        is_active=True,
+                    )
+                )
+                await session.flush()
+                assert (
+                    await resolve_notification_secret_async(
+                        session,
+                        "org_cp22_a",
+                        "secret_ref:legacy_broad_env_ref",
+                    )
+                    is None
+                )
+                with pytest.raises(ValidationFailed) as invalid_connector_env:
+                    await resolve_secret_refs(
+                        session,
+                        "org_cp22_a",
+                        {"password": "secret_ref:legacy_broad_env_ref"},
+                    )
+                assert invalid_connector_env.value.details["reason"] == "invalid_secret_ref"
+                assert "must-not-be-exposed" not in str(invalid_connector_env.value)
+
                 notif_val = await resolve_notification_secret_async(
                     session,
                     "org_cp22_a",
@@ -323,7 +421,10 @@ async def test_cp22_02_platform_secrets_api_rbac_connector_and_notification_reso
 
             r_list_a = await admin_a_client.get("/api/v1/platform/secrets")
             assert r_list_a.status_code == 200
-            assert r_list_a.json()["items"][0]["needs_key_rotation"] is True
+            encrypted_item = next(
+                item for item in r_list_a.json()["items"] if item["key"] == "rig_witsml_pass"
+            )
+            assert encrypted_item["needs_key_rotation"] is True
 
             r_rotate = await admin_a_client.post(
                 "/api/v1/platform/secrets/rig_witsml_pass/rotate",

@@ -27,7 +27,7 @@ from drillai.db.models import (
 from drillai.security import catalog as _catalog  # noqa: F401  (registers platform actions)
 from drillai.security.actions import ActionLevel, Principal
 from drillai.workflow.graph import GraphEdge, GraphNode, WorkflowGraph
-from drillai.workflow.nodes import NodeContext, NodeOutcome, NodeSpec, register_node_type
+from drillai.workflow.nodes import NodeContext, NodeOutcome, NodeSpec, node_spec, register_node_type
 from drillai.workflow.runtime import RunScope, WorkflowRuntime
 from drillai.workflow.service import WorkflowService
 
@@ -335,6 +335,25 @@ def test_run_requires_a_persisted_definition_version(session):
         asyncio.get_event_loop().run_until_complete(
             runtime.start(graph, workflow_id="", workflow_version_id="")  # type: ignore[arg-type]
         )
+
+
+@pytest.mark.parametrize(
+    ("node_type", "action_level", "config"),
+    [
+        ("integration.http_fetch", "L0", {"url": "https://example.invalid"}),
+        ("output.report", "L5", {"title": "Daily report"}),
+    ],
+)
+def test_runtime_rejects_action_level_overrides_that_bypass_the_registered_contract(
+    session, engineer, node_type, action_level, config
+):
+    from types import SimpleNamespace
+
+    runtime = WorkflowRuntime(session, org_id="org_test", principal=engineer)
+    node = GraphNode(id="target", type=node_type, action_level=action_level, config=config)
+    run = SimpleNamespace(attributes={}, well_id=None, project_id=None)
+    with pytest.raises(WorkflowDefinitionInvalid):
+        runtime._authorize(run, node, node_spec(node_type))
 
 
 async def test_high_action_node_is_blocked_below_the_ceiling(session, project, engineer):
