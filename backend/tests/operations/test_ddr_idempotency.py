@@ -200,7 +200,11 @@ async def test_a_half_promoted_report_is_completed_not_duplicated(fabric: Fabric
                 .order_by(ExtractedRecord.id)
             )
         ).scalars().all()
-        first = records[0]
+        first_name = "Drilling ahead 8-1/2 in section"
+        first = next(
+            (record for record in records if (record.payload or {}).get("activity") == first_name), None
+        )
+        assert first is not None, "the synthetic DDR must contain its first drilling operation"
         session.add(
             Operation(
                 id="opr_interrupted",
@@ -211,7 +215,7 @@ async def test_a_half_promoted_report_is_completed_not_duplicated(fabric: Fabric
                 section_id=fabric.alpha.section_id,
                 operation_class="actual",
                 sequence=1,
-                name="Drilling ahead 8-1/2 in section",
+                name=first_name,
                 kind="drilling",
                 phase="completed",
                 status="completed",
