@@ -1,3 +1,5 @@
+/// <reference types="node" />
+
 /**
  * Catalogue coverage, checked against the code that uses it.
  *
@@ -72,5 +74,12 @@ describe('message catalogue coverage', () => {
       .filter(([key]) => lookup(catalogue, key) === undefined)
       .map(([key, holders]) => `${key} (used in ${holders.join(', ')})`)
     expect(unresolved).toEqual([])
+  })
+
+  it('explains safety-sensitive validation statuses in Persian as well as English', () => {
+    expect(lookup(en, 'engineering.validation.needsFieldValidation')).toBe('needs field validation')
+    expect(lookup(fa, 'engineering.validation.needsFieldValidation')).toBe('نیازمند اعتبارسنجی میدانی')
+    expect(lookup(fa, 'engineering.fieldValidationWarning')).toContain('پروندهٔ ایمنی')
+    expect(lookup(fa, 'engineering.fieldValidationWarning')).toContain('مجوز عملیات')
   })
 })

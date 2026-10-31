@@ -28,10 +28,11 @@ the platform must not be able to present a guess in the same shape as a finding.
 from __future__ import annotations
 
 import datetime as dt
+import math
 from dataclasses import dataclass
 from typing import Any
 
-from sqlalchemy import Select, func, or_, select
+from sqlalchemy import Select, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from drillai.core.audit import record_audit
@@ -48,10 +49,23 @@ from drillai.db.models import (
     Document,
     Event,
     EvidenceLink,
+    ExtractedRecord,
     Operation,
+    RawArtifact,
     canonical_npt_category,
 )
-from drillai.documents.scope import DocumentScope, DocumentScopeResolver
+from drillai.documents.access import (
+    document_not_quarantined_condition,
+    evidence_document_not_quarantined_condition,
+    operational_source_conditions,
+)
+from drillai.documents.scope import (
+    DocumentScope,
+    DocumentScopeResolver,
+    validate_source_record,
+    validate_source_scope,
+)
+from drillai.operations.time_windows import interval_overlap_conditions
 from drillai.security.actions import Principal
 from drillai.telemetry.outbox import emit
 
@@ -82,6 +96,9 @@ MUTABLE_FIELDS: frozenset[str] = frozenset(
         "occurred_at",
         "ended_at",
         "duration_hours",
+        "is_npt",
+        "npt_category",
+        "npt_hours",
         "depth_md_si",
         "depth_tvd_si",
         "cost_usd",
@@ -103,6 +120,40 @@ class ChangeRecord:
 
     def as_dict(self) -> dict[str, Any]:
         return {"field": self.field, "before": self.before, "after": self.after}
+
+
+def _validate_nonnegative_hours(field_name: str, value: Any) -> None:
+    if value is None:
+        return
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, (int, float))
+        or not math.isfinite(float(value))
+        or float(value) < 0
+    ):
+        raise ValidationFailed(f"{field_name} must be a finite non-negative number or null")
+
+
+def _parse_datetime_change(field_name: str, value: Any) -> dt.datetime | None:
+    if value is None:
+        return None
+    if isinstance(value, dt.datetime):
+        return value
+    if isinstance(value, str):
+        iso_value = value.strip()
+        if iso_value.endswith("Z"):
+            iso_value = f"{iso_value[:-1]}+00:00"
+        try:
+            return dt.datetime.fromisoformat(iso_value)
+        except ValueError as exc:
+            raise ValidationFailed(
+                f"{field_name} must be an ISO 8601 datetime or null",
+                details={"field": field_name},
+            ) from exc
+    raise ValidationFailed(
+        f"{field_name} must be an ISO 8601 datetime or null",
+        details={"field": field_name},
+    )
 
 
 class EventService:
@@ -154,7 +205,10 @@ class EventService:
     ) -> Select:
         """The filtered statement. Ordering is by ``(occurred_at, id)`` — chronological, with the id
         breaking ties so a page boundary is deterministic when two events share a timestamp."""
-        stmt = select(Event).where(Event.org_id == self.org_id)
+        stmt = select(Event).where(
+            Event.org_id == self.org_id,
+            *operational_source_conditions(Event),
+        )
         if well_id:
             stmt = stmt.where(Event.well_id == well_id)
         if wellbore_id:
@@ -175,11 +229,15 @@ class EventService:
             stmt = stmt.where(Event.source_kind == source_kind)
         if document_id:
             stmt = stmt.where(Event.source_document_id == document_id)
-        if since is not None:
-            stmt = stmt.where(Event.occurred_at >= since)
-        if until is not None:
-            # An event that has not ended yet is still inside any window that starts before it did.
-            stmt = stmt.where(or_(Event.ended_at <= until, Event.ended_at.is_(None)))
+        if since is not None or until is not None:
+            stmt = stmt.where(
+                *interval_overlap_conditions(
+                    Event.occurred_at,
+                    Event.ended_at,
+                    since=since,
+                    until=until,
+                )
+            )
         return stmt.order_by(Event.occurred_at.asc(), Event.id.asc())
 
     async def count(self, stmt: Select) -> int:
@@ -188,7 +246,11 @@ class EventService:
     async def get(self, event_id: str) -> Event:
         row = (
             await self.session.execute(
-                select(Event).where(Event.id == event_id, Event.org_id == self.org_id)
+                select(Event).where(
+                    Event.id == event_id,
+                    Event.org_id == self.org_id,
+                    *operational_source_conditions(Event),
+                )
             )
         ).scalar_one_or_none()
         if row is None:
@@ -252,6 +314,20 @@ class EventService:
                 attributes["npt_category_raw"] = npt_category
                 fields["attributes"] = attributes
                 npt_category = translated
+        if is_npt is not None and not isinstance(is_npt, bool):
+            raise ValidationFailed("is_npt must be a boolean")
+        for field_name in ("npt_hours", "duration_hours"):
+            _validate_nonnegative_hours(field_name, fields.get(field_name))
+        target_is_npt = (
+            bool(is_npt)
+            if is_npt is not None
+            else bool(npt_category and npt_category != NOT_NPT and fields.get("npt_hours"))
+        )
+        target_npt_hours = fields.get("npt_hours")
+        if target_is_npt and npt_category in (None, NOT_NPT):
+            raise ValidationFailed("an NPT event requires an NPT category")
+        if target_npt_hours is not None and float(target_npt_hours) > 0 and not target_is_npt:
+            raise ValidationFailed("positive npt_hours require is_npt=true")
         self._check_cause_basis(
             cause_basis,
             fields,
@@ -273,11 +349,28 @@ class EventService:
             raise ValidationFailed(
                 "an event must resolve to a well", details={"scope": resolved.as_dict()}
             )
-        operation = await self._check_operation(operation_id, resolved.wellbore_id)
+        operation = await self._check_operation(operation_id)
         if operation is not None:
             # Inheriting the operation's bore and section is not a convenience: an event attributed to
-            # an operation but stored on a different bore makes the operation's own event list wrong.
+            # an operation but stored on a different scope makes the operation's own event list wrong.
             resolved = _inherit_from_operation(resolved, operation)
+            validate_source_scope(
+                operation,
+                project_id=resolved.project_id,
+                well_id=resolved.well_id,
+                wellbore_id=resolved.wellbore_id,
+                section_id=resolved.section_id,
+                operation_id=operation.id,
+            )
+        await self._check_source_linkage(
+            source_document_id=source_document_id,
+            source_record_id=source_record_id,
+            project_id=resolved.project_id,
+            well_id=resolved.well_id,
+            wellbore_id=resolved.wellbore_id,
+            section_id=resolved.section_id,
+            operation_id=operation_id,
+        )
 
         event = Event(
             id=new_id("evn"),
@@ -297,11 +390,7 @@ class EventService:
             # automatically NPT. ``not_npt`` is the vocabulary's way of saying "classified, and the
             # answer is no": it makes the denial explicit, so it can never be counted as a loss of time
             # merely because a category is present.
-            is_npt=(
-                bool(is_npt)
-                if is_npt is not None
-                else bool(npt_category and npt_category != NOT_NPT and fields.get("npt_hours"))
-            ),
+            is_npt=target_is_npt,
             npt_category=npt_category,
             source_kind=source_kind,
             source="manual" if source_kind == "manual" else source_kind,
@@ -364,6 +453,7 @@ class EventService:
         changes: dict[str, Any],
     ) -> tuple[Event, list[ChangeRecord]]:
         self._require(reason=reason)
+        changes = dict(changes)
         event = await self.get(event_id)
         _check_expected_version(event, expected_updated_at)
         if event.status == "cancelled":
@@ -384,6 +474,59 @@ class EventService:
                 "severity is not recognised",
                 details={"field": "severity", "value": changes["severity"], "allowed": list(EVENT_SEVERITIES)},
             )
+        if "classification_source" in changes and changes["classification_source"] not in CLASSIFICATION_SOURCES:
+            raise ValidationFailed(
+                "classification_source is not recognised",
+                details={
+                    "field": "classification_source",
+                    "value": changes["classification_source"],
+                    "allowed": list(CLASSIFICATION_SOURCES),
+                },
+            )
+        raw_npt_category = None
+        if "npt_category" in changes and changes["npt_category"] is not None:
+            raw_npt_category = changes["npt_category"]
+            if not isinstance(raw_npt_category, str):
+                raise ValidationFailed("npt_category must be a string or null")
+            translated = canonical_npt_category(raw_npt_category)
+            if translated not in NPT_CATEGORIES:
+                raise ValidationFailed(
+                    "npt_category is not recognised",
+                    details={"field": "npt_category", "value": raw_npt_category, "allowed": list(NPT_CATEGORIES)},
+                )
+            changes["npt_category"] = translated
+        if "is_npt" in changes and not isinstance(changes["is_npt"], bool):
+            raise ValidationFailed("is_npt must be a boolean")
+        for field_name in ("occurred_at", "ended_at"):
+            if field_name in changes:
+                changes[field_name] = _parse_datetime_change(field_name, changes[field_name])
+        for field_name in ("npt_hours", "duration_hours"):
+            if field_name in changes:
+                _validate_nonnegative_hours(field_name, changes[field_name])
+        target_npt_category = changes.get("npt_category", event.npt_category)
+        target_is_npt = changes.get("is_npt", event.is_npt)
+        target_npt_hours = changes.get("npt_hours", event.npt_hours)
+        if target_is_npt and target_npt_category in (None, NOT_NPT):
+            raise ValidationFailed(
+                "an NPT event requires an NPT category",
+                details={"field": "npt_category", "is_npt": True, "npt_category": target_npt_category},
+            )
+        if target_npt_hours is not None and float(target_npt_hours) > 0 and not target_is_npt:
+            raise ValidationFailed(
+                "positive npt_hours require is_npt=true",
+                details={"field": "npt_hours", "is_npt": target_is_npt},
+            )
+        target_occurred_at = changes.get("occurred_at", event.occurred_at)
+        target_ended_at = changes.get("ended_at", event.ended_at)
+        if (
+            target_ended_at is not None
+            and target_occurred_at is not None
+            and _as_utc(target_ended_at) < _as_utc(target_occurred_at)
+        ):
+            raise ValidationFailed(
+                "ended_at must not precede occurred_at",
+                details={"occurred_at": _iso(target_occurred_at), "ended_at": _iso(target_ended_at)},
+            )
         basis = changes.get("cause_basis", event.cause_basis)
         if basis not in CAUSE_BASES:
             raise ValidationFailed(
@@ -391,6 +534,63 @@ class EventService:
                 details={"field": "cause_basis", "value": basis, "allowed": list(CAUSE_BASES)},
             )
         self._check_cause_basis(basis, changes, existing=event)
+
+        if "npt_category" in changes:
+            attributes = dict(event.attributes or {})
+            if raw_npt_category is not None and raw_npt_category != changes["npt_category"]:
+                attributes["npt_category_raw"] = raw_npt_category
+            else:
+                attributes.pop("npt_category_raw", None)
+            if attributes != (event.attributes or {}):
+                # The client cannot edit arbitrary attributes, but the canonicalization records the
+                # spelling that arrived so a vocabulary translation remains auditable.
+                changes["attributes"] = attributes
+
+        if "section_id" in changes or "operation_id" in changes:
+            target_operation_id = changes.get("operation_id", event.operation_id)
+            target_section_id = changes.get("section_id", event.section_id)
+            for field_name, value in (
+                ("operation_id", target_operation_id),
+                ("section_id", target_section_id),
+            ):
+                if value is not None and (not isinstance(value, str) or not value.strip()):
+                    raise ValidationFailed(
+                        f"{field_name} must be a non-empty identifier when provided",
+                        details={"field": field_name},
+                    )
+            resolved = await DocumentScopeResolver(self.session, self.org_id).resolve(
+                DocumentScope(
+                    project_id=event.project_id,
+                    well_id=event.well_id,
+                    wellbore_id=event.wellbore_id,
+                    section_id=target_section_id,
+                    operation_id=target_operation_id,
+                )
+            )
+            operation = await self._check_operation(resolved.operation_id)
+            if operation is not None:
+                resolved = _inherit_from_operation(resolved, operation)
+                validate_source_scope(
+                    operation,
+                    project_id=resolved.project_id,
+                    well_id=resolved.well_id,
+                    wellbore_id=resolved.wellbore_id,
+                    section_id=resolved.section_id,
+                    operation_id=operation.id,
+                )
+            await self._check_source_linkage(
+                source_document_id=event.source_document_id,
+                source_record_id=event.source_record_id,
+                project_id=resolved.project_id,
+                well_id=resolved.well_id,
+                wellbore_id=resolved.wellbore_id,
+                section_id=resolved.section_id,
+                operation_id=resolved.operation_id,
+            )
+            for field_name in ("project_id", "wellbore_id", "section_id", "operation_id"):
+                resolved_value = getattr(resolved, field_name)
+                if getattr(event, field_name) != resolved_value:
+                    changes[field_name] = resolved_value
 
         records: list[ChangeRecord] = []
         for field, value in changes.items():
@@ -472,19 +672,15 @@ class EventService:
     async def link_document(self, event_id: str, document_id: str | None) -> Event:
         event = await self.get(event_id)
         before = event.source_document_id
-        if document_id is not None:
-            document = (
-                await self.session.execute(
-                    select(Document).where(Document.id == document_id, Document.org_id == self.org_id)
-                )
-            ).scalar_one_or_none()
-            if document is None:
-                raise NotFound(f"document {document_id!r} not found")
-            if document.well_id and document.well_id != event.well_id:
-                raise ValidationFailed(
-                    "the document is about a different well",
-                    details={"document_well_id": document.well_id, "event_well_id": event.well_id},
-                )
+        await self._check_source_linkage(
+            source_document_id=document_id,
+            source_record_id=event.source_record_id,
+            project_id=event.project_id,
+            well_id=event.well_id,
+            wellbore_id=event.wellbore_id,
+            section_id=event.section_id,
+            operation_id=event.operation_id,
+        )
         event.source_document_id = document_id
         await self.session.flush()
         await record_audit(
@@ -504,10 +700,13 @@ class EventService:
             (
                 await self.session.execute(
                     select(EvidenceLink)
+                    .outerjoin(Document, Document.id == EvidenceLink.document_id)
+                    .outerjoin(RawArtifact, RawArtifact.id == Document.raw_artifact_id)
                     .where(
                         EvidenceLink.org_id == self.org_id,
                         EvidenceLink.subject_kind == "event",
                         EvidenceLink.subject_id == event_id,
+                        evidence_document_not_quarantined_condition(),
                     )
                     .order_by(EvidenceLink.created_at.asc(), EvidenceLink.id.asc())
                     .limit(limit)
@@ -579,28 +778,81 @@ class EventService:
                 },
             )
 
-    async def _check_operation(self, operation_id: str | None, wellbore_id: str | None) -> Operation | None:
+    async def _check_operation(self, operation_id: str | None) -> Operation | None:
         if not operation_id:
             return None
         operation = (
             await self.session.execute(
                 select(Operation).where(
-                    Operation.id == operation_id, Operation.org_id == self.org_id
+                    Operation.id == operation_id,
+                    Operation.org_id == self.org_id,
+                    *operational_source_conditions(Operation),
                 )
             )
         ).scalar_one_or_none()
         if operation is None:
             raise NotFound(f"operation {operation_id!r} not found")
-        if wellbore_id and operation.wellbore_id != wellbore_id:
-            raise ValidationFailed(
-                "the operation is on a different wellbore",
-                details={
-                    "operation_id": operation_id,
-                    "operation_wellbore_id": operation.wellbore_id,
-                    "wellbore_id": wellbore_id,
-                },
-            )
         return operation
+
+    async def _check_source_linkage(
+        self,
+        *,
+        source_document_id: str | None,
+        source_record_id: str | None,
+        project_id: str | None,
+        well_id: str | None,
+        wellbore_id: str | None,
+        section_id: str | None,
+        operation_id: str | None,
+    ) -> None:
+        if source_record_id and not source_document_id:
+            raise ValidationFailed(
+                "source_record_id requires the source_document_id it belongs to",
+                details={"field": "source_document_id"},
+            )
+        if not source_document_id:
+            return
+        document = (
+            await self.session.execute(
+                select(Document)
+                .outerjoin(RawArtifact, RawArtifact.id == Document.raw_artifact_id)
+                .where(
+                    Document.id == source_document_id,
+                    Document.org_id == self.org_id,
+                    document_not_quarantined_condition(),
+                )
+            )
+        ).scalar_one_or_none()
+        if document is None:
+            raise NotFound(f"document {source_document_id!r} not found")
+        validate_source_scope(
+            document,
+            project_id=project_id,
+            well_id=well_id,
+            wellbore_id=wellbore_id,
+            section_id=section_id,
+            operation_id=operation_id,
+        )
+        if source_record_id:
+            record = (
+                await self.session.execute(
+                    select(ExtractedRecord).where(
+                        ExtractedRecord.id == source_record_id,
+                        ExtractedRecord.document_id == source_document_id,
+                        ExtractedRecord.org_id == self.org_id,
+                    )
+                )
+            ).scalar_one_or_none()
+            if record is None:
+                raise NotFound(f"extracted record {source_record_id!r} not found in document {source_document_id!r}")
+            validate_source_record(
+                record,
+                project_id=project_id,
+                well_id=well_id,
+                wellbore_id=wellbore_id,
+                section_id=section_id,
+                operation_id=operation_id,
+            )
 
 
 def _inherit_from_operation(resolved: Any, operation: Operation) -> Any:

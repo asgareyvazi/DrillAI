@@ -54,7 +54,7 @@ class Settings(BaseSettings):
     # ------------------------------------------------------------------ storage
     blob_backend: Literal["filesystem", "memory"] = "filesystem"
     blob_root: Path = Field(default=REPO_ROOT / "backend" / ".data" / "blobs")
-    max_upload_bytes: int = 200 * 1024 * 1024  # 200 MB per upload
+    max_upload_bytes: int = 64 * 1024 * 1024  # 64 MiB; matches the parser's hard byte ceiling
 
     # ------------------------------------------------------------------ ai providers
     llm_provider: Literal["stub", "openai_compatible", "ollama"] = "stub"

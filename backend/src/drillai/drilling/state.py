@@ -32,12 +32,19 @@ from drillai.db.models import (
     Event,
     ExtractedRecord,
     Operation,
+    RawArtifact,
     Recommendation,
     Risk,
     TwinAspect,
     Well,
     Wellbore,
     WellSection,
+)
+from drillai.documents.access import (
+    document_not_quarantined_condition,
+    extracted_record_scope_conditions,
+    extracted_record_trust_condition,
+    operational_source_conditions,
 )
 from drillai.documents.lifecycle import VALIDATED_STATES
 from drillai.telemetry.service import TelemetryService
@@ -253,7 +260,11 @@ class WellStateService:
             (
                 await self.session.execute(
                     select(Operation)
-                    .where(Operation.org_id == self.org_id, Operation.well_id == well_id)
+                    .where(
+                        Operation.org_id == self.org_id,
+                        Operation.well_id == well_id,
+                        *operational_source_conditions(Operation),
+                    )
                     .order_by(Operation.sequence, Operation.actual_start, Operation.planned_start)
                 )
             )
@@ -266,7 +277,11 @@ class WellStateService:
             (
                 await self.session.execute(
                     select(Event)
-                    .where(Event.org_id == self.org_id, Event.well_id == well_id)
+                    .where(
+                        Event.org_id == self.org_id,
+                        Event.well_id == well_id,
+                        *operational_source_conditions(Event),
+                    )
                     .order_by(Event.occurred_at)
                 )
             )
@@ -292,6 +307,7 @@ class WellStateService:
                         Operation.org_id == self.org_id,
                         Operation.well_id == well_id,
                         Operation.operation_class == "actual",
+                        *operational_source_conditions(Operation),
                     )
                     .order_by(Operation.actual_start.desc())
                     .limit(limit)
@@ -308,6 +324,7 @@ class WellStateService:
                         Operation.org_id == self.org_id,
                         Operation.well_id == well_id,
                         Operation.operation_class == "planned",
+                        *operational_source_conditions(Operation),
                     )
                     .order_by(Operation.sequence)
                     .limit(limit)
@@ -534,10 +551,15 @@ class WellStateService:
             await self.session.execute(
                 select(ExtractedRecord, Document.id)
                 .join(Document, Document.id == ExtractedRecord.document_id)
+                .outerjoin(RawArtifact, RawArtifact.id == Document.raw_artifact_id)
                 .where(
                     ExtractedRecord.org_id == self.org_id,
+                    Document.org_id == self.org_id,
                     ExtractedRecord.well_id == well_id,
                     ExtractedRecord.record_type == "parameter_set",
+                    document_not_quarantined_condition(),
+                    extracted_record_trust_condition(),
+                    *extracted_record_scope_conditions(),
                 )
                 .order_by(ExtractedRecord.created_at.desc())
                 .limit(1)

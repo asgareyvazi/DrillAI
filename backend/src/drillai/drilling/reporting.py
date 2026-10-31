@@ -27,6 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from drillai.core.errors import ValidationFailed
 from drillai.db.models import EngineRun, Lesson, Operation
+from drillai.documents.access import operational_source_conditions
 from drillai.drilling.npt import NptService
 from drillai.drilling.state import WellStateService
 from drillai.drilling.timeline import TimelineService
@@ -113,7 +114,11 @@ class ReportingService:
             (
                 await self.session.execute(
                     select(Operation)
-                    .where(Operation.org_id == self.org_id, Operation.well_id == well_id)
+                    .where(
+                        Operation.org_id == self.org_id,
+                        Operation.well_id == well_id,
+                        *operational_source_conditions(Operation),
+                    )
                     .order_by(Operation.sequence)
                     .limit(limit)
                 )

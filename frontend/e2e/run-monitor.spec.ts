@@ -274,8 +274,14 @@ test.describe('run monitor: the approval inbox', () => {
     await page.getByRole('tab', { name: /approvals/i }).click()
 
     if (waiting.total > 0) {
+      const cards = page.getByTestId('approval-card')
+      await expect(cards).toHaveCount(waiting.items.length)
       for (const approval of waiting.items) {
-        await expect(page.getByTestId('approval-card').filter({ hasText: approval.title })).toBeVisible()
+        const card = page.locator(
+          `[data-testid="approval-card"][data-approval-id="${approval.id}"]`,
+        )
+        await expect(card).toBeVisible()
+        await expect(card.getByRole('heading', { name: approval.title, exact: true })).toBeVisible()
       }
     } else {
       await expect(page.getByText(/no approval is waiting/i)).toBeVisible()

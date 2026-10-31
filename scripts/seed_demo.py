@@ -353,7 +353,7 @@ async def seed(database_url: str, *, reset: bool, blob_dir: pathlib.Path) -> dic
                         "name": "SYNTH-DEMO-01 (synthetic data)",
                         "well_type": "development_producer",
                         "operator": "DrillAI (synthetic)",
-                        "total_depth_planned_si": 3200.0,
+                        "total_depth_planned_si": 3300.0,
                         "objectives": "Exercise the DDR → state → NPT → engines → recommendation chain.",
                         "tags": ["synthetic", "demo"],
                     },
@@ -367,7 +367,7 @@ async def seed(database_url: str, *, reset: bool, blob_dir: pathlib.Path) -> dic
                         "name": "Main bore",
                         "purpose": "original",
                         "sequence": 1,
-                        "planned_td_md_si": 3200.0,
+                        "planned_td_md_si": 3300.0,
                         "planned_td_tvd_si": 2980.0,
                     },
                 )
@@ -383,9 +383,11 @@ async def seed(database_url: str, *, reset: bool, blob_dir: pathlib.Path) -> dic
                         "hole_diameter_nominal": '8-1/2"',
                         "hole_diameter_si": 0.2159,
                         "planned_top_md_si": 2400.0,
-                        "planned_bottom_md_si": 3200.0,
-                        # The fixture's section is drilled to its planned depth, so the as-drilled
-                        # geometry is recorded rather than asserted by a flag.
+                        "planned_bottom_md_si": 3300.0,
+                        # The synthetic well is measured at 3,200 m against a 3,300 m plan. The
+                        # distinct values exercise a real negative depth variance; the recorded
+                        # actual bottom remains the source of current MD, never the report's generic
+                        # Depth column.
                         "actual_top_md_si": 2400.0,
                         "actual_bottom_md_si": 3200.0,
                     },

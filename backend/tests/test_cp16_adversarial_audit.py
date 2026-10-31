@@ -1008,23 +1008,23 @@ def test_cp16_10_documentation_and_contract_consistency_guard():
     backend_totals = re.findall(
         r"\*\*([\d,]+) passed(?:, ([\d,]+) skipped)?(?:, ([\d,]+) deselected)?\*\*", readme_text
     )
-    assert len(backend_totals) >= 2, (
-        "README.md must quote the backend totals twice: once with PostgreSQL enabled and once with "
-        "the PostgreSQL-marked tests skipped"
+    assert len(backend_totals) == 2, (
+        "README.md must quote the completed backend totals exactly twice: PostgreSQL enabled and "
+        "the SQLite-only run with the PostgreSQL-marked tests skipped"
     )
-    totals = []
-    for passed, skipped, deselected in backend_totals:
-        counts = [
-            int(value.replace(",", "")) if value else 0 for value in (passed, skipped, deselected)
-        ]
-        totals.append(sum(counts))
-    assert len(set(totals)) == 1, (
-        f"README.md backend totals disagree: {totals}. Each claim describes the same suite — "
-        "passed + skipped + deselected must be the same figure in every claim."
+    parsed_totals = {
+        tuple(int(value.replace(",", "")) if value else 0 for value in (passed, skipped, deselected))
+        for passed, skipped, deselected in backend_totals
+    }
+    assert parsed_totals == {(1509, 0, 0), (1497, 12, 0)}, (
+        f"README.md backend totals do not match the verified runs: {parsed_totals}"
+    )
+    assert {sum(counts) for counts in parsed_totals} == {1509}, (
+        "The PostgreSQL-enabled and SQLite-only totals must describe the same collected inventory."
     )
 
     assert "121 passed" in readme_text
-    assert "329 passed" in readme_text
+    assert "340 passed" in readme_text
     assert "121 passed" in fe_testing_text
     assert "42" in fe_testing_text
 

@@ -23,6 +23,7 @@ from drillai.db.models import (
     Document,
     ExtractedRecord,
     IngestionJob,
+    RawArtifact,
 )
 from drillai.documents.lifecycle import (
     DOCUMENT_EXTRACTED_STATUSES,
@@ -199,6 +200,32 @@ async def test_stored_values_are_a_subset_of_the_declared_vocabularies(fabric: F
     assert job_statuses <= set(INGESTION_JOB_STATUSES), job_statuses - set(INGESTION_JOB_STATUSES)
 
 
+async def test_failed_upload_is_durable_and_same_bytes_retry_the_failed_document(fabric: Fabric) -> None:
+    from sqlalchemy import select
+
+    payload = b"%PDF-1.4\nthis is not a real pdf"
+    for _ in range(2):
+        response = await fabric.upload(
+            fabric.alpha,
+            payload,
+            filename="broken.pdf",
+            content_type="application/pdf",
+            well_id=fabric.alpha.well_id,
+        )
+        assert response.status_code == 422, response.text
+
+    async with fabric.session() as session:
+        documents = (await session.execute(select(Document))).scalars().all()
+        jobs = (await session.execute(select(IngestionJob).order_by(IngestionJob.created_at))).scalars().all()
+        artifacts = (await session.execute(select(RawArtifact))).scalars().all()
+
+    assert len(documents) == 1
+    assert documents[0].status == "failed"
+    assert len(jobs) == 2
+    assert [job.status for job in jobs] == ["failed", "failed"]
+    assert len(artifacts) == 1
+
+
 async def test_duplicate_upload_is_a_job_outcome_not_a_document_state(fabric: Fabric) -> None:
     payload = b"one report, uploaded twice on purpose"
     first = await fabric.upload(fabric.alpha, payload, well_id=fabric.alpha.well_id)
@@ -228,6 +255,49 @@ async def test_partial_extraction_is_distinguishable_from_success(fabric: Fabric
     assert body["document"]["status"] == "partially_extracted"
     assert body["document"]["ocr_required"] is True
     assert body["job"]["status"] == "partial"
+
+
+@pytest.mark.asyncio
+async def test_upload_reader_stops_at_the_limit_plus_one_instead_of_materializing_the_whole_file():
+    from drillai.api.routers.documents import _read_upload_bounded
+    from drillai.core.errors import ValidationFailed
+
+    class StreamingUpload:
+        def __init__(self, content: bytes):
+            self.content = content
+            self.offset = 0
+            self.read_sizes: list[int] = []
+
+        async def read(self, size: int) -> bytes:
+            self.read_sizes.append(size)
+            result = self.content[self.offset:self.offset + size]
+            self.offset += len(result)
+            return result
+
+    upload = StreamingUpload(b"0123456789")
+    with pytest.raises(ValidationFailed, match="configured limit") as error:
+        await _read_upload_bounded(upload, max_bytes=5)
+
+    assert error.value.details == {"bytes": 6, "limit": 5}
+    assert upload.offset == 6
+    assert sum(upload.read_sizes) <= 6
+
+
+@pytest.mark.asyncio
+async def test_upload_reader_accepts_a_file_exactly_at_the_configured_limit():
+    from drillai.api.routers.documents import _read_upload_bounded
+
+    class StreamingUpload:
+        def __init__(self, content: bytes):
+            self.content = content
+            self.offset = 0
+
+        async def read(self, size: int) -> bytes:
+            result = self.content[self.offset:self.offset + size]
+            self.offset += len(result)
+            return result
+
+    assert await _read_upload_bounded(StreamingUpload(b"12345"), max_bytes=5) == b"12345"
 
 
 def test_no_function_maps_a_job_status_onto_a_document_status() -> None:

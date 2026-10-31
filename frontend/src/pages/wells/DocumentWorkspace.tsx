@@ -51,6 +51,7 @@ function ProcessingReportView({ report }: { report: DdrProcessingReport }) {
         {[
           ['operations', report.counts.operations],
           ['events', report.counts.events],
+          ['events reclassified', report.counts.events_updated],
           ['survey stations', report.counts.trajectory_stations],
           ['records promoted', report.counts.promoted],
           ['operations hours', report.operations_hours],
@@ -121,12 +122,18 @@ export default function DocumentWorkspace() {
   const [tab, setTab] = useState('overview')
   const [report, setReport] = useState<DdrProcessingReport | null>(null)
   const [docType, setDocType] = useState('ddr')
+  const [operationSelection, setOperationSelection] = useState({ wellId: id, operationId: '' })
+  const operationId = operationSelection.wellId === id ? operationSelection.operationId : ''
   const [message, setMessage] = useState<string | null>(null)
   const fileInput = useRef<HTMLInputElement>(null)
 
   const documents = useQuery({
     queryKey: ['documents', id],
     queryFn: ({ signal }) => drillingApi.listDocuments({ well_id: id }, signal),
+  })
+  const operations = useQuery({
+    queryKey: ['operations', id, 'document-upload'],
+    queryFn: ({ signal }) => drillingApi.listOperations({ well_id: id, limit: 200 }, signal),
   })
 
   const selected = useMemo<DocumentRow | null>(
@@ -174,7 +181,12 @@ export default function DocumentWorkspace() {
   })
 
   const upload = useMutation({
-    mutationFn: (file: File) => drillingApi.uploadDocument(file, { well_id: id, doc_type: docType }),
+    mutationFn: (file: File) =>
+      drillingApi.uploadDocument(file, {
+        well_id: id,
+        ...(operationId ? { operation_id: operationId } : {}),
+        doc_type: docType,
+      }),
     onSuccess: (result) => {
       // Identical bytes are one document: the pipeline reuses the existing one and records a
       // `skipped_duplicate` job. Saying "ingestion started" there would be false, so it does not.
@@ -239,7 +251,17 @@ export default function DocumentWorkspace() {
                 onChange={(event) => setDocType(event.target.value)}
                 className="w-full rounded border border-graphite-300 bg-white px-2 py-1.5 text-sm dark:border-graphite-700 dark:bg-graphite-900"
               >
-                {['ddr', 'drilling_program', 'well_program', 'end_of_well_report', 'morning_report', 'unknown'].map(
+                {[
+                  'ddr',
+                  'daily_log',
+                  'drilling_program',
+                  'well_program',
+                  'end_of_well_report',
+                  'mud_report',
+                  'survey_report',
+                  'service_report',
+                  'other',
+                ].map(
                   (value) => (
                     <option key={value} value={value}>
                       {humanise(value)}
@@ -248,6 +270,22 @@ export default function DocumentWorkspace() {
                 )}
               </select>
             </Field>
+            <Field label={t('documents.operationScope')} hint={t('documents.operationScopeHint')}>
+              <select
+                value={operationId}
+                onChange={(event) => setOperationSelection({ wellId: id, operationId: event.target.value })}
+                className="w-full rounded border border-graphite-300 bg-white px-2 py-1.5 text-sm dark:border-graphite-700 dark:bg-graphite-900"
+              >
+                <option value="">{t('documents.wellScope')}</option>
+                {operations.data?.items.map((operation) => (
+                  <option key={operation.id} value={operation.id}>
+                    {operation.sequence}. {operation.name} ({humanise(operation.status)})
+                  </option>
+                ))}
+              </select>
+            </Field>
+            {operations.isPending && <Loading label={t('documents.operationLoading')} />}
+            {operations.error && <ErrorState error={operations.error} />}
             <input
               ref={fileInput}
               type="file"

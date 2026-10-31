@@ -157,13 +157,16 @@ async def test_an_unknown_category_is_refused_with_the_value_in_the_message(
 
 
 async def test_a_classified_non_loss_cannot_be_booked_as_a_loss(session: AsyncSession, well: Well) -> None:
-    """``not_npt`` is the vocabulary's way of saying "classified, and the answer is no". Saying both at
-    once is a contradiction and is refused rather than resolved in whichever direction is convenient."""
+    """``not_npt`` is the vocabulary's way of saying "classified, and the answer is no".
+
+    Both an explicit NPT flag and positive booked hours contradict that classification and must be
+    rejected; a zero-hour, classified non-loss remains a valid event.
+    """
 
     from drillai.core.errors import ValidationFailed
 
     service = EventService(session, well.org_id, principal=Principal(id="usr_1", org_id=well.org_id))
-    with pytest.raises(ValidationFailed):
+    with pytest.raises(ValidationFailed, match="cannot be NPT"):
         await service.create(
             scope=DocumentScope(well_id=well.id),
             kind="performance",
@@ -171,14 +174,23 @@ async def test_a_classified_non_loss_cannot_be_booked_as_a_loss(session: AsyncSe
             npt_category="not_npt",
             is_npt=True,
         )
+    with pytest.raises(ValidationFailed, match="positive npt_hours require is_npt=true"):
+        await service.create(
+            scope=DocumentScope(well_id=well.id),
+            kind="performance",
+            title="Fast connection with contradictory hours",
+            npt_category="not_npt",
+            npt_hours=0.5,
+        )
     quiet = await service.create(
         scope=DocumentScope(well_id=well.id),
         kind="performance",
         title="Fast connection",
         npt_category="not_npt",
-        npt_hours=0.5,
+        npt_hours=0.0,
     )
     assert quiet.is_npt is False, "a classified non-loss is not a loss of time"
+    assert quiet.npt_hours == pytest.approx(0.0)
     assert NOT_NPT == "not_npt"
 
 

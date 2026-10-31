@@ -196,7 +196,7 @@ function EngineRunner({ engine, wellId, wellboreId, sectionId, scope }: {
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
         <Badge tone={statusTone(engine.validation_status)}>
-          {formatValidationStatus(engine.validation_status)}
+          {formatValidationStatus(engine.validation_status, t)}
         </Badge>
         <Badge tone="neutral">v{engine.version}</Badge>
         <Badge tone="neutral">{engine.category}</Badge>
@@ -205,6 +205,11 @@ function EngineRunner({ engine, wellId, wellboreId, sectionId, scope }: {
         {engine.requires_well_context && <Badge tone="info">requires well context</Badge>}
       </div>
 
+      {engine.validation_status === 'needs_field_validation' && (
+        <p role="note" data-testid="field-validation-warning" className="rounded border border-danger/40 bg-red-50/60 p-2 text-xs text-danger dark:bg-red-950/20">
+          {t('engineering.fieldValidationWarning')}
+        </p>
+      )}
       <p className="text-xs text-graphite-600 dark:text-graphite-300">{engine.summary}</p>
 
       <div className="grid gap-3 lg:grid-cols-2">
@@ -333,7 +338,7 @@ function EngineRunner({ engine, wellId, wellboreId, sectionId, scope }: {
               {t('engineering.feasibilityDisclaimer')}
             </p>
             <p className="text-[11px] text-graphite-500">
-              validation status: {formatValidationStatus(result.engine.validation_status)} · assumptions and
+              {t('engineering.validationStatus')}: {formatValidationStatus(result.engine.validation_status, t)} · assumptions and
               limitations are the engine's own declarations, not commentary
             </p>
             <Json value={{ inputs }} max={40} />

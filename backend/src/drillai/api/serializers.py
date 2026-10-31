@@ -8,6 +8,8 @@ ISO-8601 with an explicit offset (the columns are stored UTC by construction).
 from __future__ import annotations
 
 import datetime as dt
+import json
+import math
 from typing import Any
 
 from drillai.assets.vocabulary import SECTION_NUMBER_SEMANTICS
@@ -38,6 +40,146 @@ __all__ = [
     "wellbore_out",
     "workflow_out",
 ]
+
+
+DEFAULT_JSON_PREVIEW_BYTES = 8 * 1024
+
+
+def bounded_json_preview(
+    value: Any,
+    *,
+    max_bytes: int = DEFAULT_JSON_PREVIEW_BYTES,
+    max_depth: int = 8,
+    max_items: int = 128,
+    max_string_chars: int = 4096,
+    max_nodes: int = 2048,
+) -> tuple[Any, bool]:
+    """Return a JSON-safe, byte-bounded preview and whether any content was omitted.
+
+    Document payloads, table cells and field locators can be tenant-authored or derived from large
+    uploads. Page limits alone do not bound those nested values, so API serializers cap the actual
+    nested JSON independently and tell clients when the preview is incomplete.
+    """
+    if max_bytes < 2 or max_depth < 0 or max_items < 0 or max_string_chars < 0 or max_nodes < 1:
+        raise ValueError("preview bounds must be non-negative and allow at least one node")
+    nodes_remaining = max_nodes
+
+    def encoded_size(item: Any) -> int:
+        return len(
+            json.dumps(item, ensure_ascii=True, separators=(",", ":"), default=str, allow_nan=False).encode("ascii")
+        )
+
+    def bounded_string(text: str, available: int) -> tuple[str | None, int, bool, bool]:
+        # Do not JSON-encode the entire source string merely to decide that it is too large. Ingestion
+        # text may be close to the upload cap; sizing only the bounded candidate keeps serialization
+        # memory proportional to the response budget, not to the original document.
+        if len(text) <= max_string_chars:
+            full_size = encoded_size(text)
+            if full_size <= available:
+                return text, full_size, False, True
+            candidate_source = text
+        else:
+            candidate_source = text[:max_string_chars]
+        marker = "…"
+        best: str | None = marker if encoded_size(marker) <= available else None
+        best_size = encoded_size(marker) if best is not None else 0
+        low, high = 0, len(candidate_source)
+        while low <= high:
+            middle = (low + high) // 2
+            candidate = candidate_source[:middle] + marker
+            candidate_size = encoded_size(candidate)
+            if candidate_size <= available:
+                best, best_size = candidate, candidate_size
+                low = middle + 1
+            else:
+                high = middle - 1
+        return best, best_size, True, best is not None
+
+    def visit(item: Any, available: int, depth: int) -> tuple[Any, int, bool, bool]:
+        nonlocal nodes_remaining
+        if nodes_remaining <= 0:
+            return None, 0, True, False
+        nodes_remaining -= 1
+        if isinstance(item, str):
+            return bounded_string(item, available)
+        if isinstance(item, float) and not math.isfinite(item):
+            size = encoded_size(None)
+            return (None, size, True, True) if size <= available else (None, 0, True, False)
+        if item is None or isinstance(item, (bool, int, float)):
+            try:
+                size = encoded_size(item)
+            except (OverflowError, ValueError):
+                # Python may refuse to stringify an integer with an extreme number of digits; keep
+                # the API response valid and signal that the original scalar was not preserved.
+                size = encoded_size(None)
+                return (None, size, True, True) if size <= available else (None, 0, True, False)
+            return (item, size, False, True) if size <= available else (None, 0, True, False)
+        if depth >= max_depth:
+            marker = "[truncated]"
+            size = encoded_size(marker)
+            return (marker, size, True, True) if size <= available else (None, 0, True, False)
+        if isinstance(item, (list, tuple)):
+            if available < 2:
+                return None, 0, True, False
+            result: list[Any] = []
+            used = 2  # []
+            truncated = len(item) > max_items
+            for child_item in item:
+                if len(result) >= max_items:
+                    truncated = True
+                    break
+                separator_size = 1 if result else 0
+                child, child_size, child_truncated, fits = visit(
+                    child_item, available - used - separator_size, depth + 1
+                )
+                if not fits:
+                    truncated = True
+                    break
+                result.append(child)
+                used += separator_size + child_size
+                truncated = truncated or child_truncated
+            return result, used, truncated, True
+        if isinstance(item, dict):
+            if available < 2:
+                return None, 0, True, False
+            result: dict[str, Any] = {}
+            used = 2  # {}
+            truncated = len(item) > max_items
+            for key, child_item in item.items():
+                if len(result) >= max_items:
+                    truncated = True
+                    break
+                key_text = key if isinstance(key, str) else str(key)
+                if len(key_text) > max_string_chars:
+                    key_text = key_text[:max_string_chars] + "…"
+                    truncated = True
+                if key_text in result:
+                    truncated = True
+                    continue
+                key_size = encoded_size(key_text)
+                separator_size = 1 if result else 0
+                colon_size = 1
+                child_budget = available - used - separator_size - key_size - colon_size
+                if child_budget < 0:
+                    truncated = True
+                    break
+                child, child_size, child_truncated, fits = visit(child_item, child_budget, depth + 1)
+                if not fits:
+                    truncated = True
+                    break
+                result[key_text] = child
+                used += separator_size + key_size + colon_size + child_size
+                truncated = truncated or child_truncated
+            return result, used, truncated, True
+        return bounded_string(str(item), available)
+
+    preview, _size, truncated, fits = visit(value, max_bytes, 0)
+    if fits:
+        return preview, truncated
+    # `None` is a valid JSON value and fits in any useful API budget. This branch is only for a
+    # deliberately tiny custom bound; still return a valid bounded preview with an honest marker.
+    marker = "[truncated]"
+    return (marker, True) if encoded_size(marker) <= max_bytes else (None, True)
 
 
 def _iso(value: dt.datetime | None) -> str | None:
@@ -239,12 +381,16 @@ def section_out(row: Any) -> dict[str, Any]:
 
 
 def document_out(row: Any) -> dict[str, Any]:
+    extraction_summary, extraction_summary_truncated = bounded_json_preview(
+        row.extraction_summary, max_bytes=8 * 1024, max_items=64, max_string_chars=2048
+    )
     return {
         "id": row.id,
         "project_id": row.project_id,
         "well_id": row.well_id,
         "wellbore_id": row.wellbore_id,
         "section_id": row.section_id,
+        "operation_id": row.operation_id,
         "doc_type": row.doc_type,
         "title": row.title,
         "document_number": row.document_number,
@@ -255,12 +401,12 @@ def document_out(row: Any) -> dict[str, Any]:
         "language": row.language,
         "page_count": row.page_count,
         "status": row.status,
-        "extraction_summary": row.extraction_summary,
+        "extraction_summary": extraction_summary,
+        "extraction_summary_truncated": extraction_summary_truncated,
         "has_tables": row.has_tables,
         "has_figures": row.has_figures,
-        # A client cannot show "this document still needs OCR before anything can be read from it"
-        # without knowing it, and the ingestion summary is not the place for a fact that outlives the
-        # run that discovered it.
+        # A client needs this durable flag to distinguish fully text-readable documents from files
+        # with one or more pages whose content remains unavailable without OCR.
         "ocr_required": row.ocr_required,
         # The artefact, not the document: two documents may share one. Exposing the id is what lets a
         # client see that the same bytes are filed against two wells, instead of deducing it from an
@@ -273,31 +419,56 @@ def document_out(row: Any) -> dict[str, Any]:
 
 
 def ingestion_job_out(row: Any) -> dict[str, Any]:
+    pipeline, pipeline_truncated = bounded_json_preview(
+        row.pipeline, max_bytes=4096, max_items=64, max_string_chars=512
+    )
+    stats, stats_truncated = bounded_json_preview(row.stats or {}, max_bytes=4096)
+    extractor_versions, extractor_versions_truncated = bounded_json_preview(
+        row.extractor_versions or {}, max_bytes=4096
+    )
+    warnings, warnings_truncated = bounded_json_preview(
+        row.warnings or [], max_bytes=8192, max_items=100, max_string_chars=1000
+    )
+    error = row.error
+    error_truncated = isinstance(error, str) and len(error) > 2000
+    if error_truncated:
+        error = error[:2000]
     return {
         "id": row.id,
         "document_id": row.document_id,
         "raw_artifact_id": row.raw_artifact_id,
         "status": row.status,
         "trigger": row.trigger,
-        "pipeline": row.pipeline,
-        "stats": row.stats or {},
-        "extractor_versions": row.extractor_versions or {},
+        "pipeline": pipeline,
+        "pipeline_truncated": pipeline_truncated,
+        "stats": stats,
+        "stats_truncated": stats_truncated,
+        "extractor_versions": extractor_versions,
+        "extractor_versions_truncated": extractor_versions_truncated,
         "attempts": row.attempts,
         "started_at": _iso(row.started_at),
         "finished_at": _iso(row.finished_at),
         "duration_ms": row.duration_ms,
-        "error": row.error,
-        "warnings": list(row.warnings or []),
+        "error": error,
+        "error_truncated": error_truncated,
+        "warnings": warnings,
+        "warnings_truncated": warnings_truncated,
         "trace_id": row.trace_id,
     }
 
 
 def extracted_record_out(row: Any) -> dict[str, Any]:
+    payload, payload_truncated = bounded_json_preview(row.payload)
+    unit_context, unit_context_truncated = bounded_json_preview(row.unit_context or {}, max_bytes=4096)
+    quality_flags, quality_flags_truncated = bounded_json_preview(
+        row.quality_flags or [], max_bytes=4096, max_items=100, max_string_chars=512
+    )
     return {
         "id": row.id,
         "document_id": row.document_id,
         "record_type": row.record_type,
-        "payload": row.payload,
+        "payload": payload,
+        "payload_truncated": payload_truncated,
         "payload_schema_key": row.payload_schema_key,
         "payload_schema_version": row.payload_schema_version,
         "page_number": row.page_number,
@@ -320,13 +491,20 @@ def extracted_record_out(row: Any) -> dict[str, Any]:
         # "this row became operation opr_… on this well".
         "promoted_to_kind": row.promoted_to_kind,
         "promoted_to_id": row.promoted_to_id,
-        "unit_context": row.unit_context,
-        "quality_flags": list(row.quality_flags or []),
+        "unit_context": unit_context,
+        "unit_context_truncated": unit_context_truncated,
+        "quality_flags": quality_flags,
+        "quality_flags_truncated": quality_flags_truncated,
         "is_demo_fixture": row.is_demo_fixture,
     }
 
 
 def evidence_out(row: Any) -> dict[str, Any]:
+    locator, locator_truncated = bounded_json_preview(row.locator, max_bytes=4 * 1024)
+    excerpt = row.excerpt
+    excerpt_truncated = isinstance(excerpt, str) and len(excerpt) > 2000
+    if excerpt_truncated:
+        excerpt = excerpt[:2000]
     return {
         "id": row.id,
         "subject_kind": row.subject_kind,
@@ -337,8 +515,10 @@ def evidence_out(row: Any) -> dict[str, Any]:
         "region_id": row.region_id,
         "page_number": row.page_number,
         "well_id": row.well_id,
-        "locator": row.locator,
-        "excerpt": row.excerpt,
+        "locator": locator,
+        "locator_truncated": locator_truncated,
+        "excerpt": excerpt,
+        "excerpt_truncated": excerpt_truncated,
         "confidence": row.confidence,
         "relevance": row.relevance,
         "weight": row.weight,

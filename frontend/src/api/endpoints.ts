@@ -514,7 +514,14 @@ export const drillingApi = {
     api.get<DocumentProvenance>(`/documents/${enc(documentId)}/provenance`, { signal }),
   uploadDocument: async (
     file: File,
-    fields: { well_id?: string; wellbore_id?: string; section_id?: string; doc_type?: string; title?: string },
+    fields: {
+      well_id?: string
+      wellbore_id?: string
+      section_id?: string
+      operation_id?: string
+      doc_type?: string
+      title?: string
+    },
   ) => {
     const form = new FormData()
     form.append('file', file)

@@ -42,6 +42,7 @@ from drillai.db.models import (
     Recommendation,
     Well,
 )
+from drillai.documents.access import operational_source_conditions
 
 
 def sort_key(entry: Any) -> tuple[bool, dt.datetime, str, str]:
@@ -207,7 +208,12 @@ class TimelineService:
         list in Python: a page of 500 meant reading the well's whole history, and the cost of a
         timeline request grew with the well rather than with the page.
         """
-        stmt = select(model).where(model.org_id == self.org_id, model.well_id == well_id)
+        source_conditions = operational_source_conditions(model) if model in (Operation, Event) else ()
+        stmt = select(model).where(
+            model.org_id == self.org_id,
+            model.well_id == well_id,
+            *source_conditions,
+        )
         if since is not None:
             # An undated row is not "since" anything: the previous behaviour dropped it when a window
             # was given, and dropping it in SQL keeps the same answer.

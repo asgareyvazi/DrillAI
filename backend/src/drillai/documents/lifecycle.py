@@ -44,6 +44,8 @@ __all__ = [
     "DOCUMENT_TRANSITIONS",
     "DOC_STATUSES",
     "INGESTION_JOB_STATUSES",
+    "MIN_PROMOTION_CONFIDENCE",
+    "PROMOTABLE_VALIDATION_STATES",
     "VALIDATED_STATES",
     "VALIDATION_STATES",
     "VALIDATION_TRANSITIONS",
@@ -89,6 +91,15 @@ DOCUMENT_EXTRACTED_STATUSES: tuple[str, ...] = (
 #: extractor". This replaces the ad-hoc ``!= "validated"`` comparison in ``drilling/state.py``, which
 #: tested against a string that never existed in the vocabulary.
 VALIDATED_STATES: frozenset[str] = frozenset({"rule_validated", "human_validated"})
+
+#: Records that may be linked into an operational row. A state is not the whole trust decision:
+#: unreviewed/rule-validated records must also meet the promotion confidence floor below.
+PROMOTABLE_VALIDATION_STATES: frozenset[str] = frozenset(
+    {"extracted", "rule_validated", "human_validated"}
+)
+
+#: Minimum extraction confidence for automatic promotion or source linkage without human validation.
+MIN_PROMOTION_CONFIDENCE = 0.6
 
 VALIDATION_TRANSITIONS: dict[str, frozenset[str]] = {
     "extracted": frozenset({"rule_validated", "human_validated", "rejected", "superseded"}),

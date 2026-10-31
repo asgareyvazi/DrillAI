@@ -97,10 +97,12 @@ def verify_quote(
     excerpt: str | None,
     region_text: str | None,
     page_text: str | None,
+    region_basis: str = "region_text",
 ) -> tuple[bool, str]:
     """Verify an excerpt against the region if there is one, else the page.
 
-    Returns ``(verified, how)``, where ``how`` is ``region_text``, ``page_text`` or ``unavailable``.
+    Returns ``(verified, how)``. ``how`` names the source actually checked (normally ``region_text``;
+    structured tables may pass ``region_table``), or ``page_text``/``unavailable`` when no region source exists.
 
     The region is tried first and *only* the region when one exists. Falling back to the page would
     turn "this came from region 7" into "this came from somewhere on page 3", which is the difference
@@ -108,8 +110,8 @@ def verify_quote(
     """
     if region_text is not None:
         if excerpt_occurs_in(excerpt=excerpt, source_text=region_text):
-            return True, "region_text"
-        return False, "region_text"
+            return True, region_basis
+        return False, region_basis
     if page_text is not None:
         if excerpt_occurs_in(excerpt=excerpt, source_text=page_text):
             return True, "page_text"

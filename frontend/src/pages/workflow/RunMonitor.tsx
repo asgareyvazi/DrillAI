@@ -155,6 +155,7 @@ function ApprovalCard({ approval, onDecided }: { approval: ApprovalRow; onDecide
   return (
     <Card
       data-testid="approval-card"
+      data-approval-id={approval.id}
       // The requester's own title is the heading: it is what the approver is being asked to decide.
       title={approval.title}
       subtitle={`${t('workflow.approvalRequest')} · ${approval.node_id ?? t('common.unknown')} · ${formatActionLevel(

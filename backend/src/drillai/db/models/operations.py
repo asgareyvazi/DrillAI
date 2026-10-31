@@ -209,6 +209,14 @@ class Operation(Base, IdMixin, TimestampMixin, OrgScopedMixin):
     """A planned or executed operation on a wellbore section."""
 
     __tablename__ = "operations"
+    __table_args__ = (
+        Index(
+            "uq_operations_org_promotion_fingerprint",
+            "org_id",
+            "promotion_fingerprint",
+            unique=True,
+        ),
+    )
     id_prefix = "opr"
 
     well_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
@@ -249,7 +257,7 @@ class Operation(Base, IdMixin, TimestampMixin, OrgScopedMixin):
     #: once per record, and answering it by loading every operation of the well and scanning JSON is
     #: the difference between an index lookup and a table scan that grows with the well's history.
     source_record_id: Mapped[str | None] = mapped_column(String(64), index=True)
-    promotion_fingerprint: Mapped[str | None] = mapped_column(String(64), index=True)
+    promotion_fingerprint: Mapped[str | None] = mapped_column(String(64))
     #: Whether the value came from a document, a person, or a connector — the reader-facing form of
     #: ``source``, kept separate so an import can be told from an entry without parsing a string.
     source_kind: Mapped[str] = mapped_column(
@@ -284,6 +292,14 @@ class Event(Base, IdMixin, TimestampMixin, OrgScopedMixin):
     """What happened: incidents, downtime, hazards, milestones, performance notes."""
 
     __tablename__ = "events"
+    __table_args__ = (
+        Index(
+            "uq_events_org_promotion_fingerprint",
+            "org_id",
+            "promotion_fingerprint",
+            unique=True,
+        ),
+    )
     id_prefix = "evn"
 
     project_id: Mapped[str | None] = mapped_column(String(64), index=True)
@@ -315,7 +331,7 @@ class Event(Base, IdMixin, TimestampMixin, OrgScopedMixin):
     evidence_ref: Mapped[str | None] = mapped_column(String(64), index=True)
     #: The record this event was promoted from, and the promotion fingerprint — see ``Operation``.
     source_record_id: Mapped[str | None] = mapped_column(String(64), index=True)
-    promotion_fingerprint: Mapped[str | None] = mapped_column(String(64), index=True)
+    promotion_fingerprint: Mapped[str | None] = mapped_column(String(64))
     source_kind: Mapped[str] = mapped_column(
         String(24), default="manual", nullable=False, index=True
     )

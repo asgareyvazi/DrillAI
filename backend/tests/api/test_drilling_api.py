@@ -9,10 +9,14 @@ the product contract rather than error handling.
 
 from __future__ import annotations
 
+import datetime as dt
 import io
 
 import pytest
+from sqlalchemy import select
 from tests.api.conftest import headers
+
+from drillai.db.models import Document, ExtractedRecord, Operation, WellSection
 
 pytestmark = pytest.mark.asyncio
 
@@ -63,7 +67,13 @@ HYDRAULICS_INPUTS = {
 }
 
 
-async def _well_with_report(client, *, process: bool = True) -> dict[str, str]:
+async def _well_with_report(
+    client,
+    *,
+    process: bool = True,
+    period_start: str | None = None,
+    period_end: str | None = None,
+) -> dict[str, str]:
     """Create a project/well/wellbore/section and promote one synthetic DDR into it."""
     project = (
         await client.post("/api/v1/projects", json={"name": "Drilling API"}, headers=headers())
@@ -100,15 +110,20 @@ async def _well_with_report(client, *, process: bool = True) -> dict[str, str]:
             headers=headers(),
         )
     ).json()
+    upload_data = {
+        "well_id": well["id"],
+        "wellbore_id": wellbore["id"],
+        "section_id": section["id"],
+        "doc_type": "ddr",
+    }
+    if period_start is not None:
+        upload_data["period_start"] = period_start
+    if period_end is not None:
+        upload_data["period_end"] = period_end
     upload = await client.post(
         "/api/v1/documents",
         files={"file": ("ddr.csv", io.BytesIO(SYNTHETIC_DDR.encode()), "text/csv")},
-        data={
-            "well_id": well["id"],
-            "wellbore_id": wellbore["id"],
-            "section_id": section["id"],
-            "doc_type": "ddr",
-        },
+        data=upload_data,
         headers=headers(),
     )
     assert upload.status_code == 201, upload.text
@@ -141,14 +156,22 @@ async def test_ddr_promotion_produces_operations_events_and_state(client):
     assert report["dry_run"] is False
     assert len(report["operations_created"]) >= 4
     assert len(report["events_created"]) >= 2
-    assert len(report["records_promoted"]) == 6
+    assert len(report["records_promoted"]) == 5  # four operations and one mud-properties revision
     assert report["npt_hours_classified"] == pytest.approx(8.5, abs=0.01)
     assert report["operations_hours"] == pytest.approx(17.5, abs=0.01)
-    assert report["twin_aspects"], "promotion must update the well twin"
-    # Nothing may be dropped silently: whatever was not promoted is listed with its reason.
-    assert report["not_promoted"] == []
+    assert report["twin_aspects"], "eligible mud properties must update the well twin"
+    # The generic parameter_set extractor reports 0.55 confidence, below the 0.6 promotion gate.
+    # It remains available for review rather than being silently admitted as measured well state.
+    assert len(report["records_needing_review"]) == 1
+    not_promoted_by_type = {item["record_type"]: item for item in report["not_promoted"]}
+    assert set(not_promoted_by_type) == {"parameter_set", "report_header"}
+    parameter_set = not_promoted_by_type["parameter_set"]
+    assert "below promotion threshold 0.6" in parameter_set["reason"]
+    assert parameter_set["record_id"] == report["records_needing_review"][0]
+    assert "header metadata is merged into the document" in not_promoted_by_type["report_header"]["reason"]
     assert isinstance(report["warnings"], list)
     assert report["counts"]["events"] == len(report["events_created"])
+    assert report["counts"]["events_updated"] == len(report["events_updated"]) == 0
 
     state = (await client.get(f"/api/v1/wells/{ids['well_id']}/state", headers=headers())).json()[
         "state"
@@ -156,14 +179,177 @@ async def test_ddr_promotion_produces_operations_events_and_state(client):
     assert state["well"]["id"] == ids["well_id"]
     assert state["counts"]["operations"] >= 4
     assert state["counts"]["npt_events"] >= 2
-    assert state["progress"]["current_md_si"] == pytest.approx(2412.0)
-    assert state["progress"]["current_md_source"]
+    assert all(item["source"] != "extracted_record:parameter_set" for item in state["measured"]), (
+        "the low-confidence parameter set remains reviewable on the document but is not a trusted telemetry fallback"
+    )
+    # The report's generic `Depth (m)` is not a defensible MD field and its parameter set is below
+    # the promotion threshold; the stored section endpoint remains the reported source of progress.
+    assert state["progress"]["current_md_si"] == pytest.approx(3200.0)
+    assert state["progress"]["current_md_source"] == "well_sections.actual_bottom_md_si"
     assert state["npt"]["total_hours"] == pytest.approx(8.5, abs=0.01)
     assert state["twin"]["aspect_count"] >= 1
     assert state["documents"]["documents"] == 1
     # Missing capability is reported, never silently rendered as zero.
     assert state["missing"], "the state bundle must declare what it does not have"
     assert all(item["how_to_supply"] for item in state["missing"])
+
+
+async def test_ddr_date_replays_ordered_durations_into_a_utc_operation_timeline(client, db):
+    ids = await _well_with_report(client)
+    listing = await client.get(
+        "/api/v1/operations",
+        params={"well_id": ids["well_id"]},
+        headers=headers(),
+    )
+    assert listing.status_code == 200, listing.text
+    operations = listing.json()["items"]
+    assert [item["actual_start"] for item in operations] == [
+        "2026-03-15T00:00:00+00:00",
+        "2026-03-15T08:30:00+00:00",
+        "2026-03-15T09:00:00+00:00",
+        "2026-03-15T15:00:00+00:00",
+    ]
+    assert [item["actual_end"] for item in operations] == [
+        "2026-03-15T08:30:00+00:00",
+        "2026-03-15T09:00:00+00:00",
+        "2026-03-15T15:00:00+00:00",
+        "2026-03-15T17:30:00+00:00",
+    ]
+
+    async with db.session() as session:
+        promoted = (
+            await session.execute(
+                select(Operation).where(
+                    Operation.source_document_id == ids["document_id"]
+                ).order_by(Operation.sequence)
+            )
+        ).scalars().all()
+    assert [row.attributes["time_basis"] for row in promoted] == [
+        "report_date",
+        "replayed_from_report_duration",
+        "replayed_from_report_duration",
+        "replayed_from_report_duration",
+    ]
+
+
+async def test_ddr_period_start_precedes_issue_date_and_is_normalized_to_utc(client, db):
+    explicit_period_start = dt.datetime(
+        2026, 3, 15, 6, tzinfo=dt.timezone(dt.timedelta(hours=2))
+    )
+    ids = await _well_with_report(
+        client,
+        process=False,
+        period_start=explicit_period_start.isoformat(),
+        period_end=(explicit_period_start + dt.timedelta(days=1)).isoformat(),
+    )
+    async with db.session() as session:
+        document = (
+            await session.execute(select(Document).where(Document.id == ids["document_id"]))
+        ).scalar_one()
+        assert document.period_start == dt.datetime(2026, 3, 15, 4, tzinfo=dt.UTC)
+        assert document.issue_date == dt.datetime(2026, 3, 15, tzinfo=dt.UTC)
+
+    processed = await client.post(
+        f"/api/v1/documents/{ids['document_id']}/process", json={}, headers=headers()
+    )
+    assert processed.status_code == 200, processed.text
+    listing = await client.get(
+        "/api/v1/operations",
+        params={"well_id": ids["well_id"]},
+        headers=headers(),
+    )
+    operations = listing.json()["items"]
+    assert [item["actual_start"] for item in operations] == [
+        "2026-03-15T04:00:00+00:00",
+        "2026-03-15T12:30:00+00:00",
+        "2026-03-15T13:00:00+00:00",
+        "2026-03-15T19:00:00+00:00",
+    ]
+    async with db.session() as session:
+        promoted = (
+            await session.execute(
+                select(Operation).where(
+                    Operation.source_document_id == ids["document_id"]
+                ).order_by(Operation.sequence)
+            )
+        ).scalars().all()
+    assert promoted[0].actual_start == dt.datetime(2026, 3, 15, 4, tzinfo=dt.UTC)
+    assert promoted[0].attributes["time_basis"] == "report_date"
+
+
+async def test_generic_depth_parameter_is_not_reinterpreted_as_measured_depth(client, db):
+    """A confident generic Depth value must not overwrite the recorded as-drilled MD field."""
+    ids = await _well_with_report(client, process=False)
+    async with db.session() as session:
+        record = (
+            await session.execute(
+                select(ExtractedRecord).where(
+                    ExtractedRecord.document_id == ids["document_id"],
+                    ExtractedRecord.record_type == "parameter_set",
+                )
+            )
+        ).scalar_one()
+        assert (record.payload or {}).get("depth") == pytest.approx(2412.0)
+        # Raising confidence makes this an explicit test of field semantics rather than the separate
+        # promotion-confidence gate. A generic label still cannot claim this is measured depth.
+        record.confidence = 0.95
+        await session.commit()
+
+    processing = await client.post(
+        f"/api/v1/documents/{ids['document_id']}/process", json={}, headers=headers()
+    )
+    assert processing.status_code == 200, processing.text
+    state = (
+        await client.get(f"/api/v1/wells/{ids['well_id']}/state", headers=headers())
+    ).json()["state"]
+    assert state["progress"]["current_md_si"] == pytest.approx(3200.0)
+    assert state["progress"]["current_md_source"] == "well_sections.actual_bottom_md_si"
+    async with db.session() as session:
+        section = await session.get(WellSection, ids["section_id"])
+        assert section is not None
+        assert section.current_md_si is None
+        assert section.actual_bottom_md_si == pytest.approx(3200.0)
+
+
+async def test_explicit_measured_depth_parameter_is_converted_to_si(client, db):
+    """An explicit MD field in feet is converted before it can update measured progress."""
+    ids = await _well_with_report(client, process=False)
+    async with db.session() as session:
+        record = (
+            await session.execute(
+                select(ExtractedRecord).where(
+                    ExtractedRecord.document_id == ids["document_id"],
+                    ExtractedRecord.record_type == "parameter_set",
+                )
+            )
+        ).scalar_one()
+        record.payload = {**record.payload, "measured_depth": 12000.0}
+        record.unit_context = {**(record.unit_context or {}), "measured_depth": "ft"}
+        record.confidence = 0.95
+        await session.commit()
+
+    processed = await client.post(
+        f"/api/v1/documents/{ids['document_id']}/process", json={}, headers=headers()
+    )
+    assert processed.status_code == 200, processed.text
+    state = (
+        await client.get(f"/api/v1/wells/{ids['well_id']}/state", headers=headers())
+    ).json()["state"]
+    assert state["progress"]["current_md_si"] == pytest.approx(3657.6)
+    assert state["progress"]["current_md_source"] == "well_sections.current_md_si"
+    async with db.session() as session:
+        section = await session.get(WellSection, ids["section_id"])
+        record = (
+            await session.execute(
+                select(ExtractedRecord).where(
+                    ExtractedRecord.document_id == ids["document_id"],
+                    ExtractedRecord.record_type == "parameter_set",
+                )
+            )
+        ).scalar_one()
+        assert section is not None
+        assert section.current_md_si == pytest.approx(3657.6)
+        assert record.unit_context["measured_depth"] == "ft", "source units remain auditable"
 
 
 async def test_reprocessing_is_idempotent(client):
@@ -179,6 +365,7 @@ async def test_reprocessing_is_idempotent(client):
     ).json()["processing"]
     assert second["operations_created"] == []
     assert second["events_created"] == []
+    assert second["events_updated"] == []
     after = (await client.get(f"/api/v1/wells/{ids['well_id']}/state", headers=headers())).json()[
         "state"
     ]
@@ -186,11 +373,11 @@ async def test_reprocessing_is_idempotent(client):
     assert after["twin"]["aspect_count"] == before["twin"]["aspect_count"]
     # The parameters are re-attached as evidence to the *same* twin revision: the twin service
     # recognises an identical payload by content hash instead of appending a duplicate revision.
-    first_schedule = next(
-        item for item in ids["processing"]["twin_aspects"] if item["aspect"] == "schedule"
+    first_mud = next(
+        item for item in ids["processing"]["twin_aspects"] if item["aspect"] == "mud_program"
     )
-    second_schedule = next(item for item in second["twin_aspects"] if item["aspect"] == "schedule")
-    assert second_schedule["id"] == first_schedule["id"]
+    second_mud = next(item for item in second["twin_aspects"] if item["aspect"] == "mud_program")
+    assert second_mud["id"] == first_mud["id"]
     assert second["records_promoted"], "re-attaching provenance to the same revision is reported"
 
 
@@ -252,7 +439,8 @@ async def test_timeline_merges_sources_and_rejects_unknown_kinds(client):
     assert set(kinds) <= set(timeline["kinds_available"])
     operation = next(entry for entry in timeline["entries"] if entry["kind"] == "operation")
     assert operation["duration_hours"] is not None
-    assert operation["depth_md_si"] is not None
+    # The source table says only `Depth`, not MD; the parser must not invent a depth reference.
+    assert operation["depth_md_si"] is None
     npt_entry = next(entry for entry in timeline["entries"] if entry["npt"] is True)
     assert npt_entry["npt_hours"] > 0
 
@@ -293,7 +481,8 @@ async def test_npt_pareto_is_ordered_and_self_consistent(client):
     assert case["code"] == "STUCK_PIPE"
     assert case["subcategory"] == "pipe_stuck"
     assert case["operator_controllable"] is True
-    assert case["depth_md_si"] == pytest.approx(2408.0)
+    # The generic `Depth (m)` source is not a measured-depth locator, so the event stays unplaced.
+    assert case["depth_md_si"] is None
     assert case["classification_source"] == "recorded"
     assert case["document_id"] == ids["document_id"]
     assert {row["key"] for row in npt["by_code"]} == {"STUCK_PIPE", "LOST_CIRC"}
@@ -323,6 +512,10 @@ async def test_advisor_separates_facts_calculations_and_unknowns(client):
         )
     ).json()["answer"]
     assert answer["facts"], "the advisor must ground its answer in recorded facts"
+    assert answer["question_text"] == next(
+        item["description"] for item in catalogue["questions"] if item["key"] == "where_are_we"
+    )
+    assert isinstance(answer["sources"], list)
     assert answer["sections"]["facts"] == len(answer["facts"])
     assert answer["sections"]["unknown"] == len(answer["unknown"])
     assert answer["unknown"], "the advisor must say what it does not know"

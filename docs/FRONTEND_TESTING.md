@@ -11,11 +11,14 @@ is confined to unit and component tests, where it isolates a boundary rather tha
 | Types | `cd frontend && npm run typecheck` | strict TypeScript with `noUncheckedIndexedAccess` enabled in the app, E2E, and Node-config projects; includes tests and E2E specs |
 | Lint | `cd frontend && npm run lint` | no unused code, no `any` slipping in, React rules |
 | Build | `cd frontend && npm run build` | `tsc -b` plus a production Vite build |
-| Unit + component | `cd frontend && npm test` | 329 passed in 31 files: values, units, the API boundary, cancellation, the request-failure oracle, permissions, identity settings, the shared UI states, and the pages' contracts |
+| Unit + component | `cd frontend && npm test` | 340 passed in 32 files: values, units, the API boundary, cancellation, the request-failure oracle, permissions, identity settings, the shared UI states, and the pages' contracts |
 | End-to-end | `cd frontend && npm run e2e` | 121 passed in 17 spec files: the real stack through a browser, in three deployments |
-| Backend | `cd backend && DRILLAI_TEST_POSTGRES=1 .venv/bin/python -m pytest -o addopts=""` | 1,248 passed in 90 files, including the embedded PostgreSQL integration cases |
+| Backend | `cd backend && DRILLAI_TEST_POSTGRES=1 .venv/bin/python -m pytest` | 1,509 passed, 0 skipped in 100 files (embedded PostgreSQL enabled) |
 | Backend lint | `cd backend && .venv/bin/python -m ruff check .` | backend style and import hygiene |
 | Migrations | `cd backend && .venv/bin/python -m alembic upgrade head && .venv/bin/python -m alembic check` | no model/migration drift — against a **fresh** database |
+
+The [CP51–CP58 final assurance review](mission-reports/CP51-58-FINAL-ASSURANCE.md) contains the file-by-file
+worktree inventory, exact local test counts, known migration/date/trajectory limitations, and CI/vendor evidence.
 
 `npm run e2e` prepares its own browser (`scripts/run-e2e.mjs`), starts the API and the web server
 itself, and seeds the database before the API opens it. `DRILLAI_CHROMIUM_PATH` overrides the browser
@@ -23,12 +26,15 @@ binary in environments that provide one.
 
 ### PostgreSQL-backed tests
 
-Eight tests across seven files assert against a real PostgreSQL: two in `tests/db/test_persistence.py`
+Twelve tests across nine files assert against a real PostgreSQL: two in `tests/db/test_persistence.py`
 (JSON and timestamp behavior SQLite cannot prove, and that the Alembic baseline creates exactly the
 schema the models declare); one in `tests/db/test_migrations_postgres.py` (the whole migration chain,
 drift, downgrade/re-upgrade, and duplicate regulator identifiers); one in
 `tests/db/test_cp18_postgres_backup_restore.py` (logical backup/restore and migration recovery drill);
-one in `tests/test_cp20_integration_completeness.py` (pgvector retrieval); one in
+one in `tests/db/test_promotion_identity_migration.py` (PostgreSQL promotion fingerprint uniqueness and tenant scope);
+three in `tests/documents/test_document_identity.py` (operation-aware identity migration backfill/downgrade,
+concurrent uploads of one logical document, and concurrent uploads into different scopes); one in
+`tests/test_cp20_integration_completeness.py` (pgvector retrieval); one in
 `tests/telemetry/test_cp15_egress_policy_recovery.py` (separate-worker egress-policy recovery); one in
 `tests/telemetry/test_connector_worker.py` (`test_competing_workers_fencing_on_postgres`); and one in
 `tests/telemetry/test_cp13_witsml_and_worker_races.py` (`test_phase6_postgres_concurrent_sql_cas_races`).
@@ -38,13 +44,14 @@ are enabled by the repository's embedded PostgreSQL, never replaced with SQLite,
 PostgreSQL flag is set:
 
 ```bash
-cd backend && DRILLAI_TEST_POSTGRES=1 .venv/bin/python -m pytest -o addopts=""
+cd backend && DRILLAI_TEST_POSTGRES=1 .venv/bin/python -m pytest
 ```
 
-The latest complete run for this revision reports **1,248 passed across 90 test files** with the flag
-set. CI runs the same PostgreSQL-backed suite (the `pgserver` dev dependency is in
-`backend/pyproject.toml`); the recorded result is the enabled-PostgreSQL run, not a test-vector or an
-assumption that skipped integration tests passed.
+The completed enabled-PostgreSQL run reports **1,509 passed, 0 skipped** across 100 test files. With the
+PostgreSQL flag unset, the same collected inventory reports **1,497 passed, 12 skipped**; those 12 cases
+are PostgreSQL-marked and are not represented as passes. CI runs the enabled suite on Linux (the `pgserver`
+dev dependency is in `backend/pyproject.toml`); the Windows job uses `-m "not postgres"` to deselect
+those integration cases.
 
 ## Unit and component tests
 
@@ -213,8 +220,9 @@ checkout → provenance → Python 3.11 + Node 22 (npm cache)
 ```
 
 Each required gate is its own step, so a red run names the gate that failed. There is no
-`continue-on-error`, no `|| true`, and no `if: always()` outside the artifact step: a required failure
-fails the job and skips what follows.
+`continue-on-error`; the only `|| true` uses are best-effort Docker Compose cleanup in the exit trap,
+not test or deployment gates. There is no `if: always()` outside the failure-artifact step: a required
+failure fails the job and skips what follows.
 
 The three testing gates **certify their own results** rather than trusting their inputs. The backend
 gate fails if the suite reports any skip (`DRILLAI_TEST_POSTGRES=1` is only evidence if the PostgreSQL
@@ -231,7 +239,7 @@ end-to-end steps, and collected no artifacts; it was removed in the following co
 (see `docs/mission-reports/FRONTEND-MISSION.md`, §CP6).
 
 Linux runs the full PostgreSQL-enabled backend suite and Docker Compose deployment gate. Windows
-runs the native SQLite backend suite with `-m "not postgres"` (the eight PostgreSQL-marked cases are
+runs the native SQLite backend suite with `-m "not postgres"` (the twelve PostgreSQL-marked cases are
 not run on Windows), the multi-process stack and local vendor-harness checks, and the complete
 frontend/E2E suite; Docker Compose is Linux-only. The external vendor probe makes zero network calls
 without configured endpoints/credentials, so no live interoperability certification is inferred.

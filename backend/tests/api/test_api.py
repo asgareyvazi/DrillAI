@@ -1026,15 +1026,42 @@ async def test_csv_roundtrip_keeps_the_declared_period(client):
         files={"file": ("period.csv", CSV_REPORT.encode(), "text/csv")},
         data={
             "well_id": well_id,
-            "period_start": "2026-01-05T00:00:00Z",
-            "period_end": "2026-01-06T00:00:00Z",
+            "period_start": "2026-01-05T05:30:00+05:30",
+            "period_end": "2026-01-06T05:30:00+05:30",
             "doc_type": "ddr",
         },
     )
     assert response.status_code == 201, response.text
     document_id = response.json()["document"]["id"]
     shifted = await client.get(f"/api/v1/documents/{document_id}", headers=headers())
-    assert shifted.json()["document"]["period_start"].startswith("2026-01-05")
+    assert shifted.json()["document"]["period_start"] == "2026-01-05T00:00:00+00:00"
+    assert shifted.json()["document"]["period_end"] == "2026-01-06T00:00:00+00:00"
+
+
+async def test_upload_rejects_naive_and_reversed_period_bounds(client):
+    _project, well_id = await _create_project_and_well(client)
+
+    naive = await client.post(
+        "/api/v1/documents",
+        headers=headers(),
+        files={"file": ("naive-period.csv", CSV_REPORT.encode(), "text/csv")},
+        data={"well_id": well_id, "period_start": "2026-01-05T00:00:00"},
+    )
+    assert naive.status_code == 422, naive.text
+    assert "timezone offset" in naive.json()["error"]["message"]
+
+    reversed_window = await client.post(
+        "/api/v1/documents",
+        headers=headers(),
+        files={"file": ("reversed-period.csv", CSV_REPORT.encode(), "text/csv")},
+        data={
+            "well_id": well_id,
+            "period_start": "2026-01-06T00:00:00Z",
+            "period_end": "2026-01-05T00:00:00Z",
+        },
+    )
+    assert reversed_window.status_code == 422, reversed_window.text
+    assert "period_end must not precede period_start" in reversed_window.json()["error"]["message"]
 
 
 async def test_csv_helper_is_deterministic():

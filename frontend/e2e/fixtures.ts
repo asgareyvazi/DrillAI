@@ -14,6 +14,9 @@ import { expect, test as base, type APIRequestContext, type Frame, type Page, ty
 import {
   classifyNetworkFailure,
   evaluateFailureOracle,
+  safeNetworkFailureEvidence,
+  safeFailureText,
+  safeFailureUrl,
   type AbortEvidence,
   type FailureAllowance,
   type FailedResponse,
@@ -184,6 +187,7 @@ interface FailureOracleState {
   failedResponses: FailedResponse[]
   networkFailures: NetworkFailure[]
   allowances: FailureAllowance[]
+  applicationOrigin: string
   abortEvidence: Map<string, AbortEvidence>
 }
 
@@ -230,8 +234,13 @@ function navigationForRequest(
 async function assertFailureOracle(state: FailureOracleState, testInfo: TestInfo): Promise<void> {
   // Let the browser-to-Node binding and request lifecycle events already queued by the test drain.
   await new Promise<void>((resolve) => setTimeout(resolve, 0))
-  const responseResult = evaluateFailureOracle(state.failedResponses, state.networkFailures, state.allowances)
-  const consoleErrors = appConsoleErrors(state.consoleErrors)
+  const responseResult = evaluateFailureOracle(
+    state.failedResponses,
+    state.networkFailures,
+    state.allowances,
+    state.applicationOrigin,
+  )
+  const consoleErrors = appConsoleErrors(state.consoleErrors).map(safeFailureText)
   if (consoleErrors.length > 0 || responseResult.findings.length > 0) {
     const evidence = {
       project: testInfo.project.name,
@@ -243,14 +252,9 @@ async function assertFailureOracle(state: FailureOracleState, testInfo: TestInfo
         url: safeFailureUrl(response.url),
         status: response.status,
       })),
-      networkFailures: state.networkFailures.filter((failure) => failure.disposition === 'unexpected').map((failure) => ({
-        method: failure.method,
-        url: safeFailureUrl(failure.url),
-        errorText: failure.errorText,
-        resourceType: failure.resourceType,
-        signalReason: failure.signalReason,
-        disposition: failure.disposition,
-      })),
+      networkFailures: state.networkFailures
+        .filter((failure) => failure.disposition === 'unexpected')
+        .map(safeNetworkFailureEvidence),
     }
     await testInfo.attach('request-failure-oracle.json', {
       body: JSON.stringify(evidence, null, 2),
@@ -259,18 +263,6 @@ async function assertFailureOracle(state: FailureOracleState, testInfo: TestInfo
   }
   expect(consoleErrors, `application console errors: ${consoleErrors.join(' | ')}`).toEqual([])
   expect(responseResult.findings, 'every HTTP or transport failure must be explicitly accounted for').toEqual([])
-}
-
-function safeFailureUrl(rawUrl: string): string {
-  try {
-    const url = new URL(rawUrl)
-    for (const key of [...url.searchParams.keys()]) {
-      if (/(token|secret|password|csrf|credential|authorization)/i.test(key)) url.searchParams.set(key, '[redacted]')
-    }
-    return url.href
-  } catch {
-    return '<invalid-url>'
-  }
 }
 
 /**
@@ -289,11 +281,15 @@ export const test = base.extend<{
   _failureOracle: [
     async ({ page, context }, use, testInfo) => {
       if (!context.pages().includes(page)) throw new Error('the fixture page must belong to its observed context')
+      const baseURL = testInfo.project.use.baseURL
+      if (typeof baseURL !== 'string') throw new Error('the failure oracle requires an explicit project baseURL')
+      const applicationOrigin = new URL(baseURL).origin
       const state: FailureOracleState = {
         consoleErrors: [],
         failedResponses: [],
         networkFailures: [],
         allowances: [],
+        applicationOrigin,
         abortEvidence: new Map(),
       }
       oracleByResponses.set(state.failedResponses, state)
@@ -359,7 +355,7 @@ export const test = base.extend<{
               const reasonName = typeof reason === 'object' && reason !== null && 'name' in reason &&
                 typeof (reason as { name?: unknown }).name === 'string'
                 ? (reason as { name: string }).name
-                : 'AbortError'
+                : 'UnknownAbortReason'
               const binding = (window as typeof window & Record<string, unknown>)[bindingName]
               if (typeof binding === 'function') {
                 void Promise.resolve(binding({ requestId, url: target.href, method, reasonName })).catch(() => undefined)
@@ -583,10 +579,16 @@ export function expectNoFailures(
     throw new Error('consoleErrors must come from the shared Playwright fixture')
   }
   state.allowances.push(...(options.allowed ?? []))
-  const result = evaluateFailureOracle(state.failedResponses, [], state.allowances)
+  const result = evaluateFailureOracle(
+    state.failedResponses,
+    [],
+    state.allowances,
+    state.applicationOrigin,
+  )
+  const safeConsoleErrors = appConsoleErrors(consoleErrors).map(safeFailureText)
   expect(
-    appConsoleErrors(consoleErrors),
-    `application console errors: ${consoleErrors.join(' | ')}`,
+    safeConsoleErrors,
+    `application console errors: ${safeConsoleErrors.join(' | ')}`,
   ).toEqual([])
   expect(result.findings, 'every HTTP or transport failure must be explicitly accounted for').toEqual([])
 }

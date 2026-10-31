@@ -19,7 +19,15 @@ from sqlalchemy import select
 from tests.fixtures.fabric import DDR_BYTES, Fabric
 from tests.fixtures.synthetic_ddr import SYNTHETIC_DDR_CSV
 
-from drillai.db.models import DocumentRegion, ExtractedRecord
+from drillai.db.models import (
+    Document,
+    DocumentChunk,
+    DocumentRegion,
+    EvidenceLink,
+    ExtractedRecord,
+    IngestionJob,
+    RawArtifact,
+)
 
 
 async def _document(
@@ -100,6 +108,88 @@ async def test_the_chain_is_paged_by_cursor_and_the_pages_join_exactly(fabric: F
     assert len(set(seen)) == len(seen)
 
 
+async def test_ingestion_jobs_are_bounded_and_offset_pageable(fabric: Fabric) -> None:
+    document_id = await _document(fabric)
+    duplicate_jobs = []
+    for _ in range(2):
+        response = await fabric.upload(
+            fabric.alpha,
+            SYNTHETIC_DDR_CSV,
+            filename="ddr.csv",
+            content_type="text/csv",
+            well_id=fabric.alpha.well_id,
+            wellbore_id=fabric.alpha.wellbore_id,
+            doc_type="ddr",
+        )
+        assert response.status_code == 201, response.text
+        assert response.json()["document"]["id"] == document_id
+        duplicate_jobs.append(response.json()["job"]["id"])
+
+    first_detail = await fabric.http.get(
+        f"/api/v1/documents/{document_id}",
+        params={"job_limit": 1, "job_offset": 0},
+        headers=fabric.alpha.headers,
+    )
+    assert first_detail.status_code == 200, first_detail.text
+    first_body = first_detail.json()
+    assert first_body["ingestion_job_count"] == 3
+    assert first_body["ingestion_jobs_returned"] == 1
+    assert first_body["ingestion_jobs_truncated"] is True
+    assert first_body["next_ingestion_job_offset"] == 1
+
+    second_detail = await fabric.http.get(
+        f"/api/v1/documents/{document_id}",
+        params={"job_limit": 1, "job_offset": 1},
+        headers=fabric.alpha.headers,
+    )
+    assert second_detail.status_code == 200, second_detail.text
+    assert second_detail.json()["ingestion_jobs_returned"] == 1
+    assert first_body["ingestion_jobs"][0]["id"] != second_detail.json()["ingestion_jobs"][0]["id"]
+
+    first_page = await fabric.http.get(
+        f"/api/v1/documents/{document_id}/ingestion",
+        params={"limit": 1, "offset": 0},
+        headers=fabric.alpha.headers,
+    )
+    second_page = await fabric.http.get(
+        f"/api/v1/documents/{document_id}/ingestion",
+        params={"limit": 1, "offset": 1},
+        headers=fabric.alpha.headers,
+    )
+    assert first_page.status_code == second_page.status_code == 200
+    assert first_page.json()["total"] == second_page.json()["total"] == 3
+    assert first_page.json()["truncated"] is True
+    assert first_page.json()["next_offset"] == 1
+    assert first_page.json()["items"][0]["id"] != second_page.json()["items"][0]["id"]
+    assert len(set(duplicate_jobs)) == 2
+
+
+async def test_evidence_summary_aggregates_without_trusting_invalid_scores(fabric: Fabric) -> None:
+    document_id = await _document(fabric)
+    async with fabric.session() as session:
+        links = (
+            await session.execute(
+                select(EvidenceLink).where(EvidenceLink.document_id == document_id)
+            )
+        ).scalars().all()
+        assert links
+        for link in links:
+            link.confidence = 1.5
+        await session.commit()
+
+    response = await fabric.http.get(
+        "/api/v1/evidence/summary",
+        params={"document_id": document_id},
+        headers=fabric.alpha.headers,
+    )
+    assert response.status_code == 200, response.text
+    summary = response.json()
+    assert summary["link_count"] == len(links)
+    assert summary["mean_confidence"] is None
+    assert sum(summary["by_kind"].values()) == summary["link_count"]
+    assert any("invalid confidence values are excluded" in note for note in summary["limitations"])
+
+
 async def test_an_unknown_cursor_is_refused_rather_than_ignored(fabric: Fabric) -> None:
     document_id = await _document(fabric)
     response = await fabric.http.get(
@@ -139,7 +229,12 @@ async def test_a_region_of_another_document_is_never_resolved_through_a_record(
         ).scalars().first()
         assert foreign_region is not None, "the fixture must have produced a region"
 
-        document_id = await _document(fabric, b"alpha report: mud weight 9.2 ppg\n", filename="alpha.txt")
+        document_id = await _document(
+            fabric,
+            b"alpha report: mud weight 9.2 ppg\n",
+            filename="alpha.txt",
+            content_type="text/plain",
+        )
         record = (
             await session.execute(
                 select(ExtractedRecord).where(ExtractedRecord.document_id == document_id)
@@ -224,6 +319,204 @@ async def test_the_other_tenant_sees_none_of_it(fabric: Fabric) -> None:
         assert (await fabric.http.get(url, headers=fabric.bravo.headers)).status_code == 404
 
 
+async def test_document_views_filter_corrupt_cross_tenant_child_rows(fabric: Fabric) -> None:
+    document_id = await _document(fabric)
+    foreign_org_id = fabric.org_id(fabric.bravo)
+    secret = "cross-tenant-child-secret-should-not-leave-the-database"
+    async with fabric.session() as session:
+        foreign_region = DocumentRegion(
+            org_id=foreign_org_id,
+            document_id=document_id,
+            page_number=1,
+            kind="text",
+            order_index=900,
+            text=secret,
+            attributes={"probe": secret},
+        )
+        session.add(foreign_region)
+        await session.flush()
+        session.add_all(
+            [
+                DocumentChunk(
+                    org_id=foreign_org_id,
+                    document_id=document_id,
+                    chunk_index=900,
+                    page_number=1,
+                    text=secret,
+                    kind="text",
+                ),
+                ExtractedRecord(
+                    org_id=foreign_org_id,
+                    document_id=document_id,
+                    region_id=foreign_region.id,
+                    record_type="tenant_secret",
+                    payload_schema_key="test.tenant_secret",
+                    payload={"value": secret},
+                    page_number=1,
+                ),
+                EvidenceLink(
+                    org_id=foreign_org_id,
+                    subject_kind="test",
+                    subject_id="tenant_secret",
+                    evidence_kind="document_region",
+                    document_id=document_id,
+                    region_id=foreign_region.id,
+                    excerpt=secret,
+                    locator={"secret": secret},
+                ),
+                IngestionJob(
+                    org_id=foreign_org_id,
+                    document_id=document_id,
+                    status="failed",
+                    error=secret,
+                    warnings=[secret],
+                ),
+            ]
+        )
+        await session.commit()
+
+    detail_response = await fabric.http.get(
+        f"/api/v1/documents/{document_id}", headers=fabric.alpha.headers
+    )
+    provenance_response = await fabric.http.get(
+        f"/api/v1/documents/{document_id}/provenance", headers=fabric.alpha.headers
+    )
+    ingestion_response = await fabric.http.get(
+        f"/api/v1/documents/{document_id}/ingestion", headers=fabric.alpha.headers
+    )
+    assert detail_response.status_code == 200, detail_response.text
+    assert provenance_response.status_code == 200, provenance_response.text
+    assert ingestion_response.status_code == 200, ingestion_response.text
+    for body in (detail_response.json(), provenance_response.json(), ingestion_response.json()):
+        assert secret not in json.dumps(body)
+    detail = detail_response.json()
+    assert all(chunk["text"] != secret for chunk in detail["chunks"])
+    assert all(record["record_type"] != "tenant_secret" for record in detail["records"])
+    assert all(job["error"] != secret for job in detail["ingestion_jobs"])
+    assert all(job["error"] != secret for job in ingestion_response.json()["items"])
+    assert all(link["excerpt"] != secret for link in detail["evidence_links"])
+
+
+async def test_quarantined_raw_artifact_is_not_served_as_a_document(fabric: Fabric) -> None:
+    document_id = await _document(fabric)
+    async with fabric.session() as session:
+        document = await session.get(Document, document_id)
+        assert document is not None and document.raw_artifact_id is not None
+        artifact = await session.get(RawArtifact, document.raw_artifact_id)
+        assert artifact is not None
+        evidence_id = await session.scalar(
+            select(EvidenceLink.id).where(EvidenceLink.document_id == document_id)
+        )
+        assert evidence_id is not None
+        artifact.is_quarantined = True
+        await session.commit()
+
+    blocked_retry = await fabric.upload(
+        fabric.alpha,
+        SYNTHETIC_DDR_CSV,
+        filename="ddr.csv",
+        content_type="text/csv",
+        well_id=fabric.alpha.well_id,
+        wellbore_id=fabric.alpha.wellbore_id,
+        doc_type="ddr",
+    )
+    assert blocked_retry.status_code == 422, blocked_retry.text
+
+    for suffix in ("", "/ingestion", "/provenance", "/file", "/permissions"):
+        response = await fabric.http.get(
+            f"/api/v1/documents/{document_id}{suffix}", headers=fabric.alpha.headers
+        )
+        assert response.status_code == 404, f"{suffix}: {response.text}"
+    listing = await fabric.http.get("/api/v1/documents", headers=fabric.alpha.headers)
+    assert listing.status_code == 200, listing.text
+    assert document_id not in {item["id"] for item in listing.json()["items"]}
+
+    evidence_list = await fabric.http.get(
+        "/api/v1/evidence", params={"document_id": document_id}, headers=fabric.alpha.headers
+    )
+    evidence_summary = await fabric.http.get(
+        "/api/v1/evidence/summary", params={"document_id": document_id}, headers=fabric.alpha.headers
+    )
+    evidence_detail = await fabric.http.get(
+        f"/api/v1/evidence/{evidence_id}", headers=fabric.alpha.headers
+    )
+    assert evidence_list.status_code == 200 and evidence_list.json()["total"] == 0
+    assert evidence_summary.status_code == 200 and evidence_summary.json()["link_count"] == 0
+    assert evidence_detail.status_code == 404, evidence_detail.text
+
+
+async def test_document_download_rejects_a_cross_tenant_raw_artifact_pointer(fabric: Fabric) -> None:
+    alpha_upload = await fabric.upload(
+        fabric.alpha,
+        b"alpha-owned document bytes that must remain private",
+        filename="alpha.txt",
+        well_id=fabric.alpha.well_id,
+    )
+    bravo_upload = await fabric.upload(
+        fabric.bravo,
+        b"bravo-only private source bytes",
+        filename="bravo.txt",
+        well_id=fabric.bravo.well_id,
+    )
+    assert alpha_upload.status_code == 201, alpha_upload.text
+    assert bravo_upload.status_code == 201, bravo_upload.text
+    alpha_document_id = alpha_upload.json()["document"]["id"]
+    bravo_document_id = bravo_upload.json()["document"]["id"]
+
+    async with fabric.session() as session:
+        alpha_document = await session.get(Document, alpha_document_id)
+        bravo_document = await session.get(Document, bravo_document_id)
+        assert alpha_document is not None and bravo_document is not None
+        foreign_artifact = await session.get(RawArtifact, bravo_document.raw_artifact_id)
+        assert foreign_artifact is not None and foreign_artifact.org_id == fabric.org_id(fabric.bravo)
+        alpha_document.raw_artifact_id = foreign_artifact.id
+        await session.commit()
+
+    response = await fabric.http.get(
+        f"/api/v1/documents/{alpha_document_id}/file", headers=fabric.alpha.headers
+    )
+    assert response.status_code == 404, response.text
+    assert b"bravo-only private source bytes" not in response.content
+
+
+async def test_exactly_full_final_pages_do_not_advertise_a_nonexistent_cursor(fabric: Fabric) -> None:
+    document_id = await _document(fabric)
+    whole = await _provenance(fabric, document_id, limit=1000)
+    assert whole["record_count"] > 1
+    first_id = whole["chain"][0]["record"]["id"]
+    tail = await _provenance(
+        fabric,
+        document_id,
+        limit=whole["record_count"] - 1,
+        cursor=first_id,
+    )
+    assert len(tail["chain"]) == whole["record_count"] - 1
+    assert tail["chain_truncated"] is False
+    assert tail["next_cursor"] is None
+
+    detail = (
+        await fabric.http.get(f"/api/v1/documents/{document_id}", headers=fabric.alpha.headers)
+    ).json()
+    first_detail = await fabric.http.get(
+        f"/api/v1/documents/{document_id}",
+        params={"record_limit": 1},
+        headers=fabric.alpha.headers,
+    )
+    assert first_detail.status_code == 200, first_detail.text
+    detail_cursor = first_detail.json()["next_record_cursor"]
+    assert detail_cursor is not None
+    detail_tail = await fabric.http.get(
+        f"/api/v1/documents/{document_id}",
+        params={"record_limit": detail["record_count"] - 1, "record_after": detail_cursor},
+        headers=fabric.alpha.headers,
+    )
+    assert detail_tail.status_code == 200, detail_tail.text
+    tail_body = detail_tail.json()
+    assert tail_body["records_returned"] == detail["record_count"] - 1
+    assert tail_body["records_truncated"] is False
+    assert tail_body["next_record_cursor"] is None
+
+
 async def test_a_hostile_filename_cannot_become_a_response_header(fabric: Fabric) -> None:
     """The upload's filename is attacker-controlled text that ends up in a header.
 
@@ -253,3 +546,28 @@ async def test_a_hostile_filename_cannot_become_a_response_header(fabric: Fabric
     assert response.headers.get("x-injected") is None
     assert "filename*=UTF-8''" in disposition
     assert response.content == b"mud weight 9.2 ppg\n"
+
+
+async def test_unicode_filename_download_has_an_ascii_fallback(fabric: Fabric) -> None:
+    from urllib.parse import quote
+
+    filename = "report-🛢.pdf"
+    uploaded = await fabric.upload(
+        fabric.alpha,
+        b"Unicode filename report content",
+        filename=filename,
+        well_id=fabric.alpha.well_id,
+    )
+    assert uploaded.status_code == 201, uploaded.text
+
+    response = await fabric.http.get(
+        f"/api/v1/documents/{uploaded.json()['document']['id']}/file",
+        headers=fabric.alpha.headers,
+    )
+
+    assert response.status_code == 200, response.text
+    disposition = response.headers["content-disposition"]
+    ascii_form = disposition.split('filename="', 1)[1].split('"', 1)[0]
+    assert all(0x20 <= ord(character) < 0x7F for character in ascii_form)
+    assert f"filename*=UTF-8''{quote(filename, safe='')}" in disposition
+    assert response.content == b"Unicode filename report content"

@@ -22,8 +22,9 @@ import datetime as dt
 from collections.abc import Iterable
 from typing import Any
 
-from sqlalchemy import or_, select
+from sqlalchemy import and_, case, false, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from drillai.context.model import (
     ContextBundle,
@@ -40,12 +41,14 @@ from drillai.db.models import (
     Document,
     DocumentChunk,
     EngineRun,
+    Event,
     EvidenceLink,
     ExtractedRecord,
     Lesson,
     OffsetCandidate,
     Operation,
     Project,
+    RawArtifact,
     Recommendation,
     Risk,
     Trajectory,
@@ -55,7 +58,18 @@ from drillai.db.models import (
     WellFormationMarker,
     WellSection,
 )
+from drillai.documents.access import (
+    chunk_document_scope_conditions,
+    document_not_quarantined_condition,
+    evidence_document_not_quarantined_condition,
+    extracted_record_scope_conditions,
+    extracted_record_trust_condition,
+    operational_source_conditions,
+    trajectory_source_conditions,
+    trajectory_station_evidence_document_condition,
+)
 from drillai.observability.tracing import get_metrics, get_tracer
+from drillai.operations.time_windows import operation_time_expressions
 from drillai.security.rbac import permissions_match
 from drillai.twin.service import TwinService
 
@@ -176,10 +190,19 @@ class WellIdentityProvider(SectionProvider):
         scope = request.scope
         if not scope.well_id:
             return _empty(section, "no well in scope"), []
-        well = await session.get(Well, scope.well_id)
+        well_stmt = select(Well).where(Well.id == scope.well_id, Well.org_id == scope.org_id)
+        if scope.project_id:
+            well_stmt = well_stmt.where(Well.project_id == scope.project_id)
+        well = (await session.execute(well_stmt)).scalar_one_or_none()
         if well is None:
-            return _empty(section, f"well {scope.well_id} not found"), []
-        project = await session.get(Project, well.project_id) if well.project_id else None
+            return _empty(section, f"well {scope.well_id} not found in the requested organization/project"), []
+        project = None
+        if well.project_id:
+            project = (
+                await session.execute(
+                    select(Project).where(Project.id == well.project_id, Project.org_id == scope.org_id)
+                )
+            ).scalar_one_or_none()
         section.items.append(
             ContextItem(
                 kind="well",
@@ -243,9 +266,39 @@ class WellboresProvider(SectionProvider):
         section = ContextSection(key=self.key, title=self.title)
         if not request.scope.well_id:
             return _empty(section, "no well in scope"), []
-        stmt = select(Wellbore).where(Wellbore.well_id == request.scope.well_id).order_by(Wellbore.sequence)
+        stmt = (
+            select(Wellbore)
+            .join(Well, Well.id == Wellbore.well_id)
+            .where(
+                Wellbore.org_id == request.scope.org_id,
+                Well.org_id == request.scope.org_id,
+                Well.id == request.scope.well_id,
+            )
+            .order_by(Wellbore.sequence)
+        )
+        if request.scope.project_id:
+            stmt = stmt.where(Well.project_id == request.scope.project_id)
         if request.scope.wellbore_id:
             stmt = stmt.where(Wellbore.id == request.scope.wellbore_id)
+        if request.scope.section_id:
+            stmt = stmt.where(
+                Wellbore.id.in_(
+                    select(WellSection.wellbore_id).where(
+                        WellSection.id == request.scope.section_id,
+                        WellSection.org_id == request.scope.org_id,
+                    )
+                )
+            )
+        if request.scope.operation_id:
+            stmt = stmt.where(
+                Wellbore.id.in_(
+                    select(Operation.wellbore_id).where(
+                        Operation.id == request.scope.operation_id,
+                        Operation.org_id == request.scope.org_id,
+                        Operation.well_id == request.scope.well_id,
+                    )
+                )
+            )
         rows = (await session.execute(stmt)).scalars().all()
         if not rows:
             return _empty(section, "no wellbores recorded for this well"), []
@@ -283,14 +336,39 @@ class WellSectionsProvider(SectionProvider):
 
     async def build(self, session: AsyncSession, request: ContextRequest) -> SectionResult:
         section = ContextSection(key=self.key, title=self.title)
-        if not request.scope.well_id:
+        scope = request.scope
+        if not scope.well_id:
             return _empty(section, "no well in scope"), []
-        stmt = select(WellSection).where(WellSection.org_id == request.scope.org_id)
-        if request.scope.wellbore_id:
-            stmt = stmt.where(WellSection.wellbore_id == request.scope.wellbore_id)
-        else:
+        if scope.formation_id is not None or scope.period_from is not None or scope.period_to is not None:
+            return _empty(section, "well sections have no formation link or historical version for this scope"), []
+        stmt = (
+            select(WellSection)
+            .join(Wellbore, Wellbore.id == WellSection.wellbore_id)
+            .join(Well, Well.id == Wellbore.well_id)
+            .where(
+                WellSection.org_id == scope.org_id,
+                Wellbore.org_id == scope.org_id,
+                Well.org_id == scope.org_id,
+                Well.id == scope.well_id,
+            )
+        )
+        if scope.project_id:
+            stmt = stmt.where(Well.project_id == scope.project_id)
+        if scope.wellbore_id:
+            stmt = stmt.where(WellSection.wellbore_id == scope.wellbore_id)
+        if scope.section_id:
+            stmt = stmt.where(WellSection.id == scope.section_id)
+        if scope.operation_id:
             stmt = stmt.where(
-                WellSection.wellbore_id.in_(select(Wellbore.id).where(Wellbore.well_id == request.scope.well_id))
+                WellSection.id.in_(
+                    select(Operation.section_id).where(
+                        Operation.id == scope.operation_id,
+                        Operation.org_id == scope.org_id,
+                        *operational_source_conditions(Operation),
+                        Operation.well_id == scope.well_id,
+                        Operation.section_id.is_not(None),
+                    )
+                )
             )
         rows = (await session.execute(stmt.order_by(WellSection.sequence))).scalars().all()
         ids: list[str] = []
@@ -373,22 +451,117 @@ class TrajectoryProvider(SectionProvider):
             return _empty(section, "no well in scope"), []
         stmt = (
             select(Trajectory)
-            .where(Trajectory.org_id == scope.org_id, Trajectory.is_current.is_(True))
+            .join(Wellbore, Wellbore.id == Trajectory.wellbore_id)
+            .join(Well, Well.id == Wellbore.well_id)
+            .where(
+                Trajectory.org_id == scope.org_id,
+                Trajectory.is_current.is_(True),
+                Wellbore.org_id == scope.org_id,
+                Well.org_id == scope.org_id,
+                Well.id == scope.well_id,
+                *trajectory_source_conditions(Trajectory),
+            )
             .order_by(Trajectory.version.desc())
             .limit(1)
         )
+        if scope.project_id:
+            stmt = stmt.where(Well.project_id == scope.project_id)
         if scope.wellbore_id:
             stmt = stmt.where(Trajectory.wellbore_id == scope.wellbore_id)
-        else:
-            stmt = stmt.where(
-                Trajectory.wellbore_id.in_(select(Wellbore.id).where(Wellbore.well_id == scope.well_id))
+        if scope.formation_id:
+            stmt = stmt.where(Trajectory.target_formation_id == scope.formation_id)
+        section_range = None
+        if scope.section_id:
+            scoped_section = (
+                await session.execute(
+                    select(WellSection)
+                    .join(Wellbore, Wellbore.id == WellSection.wellbore_id)
+                    .join(Well, Well.id == Wellbore.well_id)
+                    .where(
+                        WellSection.id == scope.section_id,
+                        WellSection.org_id == scope.org_id,
+                        Wellbore.org_id == scope.org_id,
+                        Well.org_id == scope.org_id,
+                        Well.id == scope.well_id,
+                        *([Well.project_id == scope.project_id] if scope.project_id else []),
+                        *([Wellbore.id == scope.wellbore_id] if scope.wellbore_id else []),
+                    )
+                )
+            ).scalar_one_or_none()
+            if scoped_section is None:
+                return _empty(section, "requested section not found in this well/project"), []
+            # A section determines its wellbore even when the caller omitted wellbore_id. Resolve
+            # that scope before selecting the current trajectory; otherwise a different bore's
+            # survey could win the version-ordered limit for this well.
+            stmt = stmt.where(Trajectory.wellbore_id == scoped_section.wellbore_id)
+            section_top = (
+                scoped_section.actual_top_md_si
+                if scoped_section.actual_top_md_si is not None
+                else scoped_section.planned_top_md_si
             )
+            section_bottom = (
+                scoped_section.actual_bottom_md_si
+                if scoped_section.actual_bottom_md_si is not None
+                else scoped_section.planned_bottom_md_si
+            )
+            if section_top is None and section_bottom is None:
+                return _empty(section, "requested section has no depth interval for survey filtering"), []
+            section_range = (section_top, section_bottom)
+
+        operation_range = None
+        if scope.operation_id:
+            scoped_operation = (
+                await session.execute(
+                    select(Operation)
+                    .join(Well, Well.id == Operation.well_id)
+                    .join(Wellbore, Wellbore.id == Operation.wellbore_id)
+                    .outerjoin(WellSection, WellSection.id == Operation.section_id)
+                    .where(
+                        Operation.id == scope.operation_id,
+                        Operation.org_id == scope.org_id,
+                        *operational_source_conditions(Operation),
+                        Operation.well_id == scope.well_id,
+                        Well.org_id == scope.org_id,
+                        Wellbore.org_id == scope.org_id,
+                        Wellbore.well_id == Operation.well_id,
+                        or_(
+                            Operation.section_id.is_(None),
+                            and_(
+                                WellSection.id == Operation.section_id,
+                                WellSection.org_id == scope.org_id,
+                                WellSection.wellbore_id == Operation.wellbore_id,
+                            ),
+                        ),
+                        *([Well.project_id == scope.project_id] if scope.project_id else []),
+                        *([Operation.project_id == scope.project_id] if scope.project_id else []),
+                        *([Operation.wellbore_id == scope.wellbore_id] if scope.wellbore_id else []),
+                        *([Operation.section_id == scope.section_id] if scope.section_id else []),
+                    )
+                )
+            ).scalar_one_or_none()
+            if scoped_operation is None:
+                return _empty(section, "requested operation not found in this well/project"), []
+            # Operations have their own wellbore locator. Apply it before selecting a trajectory,
+            # even if this request did not redundantly include wellbore_id.
+            stmt = stmt.where(Trajectory.wellbore_id == scoped_operation.wellbore_id)
+            operation_range = (scoped_operation.depth_from_md_si, scoped_operation.depth_to_md_si)
+            if operation_range == (None, None):
+                return _empty(section, "requested operation has no depth interval for survey filtering"), []
+
         trajectory = (await session.execute(stmt)).scalars().first()
         if trajectory is None:
-            return _empty(section, "no current trajectory on file"), []
+            return _empty(section, "no current trajectory on file for this scope"), []
         section.source_ids = [trajectory.id]
-        section.items.append(
-            ContextItem(
+        if (
+            scope.depth_from_si is None
+            and scope.depth_to_si is None
+            and scope.period_from is None
+            and scope.period_to is None
+            and section_range is None
+            and operation_range is None
+        ):
+            section.items.append(
+                ContextItem(
                 kind="trajectory_summary",
                 id=trajectory.id,
                 label=trajectory.name,
@@ -409,13 +582,35 @@ class TrajectoryProvider(SectionProvider):
         )
         station_stmt = (
             select(TrajectoryStation)
-            .where(TrajectoryStation.trajectory_id == trajectory.id)
+            .where(
+                TrajectoryStation.org_id == scope.org_id,
+                TrajectoryStation.trajectory_id == trajectory.id,
+                TrajectoryStation.wellbore_id == trajectory.wellbore_id,
+            )
             .order_by(TrajectoryStation.station_index)
         )
         if scope.depth_from_si is not None:
             station_stmt = station_stmt.where(TrajectoryStation.md_si >= scope.depth_from_si)
         if scope.depth_to_si is not None:
             station_stmt = station_stmt.where(TrajectoryStation.md_si <= scope.depth_to_si)
+        if scope.period_from is not None:
+            station_stmt = station_stmt.where(
+                TrajectoryStation.measured_at.is_not(None),
+                TrajectoryStation.measured_at >= scope.period_from,
+            )
+        if scope.period_to is not None:
+            station_stmt = station_stmt.where(
+                TrajectoryStation.measured_at.is_not(None),
+                TrajectoryStation.measured_at <= scope.period_to,
+            )
+        for interval in (section_range, operation_range):
+            if interval is None:
+                continue
+            interval_start, interval_end = interval
+            if interval_start is not None:
+                station_stmt = station_stmt.where(TrajectoryStation.md_si >= interval_start)
+            if interval_end is not None:
+                station_stmt = station_stmt.where(TrajectoryStation.md_si <= interval_end)
         stations = (await session.execute(station_stmt)).scalars().all()
         for station in stations:
             section.items.append(
@@ -438,11 +633,12 @@ class TrajectoryProvider(SectionProvider):
                     source_kind="database",
                     source_ids=[station.id],
                     cites=[station.evidence_ref] if station.evidence_ref else [],
+                    observed_at=station.measured_at,
                     units={"md_si": "m", "tvd_si": "m", "ns_si": "m", "ew_si": "m", "inclination_deg": "deg", "azimuth_deg": "deg", "dls_deg_per_30m": "deg/30m"},
                 )
             )
         if not stations:
-            section.notes.append("no survey stations fall inside the requested depth window")
+            section.notes.append("no survey stations match the requested depth/time window")
         return section, [trajectory.id, *[station.id for station in stations]]
 
 
@@ -455,20 +651,104 @@ class FormationProvider(SectionProvider):
     async def build(self, session: AsyncSession, request: ContextRequest) -> SectionResult:
         section = ContextSection(key=self.key, title=self.title)
         scope = request.scope
-        if not scope.well_id:
-            return _empty(section, "no well in scope"), []
-        stmt = select(WellFormationMarker).where(WellFormationMarker.org_id == scope.org_id)
+        if not scope.well_id and not scope.project_id:
+            return _empty(section, "no well or project in scope"), []
+        if scope.period_from is not None or scope.period_to is not None:
+            return _empty(section, "formation markers do not carry validated observation or validity times"), []
+        stmt = (
+            select(WellFormationMarker)
+            .join(Wellbore, Wellbore.id == WellFormationMarker.wellbore_id)
+            .join(Well, Well.id == Wellbore.well_id)
+            .where(
+                WellFormationMarker.org_id == scope.org_id,
+                Wellbore.org_id == scope.org_id,
+                Well.org_id == scope.org_id,
+            )
+        )
+        if scope.well_id:
+            stmt = stmt.where(Well.id == scope.well_id)
+        if scope.project_id:
+            stmt = stmt.where(Well.project_id == scope.project_id)
         if scope.wellbore_id:
             stmt = stmt.where(WellFormationMarker.wellbore_id == scope.wellbore_id)
-        else:
-            stmt = stmt.where(
-                WellFormationMarker.wellbore_id.in_(select(Wellbore.id).where(Wellbore.well_id == scope.well_id))
+        if scope.formation_id:
+            stmt = stmt.where(WellFormationMarker.formation_id == scope.formation_id)
+        section_range = None
+        if scope.section_id:
+            scoped_section = (
+                await session.execute(
+                    select(WellSection)
+                    .join(Wellbore, Wellbore.id == WellSection.wellbore_id)
+                    .join(Well, Well.id == Wellbore.well_id)
+                    .where(
+                        WellSection.id == scope.section_id,
+                        WellSection.org_id == scope.org_id,
+                        Wellbore.org_id == scope.org_id,
+                        Well.org_id == scope.org_id,
+                        *([Well.id == scope.well_id] if scope.well_id else []),
+                        *([Well.project_id == scope.project_id] if scope.project_id else []),
+                        *([Wellbore.id == scope.wellbore_id] if scope.wellbore_id else []),
+                    )
+                )
+            ).scalar_one_or_none()
+            if scoped_section is None:
+                return _empty(section, "requested section not found in this well/project"), []
+            section_top = (
+                scoped_section.actual_top_md_si
+                if scoped_section.actual_top_md_si is not None
+                else scoped_section.planned_top_md_si
             )
+            section_bottom = (
+                scoped_section.actual_bottom_md_si
+                if scoped_section.actual_bottom_md_si is not None
+                else scoped_section.planned_bottom_md_si
+            )
+            section_range = (section_top, section_bottom)
+            if section_top is None and section_bottom is None:
+                return _empty(section, "requested section has no depth interval to scope formation markers"), []
+            stmt = stmt.where(WellFormationMarker.wellbore_id == scoped_section.wellbore_id)
+
+        operation_range = None
+        if scope.operation_id:
+            scoped_operation = (
+                await session.execute(
+                    select(Operation).where(
+                        Operation.id == scope.operation_id,
+                        Operation.org_id == scope.org_id,
+                        *operational_source_conditions(Operation),
+                        *([Operation.well_id == scope.well_id] if scope.well_id else []),
+                        *([Operation.project_id == scope.project_id] if scope.project_id else []),
+                        *([Operation.wellbore_id == scope.wellbore_id] if scope.wellbore_id else []),
+                        *([Operation.section_id == scope.section_id] if scope.section_id else []),
+                    )
+                )
+            ).scalar_one_or_none()
+            if scoped_operation is None:
+                return _empty(section, "requested operation not found in this well/project"), []
+            operation_range = (scoped_operation.depth_from_md_si, scoped_operation.depth_to_md_si)
+            if operation_range == (None, None):
+                return _empty(section, "requested operation has no depth interval to scope formation markers"), []
+            stmt = stmt.where(WellFormationMarker.wellbore_id == scoped_operation.wellbore_id)
+
         markers = (await session.execute(stmt.order_by(WellFormationMarker.md_si))).scalars().all()
         ids: list[str] = []
         for marker in markers:
             if not scope.depth_overlaps(marker.md_si, marker.md_si):
                 continue
+            if section_range is not None:
+                section_top, section_bottom = section_range
+                marker_depth = marker.md_si
+                if marker_depth is None or (
+                    section_top is not None and marker_depth < section_top
+                ) or (section_bottom is not None and marker_depth > section_bottom):
+                    continue
+            if operation_range is not None:
+                operation_top, operation_bottom = operation_range
+                marker_depth = marker.md_si
+                if marker_depth is None or (
+                    operation_top is not None and marker_depth < operation_top
+                ) or (operation_bottom is not None and marker_depth > operation_bottom):
+                    continue
             ids.append(marker.id)
             section.items.append(
                 ContextItem(
@@ -512,6 +792,20 @@ class TwinAspectProvider(SectionProvider):
         scope = request.scope
         if not scope.well_id:
             return _empty(section, "no well in scope"), []
+        if (
+            scope.operation_id is not None
+            or scope.formation_id is not None
+            or scope.depth_from_si is not None
+            or scope.depth_to_si is not None
+            or scope.period_from is not None
+            or scope.period_to is not None
+        ):
+            return _empty(section, "current twin aspects have no operation/formation/depth/time locator"), []
+        well_stmt = select(Well).where(Well.id == scope.well_id, Well.org_id == scope.org_id)
+        if scope.project_id:
+            well_stmt = well_stmt.where(Well.project_id == scope.project_id)
+        if (await session.execute(well_stmt)).scalar_one_or_none() is None:
+            return _empty(section, "well not found in the requested organization/project"), []
         service = TwinService(session, org_id=scope.org_id)
         state = await service.current_state(
             well_id=scope.well_id, wellbore_id=scope.wellbore_id, section_id=scope.section_id
@@ -551,23 +845,35 @@ class OperationsProvider(SectionProvider):
     async def build(self, session: AsyncSession, request: ContextRequest) -> SectionResult:
         section = ContextSection(key=self.key, title=self.title)
         scope = request.scope
-        if not scope.well_id:
-            return _empty(section, "no well in scope"), []
-        stmt = select(Operation).where(Operation.org_id == scope.org_id, Operation.well_id == scope.well_id)
+        if not scope.well_id and not scope.project_id:
+            return _empty(section, "no well or project in scope"), []
+        if scope.formation_id is not None:
+            return _empty(section, "operations do not carry a formation locator"), []
+        stmt = select(Operation).where(
+            Operation.org_id == scope.org_id,
+            *operational_source_conditions(Operation),
+        )
+        if scope.well_id:
+            stmt = stmt.where(Operation.well_id == scope.well_id)
+        if scope.project_id:
+            stmt = stmt.where(Operation.project_id == scope.project_id)
         if scope.wellbore_id:
             stmt = stmt.where(Operation.wellbore_id == scope.wellbore_id)
         if scope.section_id:
             stmt = stmt.where(Operation.section_id == scope.section_id)
         if scope.operation_id:
             stmt = stmt.where(Operation.id == scope.operation_id)
+        if scope.depth_from_si is not None or scope.depth_to_si is not None:
+            stmt = stmt.where(
+                *_depth_scope_conditions(scope, Operation.depth_from_md_si, Operation.depth_to_md_si)
+            )
+        if scope.period_from is not None or scope.period_to is not None:
+            operation_start, operation_end = _operation_period_expressions()
+            stmt = stmt.where(*_interval_scope_conditions(scope, operation_start, operation_end))
         stmt = stmt.order_by(Operation.sequence.desc()).limit(200)
         rows = (await session.execute(stmt)).scalars().all()
         ids: list[str] = []
         for row in rows:
-            if not scope.depth_overlaps(row.depth_from_md_si, row.depth_to_md_si):
-                continue
-            if not scope.period_overlaps(row.actual_start or row.planned_start, row.actual_end or row.planned_end):
-                continue
             ids.append(row.id)
             section.items.append(
                 ContextItem(
@@ -612,25 +918,40 @@ class DocumentsProvider(SectionProvider):
         section = ContextSection(key=self.key, title=self.title)
         section.source_kind = "document"
         scope = request.scope
-        if not scope.well_id:
-            return _empty(section, "no well in scope"), []
+        if not scope.well_id and not scope.project_id:
+            return _empty(section, "no well or project in scope"), []
+        if scope.formation_id is not None or scope.depth_from_si is not None or scope.depth_to_si is not None:
+            return _empty(section, "documents do not carry formation/depth locators for this narrowed scope"), []
         stmt = (
             select(Document)
-            .where(Document.org_id == scope.org_id, Document.well_id == scope.well_id)
+            .outerjoin(RawArtifact, RawArtifact.id == Document.raw_artifact_id)
+            .where(
+                Document.org_id == scope.org_id,
+                document_not_quarantined_condition(),
+            )
             .order_by(Document.created_at.desc())
             .limit(100)
         )
+        if scope.well_id:
+            stmt = stmt.where(Document.well_id == scope.well_id)
+        if scope.project_id:
+            stmt = stmt.where(Document.project_id == scope.project_id)
         if scope.wellbore_id:
-            stmt = stmt.where(or_(Document.wellbore_id == scope.wellbore_id, Document.wellbore_id.is_(None)))
+            stmt = stmt.where(Document.wellbore_id == scope.wellbore_id)
         if scope.section_id:
             filtered = _section_filter(Document.section_id, scope.section_id)
             if filtered is not None:
                 stmt = stmt.where(filtered)
+        if scope.operation_id:
+            stmt = stmt.where(Document.operation_id == scope.operation_id)
+        if scope.period_from is not None or scope.period_to is not None:
+            document_has_period = or_(Document.period_start.is_not(None), Document.period_end.is_not(None))
+            doc_start = case((document_has_period, Document.period_start), else_=Document.issue_date)
+            doc_end = case((document_has_period, Document.period_end), else_=Document.issue_date)
+            stmt = stmt.where(*_interval_scope_conditions(scope, doc_start, doc_end))
         rows = (await session.execute(stmt)).scalars().all()
         ids: list[str] = []
         for row in rows:
-            if not scope.period_overlaps(row.period_start or row.issue_date, row.period_end or row.issue_date):
-                continue
             ids.append(row.id)
             section.items.append(
                 ContextItem(
@@ -668,18 +989,38 @@ class ExtractedRecordsProvider(SectionProvider):
     async def build(self, session: AsyncSession, request: ContextRequest) -> SectionResult:
         section = ContextSection(key=self.key, title=self.title)
         scope = request.scope
-        if not scope.well_id:
-            return _empty(section, "no well in scope"), []
+        if not scope.well_id and not scope.project_id:
+            return _empty(section, "no well or project in scope"), []
+        if scope.formation_id is not None:
+            return _empty(section, "extracted records do not carry a formation locator"), []
         stmt = (
             select(ExtractedRecord)
-            .where(ExtractedRecord.org_id == scope.org_id, ExtractedRecord.well_id == scope.well_id)
+            .join(Document, Document.id == ExtractedRecord.document_id)
+            .outerjoin(RawArtifact, RawArtifact.id == Document.raw_artifact_id)
+            .where(
+                ExtractedRecord.org_id == scope.org_id,
+                Document.org_id == scope.org_id,
+                document_not_quarantined_condition(),
+                *extracted_record_scope_conditions(),
+                extracted_record_trust_condition(),
+            )
             .order_by(ExtractedRecord.created_at.desc())
             .limit(200)
         )
+        if scope.project_id:
+            stmt = stmt.where(ExtractedRecord.project_id == scope.project_id)
+        if scope.well_id:
+            stmt = stmt.where(ExtractedRecord.well_id == scope.well_id)
         if scope.wellbore_id:
             stmt = stmt.where(ExtractedRecord.wellbore_id == scope.wellbore_id)
         if scope.section_id:
             stmt = stmt.where(ExtractedRecord.section_id == scope.section_id)
+        if scope.operation_id:
+            stmt = stmt.where(ExtractedRecord.operation_id == scope.operation_id)
+        if scope.depth_from_si is not None or scope.depth_to_si is not None:
+            stmt = stmt.where(*_depth_scope_conditions(scope, ExtractedRecord.depth_md_si, ExtractedRecord.depth_md_si))
+        if scope.period_from is not None or scope.period_to is not None:
+            stmt = stmt.where(*_interval_scope_conditions(scope, ExtractedRecord.observed_at, ExtractedRecord.observed_at))
         rows = (await session.execute(stmt)).scalars().all()
         ids: list[str] = []
         for row in rows:
@@ -709,24 +1050,466 @@ class ExtractedRecordsProvider(SectionProvider):
         return section, ids
 
 
+def _depth_scope_conditions(scope, start, end):
+    """SQL depth overlap that excludes rows with no depth evidence when a window is requested."""
+    low = func.coalesce(start, end)
+    high = func.coalesce(end, start)
+    conditions = []
+    if scope.depth_from_si is not None:
+        conditions.append(and_(high.is_not(None), high >= scope.depth_from_si))
+    if scope.depth_to_si is not None:
+        conditions.append(and_(low.is_not(None), low <= scope.depth_to_si))
+    return conditions
+
+
+def _interval_scope_conditions(scope, start, end):
+    """SQL interval overlap with fail-closed handling for a missing time range."""
+    low = func.coalesce(start, end)
+    high = func.coalesce(end, start)
+    conditions = [low.is_not(None), high.is_not(None)]
+    if scope.period_from is not None:
+        conditions.append(high >= scope.period_from)
+    if scope.period_to is not None:
+        conditions.append(low <= scope.period_to)
+    return conditions
+
+
+def _source_document_available(document_id, org_id: str):
+    """A subject derived from a document is hidden when that source is quarantined or cross-tenant."""
+    source_document = aliased(Document)
+    source_artifact = aliased(RawArtifact)
+    return or_(
+        document_id.is_(None),
+        select(source_document.id)
+        .outerjoin(source_artifact, source_artifact.id == source_document.raw_artifact_id)
+        .where(
+            source_document.id == document_id,
+            source_document.org_id == org_id,
+            or_(
+                source_document.raw_artifact_id.is_(None),
+                and_(
+                    source_artifact.id == source_document.raw_artifact_id,
+                    source_artifact.org_id == source_document.org_id,
+                    source_artifact.is_quarantined.is_(False),
+                ),
+            ),
+        )
+        .exists(),
+    )
+
+
+def _operation_period_expressions():
+    """Share the coherent actual-vs-planned interval rule with the operational read APIs."""
+    return operation_time_expressions()
+
+
+def _evidence_scope_condition(scope):
+    """Require an evidence source (document, extracted record, or operation) to prove scope.
+
+    EvidenceLink stores a well id but can be inconsistently linked to a source from another scope.
+    For every requested dimension, including well-only scope, each branch proves that the linked
+    source belongs to that scope; a source without
+    enough metadata is intentionally excluded.
+    """
+    narrowed = any(
+        value is not None
+        for value in (
+            scope.well_id,
+            scope.project_id,
+            scope.wellbore_id,
+            scope.section_id,
+            scope.operation_id,
+            scope.formation_id,
+            scope.depth_from_si,
+            scope.depth_to_si,
+            scope.period_from,
+            scope.period_to,
+        )
+    )
+    if not narrowed:
+        return None
+
+    document_conditions = [
+        Document.id == EvidenceLink.document_id,
+        Document.org_id == scope.org_id,
+        or_(EvidenceLink.subject_kind != "document", EvidenceLink.subject_id == Document.id),
+    ]
+    if scope.well_id is not None:
+        document_conditions.append(Document.well_id == scope.well_id)
+    if scope.project_id is not None:
+        document_conditions.append(Document.project_id == scope.project_id)
+    if scope.wellbore_id is not None:
+        document_conditions.append(Document.wellbore_id == scope.wellbore_id)
+    if scope.section_id is not None:
+        document_conditions.append(Document.section_id == scope.section_id)
+    if scope.operation_id is not None:
+        document_conditions.append(Document.operation_id == scope.operation_id)
+    if scope.formation_id is not None or scope.depth_from_si is not None or scope.depth_to_si is not None:
+        # Document metadata has no formation or depth locator, so it cannot prove those filters.
+        document_conditions.append(false())
+    if scope.period_from is not None or scope.period_to is not None:
+        document_has_period = or_(Document.period_start.is_not(None), Document.period_end.is_not(None))
+        document_start = case((document_has_period, Document.period_start), else_=Document.issue_date)
+        document_end = case((document_has_period, Document.period_end), else_=Document.issue_date)
+        document_conditions.extend(_interval_scope_conditions(scope, document_start, document_end))
+
+    record_subject = or_(
+        EvidenceLink.subject_kind == "extracted_record",
+        EvidenceLink.subject_kind.startswith("extracted_record."),
+    )
+    record_conditions = [
+        ExtractedRecord.id == EvidenceLink.subject_id,
+        record_subject,
+        ExtractedRecord.document_id == EvidenceLink.document_id,
+        ExtractedRecord.org_id == scope.org_id,
+        EvidenceLink.well_id == ExtractedRecord.well_id,
+        extracted_record_trust_condition(),
+        *extracted_record_scope_conditions(),
+    ]
+    if scope.well_id is not None:
+        record_conditions.append(ExtractedRecord.well_id == scope.well_id)
+    if scope.project_id is not None:
+        record_conditions.append(ExtractedRecord.project_id == scope.project_id)
+    if scope.wellbore_id is not None:
+        record_conditions.append(ExtractedRecord.wellbore_id == scope.wellbore_id)
+    if scope.section_id is not None:
+        record_conditions.append(ExtractedRecord.section_id == scope.section_id)
+    if scope.operation_id is not None:
+        record_conditions.append(ExtractedRecord.operation_id == scope.operation_id)
+    if scope.formation_id is not None:
+        record_conditions.append(false())
+    if scope.depth_from_si is not None:
+        record_conditions.extend(
+            (ExtractedRecord.depth_md_si.is_not(None), ExtractedRecord.depth_md_si >= scope.depth_from_si)
+        )
+    if scope.depth_to_si is not None:
+        record_conditions.extend(
+            (ExtractedRecord.depth_md_si.is_not(None), ExtractedRecord.depth_md_si <= scope.depth_to_si)
+        )
+    if scope.period_from is not None:
+        record_conditions.extend(
+            (ExtractedRecord.observed_at.is_not(None), ExtractedRecord.observed_at >= scope.period_from)
+        )
+    if scope.period_to is not None:
+        record_conditions.extend(
+            (ExtractedRecord.observed_at.is_not(None), ExtractedRecord.observed_at <= scope.period_to)
+        )
+
+    operation_conditions = [
+        Operation.id == EvidenceLink.subject_id,
+        EvidenceLink.subject_kind == "operation",
+        EvidenceLink.well_id == Operation.well_id,
+        Operation.org_id == scope.org_id,
+        *operational_source_conditions(Operation),
+        _source_document_available(Operation.source_document_id, scope.org_id),
+        select(Well.id)
+        .where(
+            Well.id == Operation.well_id,
+            Well.org_id == scope.org_id,
+            or_(Operation.project_id.is_(None), Well.project_id == Operation.project_id),
+        )
+        .exists(),
+        or_(
+            Operation.wellbore_id.is_(None),
+            select(Wellbore.id)
+            .where(
+                Wellbore.id == Operation.wellbore_id,
+                Wellbore.org_id == scope.org_id,
+                Wellbore.well_id == Operation.well_id,
+            )
+            .exists(),
+        ),
+        or_(
+            Operation.section_id.is_(None),
+            select(WellSection.id)
+            .where(
+                WellSection.id == Operation.section_id,
+                WellSection.org_id == scope.org_id,
+                WellSection.wellbore_id == Operation.wellbore_id,
+            )
+            .exists(),
+        ),
+    ]
+    operation_conditions.append(
+        or_(
+            EvidenceLink.document_id.is_(None),
+            and_(
+                Document.org_id == scope.org_id,
+                or_(Document.project_id.is_(None), Document.project_id == Operation.project_id),
+                or_(Document.well_id.is_(None), Document.well_id == Operation.well_id),
+                or_(Document.wellbore_id.is_(None), Document.wellbore_id == Operation.wellbore_id),
+                or_(Document.section_id.is_(None), Document.section_id == Operation.section_id),
+                or_(Document.operation_id.is_(None), Document.operation_id == Operation.id),
+            ),
+        )
+    )
+    if scope.well_id is not None:
+        operation_conditions.append(Operation.well_id == scope.well_id)
+    if scope.project_id is not None:
+        operation_conditions.append(Operation.project_id == scope.project_id)
+    if scope.wellbore_id is not None:
+        operation_conditions.append(Operation.wellbore_id == scope.wellbore_id)
+    if scope.section_id is not None:
+        operation_conditions.append(Operation.section_id == scope.section_id)
+    if scope.operation_id is not None:
+        operation_conditions.append(Operation.id == scope.operation_id)
+    if scope.formation_id is not None:
+        operation_conditions.append(false())
+    if scope.depth_from_si is not None or scope.depth_to_si is not None:
+        depth_start = func.coalesce(Operation.depth_from_md_si, Operation.depth_to_md_si)
+        depth_end = func.coalesce(Operation.depth_to_md_si, Operation.depth_from_md_si)
+        operation_conditions.append(depth_start.is_not(None))
+        operation_conditions.append(depth_end.is_not(None))
+        if scope.depth_from_si is not None:
+            operation_conditions.append(depth_end >= scope.depth_from_si)
+        if scope.depth_to_si is not None:
+            operation_conditions.append(depth_start <= scope.depth_to_si)
+    if scope.period_from is not None or scope.period_to is not None:
+        operation_start, operation_end = _operation_period_expressions()
+        operation_conditions.extend(_interval_scope_conditions(scope, operation_start, operation_end))
+
+    event_conditions = [
+        Event.id == EvidenceLink.subject_id,
+        EvidenceLink.subject_kind == "event",
+        EvidenceLink.well_id == Event.well_id,
+        Event.org_id == scope.org_id,
+        *operational_source_conditions(Event),
+        _source_document_available(Event.source_document_id, scope.org_id),
+        select(Well.id)
+        .where(
+            Well.id == Event.well_id,
+            Well.org_id == scope.org_id,
+            or_(Event.project_id.is_(None), Well.project_id == Event.project_id),
+        )
+        .exists(),
+        or_(
+            Event.wellbore_id.is_(None),
+            select(Wellbore.id)
+            .where(
+                Wellbore.id == Event.wellbore_id,
+                Wellbore.org_id == scope.org_id,
+                Wellbore.well_id == Event.well_id,
+            )
+            .exists(),
+        ),
+        or_(
+            Event.section_id.is_(None),
+            select(WellSection.id)
+            .where(
+                WellSection.id == Event.section_id,
+                WellSection.org_id == scope.org_id,
+                WellSection.wellbore_id == Event.wellbore_id,
+            )
+            .exists(),
+        ),
+        or_(
+            Event.operation_id.is_(None),
+            select(Operation.id)
+            .where(
+                Operation.id == Event.operation_id,
+                Operation.org_id == scope.org_id,
+                Operation.well_id == Event.well_id,
+                or_(Event.project_id.is_(None), Operation.project_id == Event.project_id),
+                or_(Event.wellbore_id.is_(None), Operation.wellbore_id == Event.wellbore_id),
+                or_(Event.section_id.is_(None), Operation.section_id == Event.section_id),
+            )
+            .correlate_except(Operation)
+            .exists(),
+        ),
+    ]
+    event_conditions.append(
+        or_(
+            EvidenceLink.document_id.is_(None),
+            and_(
+                Document.org_id == scope.org_id,
+                or_(Document.project_id.is_(None), Document.project_id == Event.project_id),
+                or_(Document.well_id.is_(None), Document.well_id == Event.well_id),
+                or_(Document.wellbore_id.is_(None), Document.wellbore_id == Event.wellbore_id),
+                or_(Document.section_id.is_(None), Document.section_id == Event.section_id),
+                or_(Document.operation_id.is_(None), Document.operation_id == Event.operation_id),
+            ),
+        )
+    )
+    if scope.well_id is not None:
+        event_conditions.append(Event.well_id == scope.well_id)
+    if scope.project_id is not None:
+        event_conditions.append(Event.project_id == scope.project_id)
+    if scope.wellbore_id is not None:
+        event_conditions.append(Event.wellbore_id == scope.wellbore_id)
+    if scope.section_id is not None:
+        event_conditions.append(Event.section_id == scope.section_id)
+    if scope.operation_id is not None:
+        event_conditions.append(Event.operation_id == scope.operation_id)
+    if scope.formation_id is not None:
+        event_conditions.append(false())
+    if scope.depth_from_si is not None:
+        event_conditions.extend((Event.depth_md_si.is_not(None), Event.depth_md_si >= scope.depth_from_si))
+    if scope.depth_to_si is not None:
+        event_conditions.extend((Event.depth_md_si.is_not(None), Event.depth_md_si <= scope.depth_to_si))
+    if scope.period_from is not None or scope.period_to is not None:
+        event_conditions.extend(_interval_scope_conditions(scope, Event.occurred_at, Event.ended_at))
+
+    station_stmt = (
+        select(TrajectoryStation.id)
+        .join(Trajectory, Trajectory.id == TrajectoryStation.trajectory_id)
+        .join(Wellbore, Wellbore.id == TrajectoryStation.wellbore_id)
+        .join(Well, Well.id == Wellbore.well_id)
+        .where(
+            TrajectoryStation.id == EvidenceLink.subject_id,
+            TrajectoryStation.org_id == scope.org_id,
+            EvidenceLink.subject_kind == "trajectory_station",
+            Trajectory.org_id == scope.org_id,
+            _source_document_available(Trajectory.source_document_id, scope.org_id),
+            *trajectory_source_conditions(Trajectory),
+            trajectory_station_evidence_document_condition(),
+            Trajectory.wellbore_id == TrajectoryStation.wellbore_id,
+            Wellbore.org_id == scope.org_id,
+            Well.org_id == scope.org_id,
+            Well.id == EvidenceLink.well_id,
+            or_(
+                EvidenceLink.document_id.is_(None),
+                and_(
+                    Document.org_id == scope.org_id,
+                    or_(Document.project_id.is_(None), Document.project_id == Well.project_id),
+                    or_(Document.well_id.is_(None), Document.well_id == Well.id),
+                    or_(Document.wellbore_id.is_(None), Document.wellbore_id == TrajectoryStation.wellbore_id),
+                ),
+            ),
+        )
+    )
+    if scope.well_id is not None:
+        station_stmt = station_stmt.where(Well.id == scope.well_id)
+    if scope.project_id is not None:
+        station_stmt = station_stmt.where(Well.project_id == scope.project_id)
+    if scope.wellbore_id is not None:
+        station_stmt = station_stmt.where(TrajectoryStation.wellbore_id == scope.wellbore_id)
+    if scope.formation_id is not None:
+        station_stmt = station_stmt.where(Trajectory.target_formation_id == scope.formation_id)
+    if scope.section_id is not None:
+        section_start = func.coalesce(WellSection.actual_top_md_si, WellSection.planned_top_md_si)
+        section_end = func.coalesce(WellSection.actual_bottom_md_si, WellSection.planned_bottom_md_si)
+        station_stmt = (
+            station_stmt.join(
+                WellSection,
+                and_(
+                    WellSection.id == scope.section_id,
+                    WellSection.wellbore_id == TrajectoryStation.wellbore_id,
+                ),
+            )
+            .where(
+                WellSection.org_id == scope.org_id,
+                section_start.is_not(None),
+                section_end.is_not(None),
+                TrajectoryStation.md_si >= section_start,
+                TrajectoryStation.md_si <= section_end,
+            )
+        )
+    if scope.operation_id is not None:
+        operation_start_depth = func.coalesce(Operation.depth_from_md_si, Operation.depth_to_md_si)
+        operation_end_depth = func.coalesce(Operation.depth_to_md_si, Operation.depth_from_md_si)
+        station_stmt = (
+            station_stmt.join(
+                Operation,
+                and_(
+                    Operation.id == scope.operation_id,
+                    Operation.well_id == Well.id,
+                    Operation.project_id == Well.project_id,
+                    Operation.wellbore_id == TrajectoryStation.wellbore_id,
+                ),
+            )
+            .where(
+                Operation.org_id == scope.org_id,
+                *operational_source_conditions(Operation),
+                operation_start_depth.is_not(None),
+                operation_end_depth.is_not(None),
+                TrajectoryStation.md_si >= operation_start_depth,
+                TrajectoryStation.md_si <= operation_end_depth,
+            )
+        )
+    if scope.depth_from_si is not None:
+        station_stmt = station_stmt.where(TrajectoryStation.md_si >= scope.depth_from_si)
+    if scope.depth_to_si is not None:
+        station_stmt = station_stmt.where(TrajectoryStation.md_si <= scope.depth_to_si)
+    if scope.period_from is not None:
+        station_stmt = station_stmt.where(
+            TrajectoryStation.measured_at.is_not(None),
+            TrajectoryStation.measured_at >= scope.period_from,
+        )
+    if scope.period_to is not None:
+        station_stmt = station_stmt.where(
+            TrajectoryStation.measured_at.is_not(None),
+            TrajectoryStation.measured_at <= scope.period_to,
+        )
+    station_condition = and_(
+        EvidenceLink.subject_kind == "trajectory_station",
+        station_stmt.correlate_except(TrajectoryStation, Trajectory, Wellbore, Well, WellSection, Operation).exists(),
+    )
+
+    document_subject = and_(
+        EvidenceLink.subject_kind != "operation",
+        EvidenceLink.subject_kind != "event",
+        EvidenceLink.subject_kind != "trajectory_station",
+        ~record_subject,
+    )
+    return or_(
+        and_(document_subject, and_(*document_conditions)),
+        and_(record_subject, and_(*record_conditions)),
+        and_(EvidenceLink.subject_kind == "operation", and_(*operation_conditions)),
+        and_(EvidenceLink.subject_kind == "event", and_(*event_conditions)),
+        station_condition,
+    )
+
+
 class EvidenceProvider(SectionProvider):
     key = "evidence"
     required_permission = "evidence.read"
     title = "Evidence and provenance"
     priority = 65
-    required_permission = "evidence.read"
 
     async def build(self, session: AsyncSession, request: ContextRequest) -> SectionResult:
         section = ContextSection(key=self.key, title=self.title)
         scope = request.scope
-        if not scope.well_id:
-            return _empty(section, "no well in scope"), []
+        if not scope.well_id and not scope.project_id:
+            return _empty(section, "no well or project in scope"), []
         stmt = (
             select(EvidenceLink)
-            .where(EvidenceLink.org_id == scope.org_id, EvidenceLink.well_id == scope.well_id)
+            .outerjoin(Document, Document.id == EvidenceLink.document_id)
+            .outerjoin(RawArtifact, RawArtifact.id == Document.raw_artifact_id)
+            .outerjoin(
+                ExtractedRecord,
+                and_(
+                    ExtractedRecord.id == EvidenceLink.subject_id,
+                    or_(
+                        EvidenceLink.subject_kind == "extracted_record",
+                        EvidenceLink.subject_kind.startswith("extracted_record."),
+                    ),
+                ),
+            )
+            .outerjoin(
+                Operation,
+                and_(Operation.id == EvidenceLink.subject_id, EvidenceLink.subject_kind == "operation"),
+            )
+            .outerjoin(Event, and_(Event.id == EvidenceLink.subject_id, EvidenceLink.subject_kind == "event"))
+            .where(
+                EvidenceLink.org_id == scope.org_id,
+                evidence_document_not_quarantined_condition(),
+            )
             .order_by(EvidenceLink.created_at.desc())
             .limit(200)
         )
+        if scope.well_id:
+            stmt = stmt.where(EvidenceLink.well_id == scope.well_id)
+        else:
+            project_wells = select(Well.id).where(
+                Well.org_id == scope.org_id,
+                Well.project_id == scope.project_id,
+            )
+            stmt = stmt.where(
+                or_(EvidenceLink.well_id.in_(project_wells), Document.project_id == scope.project_id)
+            )
+        scope_condition = _evidence_scope_condition(scope)
+        if scope_condition is not None:
+            stmt = stmt.where(scope_condition)
         rows = (await session.execute(stmt)).scalars().all()
         ids: list[str] = []
         for row in rows:
@@ -749,7 +1532,7 @@ class EvidenceProvider(SectionProvider):
                         "quote_verified": row.quote_verified,
                     },
                     source_kind="document",
-                    source_ids=[row.id, row.evidence_id],
+                    source_ids=[row.id, *([row.evidence_id] if row.evidence_id else [])],
                     cites=[row.document_id] if row.document_id else [],
                     confidence=row.confidence,
                 )
@@ -768,18 +1551,25 @@ class EngineResultsProvider(SectionProvider):
     async def build(self, session: AsyncSession, request: ContextRequest) -> SectionResult:
         section = ContextSection(key=self.key, title=self.title)
         scope = request.scope
-        if not scope.well_id:
-            return _empty(section, "no well in scope"), []
-        stmt = (
-            select(EngineRun)
-            .where(EngineRun.org_id == scope.org_id, EngineRun.well_id == scope.well_id, EngineRun.status == "succeeded")
-            .order_by(EngineRun.created_at.desc())
-            .limit(100)
-        )
+        if not scope.well_id and not scope.project_id:
+            return _empty(section, "no well or project in scope"), []
+        if scope.formation_id is not None or scope.depth_from_si is not None or scope.depth_to_si is not None:
+            return _empty(section, "engine runs do not carry a validated formation/depth locator"), []
+        stmt = select(EngineRun).where(EngineRun.org_id == scope.org_id, EngineRun.status == "succeeded")
+        if scope.project_id:
+            stmt = stmt.where(EngineRun.project_id == scope.project_id)
+        if scope.well_id:
+            stmt = stmt.where(EngineRun.well_id == scope.well_id)
+        if scope.wellbore_id:
+            stmt = stmt.where(EngineRun.wellbore_id == scope.wellbore_id)
         if scope.section_id:
-            filtered = _section_filter(EngineRun.section_id, scope.section_id)
-            if filtered is not None:
-                stmt = stmt.where(filtered)
+            stmt = stmt.where(EngineRun.section_id == scope.section_id)
+        if scope.operation_id:
+            stmt = stmt.where(EngineRun.operation_id == scope.operation_id)
+        if scope.period_from is not None or scope.period_to is not None:
+            observed = func.coalesce(EngineRun.finished_at, EngineRun.started_at, EngineRun.created_at)
+            stmt = stmt.where(*_interval_scope_conditions(scope, observed, observed))
+        stmt = stmt.order_by(EngineRun.created_at.desc()).limit(100)
         rows = (await session.execute(stmt)).scalars().all()
         ids: list[str] = []
         for row in rows:
@@ -821,23 +1611,38 @@ class RecommendationsProvider(SectionProvider):
     async def build(self, session: AsyncSession, request: ContextRequest) -> SectionResult:
         section = ContextSection(key=self.key, title=self.title)
         scope = request.scope
-        if not scope.well_id:
-            return _empty(section, "no well in scope"), []
-        stmt = (
-            select(Recommendation)
-            .where(Recommendation.org_id == scope.org_id, Recommendation.well_id == scope.well_id)
-            .order_by(Recommendation.created_at.desc())
-            .limit(100)
-        )
+        if not scope.well_id and not scope.project_id:
+            return _empty(section, "no well or project in scope"), []
+        if scope.formation_id is not None:
+            return _empty(section, "recommendations do not carry a formation locator"), []
+        stmt = select(Recommendation).where(Recommendation.org_id == scope.org_id)
+        if scope.project_id:
+            stmt = stmt.where(Recommendation.project_id == scope.project_id)
+        if scope.well_id:
+            stmt = stmt.where(Recommendation.well_id == scope.well_id)
+        if scope.wellbore_id:
+            stmt = stmt.where(Recommendation.wellbore_id == scope.wellbore_id)
         if scope.section_id:
-            filtered = _section_filter(Recommendation.section_id, scope.section_id)
-            if filtered is not None:
-                stmt = stmt.where(filtered)
+            stmt = stmt.where(Recommendation.section_id == scope.section_id)
+        if scope.operation_id:
+            stmt = stmt.where(Recommendation.operation_id == scope.operation_id)
+        if scope.depth_from_si is not None or scope.depth_to_si is not None:
+            stmt = stmt.where(
+                *_depth_scope_conditions(scope, Recommendation.depth_from_md_si, Recommendation.depth_to_md_si)
+            )
+        if scope.period_from is not None or scope.period_to is not None:
+            # Creation time is not a substitute for a declared recommendation validity window.
+            stmt = stmt.where(Recommendation.valid_from.is_not(None))
+            if scope.period_from is not None:
+                stmt = stmt.where(
+                    or_(Recommendation.valid_to.is_(None), Recommendation.valid_to >= scope.period_from)
+                )
+            if scope.period_to is not None:
+                stmt = stmt.where(Recommendation.valid_from <= scope.period_to)
+        stmt = stmt.order_by(Recommendation.created_at.desc()).limit(100)
         rows = (await session.execute(stmt)).scalars().all()
         ids: list[str] = []
         for row in rows:
-            if not scope.depth_overlaps(row.depth_from_md_si, row.depth_to_md_si):
-                continue
             ids.append(row.id)
             section.items.append(
                 ContextItem(
@@ -883,23 +1688,29 @@ class RiskProvider(SectionProvider):
     async def build(self, session: AsyncSession, request: ContextRequest) -> SectionResult:
         section = ContextSection(key=self.key, title=self.title)
         scope = request.scope
-        if not scope.well_id:
-            return _empty(section, "no well in scope"), []
-        stmt = (
-            select(Risk)
-            .where(Risk.org_id == scope.org_id, Risk.well_id == scope.well_id)
-            .order_by(Risk.probability.desc(), Risk.impact.desc())
-            .limit(100)
-        )
+        if not scope.well_id and not scope.project_id:
+            return _empty(section, "no well or project in scope"), []
+        if scope.period_from is not None or scope.period_to is not None:
+            return _empty(section, "risks do not carry validated observation or validity times"), []
+        stmt = select(Risk).where(Risk.org_id == scope.org_id)
+        if scope.project_id:
+            stmt = stmt.where(Risk.project_id == scope.project_id)
+        if scope.well_id:
+            stmt = stmt.where(Risk.well_id == scope.well_id)
+        if scope.wellbore_id:
+            stmt = stmt.where(Risk.wellbore_id == scope.wellbore_id)
         if scope.section_id:
-            filtered = _section_filter(Risk.section_id, scope.section_id)
-            if filtered is not None:
-                stmt = stmt.where(filtered)
+            stmt = stmt.where(Risk.section_id == scope.section_id)
+        if scope.operation_id:
+            stmt = stmt.where(Risk.operation_id == scope.operation_id)
+        if scope.formation_id:
+            stmt = stmt.where(Risk.formation_id == scope.formation_id)
+        if scope.depth_from_si is not None or scope.depth_to_si is not None:
+            stmt = stmt.where(*_depth_scope_conditions(scope, Risk.depth_from_md_si, Risk.depth_to_md_si))
+        stmt = stmt.order_by(Risk.probability.desc(), Risk.impact.desc()).limit(100)
         rows = (await session.execute(stmt)).scalars().all()
         ids: list[str] = []
         for row in rows:
-            if not scope.depth_overlaps(row.depth_from_md_si, row.depth_to_md_si):
-                continue
             ids.append(row.id)
             section.items.append(
                 ContextItem(
@@ -941,27 +1752,53 @@ class LessonsProvider(SectionProvider):
     async def build(self, session: AsyncSession, request: ContextRequest) -> SectionResult:
         section = ContextSection(key=self.key, title=self.title)
         scope = request.scope
-        if not scope.well_id:
-            return _empty(section, "no well in scope"), []
+        if not scope.well_id and not scope.project_id:
+            return _empty(section, "no well or project in scope"), []
+        if (
+            scope.formation_id is not None
+            or scope.depth_from_si is not None
+            or scope.depth_to_si is not None
+            or scope.period_from is not None
+            or scope.period_to is not None
+        ):
+            return _empty(section, "lessons do not carry validated formation/depth/time locators"), []
+        lesson_stmt = select(Lesson).where(Lesson.org_id == scope.org_id)
+        if scope.project_id:
+            lesson_stmt = lesson_stmt.where(Lesson.project_id == scope.project_id)
+        if scope.well_id:
+            lesson_stmt = lesson_stmt.where(Lesson.well_id == scope.well_id)
+        if scope.wellbore_id:
+            lesson_stmt = lesson_stmt.where(Lesson.wellbore_id == scope.wellbore_id)
+        if scope.section_id:
+            lesson_stmt = lesson_stmt.where(Lesson.section_id == scope.section_id)
+        if scope.operation_id:
+            lesson_stmt = lesson_stmt.where(Lesson.operation_id == scope.operation_id)
         lessons = (
             await session.execute(
-                select(Lesson)
-                .where(Lesson.org_id == scope.org_id, Lesson.well_id == scope.well_id)
-                .order_by(Lesson.recurrence_count.desc(), Lesson.created_at.desc())
-                .limit(50)
+                lesson_stmt.order_by(Lesson.recurrence_count.desc(), Lesson.created_at.desc()).limit(50)
             )
         ).scalars().all()
-        offsets = (
-            await session.execute(
-                select(OffsetCandidate)
-                .where(
-                    OffsetCandidate.org_id == scope.org_id,
-                    OffsetCandidate.subject_well_id == scope.well_id,
-                    OffsetCandidate.is_selected.is_(True),
-                )
-                .order_by(OffsetCandidate.rank)
-                .limit(30)
+        offset_stmt = (
+            select(OffsetCandidate)
+            .join(Well, Well.id == OffsetCandidate.subject_well_id)
+            .where(
+                OffsetCandidate.org_id == scope.org_id,
+                Well.org_id == scope.org_id,
+                OffsetCandidate.is_selected.is_(True),
             )
+        )
+        if scope.project_id:
+            offset_stmt = offset_stmt.where(Well.project_id == scope.project_id)
+        if scope.well_id:
+            offset_stmt = offset_stmt.where(OffsetCandidate.subject_well_id == scope.well_id)
+        if scope.wellbore_id:
+            offset_stmt = offset_stmt.where(OffsetCandidate.subject_wellbore_id == scope.wellbore_id)
+        if scope.section_id:
+            offset_stmt = offset_stmt.where(OffsetCandidate.subject_section_id == scope.section_id)
+        if scope.operation_id:
+            offset_stmt = offset_stmt.where(false())
+        offsets = (
+            await session.execute(offset_stmt.order_by(OffsetCandidate.rank).limit(30))
         ).scalars().all()
         ids: list[str] = []
         for row in lessons:
@@ -1024,13 +1861,27 @@ class MaterialsProvider(SectionProvider):
     async def build(self, session: AsyncSession, request: ContextRequest) -> SectionResult:
         section = ContextSection(key=self.key, title=self.title)
         scope = request.scope
-        if not scope.well_id:
-            return _empty(section, "no well in scope"), []
-        stmt = select(BomRequirement).where(BomRequirement.org_id == scope.org_id, BomRequirement.well_id == scope.well_id)
+        if not scope.well_id and not scope.project_id:
+            return _empty(section, "no well or project in scope"), []
+        if scope.formation_id is not None or scope.depth_from_si is not None or scope.depth_to_si is not None:
+            return _empty(section, "BOM requirements do not carry validated formation/depth locators"), []
+        stmt = (
+            select(BomRequirement)
+            .join(Well, Well.id == BomRequirement.well_id)
+            .where(BomRequirement.org_id == scope.org_id, Well.org_id == scope.org_id)
+        )
+        if scope.project_id:
+            stmt = stmt.where(Well.project_id == scope.project_id)
+        if scope.well_id:
+            stmt = stmt.where(BomRequirement.well_id == scope.well_id)
+        if scope.wellbore_id:
+            stmt = stmt.where(BomRequirement.wellbore_id == scope.wellbore_id)
         if scope.section_id:
-            filtered = _section_filter(BomRequirement.section_id, scope.section_id)
-            if filtered is not None:
-                stmt = stmt.where(filtered)
+            stmt = stmt.where(BomRequirement.section_id == scope.section_id)
+        if scope.operation_id:
+            stmt = stmt.where(BomRequirement.operation_id == scope.operation_id)
+        if scope.period_from is not None or scope.period_to is not None:
+            stmt = stmt.where(*_interval_scope_conditions(scope, BomRequirement.required_by, BomRequirement.required_by))
         rows = (await session.execute(stmt.order_by(BomRequirement.category, BomRequirement.description))).scalars().all()
         ids: list[str] = []
         for row in rows:
@@ -1077,23 +1928,40 @@ class DocumentChunkProvider(SectionProvider):
     async def build(self, session: AsyncSession, request: ContextRequest) -> SectionResult:
         section = ContextSection(key=self.key, title=self.title)
         scope = request.scope
-        if not scope.well_id:
-            return _empty(section, "no well in scope"), []
+        if not scope.well_id and not scope.project_id:
+            return _empty(section, "no well or project in scope"), []
         stmt = (
             select(DocumentChunk)
-            .where(DocumentChunk.org_id == scope.org_id, DocumentChunk.well_id == scope.well_id)
+            .join(Document, Document.id == DocumentChunk.document_id)
+            .outerjoin(RawArtifact, RawArtifact.id == Document.raw_artifact_id)
+            .where(
+                DocumentChunk.org_id == scope.org_id,
+                Document.org_id == scope.org_id,
+                document_not_quarantined_condition(),
+                *chunk_document_scope_conditions(),
+            )
             .order_by(DocumentChunk.created_at.desc())
             .limit(80)
         )
+        if scope.project_id:
+            stmt = stmt.where(Document.project_id == scope.project_id)
+        if scope.well_id:
+            stmt = stmt.where(DocumentChunk.well_id == scope.well_id)
+        if scope.wellbore_id:
+            stmt = stmt.where(DocumentChunk.wellbore_id == scope.wellbore_id)
         if scope.section_id:
-            filtered = _section_filter(DocumentChunk.section_id, scope.section_id)
-            if filtered is not None:
-                stmt = stmt.where(filtered)
+            stmt = stmt.where(DocumentChunk.section_id == scope.section_id)
+        if scope.operation_id:
+            stmt = stmt.where(DocumentChunk.operation_id == scope.operation_id)
+        if scope.formation_id:
+            stmt = stmt.where(DocumentChunk.formation_id == scope.formation_id)
+        if scope.depth_from_si is not None or scope.depth_to_si is not None:
+            stmt = stmt.where(*_depth_scope_conditions(scope, DocumentChunk.depth_from_si, DocumentChunk.depth_to_si))
+        if scope.period_from is not None or scope.period_to is not None:
+            stmt = stmt.where(*_interval_scope_conditions(scope, DocumentChunk.period_start, DocumentChunk.period_end))
         rows = (await session.execute(stmt)).scalars().all()
         ids: list[str] = []
         for row in rows:
-            if not scope.depth_overlaps(row.depth_from_si, row.depth_to_si):
-                continue
             ids.append(row.id)
             section.items.append(
                 ContextItem(

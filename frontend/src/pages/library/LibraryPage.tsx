@@ -54,7 +54,7 @@ export default function LibraryPage() {
       >
 
       {tab === 'engines' && (
-        <Card title={t('library.engines')} subtitle="validation status is a per-engine declaration, not a marketing claim">
+        <Card title={t('library.engines')} subtitle={t('engineering.validationHint')}>
           <Async query={engines}>
             {(data) => (
               <Table
@@ -77,7 +77,7 @@ export default function LibraryPage() {
                   {
                     key: 'validation',
                     header: t('engineering.validationStatus'),
-                    render: (row) => <Badge tone={statusTone(row.validation_status)}>{formatValidationStatus(row.validation_status)}</Badge>,
+                    render: (row) => <Badge tone={statusTone(row.validation_status)}>{formatValidationStatus(row.validation_status, t)}</Badge>,
                   },
                   { key: 'level', header: 'Action', render: (row) => formatActionLevel(row.action_level) },
                   {

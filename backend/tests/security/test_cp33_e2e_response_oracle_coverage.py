@@ -287,10 +287,13 @@ def test_cp33_context_fixture_records_http_and_transport_failures_for_all_pages(
         "context.on('requestfailed'",
         "context.on('page'",
         "response.status() >= 400",
-        "evaluateFailureOracle(state.failedResponses, state.networkFailures, state.allowances)",
         "await assertFailureOracle(state, testInfo)",
     ):
         assert invariant in fixture, f"the shared fixture is missing context-wide behavior: {invariant}"
+    assert re.search(
+        r"evaluateFailureOracle\(\s*state\.failedResponses,\s*state\.networkFailures,\s*state\.allowances,\s*state\.applicationOrigin,\s*\)",
+        fixture,
+    ), "the automatic oracle must bind every page's failures to the fixture's application origin"
 
 
 def _contract_body() -> str:

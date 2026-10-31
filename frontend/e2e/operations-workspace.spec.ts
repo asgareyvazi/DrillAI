@@ -16,6 +16,7 @@
 
 import {
   apiGet,
+  apiPost,
   expect,
   expectNoFailures,
   test,
@@ -25,6 +26,7 @@ import {
 type OperationPage = {
   items: {
     id: string
+    wellbore_id: string
     name: string
     sequence: number
     kind: string
@@ -137,14 +139,68 @@ test.describe('the operational workspace built from the real records', () => {
     wellId,
     consoleErrors, failedResponses,
   }) => {
-    const operations = await apiGet<OperationPage>(
+    const seededBefore = await apiGet<OperationPage>(
       request,
-      `/operations?well_id=${wellId}&limit=20`,
+      `/operations?well_id=${wellId}&limit=500`,
     )
-    const terminal = operations.items.find((row) => row.allowed_transitions.length === 0)
-    expect(terminal, 'the seeded promotion completes its operations').toBeTruthy()
+    const tag = Date.now().toString(36)
+    const project = await apiPost<{ id: string }>(
+      request,
+      '/projects',
+      { name: `E2E Operation Transition Project ${tag}` },
+      'wellManager',
+    )
+    const isolatedWell = await apiPost<{ id: string }>(
+      request,
+      '/wells',
+      { project_id: project.id, name: `E2E-OPS-${tag}`, well_type: 'development_producer' },
+      'engineer',
+    )
+    const wellbore = await apiPost<{ id: string }>(
+      request,
+      `/wells/${isolatedWell.id}/wellbores`,
+      { name: 'Main bore', purpose: 'original' },
+      'engineer',
+    )
 
-    await page.goto(wellPath(`/operations?tab=operations&operation=${terminal?.id}`))
+    // Operations are append-only evidence; the API intentionally has no delete route. Keep this
+    // journey's two records under a unique test-only well so they cannot pollute the shared seeded
+    // well, and prove that the seeded operation list stayed unchanged.
+    const open = await apiPost<OperationPage['items'][number]>(request, '/operations', {
+      well_id: isolatedWell.id,
+      wellbore_id: wellbore.id,
+      name: `E2E in-progress operation ${tag}`,
+      operation_class: 'actual',
+      kind: 'drilling',
+      status: 'in_progress',
+      source_kind: 'manual',
+    }, 'engineer')
+    const terminal = await apiPost<OperationPage['items'][number]>(request, '/operations', {
+      well_id: isolatedWell.id,
+      wellbore_id: wellbore.id,
+      name: `E2E completed operation ${tag}`,
+      operation_class: 'actual',
+      kind: 'drilling',
+      status: 'completed',
+      source_kind: 'manual',
+    }, 'engineer')
+    expect(open.allowed_transitions.length).toBeGreaterThan(0)
+    expect(terminal.allowed_transitions).toEqual([])
+
+    const isolatedOperations = await apiGet<OperationPage>(
+      request,
+      `/operations?well_id=${isolatedWell.id}&limit=20`,
+      'engineer',
+    )
+    expect(isolatedOperations.items.map((row) => row.id).sort()).toEqual([open.id, terminal.id].sort())
+    const seededAfter = await apiGet<OperationPage>(
+      request,
+      `/operations?well_id=${wellId}&limit=500`,
+    )
+    expect(seededAfter.items.map((row) => row.id)).toEqual(seededBefore.items.map((row) => row.id))
+    expect(seededAfter.total).toBe(seededBefore.total)
+
+    await page.goto(`/wells/${isolatedWell.id}/operations?tab=operations&operation=${terminal.id}`)
     const drawer = page.getByRole('dialog')
     await expect(
       drawer.getByText('This record has reached a terminal state; no further transition is offered.'),
@@ -153,15 +209,12 @@ test.describe('the operational workspace built from the real records', () => {
     await expect(drawer.getByRole('button', { name: /^Move to / })).toHaveCount(0)
 
     // A record the server *does* offer transitions for renders exactly those buttons.
-    const open = operations.items.find((row) => row.allowed_transitions.length > 0)
-    if (open) {
-      await page.goto(wellPath(`/operations?tab=operations&operation=${open.id}`))
-      for (const status of open.allowed_transitions) {
-        const label = status.charAt(0).toUpperCase() + status.slice(1)
-        await expect(
-          page.getByRole('dialog').getByRole('button', { name: `Move to ${label}` }),
-        ).toBeVisible()
-      }
+    await page.goto(`/wells/${isolatedWell.id}/operations?tab=operations&operation=${open.id}`)
+    for (const status of open.allowed_transitions) {
+      const label = status.charAt(0).toUpperCase() + status.slice(1)
+      await expect(
+        page.getByRole('dialog').getByRole('button', { name: `Move to ${label}` }),
+      ).toBeVisible()
     }
     expectNoFailures(consoleErrors, failedResponses)
   })

@@ -115,7 +115,21 @@ test.describe('the Persian interface', () => {
     expect(/[\u0600-\u06FF]/.test(mainText), 'the Persian interface renders Persian text').toBe(true)
   })
 
-  test('keeps identifiers readable and JSON a payload', async ({ page, wellId }) => {
+  test('keeps identifiers readable and JSON a payload', async ({ page, request, wellId }) => {
+    const { state } = await apiGet<{
+      state: {
+        progress: {
+          current_md_si: number | null
+          current_md_source: string | null
+          depth_variance_si: number | null
+        }
+      }
+    }>(request, `/wells/${wellId}/state`)
+    expect(state.progress.current_md_si).toBe(3200)
+    expect(state.progress.current_md_source).toBe('well_sections.actual_bottom_md_si')
+    expect(state.progress.depth_variance_si).not.toBeNull()
+    expect(state.progress.depth_variance_si as number).toBeLessThan(0)
+
     await page.goto(`/wells/${wellId}/cockpit`)
     await waitForLoaded(page)
     await switchToPersian(page)
@@ -135,12 +149,21 @@ test.describe('the Persian interface', () => {
     const technical = await page.locator('.font-mono:visible').allInnerTexts()
     expect(technical.some((text) => /^(well_|engine\.|extracted_record:)/.test(text.trim()))).toBe(true)
 
-    // Engineering numbers keep their sign and their magnitude: the cockpit's variance is negative,
-    // and a minus sign placed at the wrong end of a number is a different number.
+    // Engineering numbers keep their sign and magnitude. Read the variance from the backend, then
+    // compare it with the specifically labelled value rather than accepting any unrelated negative
+    // number elsewhere on the page.
+    const varianceCell = page.locator('dt').filter({ hasText: 'اختلاف' }).locator('..')
+    const varianceText = asciiDigits(await varianceCell.locator('dd').innerText()).replace(
+      /[\u200e\u200f\u2212]/g,
+      (mark) => (mark === '\u2212' ? '-' : ''),
+    )
+    const displayedVariance = varianceText.match(/-?[\d.,]+/)?.[0]
+    expect(displayedVariance, 'the localized variance has a numeric value').toBeDefined()
+    expect(Number(displayedVariance?.replace(',', '.'))).toBe(state.progress.depth_variance_si)
     const negatives = technical
       .map((text) => asciiDigits(text).replace(/[\u200e\u200f\u2212]/g, (mark) => (mark === '\u2212' ? '-' : '')))
       .filter((text) => /^-?[\d.,]+$/.test(text) && text.startsWith('-'))
-    expect(negatives.length, 'a signed engineering quantity stays signed').toBeGreaterThan(0)
+    expect(negatives).toContain(displayedVariance)
 
     // A JSON payload keeps its own direction. The platform page renders the deployment's authorization
     // summary as a payload through the shared component (`Json`), which is the contract asserted here.

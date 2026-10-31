@@ -11,7 +11,7 @@
  */
 
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ErrorState } from '../components/common'
@@ -97,7 +97,7 @@ describe('a read that is superseded', () => {
     renderWithQuery(<Harness initial="run_a" />)
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
 
-    screen.getByRole('button', { name: /open run b/i }).click()
+    fireEvent.click(screen.getByRole('button', { name: /open run b/i }))
 
     expect(await screen.findByTestId('run-id')).toHaveTextContent('run_b')
     expect(signals.get('run_a')?.aborted).toBe(true)
@@ -122,7 +122,7 @@ describe('a read that is superseded', () => {
     const { queryClient } = renderWithQuery(<Harness initial="run_a" />)
     await waitFor(() => expect(pending).toHaveLength(1))
 
-    screen.getByRole('button', { name: /open run b/i }).click()
+    fireEvent.click(screen.getByRole('button', { name: /open run b/i }))
     expect(await screen.findByTestId('run-id')).toHaveTextContent('run_b')
 
     // Run A's answer finally arrives. It belongs to a screen that no longer exists.
@@ -142,7 +142,7 @@ describe('a read that is superseded', () => {
     const { queryClient } = renderWithQuery(<Harness initial="run_a" />)
     expect(await screen.findByTestId('error-state')).toHaveAttribute('data-error-kind', 'server')
 
-    screen.getByRole('button', { name: /open run b/i }).click()
+    fireEvent.click(screen.getByRole('button', { name: /open run b/i }))
 
     expect(await screen.findByTestId('run-id')).toHaveTextContent('run_b')
     expect(screen.queryByTestId('error-state')).not.toBeInTheDocument()
@@ -160,7 +160,7 @@ describe('the failure state a screen shows', () => {
     expect(await screen.findByTestId('error-state')).toHaveAttribute('data-error-kind', 'network')
 
     fetchMock.mockResolvedValueOnce(jsonResponse(detailFor('run_a')))
-    screen.getByRole('button', { name: /retry/i }).click()
+    fireEvent.click(screen.getByRole('button', { name: /retry/i }))
 
     expect(await screen.findByTestId('run-id')).toHaveTextContent('run_a')
     expect(screen.queryByTestId('error-state')).not.toBeInTheDocument()

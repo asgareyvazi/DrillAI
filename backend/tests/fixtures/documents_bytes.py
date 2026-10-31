@@ -12,6 +12,8 @@ that are handed to the real parser.
 from __future__ import annotations
 
 import io
+import re
+import zipfile
 
 # --------------------------------------------------------------------------- fixtures
 
@@ -106,3 +108,42 @@ def xlsx_bytes() -> bytes:
     buffer = io.BytesIO()
     workbook.save(buffer)
     return buffer.getvalue()
+
+
+def xlsx_formula_cached_bytes() -> bytes:
+    """A deterministic workbook exercising coordinates, blanks, zero, formulas and hidden rows."""
+    import openpyxl
+
+    workbook = openpyxl.Workbook()
+    sheet = workbook.active
+    sheet.title = "Operations"
+    sheet.merge_cells("A1:C1")
+    sheet["A1"] = "Synthetic DDR"
+    sheet.append([])
+    sheet.append(["Activity", "Duration (h)", "Depth (m)"])
+    sheet.append(["Drill ahead", "=6+6", 1500])
+    sheet.append(["Circulate", 0, 0])
+    sheet.append(["Hidden operation", 4, 1700])
+    sheet.row_dimensions[6].hidden = True
+    sheet.append(["Trip", None, 1800])
+
+    hidden = workbook.create_sheet("Hidden Data")
+    hidden.sheet_state = "hidden"
+    hidden.append(["Mud Weight", "99.9"])
+
+    buffer = io.BytesIO()
+    workbook.save(buffer)
+    original = buffer.getvalue()
+    patched = io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(original), "r") as source, zipfile.ZipFile(
+        patched, "w", compression=zipfile.ZIP_DEFLATED
+    ) as target:
+        for item in source.infolist():
+            content = source.read(item.filename)
+            if item.filename == "xl/worksheets/sheet1.xml":
+                pattern = rb'(<c\b[^>]*\br="B4"[^>]*>.*?<f>.*?</f><v>).*?(</v>.*?</c>)'
+                content, count = re.subn(pattern, rb"\g<1>12\g<2>", content, count=1)
+                if count != 1:
+                    raise AssertionError("test fixture formula cell B4 did not have a cached-value slot")
+            target.writestr(item, content)
+    return patched.getvalue()

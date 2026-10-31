@@ -8,10 +8,10 @@ One method, :meth:`IngestionPipeline.ingest`, executes the whole chain and write
    (``documents.identity``). The same report filed against two wells is two documents sharing one
    artefact, and re-filing it against the same well returns the document that already exists;
 2. **parse** — format parser produces pages and regions (tables keep their grid and coordinates);
-3. **chunk** — retrievable passages carrying the id of the region they came from, plus coordinates,
-   depth and period metadata, so retrieval can filter by well, section, depth or date rather than
-   relying on embeddings alone;
-4. **extract** — deterministic extractors produce typed records (numbers, never prose);
+3. **extract and merge metadata** — deterministic extractors produce typed records (numbers, never
+   prose), and any report date is merged before dependent rows are persisted;
+4. **chunk** — retrievable passages carry the id of their region plus explicit depth and period
+   metadata, so retrieval can filter by well, section, depth or date rather than relying on embeddings;
 5. **link provenance** — every record carries its page *and its region* where the extractor could
    name one, every record gets an :class:`EvidenceLink` back to that source with the quote checked
    against the text it claims to quote, and the document is linked to the well it belongs to;
@@ -30,15 +30,17 @@ from __future__ import annotations
 
 import contextlib
 import datetime as dt
+import math
 import re
 from dataclasses import dataclass, field
 from typing import Any
 
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from drillai.core.clock import utc_now
-from drillai.core.errors import ExtractionFailed, IngestionError, UnsupportedFormat
+from drillai.core.clock import ensure_utc, parse_iso_datetime_utc, utc_now
+from drillai.core.errors import ExtractionFailed, IngestionError, UnsupportedFormat, ValidationFailed
 from drillai.core.logging import get_logger
 from drillai.db.models import (
     Document,
@@ -59,6 +61,62 @@ from drillai.ingestion.storage import BlobStore, compute_sha256
 from drillai.observability.tracing import get_metrics, get_tracer
 
 logger = get_logger(__name__)
+
+
+def _is_named_unique_conflict(
+    exc: IntegrityError, *, constraint_name: str, sqlite_columns: str
+) -> bool:
+    """Match a known unique index across PostgreSQL and SQLite error representations."""
+    original = getattr(exc, "orig", exc)
+    reported_name = getattr(original, "constraint_name", None)
+    if reported_name is None:
+        reported_name = getattr(getattr(original, "diag", None), "constraint_name", None)
+    if reported_name == constraint_name:
+        return True
+    message = str(original).casefold()
+    return constraint_name.casefold() in message or f"unique constraint failed: {sqlite_columns}" in message
+
+
+def _is_raw_artifact_unique_conflict(exc: IntegrityError) -> bool:
+    """Recognize the content-address uniqueness race, not arbitrary integrity failures."""
+    return _is_named_unique_conflict(
+        exc,
+        constraint_name="uq_raw_artifacts_org_sha256",
+        sqlite_columns="raw_artifacts.org_id, raw_artifacts.sha256",
+    )
+
+
+def _is_logical_document_unique_conflict(exc: IntegrityError) -> bool:
+    """Recognize the logical-document uniqueness race, not arbitrary integrity failures."""
+    return _is_named_unique_conflict(
+        exc,
+        constraint_name="uq_documents_org_logical_key",
+        sqlite_columns="documents.org_id, documents.logical_key",
+    )
+
+
+def _prepare_identity_parse(
+    data: bytes,
+    *,
+    filename: str,
+    content_type: str | None,
+    requested_doc_type: str | None,
+) -> tuple[str, ParsedDocument | None, Exception | None]:
+    """Resolve auto-classified identity before hashing the logical document key.
+
+    Persisted keys use the document's final type, so an omitted/``other`` request must run the same
+    deterministic parser classifier before deduplication. Keep the parse result (or failure) so this
+    preflight does not parse successful uploads twice and parser failures can still be recorded.
+    """
+    if requested_doc_type not in (None, "", "other"):
+        return requested_doc_type, None, None
+    try:
+        parsed = parse_bytes(data, filename=filename, content_type=content_type)
+    except Exception as exc:
+        # Defer the error until the normal failure-record path has created the durable job/document.
+        return "other", None, exc
+    return guess_doc_type(parsed, filename), parsed, None
+
 
 __all__ = ["IngestionOutcome", "IngestionPipeline", "build_chunks", "normalize_text"]
 
@@ -89,6 +147,16 @@ def normalize_text(text: str) -> str:
     return "\n".join(out).strip("\n")
 
 
+def _valid_si_depth(value: Any) -> bool:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return False
+    try:
+        numeric = float(value)
+    except (OverflowError, ValueError):
+        return False
+    return math.isfinite(numeric) and numeric >= 0.0
+
+
 @dataclass
 class _ChunkDraft:
     text: str
@@ -109,33 +177,73 @@ def build_chunks(
     kind: str = "text",
     target_chars: int = CHUNK_TARGET_CHARS,
     overlap_chars: int = CHUNK_OVERLAP_CHARS,
+    depth_from_si: float | None = None,
+    depth_to_si: float | None = None,
 ) -> list[_ChunkDraft]:
-    """Split text on paragraph boundaries into overlapping, retrievable chunks."""
+    """Split text into bounded, overlapping chunks while preferring paragraph/word boundaries.
+
+    A single long paragraph used to bypass the target entirely because the previous chunker only
+    split when there was already a buffer. A 64 MiB text upload could therefore become one 64 MiB
+    retrieval result. The sliding window below bounds every chunk even when the source has no
+    whitespace at all.
+    """
+    if target_chars < CHUNK_MIN_CHARS:
+        raise ValueError(f"target_chars must be at least {CHUNK_MIN_CHARS}")
+    if overlap_chars < 0 or overlap_chars >= target_chars:
+        raise ValueError("overlap_chars must be non-negative and smaller than target_chars")
+    for name, value in (("depth_from_si", depth_from_si), ("depth_to_si", depth_to_si)):
+        if value is not None and not _valid_si_depth(value):
+            raise ValueError(f"{name} must be a finite non-negative number")
+    if depth_from_si is not None and depth_to_si is not None and depth_from_si > depth_to_si:
+        raise ValueError("depth_from_si must not exceed depth_to_si")
     text = normalize_text(text)
     if len(text) < CHUNK_MIN_CHARS:
         return []
-    paragraphs = [paragraph for paragraph in text.split("\n\n") if paragraph.strip()]
+
     chunks: list[_ChunkDraft] = []
-    buffer = ""
     start = 0
-    cursor = 0
-    for paragraph in paragraphs:
-        candidate = f"{buffer}\n\n{paragraph}" if buffer else paragraph
-        if buffer and len(candidate) > target_chars:
-            chunks.append(
-                _ChunkDraft(text=buffer, page_number=page_number, region_id=region_id, kind=kind, char_start=start, char_end=start + len(buffer))
+    while start < len(text):
+        end = min(start + target_chars, len(text))
+        if end < len(text):
+            floor = start + max(CHUNK_MIN_CHARS, target_chars // 2)
+            boundaries = (
+                text.rfind("\n\n", floor, end),
+                text.rfind("\n", floor, end),
+                text.rfind(" ", floor, end),
             )
-            overlap = buffer[-overlap_chars:] if overlap_chars else ""
-            buffer = f"{overlap}\n\n{paragraph}" if overlap else paragraph
-            start = max(0, cursor - len(overlap)) if overlap else cursor
-        else:
-            buffer = candidate
-        cursor += len(paragraph) + 2
-    if buffer.strip():
-        chunks.append(
-            _ChunkDraft(text=buffer, page_number=page_number, region_id=region_id, kind=kind, char_start=start, char_end=start + len(buffer))
-        )
-    return [chunk for chunk in chunks if len(chunk.text) >= CHUNK_MIN_CHARS]
+            boundary = max(boundaries)
+            if boundary > start:
+                end = boundary
+
+        raw_chunk = text[start:end]
+        leading = len(raw_chunk) - len(raw_chunk.lstrip())
+        trailing = len(raw_chunk.rstrip())
+        chunk_text = raw_chunk.strip()
+        chunk_start = start + leading
+        chunk_end = start + trailing
+        if len(chunk_text) >= CHUNK_MIN_CHARS:
+            chunks.append(
+                _ChunkDraft(
+                    text=chunk_text,
+                    page_number=page_number,
+                    region_id=region_id,
+                    kind=kind,
+                    char_start=chunk_start,
+                    char_end=chunk_end,
+                    depth_from_si=depth_from_si,
+                    depth_to_si=depth_to_si,
+                )
+            )
+        if end >= len(text):
+            break
+
+        next_start = max(start + 1, end - overlap_chars)
+        if next_start < end:
+            next_whitespace = re.search(r"\s", text[next_start:end])
+            if next_whitespace is not None:
+                next_start += next_whitespace.end()
+        start = next_start
+    return chunks
 
 
 @dataclass
@@ -207,13 +315,67 @@ class IngestionPipeline:
         link_to_well: bool = True,
         commit: bool = False,
     ) -> IngestionOutcome:
+        try:
+            period_start = ensure_utc(period_start) if period_start is not None else None
+            period_end = ensure_utc(period_end) if period_end is not None else None
+        except ValueError as exc:
+            raise ValidationFailed(
+                "period_start and period_end must include a timezone offset",
+                details={"reason": str(exc)},
+            ) from exc
+        if period_start is not None and period_end is not None and period_end < period_start:
+            raise ValidationFailed("period_end must not precede period_start")
+
         tracer = get_tracer()
         metrics = get_metrics()
-        with tracer.span(
-            "ingestion.run",
-            attributes={"document.filename": filename, "well.id": well_id, "org.id": self.org_id},
-        ) as span:
-            outcome = await self._ingest_inner(
+        effective_trace_id = trace_id
+        try:
+            with tracer.span(
+                "ingestion.run",
+                attributes={"document.filename": filename, "well.id": well_id, "org.id": self.org_id},
+            ) as span:
+                effective_trace_id = trace_id or span.trace.trace_id
+                outcome = await self._ingest_inner(
+                    data,
+                    filename=filename,
+                    content_type=content_type,
+                    project_id=project_id,
+                    well_id=well_id,
+                    wellbore_id=wellbore_id,
+                    section_id=section_id,
+                    operation_id=operation_id,
+                    doc_type=doc_type,
+                    title=title,
+                    revision=revision,
+                    period_start=period_start,
+                    period_end=period_end,
+                    trigger=trigger,
+                    triggered_by=triggered_by,
+                    trace_id=effective_trace_id,
+                    link_to_well=link_to_well,
+                    commit=commit,
+                )
+                span.set_attributes(
+                    {
+                        "document.id": outcome.document.id if outcome.document else None,
+                        "document.page_count": outcome.page_count,
+                        "document.record_count": len(outcome.record_ids),
+                        "document.status": outcome.job.status,
+                    }
+                )
+                if outcome.job.error:
+                    span.record_error(outcome.job.error)
+            if commit:
+                await self.session.commit()
+        except IntegrityError as exc:
+            if not commit:
+                raise
+            raw_artifact_conflict = _is_raw_artifact_unique_conflict(exc)
+            logical_document_conflict = _is_logical_document_unique_conflict(exc)
+            await self.session.rollback()
+            if not (raw_artifact_conflict or logical_document_conflict):
+                raise
+            outcome = await self._recover_duplicate_upload(
                 data,
                 filename=filename,
                 content_type=content_type,
@@ -229,27 +391,145 @@ class IngestionPipeline:
                 period_end=period_end,
                 trigger=trigger,
                 triggered_by=triggered_by,
-                trace_id=trace_id or span.trace.trace_id,
+                trace_id=effective_trace_id,
                 link_to_well=link_to_well,
+                raw_artifact_conflict=raw_artifact_conflict,
             )
-            span.set_attributes(
-                {
-                    "document.id": outcome.document.id if outcome.document else None,
-                    "document.page_count": outcome.page_count,
-                    "document.record_count": len(outcome.record_ids),
-                    "document.status": outcome.job.status,
-                }
-            )
-            if outcome.job.error:
-                span.record_error(outcome.job.error)
+            if outcome is None:
+                raise exc
         metrics.counter("drillai.ingestion.jobs", "ingestion jobs").inc(1, status=outcome.job.status)
         if outcome.job.duration_ms:
             metrics.histogram("drillai.ingestion.duration_ms", "ingestion duration").observe(
                 outcome.job.duration_ms, doc_type=outcome.document.doc_type if outcome.document else "unknown"
             )
-        if commit:
-            await self.session.commit()
         return outcome
+
+    async def _recover_duplicate_upload(
+        self,
+        data: bytes,
+        *,
+        filename: str,
+        content_type: str | None,
+        project_id: str | None,
+        well_id: str | None,
+        wellbore_id: str | None,
+        section_id: str | None,
+        operation_id: str | None,
+        doc_type: str | None,
+        title: str | None,
+        revision: str | None,
+        period_start: dt.datetime | None,
+        period_end: dt.datetime | None,
+        trigger: str,
+        triggered_by: str | None,
+        trace_id: str | None,
+        link_to_well: bool,
+        raw_artifact_conflict: bool = False,
+    ) -> IngestionOutcome | None:
+        """Resolve a concurrent upload only after the database confirms its logical winner."""
+        digest = compute_sha256(data)
+        identity_doc_type, _parsed, _parse_error = _prepare_identity_parse(
+            data,
+            filename=filename,
+            content_type=content_type,
+            requested_doc_type=doc_type,
+        )
+        key = logical_key(
+            content_sha256=digest,
+            section_id=section_id,
+            wellbore_id=wellbore_id,
+            well_id=well_id,
+            project_id=project_id,
+            doc_type=identity_doc_type,
+            revision=revision,
+            operation_id=operation_id,
+        )
+        if key is None:
+            return None
+        existing_document = await find_logical_document(
+            self.session, org_id=self.org_id, logical_key_value=key
+        )
+        if existing_document is not None and existing_document.raw_artifact_id:
+            prior_artifact = await self.session.get(RawArtifact, existing_document.raw_artifact_id)
+            if prior_artifact is not None and prior_artifact.is_quarantined:
+                raise ValidationFailed("the uploaded content is quarantined and cannot be ingested")
+        if existing_document is None:
+            if not raw_artifact_conflict:
+                return None
+            # Identical bytes may legitimately be filed to another well, operation or revision. The
+            # unique raw-artifact race is not a duplicate-document race: after rollback, the winning
+            # artifact is visible, so rerun the requested logical filing against it.
+            raw = (
+                await self.session.execute(
+                    select(RawArtifact).where(RawArtifact.org_id == self.org_id, RawArtifact.sha256 == digest)
+                )
+            ).scalar_one_or_none()
+            if raw is None:
+                return None
+            if raw.is_quarantined:
+                raise ValidationFailed("the uploaded content is quarantined and cannot be ingested")
+            return await self.ingest(
+                data,
+                filename=filename,
+                content_type=content_type,
+                project_id=project_id,
+                well_id=well_id,
+                wellbore_id=wellbore_id,
+                section_id=section_id,
+                operation_id=operation_id,
+                doc_type=identity_doc_type,
+                title=title,
+                revision=revision,
+                period_start=period_start,
+                period_end=period_end,
+                trigger=trigger,
+                triggered_by=triggered_by,
+                trace_id=trace_id,
+                link_to_well=link_to_well,
+                commit=True,
+            )
+        if existing_document.status == "failed":
+            # A committed parse failure has no reusable output. Use the regular failed-document retry
+            # path after the winning transaction is visible; its artifact-count check prevents appending
+            # to a partial document.
+            return await self.ingest(
+                data,
+                filename=filename,
+                content_type=content_type,
+                project_id=project_id,
+                well_id=well_id,
+                wellbore_id=wellbore_id,
+                section_id=section_id,
+                operation_id=operation_id,
+                doc_type=identity_doc_type,
+                title=title,
+                revision=revision,
+                period_start=period_start,
+                period_end=period_end,
+                trigger=trigger,
+                triggered_by=triggered_by,
+                trace_id=trace_id,
+                link_to_well=link_to_well,
+                commit=True,
+            )
+        raw = await self.session.get(RawArtifact, existing_document.raw_artifact_id)
+        if raw is None or raw.org_id != self.org_id:
+            return None
+        job = await self._record_job(
+            raw=raw,
+            document=existing_document,
+            status="skipped_duplicate",
+            started=utc_now(),
+            stats={"deduplicated": 1, "concurrent_conflict": 1},
+            warnings=["a concurrent upload filed the same logical document; the committed document was reused"],
+            trigger=trigger,
+            triggered_by=triggered_by,
+            trace_id=trace_id,
+            project_id=existing_document.project_id or project_id,
+            well_id=existing_document.well_id or well_id,
+        )
+        await self.session.commit()
+        return IngestionOutcome(job=job, document=existing_document, raw_artifact=raw, reused_existing=True)
 
     async def _ingest_inner(self, data: bytes, **kwargs: Any) -> IngestionOutcome:
         started = utc_now()
@@ -273,6 +553,14 @@ class IngestionPipeline:
                 select(RawArtifact).where(RawArtifact.org_id == self.org_id, RawArtifact.sha256 == digest).limit(1)
             )
         ).scalars().first()
+        if existing is not None and existing.is_quarantined:
+            raise ValidationFailed("the uploaded content is quarantined and cannot be ingested")
+        identity_doc_type, parsed_for_identity, deferred_parse_error = _prepare_identity_parse(
+            data,
+            filename=filename,
+            content_type=content_type,
+            requested_doc_type=kwargs.get("doc_type"),
+        )
 
         # The bytes are one artefact; the *document* is only a repeat if the scope, type and revision
         # match too. Keying the repeat on the bytes alone returned another well's document — see
@@ -283,14 +571,56 @@ class IngestionPipeline:
             wellbore_id=wellbore_id,
             well_id=well_id,
             project_id=project_id,
-            doc_type=kwargs.get("doc_type"),
+            doc_type=identity_doc_type,
             revision=kwargs.get("revision"),
+            operation_id=operation_id,
         )
+        retry_document: Document | None = None
         if existing is not None and fingerprint is not None:
             existing_document = await find_logical_document(
                 self.session, org_id=self.org_id, logical_key_value=fingerprint
             )
-            if existing_document is not None:
+            if existing_document is not None and existing_document.status == "failed":
+                # A parse failure occurs before structure/record persistence. Re-run only when that
+                # invariant is true; never append a second copy of a partially persisted document.
+                artifact_counts = []
+                for model in (
+                    DocumentPage,
+                    DocumentRegion,
+                    DocumentChunk,
+                    ExtractedRecord,
+                    EvidenceLink,
+                ):
+                    artifact_counts.append(
+                        (
+                            await self.session.execute(
+                                select(func.count()).select_from(model).where(model.document_id == existing_document.id)
+                            )
+                        ).scalar_one()
+                    )
+                if not any(artifact_counts):
+                    retry_document = existing_document
+                else:
+                    job = await self._record_job(
+                        raw=existing,
+                        document=existing_document,
+                        status="skipped_duplicate",
+                        started=started,
+                        stats={"deduplicated": 1, "retry_refused_due_to_persisted_artifacts": 1},
+                        warnings=[
+                            "prior attempt failed after source artifacts were persisted; automatic retry "
+                            "was refused to prevent duplicate pages, chunks or records"
+                        ],
+                        trigger=trigger,
+                        triggered_by=triggered_by,
+                        trace_id=trace_id,
+                        project_id=project_id,
+                        well_id=well_id,
+                    )
+                    return IngestionOutcome(
+                        job=job, document=existing_document, raw_artifact=existing, reused_existing=True
+                    )
+            elif existing_document is not None:
                 job = await self._record_job(
                     raw=existing,
                     document=existing_document,
@@ -327,36 +657,45 @@ class IngestionPipeline:
             self.session.add(raw)
             await self.session.flush()
 
-        document = Document(
-            org_id=self.org_id,
-            project_id=project_id,
-            well_id=well_id,
-            wellbore_id=wellbore_id,
-            section_id=section_id,
-            operation_id=operation_id,
-            raw_artifact_id=raw.id,
-            doc_type=kwargs.get("doc_type") or "other",
-            title=kwargs.get("title") or filename,
-            revision=kwargs.get("revision"),
-            period_start=kwargs.get("period_start"),
-            period_end=kwargs.get("period_end"),
-            # A document that is being read is *extracting* — the canonical name for that state. The
-            # old value here was `parsing`, which the model's own vocabulary did not contain.
-            status="extracting",
-            logical_key=fingerprint,
-            checksum=digest,
-            language=None,
-        )
-        self.session.add(document)
-        await self.session.flush()
+        if retry_document is None:
+            document = Document(
+                org_id=self.org_id,
+                project_id=project_id,
+                well_id=well_id,
+                wellbore_id=wellbore_id,
+                section_id=section_id,
+                operation_id=operation_id,
+                raw_artifact_id=raw.id,
+                doc_type=identity_doc_type,
+                title=kwargs.get("title") or filename,
+                revision=kwargs.get("revision"),
+                period_start=kwargs.get("period_start"),
+                period_end=kwargs.get("period_end"),
+                # A document that is being read is *extracting* — the canonical name for that state.
+                status="extracting",
+                logical_key=fingerprint,
+                checksum=digest,
+                language=None,
+            )
+            self.session.add(document)
+            await self.session.flush()
+        else:
+            document = retry_document
+            document.status = "extracting"
+            document.extraction_summary = None
+            document.checksum = digest
 
         job = await self._record_job(
             raw=raw,
             document=document,
             status="running",
             started=started,
-            stats={},
-            warnings=[],
+            stats={"retry_of_failed_document": 1} if retry_document is not None else {},
+            warnings=(
+                ["retrying parse of a previously failed document"]
+                if retry_document is not None
+                else []
+            ),
             trigger=trigger,
             triggered_by=triggered_by,
             trace_id=trace_id,
@@ -365,7 +704,11 @@ class IngestionPipeline:
         )
 
         try:
-            parsed = parse_bytes(data, filename=filename, content_type=content_type)
+            if deferred_parse_error is not None:
+                raise deferred_parse_error
+            parsed = parsed_for_identity or parse_bytes(
+                data, filename=filename, content_type=content_type
+            )
         except (UnsupportedFormat, ExtractionFailed) as exc:
             document.status = "failed"
             document.extraction_summary = {"error": str(exc)}
@@ -377,29 +720,39 @@ class IngestionPipeline:
             document.status = "failed"
             document.extraction_summary = {"error": str(exc)}
             await self._finish_job(job, started, status="failed", stats={}, warnings=[], error=str(exc))
+            if kwargs.get("commit"):
+                await self.session.commit()
             raise IngestionError(f"parsing failed: {exc}", details={"filename": filename}) from exc
 
         doc_type = document.doc_type if document.doc_type != "other" else guess_doc_type(parsed, filename)
         document.doc_type = doc_type
 
-        pages, regions, region_ids = await self._persist_structure(document, parsed)
-        chunk_count = await self._persist_chunks(
-            document, parsed, doc_type=doc_type, region_ids=region_ids
-        )
+        pages, regions, region_ids, page_ids = await self._persist_structure(document, parsed)
         drafts, extraction_warnings = extract(parsed, doc_type=doc_type)
+        # Header dates and explicit upload windows are document metadata, so merge them before the
+        # chunks and records inherit their temporal bounds.
+        await self._merge_document_metadata(document, parsed, drafts)
+        depth_by_region = self._depth_bounds_by_region(drafts)
+        chunk_count = await self._persist_chunks(
+            document,
+            parsed,
+            doc_type=doc_type,
+            region_ids=region_ids,
+            depth_by_region=depth_by_region,
+        )
         record_ids, evidence_ids = await self._persist_records(
             document,
             drafts,
             parsed=parsed,
             region_ids=region_ids,
+            page_ids=page_ids,
             link_to_well=kwargs.get("link_to_well", True),
         )
-        await self._merge_document_metadata(document, parsed, drafts)
 
         warnings = [*parsed.warnings, *extraction_warnings]
         if parsed.metadata.get("ocr_required"):
             document.ocr_required = True
-            warnings.append("document has no extractable text: OCR is required before extraction can run")
+            warnings.append("one or more pages have no extractable text: OCR is required for those pages")
         # An extractor that raised is counted, not merely warned about: "one of four extractors
         # failed" is the difference between a complete document and a partial one, and the number is
         # what makes the partial status checkable rather than a judgement call.
@@ -451,7 +804,7 @@ class IngestionPipeline:
 
     async def _persist_structure(
         self, document: Document, parsed: ParsedDocument
-    ) -> tuple[int, int, dict[tuple[int, int], str]]:
+    ) -> tuple[int, int, dict[tuple[int, int], str], dict[int, str]]:
         """Write pages and regions, returning the map that lets a value point back at its source.
 
         The map is keyed by ``(page_number, order_index)`` because that is what the parsers and
@@ -460,10 +813,11 @@ class IngestionPipeline:
         the region rows are actually created — is what stops the pipeline from having to look a region
         up again later, and is what was missing when ``region_id`` was written as ``NULL``.
         """
-        page_rows: dict[int, DocumentPage] = {}
+        page_ids: dict[int, str] = {}
         region_ids: dict[tuple[int, int], str] = {}
         page_text: dict[int, str] = {}
         self._region_text: dict[str, str] = {}
+        self._region_text_basis: dict[str, str] = {}
         region_count = 0
         for page in parsed.pages:
             row = DocumentPage(
@@ -481,7 +835,7 @@ class IngestionPipeline:
             )
             self.session.add(row)
             await self.session.flush()
-            page_rows[page.page_number] = row
+            page_ids[page.page_number] = row.id
             page_text[page.page_number] = page.text or ""
             for region in page.regions:
                 region_row = DocumentRegion(
@@ -495,6 +849,7 @@ class IngestionPipeline:
                     bbox=region.bbox,
                     table=region.table,
                     confidence=region.confidence,
+                    attributes=region.source_locator,
                     extractor=parsed.parser,
                     extractor_version=parsed.parser_version,
                 )
@@ -504,6 +859,14 @@ class IngestionPipeline:
                 region_ids[(page.page_number, region.order_index)] = region_row.id
                 if region.text is not None:
                     self._region_text[region_row.id] = region.text
+                    self._region_text_basis[region_row.id] = "region_text"
+                elif region.table is not None:
+                    self._region_text[region_row.id] = _table_to_text(region.table)
+                    self._region_text_basis[region_row.id] = "region_table"
+                else:
+                    # A non-text region with neither text nor a table has no verifiable quote source.
+                    self._region_text[region_row.id] = ""
+                    self._region_text_basis[region_row.id] = "region_unavailable"
         document.page_count = len(parsed.pages)
         document.has_tables = any(page.has_tables for page in parsed.pages)
         document.has_figures = any(page.has_figures for page in parsed.pages)
@@ -511,7 +874,35 @@ class IngestionPipeline:
         # The page texts travel with the map so quote verification does not re-read the pages it just
         # wrote.
         self._page_text = page_text
-        return len(parsed.pages), region_count, region_ids
+        return len(parsed.pages), region_count, region_ids, page_ids
+
+    @staticmethod
+    def _depth_bounds_by_region(
+        drafts: list[ExtractedRecordDraft],
+    ) -> dict[tuple[int, int], tuple[float, float]]:
+        """Return conservative MD ranges from explicitly SI-labelled extraction fields only.
+
+        A generic ``depth`` value is deliberately ignored. It is not evidence that a number is
+        measured depth, and raw values in ``parameter_set`` may still be in field units.
+        """
+        values_by_region: dict[tuple[int, int], list[float]] = {}
+        for draft in drafts:
+            if draft.region_index is None:
+                continue
+            value = draft.depth_md_si
+            if value is None:
+                payload = draft.payload or {}
+                value = payload.get("depth_md_si")
+                if value is None:
+                    value = payload.get("md_si")
+            if not _valid_si_depth(value):
+                continue
+            values_by_region.setdefault((draft.page_number, draft.region_index), []).append(float(value))
+        return {
+            key: (min(values), max(values))
+            for key, values in values_by_region.items()
+            if values
+        }
 
     async def _persist_chunks(
         self,
@@ -520,6 +911,7 @@ class IngestionPipeline:
         *,
         doc_type: str,
         region_ids: dict[tuple[int, int], str],
+        depth_by_region: dict[tuple[int, int], tuple[float, float]],
     ) -> int:
         """One chunk per region, carrying that region's id.
 
@@ -530,6 +922,9 @@ class IngestionPipeline:
         live.
         """
         chunk_index = 0
+        document_has_period = document.period_start is not None or document.period_end is not None
+        chunk_period_start = document.period_start if document_has_period else document.issue_date
+        chunk_period_end = document.period_end if document_has_period else document.issue_date
         for page in parsed.pages:
             region_by_index = {region.order_index: region for region in page.regions}
             for region in page.regions:
@@ -537,8 +932,14 @@ class IngestionPipeline:
                     continue
                 text = region.text or _table_to_text(region.table)
                 source_region_id = region_ids.get((page.page_number, region.order_index))
+                depth_bounds = depth_by_region.get((page.page_number, region.order_index))
                 for draft in build_chunks(
-                    text, page_number=page.page_number, region_id=source_region_id, kind=region.kind
+                    text,
+                    page_number=page.page_number,
+                    region_id=source_region_id,
+                    kind=region.kind,
+                    depth_from_si=depth_bounds[0] if depth_bounds is not None else None,
+                    depth_to_si=depth_bounds[1] if depth_bounds is not None else None,
                 ):
                     row = DocumentChunk(
                         org_id=self.org_id,
@@ -550,15 +951,21 @@ class IngestionPipeline:
                         token_estimate=max(1, len(draft.text) // 4),
                         char_start=draft.char_start,
                         char_end=draft.char_end,
+                        depth_from_si=draft.depth_from_si,
+                        depth_to_si=draft.depth_to_si,
                         kind=region.kind,
                         well_id=document.well_id,
                         wellbore_id=document.wellbore_id,
                         section_id=document.section_id,
                         operation_id=document.operation_id,
                         doc_type=doc_type,
-                        period_start=document.period_start,
-                        period_end=document.period_end,
-                        attributes={"region_order": region.order_index, "page_regions": len(region_by_index)},
+                        period_start=chunk_period_start,
+                        period_end=chunk_period_end,
+                        attributes={
+                            "region_order": region.order_index,
+                            "page_regions": len(region_by_index),
+                            "source_locator": region.source_locator,
+                        },
                     )
                     self.session.add(row)
                     chunk_index += 1
@@ -572,6 +979,7 @@ class IngestionPipeline:
         *,
         parsed: ParsedDocument,
         region_ids: dict[tuple[int, int], str],
+        page_ids: dict[int, str],
         link_to_well: bool,
     ) -> tuple[list[str], list[str]]:
         """Persist extracted records and the evidence link that anchors each one to its source.
@@ -606,7 +1014,7 @@ class IngestionPipeline:
                 payload_schema_key=draft.payload_schema_key,
                 payload_schema_version=draft.payload_schema_version,
                 payload=draft.payload,
-                observed_at=draft.observed_at or document.period_start,
+                observed_at=draft.observed_at or document.period_start or document.issue_date,
                 depth_md_si=draft.depth_md_si,
                 depth_tvd_si=draft.depth_tvd_si,
                 method=draft.method,
@@ -624,57 +1032,96 @@ class IngestionPipeline:
             ids.append(record.id)
             if link_to_well or document.well_id:
                 excerpt = (draft.excerpt or "")[:2000] or None
-                region_text, page_text = self._quote_sources(region_id, draft.page_number)
+                region_text, page_text, region_basis = self._quote_sources(region_id, draft.page_number)
                 verified, quote_check = verify_quote(
-                    excerpt=excerpt, region_text=region_text, page_text=page_text
+                    excerpt=excerpt,
+                    region_text=region_text,
+                    page_text=page_text,
+                    region_basis=region_basis,
                 )
-                link = EvidenceLink(
-                        org_id=self.org_id,
-                        subject_kind=f"extracted_record.{draft.record_type}",
-                        subject_id=record.id,
-                        evidence_kind="document_region" if region_id else "document_page",
-                        evidence_id=region_id or document.raw_artifact_id or document.id,
-                        document_id=document.id,
-                        region_id=region_id,
-                        page_number=draft.page_number,
-                        well_id=document.well_id,
-                        locator={
-                            "page": draft.page_number,
-                            "region_id": region_id,
-                            "region_order": draft.region_index,
-                            "parser": parsed.parser,
-                            "record_type": draft.record_type,
-                            # Says whether the quote was checked against the region or only against
-                            # the page, so a reader never has to infer the precision of the locator.
-                            "precision": "region" if region_id else "page",
-                        },
-                        excerpt=excerpt,
-                        confidence=draft.confidence,
-                        relevance=1.0,
-                        weight=1.0,
-                        method=draft.method,
-                        quote_verified=verified,
-                        quote_check=quote_check,
+                page_id = page_ids.get(draft.page_number)
+                if region_id is not None:
+                    evidence_kind, evidence_id = "document_region", region_id
+                elif page_id is not None:
+                    evidence_kind, evidence_id = "document_page", page_id
+                else:
+                    # A malformed extractor locator must not make a page edge point at a blob id.
+                    evidence_kind, evidence_id = "document", document.id
+                field_locations = draft.field_locations or {}
+                all_field_locators = [
+                    locator
+                    for locator in field_locations.values()
+                    if isinstance(locator, dict)
+                ]
+                has_cell_locator = any(
+                    locator.get("cell")
+                    or (
+                        locator.get("format") in {"csv", "tsv", "xlsx", "docx"}
+                        and locator.get("column") is not None
                     )
+                    for locator in all_field_locators
+                )
+                if has_cell_locator:
+                    precision = "cell"
+                elif draft.source_locator.get("kind") == "table_row":
+                    precision = "row"
+                elif region_id is not None:
+                    precision = "region"
+                elif page_id is not None:
+                    precision = "page"
+                else:
+                    precision = "document"
+                link = EvidenceLink(
+                    org_id=self.org_id,
+                    subject_kind=f"extracted_record.{draft.record_type}",
+                    subject_id=record.id,
+                    evidence_kind=evidence_kind,
+                    evidence_id=evidence_id,
+                    document_id=document.id,
+                    region_id=region_id,
+                    page_number=draft.page_number if page_id is not None else None,
+                    well_id=document.well_id,
+                    locator={
+                        "page": draft.page_number,
+                        "page_id": page_id,
+                        "region_id": region_id,
+                        "region_order": draft.region_index,
+                        "parser": parsed.parser,
+                        "record_type": draft.record_type,
+                        "source": draft.source_locator,
+                        "field_locations": field_locations,
+                        "precision": precision,
+                        "quote_verification_basis": quote_check,
+                    },
+                    excerpt=excerpt,
+                    confidence=draft.confidence,
+                    relevance=1.0,
+                    weight=1.0,
+                    method=draft.method,
+                    quote_verified=verified,
+                    quote_check=quote_check,
+                )
                 self.session.add(link)
                 await self.session.flush()
                 evidence_ids.append(link.id)
         await self.session.flush()
         return ids, evidence_ids
 
-    def _quote_sources(self, region_id: str | None, page_number: int) -> tuple[str | None, str | None]:
-        """The texts an excerpt is checked against: the region first, the page as the fallback.
+    def _quote_sources(
+        self, region_id: str | None, page_number: int
+    ) -> tuple[str | None, str | None, str]:
+        """Return the exact region source when available, otherwise the page source.
 
-        Both are the strings this same request just wrote, held on the pipeline instance rather than
-        re-read from the database, so verification costs no extra query. The region text is returned
-        as ``None`` when there is no region, which is what makes the verifier fall back to the page and
-        record that it did.
+        Table text is rendered from the parser's original cell matrix, not inferred from the page's
+        CSV/XLSX presentation. The source basis is stored with the result so a cell/row quote is not
+        reported as page-verified when it was checked against structured table cells.
         """
         page_text = getattr(self, "_page_text", {}).get(page_number)
         if region_id is None:
-            return None, page_text
-        region_text = getattr(self, "_region_text", {}).get(region_id)
-        return region_text, page_text
+            return None, page_text, "page_text"
+        region_text = getattr(self, "_region_text", {}).get(region_id, "")
+        region_basis = getattr(self, "_region_text_basis", {}).get(region_id, "region_unavailable")
+        return region_text, page_text, region_basis
 
     async def _merge_document_metadata(
         self, document: Document, parsed: ParsedDocument, drafts: list[ExtractedRecordDraft]
@@ -687,17 +1134,23 @@ class IngestionPipeline:
                 document.well_name_text = payload["well_name_text"]
             if payload.get("rig_name_text") and not document.rig_name_text:
                 document.rig_name_text = payload["rig_name_text"]
-            if payload.get("report_date") and document.issue_date is None:
-                with contextlib.suppress(ValueError):  # a malformed date must not lose the page text
-                    document.issue_date = dt.datetime.fromisoformat(payload["report_date"]).replace(tzinfo=dt.UTC)
-            # A daily report covers one day: its report date *is* the reporting period. Deriving
-            # the period here means every downstream consumer (operations, timeline, twin
-            # validity, NPT attribution) has an unambiguous date without re-parsing the header.
-            if document.issue_date is not None:
-                if document.period_start is None:
-                    document.period_start = document.issue_date
-                if document.period_end is None:
-                    document.period_end = document.issue_date + dt.timedelta(days=1)
+            raw_report_date = payload.get("report_date")
+            if raw_report_date and document.issue_date is None:
+                with contextlib.suppress(ValueError, TypeError):  # malformed dates must not lose page text
+                    document.issue_date = parse_iso_datetime_utc(
+                        raw_report_date, assume_utc_for_naive=True
+                    )
+            # Only a document explicitly classified as a daily drilling report gets a one-day
+            # reporting interval from its issue date. An explicit partial or complete upload window
+            # is authoritative; never fill its missing endpoint from a potentially conflicting header.
+            if (
+                document.doc_type == "ddr"
+                and document.issue_date is not None
+                and document.period_start is None
+                and document.period_end is None
+            ):
+                document.period_start = document.issue_date
+                document.period_end = document.issue_date + dt.timedelta(days=1)
         # ``classification`` is the data-sensitivity label (internal/confidential); parser
         # provenance belongs with the rest of the extraction summary.
         document.extraction_summary = {
@@ -776,8 +1229,29 @@ def _record_fingerprint(document_id: str, draft: ExtractedRecordDraft) -> str:
     import hashlib
     import json
 
-    payload = json.dumps({"type": draft.record_type, "payload": draft.payload}, sort_keys=True, default=str)
-    return hashlib.sha256(f"{document_id}:{draft.page_number}:{payload}".encode()).hexdigest()[:64]
+    identity = json.dumps(
+        {
+            "type": draft.record_type,
+            "payload": draft.payload,
+            "region_index": draft.region_index,
+            "method": draft.method,
+            "method_version": draft.method_version,
+            "observed_at": draft.observed_at,
+            "depth_md_si": draft.depth_md_si,
+            "depth_tvd_si": draft.depth_tvd_si,
+            "unit_context": draft.unit_context,
+            "quality_flags": draft.quality_flags,
+            "excerpt": draft.excerpt,
+            "payload_schema_key": draft.payload_schema_key,
+            "payload_schema_version": draft.payload_schema_version,
+            "source_locator": draft.source_locator,
+            "field_locations": draft.field_locations,
+        },
+        sort_keys=True,
+        ensure_ascii=False,
+        default=str,
+    )
+    return hashlib.sha256(f"{document_id}:{draft.page_number}:{identity}".encode()).hexdigest()[:64]
 
 
 async def count_document_records(session: AsyncSession, document_id: str) -> int:

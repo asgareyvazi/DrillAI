@@ -26,6 +26,7 @@ type DocumentRow = {
   id: string
   title: string
   doc_type: string
+  operation_id: string | null
   page_count: number
   status: string
   extraction_summary: {
@@ -176,12 +177,20 @@ test.describe('documents → ingestion → records → evidence', () => {
     consoleErrors, failedResponses,
   }) => {
     const before = await apiGet<DocumentPage>(request, `/documents?well_id=${wellId}`)
+    const operations = await apiGet<{ items: { id: string; name: string }[] }>(
+      request,
+      `/operations?well_id=${wellId}&limit=200`,
+    )
+    const operation = operations.items[0]
+    expect(operation, 'an operation is required to verify operation-scoped document filing').toBeTruthy()
+    if (!operation) throw new Error('an operation is required to verify operation-scoped document filing')
 
     await page.goto(wellPath('/documents'))
     await expect(page.getByRole('heading', { level: 1 }).first()).toBeVisible()
     // 1. New content: a Well Drilling Program that the seeder did not ingest for this well. The
     // document type is chosen in the UI, exactly as an engineer would before uploading.
     await page.getByLabel(/document type/i).selectOption('well_program')
+    await page.getByLabel(/operation scope/i).selectOption(operation.id)
     await page.locator('input[type="file"]').setInputFiles(UPLOAD_PATH)
     await expect(page.getByText(/Uploaded /)).toBeVisible({ timeout: 30_000 })
     await expect
@@ -196,6 +205,7 @@ test.describe('documents → ingestion → records → evidence', () => {
     expect(newDocument, 'the upload must have created exactly one new document').toBeTruthy()
     const newId = newDocument?.id as string
     const detail = await apiGet<DocumentDetail>(request, `/documents/${newId}`)
+    expect(detail.document.operation_id).toBe(operation.id)
     expect(detail.ingestion_jobs[0]?.status).toBe('succeeded')
 
     // The UI reports the API's own numbers rather than a plausible-looking summary.

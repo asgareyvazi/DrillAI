@@ -175,7 +175,19 @@ export function levelRank(level: string | null | undefined): number {
   return match ? Number(match[1]) : -1
 }
 
-export function formatValidationStatus(status: string | null | undefined): string {
+export function formatValidationStatus(
+  status: string | null | undefined,
+  translate?: (key: string) => string,
+): string {
+  const translationKeys: Record<string, string> = {
+    verified_against_reference: 'engineering.validation.verifiedAgainstReference',
+    formula_derived: 'engineering.validation.formulaDerived',
+    needs_field_validation: 'engineering.validation.needsFieldValidation',
+    provisional: 'engineering.validation.provisional',
+    unknown: 'engineering.validation.unknown',
+  }
+  const key = status ? translationKeys[status] : undefined
+  if (key && translate) return translate(key)
   switch (status) {
     case 'verified_against_reference':
       return 'verified against reference'

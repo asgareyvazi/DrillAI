@@ -626,6 +626,7 @@ export interface DocumentRow {
   well_id: string | null
   wellbore_id: string | null
   section_id: string | null
+  operation_id: string | null
   doc_type: string
   title: string
   document_number: string | null
@@ -727,6 +728,12 @@ export interface IngestionJob {
 export interface DocumentDetail {
   document: DocumentRow
   ingestion_jobs: IngestionJob[]
+  ingestion_job_count?: number
+  ingestion_jobs_returned?: number
+  ingestion_jobs_truncated?: boolean
+  next_ingestion_job_offset?: number | null
+  ingestion_jobs_limit?: number
+  ingestion_jobs_offset?: number
   region_count: number
   chunks: DocumentChunk[]
   records: ExtractionRecord[]
@@ -814,6 +821,8 @@ export interface DdrProcessingReport {
   /** Extracted records whose operations already existed: linked, not duplicated. */
   operations_linked: string[]
   events_created: string[]
+  /** Existing open derived events refreshed on retry; in a dry run, these are prospective updates. */
+  events_updated: string[]
   /** The twin revisions the run wrote; a dry run marks each with `dry_run: "true"`. */
   twin_aspects: Array<{ aspect: string; state_kind: string; id?: string; dry_run?: string }>
   trajectory_stations_created: number
@@ -827,6 +836,7 @@ export interface DdrProcessingReport {
     operations: number
     operations_linked: number
     events: number
+    events_updated: number
     twin_aspects: number
     trajectory_stations: number
     promoted: number
@@ -1008,6 +1018,20 @@ export interface RecommendationRow {
 
 // --------------------------------------------------------------------------- advisor & reports
 
+export interface AdvisorNarrative {
+  status: 'generated' | 'blocked_by_guardrail' | 'unavailable'
+  text?: string | null
+  provider?: string
+  model?: string
+  reason?: string
+  note?: string
+  usage?: Record<string, unknown>
+  routing?: { reason: string[]; provider: string }
+  guardrails?: { blocked: boolean; findings: Array<Record<string, unknown>> }
+  guardrail?: string
+  prompt_confined_to?: string[]
+}
+
 export interface AdvisorAnswer {
   well_id: string
   question: string
@@ -1019,8 +1043,10 @@ export interface AdvisorAnswer {
   inference: Array<Record<string, unknown>>
   recommendation: Array<Record<string, unknown>>
   unknown: Array<Record<string, unknown>>
-  narrative: string | null
-  narrative_model: string | null
+  narrative: AdvisorNarrative | null
+  context_used: Record<string, unknown>
+  limitations: string[]
+  sections: Record<'facts' | 'calculations' | 'evidence' | 'inference' | 'recommendation' | 'unknown', number>
   sources: string[]
 }
 

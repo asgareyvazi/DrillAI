@@ -91,6 +91,11 @@ const ALLOWED_HTTP_FAILURE_STATUSES = new Set([400, 401, 403, 404, 409, 422, 428
 const ROUTE_PARAMETER = /^:[A-Za-z][A-Za-z0-9_]*$/
 const ROUTE_SEGMENT = /^[A-Za-z0-9._~-]+$/
 const NETWORK_ERROR = /^net::ERR_[A-Z0-9_]+$/
+const SENSITIVE_PATH_LABEL = /^(?:tokens?|secrets?|passwords?|passphrases?|csrf|credentials?|authorizations?|auth|api[_-]?keys?|access[_-]?keys?|private[_-]?keys?|sessions?|cookies?|jwts?|signatures?|sigs?|codes?|assertions?|reset|password[-_]reset|reset[-_]token|invite[-_]code|magic[-_]link)$/i
+const SENSITIVE_PATH_INLINE_VALUE = /^(?:token|secret|password|passphrase|csrf|credential|authorization|api[_-]?key|access[_-]?key|private[_-]?key|session|cookie|jwt|signature|sig|code|assertion)[=:].+$/i
+const SENSITIVE_PATH_PREFIX_VALUE = /^(?:token|secret|password|passphrase|csrf|credential|authorization|api[_-]?key|access[_-]?key|private[_-]?key|session|cookie|jwt|signature|sig|code|assertion)[_-][A-Za-z0-9._~-]+$/i
+const ENCODED_PATH_SEPARATOR = /%(?:25)*(?:2f|5c)/i
+const JWT_PATH_VALUE = /^[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}$/
 
 function parsedTarget(pathname: string, query: string): { pathSegments: string[]; queryEntries: Array<[string, string]> } | null {
   if (
@@ -99,7 +104,7 @@ function parsedTarget(pathname: string, query: string): { pathSegments: string[]
     pathname.includes('\\') ||
     pathname.includes('?') ||
     pathname.includes('#') ||
-    /%2f|%5c/i.test(pathname)
+    ENCODED_PATH_SEPARATOR.test(pathname)
   ) return null
 
   const pathSegments = pathname.slice(1).split('/')
@@ -186,7 +191,11 @@ function matchesQuery(pattern: Array<[string, string]>, actual: Array<[string, s
   return remaining.length === 0
 }
 
-function allowanceMatches(entry: FailureAllowance, failure: ObservedFailure): boolean {
+function allowanceMatches(
+  entry: FailureAllowance,
+  failure: ObservedFailure,
+  applicationOrigin: string,
+): boolean {
   if (entry.kind !== failure.kind || entry.method !== failure.method) return false
   let url: URL
   try {
@@ -194,6 +203,7 @@ function allowanceMatches(entry: FailureAllowance, failure: ObservedFailure): bo
   } catch {
     return false
   }
+  if (url.origin !== applicationOrigin) return false
   const target = parsedTarget(entry.pathname, entry.query)
   if (!target) return false
   const actualSegments = url.pathname.slice(1).split('/')
@@ -232,29 +242,154 @@ export function classifyNetworkFailure(
   return 'unexpected'
 }
 
-function safeFailureLabel(failure: ObservedFailure): string {
-  const url = new URL(failure.url)
-  for (const key of [...url.searchParams.keys()]) {
-    if (/(token|secret|password|csrf|credential|authorization)/i.test(key)) url.searchParams.set(key, '[redacted]')
+export function safeFailureUrl(rawUrl: string): string {
+  try {
+    const url = new URL(rawUrl)
+    // URL.href retains userinfo unless explicitly cleared; never put URL credentials into an oracle
+    // finding, attachment, or CI log.
+    url.username = ''
+    url.password = ''
+    url.hash = ''
+    const pathSegments = url.pathname.split('/')
+    let redactNextPathSegment = false
+    let pathChanged = false
+    for (let index = 0; index < pathSegments.length; index += 1) {
+      const segment = pathSegments[index] ?? ''
+      if (!segment) continue
+      let decoded = segment
+      let encodedSeparator = false
+      // Percent-encoded separators can be nested more than once. Each successful decode shortens the
+      // segment, so the original length is a hard upper bound without an arbitrary depth cutoff.
+      for (let decodePass = 0; decodePass <= segment.length; decodePass += 1) {
+        if (ENCODED_PATH_SEPARATOR.test(decoded)) {
+          encodedSeparator = true
+          break
+        }
+        try {
+          const next = decodeURIComponent(decoded)
+          if (next === decoded) break
+          decoded = next
+        } catch {
+          // Keep malformed public route text, but never let it interfere with checks on other segments.
+          break
+        }
+      }
+      if (encodedSeparator || decoded.includes('/') || decoded.includes('\\')) {
+        // Encoded path separators make segment boundaries ambiguous; discard the remainder rather
+        // than risk logging a secret that the server may interpret as the next path parameter.
+        pathSegments.fill('%5Bredacted%5D', index)
+        pathChanged = true
+        break
+      }
+      if (redactNextPathSegment) {
+        pathSegments[index] = '%5Bredacted%5D'
+        pathChanged = true
+        // A redacted segment can itself be a credential label (for example password/reset/token).
+        // Keep following the chain so masking the route word does not expose the value after it.
+        redactNextPathSegment = SENSITIVE_PATH_LABEL.test(decoded)
+        continue
+      }
+      const sensitiveLabel = SENSITIVE_PATH_LABEL.test(decoded)
+      if (
+        !sensitiveLabel && (
+          SENSITIVE_PATH_INLINE_VALUE.test(decoded) ||
+          SENSITIVE_PATH_PREFIX_VALUE.test(decoded) ||
+          JWT_PATH_VALUE.test(decoded)
+        )
+      ) {
+        pathSegments[index] = '%5Bredacted%5D'
+        pathChanged = true
+        continue
+      }
+      if (sensitiveLabel) redactNextPathSegment = true
+    }
+    if (pathChanged) url.pathname = pathSegments.join('/')
+    const sensitiveQueryKey = /(token|secret|password|passphrase|csrf|credential|authorization|auth|api[_-]?key|access[_-]?key|private[_-]?key|session|cookie|jwt|signature|(?:^|[_-])sig(?:$|[_-])|(?:^|[_-])code(?:$|[_-])|assertion)/i
+    for (const key of [...url.searchParams.keys()]) {
+      if (sensitiveQueryKey.test(key)) url.searchParams.set(key, '[redacted]')
+    }
+    return url.href
+  } catch {
+    return '<invalid-url>'
   }
+}
+
+export function safeFailureText(rawText: string): string {
+  const sensitiveKey = '(?:token|secret|password|passphrase|csrf|credential|authorization|auth|api[_-]?key|access[_-]?key|private[_-]?key|session|cookie|jwt|signature|(?:^|[_-])sig(?:$|[_-])|(?:^|[_-])code(?:$|[_-])|assertion)'
+  let safe = rawText.replace(/https?:\/\/[^\s"'<>]+/g, (candidate) => safeFailureUrl(candidate))
+  safe = safe.replace(/\b(Bearer|Basic)\s+[^\s"'<>]+/gi, '$1 [redacted]')
+  safe = safe.replace(
+    new RegExp(`([?&]${sensitiveKey}=)[^&#\\s]*`, 'gi'),
+    '$1[redacted]',
+  )
+  // Values written as JSON, quoted assignments, or plain header/log assignments are all possible in
+  // exception text. Consume the entire quoted value (including spaces), and consume an unquoted value
+  // to the next field delimiter or line break rather than leaving the tail of a multiword secret.
+  safe = safe.replace(
+    new RegExp(
+      `(["']?${sensitiveKey}["']?\\s*[:=]\\s*)(?:"(?:\\\\.|[^"\\\\])*"|'(?:\\\\.|[^'\\\\])*'|[^\\r\\n,;&}]+)`,
+      'gi',
+    ),
+    '$1[redacted]',
+  )
+  return safe
+}
+
+export function safeNetworkFailureEvidence(
+  failure: NetworkFailure,
+): Pick<NetworkFailure, 'method' | 'url' | 'errorText' | 'resourceType' | 'signalReason' | 'disposition'> {
+  return {
+    method: safeFailureText(failure.method),
+    url: safeFailureUrl(failure.url),
+    errorText: safeFailureText(failure.errorText),
+    resourceType: safeFailureText(failure.resourceType),
+    signalReason: failure.signalReason === undefined ? undefined : safeFailureText(failure.signalReason),
+    disposition: failure.disposition,
+  }
+}
+
+function safeFailureLabel(failure: ObservedFailure): string {
+  const url = safeFailureUrl(failure.url)
   return failure.kind === 'http'
-    ? `${failure.method} ${url.href} -> HTTP ${failure.status}`
-    : `${failure.method} ${url.href} -> ${failure.errorText} (${failure.resourceType})`
+    ? `${safeFailureText(failure.method)} ${url} -> HTTP ${failure.status}`
+    : `${safeFailureText(failure.method)} ${url} -> ${safeFailureText(failure.errorText)} (${safeFailureText(failure.resourceType)})`
 }
 
 /**
  * Evaluate observations one-to-one. A single response cannot be consumed by overlapping tolerances;
  * an explicit maxMatches is the only way one tolerance can account for more than one failure.
  */
+function canonicalApplicationOrigin(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  try {
+    const url = new URL(value)
+    if (
+      !['http:', 'https:'].includes(url.protocol) ||
+      url.origin !== value ||
+      url.username !== '' ||
+      url.password !== '' ||
+      url.pathname !== '/' ||
+      url.search !== '' ||
+      url.hash !== ''
+    ) return null
+    return url.origin
+  } catch {
+    return null
+  }
+}
+
 export function evaluateFailureOracle(
   responses: readonly FailedResponse[],
   networkFailures: readonly NetworkFailure[],
   allowances: readonly FailureAllowance[],
+  expectedApplicationOrigin: string,
 ): FailureOracleResult {
   const findings = validateFailureAllowances(allowances)
+  const applicationOrigin = canonicalApplicationOrigin(expectedApplicationOrigin)
+  if (!applicationOrigin) findings.push('expected application origin must be a canonical absolute HTTP(S) origin')
   const safeAllowances: readonly FailureAllowance[] = Array.isArray(allowances) ? allowances : []
   const matchedCounts = safeAllowances.map(() => 0)
-  if (findings.length > 0) return { findings, matchedCounts }
+  if (findings.length > 0 || applicationOrigin === null) return { findings, matchedCounts }
 
   const observations: ObservedFailure[] = [
     ...responses.filter((failure) => failure.status >= 400),
@@ -267,7 +402,7 @@ export function evaluateFailureOracle(
       .filter(({ allowance, index }) => {
         const maxMatches = allowance.maxMatches
         const usedMatches = matchedCounts[index]
-        return usedMatches !== undefined && usedMatches < maxMatches && allowanceMatches(allowance, failure)
+        return usedMatches !== undefined && usedMatches < maxMatches && allowanceMatches(allowance, failure, applicationOrigin)
       })
     if (matching.length === 0) {
       findings.push(`unprovoked ${safeFailureLabel(failure)}`)

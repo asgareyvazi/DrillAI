@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import datetime as dt
 
-from sqlalchemy import Boolean, Float, ForeignKey, Index, String
+from sqlalchemy import Boolean, Float, ForeignKey, Index, String, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from drillai.db.base import (
@@ -154,6 +154,9 @@ class RawArtifact(Base, IdMixin, CreatedAtMixin, OrgScopedMixin):
 
     __tablename__ = "raw_artifacts"
     id_prefix = "raw"
+    __table_args__ = (
+        Index("uq_raw_artifacts_org_sha256", "org_id", "sha256", unique=True),
+    )
 
     blob_key: Mapped[str] = mapped_column(String(400), nullable=False, index=True)
     sha256: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
@@ -174,6 +177,16 @@ class Document(Base, IdMixin, TimestampMixin, OrgScopedMixin):
 
     __tablename__ = "documents"
     id_prefix = "doc"
+    __table_args__ = (
+        Index(
+            "uq_documents_org_logical_key",
+            "org_id",
+            "logical_key",
+            unique=True,
+            sqlite_where=text("logical_key IS NOT NULL"),
+            postgresql_where=text("logical_key IS NOT NULL"),
+        ),
+    )
 
     project_id: Mapped[str | None] = mapped_column(String(64), index=True)
     well_id: Mapped[str | None] = mapped_column(String(64), index=True)

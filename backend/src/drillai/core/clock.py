@@ -78,9 +78,29 @@ def ensure_utc(value: dt.datetime) -> dt.datetime:
     drilling context (where DDRs, rig clocks and operator headquarters differ) is a
     data-integrity defect.
     """
-    if value.tzinfo is None:
-        raise ValueError("naive datetime is not allowed; provide timezone-aware UTC")
+    if value.tzinfo is None or value.utcoffset() is None:
+        raise ValueError("naive datetime is not allowed; provide a timezone-aware datetime")
     return value.astimezone(UTC)
+
+
+def parse_iso_datetime_utc(value: str, *, assume_utc_for_naive: bool = False) -> dt.datetime:
+    """Parse an ISO-8601 timestamp and return its UTC instant.
+
+    Date-only report-header values are intentionally allowed to mean midnight UTC by callers that
+    pass ``assume_utc_for_naive=True``. User-supplied interval bounds must instead carry an explicit
+    offset; they should use :func:`ensure_utc` after their API parser has produced a datetime.
+    """
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError("an ISO-8601 datetime string is required")
+    text = value.strip()
+    if text.endswith(("Z", "z")):
+        text = text[:-1] + "+00:00"
+    parsed = dt.datetime.fromisoformat(text)
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        if not assume_utc_for_naive:
+            raise ValueError("ISO-8601 datetime must include a timezone offset")
+        parsed = parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC)
 
 
 def utc_now() -> dt.datetime:

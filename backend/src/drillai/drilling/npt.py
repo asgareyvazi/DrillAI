@@ -34,6 +34,7 @@ from drillai.db.models import (
     canonical_npt_category,
 )
 from drillai.db.models.operations import NPT_CATEGORIES
+from drillai.documents.access import operational_source_conditions
 
 #: Which recorded source a reported total is built from.
 NPT_BASES = ("events", "operations")
@@ -245,6 +246,7 @@ class NptService:
             Event.org_id == self.org_id,
             Event.well_id == well_id,
             Event.is_npt.is_(True),
+            *operational_source_conditions(Event),
         ]
         if section_id is not None:
             clauses.append(Event.section_id == section_id)
@@ -328,6 +330,7 @@ class NptService:
         clauses: list[Any] = [
             Operation.org_id == self.org_id,
             Operation.well_id == well_id,
+            *operational_source_conditions(Operation),
             # A zero-hour roll-up is "no loss booked here", not an NPT occurrence: keeping it would
             # inflate the occurrence count and put an empty row in the evidence list.
             Operation.npt_hours > 0,

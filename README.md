@@ -100,9 +100,9 @@ it holds to and `docs/FRONTEND_TESTING.md` lists what is verified and how.
 | --- | --- | --- |
 | Frontend types | `cd frontend && npm run typecheck` | strict TypeScript with `noUncheckedIndexedAccess` across app, E2E specs and Node config |
 | Frontend lint | `cd frontend && npm run lint` | unused code, `any`, React rules |
-| Frontend unit/component | `cd frontend && npm test` | 329 passed in 31 files |
+| Frontend unit/component | `cd frontend && npm test` | 340 passed in 32 files |
 | Frontend build | `cd frontend && npm run build` | `tsc -b` plus the production Vite build |
-| Backend tests | `cd backend && DRILLAI_TEST_POSTGRES=1 .venv/bin/python -m pytest -o addopts=""` | 1,248 passed in 90 files, including PostgreSQL persistence, migration, backup/restore DR drill, pgvector retrieval, competing-worker fencing & concurrent SQL CAS race tests |
+| Backend tests | `cd backend && DRILLAI_TEST_POSTGRES=1 .venv/bin/python -m pytest` | 1,509 passed, 0 skipped in 100 files (embedded PostgreSQL enabled) |
 | Backend lint | `cd backend && .venv/bin/python -m ruff check .` | style and import hygiene |
 | Migrations | `cd backend && .venv/bin/python -m alembic upgrade head && .venv/bin/python -m alembic check` | no model/migration drift, against a fresh database |
 | Stack verification | `backend/.venv/bin/python scripts/verify_stack.py` | 16 multi-process scenarios: clean migration, backend, dedicated `connector-worker`, real WITSML 1.4.1.1 SOAP & ETP 1.2 Binary Avro ingest, soak metrics, restart recovery & stop |
@@ -110,14 +110,14 @@ it holds to and `docs/FRONTEND_TESTING.md` lists what is verified and how.
 | Docker Compose smoke gate | `POSTGRES_PASSWORD=... docker compose up -d --build` | multi-container PostgreSQL, Alembic migrate, backend, `connector-worker`, and Nginx frontend proxy |
 | End-to-end | `cd frontend && npm run e2e` | 121 passed browser journeys in 17 spec files against the real stack (Chromium 114, faults 4, auth 3) |
 
-Set `DRILLAI_TEST_POSTGRES=1` to run the eight PostgreSQL-backed persistence, migration, backup/restore,
-pgvector, worker-fencing, and concurrent SQL-CAS tests through the repository's embedded PostgreSQL
-(`pgserver`). The complete suite reports **1,248 passed** with the flag; without it, it reports
-**1,240 passed, 8 skipped** (the same 1,248-test inventory, with no PostgreSQL test called passed).
-The native Windows CI job uses `-m "not postgres"`, so those eight tests are deselected there and are
-exercised by Linux CI instead.
+Set `DRILLAI_TEST_POSTGRES=1` to run the twelve PostgreSQL-backed persistence, migration, promotion-index,
+backup/restore, pgvector, worker-fencing, concurrent-upload, and concurrent SQL-CAS tests through the
+repository's embedded PostgreSQL (`pgserver`). The completed PostgreSQL-enabled run reports **1,509 passed, 0 skipped** in 100 test files.
+With the flag unset, the same 1,509-test inventory reports **1,497 passed, 12 skipped**; the skipped cases are the PostgreSQL-marked integration tests, not counted as passes. Linux CI runs the PostgreSQL-enabled suite, while native Windows deselects the twelve PostgreSQL-marked cases with `-m "not postgres"`.
 See `docs/WINDOWS-SETUP.md`, `docs/mission-reports/PRODUCTION-READINESS-MATRIX.md`, and
-`docs/mission-reports/CP16-MISSION-REPORT.md` for historical commit-stamped verification provenance.
+`docs/mission-reports/CP16-MISSION-REPORT.md` for historical commit-stamped verification provenance. The
+[CP51–CP58 final assurance review](docs/mission-reports/CP51-58-FINAL-ASSURANCE.md) records the current
+worktree evidence, residuals, and the absence of a CI run on its uncommitted contents.
 
 The end-to-end suite is 17 spec files across three deployments of the same product — development
 identity, deterministic fault injection, and authentication enabled — covering the cockpit,
@@ -139,11 +139,11 @@ CI is triggered on every push to `arena/**` session branches (`.github/workflows
 frontend typecheck/lint/unit/build, the full backend suite with embedded PostgreSQL, lint/migration
 checks, multi-process stack verification, Docker Compose smoke, the reviewed E2E inventory, and all
 three Playwright projects. Native Windows runs the corresponding frontend gates, the backend suite
-excluding the eight PostgreSQL-marked cases (which are exercised on Linux), stack/vendor-harness
+excluding the twelve PostgreSQL-marked cases (which are exercised on Linux), stack/vendor-harness
 checks, the same inventory, and all three E2E projects; it does not run Docker Compose. Both platforms
 require exactly 121 E2E passes (Chromium 114, faults 4, auth 3). Evidence uploads only after failure.
-Every required gate is a separate step that fails the job; there is no `continue-on-error` and no
-`|| true` in the pipeline.
+Every required gate is a separate step that fails the job; there is no `continue-on-error`. The only
+`|| true` uses are best-effort Docker Compose cleanup in the exit trap, not test or deployment gates.
 
 Not implemented yet (do not assume otherwise):
 

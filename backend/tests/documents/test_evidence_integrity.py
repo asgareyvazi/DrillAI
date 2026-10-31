@@ -17,9 +17,16 @@ What the tests check, in order of what would break first if it regressed:
 
 from __future__ import annotations
 
+import json
+from typing import Any
+
+import pytest
 from sqlalchemy import func, select
 from tests.documents.conftest import DDR_BYTES, Fabric
 
+from drillai.api.deps import AuthContext
+from drillai.api.routers.evidence import get_evidence
+from drillai.core.errors import NotFound
 from drillai.db.models import (
     Document,
     DocumentChunk,
@@ -27,8 +34,11 @@ from drillai.db.models import (
     DocumentRegion,
     EvidenceLink,
     ExtractedRecord,
+    IngestionJob,
+    RawArtifact,
 )
 from drillai.documents.quotes import excerpt_occurs_in, normalize_for_match, verify_quote
+from drillai.security.actions import ActionLevel, Principal
 
 # --------------------------------------------------------------------------- the mechanical check
 
@@ -64,6 +74,12 @@ def test_verify_quote_reports_which_text_it_consulted() -> None:
     assert verify_quote(
         excerpt="Bit Depth: 1600 m", region_text=region, page_text=page
     ) == (False, "region_text")
+    assert verify_quote(
+        excerpt="Mud weight: 9.2 ppg",
+        region_text="Mud weight: 9.4 ppg",
+        page_text="Mud weight: 9.2 ppg",
+        region_basis="region_table",
+    ) == (False, "region_table")
     # No region on the link, so the page is the text of record.
     assert verify_quote(
         excerpt="header", region_text=None, page_text=page
@@ -188,16 +204,24 @@ async def test_quote_verified_matches_the_text_the_platform_stored(fabric: Fabri
         links = (
             await session.execute(select(EvidenceLink).where(EvidenceLink.document_id == document_id))
         ).scalars().all()
-        regions = {
-            region.id: region.text or ""
-            for region in (
-                await session.execute(
-                    select(DocumentRegion).where(DocumentRegion.document_id == document_id)
-                )
+        region_rows = (
+            await session.execute(
+                select(DocumentRegion).where(DocumentRegion.document_id == document_id)
             )
-            .scalars()
-            .all()
-        }
+        ).scalars().all()
+        regions = {}
+        for region in region_rows:
+            if region.text is not None:
+                region_source, region_basis = region.text, "region_text"
+            elif region.table is not None:
+                region_source = "\n".join(
+                    " | ".join(str(cell.get("text", "")) for cell in row)
+                    for row in region.table.get("cells", [])
+                )
+                region_basis = "region_table"
+            else:
+                region_source, region_basis = "", "region_unavailable"
+            regions[region.id] = (region_source, region_basis)
         page_texts = {
             page.page_number: page.text or ""
             for page in (
@@ -212,12 +236,13 @@ async def test_quote_verified_matches_the_text_the_platform_stored(fabric: Fabri
     checked = [link for link in links if link.quote_check]
     assert checked, "every link written by the pipeline records how its quote was checked"
     for link in checked:
-        region_text = regions.get(link.region_id or "", "")
+        region_text, region_basis = regions.get(link.region_id, (None, "region_text"))
         page_text = page_texts.get(link.page_number or -1, "")
         verified, basis = verify_quote(
             excerpt=link.excerpt,
-            region_text=region_text or None,
+            region_text=region_text,
             page_text=page_text or None,
+            region_basis=region_basis,
         )
         # Re-derived from the stored row, the verdict must be the one that was stored. If this ever
         # fails, the flag was written by something other than the check it claims to be.
@@ -308,13 +333,10 @@ async def test_evidence_traversal_is_organization_scoped(fabric: Fabric) -> None
         await session.commit()
 
     response = await fabric.http.get("/api/v1/evidence/evd_intruder_probe", headers=fabric.bravo.headers)
-    assert response.status_code == 200, response.text
-    body = response.json()
-    # The link itself is bravo's and is returned. What must not be returned is anything it points at.
-    assert body["evidence"]["id"] == "evd_intruder_probe"
-    assert body.get("document") is None, "another tenant's document was disclosed through a link"
-    assert body.get("region") is None, "another tenant's region text was disclosed through a link"
-    assert body.get("subject_record") is None, "another tenant's record was disclosed through a link"
+    # A cross-tenant link target invalidates the edge itself; do not return even its caller-authored
+    # excerpt as if it were an internally valid citation.
+    assert response.status_code == 404, response.text
+    assert "this excerpt belongs to another tenant" not in response.text
 
 
 async def test_provenance_chain_is_scoped_and_ordered(fabric: Fabric) -> None:
@@ -347,3 +369,202 @@ async def test_provenance_chain_is_scoped_and_ordered(fabric: Fabric) -> None:
             f"/api/v1/documents/{document_id}/provenance", headers=fabric.bravo.headers
         )
     ).status_code == 404
+
+
+async def test_evidence_detail_rejects_a_deleted_subject_record(fabric: Fabric) -> None:
+    created = await fabric.upload(
+        fabric.alpha, DDR_BYTES, filename="deleted-record.txt", doc_type="ddr", well_id=fabric.alpha.well_id
+    )
+    assert created.status_code == 201, created.text
+    document_id = created.json()["document"]["id"]
+    async with fabric.session() as session:
+        link = (
+            await session.execute(
+                select(EvidenceLink).where(
+                    EvidenceLink.document_id == document_id,
+                    EvidenceLink.subject_kind.startswith("extracted_record"),
+                )
+            )
+        ).scalars().first()
+        assert link is not None
+        record = await session.get(ExtractedRecord, link.subject_id)
+        assert record is not None
+        evidence_id = link.id
+        await session.delete(record)
+        await session.commit()
+
+    response = await fabric.http.get(f"/api/v1/evidence/{evidence_id}", headers=fabric.alpha.headers)
+    assert response.status_code == 404, response.text
+
+
+async def test_evidence_detail_rejects_a_deleted_source_document(fabric: Fabric) -> None:
+    created = await fabric.upload(
+        fabric.alpha, DDR_BYTES, filename="deleted-document.txt", doc_type="ddr", well_id=fabric.alpha.well_id
+    )
+    assert created.status_code == 201, created.text
+    document_id = created.json()["document"]["id"]
+    async with fabric.session() as session:
+        link = (
+            await session.execute(
+                select(EvidenceLink).where(EvidenceLink.document_id == document_id)
+            )
+        ).scalars().first()
+        document = await session.get(Document, document_id)
+        assert link is not None and document is not None
+        evidence_id = link.id
+        await session.delete(document)
+        await session.commit()
+
+    response = await fabric.http.get(f"/api/v1/evidence/{evidence_id}", headers=fabric.alpha.headers)
+    assert response.status_code == 404, response.text
+
+
+async def test_evidence_detail_bounds_nested_table_locator_excerpt_and_record_payload(fabric: Fabric) -> None:
+    created = await fabric.upload(
+        fabric.alpha, DDR_BYTES, filename="large-evidence.txt", doc_type="ddr", well_id=fabric.alpha.well_id
+    )
+    assert created.status_code == 201, created.text
+    document_id = created.json()["document"]["id"]
+
+    async with fabric.session() as session:
+        region = (
+            await session.execute(
+                select(DocumentRegion).where(DocumentRegion.document_id == document_id)
+            )
+        ).scalars().first()
+        assert region is not None
+        link = (
+            await session.execute(
+                select(EvidenceLink).where(
+                    EvidenceLink.document_id == document_id,
+                    EvidenceLink.region_id == region.id,
+                    EvidenceLink.subject_kind.startswith("extracted_record"),
+                )
+            )
+        ).scalars().first()
+        assert link is not None
+        record = (
+            await session.execute(select(ExtractedRecord).where(ExtractedRecord.id == link.subject_id))
+        ).scalar_one()
+        link.locator = {
+            "field_locations": {
+                f"field_{index}": {"source": "x" * 256, "index": index} for index in range(300)
+            }
+        }
+        link.excerpt = "e" * 10000
+        region.table = {
+            "rows": 200,
+            "cols": 3,
+            "header": ["A", "B", "C"],
+            "cells": [
+                [{"text": "cell-" + ("t" * 3000)} for _ in range(3)] for _ in range(200)
+            ],
+        }
+        record.payload = {f"field_{index}": "p" * 2000 for index in range(100)}
+        evidence_id = link.id
+        await session.commit()
+
+    response = await fabric.http.get(f"/api/v1/evidence/{evidence_id}", headers=fabric.alpha.headers)
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["region"]["table_truncated"] is True
+    assert body["evidence"]["locator_truncated"] is True
+    assert body["evidence"]["excerpt_truncated"] is True
+    assert len(body["evidence"]["excerpt"]) == 2000
+    assert body["subject_record"]["payload_truncated"] is True
+    assert len(json.dumps(body).encode("utf-8")) < 250_000
+
+
+async def test_document_detail_bounds_nested_summaries_attributes_and_job_text(fabric: Fabric) -> None:
+    created = await fabric.upload(
+        fabric.alpha, DDR_BYTES, filename="large-detail.txt", doc_type="ddr", well_id=fabric.alpha.well_id
+    )
+    assert created.status_code == 201, created.text
+    document_id = created.json()["document"]["id"]
+    async with fabric.session() as session:
+        document = await session.get(Document, document_id)
+        assert document is not None
+        region = (
+            await session.execute(
+                select(DocumentRegion).where(DocumentRegion.document_id == document_id)
+            )
+        ).scalars().first()
+        job = (
+            await session.execute(
+                select(IngestionJob).where(IngestionJob.document_id == document_id)
+            )
+        ).scalars().first()
+        record = (
+            await session.execute(
+                select(ExtractedRecord).where(ExtractedRecord.document_id == document_id)
+            )
+        ).scalars().first()
+        assert region is not None and job is not None and record is not None
+        document.extraction_summary = {"large": "s" * 50000}
+        region.attributes = {"source_locator": "a" * 20000}
+        job.warnings = ["w" * 5000 for _ in range(30)]
+        job.error = "e" * 6000
+        record.unit_context = {"depth": "u" * 10000}
+        record.quality_flags = ["q" * 1000 for _ in range(100)]
+        await session.commit()
+
+    response = await fabric.http.get(
+        f"/api/v1/documents/{document_id}",
+        params={"chunk_limit": 1, "region_limit": 1, "record_limit": 1, "evidence_limit": 1},
+        headers=fabric.alpha.headers,
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["document"]["extraction_summary_truncated"] is True
+    assert body["ingestion_jobs"][0]["warnings_truncated"] is True
+    assert body["ingestion_jobs"][0]["error_truncated"] is True
+    assert body["regions"][0]["attributes_truncated"] is True
+    assert body["records"][0]["unit_context_truncated"] is True
+    assert body["records"][0]["quality_flags_truncated"] is True
+    assert len(response.content) < 100_000
+
+
+@pytest.mark.parametrize("quarantine_after_call", [1, 2, 3, 4])
+async def test_evidence_detail_rechecks_quarantine_during_traversal(
+    fabric: Fabric, quarantine_after_call: int
+) -> None:
+    created = await fabric.upload(
+        fabric.alpha, DDR_BYTES, filename="quarantine-race.txt", doc_type="ddr", well_id=fabric.alpha.well_id
+    )
+    assert created.status_code == 201, created.text
+    document_id = created.json()["document"]["id"]
+    async with fabric.session() as session:
+        evidence = (
+            await session.execute(
+                select(EvidenceLink).where(
+                    EvidenceLink.document_id == document_id,
+                    EvidenceLink.region_id.is_not(None),
+                    EvidenceLink.subject_kind.startswith("extracted_record"),
+                )
+            )
+        ).scalars().first()
+        assert evidence is not None
+        evidence_id = evidence.id
+        document = await session.get(Document, document_id)
+        assert document is not None and document.raw_artifact_id is not None
+        artifact = await session.get(RawArtifact, document.raw_artifact_id)
+        assert artifact is not None
+
+        class QuarantineAfterLookup:
+            def __init__(self) -> None:
+                self.calls = 0
+
+            async def execute(self, *args: Any, **kwargs: Any) -> Any:
+                result = await session.execute(*args, **kwargs)
+                self.calls += 1
+                if self.calls == quarantine_after_call:
+                    artifact.is_quarantined = True
+                    await session.flush()
+                return result
+
+        auth = AuthContext(
+            principal=Principal(id="usr_alpha", org_id="org_alpha", max_action_level=ActionLevel.OBSERVE),
+            org_id="org_alpha",
+        )
+        with pytest.raises(NotFound):
+            await get_evidence(evidence_id, session=QuarantineAfterLookup(), auth=auth)

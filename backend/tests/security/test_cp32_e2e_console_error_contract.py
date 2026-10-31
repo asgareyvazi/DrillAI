@@ -191,7 +191,10 @@ def test_cp32_the_shared_contract_exists_and_is_used() -> None:
     assert match, "could not find the body of `expectNoFailures`"
     body = match.group(2)
     assert "appConsoleErrors(consoleErrors)" in body
-    assert "evaluateFailureOracle(state.failedResponses, [], state.allowances)" in body
+    assert re.search(
+        r"evaluateFailureOracle\(\s*state\.failedResponses,\s*\[\],\s*state\.allowances,\s*state\.applicationOrigin,\s*\)",
+        body,
+    ), "the immediate oracle must bind its observations to the fixture's application origin"
     assert "result.findings" in body
     assert "await assertFailureOracle(state, testInfo)" in source, (
         "the auto fixture must repeat the oracle after collecting network failures, even if a journey "

@@ -28,9 +28,9 @@ import datetime as dt
 import enum
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from drillai.core.clock import UTC
+from drillai.core.clock import UTC, ensure_utc
 
 __all__ = [
     "ContextBundle",
@@ -74,11 +74,46 @@ class ContextScope(BaseModel):
     #: Restrict depth-referenced data to this interval (metres, measured depth). This is the
     #: mechanism that keeps an "8½ inch section" question from matching every 8½ string in the
     #: well: the caller passes the section, and providers filter by both section id and depths.
-    depth_from_si: float | None = None
-    depth_to_si: float | None = None
+    depth_from_si: float | None = Field(default=None, ge=0, allow_inf_nan=False)
+    depth_to_si: float | None = Field(default=None, ge=0, allow_inf_nan=False)
     #: Restrict time-referenced data (documents, operations, events) to this window.
     period_from: dt.datetime | None = None
     period_to: dt.datetime | None = None
+
+    @field_validator(
+        "org_id",
+        "project_id",
+        "well_id",
+        "wellbore_id",
+        "section_id",
+        "operation_id",
+        "formation_id",
+        mode="before",
+    )
+    @classmethod
+    def scope_identifiers_must_not_be_blank(cls, value):
+        if value is not None and (not isinstance(value, str) or not value.strip()):
+            raise ValueError("scope identifiers must be non-empty strings when provided")
+        return value
+
+    @field_validator("period_from", "period_to")
+    @classmethod
+    def period_bounds_must_be_timezone_aware(cls, value: dt.datetime | None) -> dt.datetime | None:
+        if value is None:
+            return None
+        return ensure_utc(value)
+
+    @model_validator(mode="after")
+    def period_window_must_be_ordered(self):
+        if (
+            self.depth_from_si is not None
+            and self.depth_to_si is not None
+            and self.depth_from_si > self.depth_to_si
+        ):
+            raise ValueError("depth_from_si must not exceed depth_to_si")
+        if self.period_from is not None and self.period_to is not None and self.period_from > self.period_to:
+            raise ValueError("period_from must not follow period_to")
+        return self
 
     def depth_overlaps(self, start: float | None, end: float | None) -> bool:
         """True when an interval intersects the requested depth window (None = unbounded)."""

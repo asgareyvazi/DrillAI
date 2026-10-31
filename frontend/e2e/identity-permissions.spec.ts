@@ -367,14 +367,17 @@ test.describe('identity, permission and action level', () => {
     )?.id
     expect(workflowId, 'the seed must have produced the drilling workflow').toBeTruthy()
 
-    // A run that is still waiting for its approval: the monitor streams while it waits.
-    const runId = await startRunFromStudio(page, workflowId as string, wellId)
+    // Attach the transport observer before navigation: startRunFromStudio both creates the waiting run
+    // and navigates to its monitor, so observing afterwards can miss a fast initial WebSocket.
     const opened: string[] = []
     const closed: string[] = []
     page.on('websocket', (socket) => {
       opened.push(socket.url())
       socket.on('close', () => closed.push(socket.url()))
     })
+
+    // A run that is still waiting for its approval: the monitor streams while it waits.
+    const runId = await startRunFromStudio(page, workflowId as string, wellId)
 
     // Give the stream a moment to be opened by the page that just navigated to the run.
     await expect

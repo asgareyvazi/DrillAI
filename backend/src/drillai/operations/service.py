@@ -31,7 +31,7 @@ import datetime as dt
 from dataclasses import dataclass
 from typing import Any
 
-from sqlalchemy import Select, func, or_, select
+from sqlalchemy import Select, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from drillai.core.audit import record_audit
@@ -46,9 +46,22 @@ from drillai.db.models import (
     Document,
     Event,
     EvidenceLink,
+    ExtractedRecord,
     Operation,
+    RawArtifact,
 )
-from drillai.documents.scope import DocumentScope, DocumentScopeResolver
+from drillai.documents.access import (
+    document_not_quarantined_condition,
+    evidence_document_not_quarantined_condition,
+    operational_source_conditions,
+)
+from drillai.documents.scope import (
+    DocumentScope,
+    DocumentScopeResolver,
+    validate_source_record,
+    validate_source_scope,
+)
+from drillai.operations.time_windows import interval_overlap_conditions, operation_time_expressions
 from drillai.security.actions import Principal
 from drillai.telemetry.outbox import emit
 
@@ -170,7 +183,10 @@ class OperationService:
         ``created_at`` — the obvious choice — is *not* the drilling order, and a timeline that
         reorders itself between pages is worse than one that is merely slow.
         """
-        stmt = select(Operation).where(Operation.org_id == self.org_id)
+        stmt = select(Operation).where(
+            Operation.org_id == self.org_id,
+            *operational_source_conditions(Operation),
+        )
         if well_id:
             stmt = stmt.where(Operation.well_id == well_id)
         if wellbore_id:
@@ -187,14 +203,9 @@ class OperationService:
             stmt = stmt.where(Operation.source_kind == source_kind)
         if document_id:
             stmt = stmt.where(Operation.source_document_id == document_id)
-        if since is not None:
-            stmt = stmt.where(
-                or_(Operation.actual_start >= since, Operation.planned_start >= since)
-            )
-        if until is not None:
-            stmt = stmt.where(
-                or_(Operation.actual_end <= until, Operation.planned_end <= until)
-            )
+        if since is not None or until is not None:
+            start, end = operation_time_expressions()
+            stmt = stmt.where(*interval_overlap_conditions(start, end, since=since, until=until))
         return stmt.order_by(Operation.sequence.asc(), Operation.id.asc())
 
     async def count(self, stmt: Select) -> int:
@@ -204,7 +215,9 @@ class OperationService:
         row = (
             await self.session.execute(
                 select(Operation).where(
-                    Operation.id == operation_id, Operation.org_id == self.org_id
+                    Operation.id == operation_id,
+                    Operation.org_id == self.org_id,
+                    *operational_source_conditions(Operation),
                 )
             )
         ).scalar_one_or_none()
@@ -295,7 +308,14 @@ class OperationService:
             sequence = await self.next_sequence(wellbore_id)
         await self._check_predecessor(predecessor_operation_id, wellbore_id)
         await self._check_parent(parent_operation_id, wellbore_id)
-        await self._check_linkage(source_document_id=source_document_id, source_record_id=source_record_id)
+        await self._check_linkage(
+            source_document_id=source_document_id,
+            source_record_id=source_record_id,
+            project_id=resolved.project_id,
+            well_id=well_id,
+            wellbore_id=wellbore_id,
+            section_id=resolved.section_id,
+        )
 
         operation = Operation(
             id=new_id("opr"),
@@ -367,6 +387,7 @@ class OperationService:
         expected_updated_at: dt.datetime,
         reason: str,
         changes: dict[str, Any],
+        audit_metadata: dict[str, Any] | None = None,
     ) -> tuple[Operation, list[ChangeRecord]]:
         """Apply an allowed change to an existing operation, with the version and a reason."""
         self._require(reason=reason)
@@ -403,8 +424,23 @@ class OperationService:
                 "kind is not a recognised operation kind",
                 details={"field": "kind", "value": changes["kind"], "allowed": sorted(OPERATION_KINDS)},
             )
-        if changes.get("section_id"):
-            await self._check_section_belongs(changes["section_id"], operation.wellbore_id)
+        target_section_id = changes.get("section_id", operation.section_id)
+        if target_section_id is not None:
+            if not isinstance(target_section_id, str) or not target_section_id.strip():
+                raise ValidationFailed("section_id must be a non-empty identifier when provided")
+            await self._check_section_belongs(target_section_id, operation.wellbore_id)
+        if "section_id" in changes:
+            # A section edit must not leave the operation attached to a source document or extracted
+            # record from a different section. Check the proposed scope before mutating the ORM row.
+            await self._check_linkage(
+                source_document_id=operation.source_document_id,
+                source_record_id=operation.source_record_id,
+                project_id=operation.project_id,
+                well_id=operation.well_id,
+                wellbore_id=operation.wellbore_id,
+                section_id=target_section_id,
+                operation_id=operation.id,
+            )
 
         records: list[ChangeRecord] = []
         for field, value in changes.items():
@@ -418,6 +454,12 @@ class OperationService:
         self._check_class_fields(operation.operation_class, {record.field: record.after for record in records})
 
         await self.session.flush()
+        audit_details: dict[str, Any] = {
+            "reason": reason,
+            "changes": [record.as_dict() for record in records],
+        }
+        if audit_metadata is not None:
+            audit_details["audit_metadata"] = dict(audit_metadata)
         await record_audit(
             self.session,
             org_id=self.org_id,
@@ -425,7 +467,7 @@ class OperationService:
             action="operation.update",
             resource_kind="operation",
             resource_id=operation.id,
-            details={"reason": reason, "changes": [record.as_dict() for record in records]},
+            details=audit_details,
         )
         await emit(
             self.session,
@@ -556,25 +598,15 @@ class OperationService:
         """
         operation = await self.get(operation_id)
         before = operation.source_document_id
-        if document_id is not None:
-            document = (
-                await self.session.execute(
-                    select(Document).where(
-                        Document.id == document_id, Document.org_id == self.org_id
-                    )
-                )
-            ).scalar_one_or_none()
-            if document is None:
-                raise NotFound(f"document {document_id!r} not found")
-            if document.well_id and document.well_id != operation.well_id:
-                raise ValidationFailed(
-                    "the document is about a different well",
-                    details={
-                        "document_id": document_id,
-                        "document_well_id": document.well_id,
-                        "operation_well_id": operation.well_id,
-                    },
-                )
+        await self._check_linkage(
+            source_document_id=document_id,
+            source_record_id=operation.source_record_id,
+            project_id=operation.project_id,
+            well_id=operation.well_id,
+            wellbore_id=operation.wellbore_id,
+            section_id=operation.section_id,
+            operation_id=operation.id,
+        )
         operation.source_document_id = document_id
         await self.session.flush()
         await record_audit(
@@ -594,7 +626,11 @@ class OperationService:
             (
                 await self.session.execute(
                     select(Event)
-                    .where(Event.org_id == self.org_id, Event.operation_id == operation_id)
+                    .where(
+                        Event.org_id == self.org_id,
+                        Event.operation_id == operation_id,
+                        *operational_source_conditions(Event),
+                    )
                     .order_by(Event.occurred_at.asc(), Event.id.asc())
                     .limit(limit)
                 )
@@ -609,10 +645,13 @@ class OperationService:
             (
                 await self.session.execute(
                     select(EvidenceLink)
+                    .outerjoin(Document, Document.id == EvidenceLink.document_id)
+                    .outerjoin(RawArtifact, RawArtifact.id == Document.raw_artifact_id)
                     .where(
                         EvidenceLink.org_id == self.org_id,
                         EvidenceLink.subject_kind == "operation",
                         EvidenceLink.subject_id == operation_id,
+                        evidence_document_not_quarantined_condition(),
                     )
                     .order_by(EvidenceLink.created_at.asc(), EvidenceLink.id.asc())
                     .limit(limit)
@@ -669,7 +708,9 @@ class OperationService:
         row = (
             await self.session.execute(
                 select(Operation).where(
-                    Operation.id == predecessor_id, Operation.org_id == self.org_id
+                    Operation.id == predecessor_id,
+                    Operation.org_id == self.org_id,
+                    *operational_source_conditions(Operation),
                 )
             )
         ).scalar_one_or_none()
@@ -690,7 +731,11 @@ class OperationService:
             return
         row = (
             await self.session.execute(
-                select(Operation).where(Operation.id == parent_id, Operation.org_id == self.org_id)
+                select(Operation).where(
+                    Operation.id == parent_id,
+                    Operation.org_id == self.org_id,
+                    *operational_source_conditions(Operation),
+                )
             )
         ).scalar_one_or_none()
         if row is None:
@@ -752,22 +797,67 @@ class OperationService:
             )
 
     async def _check_linkage(
-        self, *, source_document_id: str | None, source_record_id: str | None
+        self,
+        *,
+        source_document_id: str | None,
+        source_record_id: str | None,
+        project_id: str | None,
+        well_id: str,
+        wellbore_id: str,
+        section_id: str | None,
+        operation_id: str | None = None,
     ) -> None:
-        if source_document_id:
-            document = (
-                await self.session.execute(
-                    select(Document).where(
-                        Document.id == source_document_id, Document.org_id == self.org_id
-                    )
-                )
-            ).scalar_one_or_none()
-            if document is None:
-                raise NotFound(f"document {source_document_id!r} not found")
-        elif source_record_id:
+        if source_record_id and not source_document_id:
             raise ValidationFailed(
                 "source_record_id requires the source_document_id it belongs to",
                 details={"field": "source_document_id"},
+            )
+        if not source_document_id:
+            return
+
+        document = (
+            await self.session.execute(
+                select(Document)
+                .outerjoin(RawArtifact, RawArtifact.id == Document.raw_artifact_id)
+                .where(
+                    Document.id == source_document_id,
+                    Document.org_id == self.org_id,
+                    document_not_quarantined_condition(),
+                )
+            )
+        ).scalar_one_or_none()
+        if document is None:
+            # A quarantined source is unavailable for promotion just like a missing one; do not
+            # disclose whether the retained artifact exists to this caller.
+            raise NotFound(f"document {source_document_id!r} not found")
+        validate_source_scope(
+            document,
+            project_id=project_id,
+            well_id=well_id,
+            wellbore_id=wellbore_id,
+            section_id=section_id,
+            operation_id=operation_id,
+        )
+
+        if source_record_id:
+            record = (
+                await self.session.execute(
+                    select(ExtractedRecord).where(
+                        ExtractedRecord.id == source_record_id,
+                        ExtractedRecord.document_id == source_document_id,
+                        ExtractedRecord.org_id == self.org_id,
+                    )
+                )
+            ).scalar_one_or_none()
+            if record is None:
+                raise NotFound(f"extracted record {source_record_id!r} not found in document {source_document_id!r}")
+            validate_source_record(
+                record,
+                project_id=project_id,
+                well_id=well_id,
+                wellbore_id=wellbore_id,
+                section_id=section_id,
+                operation_id=operation_id,
             )
 
     def _check_expected_version(self, operation: Operation, expected_updated_at: dt.datetime) -> None:

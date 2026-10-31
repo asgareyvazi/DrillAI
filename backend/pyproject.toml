@@ -19,6 +19,8 @@ dependencies = [
   # --- contracts / validation ---
   "pydantic>=2.9,<3",
   "pydantic-settings>=2.6",
+  "jsonschema>=4.23,<5",
+  "referencing>=0.35,<1",
   "cryptography>=44.0",
   "setuptools>=83.0.0",
   # --- persistence ---

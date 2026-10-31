@@ -24,7 +24,7 @@ import pytest
 from sqlalchemy import select
 from tests.fixtures.fabric import Fabric
 
-from drillai.db.models import AuditLog
+from drillai.db.models import AuditLog, ExtractedRecord, RawArtifact
 
 
 def _scope(fabric: Fabric, tenant, **overrides) -> dict:
@@ -509,7 +509,7 @@ async def test_linking_a_document_of_another_well_is_refused(fabric: Fabric) -> 
         headers=fabric.alpha.headers,
     )
     assert response.status_code == 422, response.text
-    assert "different well" in response.json()["error"]["message"]
+    assert "source well_id does not match" in response.json()["error"]["message"]
 
 
 async def test_linking_a_document_of_the_same_well_is_recorded(fabric: Fabric) -> None:
@@ -524,6 +524,321 @@ async def test_linking_a_document_of_the_same_well_is_recorded(fabric: Fabric) -
     )
     assert response.status_code == 200, response.text
     assert response.json()["source_document_id"] == document.json()["document"]["id"]
+
+
+async def test_operation_correction_cannot_move_away_from_its_source_section(fabric: Fabric) -> None:
+    other_section = await fabric.http.post(
+        f"/api/v1/wellbores/{fabric.alpha.wellbore_id}/sections",
+        json={"sequence": 2, "name": "8-1/2 inch section", "kind": "intermediate"},
+        headers=fabric.alpha.headers,
+    )
+    assert other_section.status_code == 201, other_section.text
+    document = await fabric.upload(
+        fabric.alpha,
+        b"section-specific operation report",
+        well_id=fabric.alpha.well_id,
+        wellbore_id=fabric.alpha.wellbore_id,
+        section_id=fabric.alpha.section_id,
+    )
+    created = (
+        await _create(
+            fabric,
+            fabric.alpha,
+            sequence=1,
+            section_id=fabric.alpha.section_id,
+            source_document_id=document.json()["document"]["id"],
+        )
+    ).json()
+
+    response = await fabric.http.patch(
+        f"/api/v1/operations/{created['id']}",
+        json={
+            "expected_updated_at": created["updated_at"],
+            "reason": "attempt to refile the operation",
+            "changes": {"section_id": other_section.json()["id"]},
+        },
+        headers=fabric.alpha.headers,
+    )
+
+    assert response.status_code == 422, response.text
+    assert "source section_id does not match" in response.json()["error"]["message"]
+    detail = await fabric.http.get(
+        f"/api/v1/operations/{created['id']}", headers=fabric.alpha.headers
+    )
+    assert detail.status_code == 200
+    assert detail.json()["section_id"] == fabric.alpha.section_id
+    assert detail.json()["source_document_id"] == document.json()["document"]["id"]
+
+
+async def test_relinking_an_operation_revalidates_its_source_record_document_pair(fabric: Fabric) -> None:
+    from tests.fixtures.fabric import DDR_BYTES
+
+    original = await fabric.upload(
+        fabric.alpha,
+        DDR_BYTES,
+        filename="operation-source-ddr.txt",
+        content_type="text/plain",
+        well_id=fabric.alpha.well_id,
+        wellbore_id=fabric.alpha.wellbore_id,
+        section_id=fabric.alpha.section_id,
+        doc_type="ddr",
+    )
+    original_id = original.json()["document"]["id"]
+    original_detail = await fabric.http.get(
+        f"/api/v1/documents/{original_id}", headers=fabric.alpha.headers
+    )
+    record_id = original_detail.json()["records"][0]["id"]
+    async with fabric.session() as session:
+        record = await session.get(ExtractedRecord, record_id)
+        assert record is not None
+        record.validation_state = "human_validated"
+        record.confidence = None
+        await session.commit()
+    replacement = await fabric.upload(
+        fabric.alpha,
+        b"replacement report in the same section",
+        well_id=fabric.alpha.well_id,
+        wellbore_id=fabric.alpha.wellbore_id,
+        section_id=fabric.alpha.section_id,
+    )
+    created = (
+        await _create(
+            fabric,
+            fabric.alpha,
+            sequence=1,
+            section_id=fabric.alpha.section_id,
+            source_document_id=original_id,
+            source_record_id=record_id,
+        )
+    ).json()
+
+    response = await fabric.http.post(
+        f"/api/v1/operations/{created['id']}/document",
+        json={"document_id": replacement.json()["document"]["id"]},
+        headers=fabric.alpha.headers,
+    )
+
+    assert response.status_code == 404, response.text
+    assert "not found in document" in response.json()["error"]["message"]
+    detail = await fabric.http.get(
+        f"/api/v1/operations/{created['id']}", headers=fabric.alpha.headers
+    )
+    assert detail.status_code == 200
+    assert detail.json()["source_document_id"] == original_id
+    assert detail.json()["source_record_id"] == record_id
+
+
+async def test_linking_a_document_from_another_wellbore_is_refused(fabric: Fabric) -> None:
+    other_wellbore = await fabric.add_wellbore(fabric.alpha, fabric.alpha.well_id, "Side track")
+    document = await fabric.upload(
+        fabric.alpha,
+        b"side-track document",
+        well_id=fabric.alpha.well_id,
+        wellbore_id=other_wellbore,
+    )
+    created = (await _create(fabric, fabric.alpha, sequence=1)).json()
+
+    response = await fabric.http.post(
+        f"/api/v1/operations/{created['id']}/document",
+        json={"document_id": document.json()["document"]["id"]},
+        headers=fabric.alpha.headers,
+    )
+    assert response.status_code == 422, response.text
+    assert "source wellbore_id does not match" in response.json()["error"]["message"]
+
+
+async def test_linking_an_operation_scoped_document_to_a_different_operation_is_refused(
+    fabric: Fabric,
+) -> None:
+    first = (await _create(fabric, fabric.alpha, sequence=1)).json()
+    second = (await _create(fabric, fabric.alpha, sequence=2)).json()
+    document = await fabric.upload(
+        fabric.alpha,
+        b"operation-specific report",
+        well_id=fabric.alpha.well_id,
+        wellbore_id=fabric.alpha.wellbore_id,
+        operation_id=first["id"],
+    )
+
+    response = await fabric.http.post(
+        f"/api/v1/operations/{second['id']}/document",
+        json={"document_id": document.json()["document"]["id"]},
+        headers=fabric.alpha.headers,
+    )
+    assert response.status_code == 422, response.text
+    assert "source operation_id does not match" in response.json()["error"]["message"]
+
+
+async def test_linking_a_quarantined_document_is_refused(fabric: Fabric) -> None:
+    document = await fabric.upload(
+        fabric.alpha,
+        b"quarantined operation report",
+        well_id=fabric.alpha.well_id,
+        wellbore_id=fabric.alpha.wellbore_id,
+    )
+    artifact_id = document.json()["document"]["raw_artifact_id"]
+    async with fabric.session() as session:
+        artifact = await session.get(RawArtifact, artifact_id)
+        assert artifact is not None
+        artifact.is_quarantined = True
+        await session.commit()
+    created = (await _create(fabric, fabric.alpha, sequence=1)).json()
+
+    response = await fabric.http.post(
+        f"/api/v1/operations/{created['id']}/document",
+        json={"document_id": document.json()["document"]["id"]},
+        headers=fabric.alpha.headers,
+    )
+    assert response.status_code == 404, response.text
+    detail = await fabric.http.get(
+        f"/api/v1/operations/{created['id']}", headers=fabric.alpha.headers
+    )
+    assert detail.status_code == 200
+    assert detail.json()["source_document_id"] is None
+
+
+async def test_operation_creation_rejects_source_document_from_another_wellbore(fabric: Fabric) -> None:
+    other_wellbore = await fabric.add_wellbore(fabric.alpha, fabric.alpha.well_id, "Side track")
+    document = await fabric.upload(
+        fabric.alpha,
+        b"side-track report",
+        well_id=fabric.alpha.well_id,
+        wellbore_id=other_wellbore,
+    )
+    assert document.status_code == 201, document.text
+
+    response = await _create(
+        fabric,
+        fabric.alpha,
+        sequence=1,
+        source_document_id=document.json()["document"]["id"],
+    )
+    assert response.status_code == 422, response.text
+    assert "source wellbore_id does not match" in response.json()["error"]["message"]
+    listing = await fabric.http.get(
+        "/api/v1/operations",
+        params={"well_id": fabric.alpha.well_id},
+        headers=fabric.alpha.headers,
+    )
+    assert listing.status_code == 200
+    assert listing.json()["total"] == 0, "rejected provenance must not leave a partial operation row"
+
+
+async def test_operation_creation_rejects_quarantined_source_documents(fabric: Fabric) -> None:
+    document_response = await fabric.upload(
+        fabric.alpha,
+        b"report quarantined before promotion",
+        well_id=fabric.alpha.well_id,
+        wellbore_id=fabric.alpha.wellbore_id,
+    )
+    assert document_response.status_code == 201, document_response.text
+    artifact_id = document_response.json()["document"]["raw_artifact_id"]
+    async with fabric.session() as session:
+        artifact = await session.get(RawArtifact, artifact_id)
+        assert artifact is not None
+        artifact.is_quarantined = True
+        await session.commit()
+
+    response = await _create(
+        fabric,
+        fabric.alpha,
+        sequence=1,
+        source_document_id=document_response.json()["document"]["id"],
+    )
+    assert response.status_code == 404, response.text
+    assert "not found" in response.json()["error"]["message"]
+    listing = await fabric.http.get(
+        "/api/v1/operations",
+        params={"well_id": fabric.alpha.well_id},
+        headers=fabric.alpha.headers,
+    )
+    assert listing.status_code == 200
+    assert listing.json()["total"] == 0
+
+
+async def test_operation_creation_requires_source_record_to_belong_to_source_document(fabric: Fabric) -> None:
+    from tests.fixtures.fabric import DDR_BYTES
+
+    first = await fabric.upload(
+        fabric.alpha,
+        b"a report with no extracted record",
+        well_id=fabric.alpha.well_id,
+        wellbore_id=fabric.alpha.wellbore_id,
+    )
+    second = await fabric.upload(
+        fabric.alpha,
+        DDR_BYTES,
+        filename="source-record-ddr.txt",
+        content_type="text/plain",
+        well_id=fabric.alpha.well_id,
+        wellbore_id=fabric.alpha.wellbore_id,
+        section_id=fabric.alpha.section_id,
+        doc_type="ddr",
+    )
+    assert first.status_code == second.status_code == 201
+    second_detail = await fabric.http.get(
+        f"/api/v1/documents/{second.json()['document']['id']}", headers=fabric.alpha.headers
+    )
+    assert second_detail.status_code == 200, second_detail.text
+    records = second_detail.json()["records"]
+    assert records
+
+    response = await _create(
+        fabric,
+        fabric.alpha,
+        sequence=1,
+        source_document_id=first.json()["document"]["id"],
+        source_record_id=records[0]["id"],
+    )
+    assert response.status_code == 404, response.text
+    assert "not found in document" in response.json()["error"]["message"]
+
+
+@pytest.mark.parametrize("validation_state", ["rejected", "superseded"])
+async def test_operation_creation_refuses_rejected_or_superseded_source_records(
+    fabric: Fabric, validation_state: str
+) -> None:
+    from tests.fixtures.fabric import DDR_BYTES
+
+    upload = await fabric.upload(
+        fabric.alpha,
+        DDR_BYTES,
+        filename="invalid-source-record.txt",
+        content_type="text/plain",
+        well_id=fabric.alpha.well_id,
+        wellbore_id=fabric.alpha.wellbore_id,
+        section_id=fabric.alpha.section_id,
+        doc_type="ddr",
+    )
+    assert upload.status_code == 201, upload.text
+    document_id = upload.json()["document"]["id"]
+    async with fabric.session() as session:
+        record = (
+            await session.execute(
+                select(ExtractedRecord).where(ExtractedRecord.document_id == document_id).limit(1)
+            )
+        ).scalar_one()
+        record.validation_state = validation_state
+        record_id = record.id
+        await session.commit()
+
+    response = await _create(
+        fabric,
+        fabric.alpha,
+        sequence=1,
+        section_id=fabric.alpha.section_id,
+        source_document_id=document_id,
+        source_record_id=record_id,
+    )
+    assert response.status_code == 422, response.text
+    assert "not eligible for linkage" in response.json()["error"]["message"]
+    listing = await fabric.http.get(
+        "/api/v1/operations",
+        params={"well_id": fabric.alpha.well_id},
+        headers=fabric.alpha.headers,
+    )
+    assert listing.status_code == 200
+    assert listing.json()["total"] == 0
 
 
 async def test_listing_filters_and_counts_in_the_database(fabric: Fabric) -> None:

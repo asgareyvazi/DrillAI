@@ -21,6 +21,7 @@ from drillai.context.builder import default_context_builder, registered_section_
 from drillai.context.model import ContextPurpose, ContextRequest, ContextScope, UnitSystemName
 from drillai.core.errors import NotFound, ValidationFailed
 from drillai.db.models import Operation, Well, Wellbore, WellSection
+from drillai.documents.access import operational_source_conditions
 from drillai.security.actions import authorize
 
 router = APIRouter(tags=["context"])
@@ -94,6 +95,7 @@ async def well_context(
                     Operation.id == operation_id,
                     Operation.well_id == well.id,
                     Operation.org_id == auth.org_id,
+                    *operational_source_conditions(Operation),
                 )
             )
         ).scalar_one_or_none()

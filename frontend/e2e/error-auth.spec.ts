@@ -79,14 +79,22 @@ test.describe('an authentication-enabled deployment', () => {
     await expect(errorState(page).first()).toHaveAttribute('data-error-kind', 'unauthenticated')
     await expect(page.getByTestId('live-transport-state')).toHaveText(/ERROR/i)
 
+    // `WellList` issues the fields and rigs reads alongside wells/projects. In this Vite development
+    // stack React.StrictMode mounts query observers twice; HTTP 401 is not retryable, so each exact
+    // two-observation allowance accounts only for that development remount.
     expectNoFailures(consoleErrors, failedResponses, {
       allowed: [
-        anonymousGet('/api/v1/health/ready', '', 5, 'the anonymous-read journey'),
+        anonymousGet(
+          '/api/v1/health/ready',
+          '',
+          6,
+          'the shell health read is observed twice by React StrictMode on each of the three screens in this journey',
+        ),
         anonymousGet('/api/v1/platform/identity', '', 5, 'the anonymous-read journey'),
         anonymousGet('/api/v1/wells', '?limit=200', 2, 'the anonymous-read journey'),
         anonymousGet('/api/v1/projects', '', 2, 'the anonymous-read journey'),
-        anonymousGet('/api/v1/fields', '?limit=500', 1, 'the anonymous-read journey'),
-        anonymousGet('/api/v1/rigs', '', 1, 'the anonymous-read journey'),
+        anonymousGet('/api/v1/fields', '?limit=500', 2, 'the anonymous-read journey and StrictMode remount'),
+        anonymousGet('/api/v1/rigs', '', 2, 'the anonymous-read journey and StrictMode remount'),
         anonymousGet('/api/v1/workflows', '', 1, 'the anonymous-read journey'),
         anonymousGet('/api/v1/registry/node-types', '', 1, 'the anonymous-read journey'),
         anonymousGet('/api/v1/evidence/summary', '?well_id=wel_unauth_probe', 2, 'the anonymous-read journey'),

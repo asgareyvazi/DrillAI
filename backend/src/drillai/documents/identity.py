@@ -109,6 +109,7 @@ def logical_key(
     project_id: str | None = None,
     doc_type: str | None = None,
     revision: str | None = None,
+    operation_id: str | None = None,
 ) -> str | None:
     """The identity of a logical document, or ``None`` when it has no bytes to be identified by.
 
@@ -119,9 +120,9 @@ def logical_key(
     every later copy searched for under another, so deduplication would never fire. That was written
     and caught by ``test_identical_upload_is_deduplicated`` rather than by review.
 
-    Normalising case here rather than at the call sites means a revision recorded as ``"B"`` and one
-    recorded as ``"b"`` are the same revision — the platform does not get to decide that a person's
-    capitalisation made a new document.
+    ``operation_id`` is an orthogonal filing target, not a level in the well/project hierarchy, so it
+    is included independently: the same bytes and well filed to two different operations are not the
+    same logical document. Normalising case for revisions means ``"B"`` and ``"b"`` remain one revision.
     """
     if not content_sha256:
         return None
@@ -134,6 +135,7 @@ def logical_key(
                 well_id=well_id,
                 project_id=project_id,
             ),
+            operation_id or "",
             (doc_type or "").strip().lower(),
             (revision or "").strip().lower(),
         ]

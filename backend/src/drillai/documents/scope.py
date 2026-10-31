@@ -31,13 +31,17 @@ the platform recorded both, producing a document whose scope is not a tree.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from drillai.core.errors import NotFound, ValidationFailed
 from drillai.db.models import Operation, Project, Well, Wellbore, WellSection
+from drillai.documents.access import operational_source_conditions
+from drillai.documents.lifecycle import MIN_PROMOTION_CONFIDENCE, PROMOTABLE_VALIDATION_STATES
 
 #: Field order used in every message, so two callers reporting the same disagreement describe it the
 #: same way.
@@ -76,6 +80,93 @@ class ResolvedScope:
             "section_id": self.section_id,
             "operation_id": self.operation_id,
         }
+
+
+SOURCE_RECORD_STATES = PROMOTABLE_VALIDATION_STATES
+
+
+def validate_source_record(
+    record: Any,
+    *,
+    project_id: str | None,
+    well_id: str | None,
+    wellbore_id: str | None,
+    section_id: str | None,
+    operation_id: str | None,
+) -> None:
+    """Reject stale/rejected records before checking their hierarchy against the owner."""
+    state = getattr(record, "validation_state", None)
+    if state not in SOURCE_RECORD_STATES:
+        raise ValidationFailed(
+            f"source record validation state {state!r} is not eligible for linkage",
+            details={"field": "source_record_id", "validation_state": state},
+        )
+    confidence = getattr(record, "confidence", None)
+    if confidence is not None and (
+        isinstance(confidence, bool)
+        or not isinstance(confidence, (int, float))
+        or not math.isfinite(float(confidence))
+        or not 0.0 <= float(confidence) <= 1.0
+    ):
+        raise ValidationFailed(
+            "source record confidence must be finite and between 0 and 1",
+            details={"field": "source_record_id", "confidence": confidence, "validation_state": state},
+        )
+    if state != "human_validated" and (
+        confidence is None or float(confidence) < MIN_PROMOTION_CONFIDENCE
+    ):
+        raise ValidationFailed(
+            "source record confidence is below the promotion threshold; human validation is required",
+            details={
+                "field": "source_record_id",
+                "confidence": confidence,
+                "minimum_confidence": MIN_PROMOTION_CONFIDENCE,
+                "validation_state": state,
+            },
+        )
+    validate_source_scope(
+        record,
+        project_id=project_id,
+        well_id=well_id,
+        wellbore_id=wellbore_id,
+        section_id=section_id,
+        operation_id=operation_id,
+    )
+
+
+def validate_source_scope(
+    source: Any,
+    *,
+    project_id: str | None,
+    well_id: str | None,
+    wellbore_id: str | None,
+    section_id: str | None,
+    operation_id: str | None,
+) -> None:
+    """Require every non-null scope tag on a source to agree with its owning record.
+
+    A broad source (for example a well-level report supporting an operation) is valid. A narrower or
+    different source tag is not silently accepted, because it would make the link claim more than the
+    source's hierarchy proves.
+    """
+    expected = {
+        "project_id": project_id,
+        "well_id": well_id,
+        "wellbore_id": wellbore_id,
+        "section_id": section_id,
+        "operation_id": operation_id,
+    }
+    for field_name, expected_value in expected.items():
+        actual_value = getattr(source, field_name, None)
+        if actual_value is not None and actual_value != expected_value:
+            raise ValidationFailed(
+                f"source {field_name} does not match the owning record scope",
+                details={
+                    "field": field_name,
+                    "source_value": actual_value,
+                    "owner_value": expected_value,
+                },
+            )
 
 
 @dataclass(frozen=True)
@@ -166,7 +257,11 @@ class DocumentScopeResolver:
     async def _operation(self, operation_id: str) -> Operation:
         row = (
             await self.session.execute(
-                select(Operation).where(Operation.id == operation_id, Operation.org_id == self.org_id)
+                select(Operation).where(
+                    Operation.id == operation_id,
+                    Operation.org_id == self.org_id,
+                    *operational_source_conditions(Operation),
+                )
             )
         ).scalar_one_or_none()
         if row is None:
@@ -182,8 +277,12 @@ class DocumentScopeResolver:
         fields straight through without building an intermediate object.
         """
         scope = scope or DocumentScope(**named)
-        project_id, well_id = scope.project_id, scope.well_id
-        wellbore_id, section_id, operation_id = scope.wellbore_id, scope.section_id, scope.operation_id
+        project_id, well_id = scope.project_id or None, scope.well_id or None
+        wellbore_id, section_id, operation_id = (
+            scope.wellbore_id or None,
+            scope.section_id or None,
+            scope.operation_id or None,
+        )
         supplied = tuple(scope.named())
         chain: list[str] = []
         notes: list[str] = []
