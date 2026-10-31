@@ -1,11 +1,11 @@
 # CP51–CP58 Final Assurance Review
 
 **Review date:** 2026-10-31<br>
-**Disposition:** **PARTIAL — local implementation and regression evidence are strong; final CI, live-vendor, and field-validation evidence are not available.**<br>
+**Disposition:** **PARTIAL — implementation, regression suites, and exact-head Linux/Windows CI passed; vendor, OCR/live-model, and field-validation evidence remain unavailable.**<br>
 **Reviewed against:** baseline `c403c3c857f0d2a9462847f4831b465f864bd74f`<br>
 **Working branch:** `arena/9d8f5568-drillai`<br>
-**Local `HEAD`:** `c403c3c857f0d2a9462847f4831b465f864bd74f` (aligned with the remote baseline; worktree edits are uncommitted)<br>
-**Remote branch at review:** same SHA as local `HEAD`; `main` observed at `bfa066b28e0071880cb9191a4f1d47fdaa143e04` and untouched.
+**Implementation commit:** `a8468e2d76e3cfe3a484b7bd29e354e9e78b5e75` (pushed; exact-head CI run `41204361093` passed)<br>
+**Branch at implementation certification:** local and remote both `a8468e2d76e3cfe3a484b7bd29e354e9e78b5e75`; `main` observed at `bfa066b28e0071880cb9191a4f1d47fdaa143e04` and untouched.
 
 ## Executive decision
 
@@ -18,16 +18,16 @@ This is **not** a production-readiness or field-acceptance statement. The follow
 3. **P2 — multi-document trajectory source compatibility is limited to identity/provenance checks.** DDR processing can append stations from separate documents to the same wellbore trajectory. Each station points to its extracted record and an evidence link to that record's own document; `Trajectory.source_document_id` remains the trajectory's original anchor document. The implementation does not compare survey datum, magnetic/grid reference, tool, or survey-run compatibility across documents. A merged trajectory is therefore not a field-certified survey.
 4. **External evidence remains blocked.** Local WITSML/ETP harnesses pass, but no commercial vendor endpoint was configured (`network_calls_made=0`, `external_vendor_verified=false`). OCR execution/quality and live LLM quality are not established by deterministic parsers or `StubRouter` tests.
 5. **Field validation remains required** for `well_control.kill_sheet` and `tubulars.api_5c3`; formulas, `is_feasible`, and regression tests are not field sign-off.
-6. **No CI run yet covers the reviewed changes.** The latest CI run on the initial baseline SHA is green on both platforms, but that is not evidence for this dirty worktree. Any post-push CI result must be checked against the exact final branch SHA; until then the disposition remains partial.
+6. **Exact-head CI passed on the implementation commit.** GitHub Actions run [41204361093](https://github.com/asgareyvazi/DrillAI/actions/runs/41204361093) tested `a8468e2d76e3cfe3a484b7bd29e354e9e78b5e75`: Linux job `124546316616` and native Windows job `124546317444` both succeeded, including backend, supply-chain, migration, stack, Docker Compose (Linux), and E2E gates. This does not establish live-vendor, OCR/LLM-quality, or field-validation evidence.
 
 ## Scope, baseline, and workspace state
 
 - The review stayed on `arena/9d8f5568-drillai`; no branch was created or switched. On resumption, the local ref was at `bfea530602a23bcc08efca85a136240f61c44a0d` while the remote branch was at the reviewed baseline `c403c3c857f0d2a9462847f4831b465f864bd74f`. After fetching and verifying that the remote was a strict descendant, there were no staged changes, and the worktree matched the remote plus the reviewed local delta, the local ref was fast-forwarded with `git reset --mixed`; the worktree contents were preserved. No hard reset, cleanup, rebase, or history rewrite was performed.
 - Review baseline and local `HEAD` after that fast-forward: `c403c3c857f0d2a9462847f4831b465f864bd74f`.
-- At final inventory: **74 tracked files modified and 16 added files** (15 implementation/test files plus this report); **0 staged files**. No implementation commit or push had been made at that inventory point. The tracked diff is **14,297 insertions / 2,800 deletions**; new-file lines are additional.
-- The remote `arena/9d8f5568-drillai` still pointed to the baseline at that inventory point. Remote `main` was only read and was not modified or merged into.
+- Pre-commit inventory: **74 tracked files modified and 16 added files** (15 implementation/test files plus this report); **0 staged files**. The tracked-only diff was **14,297 insertions / 2,800 deletions**; new-file lines were additional.
+- The 90 reviewed files were committed as `a8468e2d76e3cfe3a484b7bd29e354e9e78b5e75` (**17,107 insertions / 2,800 deletions**) and pushed to `origin/arena/9d8f5568-drillai`. The local and remote branch refs matched at that SHA after publication. The `main` branch was only read and remained at `bfa066b28e0071880cb9191a4f1d47fdaa143e04`.
 - All changes are scoped to CP51–CP58 engineering, tests, their maintained test-count documentation, and this report. No generated `dist`, test-result, build, or environment directory was added to Git. `frontend/package-lock.json` is a large lockfile regeneration accompanying dependency updates; `npm ci`, audit, unit tests, typecheck, lint, build, and E2E passed.
-- `git diff --check` was clean at the final review stage. The worktree is intentionally dirty and is not a commit SHA; no final implementation SHA exists yet.
+- `git diff --check` passed before publication and on the clean implementation commit. The exact-head CI result is recorded below. This report-only update will be pushed separately and re-certified; its final branch SHA and run status are also confirmed in the completion summary.
 
 ## Verification results
 
@@ -65,11 +65,11 @@ The first E2E attempt was 120/121. The trace showed exactly six expected `/api/v
 
 ### Supply chain, secrets, stack, and vendor harness
 
-- `scripts/verify_supply_chain_and_secrets.py`: **8 GitHub Actions pinned to full SHAs**, **455 tracked text files** scanned, `pip-audit` passed, `npm audit --omit=dev --audit-level=high` passed. A separate scan using the same secret patterns covered **471 tracked and untracked text files, 0 findings**, after this report was added.
+- `scripts/verify_supply_chain_and_secrets.py`: **8 GitHub Actions pinned to full SHAs**, **471 tracked text files** scanned after commit, `pip-audit` passed, `npm audit --omit=dev --audit-level=high` passed. An independent scan using the same secret patterns covered those **471 text files with 0 findings**; CI reran the supply-chain gate on the exact implementation SHA.
 - `scripts/verify_stack.py`: **16/16** multi-process scenarios and **32** bounded soak cycles passed; `STACK_VERIFICATION_OK`. Final metrics: 9 WITSML points and 8 ETP binary points accepted; 328 duplicates suppressed; one stale write fenced; DNS permits recovered to 8/8; zero reconciliation failures; max poll 82.21 ms; worker RSS 107.67 → 113.18 MB.
 - `scripts/verify_external_vendor_interop.py --mode harness`: local WITSML 1.4.1.1 SOAP and ETP 1.2 binary/JSON harness checks passed, including rejection of unsupported messages/protocols. This proves harness behavior, not commercial-vendor compatibility.
 - `--mode external`: **`BLOCKED_BY_EXTERNAL_EVIDENCE`**, `external_vendor_verified=false`, **0 network calls**. No vendor endpoint was configured.
-- Docker and Docker Compose executables are absent in this sandbox; no local Compose smoke run is claimed. Linux Compose CI evidence below belongs to the baseline SHA only.
+- Docker and Docker Compose executables are absent in this sandbox; no local Compose smoke run is claimed. The Docker Compose deployment smoke gate passed in Linux CI on implementation SHA `a8468e2d76e3cfe3a484b7bd29e354e9e78b5e75`.
 - No new `filters_applied` key was added in the context builder. The RAG retriever now reports `org_id`, `wellbore_id`, `formation_id`, `chunk_kind`, and `include_neighbours`; `test_filters_applied_reports_every_scope_and_content_filter` and the neighbour-expansion test assert those keys. The context tests assert `ContextSection.source_ids` at section level; individual trajectory stations retain their source record through citations/evidence links.
 
 ### CI and GitHub state
@@ -78,9 +78,9 @@ The first E2E attempt was 120/121. The trace showed exactly six expected `/api/v
 | --- | --- | --- |
 | Baseline CI run [40281481839](https://github.com/asgareyvazi/DrillAI/actions/runs/40281481839) | `c403c3c857f0d2a9462847f4831b465f864bd74f`; Linux job `121435540820` and Windows job `121435541209` both succeeded. | Baseline only; all listed workflow steps passed, including Linux Compose and both E2E projects. |
 | Earlier run [40279405737](https://github.com/asgareyvazi/DrillAI/actions/runs/40279405737) | `328432e31206341bbe14eef2c14f40dc0d0a89f2`; Linux passed, Windows failed one DDR idempotency test. | Historical run, superseded as a baseline reference by the later green `c403c3c...` run; not evidence for this worktree. |
-| Current CP51–CP58 worktree | No commit SHA and no GitHub Actions run. | **Pending** commit/push and exact-head Linux/Windows CI; no CI green claim is made. |
+| CP51–CP58 implementation [CI run 41204361093](https://github.com/asgareyvazi/DrillAI/actions/runs/41204361093) | `a8468e2d76e3cfe3a484b7bd29e354e9e78b5e75`; Linux job `124546316616` and native Windows job `124546317444` both succeeded. | Exact implementation SHA; full workflow gates passed, including Linux Compose and both E2E certifications. The report-only follow-up does not alter implementation code and will receive its own exact-head CI run. |
 
-No branch-protection setting was changed. The earlier GitHub branch metadata read reported `protected:false`; the protection-detail API returned 403 and the ruleset query returned no rows, so required-check enforcement could not be independently verified. The current branch and `main` were not modified by this review.
+No branch-protection setting was changed. The earlier GitHub branch metadata read reported `protected:false`; the protection-detail API returned 403 and the ruleset query returned no rows, so required-check enforcement could not be independently verified. Only `arena/9d8f5568-drillai` was updated; `main` was not modified or merged into.
 
 ## Functional assurance and boundaries
 
@@ -223,8 +223,8 @@ No branch-protection setting was changed. The earlier GitHub branch metadata rea
 | M `frontend/src/pages/workflow/RunMonitor.tsx` | Run status copy/state rendering; frontend tests pass. | No false successful-run presentation. |
 | A `frontend/src/pages/engineering/AdvisorWorkspace.test.tsx` | Component contract for advisor provenance/fallback UI; covered by 340 frontend tests. | No live LLM quality claim. |
 | M `docs/FRONTEND_TESTING.md` | Maintains current test totals, CI boundaries and honest vendor limits; CP16 doc guard passes. | Historical CP34 counts remain historical, not current results. |
-| A `docs/mission-reports/CP51-58-FINAL-ASSURANCE.md` | This report: results, residuals, CI/SHA/workspace status and per-file inventory. | Exact-head CI remains pending until the final worktree is committed and pushed; no CI green claim is made for the local diff. |
+| A `docs/mission-reports/CP51-58-FINAL-ASSURANCE.md` | This report: results, residuals, CI/SHA/workspace status and per-file inventory. | This report-only follow-up is being CI-certified separately; no implementation source changed after exact-head CI on `a8468e2d76e3cfe3a484b7bd29e354e9e78b5e75`. |
 
 ## Final disposition
 
-**Local code/test review: PASS within tested scope. Overall mission: PARTIAL.** P0/P1 findings identified in scope were addressed and regression-tested; the P2 downgrade and cross-survey compatibility boundaries are explicitly documented and tested as far as the local model allows. Live vendor, OCR/LLM quality, field validation, Docker Compose locally, and exact-final-SHA Linux/Windows CI remain unverified. No production-readiness or field-validation claim is made.
+**Implementation review and exact-head Linux/Windows CI: PASS within tested scope. Overall mission: PARTIAL.** P0/P1 findings identified in scope were addressed and regression-tested; the P2 downgrade and cross-survey compatibility boundaries are explicitly documented and tested as far as the local model allows. Live vendor compatibility, OCR/LLM quality, and field validation remain unverified; Docker Compose was validated only in Linux CI, not locally. No production-readiness or field-validation claim is made. The report-only follow-up is separately checked against its own final SHA.
