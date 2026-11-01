@@ -115,7 +115,7 @@ it holds to and `docs/FRONTEND_TESTING.md` lists what is verified and how.
 Set `DRILLAI_TEST_POSTGRES=1` to run the twelve PostgreSQL-backed persistence, migration, promotion-index,
 backup/restore, pgvector, worker-fencing, concurrent-upload, and concurrent SQL-CAS tests through the
 repository's embedded PostgreSQL (`pgserver`). The completed PostgreSQL-enabled run reports **1,555 passed, 0 skipped** in 106 test files.
-With the flag unset, the same 1,555-test inventory reports **1,543 passed, 12 skipped**; the skipped cases are the PostgreSQL-marked integration tests, not counted as passes. Linux CI runs the PostgreSQL-enabled suite, while native Windows deselects the twelve PostgreSQL-marked cases with `-m "not postgres"`.
+With the flag unset, the same 1,555-test inventory reports **1,543 passed, 12 skipped**; the skipped cases are the PostgreSQL-marked integration tests, not counted as passes. Linux CI runs the PostgreSQL-enabled suite, while native Windows deselects the twelve PostgreSQL-marked cases with `-m "not postgres"`. The Windows suite additionally reports one exact, expected skip for the POSIX-only Tesseract subprocess fixture; its skip reason is asserted by CI and no other skips are accepted.
 See `docs/WINDOWS-SETUP.md`, `docs/mission-reports/PRODUCTION-READINESS-MATRIX.md`, and
 `docs/mission-reports/CP16-MISSION-REPORT.md` for historical commit-stamped verification provenance. The
 [CP51–CP58 final assurance review](docs/mission-reports/CP51-58-FINAL-ASSURANCE.md) records that mission's

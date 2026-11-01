@@ -59,7 +59,7 @@ The completed enabled-PostgreSQL run reports **1,555 passed, 0 skipped** across 
 PostgreSQL flag unset, the same collected inventory reports **1,543 passed, 12 skipped**; those 12 cases
 are PostgreSQL-marked and are not represented as passes. CI runs the enabled suite on Linux (the `pgserver`
 dev dependency is in `backend/pyproject.toml`); the Windows job uses `-m "not postgres"` to deselect
-those integration cases.
+those integration cases. Windows reports one expected skip for the POSIX-only Tesseract CLI subprocess fixture; `-rs` prints its reason and the Windows gate accepts exactly that single skip, no additional skips.
 
 ## Unit and component tests
 

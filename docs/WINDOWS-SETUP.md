@@ -15,7 +15,7 @@ This guide provides exact, copy-pasteable instructions for running, testing, and
 | **Bootstrap (`scripts/bootstrap.ps1` / `scripts/bootstrap.sh`)** | **PASS** (`scripts/bootstrap.ps1`) | **PASS** (`scripts/bootstrap.sh`) | **PASS** (`docker compose build`) | **PASS** (`ubuntu-latest` + `windows-latest`) |
 | **Backend Editable Install (`pip install -e "backend[dev,ocr]"`)** | **PASS** (`.venv\Scripts\python.exe`) | **PASS** (`.venv/bin/python`) | **PASS** (container build) | **PASS** |
 | **Alembic Migrations (`alembic upgrade head && alembic check`)** | **PASS** (POSIX-normalized SQLite & PG URLs) | **PASS** | **PASS** (`migrate` service) | **PASS** |
-| **Backend SQLite Test Suite (`pytest -m "not postgres"`)** | **PASS** (`windows-certification` CI job) | **PASS** | **PASS** | **PASS** |
+| **Backend SQLite Test Suite (`pytest -rs -m "not postgres"`)** | **PASS** (1 documented POSIX-only skip; 12 PostgreSQL tests deselected) | **PASS** | **PASS** | **PASS** |
 | **Embedded PostgreSQL (`pgserver`) Tests (`DRILLAI_TEST_POSTGRES=1`)** | **PARTIAL** (use external/Docker PG via `DRILLAI_TEST_DATABASE_URL` or WSL2; `pgserver` uses Unix socket / POSIX process conventions) | **PASS** (`DRILLAI_TEST_POSTGRES=1`) | **PASS** (`postgres:16-alpine`) | **PASS** (`ubuntu-latest` CI job) |
 | **Multi-Process Stack & 32-Cycle Soak (`scripts/verify_stack.py`)** | **PASS** (uses `psutil` RSS fallback & `.venv\Scripts\python.exe`) | **PASS** | **PASS** | **PASS** (`ubuntu-latest` & `windows-latest`) |
 | **External Vendor Interop Runner (`scripts/verify_external_vendor_interop.py`)** | **PASS** (`--mode harness` & `--mode external`) | **PASS** | **PASS** | **PASS** |
