@@ -34,9 +34,9 @@ if [ ! -x "$BACKEND/.venv/bin/python" ]; then
   say "creating backend virtualenv"
   "$PYTHON_BIN" -m venv "$BACKEND/.venv"
 fi
-say "installing the backend package (editable, with dev extras)"
+say "installing the backend package (editable, with dev + OCR test extras)"
 "$BACKEND/.venv/bin/pip" install --quiet --upgrade pip "setuptools>=83.0.0"
-"$BACKEND/.venv/bin/pip" install --quiet -e "$BACKEND[dev]"
+"$BACKEND/.venv/bin/pip" install --quiet -e "$BACKEND[dev,ocr]"
 
 # --------------------------------------------------------------------------- frontend
 if [ ! -d "$FRONTEND/node_modules" ]; then

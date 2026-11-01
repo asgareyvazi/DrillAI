@@ -46,11 +46,11 @@ if (-not (Test-Path $VenvPython)) {
     }
 }
 
-Write-Host "==> Installing backend (editable + dev extras)..."
+Write-Host "==> Installing backend (editable + dev and OCR test extras)..."
 & $VenvPython -m pip install --quiet --upgrade pip "setuptools>=83.0.0"
 if ($LASTEXITCODE -ne 0) { throw "Failed to upgrade pip in backend\.venv" }
-& $VenvPython -m pip install --quiet -e "${BackendDir}[dev]"
-if ($LASTEXITCODE -ne 0) { throw "Failed to install backend[dev] in backend\.venv" }
+& $VenvPython -m pip install --quiet -e "${BackendDir}[dev,ocr]"
+if ($LASTEXITCODE -ne 0) { throw "Failed to install backend[dev,ocr] in backend\.venv" }
 
 $NodeModulesBin = Join-Path $FrontendDir "node_modules\.bin"
 $PkgLock = Join-Path $FrontendDir "package-lock.json"

@@ -29,7 +29,8 @@ Or step by step (backend):
 ```bash
 cd backend
 python3.11 -m venv .venv
-./.venv/bin/pip install -e ".[dev]"
+./.venv/bin/pip install -e ".[dev,ocr]"
+# OCR remains disabled unless explicitly configured; Tesseract and language data are OS-level installs.
 
 # configuration is environment-driven (prefix DRILLAI_), see src/drillai/core/config.py
 DRILLAI_DATABASE_URL="sqlite+aiosqlite:///./drillai.db" ./.venv/bin/python -m alembic upgrade head

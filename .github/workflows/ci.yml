@@ -98,11 +98,11 @@ jobs:
       # `backend/.venv` a developer gets from `scripts/bootstrap.sh` — the end-to-end suite starts the
       # service with that interpreter (`frontend/e2e/start-api.mjs`), so the path is part of the
       # contract, not a convenience.
-      - name: Install the backend (editable, dev extras)
+      - name: Install the backend (editable, dev + OCR test extras)
         run: |
           python -m venv backend/.venv
           backend/.venv/bin/python -m pip install --upgrade pip "setuptools>=83.0.0"
-          backend/.venv/bin/python -m pip install -e "backend[dev]"
+          backend/.venv/bin/python -m pip install -e "backend[dev,ocr]"
 
       # The lockfile is authoritative: `npm ci` installs exactly what is committed and fails if the
       # lockfile and the manifest disagree. It is never regenerated here.

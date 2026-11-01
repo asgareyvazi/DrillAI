@@ -13,7 +13,7 @@ This guide provides exact, copy-pasteable instructions for running, testing, and
 | Capability / Verification Gate | Native Windows PowerShell | Windows + WSL2 (Ubuntu) | Windows + Docker Desktop | Linux / GitHub Actions CI |
 | :--- | :--- | :--- | :--- | :--- |
 | **Bootstrap (`scripts/bootstrap.ps1` / `scripts/bootstrap.sh`)** | **PASS** (`scripts/bootstrap.ps1`) | **PASS** (`scripts/bootstrap.sh`) | **PASS** (`docker compose build`) | **PASS** (`ubuntu-latest` + `windows-latest`) |
-| **Backend Editable Install (`pip install -e "backend[dev]"`)** | **PASS** (`.venv\Scripts\python.exe`) | **PASS** (`.venv/bin/python`) | **PASS** (container build) | **PASS** |
+| **Backend Editable Install (`pip install -e "backend[dev,ocr]"`)** | **PASS** (`.venv\Scripts\python.exe`) | **PASS** (`.venv/bin/python`) | **PASS** (container build) | **PASS** |
 | **Alembic Migrations (`alembic upgrade head && alembic check`)** | **PASS** (POSIX-normalized SQLite & PG URLs) | **PASS** | **PASS** (`migrate` service) | **PASS** |
 | **Backend SQLite Test Suite (`pytest -m "not postgres"`)** | **PASS** (`windows-certification` CI job) | **PASS** | **PASS** | **PASS** |
 | **Embedded PostgreSQL (`pgserver`) Tests (`DRILLAI_TEST_POSTGRES=1`)** | **PARTIAL** (use external/Docker PG via `DRILLAI_TEST_DATABASE_URL` or WSL2; `pgserver` uses Unix socket / POSIX process conventions) | **PASS** (`DRILLAI_TEST_POSTGRES=1`) | **PASS** (`postgres:16-alpine`) | **PASS** (`ubuntu-latest` CI job) |
@@ -57,7 +57,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\bootstrap.ps1
 
 What `.\scripts\bootstrap.ps1` does automatically:
 - Creates `backend\.venv` using your Windows Python (`>=3.11`).
-- Upgrades `pip` and installs `backend[dev]` in editable mode (`backend\.venv\Scripts\python.exe -m pip install -e "backend[dev]"`).
+- Upgrades `pip` and installs `backend[dev,ocr]` in editable mode (`backend\.venv\Scripts\python.exe -m pip install -e "backend[dev,ocr]"`); this supplies PDFium dependencies for OCR contract tests, while Tesseract itself remains an opt-in OS dependency.
 - Runs `npm ci` in `frontend\`.
 - Invokes `node scripts/prepare-chromium.mjs` inside `frontend\`, which detects `win32` and automatically installs Playwright's native Windows Chromium binary if not already present.
 

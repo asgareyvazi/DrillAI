@@ -29,6 +29,11 @@ binary in environments that provide one.
 
 ### PostgreSQL-backed tests
 
+The complete backend suite also exercises PDF rendering and OCR contracts. Install the test/runtime
+extras with `pip install -e "backend[dev,ocr]"` (the bootstrap scripts and CI do this); the OCR tests
+inject deterministic providers and do not require a Tesseract executable. Tesseract and language data
+remain opt-in operating-system dependencies, as described in `CONNECTORS_AND_OPERATIONS.md`.
+
 Twelve tests across nine files assert against a real PostgreSQL: two in `tests/db/test_persistence.py`
 (JSON and timestamp behavior SQLite cannot prove, and that the Alembic baseline creates exactly the
 schema the models declare); one in `tests/db/test_migrations_postgres.py` (the whole migration chain,
@@ -213,7 +218,7 @@ pull requests targeting `arena/01a0dca0-drillai` or `main`, and on manual dispat
 
 ```
 checkout → provenance → Python 3.11 + Node 22 (npm cache)
-→ backend install (`pip install -e "backend[dev]"` into backend/.venv)
+→ backend install (`pip install -e "backend[dev,ocr]"` into backend/.venv; Tesseract remains an opt-in OS dependency)
 → frontend install (`npm ci`, lockfile authoritative)
 → typecheck → lint → unit tests → build
 → backend tests (DRILLAI_TEST_POSTGRES=1) → ruff → migration check on a fresh database

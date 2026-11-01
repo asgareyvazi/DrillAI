@@ -1005,8 +1005,8 @@ a terminal, then certify that condition from a place that has never seen this ma
 **What was built.** One workflow, `.github/workflows/ci.yml`, triggered by pushes to
 `arena/01a0dca0-drillai`, by pull requests into that branch or `main`, and by `workflow_dispatch`. It
 holds `permissions: contents: read`, uses no secrets, writes nothing back to the branch, and cancels a
-run that a newer push has superseded. It installs with `pip install -e "backend[dev]"` into
-`backend/.venv` — the path `e2e/start-api.mjs` expects — and with `npm ci` against the committed
+run that a newer push has superseded. It installs with `pip install -e "backend[dev,ocr]"` into
+`backend/.venv` — the path `e2e/start-api.mjs` expects — so the backend's PDF/OCR contract tests have their renderer; Tesseract remains an opt-in OS runtime. It installs the frontend with `npm ci` against the committed
 lockfile, on Python 3.11 and Node 22, the versions the repository declares. Gates run in the order the
 brief fixes: typecheck → lint → unit tests → build → backend tests → backend lint → migration check on
 a fresh database → the complete end-to-end suite. Each gate is its own step, so a red run names the gate
