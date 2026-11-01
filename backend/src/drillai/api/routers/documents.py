@@ -11,10 +11,14 @@ status, stats, warnings and the trace id that ties it to the observability strea
 from __future__ import annotations
 
 import datetime as dt
-from typing import Annotated, Any
+import hashlib
+import json
+import math
+from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, Depends, File, Form, Query, Request, UploadFile
-from sqlalchemy import func, select
+from fastapi import APIRouter, Depends, File, Form, Header, Query, Request, UploadFile
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from drillai.api.deps import AuthContext, OptionalFilter, get_blob_store, get_db, require
@@ -25,9 +29,11 @@ from drillai.api.serializers import (
     extracted_record_out,
     ingestion_job_out,
 )
-from drillai.core.clock import ensure_utc
+from drillai.core.audit import record_audit
+from drillai.core.clock import ensure_utc, utc_now
 from drillai.core.config import get_settings
-from drillai.core.errors import NotFound, ValidationFailed
+from drillai.core.errors import Conflict, NotFound, ValidationFailed
+from drillai.core.idempotency import complete, replay_or_reserve
 from drillai.db.models import (
     DOC_TYPES,
     Document,
@@ -39,10 +45,127 @@ from drillai.db.models import (
     RawArtifact,
 )
 from drillai.documents.access import document_not_quarantined_condition
+from drillai.documents.lifecycle import VALIDATION_TRANSITIONS
 from drillai.documents.scope import DocumentScope, DocumentScopeResolver
 from drillai.security.actions import authorize
 
 router = APIRouter(tags=["documents"])
+
+
+class ExtractedRecordReviewChanges(BaseModel):
+    """Only evidence-derived values can be corrected; identity and provenance are immutable."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    payload: dict[str, Any] | None = None
+    observed_at: dt.datetime | None = None
+    depth_md_si: float | None = None
+    depth_tvd_si: float | None = None
+
+    @field_validator("observed_at")
+    @classmethod
+    def observed_at_must_be_aware(cls, value: dt.datetime | None) -> dt.datetime | None:
+        if value is not None and (value.tzinfo is None or value.utcoffset() is None):
+            raise ValueError("observed_at must include a timezone offset")
+        return value
+
+    @field_validator("depth_md_si", "depth_tvd_si")
+    @classmethod
+    def depths_must_be_finite_nonnegative(cls, value: float | None) -> float | None:
+        if value is not None and (not math.isfinite(value) or value < 0):
+            raise ValueError("SI depths must be finite and non-negative")
+        return value
+
+
+class ExtractedRecordReviewRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    expected_version: int = Field(ge=1, strict=True)
+    decision: Literal["validate", "reject"]
+    reason: str = Field(min_length=1, max_length=2000)
+    changes: ExtractedRecordReviewChanges = Field(default_factory=ExtractedRecordReviewChanges)
+
+    @field_validator("reason")
+    @classmethod
+    def reason_must_not_be_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("reason must not be blank")
+        return value.strip()
+
+
+def _review_payload_hash(payload: dict[str, Any]) -> str:
+    """Hash, but never copy, potentially sensitive extracted data into the governance audit."""
+    canonical = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False)
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def _is_finite_number(value: Any) -> bool:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return False
+    try:
+        return math.isfinite(float(value))
+    except (OverflowError, ValueError):
+        return False
+
+
+def _validate_review_value_shape(original: Any, corrected: Any, *, path: str) -> None:
+    """Keep corrections within the extracted JSON shape when no schema registry exists yet."""
+    if original is None:
+        if isinstance(corrected, (dict, list)):
+            raise ValidationFailed(f"corrected {path} must remain a scalar because its stored type is unknown")
+        return
+    if isinstance(original, bool):
+        if not isinstance(corrected, bool):
+            raise ValidationFailed(f"corrected {path} must remain boolean")
+        return
+    if isinstance(original, (int, float)):
+        if not _is_finite_number(corrected):
+            raise ValidationFailed(f"corrected {path} must remain a finite number")
+        return
+    if isinstance(original, str):
+        if not isinstance(corrected, str):
+            raise ValidationFailed(f"corrected {path} must remain text")
+        return
+    if isinstance(original, dict):
+        if not isinstance(corrected, dict) or set(corrected) != set(original):
+            raise ValidationFailed(f"corrected {path} must preserve the stored object fields")
+        for key, old_value in original.items():
+            _validate_review_value_shape(old_value, corrected[key], path=f"{path}.{key}")
+        return
+    if isinstance(original, list):
+        if not isinstance(corrected, list) or len(corrected) != len(original):
+            raise ValidationFailed(f"corrected {path} must preserve the stored list shape")
+        for index, (old_value, new_value) in enumerate(zip(original, corrected, strict=True)):
+            _validate_review_value_shape(old_value, new_value, path=f"{path}[{index}]")
+        return
+    raise ValidationFailed(f"stored {path} uses an unsupported correction type")
+
+
+def _validate_review_payload_shape(original: dict[str, Any], corrected: dict[str, Any]) -> None:
+    if set(corrected) != set(original):
+        raise ValidationFailed("corrected payload must preserve the stored record fields")
+    _validate_review_value_shape(original, corrected, path="payload")
+
+
+def _validate_review_domain_payload(record_type: str, payload: dict[str, Any]) -> None:
+    if record_type == "survey_station":
+        md = payload.get("md_si")
+        if md is not None and (not _is_finite_number(md) or md <= 0):
+            raise ValidationFailed("survey station md_si must be a finite number greater than zero")
+        inclination = payload.get("inclination_deg")
+        if inclination is not None and (
+            not _is_finite_number(inclination) or not 0 <= inclination <= 180
+        ):
+            raise ValidationFailed("survey station inclination_deg must be between 0 and 180 degrees")
+        azimuth = payload.get("azimuth_deg")
+        if azimuth is not None and (not _is_finite_number(azimuth) or not 0 <= azimuth <= 360):
+            raise ValidationFailed("survey station azimuth_deg must be between 0 and 360 degrees")
+    elif record_type == "depth_reading":
+        for field_name, value in payload.items():
+            if field_name.endswith("_si") and value is not None and (
+                not _is_finite_number(value) or value < 0
+            ):
+                raise ValidationFailed(f"depth reading {field_name} must be finite and non-negative")
 
 
 def _region_metadata_out(region: DocumentRegion) -> dict[str, Any]:
@@ -195,9 +318,27 @@ async def upload_document(
     if not data:
         raise ValidationFailed("the uploaded file is empty")
 
+    from drillai.ingestion.ocr import TesseractOcrProvider
     from drillai.ingestion.pipeline import IngestionPipeline
 
-    pipeline = IngestionPipeline(session, get_blob_store(request), org_id=auth.org_id or "")
+    ocr_provider = (
+        TesseractOcrProvider(
+            languages=settings.ocr_languages,
+            executable=settings.ocr_executable,
+            timeout_seconds=settings.ocr_timeout_seconds,
+        )
+        if settings.ocr_enabled
+        else None
+    )
+    pipeline = IngestionPipeline(
+        session,
+        get_blob_store(request),
+        org_id=auth.org_id or "",
+        ocr_provider=ocr_provider,
+        ocr_max_pages=settings.ocr_max_pages,
+        ocr_dpi=settings.ocr_dpi,
+        ocr_max_page_pixels=settings.ocr_max_page_pixels,
+    )
     outcome = await pipeline.ingest(
         data,
         filename=file.filename or "upload.bin",
@@ -410,6 +551,264 @@ async def get_document(
     }
     await _require_available_document(session, auth.org_id, document_id)
     return payload
+
+
+@router.get(
+    "/documents/{document_id}/records/{record_id}",
+    summary="Read one extracted record for review",
+)
+async def extracted_record_for_review(
+    document_id: str,
+    record_id: str,
+    session: Annotated[AsyncSession, Depends(get_db)],
+    auth: Annotated[AuthContext, Depends(require("document.read"))],
+) -> dict[str, Any]:
+    """Return a larger, still-bounded payload preview for human review without weakening tenant scope."""
+    row = (
+        await session.execute(
+            select(ExtractedRecord)
+            .join(Document, Document.id == ExtractedRecord.document_id)
+            .outerjoin(RawArtifact, RawArtifact.id == Document.raw_artifact_id)
+            .where(
+                ExtractedRecord.id == record_id,
+                ExtractedRecord.document_id == document_id,
+                ExtractedRecord.org_id == auth.org_id,
+                Document.id == document_id,
+                Document.org_id == auth.org_id,
+                document_not_quarantined_condition(),
+            )
+        )
+    ).scalar_one_or_none()
+    if row is None:
+        raise NotFound(f"extracted record {record_id!r} not found")
+    return extracted_record_out(row, payload_max_bytes=64 * 1024)
+
+
+@router.patch(
+    "/documents/{document_id}/records/{record_id}/review",
+    summary="Correct, validate or reject one extracted record",
+)
+async def review_extracted_record(
+    document_id: str,
+    record_id: str,
+    payload: ExtractedRecordReviewRequest,
+    request: Request,
+    session: Annotated[AsyncSession, Depends(get_db)],
+    auth: Annotated[AuthContext, Depends(require("document.read"))],
+    idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key", max_length=160)] = None,
+) -> dict[str, Any]:
+    """Versioned human review; source identity and provenance cannot be rewritten by this route."""
+    authorize(
+        auth.principal,
+        "document.record_review",
+        context={"document_id": document_id, "record_id": record_id},
+    )
+    org_id = auth.org_id or ""
+    scope = f"document.record_review:{document_id}:{record_id}"
+    # Preserve omitted-vs-explicit-null distinctions: a cleared payload is invalid and must not replay
+    # a prior successful review that omitted the payload field.
+    request_body = payload.model_dump(mode="json", exclude_unset=True)
+    if (
+        replayed := await replay_or_reserve(
+            session,
+            org_id=org_id,
+            key=idempotency_key,
+            scope=scope,
+            payload=request_body,
+        )
+    ) is not None:
+        return replayed
+
+    document = (
+        await session.execute(
+            select(Document)
+            .outerjoin(RawArtifact, RawArtifact.id == Document.raw_artifact_id)
+            .where(
+                Document.id == document_id,
+                Document.org_id == org_id,
+                document_not_quarantined_condition(),
+            )
+        )
+    ).scalar_one_or_none()
+    if document is None:
+        raise NotFound(f"document {document_id!r} not found")
+    if document.status == "archived":
+        raise Conflict("an archived document is read-only")
+
+    record = (
+        await session.execute(
+            select(ExtractedRecord)
+            .where(
+                ExtractedRecord.id == record_id,
+                ExtractedRecord.document_id == document_id,
+                ExtractedRecord.org_id == org_id,
+            )
+            .with_for_update()
+        )
+    ).scalar_one_or_none()
+    if record is None:
+        raise NotFound(f"extracted record {record_id!r} not found")
+    if record.review_version != payload.expected_version:
+        raise Conflict(
+            "the extracted record changed since it was opened; reload before reviewing",
+            details={"expected_version": payload.expected_version, "current_version": record.review_version},
+        )
+
+    next_state = "human_validated" if payload.decision == "validate" else "rejected"
+    allowed_states = VALIDATION_TRANSITIONS.get(record.validation_state, frozenset())
+    reaffirming_human_review = (
+        payload.decision == "validate"
+        and record.validation_state == "human_validated"
+        and next_state == "human_validated"
+    )
+    if next_state not in allowed_states and not reaffirming_human_review:
+        raise Conflict(
+            f"an extracted record in state {record.validation_state!r} cannot move to {next_state!r}",
+            details={"current_state": record.validation_state, "requested_state": next_state},
+        )
+
+    changed_fields = set(payload.changes.model_fields_set)
+    update_values: dict[str, Any] = {
+        "validation_state": next_state,
+        "validation_notes": payload.reason,
+        "review_version": payload.expected_version + 1,
+    }
+    corrected_payload = dict(record.payload or {})
+    if "payload" in changed_fields:
+        if payload.changes.payload is None:
+            raise ValidationFailed("a corrected payload must be a JSON object, not null")
+        corrected_payload = payload.changes.payload
+        _validate_review_payload_shape(dict(record.payload or {}), corrected_payload)
+        _validate_review_domain_payload(record.record_type, corrected_payload)
+        try:
+            encoded_payload = json.dumps(
+                corrected_payload,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+                allow_nan=False,
+            ).encode("utf-8")
+        except (TypeError, ValueError, RecursionError) as exc:
+            raise ValidationFailed("corrected payload must contain finite JSON values") from exc
+        if len(encoded_payload) > 64 * 1024:
+            raise ValidationFailed("corrected payload exceeds the 64 KiB review limit")
+        update_values["payload"] = corrected_payload
+
+        # The canonical SI columns are consumed by state/KPI code separately from the raw JSON.
+        # Keep them synchronized for the two record types whose payload contract names SI depth.
+        if record.record_type == "survey_station":
+            depth_fields = {"md_si": "depth_md_si", "tvd_si": "depth_tvd_si"}
+        elif record.record_type == "depth_reading":
+            depth_fields = {"depth_md_si": "depth_md_si", "depth_tvd_si": "depth_tvd_si"}
+        else:
+            depth_fields = {}
+        for payload_key, column_key in depth_fields.items():
+            if payload_key not in corrected_payload:
+                continue
+            value = corrected_payload[payload_key]
+            if value is not None and (not _is_finite_number(value) or value < 0):
+                raise ValidationFailed(
+                    f"corrected {payload_key} must be null or a finite non-negative SI value"
+                )
+            update_values[column_key] = float(value) if value is not None else None
+
+    for field_name in ("observed_at", "depth_md_si", "depth_tvd_si"):
+        if field_name not in changed_fields:
+            continue
+        value = getattr(payload.changes, field_name)
+        if field_name == "observed_at" and value is not None:
+            value = ensure_utc(value)
+        if (
+            field_name in {"depth_md_si", "depth_tvd_si"}
+            and value is not None
+            and (not math.isfinite(value) or value < 0)
+        ):
+            raise ValidationFailed(f"{field_name} must be a finite non-negative SI value")
+        update_values[field_name] = value
+
+    if payload.decision == "validate":
+        update_values["validated_by"] = auth.principal.id
+        update_values["validated_at"] = utc_now()
+    else:
+        update_values["validated_by"] = None
+        update_values["validated_at"] = None
+
+    previous_validation_notes = record.validation_notes or ""
+    before = {
+        "validation_state": record.validation_state,
+        "review_version": record.review_version,
+        "validation_notes": previous_validation_notes[:512],
+        "validation_notes_truncated": len(previous_validation_notes) > 512,
+        "payload_sha256": _review_payload_hash(record.payload or {}),
+        "observed_at": record.observed_at.isoformat() if record.observed_at else None,
+        "depth_md_si": record.depth_md_si,
+        "depth_tvd_si": record.depth_tvd_si,
+    }
+    result = await session.execute(
+        update(ExtractedRecord)
+        .where(
+            ExtractedRecord.id == record_id,
+            ExtractedRecord.document_id == document_id,
+            ExtractedRecord.org_id == org_id,
+            ExtractedRecord.review_version == payload.expected_version,
+        )
+        .values(**update_values)
+        .execution_options(synchronize_session=False)
+    )
+    if result.rowcount != 1:
+        current_version = await session.scalar(
+            select(ExtractedRecord.review_version).where(
+                ExtractedRecord.id == record_id,
+                ExtractedRecord.document_id == document_id,
+                ExtractedRecord.org_id == org_id,
+            )
+        )
+        if current_version is None:
+            raise NotFound(f"extracted record {record_id!r} not found")
+        raise Conflict(
+            "the extracted record changed during review; reload before retrying",
+            details={"expected_version": payload.expected_version, "current_version": current_version},
+        )
+
+    await session.refresh(record)
+    after = {
+        "validation_state": record.validation_state,
+        "review_version": record.review_version,
+        "payload_sha256": _review_payload_hash(record.payload or {}),
+        "observed_at": record.observed_at.isoformat() if record.observed_at else None,
+        "depth_md_si": record.depth_md_si,
+        "depth_tvd_si": record.depth_tvd_si,
+    }
+    await record_audit(
+        session,
+        org_id=org_id,
+        action="document.record_review",
+        resource_kind="extracted_record",
+        resource_id=record.id,
+        principal=auth.principal,
+        permission="document.review",
+        request_id=getattr(request.state, "request_id", None),
+        project_id=record.project_id,
+        well_id=record.well_id,
+        before=before,
+        after=after,
+        details={
+            "document_id": document_id,
+            "decision": payload.decision,
+            "changed_fields": sorted(changed_fields),
+            "reason": payload.reason[:512],
+            "reason_truncated": len(payload.reason) > 512,
+        },
+    )
+    response = extracted_record_out(record)
+    await complete(
+        session,
+        org_id=org_id,
+        key=idempotency_key,
+        scope=scope,
+        response=response,
+    )
+    return response
 
 
 @router.get("/documents/{document_id}/ingestion", summary="Ingestion jobs for a document")

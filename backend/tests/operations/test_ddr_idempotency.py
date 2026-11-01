@@ -1010,11 +1010,10 @@ async def test_survey_retry_reuses_the_existing_station_and_evidence_link(fabric
     assert stations[0].azimuth_deg == pytest.approx(180.0)
 
 
-async def test_survey_stations_from_two_documents_share_a_wellbore_trajectory_with_per_station_source(
+async def test_survey_from_new_document_is_held_for_review_when_frame_compatibility_is_unproven(
     fabric: Fabric,
 ) -> None:
-    """The trajectory has one anchor document; each appended station retains its own source."""
-    from drillai.db.models import EvidenceLink
+    """A later document cannot append stations to a current trajectory without frame evidence."""
 
     def survey_report(report_number: str, report_date: str, md: int, inclination: int, azimuth: int) -> bytes:
         return (
@@ -1041,8 +1040,22 @@ async def test_survey_stations_from_two_documents_share_a_wellbore_trajectory_wi
     first = await _process(fabric, first_document["id"])
     assert first["counts"]["trajectory_stations"] == 1
 
+    second = await _process(fabric, second_document["id"])
+    assert second["counts"]["trajectory_stations"] == 0
+    assert len(second["records_needing_review"]) == 1
+    assert any(
+        row.get("record_id") == second["records_needing_review"][0]
+        and "survey-frame compatibility" in row.get("reason", "")
+        for row in second["not_promoted"]
+    )
+    assert any("cross-document survey-frame compatibility" in warning for warning in second["warnings"])
+
+    retry = await _process(fabric, second_document["id"])
+    assert retry["counts"]["trajectory_stations"] == 0
+    assert len(retry["records_needing_review"]) == 1
+
     async with fabric.session() as session:
-        first_trajectory = (
+        trajectory = (
             await session.execute(
                 select(Trajectory).where(
                     Trajectory.org_id == fabric.org_id(fabric.alpha),
@@ -1052,48 +1065,26 @@ async def test_survey_stations_from_two_documents_share_a_wellbore_trajectory_wi
                 )
             )
         ).scalar_one()
-        trajectory_id = first_trajectory.id
-        assert first_trajectory.source_document_id == first_document["id"]
-
-    second = await _process(fabric, second_document["id"])
-    assert second["counts"]["trajectory_stations"] == 1
-
-    async with fabric.session() as session:
-        trajectory = (await session.execute(select(Trajectory).where(Trajectory.id == trajectory_id))).scalar_one()
         stations = (
             await session.execute(
                 select(TrajectoryStation)
-                .where(TrajectoryStation.trajectory_id == trajectory.id)
+                .where(TrajectoryStation.wellbore_id == fabric.alpha.wellbore_id)
                 .order_by(TrajectoryStation.md_si)
             )
         ).scalars().all()
         records = (
             await session.execute(
                 select(ExtractedRecord).where(
-                    ExtractedRecord.id.in_([station.evidence_ref for station in stations])
-                )
-            )
-        ).scalars().all()
-        links = (
-            await session.execute(
-                select(EvidenceLink).where(
-                    EvidenceLink.subject_kind == "trajectory_station",
-                    EvidenceLink.subject_id.in_([station.id for station in stations]),
+                    ExtractedRecord.document_id.in_([first_document["id"], second_document["id"]]),
+                    ExtractedRecord.record_type == "survey_station",
                 )
             )
         ).scalars().all()
 
-    record_document_by_id = {record.id: record.document_id for record in records}
-    station_document_by_id = {
-        station.id: record_document_by_id[station.evidence_ref]
-        for station in stations
-        if station.evidence_ref in record_document_by_id
-    }
-    link_document_by_id = {link.subject_id: link.document_id for link in links}
     assert trajectory.source_document_id == first_document["id"]
-    assert [station.md_si for station in stations] == [500.0, 600.0]
-    assert set(station_document_by_id.values()) == {first_document["id"], second_document["id"]}
-    assert link_document_by_id == station_document_by_id
+    assert len(stations) == 1 and stations[0].md_si == pytest.approx(500.0)
+    assert len(records) == 2
+    assert stations[0].evidence_ref == next(record.id for record in records if record.document_id == first_document["id"])
 
 
 async def test_a_document_that_is_not_a_ddr_is_refused_with_a_reason(fabric: Fabric) -> None:

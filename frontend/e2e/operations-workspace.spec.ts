@@ -52,6 +52,7 @@ type EventPage = {
     is_npt: boolean
     npt_category: string | null
     npt_hours: number | null
+    source_kind: string | null
     cause_basis: string
     allowed_transitions: string[]
   }[]
@@ -133,7 +134,7 @@ test.describe('the operational workspace built from the real records', () => {
     expectNoFailures(consoleErrors, failedResponses)
   })
 
-  test('offers the transitions the server allows and says so when a record is terminal', async ({
+  test('creates manual records and offers only the transitions the server allows', async ({
     page,
     request,
     wellId,
@@ -163,18 +164,26 @@ test.describe('the operational workspace built from the real records', () => {
       'engineer',
     )
 
-    // Operations are append-only evidence; the API intentionally has no delete route. Keep this
-    // journey's two records under a unique test-only well so they cannot pollute the shared seeded
-    // well, and prove that the seeded operation list stayed unchanged.
-    const open = await apiPost<OperationPage['items'][number]>(request, '/operations', {
-      well_id: isolatedWell.id,
-      wellbore_id: wellbore.id,
-      name: `E2E in-progress operation ${tag}`,
-      operation_class: 'actual',
-      kind: 'drilling',
-      status: 'in_progress',
-      source_kind: 'manual',
-    }, 'engineer')
+    // Operations and events are append-only evidence; the API intentionally has no delete route.
+    // Keep this journey's manual records under a unique test-only well so they cannot pollute the
+    // shared seeded well, and prove that the seeded operation list stayed unchanged.
+    const manualOperationName = `E2E in-progress operation ${tag}`
+    await page.goto(`/wells/${isolatedWell.id}/operations`)
+    await page.getByTestId('manual-operation-toggle').click()
+    await page.getByTestId('manual-operation-name').fill(manualOperationName)
+    await page.getByTestId('manual-operation-kind').selectOption('drilling')
+    await page.getByTestId('manual-operation-status').selectOption('in_progress')
+    await page.getByTestId('manual-operation-submit').click()
+    await expect(page.getByTestId('manual-operation-form')).toHaveCount(0)
+    await expect(page.getByText(manualOperationName, { exact: true })).toBeVisible()
+    const operationRead = await apiGet<OperationPage>(
+      request,
+      `/operations?well_id=${isolatedWell.id}&limit=20`,
+      'engineer',
+    )
+    const open = operationRead.items.find((row) => row.name === manualOperationName)
+    if (!open) throw new Error('the manual operation form did not create the requested row')
+    expect(open.source_kind).toBe('manual')
     const terminal = await apiPost<OperationPage['items'][number]>(request, '/operations', {
       well_id: isolatedWell.id,
       wellbore_id: wellbore.id,
@@ -216,6 +225,33 @@ test.describe('the operational workspace built from the real records', () => {
         page.getByRole('dialog').getByRole('button', { name: `Move to ${label}` }),
       ).toBeVisible()
     }
+
+    const manualEventTitle = `E2E manual NPT event ${tag}`
+    await page.goto(`/wells/${isolatedWell.id}/operations?tab=events`)
+    await page.getByTestId('manual-event-toggle').click()
+    await page.getByTestId('manual-event-title').fill(manualEventTitle)
+    await page.getByTestId('manual-event-is-npt').check()
+    const eventSubmit = page.getByTestId('manual-event-submit')
+    await expect(eventSubmit).toBeDisabled()
+    await page.getByTestId('manual-event-npt-category').selectOption('stuck_pipe')
+    await page.getByTestId('manual-event-npt-hours').fill('1.5')
+    await expect(eventSubmit).toBeEnabled()
+    await eventSubmit.click()
+    await expect(page.getByTestId('manual-event-form')).toHaveCount(0)
+    await expect(page.getByText(manualEventTitle, { exact: true })).toBeVisible()
+    const eventRead = await apiGet<EventPage>(
+      request,
+      `/events?well_id=${isolatedWell.id}&limit=20`,
+      'engineer',
+    )
+    const manualNpt = eventRead.items.find((row) => row.title === manualEventTitle)
+    if (!manualNpt) throw new Error('the manual event form did not create the requested row')
+    expect(manualNpt).toMatchObject({
+      is_npt: true,
+      npt_category: 'stuck_pipe',
+      npt_hours: 1.5,
+      source_kind: 'manual',
+    })
     expectNoFailures(consoleErrors, failedResponses)
   })
 

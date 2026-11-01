@@ -28,6 +28,7 @@ What "correct" means for an operation
 from __future__ import annotations
 
 import datetime as dt
+import math
 from dataclasses import dataclass
 from typing import Any
 
@@ -67,6 +68,44 @@ from drillai.telemetry.outbox import emit
 
 #: Statuses from which no further work happens. A row here is history.
 TERMINAL_STATUSES: frozenset[str] = frozenset({"completed", "cancelled"})
+
+_OPERATION_TIME_FIELDS = ("planned_start", "planned_end", "actual_start", "actual_end")
+
+
+def _operation_datetime(field_name: str, value: Any) -> dt.datetime | None:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        iso_value = value.strip()
+        if iso_value.endswith("Z"):
+            iso_value = f"{iso_value[:-1]}+00:00"
+        try:
+            value = dt.datetime.fromisoformat(iso_value)
+        except ValueError as exc:
+            raise ValidationFailed(f"{field_name} must be an ISO 8601 datetime or null") from exc
+    if not isinstance(value, dt.datetime) or value.tzinfo is None or value.utcoffset() is None:
+        raise ValidationFailed(f"{field_name} must include a timezone offset")
+    return value.astimezone(dt.UTC)
+
+
+def _validate_operation_time_windows(values: dict[str, Any]) -> None:
+    planned_start = _operation_datetime("planned_start", values.get("planned_start"))
+    planned_end = _operation_datetime("planned_end", values.get("planned_end"))
+    actual_start = _operation_datetime("actual_start", values.get("actual_start"))
+    actual_end = _operation_datetime("actual_end", values.get("actual_end"))
+    if planned_start is not None and planned_end is not None and planned_end < planned_start:
+        raise ValidationFailed("planned_end must not precede planned_start")
+    if actual_start is not None and actual_end is not None and actual_end < actual_start:
+        raise ValidationFailed("actual_end must not precede actual_start")
+    values.update(
+        {
+            "planned_start": planned_start,
+            "planned_end": planned_end,
+            "actual_start": actual_start,
+            "actual_end": actual_end,
+        }
+    )
+
 
 #: Allowed status moves. ``cancelled`` is reachable from anything that has started, because work that
 #: has begun can still be abandoned — and abandoning it is exactly the case that has to be recorded.
@@ -262,6 +301,7 @@ class OperationService:
     ) -> Operation:
         """Create one operation, after checking its scope, its class and its position in the chain."""
         self._require(name=name)
+        _validate_operation_time_windows(fields)
         if operation_class not in OPERATION_CLASSES:
             raise ValidationFailed(
                 "operation_class is not recognised",
@@ -289,6 +329,10 @@ class OperationService:
                 details={"field": "status", "value": target_status, "allowed": list(OPERATION_STATUSES)},
             )
         self._check_class_fields(operation_class, fields)
+        self._validate_depth_interval(
+            fields.get("depth_from_md_si"),
+            fields.get("depth_to_md_si"),
+        )
 
         resolved = await DocumentScopeResolver(self.session, self.org_id).resolve(scope)
         if not resolved.wellbore_id:
@@ -419,6 +463,18 @@ class OperationService:
             )
         if not changes:
             raise ValidationFailed("no changes were supplied")
+        proposed_times = {
+            field_name: changes.get(field_name, getattr(operation, field_name))
+            for field_name in _OPERATION_TIME_FIELDS
+        }
+        _validate_operation_time_windows(proposed_times)
+        for field_name in _OPERATION_TIME_FIELDS:
+            if field_name in changes:
+                changes[field_name] = proposed_times[field_name]
+        self._validate_depth_interval(
+            changes.get("depth_from_md_si", operation.depth_from_md_si),
+            changes.get("depth_to_md_si", operation.depth_to_md_si),
+        )
         if "kind" in changes and changes["kind"] not in OPERATION_KINDS:
             raise ValidationFailed(
                 "kind is not a recognised operation kind",
@@ -681,6 +737,36 @@ class OperationService:
             "cancelled": "cancelled",
         }[status]
 
+    @staticmethod
+    def _validate_depth_interval(depth_from_md_si: Any, depth_to_md_si: Any) -> None:
+        """Measured-depth bounds are finite, non-negative SI values and their interval is ordered."""
+        for field_name, value in (
+            ("depth_from_md_si", depth_from_md_si),
+            ("depth_to_md_si", depth_to_md_si),
+        ):
+            if value is None:
+                continue
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                raise ValidationFailed(f"{field_name} must be a finite non-negative SI value")
+            try:
+                finite = math.isfinite(float(value))
+            except OverflowError:
+                finite = False
+            if not finite or value < 0:
+                raise ValidationFailed(f"{field_name} must be a finite non-negative SI value")
+        if (
+            depth_from_md_si is not None
+            and depth_to_md_si is not None
+            and depth_to_md_si < depth_from_md_si
+        ):
+            raise ValidationFailed(
+                "depth_to_md_si must not precede depth_from_md_si",
+                details={
+                    "depth_from_md_si": depth_from_md_si,
+                    "depth_to_md_si": depth_to_md_si,
+                },
+            )
+
     def _check_class_fields(self, operation_class: str, fields: dict[str, Any]) -> None:
         """A plan may not carry actuals, and an actual may not carry a plan's window.
 
@@ -861,10 +947,12 @@ class OperationService:
             )
 
     def _check_expected_version(self, operation: Operation, expected_updated_at: dt.datetime) -> None:
+        expected = _operation_datetime("expected_updated_at", expected_updated_at)
+        assert expected is not None
         stored = operation.updated_at
         if stored is None:
             return
-        if _same_instant(stored, expected_updated_at):
+        if _same_instant(stored, expected):
             return
         raise Conflict(
             "the operation was changed by someone else since you read it",

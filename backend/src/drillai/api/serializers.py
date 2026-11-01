@@ -457,8 +457,18 @@ def ingestion_job_out(row: Any) -> dict[str, Any]:
     }
 
 
-def extracted_record_out(row: Any) -> dict[str, Any]:
-    payload, payload_truncated = bounded_json_preview(row.payload)
+def extracted_record_out(
+    row: Any,
+    *,
+    payload_max_bytes: int = DEFAULT_JSON_PREVIEW_BYTES,
+) -> dict[str, Any]:
+    payload, payload_truncated = bounded_json_preview(
+        row.payload,
+        max_bytes=payload_max_bytes,
+        max_string_chars=payload_max_bytes,
+        max_items=512 if payload_max_bytes > DEFAULT_JSON_PREVIEW_BYTES else 128,
+        max_nodes=4096 if payload_max_bytes > DEFAULT_JSON_PREVIEW_BYTES else 2048,
+    )
     unit_context, unit_context_truncated = bounded_json_preview(row.unit_context or {}, max_bytes=4096)
     quality_flags, quality_flags_truncated = bounded_json_preview(
         row.quality_flags or [], max_bytes=4096, max_items=100, max_string_chars=512
@@ -480,6 +490,11 @@ def extracted_record_out(row: Any) -> dict[str, Any]:
         "method_version": row.method_version,
         "confidence": row.confidence,
         "validation_state": row.validation_state,
+        "review_version": row.review_version,
+        "validated_by": row.validated_by,
+        "validated_at": _iso(row.validated_at),
+        "validation_notes": (row.validation_notes or "")[:2000],
+        "validation_notes_truncated": len(row.validation_notes or "") > 2000,
         # True when the extractor could not determine which region of the page the value came from.
         # `region_id` is then null — deliberately, rather than pointing at whichever region happened
         # to be nearby — and this flag is what tells a reader that the gap is known instead of

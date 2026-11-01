@@ -122,15 +122,16 @@ class ChangeRecord:
         return {"field": self.field, "before": self.before, "after": self.after}
 
 
-def _validate_nonnegative_hours(field_name: str, value: Any) -> None:
+def _validate_nonnegative_measurement(field_name: str, value: Any) -> None:
     if value is None:
         return
-    if (
-        isinstance(value, bool)
-        or not isinstance(value, (int, float))
-        or not math.isfinite(float(value))
-        or float(value) < 0
-    ):
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValidationFailed(f"{field_name} must be a finite non-negative number or null")
+    try:
+        finite = math.isfinite(float(value))
+    except (OverflowError, ValueError):
+        finite = False
+    if not finite or value < 0:
         raise ValidationFailed(f"{field_name} must be a finite non-negative number or null")
 
 
@@ -138,22 +139,29 @@ def _parse_datetime_change(field_name: str, value: Any) -> dt.datetime | None:
     if value is None:
         return None
     if isinstance(value, dt.datetime):
-        return value
-    if isinstance(value, str):
+        parsed = value
+    elif isinstance(value, str):
         iso_value = value.strip()
         if iso_value.endswith("Z"):
             iso_value = f"{iso_value[:-1]}+00:00"
         try:
-            return dt.datetime.fromisoformat(iso_value)
+            parsed = dt.datetime.fromisoformat(iso_value)
         except ValueError as exc:
             raise ValidationFailed(
-                f"{field_name} must be an ISO 8601 datetime or null",
+                f"{field_name} must be an ISO 8601 datetime with a timezone offset or null",
                 details={"field": field_name},
             ) from exc
-    raise ValidationFailed(
-        f"{field_name} must be an ISO 8601 datetime or null",
-        details={"field": field_name},
-    )
+    else:
+        raise ValidationFailed(
+            f"{field_name} must be an ISO 8601 datetime with a timezone offset or null",
+            details={"field": field_name},
+        )
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        raise ValidationFailed(
+            f"{field_name} must include a timezone offset",
+            details={"field": field_name},
+        )
+    return parsed.astimezone(dt.UTC)
 
 
 class EventService:
@@ -280,6 +288,9 @@ class EventService:
         **fields: Any,
     ) -> Event:
         self._require(title=title)
+        occurred_at = _parse_datetime_change("occurred_at", occurred_at)
+        if "ended_at" in fields:
+            fields["ended_at"] = _parse_datetime_change("ended_at", fields["ended_at"])
         for value, allowed, field in (
             (kind, EVENT_KINDS, "kind"),
             (severity, EVENT_SEVERITIES, "severity"),
@@ -316,8 +327,8 @@ class EventService:
                 npt_category = translated
         if is_npt is not None and not isinstance(is_npt, bool):
             raise ValidationFailed("is_npt must be a boolean")
-        for field_name in ("npt_hours", "duration_hours"):
-            _validate_nonnegative_hours(field_name, fields.get(field_name))
+        for field_name in ("npt_hours", "duration_hours", "depth_md_si", "depth_tvd_si"):
+            _validate_nonnegative_measurement(field_name, fields.get(field_name))
         target_is_npt = (
             bool(is_npt)
             if is_npt is not None
@@ -500,9 +511,9 @@ class EventService:
         for field_name in ("occurred_at", "ended_at"):
             if field_name in changes:
                 changes[field_name] = _parse_datetime_change(field_name, changes[field_name])
-        for field_name in ("npt_hours", "duration_hours"):
+        for field_name in ("npt_hours", "duration_hours", "depth_md_si", "depth_tvd_si"):
             if field_name in changes:
-                _validate_nonnegative_hours(field_name, changes[field_name])
+                _validate_nonnegative_measurement(field_name, changes[field_name])
         target_npt_category = changes.get("npt_category", event.npt_category)
         target_is_npt = changes.get("is_npt", event.is_npt)
         target_npt_hours = changes.get("npt_hours", event.npt_hours)
@@ -872,10 +883,12 @@ def _inherit_from_operation(resolved: Any, operation: Operation) -> Any:
 
 
 def _check_expected_version(event: Event, expected_updated_at: dt.datetime) -> None:
+    expected = _parse_datetime_change("expected_updated_at", expected_updated_at)
+    assert expected is not None
     stored = event.updated_at
     if stored is None:
         return
-    if _as_utc(stored) == _as_utc(expected_updated_at):
+    if _as_utc(stored) == expected:
         return
     raise Conflict(
         "the event was changed by someone else since you read it",

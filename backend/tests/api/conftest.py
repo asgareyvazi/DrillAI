@@ -22,6 +22,7 @@ from collections.abc import AsyncIterator
 import httpx
 import pytest
 import pytest_asyncio
+from tests.fixtures.fabric import fabric as fabric
 
 from drillai.core.config import get_settings, reset_settings_cache
 from drillai.db.models import Base

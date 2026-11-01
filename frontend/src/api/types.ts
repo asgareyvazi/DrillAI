@@ -509,6 +509,48 @@ export interface TimelineEntry {
 
 // --------------------------------------------------------------------------- operations & events
 
+export interface OperationCreatePayload {
+  project_id?: string | null
+  well_id: string
+  wellbore_id: string
+  section_id?: string | null
+  name: string
+  operation_class?: 'actual' | 'plan' | 'forecast'
+  kind?: string
+  phase?: string | null
+  status?: string
+  actual_start?: string | null
+  actual_end?: string | null
+  actual_duration_hours?: number | null
+  depth_from_md_si?: number | null
+  depth_to_md_si?: number | null
+  npt_hours?: number | null
+  is_productive?: boolean | null
+  remarks?: string | null
+  source_kind?: string
+}
+
+export interface EventCreatePayload {
+  well_id: string
+  operation_id?: string | null
+  title: string
+  kind?: string
+  severity?: string
+  occurred_at?: string | null
+  ended_at?: string | null
+  description?: string | null
+  duration_hours?: number | null
+  depth_md_si?: number | null
+  depth_tvd_si?: number | null
+  npt_hours?: number | null
+  npt_category?: string | null
+  is_npt?: boolean | null
+  root_cause?: string | null
+  cause_basis?: 'recorded' | 'inferred' | 'unknown'
+  classification_source?: 'recorded' | 'derived' | 'unclassified'
+  source_kind?: string
+}
+
 /**
  * One operation, as the operations API serialises it.
  *
@@ -668,6 +710,7 @@ export interface ExtractionRecord {
   /** The extractor's record kind, e.g. `operation_row`, `report_header`, `mud_property`. */
   record_type: string
   payload: Record<string, unknown>
+  payload_truncated: boolean
   payload_schema_key: string | null
   payload_schema_version: number | null
   page_number: number | null
@@ -681,6 +724,12 @@ export interface ExtractionRecord {
   confidence: number | null
   /** `extracted` (a machine wrote it), `rule_validated`, `human_validated`, `rejected`, `superseded`. */
   validation_state: string
+  /** Compare-and-swap version for the human review lifecycle, independent of payload schema version. */
+  review_version: number
+  validated_by: string | null
+  validated_at: string | null
+  validation_notes: string
+  validation_notes_truncated: boolean
   /** True when the extractor could not tell which region the value came from; `region_id` is null. */
   region_unknown: boolean
   /** Which named rule accepted the row, when a rule did. Null for machine-only extraction. */
@@ -690,6 +739,20 @@ export interface ExtractionRecord {
   promoted_to_kind: string | null
   promoted_to_id: string | null
   is_demo_fixture: boolean
+}
+
+export interface ExtractedRecordReviewChanges {
+  payload?: Record<string, unknown>
+  observed_at?: string | null
+  depth_md_si?: number | null
+  depth_tvd_si?: number | null
+}
+
+export interface ExtractedRecordReviewRequest {
+  expected_version: number
+  decision: 'validate' | 'reject'
+  reason: string
+  changes: ExtractedRecordReviewChanges
 }
 
 export interface DocumentChunk {
@@ -1065,19 +1128,22 @@ export interface ReportSection {
   title: string
   kind: 'facts' | 'calculations' | 'evidence' | 'recommendations' | 'assumptions'
   items: Array<Record<string, unknown>>
-  empty_reason: string | null
+  note: string | null
+  count: number
 }
 
 export interface Report {
   kind: string
   title: string
   well_id: string
+  generated_at: string
   period_from: string | null
   period_to: string | null
-  generated_at: string
+  metadata: Record<string, unknown>
   sections: ReportSection[]
-  sources: string[]
-  limitations: string[]
+  section_kinds: string[]
+  is_renderable: boolean
+  rendering_note: string
 }
 
 export interface ReportKind {

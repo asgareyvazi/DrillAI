@@ -12,7 +12,12 @@ import { useCallback, useMemo, useRef, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { ApiError } from '../../api/client'
 import { drillingApi } from '../../api/endpoints'
-import type { DdrProcessingReport, DocumentRow } from '../../api/types'
+import type {
+  DdrProcessingReport,
+  DocumentRow,
+  ExtractedRecordReviewRequest,
+} from '../../api/types'
+import { ExtractedRecordReviewForm } from '../../components/documents/ExtractedRecordReviewForm'
 import { EvidenceList, EvidencePanel } from '../../components/evidence/EvidencePanel'
 import { PageHeader } from '../../components/layout/AppShell'
 import {
@@ -20,6 +25,7 @@ import {
   Badge,
   Button,
   Card,
+  Drawer,
   EmptyState,
   ErrorState,
   Field,
@@ -125,6 +131,8 @@ export default function DocumentWorkspace() {
   const [operationSelection, setOperationSelection] = useState({ wellId: id, operationId: '' })
   const operationId = operationSelection.wellId === id ? operationSelection.operationId : ''
   const [message, setMessage] = useState<string | null>(null)
+  const [reviewRecordId, setReviewRecordId] = useState<string | null>(null)
+  const closeReview = useCallback(() => setReviewRecordId(null), [])
   const fileInput = useRef<HTMLInputElement>(null)
 
   const documents = useQuery({
@@ -146,6 +154,14 @@ export default function DocumentWorkspace() {
     queryFn: ({ signal }) => drillingApi.getDocument(selectedId as string, signal),
     enabled: Boolean(selectedId),
   })
+  const reviewRecordQuery = useQuery({
+    queryKey: ['document-record-review', selectedId, reviewRecordId],
+    queryFn: ({ signal }) =>
+      drillingApi.getExtractedRecord(selectedId as string, reviewRecordId as string, signal),
+    enabled: Boolean(selectedId && reviewRecordId),
+    retry: false,
+  })
+  const reviewRecord = reviewRecordQuery.data ?? null
 
   /*
    * Two ways a URL can name a document that must not be presented as this well's:
@@ -215,10 +231,26 @@ export default function DocumentWorkspace() {
     },
   })
 
+  const recordReview = useMutation({
+    mutationFn: (input: {
+      documentId: string
+      recordId: string
+      body: ExtractedRecordReviewRequest
+      key: string
+    }) => drillingApi.reviewExtractedRecord(input.documentId, input.recordId, input.body, input.key),
+    onSuccess: (_record, input) => {
+      setReviewRecordId(null)
+      queryClient.invalidateQueries({ queryKey: ['document', input.documentId] })
+      queryClient.invalidateQueries({ queryKey: ['document-record-review', input.documentId, input.recordId] })
+      queryClient.invalidateQueries({ queryKey: ['documents', id] })
+    },
+  })
+
   const onSelect = useCallback(
     (documentId: string) => {
       setSearchParams({ document: documentId })
       setReport(null)
+      setReviewRecordId(null)
     },
     [setSearchParams],
   )
@@ -463,6 +495,29 @@ export default function DocumentWorkspace() {
                               render: (record) => <Badge tone="neutral">{humanise(record.validation_state)}</Badge>,
                             },
                             {
+                              key: 'review',
+                              header: t('documents.reviewOpen'),
+                              render: (record) => {
+                                const reviewable =
+                                  selected.status !== 'archived' &&
+                                  ['extracted', 'rule_validated', 'human_validated'].includes(record.validation_state)
+                                return reviewable ? (
+                                  <Button
+                                    size="sm"
+                                    onClick={() => {
+                                      recordReview.reset()
+                                      setReviewRecordId(record.id)
+                                    }}
+                                    data-testid={`extracted-record-review-open-${record.id}`}
+                                  >
+                                    {t('documents.reviewOpen')}
+                                  </Button>
+                                ) : (
+                                  <span className="text-graphite-500">—</span>
+                                )
+                              },
+                            },
+                            {
                               key: 'payload',
                               header: 'Content',
                               render: (record) => <Json value={record.payload} max={80} />,
@@ -559,6 +614,54 @@ export default function DocumentWorkspace() {
           )}
         </div>
       </div>
+
+      <Drawer
+        open={Boolean(reviewRecordId)}
+        wide
+        title={t('documents.reviewTitle')}
+        onClose={closeReview}
+      >
+        {reviewRecordQuery.isLoading ? <Loading label={t('documents.reviewLoading')} /> : null}
+        {reviewRecordQuery.error ? (
+          <ErrorState error={reviewRecordQuery.error} onRetry={() => void reviewRecordQuery.refetch()} />
+        ) : null}
+        {reviewRecord?.payload_truncated ? (
+          <p role="alert" className="rounded border border-warning/40 bg-amber-50 p-3 text-sm text-warning dark:bg-amber-950/20">
+            {t('documents.reviewPayloadTruncated')}
+          </p>
+        ) : null}
+        {reviewRecord && selectedId && !reviewRecord.payload_truncated ? (
+          <div className="space-y-3">
+            <div className="flex flex-wrap gap-2">
+              <Badge tone="info">{humanise(reviewRecord.record_type)}</Badge>
+              <Badge tone="neutral">{humanise(reviewRecord.validation_state)}</Badge>
+              {reviewRecord.page_number !== null ? (
+                <Badge tone="neutral">{t('common.page')} {formatNumber(reviewRecord.page_number, locale, 0)}</Badge>
+              ) : null}
+            </div>
+            <ExtractedRecordReviewForm
+              key={`${reviewRecord.id}-v${reviewRecord.review_version}`}
+              record={reviewRecord}
+              onSubmit={(body, key) =>
+                recordReview.mutate({
+                  documentId: selectedId,
+                  recordId: reviewRecord.id,
+                  body,
+                  key,
+                })
+              }
+              onCancel={closeReview}
+              onChanged={() => recordReview.reset()}
+              onRefresh={() => {
+                recordReview.reset()
+                void reviewRecordQuery.refetch()
+              }}
+              pending={recordReview.isPending}
+              error={recordReview.error}
+            />
+          </div>
+        ) : null}
+      </Drawer>
 
       <EvidencePanel
         open={false}

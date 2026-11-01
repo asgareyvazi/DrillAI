@@ -15,6 +15,7 @@ external services for development/CI while remaining production-shaped:
 from __future__ import annotations
 
 import functools
+import re
 from pathlib import Path
 from typing import Literal
 
@@ -55,6 +56,17 @@ class Settings(BaseSettings):
     blob_backend: Literal["filesystem", "memory"] = "filesystem"
     blob_root: Path = Field(default=REPO_ROOT / "backend" / ".data" / "blobs")
     max_upload_bytes: int = 64 * 1024 * 1024  # 64 MiB; matches the parser's hard byte ceiling
+
+    # ------------------------------------------------------------------ optional OCR
+    # OCR is disabled by default. The Python extra supplies PDFium; Tesseract and its language packs
+    # are operator-installed host/container dependencies and are never downloaded at request time.
+    ocr_enabled: bool = False
+    ocr_executable: str = "tesseract"
+    ocr_languages: str = "eng"
+    ocr_timeout_seconds: float = Field(default=30.0, ge=1.0, le=120.0)
+    ocr_max_pages: int = Field(default=20, ge=1, le=200)
+    ocr_dpi: int = Field(default=200, ge=72, le=300)
+    ocr_max_page_pixels: int = Field(default=12_000_000, ge=100_000, le=30_000_000)
 
     # ------------------------------------------------------------------ ai providers
     llm_provider: Literal["stub", "openai_compatible", "ollama"] = "stub"
@@ -181,6 +193,26 @@ class Settings(BaseSettings):
     def _validate_database_url(cls, value: str) -> str:
         if not value:
             raise ValueError("database_url must not be empty")
+        return value
+
+    @field_validator("ocr_languages")
+    @classmethod
+    def _validate_ocr_languages(cls, value: str) -> str:
+        parts = re.split(r"[+,]", value) if isinstance(value, str) else []
+        if (
+            not parts
+            or len(value) > 120
+            or any(not re.fullmatch(r"[A-Za-z0-9_-]{1,40}", part) for part in parts)
+        ):
+            raise ValueError("ocr_languages must contain Tesseract language identifiers")
+        return "+".join(parts)
+
+    @field_validator("ocr_executable")
+    @classmethod
+    def _validate_ocr_executable(cls, value: str) -> str:
+        value = value.strip()
+        if not value or "\x00" in value:
+            raise ValueError("ocr_executable must be a non-empty executable path")
         return value
 
     @property

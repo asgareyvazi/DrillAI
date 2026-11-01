@@ -4,9 +4,9 @@
 Executed in CI and locally to certify:
 1. All GitHub Actions `uses:` directives in `.github/workflows/ci.yml` are pinned to full 40-char commit SHAs.
 2. Zero `continue-on-error: true` directives exist in `.github/workflows/ci.yml`.
-3. No private keys, cloud/API credentials, or frontend bundle tokens appear in git-tracked files or `frontend/dist`.
+3. No private keys, cloud/API credentials, or frontend bundle tokens appear in tracked, untracked, or ignored workspace text files (excluding generated dependency/build/cache trees) or `frontend/dist`.
 4. `pip-audit` reports zero known vulnerabilities in the Python environment.
-5. `npm audit --omit=dev --audit-level=high` reports zero high/critical vulnerabilities in frontend production dependencies.
+5. Full frontend `npm audit --audit-level=moderate` and production `npm audit --omit=dev --audit-level=high` report no moderate-or-higher issues (including development tooling) and no high/critical production issues.
 6. `SECURITY.md` and `docs/SECURITY_MODEL.md` are present and complete.
 """
 
@@ -42,6 +42,20 @@ BUNDLE_FORBIDDEN_TOKENS = (
     "DRILLAI_SECRET_MASTER_KEY",
 )
 
+GENERATED_PATH_PARTS = {
+    ".pytest_cache",
+    ".ruff_cache",
+    ".mypy_cache",
+    ".venv",
+    "venv",
+    "node_modules",
+    "__pycache__",
+    "build",
+    "dist",
+    "coverage",
+    "htmlcov",
+}
+
 
 def verify_workflow_sha_pinning() -> list[str]:
     workflow_path = REPO_ROOT / ".github" / "workflows" / "ci.yml"
@@ -69,16 +83,31 @@ def verify_workflow_sha_pinning() -> list[str]:
 
 
 def verify_no_leaked_secrets() -> int:
-    proc = subprocess.run(
-        ["git", "ls-files"],
+    tracked_and_unignored = subprocess.run(
+        ["git", "ls-files", "--cached", "--others", "--exclude-standard"],
         cwd=str(REPO_ROOT),
         check=True,
         capture_output=True,
         text=True,
     )
-    tracked_files = [REPO_ROOT / rel for rel in proc.stdout.splitlines() if rel.strip()]
+    ignored = subprocess.run(
+        ["git", "ls-files", "--others", "--ignored", "--exclude-standard"],
+        cwd=str(REPO_ROOT),
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    workspace_paths = set(tracked_and_unignored.stdout.splitlines()) | set(ignored.stdout.splitlines())
+    workspace_files = []
+    for rel in workspace_paths:
+        if not rel.strip():
+            continue
+        relative_path = Path(rel)
+        if GENERATED_PATH_PARTS.intersection(relative_path.parts):
+            continue
+        workspace_files.append(REPO_ROOT / relative_path)
     scanned = 0
-    for path in tracked_files:
+    for path in workspace_files:
         if not path.is_file():
             continue
         if path.suffix.lower() in {".png", ".jpg", ".jpeg", ".gif", ".webp", ".woff", ".woff2", ".ico", ".pdf"}:
@@ -92,7 +121,7 @@ def verify_no_leaked_secrets() -> int:
             match = pattern.search(text)
             if match:
                 raise RuntimeError(
-                    f"Secret scan violation ({rule_name}) in tracked file {path.relative_to(REPO_ROOT)}"
+                    f"Secret scan violation ({rule_name}) in workspace file {path.relative_to(REPO_ROOT)}"
                 )
 
     dist_dir = REPO_ROOT / "frontend" / "dist"
@@ -126,18 +155,26 @@ def verify_pip_audit() -> None:
 def verify_npm_audit() -> None:
     npm_cmd = shutil.which("npm.cmd") if os.name == "nt" else shutil.which("npm")
     npm_bin = npm_cmd or "npm"
-    proc = subprocess.run(
-        [npm_bin, "audit", "--omit=dev", "--audit-level=high"],
-        cwd=str(REPO_ROOT / "frontend"),
-        capture_output=True,
-        text=True,
-        timeout=120,
+    audits = (
+        ("npm audit --audit-level=moderate", [npm_bin, "audit", "--audit-level=moderate"]),
+        (
+            "npm audit --omit=dev --audit-level=high",
+            [npm_bin, "audit", "--omit=dev", "--audit-level=high"],
+        ),
     )
-    if proc.returncode != 0:
-        raise RuntimeError(
-            f"npm audit --omit=dev --audit-level=high failed (exit={proc.returncode}):\n"
-            f"STDOUT:\n{proc.stdout}\nSTDERR:\n{proc.stderr}"
+    for description, command in audits:
+        proc = subprocess.run(
+            command,
+            cwd=str(REPO_ROOT / "frontend"),
+            capture_output=True,
+            text=True,
+            timeout=120,
         )
+        if proc.returncode != 0:
+            raise RuntimeError(
+                f"{description} failed (exit={proc.returncode}):\n"
+                f"STDOUT:\n{proc.stdout}\nSTDERR:\n{proc.stderr}"
+            )
 
 
 def verify_security_docs() -> None:
@@ -156,8 +193,9 @@ def main() -> int:
     summary = {
         "status": "SUPPLY_CHAIN_AND_SECRET_SCAN_OK",
         "pinned_actions_count": len(pinned),
-        "scanned_tracked_files": scanned,
+        "scanned_workspace_files": scanned,
         "pip_audit": "pass",
+        "npm_audit_all_moderate": "pass",
         "npm_audit_prod_high": "pass",
     }
     print(json.dumps(summary, indent=2))

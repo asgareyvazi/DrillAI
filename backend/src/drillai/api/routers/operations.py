@@ -23,7 +23,7 @@ import datetime as dt
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Header, Query, Request
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from drillai.api.deps import AuthContext, OptionalFilter, get_db, require
@@ -42,6 +42,12 @@ router = APIRouter(tags=["operations"])
 #: UTC instants; reading "2026-01-15" as the server's local time would put an operation hours away from
 #: where the caller meant, and nothing downstream would notice.
 _TZ_HELP = "timestamps must include a timezone offset, e.g. 2026-01-15T08:00:00+00:00"
+
+
+def _require_aware_timestamp(value: dt.datetime) -> dt.datetime:
+    if value.tzinfo is None or value.utcoffset() is None:
+        raise ValueError(_TZ_HELP)
+    return value
 
 
 class OperationCreate(BaseModel):
@@ -76,6 +82,11 @@ class OperationCreate(BaseModel):
     source_kind: str = "manual"
     source_document_id: str | None = None
     source_record_id: str | None = None
+
+    @field_validator("planned_start", "planned_end", "actual_start", "actual_end")
+    @classmethod
+    def timestamps_must_be_aware(cls, value: dt.datetime | None) -> dt.datetime | None:
+        return None if value is None else _require_aware_timestamp(value)
 
     def scope(self) -> DocumentScope:
         return DocumentScope(
@@ -120,6 +131,11 @@ class OperationPatch(BaseModel):
     reason: str = Field(min_length=1, max_length=2000)
     changes: dict[str, Any] = Field(min_length=1)
 
+    @field_validator("expected_updated_at")
+    @classmethod
+    def expected_timestamp_must_be_aware(cls, value: dt.datetime) -> dt.datetime:
+        return _require_aware_timestamp(value)
+
     def validated_changes(self) -> dict[str, Any]:
         """The caller's changes, unexamined.
 
@@ -136,6 +152,11 @@ class TransitionRequest(BaseModel):
     status: str
     expected_updated_at: dt.datetime
     reason: str | None = Field(default=None, max_length=2000)
+
+    @field_validator("expected_updated_at")
+    @classmethod
+    def expected_timestamp_must_be_aware(cls, value: dt.datetime) -> dt.datetime:
+        return _require_aware_timestamp(value)
 
 
 class LinkRequest(BaseModel):
@@ -183,6 +204,11 @@ class EventCreate(BaseModel):
     source_record_id: str | None = None
     evidence_ref: str | None = None
 
+    @field_validator("occurred_at", "ended_at")
+    @classmethod
+    def timestamps_must_be_aware(cls, value: dt.datetime | None) -> dt.datetime | None:
+        return None if value is None else _require_aware_timestamp(value)
+
     def scope(self) -> DocumentScope:
         return DocumentScope(
             project_id=self.project_id,
@@ -226,6 +252,11 @@ class EventPatch(BaseModel):
     expected_updated_at: dt.datetime
     reason: str = Field(min_length=1, max_length=2000)
     changes: dict[str, Any] = Field(min_length=1)
+
+    @field_validator("expected_updated_at")
+    @classmethod
+    def expected_timestamp_must_be_aware(cls, value: dt.datetime) -> dt.datetime:
+        return _require_aware_timestamp(value)
 
 
 def _operation_service(session: AsyncSession, auth: AuthContext) -> OperationService:

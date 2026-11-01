@@ -1,0 +1,155 @@
+import { fireEvent, render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { describe, expect, it, vi } from 'vitest'
+import type { ExtractionRecord } from '../../api/types'
+import { I18nProvider } from '../../i18n'
+import { ExtractedRecordReviewForm } from './ExtractedRecordReviewForm'
+
+const record: ExtractionRecord = {
+  id: 'rec_review_1',
+  document_id: 'doc_review_1',
+  record_type: 'depth_reading',
+  payload: { bit_depth_si: 1000 },
+  payload_truncated: false,
+  payload_schema_key: 'extracted.depth_reading',
+  payload_schema_version: 1,
+  page_number: 1,
+  region_id: 'reg_review_1',
+  depth_md_si: null,
+  depth_tvd_si: null,
+  observed_at: null,
+  method: 'label_value',
+  method_version: '1.1.0',
+  confidence: 0.7,
+  validation_state: 'extracted',
+  review_version: 1,
+  validated_by: null,
+  validated_at: null,
+  validation_notes: '',
+  validation_notes_truncated: false,
+  region_unknown: false,
+  validation_rule: null,
+  quality_flags: [],
+  unit_context: { bit_depth_si: 'm' },
+  promoted_to_kind: null,
+  promoted_to_id: null,
+  is_demo_fixture: false,
+}
+
+function renderForm(onSubmit = vi.fn(), currentRecord = record) {
+  const onCancel = vi.fn()
+  const onChanged = vi.fn()
+  const onRefresh = vi.fn()
+  render(
+    <I18nProvider>
+      <ExtractedRecordReviewForm
+        record={currentRecord}
+        onSubmit={onSubmit}
+        onCancel={onCancel}
+        onChanged={onChanged}
+        onRefresh={onRefresh}
+        pending={false}
+        error={null}
+      />
+    </I18nProvider>,
+  )
+  return { onSubmit, onCancel, onChanged, onRefresh }
+}
+
+describe('ExtractedRecordReviewForm', () => {
+  it('submits a versioned human validation with corrected payload and an audit reason', async () => {
+    const user = userEvent.setup()
+    const { onSubmit } = renderForm()
+    fireEvent.change(screen.getByTestId('extracted-record-review-payload'), {
+      target: { value: '{\n  "bit_depth_si": 1001.5\n}' },
+    })
+    await user.type(screen.getByTestId('extracted-record-review-reason'), 'Checked against page one')
+    await user.click(screen.getByTestId('extracted-record-review-submit'))
+
+    expect(onSubmit).toHaveBeenCalledWith(
+      {
+        expected_version: 1,
+        decision: 'validate',
+        reason: 'Checked against page one',
+        changes: { payload: { bit_depth_si: 1001.5 } },
+      },
+      expect.stringMatching(/^ui-record-review-rec_review_1-v1-/),
+    )
+  })
+
+  it('sends explicit nulls when a reviewer clears existing observed time and canonical depth', async () => {
+    const user = userEvent.setup()
+    const onSubmit = vi.fn()
+    renderForm(onSubmit, {
+      ...record,
+      observed_at: '2026-11-01T10:30:00Z',
+      depth_md_si: 1200,
+    })
+    fireEvent.change(screen.getByTestId('extracted-record-review-observed-at'), { target: { value: '' } })
+    fireEvent.change(screen.getByTestId('extracted-record-review-depth-md'), { target: { value: '' } })
+    await user.type(screen.getByTestId('extracted-record-review-reason'), 'Cleared unsupported metadata')
+    await user.click(screen.getByTestId('extracted-record-review-submit'))
+
+    expect(onSubmit).toHaveBeenCalledWith(
+      {
+        expected_version: 1,
+        decision: 'validate',
+        reason: 'Cleared unsupported metadata',
+        changes: { payload: { bit_depth_si: 1000 }, observed_at: null, depth_md_si: null },
+      },
+      expect.stringMatching(/^ui-record-review-rec_review_1-v1-/),
+    )
+  })
+
+  it('refuses invalid JSON before sending a review mutation', async () => {
+    const user = userEvent.setup()
+    const { onSubmit } = renderForm()
+    fireEvent.change(screen.getByTestId('extracted-record-review-payload'), { target: { value: '{broken' } })
+    await user.type(screen.getByTestId('extracted-record-review-reason'), 'Checked source')
+    await user.click(screen.getByTestId('extracted-record-review-submit'))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Payload is not valid JSON.')
+    expect(onSubmit).not.toHaveBeenCalled()
+  })
+
+  it('submits an explicit rejection with a reason and the observed payload', async () => {
+    const user = userEvent.setup()
+    const onSubmit = vi.fn()
+    renderForm(onSubmit)
+    await user.selectOptions(screen.getByTestId('extracted-record-review-decision'), 'reject')
+    await user.type(screen.getByTestId('extracted-record-review-reason'), 'The source page does not support this value')
+    await user.click(screen.getByTestId('extracted-record-review-submit'))
+
+    expect(onSubmit).toHaveBeenCalledWith(
+      {
+        expected_version: 1,
+        decision: 'reject',
+        reason: 'The source page does not support this value',
+        changes: { payload: { bit_depth_si: 1000 } },
+      },
+      expect.stringMatching(/^ui-record-review-rec_review_1-v1-/),
+    )
+  })
+
+  it('allows a versioned correction and revalidation of an already human-validated row', async () => {
+    const user = userEvent.setup()
+    const onSubmit = vi.fn()
+    const humanValidated = { ...record, validation_state: 'human_validated' }
+    renderForm(onSubmit, humanValidated)
+
+    expect(screen.getByTestId('extracted-record-review-decision')).toHaveValue('validate')
+    expect(screen.getByRole('option', { name: 'Validate this record' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Reject this record' })).toBeInTheDocument()
+    await user.type(screen.getByTestId('extracted-record-review-reason'), 'Second reviewer confirmed the field')
+    await user.click(screen.getByTestId('extracted-record-review-submit'))
+    expect(onSubmit).toHaveBeenCalledWith(
+      {
+        expected_version: 1,
+        decision: 'validate',
+        reason: 'Second reviewer confirmed the field',
+        changes: { payload: { bit_depth_si: 1000 } },
+      },
+      expect.stringMatching(/^ui-record-review-rec_review_1-v1-/),
+    )
+  })
+})

@@ -53,6 +53,46 @@ async def test_create_an_event(fabric: Fabric) -> None:
     assert set(body["allowed_transitions"]) == {"acknowledged", "investigating", "closed", "cancelled"}
 
 
+async def test_event_timestamps_require_offsets_and_valid_depths(fabric: Fabric) -> None:
+    naive = await _create(fabric, fabric.alpha, occurred_at="2026-03-15T07:15:00")
+    assert naive.status_code == 422, naive.text
+    assert "timezone offset" in str(naive.json()["error"]["details"]["issues"])
+
+    reversed_window = await _create(
+        fabric,
+        fabric.alpha,
+        occurred_at="2026-03-15T07:15:00+00:00",
+        ended_at="2026-03-15T07:00:00+00:00",
+    )
+    assert reversed_window.status_code == 422, reversed_window.text
+    assert "ended_at must not precede occurred_at" in reversed_window.json()["error"]["message"]
+
+    negative_depth = await _create(fabric, fabric.alpha, depth_md_si=-1.0)
+    assert negative_depth.status_code == 422, negative_depth.text
+    assert "depth_md_si must be a finite non-negative number or null" in negative_depth.json()["error"]["message"]
+    overflowing_depth = await _create(fabric, fabric.alpha, depth_md_si=10**1000)
+    assert overflowing_depth.status_code == 422, overflowing_depth.text
+
+    zero_depth = await _create(fabric, fabric.alpha, depth_md_si=0.0)
+    assert zero_depth.status_code == 201, zero_depth.text
+    assert zero_depth.json()["depth_md_si"] == 0.0
+
+
+async def test_event_correction_rejects_naive_datetime(fabric: Fabric) -> None:
+    created = (await _create(fabric, fabric.alpha)).json()
+    response = await fabric.http.patch(
+        f"/api/v1/events/{created['id']}",
+        json={
+            "expected_updated_at": created["updated_at"],
+            "reason": "The source did not identify its timezone",
+            "changes": {"occurred_at": "2026-03-15T07:30:00"},
+        },
+        headers=fabric.alpha.headers,
+    )
+    assert response.status_code == 422, response.text
+    assert "timezone offset" in response.json()["error"]["message"]
+
+
 async def test_an_event_must_resolve_to_a_well(fabric: Fabric) -> None:
     response = await fabric.http.post(
         "/api/v1/events",

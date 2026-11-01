@@ -393,6 +393,8 @@ export interface RequestOptions {
    * name and the decision to send one at all belong to the transport boundary.
    */
   idempotencyKey?: string
+  /** Return the validated response bytes as a Blob after checking the JSON contract. */
+  responseType?: 'json' | 'blob'
 }
 
 function buildQuery(query: RequestOptions['query']): string {
@@ -557,7 +559,11 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
   const contentType = response.headers.get('content-type')
   if (response.status === 204) return undefined as T
 
-  const text = await response.text()
+  // Keep the original bytes for authorized downloads while inspecting a text copy through the same
+  // JSON/error contract as ordinary API reads. The download is not reserialized client-side, so its
+  // bytes continue to match the server's ETag and audit digest.
+  const rawBlob = options.responseType === 'blob' ? await response.blob() : null
+  const text = rawBlob ? await rawBlob.text() : await response.text()
   let payload: unknown = null
   let parseFailed = false
   if (text) {
@@ -636,6 +642,7 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
     }
   }
 
+  if (rawBlob) return rawBlob as T
   return payload as T
 }
 
@@ -663,6 +670,9 @@ export const expect = {
 export const api = {
   get: <T>(path: string, options: Omit<RequestOptions, 'method' | 'body'> = {}) =>
     request<T>(path, { ...options, method: 'GET' }),
+  /** Download exact response bytes after validating the same JSON API contract and error envelope. */
+  getBlob: (path: string, options: Omit<RequestOptions, 'method' | 'body' | 'responseType'> = {}) =>
+    request<Blob>(path, { ...options, method: 'GET', responseType: 'blob' }),
   post: <T>(path: string, body?: unknown, options: Omit<RequestOptions, 'method' | 'body'> = {}) =>
     request<T>(path, { ...options, method: 'POST', body }),
   put: <T>(path: string, body?: unknown, options: Omit<RequestOptions, 'method' | 'body'> = {}) =>

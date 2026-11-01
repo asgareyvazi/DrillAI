@@ -169,6 +169,18 @@ PLATFORM_ACTIONS: tuple[tuple[str, ActionLevel, str, str], ...] = (
         "document.write",
     ),
     (
+        "document.record_review",
+        ActionLevel.DRAFT,
+        "Correct, validate or reject an extracted record with a version check and audit entry.",
+        "document.review",
+    ),
+    (
+        "report.export",
+        ActionLevel.DRAFT,
+        "Download a scoped, machine-readable report payload.",
+        "report.export",
+    ),
+    (
         "operation.create",
         ActionLevel.DRAFT,
         "Record an operation on a wellbore section.",

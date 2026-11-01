@@ -28,6 +28,7 @@ method later: no request-scoped state is used, and the caller owns the transacti
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import datetime as dt
 import math
@@ -56,6 +57,7 @@ from drillai.documents.identity import find_logical_document, logical_key
 from drillai.documents.lifecycle import plan_document_status
 from drillai.documents.quotes import verify_quote
 from drillai.ingestion.extractors import ExtractedRecordDraft, extract, extractor_catalogue
+from drillai.ingestion.ocr import OcrProvider
 from drillai.ingestion.parsers import ParsedDocument, guess_doc_type, parse_bytes
 from drillai.ingestion.storage import BlobStore, compute_sha256
 from drillai.observability.tracing import get_metrics, get_tracer
@@ -95,12 +97,16 @@ def _is_logical_document_unique_conflict(exc: IntegrityError) -> bool:
     )
 
 
-def _prepare_identity_parse(
+async def _prepare_identity_parse(
     data: bytes,
     *,
     filename: str,
     content_type: str | None,
     requested_doc_type: str | None,
+    ocr_provider: OcrProvider | None = None,
+    ocr_max_pages: int = 20,
+    ocr_dpi: int = 200,
+    ocr_max_page_pixels: int = 12_000_000,
 ) -> tuple[str, ParsedDocument | None, Exception | None]:
     """Resolve auto-classified identity before hashing the logical document key.
 
@@ -111,7 +117,16 @@ def _prepare_identity_parse(
     if requested_doc_type not in (None, "", "other"):
         return requested_doc_type, None, None
     try:
-        parsed = parse_bytes(data, filename=filename, content_type=content_type)
+        parsed = await asyncio.to_thread(
+            parse_bytes,
+            data,
+            filename=filename,
+            content_type=content_type,
+            ocr_provider=ocr_provider,
+            ocr_max_pages=ocr_max_pages,
+            ocr_dpi=ocr_dpi,
+            ocr_max_page_pixels=ocr_max_page_pixels,
+        )
     except Exception as exc:
         # Defer the error until the normal failure-record path has created the durable job/document.
         return "other", None, exc
@@ -281,10 +296,18 @@ class IngestionPipeline:
         *,
         org_id: str,
         extractor_version_map: dict[str, str] | None = None,
+        ocr_provider: OcrProvider | None = None,
+        ocr_max_pages: int = 20,
+        ocr_dpi: int = 200,
+        ocr_max_page_pixels: int = 12_000_000,
     ) -> None:
         self.session = session
         self.store = store
         self.org_id = org_id
+        self.ocr_provider = ocr_provider
+        self.ocr_max_pages = ocr_max_pages
+        self.ocr_dpi = ocr_dpi
+        self.ocr_max_page_pixels = ocr_max_page_pixels
         self.extractor_versions = extractor_version_map or {
             item["key"]: item["version"] for item in extractor_catalogue()
         }
@@ -428,11 +451,15 @@ class IngestionPipeline:
     ) -> IngestionOutcome | None:
         """Resolve a concurrent upload only after the database confirms its logical winner."""
         digest = compute_sha256(data)
-        identity_doc_type, _parsed, _parse_error = _prepare_identity_parse(
+        identity_doc_type, _parsed, _parse_error = await _prepare_identity_parse(
             data,
             filename=filename,
             content_type=content_type,
             requested_doc_type=doc_type,
+            ocr_provider=self.ocr_provider,
+            ocr_max_pages=self.ocr_max_pages,
+            ocr_dpi=self.ocr_dpi,
+            ocr_max_page_pixels=self.ocr_max_page_pixels,
         )
         key = logical_key(
             content_sha256=digest,
@@ -555,11 +582,15 @@ class IngestionPipeline:
         ).scalars().first()
         if existing is not None and existing.is_quarantined:
             raise ValidationFailed("the uploaded content is quarantined and cannot be ingested")
-        identity_doc_type, parsed_for_identity, deferred_parse_error = _prepare_identity_parse(
+        identity_doc_type, parsed_for_identity, deferred_parse_error = await _prepare_identity_parse(
             data,
             filename=filename,
             content_type=content_type,
             requested_doc_type=kwargs.get("doc_type"),
+            ocr_provider=self.ocr_provider,
+            ocr_max_pages=self.ocr_max_pages,
+            ocr_dpi=self.ocr_dpi,
+            ocr_max_page_pixels=self.ocr_max_page_pixels,
         )
 
         # The bytes are one artefact; the *document* is only a repeat if the scope, type and revision
@@ -706,8 +737,15 @@ class IngestionPipeline:
         try:
             if deferred_parse_error is not None:
                 raise deferred_parse_error
-            parsed = parsed_for_identity or parse_bytes(
-                data, filename=filename, content_type=content_type
+            parsed = parsed_for_identity or await asyncio.to_thread(
+                parse_bytes,
+                data,
+                filename=filename,
+                content_type=content_type,
+                ocr_provider=self.ocr_provider,
+                ocr_max_pages=self.ocr_max_pages,
+                ocr_dpi=self.ocr_dpi,
+                ocr_max_page_pixels=self.ocr_max_page_pixels,
             )
         except (UnsupportedFormat, ExtractionFailed) as exc:
             document.status = "failed"
@@ -750,9 +788,21 @@ class IngestionPipeline:
         )
 
         warnings = [*parsed.warnings, *extraction_warnings]
-        if parsed.metadata.get("ocr_required"):
-            document.ocr_required = True
-            warnings.append("one or more pages have no extractable text: OCR is required for those pages")
+        document.ocr_required = bool(parsed.metadata.get("ocr_required"))
+        if document.ocr_required:
+            warnings.append("one or more pages remain incomplete and require OCR or operator review")
+        ocr_summary = {
+            key: parsed.metadata[key]
+            for key in (
+                "ocr_enabled",
+                "ocr_provider",
+                "ocr_provider_version",
+                "ocr_applied_pages",
+                "ocr_required_pages",
+                "ocr_status_by_page",
+            )
+            if key in parsed.metadata
+        }
         # An extractor that raised is counted, not merely warned about: "one of four extractors
         # failed" is the difference between a complete document and a partial one, and the number is
         # what makes the partial status checkable rather than a judgement call.
@@ -781,6 +831,7 @@ class IngestionPipeline:
             **outcome.stats,
             "extractors": self.extractor_versions,
             "doc_type": doc_type,
+            **({"ocr": ocr_summary} if ocr_summary else {}),
             # The reconciliation block: a caller can check that the document's status follows from
             # these numbers instead of taking it on trust.
             "extractor_failures": extractor_failures,
@@ -826,11 +877,12 @@ class IngestionPipeline:
                 page_number=page.page_number,
                 width_pt=page.width_pt,
                 height_pt=page.height_pt,
+                rotation=page.rotation,
                 text=page.text,
                 char_count=len(page.text),
                 has_tables=page.has_tables,
                 has_figures=page.has_figures,
-                ocr_applied=False,
+                ocr_applied=page.ocr_applied,
                 layout=page.layout,
             )
             self.session.add(row)
@@ -1184,7 +1236,12 @@ class IngestionPipeline:
             well_id=well_id,
             status=status,
             trigger=trigger,
-            pipeline={"parser_registry": True, "extractors": self.extractor_versions},
+            pipeline={
+                "parser_registry": True,
+                "extractors": self.extractor_versions,
+                "ocr_enabled": self.ocr_provider is not None,
+                "ocr_provider": self.ocr_provider.name if self.ocr_provider is not None else None,
+            },
             stats=stats,
             extractor_versions=self.extractor_versions,
             attempts=1,

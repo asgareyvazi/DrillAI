@@ -8,15 +8,20 @@ platform uses, so the UI and the workflow runtime see identical numbers.
 from __future__ import annotations
 
 import datetime as dt
+import hashlib
+import json
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from drillai.ai.providers import ProviderRegistry, provider_registry
 from drillai.ai.router import LlmRouter, RoutingPolicy
 from drillai.api.deps import AuthContext, OptionalFilter, get_db, require
+from drillai.core.audit import record_audit
+from drillai.core.clock import ensure_utc
+from drillai.core.errors import ValidationFailed
 from drillai.drilling.advisor import ADVISOR_QUESTIONS, OperationsAdvisor
 from drillai.drilling.ddr import DdrProcessor
 from drillai.drilling.dependencies import DependencyGraphService
@@ -299,6 +304,83 @@ async def build_report(
         kind, well_id, period_from=period_from, period_to=period_to
     )
     return {"report": report.to_dict()}
+
+
+@router.get("/wells/{well_id}/reports/{kind}/export", summary="Export a scoped report as JSON")
+async def export_report_json(
+    well_id: str,
+    kind: str,
+    request: Request,
+    session: Annotated[AsyncSession, Depends(get_db)],
+    auth: Annotated[AuthContext, Depends(require("well.read"))],
+    period_from: dt.datetime | None = None,
+    period_to: dt.datetime | None = None,
+) -> Response:
+    """Build and audit a tenant-scoped JSON attachment; document rendering remains separate."""
+    authorize(auth.principal, "report.export", context={"well_id": well_id, "kind": kind})
+    try:
+        period_from = ensure_utc(period_from) if period_from is not None else None
+        period_to = ensure_utc(period_to) if period_to is not None else None
+    except ValueError as exc:
+        raise ValidationFailed(
+            "report period bounds must include a timezone offset",
+            details={"reason": str(exc)},
+        ) from exc
+    if period_from is not None and period_to is not None and period_to < period_from:
+        raise ValidationFailed("period_to must not precede period_from")
+
+    org_id = auth.org_id or ""
+    report = await ReportingService(session, org_id).build(
+        kind, well_id, period_from=period_from, period_to=period_to
+    )
+    payload = {"report": report.to_dict()}
+    try:
+        serialized = json.dumps(
+            payload,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+            allow_nan=False,
+        ).encode("utf-8")
+    except (TypeError, ValueError, RecursionError) as exc:
+        raise ValidationFailed("report contains a value that cannot be represented as finite JSON") from exc
+    max_export_bytes = 20 * 1024 * 1024
+    if len(serialized) > max_export_bytes:
+        raise ValidationFailed(
+            "report export exceeds the configured response limit",
+            details={"bytes": len(serialized), "limit": max_export_bytes},
+        )
+
+    digest = hashlib.sha256(serialized).hexdigest()
+    await record_audit(
+        session,
+        org_id=org_id,
+        principal=auth.principal,
+        action="report.export",
+        resource_kind="well_report",
+        resource_id=well_id,
+        permission="report.export",
+        request_id=getattr(request.state, "request_id", None),
+        well_id=well_id,
+        details={
+            "kind": kind,
+            "format": "json",
+            "bytes": len(serialized),
+            "sha256": digest,
+            "period_from": period_from.isoformat() if period_from else None,
+            "period_to": period_to.isoformat() if period_to else None,
+        },
+    )
+    return Response(
+        content=serialized,
+        media_type="application/json",
+        headers={
+            "Content-Disposition": f'attachment; filename="drillai-{kind}.json"',
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+            "ETag": f'"{digest}"',
+        },
+    )
 
 
 # --------------------------------------------------------------------------- dependencies

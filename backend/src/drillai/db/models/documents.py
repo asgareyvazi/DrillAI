@@ -366,6 +366,9 @@ class ExtractedRecord(Base, IdMixin, CreatedAtMixin, OrgScopedMixin):
     method_version: Mapped[str | None] = mapped_column(String(40))
     confidence: Mapped[float | None] = mapped_column(Float)
     validation_state: Mapped[str] = mapped_column(String(32), default="extracted", nullable=False, index=True)
+    # Monotonic compare-and-swap version for human review/correction. It is deliberately separate
+    # from payload_schema_version, which versions the shape rather than this record's edit history.
+    review_version: Mapped[int] = mapped_column(IntType, default=1, server_default="1", nullable=False)
     validated_by: Mapped[str | None] = mapped_column(String(64))
     validated_at: Mapped[dt.datetime | None] = mapped_column(UtcDateTime)
     validation_notes: Mapped[str | None] = mapped_column(TextType)

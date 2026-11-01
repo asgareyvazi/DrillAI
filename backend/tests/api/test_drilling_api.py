@@ -584,6 +584,42 @@ async def test_reports_keep_evidence_apart_from_calculations(client):
     ]
 
 
+async def test_report_json_export_is_scoped_audited_and_attachment_safe(client):
+    import hashlib
+
+    ids = await _well_with_report(client)
+    response = await client.get(
+        f"/api/v1/wells/{ids['well_id']}/reports/daily_drilling/export",
+        headers=headers("engineer"),
+    )
+    assert response.status_code == 200, response.text
+    assert response.headers["content-type"].startswith("application/json")
+    assert response.headers["content-disposition"] == 'attachment; filename="drillai-daily_drilling.json"'
+    assert response.headers["cache-control"] == "no-store"
+    assert response.headers["x-content-type-options"] == "nosniff"
+    assert response.headers["etag"] == f'"{hashlib.sha256(response.content).hexdigest()}"'
+    exported = response.json()["report"]
+    assert exported["kind"] == "daily_drilling"
+    assert exported["well_id"] == ids["well_id"]
+    assert exported["metadata"]["well"]["id"] == ids["well_id"]
+
+    audit = await client.get(f"/api/v1/wells/{ids['well_id']}/audit-log", headers=headers())
+    assert audit.status_code == 200, audit.text
+    exports = [row for row in audit.json()["items"] if row["action"] == "report.export"]
+    assert len(exports) == 1
+    assert exports[0]["permission_decision"]["required"] == "report.export"
+    assert exports[0]["details"]["format"] == "json"
+    assert exports[0]["details"]["sha256"] == hashlib.sha256(response.content).hexdigest()
+    assert exports[0]["details"]["bytes"] == len(response.content)
+    assert exports[0]["details"].get("body") is None
+
+    denied = await client.get(
+        f"/api/v1/wells/{ids['well_id']}/reports/daily_drilling/export",
+        headers=headers("viewer"),
+    )
+    assert denied.status_code == 403, denied.text
+
+
 async def test_optimisation_returns_constrained_candidates_and_a_reasoned_recommendation(client):
     ids = await _well_with_report(client)
     objectives = (

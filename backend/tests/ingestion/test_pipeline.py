@@ -7,6 +7,7 @@ openpyxl workbook, delimited text) so the parsers are exercised for real rather 
 from __future__ import annotations
 
 import datetime as dt
+import io
 from itertools import pairwise
 
 import pytest
@@ -1129,6 +1130,53 @@ async def test_scanned_document_records_ocr_requirement(session, context):
     assert outcome.document.status == "partially_extracted"
     # The job still reports its own outcome separately: the run did what it was asked to do.
     assert outcome.job.status == "partial"
+
+
+async def test_ocr_pipeline_persists_applied_state_and_provider_provenance(session, context):
+    from drillai.ingestion.ocr import OcrLine
+
+    class ContractProvider:
+        name = "pipeline-contract-test"
+        version = "synthetic-contract-v1"
+
+        def availability(self):
+            return True, None
+
+        def recognize(self, image_png: bytes):
+            from PIL import Image
+
+            image = Image.open(io.BytesIO(image_png))
+            assert image.width * image.height <= 1_000_000
+            return [OcrLine("Synthetic transcript only", 0.9, (10, 10, 80, 18))]
+
+    pipeline = IngestionPipeline(
+        session,
+        context["store"],
+        org_id=context["org"].id,
+        ocr_provider=ContractProvider(),
+        ocr_max_pages=2,
+        ocr_dpi=200,
+        ocr_max_page_pixels=1_000_000,
+    )
+    outcome = await pipeline.ingest(
+        scanned_pdf(),
+        filename="contract-scan.pdf",
+        content_type="application/pdf",
+        doc_type="ddr",
+        well_id=context["well"].id,
+    )
+
+    assert outcome.document is not None
+    assert outcome.document.ocr_required is False
+    assert outcome.document.extraction_summary["ocr"]["ocr_applied_pages"] == [1]
+    page = (
+        await session.execute(select(DocumentPage).where(DocumentPage.document_id == outcome.document.id))
+    ).scalar_one()
+    assert page.ocr_applied is True
+    assert page.layout["ocr"]["provider"] == "pipeline-contract-test"
+    assert outcome.job.pipeline["ocr_enabled"] is True
+    assert outcome.job.pipeline["ocr_provider"] == "pipeline-contract-test"
+    # The provider is synthetic test output. This verifies data flow, not recognition accuracy.
 
 
 async def test_empty_file_is_refused(session, context):

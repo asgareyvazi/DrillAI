@@ -287,3 +287,48 @@ backend/.venv/bin/python scripts/verify_postgres_dr_drill.py
   - Inspect current policy state (`active`, `transient_store_error`, `corrupt_policy_record`, `inactive_policy`, `missing_policy_record`) and revision: `GET /api/v1/connectors/egress-policy`.
   - Update allowed hostnames and private rig CIDRs atomically with `Idempotency-Key`: `PUT /api/v1/connectors/egress-policy` (requires `admin` role). Both API and worker processes sync the updated revision from PostgreSQL before every outbound connection test or poll.
 
+---
+
+## 7. Document Ingestion, Extracted-Record Review, OCR Benchmark & Report Export
+
+### 7.1 Manual Operation and Event Entry
+
+- The bilingual Operations workspace can create actual operations and events through the same authorized API used by integrations. Manual rows carry `source_kind: "manual"` and a client-generated `Idempotency-Key`; the API remains authoritative for scope, RBAC, vocabularies, and validation.
+- Manual operation time inputs are interpreted as the operator's local browser time and submitted as UTC instants. API timestamps must carry an explicit timezone offset; timezone-naive timestamps and planned/actual end times before their corresponding starts are rejected. Measured-depth inputs are canonical SI metres; the displayed datum is contextual and is not converted or inferred by the form. An end depth earlier than the start depth is rejected in the UI and again by the server. Event depth corrections are finite and non-negative; zero is a valid measured depth.
+- Event kind, NPT classification, and NPT duration are separate claims. A non-NPT event does not acquire a category implicitly. To mark an event as NPT, choose a backend-approved category and enter positive hours; a recorded `not_npt` category is intentionally not offered for an event that is being charged as NPT. The frontend's operation/event/NPT vocabularies are contract-tested against the backend model constants.
+- These forms create operator-entered evidence; they do not establish that a record came from a rig or received engineering/field approval.
+
+### 7.2 OCR Runtime and Limits
+
+OCR is opt-in and disabled by default (`DRILLAI_OCR_ENABLED=false`). To enable the bounded PDF OCR path, install the optional Python extra (`cd backend && .venv/bin/pip install -e '.[ocr]'`), install the Tesseract executable and each selected trained-data language at the operating-system level, then explicitly configure `DRILLAI_OCR_ENABLED=true`, `DRILLAI_OCR_EXECUTABLE`, and `DRILLAI_OCR_LANGUAGES` (for example `eng+fas`). Python dependencies alone do not install Tesseract or its language packs.
+
+Defaults are 30 seconds per page, 20 blank/image-only pages per PDF, 200 DPI, and 12,000,000 rendered pixels per page; configuration enforces the documented upper bounds. Missing Tesseract/PDFium, a page limit, unsafe render dimensions, timeout, OCR failure, or truncated output remains an explicit incomplete page state. Do not treat OCR confidence, a successful process exit, or any parser result as semantic correctness. OCR results retain page/line geometry and confidence where supplied by the provider; operator review is still required for source-critical values.
+
+No approved real-world benchmark corpus or measured OCR accuracy is bundled with this repository. To run the local-only benchmark, stage operator-approved PDFs and UTF-8 ground-truth text outside Git, pin each file with SHA-256 in a schema-version-1 manifest, and run:
+
+```bash
+cd backend
+.venv/bin/python -m drillai.ingestion.ocr_benchmark \
+  --manifest /secure/ocr/manifest.json \
+  --corpus-root /secure/ocr/corpus \
+  --languages eng+fas \
+  --output /secure/ocr/benchmark-result.json
+```
+
+The runner reads no network sources, limits file sizes/case count/edit-distance work, refuses path traversal and digest mismatches, and writes aggregate CER/WER plus per-case hashes/status without transcripts. Missing runtime exits with status 2; failed or incomplete cases exit non-zero. No accuracy result is asserted by the synthetic provider tests, and no result should be called representative without an approved, versioned corpus and operator validation.
+
+### 7.3 Versioned Extracted-Record Review
+
+- `GET /api/v1/documents/{document_id}/records/{record_id}` is tenant/document scoped and returns a focused payload preview capped at 64 KiB. `payload_truncated: true` means the UI must not offer edits to that still-truncated value.
+- `PATCH /api/v1/documents/{document_id}/records/{record_id}/review` requires review permission, an `Idempotency-Key`, a `reason`, `decision` (`validate` or `reject`), and `expected_version`. It performs compare-and-swap; a stale concurrent edit returns HTTP 409 and must be reloaded rather than overwritten.
+- Corrections preserve the stored JSON field/list shape and validate domain-specific survey/depth values. Payloads above 64 KiB are refused. Corrections cannot change tenant, document, source-record, or provenance identity. The transaction increments `review_version` and writes an audit entry containing the prior validation note (capped), payload digests, changed field names, decision, reviewer, and reason; raw payload content is not copied into the audit.
+- Explicit `null` for `observed_at`, `depth_md_si`, or `depth_tvd_si` clears that canonical metadata. Omitted fields are left unchanged. The route does not infer canonical depth from a JSON payload; the operator must correct each intended field. Audit idempotency fingerprints preserve omitted-versus-explicit-null distinctions.
+
+### 7.4 Scoped Report JSON Export
+
+`GET /api/v1/wells/{well_id}/reports/{kind}/export` is a separate `report.export`-authorized route; it serializes the same structured report content as the JSON report API, refuses output over 20 MiB, returns an attachment with `Cache-Control: no-store`, `X-Content-Type-Options: nosniff`, and a content digest ETag, and records an audit entry with report kind, period, size, and SHA-256 (not report body content). It is tenant-scoped; viewers without the export action are denied. The frontend validates the JSON envelope through the normal API error/identity boundary and downloads the unmodified response bytes, so the saved file matches the server's ETag and audit digest. This is machine-readable JSON only. PDF/DOCX rendering, provider delivery, and field certification are not implied.
+
+### 7.5 Deterministic retrieval evaluation
+
+Run the versioned, network-free lexical retrieval smoke benchmark from `backend/` with `.venv/bin/python -m drillai.rag.benchmark` (optionally pass `--output /secure/path/report.json`). It seeds a temporary SQLite database, exercises the production `retrieve` service on a synthetic five-chunk, three-query corpus, and reports Recall@5, Precision@5, MRR, citation coverage, and scope violations. On the current source, dataset `drillai-rag-synthetic-v1` (`bc8cee30df32b503c26cee4f58d1df88b5b3cbb61c6df23f4bc64bef8ab8ffd1`) measured Recall@5 1.0, Precision@5 0.20, MRR 1.0, citation coverage 1.0, and zero scope violations. Precision uses the fixed cutoff denominator of five, even when fewer than five lexical matches are returned. This synthetic set tests deterministic ranking/filter contracts only: it is not representative corpus evidence and does not measure semantic relevance, embedding/hybrid quality, answer grounding, LLM quality, engineering approval, or field performance.
+

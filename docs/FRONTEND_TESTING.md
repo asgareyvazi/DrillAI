@@ -11,14 +11,17 @@ is confined to unit and component tests, where it isolates a boundary rather tha
 | Types | `cd frontend && npm run typecheck` | strict TypeScript with `noUncheckedIndexedAccess` enabled in the app, E2E, and Node-config projects; includes tests and E2E specs |
 | Lint | `cd frontend && npm run lint` | no unused code, no `any` slipping in, React rules |
 | Build | `cd frontend && npm run build` | `tsc -b` plus a production Vite build |
-| Unit + component | `cd frontend && npm test` | 340 passed in 32 files: values, units, the API boundary, cancellation, the request-failure oracle, permissions, identity settings, the shared UI states, and the pages' contracts |
+| Unit + component | `cd frontend && npm test` | 356 passed in 35 files: values, units, the API boundary, cancellation, the request-failure oracle, permissions, identity settings, the shared UI states, and the pages' contracts |
 | End-to-end | `cd frontend && npm run e2e` | 121 passed in 17 spec files: the real stack through a browser, in three deployments |
-| Backend | `cd backend && DRILLAI_TEST_POSTGRES=1 .venv/bin/python -m pytest` | 1,509 passed, 0 skipped in 100 files (embedded PostgreSQL enabled) |
+| Backend | `cd backend && DRILLAI_TEST_POSTGRES=1 .venv/bin/python -m pytest` | 1,555 passed, 0 skipped in 106 files (embedded PostgreSQL enabled) |
 | Backend lint | `cd backend && .venv/bin/python -m ruff check .` | backend style and import hygiene |
 | Migrations | `cd backend && .venv/bin/python -m alembic upgrade head && .venv/bin/python -m alembic check` | no model/migration drift — against a **fresh** database |
+| Supply chain + secrets | `backend/.venv/bin/python scripts/verify_supply_chain_and_secrets.py` | full-SHA Actions pins, tracked/untracked/eligible ignored text scan, `pip-audit`, full frontend `npm audit` at moderate, and production audit at high |
 
-The [CP51–CP58 final assurance review](mission-reports/CP51-58-FINAL-ASSURANCE.md) contains the file-by-file
-worktree inventory, exact local test counts, known migration/date/trajectory limitations, and CI/vendor evidence.
+The [CP51–CP58 final assurance review](mission-reports/CP51-58-FINAL-ASSURANCE.md) contains that mission's
+file-by-file inventory, measured test counts, limitations, and CI/vendor evidence. The current
+[CP59–CP75 capability matrix](mission-reports/CP59-CP75-CAPABILITY-MATRIX.md) records the latest
+source-backed test results and remaining external/field limits.
 
 `npm run e2e` prepares its own browser (`scripts/run-e2e.mjs`), starts the API and the web server
 itself, and seeds the database before the API opens it. `DRILLAI_CHROMIUM_PATH` overrides the browser
@@ -47,8 +50,8 @@ PostgreSQL flag is set:
 cd backend && DRILLAI_TEST_POSTGRES=1 .venv/bin/python -m pytest
 ```
 
-The completed enabled-PostgreSQL run reports **1,509 passed, 0 skipped** across 100 test files. With the
-PostgreSQL flag unset, the same collected inventory reports **1,497 passed, 12 skipped**; those 12 cases
+The completed enabled-PostgreSQL run reports **1,555 passed, 0 skipped** across 106 test files. With the
+PostgreSQL flag unset, the same collected inventory reports **1,543 passed, 12 skipped**; those 12 cases
 are PostgreSQL-marked and are not represented as passes. CI runs the enabled suite on Linux (the `pgserver`
 dev dependency is in `backend/pyproject.toml`); the Windows job uses `-m "not postgres"` to deselect
 those integration cases.

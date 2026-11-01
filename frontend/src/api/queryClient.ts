@@ -20,6 +20,10 @@ export function createQueryClient(): QueryClient {
         refetchOnWindowFocus: false,
         // Classified once, in the API client.
         retry: shouldRetryRequest,
+        // A cached terminal error (notably a 404) is not new evidence on remount. Let only the
+        // explicit, classified retry policy below or the user's retry action start another request.
+        // This also keeps React StrictMode's development remount from replaying a known refusal.
+        retryOnMount: false,
         // Attempt the request even when the browser reports no network, instead of holding it until
         // the connection comes back. The default ("online") *pauses* the read, which leaves the screen
         // on its loading state for as long as the outage lasts: an operator sees a spinner where the

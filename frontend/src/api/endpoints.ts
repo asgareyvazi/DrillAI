@@ -43,6 +43,8 @@ import type {
   EngineRunListItem,
   EvidenceItem,
   EvidenceSummary,
+  ExtractionRecord,
+  ExtractedRecordReviewRequest,
   Field,
   ImpactReport,
   NodeRunState,
@@ -55,6 +57,8 @@ import type {
   ManagedAuthUsersResponse,
   NodeTypeCatalogue,
   NptSummary,
+  OperationCreatePayload,
+  EventCreatePayload,
   OperationRow,
   EventRow,
   TimelinePage,
@@ -441,6 +445,8 @@ export const drillingApi = {
     } = {},
     signal?: AbortSignal,
   ) => api.get<Page<OperationRow>>('/operations', { query: params, signal, validate: expect.paged() }),
+  createOperation: (body: OperationCreatePayload, idempotencyKey?: string) =>
+    api.post<OperationRow & WithTransitions>('/operations', body, idempotencyHeader(idempotencyKey)),
   getOperation: (operationId: string, signal?: AbortSignal) =>
     api.get<OperationRow>(`/operations/${enc(operationId)}`, { signal }),
   updateOperation: (
@@ -486,6 +492,8 @@ export const drillingApi = {
     } = {},
     signal?: AbortSignal,
   ) => api.get<Page<EventRow>>('/events', { query: params, signal, validate: expect.paged() }),
+  createEvent: (body: EventCreatePayload, idempotencyKey?: string) =>
+    api.post<EventRow & WithTransitions>('/events', body, idempotencyHeader(idempotencyKey)),
   getEvent: (eventId: string, signal?: AbortSignal) => api.get<EventRow>(`/events/${enc(eventId)}`, { signal }),
   updateEvent: (
     eventId: string,
@@ -510,6 +518,19 @@ export const drillingApi = {
   listDocuments: (params: { well_id?: string; doc_type?: string } = {}, signal?: AbortSignal) =>
     api.get<Page<DocumentRow>>('/documents', { query: params, signal, validate: expect.paged() }),
   getDocument: (documentId: string, signal?: AbortSignal) => api.get<DocumentDetail>(`/documents/${enc(documentId)}`, { signal }),
+  getExtractedRecord: (documentId: string, recordId: string, signal?: AbortSignal) =>
+    api.get<ExtractionRecord>(`/documents/${enc(documentId)}/records/${enc(recordId)}`, { signal }),
+  reviewExtractedRecord: (
+    documentId: string,
+    recordId: string,
+    body: ExtractedRecordReviewRequest,
+    idempotencyKey?: string,
+  ) =>
+    api.patch<ExtractionRecord>(
+      `/documents/${enc(documentId)}/records/${enc(recordId)}/review`,
+      body,
+      idempotencyHeader(idempotencyKey),
+    ),
   documentProvenance: (documentId: string, signal?: AbortSignal) =>
     api.get<DocumentProvenance>(`/documents/${enc(documentId)}/provenance`, { signal }),
   uploadDocument: async (
@@ -577,6 +598,11 @@ export const drillingApi = {
   reportKinds: (signal?: AbortSignal) => api.get<{ kinds: ReportKind[]; note: string }>('/reports/kinds', { signal }),
   buildReport: (wellId: string, kind: string, signal?: AbortSignal) =>
     api.get<{ report: Report }>(`/wells/${enc(wellId)}/reports/${enc(kind)}`, { signal }),
+  exportReport: (wellId: string, kind: string, signal?: AbortSignal) =>
+    api.getBlob(`/wells/${enc(wellId)}/reports/${enc(kind)}/export`, {
+      signal,
+      validate: expect.object('report'),
+    }),
 
   // ------------------------------------------------------------------ workflows
   listWorkflows: (signal?: AbortSignal) => api.get<Page<Workflow>>('/workflows', { signal, validate: expect.paged() }),

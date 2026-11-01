@@ -11,10 +11,10 @@ Parsers are deliberately honest about what they can and cannot see:
 * nothing is invented: a parser that fails raises :class:`UnsupportedFormat` or
   :class:`ExtractionFailed` and the ingestion job records the failure.
 
-Supported today (dependencies already in the project): PDF (``pypdf``), DOCX (``python-docx``),
-XLSX/XLSM (``openpyxl``), CSV/TSV, and plain text/markdown. Scanned/image PDFs are detected
-(no extractable text) and flagged ``ocr_required`` instead of silently returning an empty
-document.
+Supported today: PDF (``pypdf``), DOCX (``python-docx``), XLSX/XLSM (``openpyxl``), CSV/TSV,
+and plain text/markdown. Scanned/image PDF pages are flagged ``ocr_required``; an operator may enable
+the optional PDFium + Tesseract path. Missing OCR dependencies, runtime failures, page limits, and
+truncation remain visible instead of being treated as complete extraction.
 """
 
 from __future__ import annotations
@@ -22,6 +22,7 @@ from __future__ import annotations
 import csv
 import datetime as dt
 import io
+import math
 import re
 import zipfile
 from collections.abc import Sequence
@@ -31,6 +32,7 @@ from xml.etree import ElementTree
 from xml.parsers import expat
 
 from drillai.core.errors import ExtractionFailed, UnsupportedFormat
+from drillai.ingestion.ocr import OcrLine, OcrProvider, OcrUnavailable
 
 __all__ = [
     "PARSER_REGISTRY",
@@ -225,10 +227,13 @@ class ParsedPage:
     text: str = ""
     width_pt: float | None = None
     height_pt: float | None = None
+    rotation: int | None = None
     regions: list[ParsedRegion] = field(default_factory=list)
     has_tables: bool = False
     has_figures: bool = False
     layout: dict[str, Any] = field(default_factory=dict)
+    ocr_applied: bool = False
+    ocr_status: str = "not_required"
 
 
 @dataclass
@@ -288,7 +293,16 @@ def detect_content_type(filename: str, declared: str | None = None) -> str:
     return declared or "application/octet-stream"
 
 
-def parse_bytes(data: bytes, *, filename: str, content_type: str | None = None) -> ParsedDocument:
+def parse_bytes(
+    data: bytes,
+    *,
+    filename: str,
+    content_type: str | None = None,
+    ocr_provider: OcrProvider | None = None,
+    ocr_max_pages: int = 20,
+    ocr_dpi: int = 200,
+    ocr_max_page_pixels: int = 12_000_000,
+) -> ParsedDocument:
     if not data:
         raise ExtractionFailed("file is empty")
     if len(data) > MAX_BYTES:
@@ -299,6 +313,13 @@ def parse_bytes(data: bytes, *, filename: str, content_type: str | None = None) 
         raise UnsupportedFormat(
             f"no parser registered for {resolved!r}",
             details={"filename": filename, "supported": sorted(PARSER_REGISTRY)},
+        )
+    if resolved == "application/pdf" and ocr_provider is not None:
+        parser = PdfParser(
+            ocr_provider=ocr_provider,
+            ocr_max_pages=ocr_max_pages,
+            ocr_dpi=ocr_dpi,
+            ocr_max_page_pixels=ocr_max_page_pixels,
         )
     return parser.parse(data, filename=filename)
 
@@ -1051,7 +1072,28 @@ def parse_xlsx(data: bytes, *, filename: str) -> ParsedDocument:
 class PdfParser:
     content_types = ("application/pdf",)
     name = "pdf"
-    version = "1.0.0"
+    version = "1.2.0"
+    MAX_OCR_LINES_PER_PAGE = 500
+    MAX_OCR_TEXT_CHARS_PER_PAGE = 1_000_000
+
+    def __init__(
+        self,
+        *,
+        ocr_provider: OcrProvider | None = None,
+        ocr_max_pages: int = 20,
+        ocr_dpi: int = 200,
+        ocr_max_page_pixels: int = 12_000_000,
+    ) -> None:
+        if not 1 <= ocr_max_pages <= MAX_PAGES:
+            raise ValueError(f"ocr_max_pages must be between 1 and {MAX_PAGES}")
+        if not 72 <= ocr_dpi <= 300:
+            raise ValueError("ocr_dpi must be between 72 and 300")
+        if not 100_000 <= ocr_max_page_pixels <= 30_000_000:
+            raise ValueError("ocr_max_page_pixels must be between 100,000 and 30,000,000")
+        self.ocr_provider = ocr_provider
+        self.ocr_max_pages = ocr_max_pages
+        self.ocr_dpi = ocr_dpi
+        self.ocr_max_page_pixels = ocr_max_page_pixels
 
     def parse(self, data: bytes, *, filename: str) -> ParsedDocument:
         import pypdf
@@ -1068,10 +1110,15 @@ class PdfParser:
         for index, page in enumerate(reader.pages[:MAX_PAGES], start=1):
             try:
                 text = page.extract_text() or ""
-            except Exception as exc:
+            except Exception:
                 text = ""
-                warnings.append(f"page {index}: text extraction failed ({exc})")
+                warnings.append(f"page {index}: text extraction failed")
             box = page.mediabox
+            rotation = int(page.rotation or 0) % 360
+            width_pt = float(box.width) if box else None
+            height_pt = float(box.height) if box else None
+            if rotation in {90, 270}:
+                width_pt, height_pt = height_pt, width_pt
             regions: list[ParsedRegion] = []
             if text.strip():
                 regions.append(
@@ -1087,24 +1134,36 @@ class PdfParser:
                 ParsedPage(
                     page_number=index,
                     text=text,
-                    width_pt=float(box.width) if box else None,
-                    height_pt=float(box.height) if box else None,
+                    width_pt=width_pt,
+                    height_pt=height_pt,
+                    rotation=rotation,
                     regions=regions,
                     layout={"source": "pdf", "extractor": "pypdf"},
+                    ocr_status="not_required" if text.strip() else ("disabled" if self.ocr_provider is None else "pending"),
                 )
             )
         if len(reader.pages) > MAX_PAGES:
             warnings.append(f"document truncated to the first {MAX_PAGES} pages")
-        ocr_required_pages = [page.page_number for page in pages if not page.text.strip()]
-        if ocr_required_pages:
-            if len(ocr_required_pages) == len(pages):
-                warnings.append(
-                    "no extractable text: the PDF is probably scanned (OCR required before extraction)"
-                )
-            else:
-                warnings.append(
-                    f"{len(ocr_required_pages)} PDF page(s) have no extractable text; OCR is required for those pages"
-                )
+
+        if self.ocr_provider is not None:
+            self._apply_ocr(data, pages, warnings)
+
+        ocr_required_pages = [
+            page.page_number
+            for page in pages
+            if not page.text.strip() or page.ocr_status in {"failed", "unavailable", "renderer_unavailable", "page_limit", "pixel_limit", "truncated"}
+        ]
+        if ocr_required_pages and self.ocr_provider is None:
+            warnings.append(
+                f"{len(ocr_required_pages)} PDF page(s) have no extractable text (possibly scanned or image-only); "
+                "OCR is required for those pages but is disabled, so they remain incomplete"
+            )
+        elif ocr_required_pages and not any("OCR" in warning for warning in warnings):
+            warnings.append(
+                f"{len(ocr_required_pages)} PDF page(s) remain incomplete after OCR processing"
+            )
+
+        provider = self.ocr_provider
         return ParsedDocument(
             pages=pages,
             content_type="application/pdf",
@@ -1113,15 +1172,243 @@ class PdfParser:
             metadata={
                 "filename": filename,
                 "page_count": len(pages),
+                "ocr_enabled": provider is not None,
+                "ocr_provider": provider.name if provider is not None else None,
+                "ocr_provider_version": provider.version if provider is not None else None,
+                "ocr_applied_pages": [page.page_number for page in pages if page.ocr_applied],
                 "ocr_required": bool(ocr_required_pages),
                 "ocr_required_pages": ocr_required_pages,
+                "ocr_status_by_page": {str(page.page_number): page.ocr_status for page in pages},
             },
             warnings=warnings,
         )
 
+    def _apply_ocr(self, data: bytes, pages: list[ParsedPage], warnings: list[str]) -> None:
+        pending = [page for page in pages if not page.text.strip()]
+        if not pending:
+            return
+        provider = self.ocr_provider
+        if provider is None:
+            return
+        try:
+            available, reason = provider.availability()
+        except Exception:
+            available, reason = False, None
+        if not available:
+            for page in pending:
+                page.ocr_status = "unavailable"
+                page.layout["ocr"] = {"status": "unavailable", "provider": provider.name}
+            suffix = f": {reason}" if reason else ""
+            warnings.append(f"OCR provider {provider.name!r} is unavailable{suffix}")
+            return
+        try:
+            import pypdfium2 as pdfium
+        except ImportError:
+            for page in pending:
+                page.ocr_status = "renderer_unavailable"
+                page.layout["ocr"] = {"status": "renderer_unavailable", "provider": provider.name}
+            warnings.append("OCR was enabled, but PDFium is not installed; install the optional backend OCR extra")
+            return
+        try:
+            pdf = pdfium.PdfDocument(data)
+        except Exception:
+            for page in pending:
+                page.ocr_status = "failed"
+                page.layout["ocr"] = {"status": "renderer_failed", "provider": provider.name}
+            warnings.append("OCR was enabled, but the PDF renderer could not open the document")
+            return
 
-def parse_pdf(data: bytes, *, filename: str) -> ParsedDocument:
-    return PdfParser().parse(data, filename=filename)
+        try:
+            for index, page in enumerate(pending):
+                if index >= self.ocr_max_pages:
+                    page.ocr_status = "page_limit"
+                    page.layout["ocr"] = {"status": "page_limit", "provider": provider.name}
+                    continue
+                try:
+                    self._recognize_page(pdf, page, provider, warnings)
+                except OcrUnavailable as exc:
+                    page.ocr_status = "failed"
+                    page.layout["ocr"] = {"status": "failed", "provider": provider.name}
+                    warnings.append(f"page {page.page_number}: OCR failed ({exc})")
+                except Exception:
+                    page.ocr_status = "failed"
+                    page.layout["ocr"] = {"status": "failed", "provider": provider.name}
+                    warnings.append(f"page {page.page_number}: OCR failed during rendering or processing")
+            if len(pending) > self.ocr_max_pages:
+                warnings.append(
+                    f"OCR page limit reached: processed at most {self.ocr_max_pages} blank PDF pages"
+                )
+        finally:
+            close = getattr(pdf, "close", None)
+            if callable(close):
+                close()
+
+    def _recognize_page(self, pdf: Any, page: ParsedPage, provider: OcrProvider, warnings: list[str]) -> None:
+        if page.page_number > len(pdf):
+            raise OcrUnavailable("the PDF renderer returned fewer pages than the text parser")
+        pdf_page = pdf[page.page_number - 1]
+        try:
+            width_pt, height_pt = (float(value) for value in pdf_page.get_size())
+        except Exception as exc:
+            raise OcrUnavailable("the PDF renderer returned invalid page dimensions") from exc
+        if not math.isfinite(width_pt) or not math.isfinite(height_pt) or width_pt <= 0 or height_pt <= 0:
+            page.ocr_status = "pixel_limit"
+            page.layout["ocr"] = {"status": "invalid_page_size", "provider": provider.name}
+            warnings.append(f"page {page.page_number}: OCR skipped because the page dimensions are invalid")
+            return
+        page.width_pt = width_pt
+        page.height_pt = height_pt
+        scale = min(
+            self.ocr_dpi / 72.0,
+            math.sqrt(self.ocr_max_page_pixels / (width_pt * height_pt)) * 0.98,
+        )
+        if scale < 0.25:
+            page.ocr_status = "pixel_limit"
+            page.layout["ocr"] = {"status": "pixel_limit", "provider": provider.name}
+            warnings.append(f"page {page.page_number}: OCR skipped because safe rendering would be too small")
+            return
+
+        bitmap = pdf_page.render(scale=scale)
+        image = bitmap.to_pil()
+        if image.width * image.height > self.ocr_max_page_pixels:
+            # Rounding at the PDFium boundary can exceed the pixel budget by a handful of pixels.
+            shrink = math.sqrt(self.ocr_max_page_pixels / (image.width * image.height))
+            image.thumbnail(
+                (max(1, math.floor(image.width * shrink)), max(1, math.floor(image.height * shrink)))
+            )
+        image_buffer = io.BytesIO()
+        image.save(image_buffer, format="PNG", optimize=True)
+        recognized = provider.recognize(image_buffer.getvalue())
+        valid_lines: list[OcrLine] = []
+        invalid_line_count = 0
+        for line in recognized:
+            if (
+                not isinstance(line, OcrLine)
+                or not isinstance(line.text, str)
+                or not line.text.strip()
+                or isinstance(line.confidence, bool)
+                or not isinstance(line.confidence, (int, float))
+                or not math.isfinite(float(line.confidence))
+                or not 0.0 <= float(line.confidence) <= 1.0
+                or not isinstance(line.bbox, tuple)
+                or len(line.bbox) != 4
+                or any(isinstance(value, bool) or not isinstance(value, int) for value in line.bbox)
+                or line.bbox[0] < 0
+                or line.bbox[1] < 0
+                or line.bbox[2] <= 0
+                or line.bbox[3] <= 0
+                or line.bbox[0] + line.bbox[2] > image.width
+                or line.bbox[1] + line.bbox[3] > image.height
+            ):
+                invalid_line_count += 1
+                continue
+            valid_lines.append(line)
+        lines = valid_lines[: self.MAX_OCR_LINES_PER_PAGE]
+        truncated = invalid_line_count > 0 or len(valid_lines) > len(lines)
+        if invalid_line_count:
+            warnings.append(f"page {page.page_number}: OCR discarded {invalid_line_count} invalid line result(s)")
+        text_parts: list[str] = []
+        included_lines: list[OcrLine] = []
+        char_count = 0
+        for line in lines:
+            remaining = self.MAX_OCR_TEXT_CHARS_PER_PAGE - char_count
+            if remaining <= 0:
+                truncated = True
+                break
+            line_text = line.text[:remaining]
+            if len(line_text) < len(line.text):
+                truncated = True
+            text_parts.append(line_text)
+            included_lines.append(line)
+            char_count += len(line_text) + 1
+            if truncated and char_count >= self.MAX_OCR_TEXT_CHARS_PER_PAGE:
+                break
+        extracted_text = "\n".join(text_parts).strip()
+        page.ocr_applied = True
+        page.ocr_status = "truncated" if truncated else ("applied" if extracted_text else "no_text")
+        page.layout["ocr"] = {
+            "status": page.ocr_status,
+            "provider": provider.name,
+            "provider_version": provider.version,
+            "rendered_width_px": image.width,
+            "rendered_height_px": image.height,
+            "effective_dpi": round(scale * 72.0, 1),
+            "line_count": len(included_lines),
+            "lines_truncated": truncated,
+        }
+        if not extracted_text:
+            warnings.append(f"page {page.page_number}: OCR completed but recognized no text")
+            return
+        page.text = extracted_text
+        x_scale = width_pt / image.width
+        y_scale = height_pt / image.height
+        left = min(line.bbox[0] for line in included_lines)
+        top = min(line.bbox[1] for line in included_lines)
+        right = max(line.bbox[0] + line.bbox[2] for line in included_lines)
+        bottom = max(line.bbox[1] + line.bbox[3] for line in included_lines)
+        confidence = sum(
+            line.confidence * max(1, len(line.text)) for line in included_lines
+        ) / sum(max(1, len(line.text)) for line in included_lines)
+        line_boxes = [
+            {
+                "line": index,
+                "text": line.text[:1000],
+                "text_truncated": len(line.text) > 1000,
+                "confidence": round(line.confidence, 6),
+                "bbox_px": {
+                    "x0": line.bbox[0],
+                    "y0": line.bbox[1],
+                    "x1": line.bbox[0] + line.bbox[2],
+                    "y1": line.bbox[1] + line.bbox[3],
+                },
+            }
+            for index, line in enumerate(included_lines)
+        ]
+        page.regions.append(
+            ParsedRegion(
+                kind="text",
+                order_index=max((region.order_index for region in page.regions), default=-1) + 1,
+                text=extracted_text,
+                bbox={
+                    "x0": left * x_scale,
+                    "y0": top * y_scale,
+                    "x1": right * x_scale,
+                    "y1": bottom * y_scale,
+                },
+                confidence=confidence,
+                source_locator={
+                    "format": "pdf",
+                    "page": page.page_number,
+                    "granularity": "ocr_page_text",
+                    "engine": provider.name,
+                    "engine_version": provider.version,
+                    "coordinate_system": "rendered_page_pixels_top_left",
+                    "rendered_width_px": image.width,
+                    "rendered_height_px": image.height,
+                    "line_boxes": line_boxes,
+                    "line_boxes_truncated": truncated or any(len(line.text) > 1000 for line in included_lines),
+                },
+            )
+        )
+        if truncated:
+            warnings.append(f"page {page.page_number}: OCR output was truncated at the configured size limit")
+
+
+def parse_pdf(
+    data: bytes,
+    *,
+    filename: str,
+    ocr_provider: OcrProvider | None = None,
+    ocr_max_pages: int = 20,
+    ocr_dpi: int = 200,
+    ocr_max_page_pixels: int = 12_000_000,
+) -> ParsedDocument:
+    return PdfParser(
+        ocr_provider=ocr_provider,
+        ocr_max_pages=ocr_max_pages,
+        ocr_dpi=ocr_dpi,
+        ocr_max_page_pixels=ocr_max_page_pixels,
+    ).parse(data, filename=filename)
 
 
 # --------------------------------------------------------------------------- helpers

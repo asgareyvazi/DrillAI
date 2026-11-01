@@ -65,6 +65,104 @@ async def test_create_an_operation(fabric: Fabric) -> None:
     assert body["allowed_transitions"] == []
 
 
+@pytest.mark.parametrize(
+    ("depth_from", "depth_to", "expected_message"),
+    [
+        (1100.0, 1000.0, "depth_to_md_si must not precede depth_from_md_si"),
+        (-1.0, 1000.0, "depth_from_md_si must be a finite non-negative SI value"),
+    ],
+)
+async def test_create_rejects_invalid_measured_depth_intervals(
+    fabric: Fabric,
+    depth_from: float,
+    depth_to: float,
+    expected_message: str,
+) -> None:
+    response = await _create(
+        fabric,
+        fabric.alpha,
+        depth_from_md_si=depth_from,
+        depth_to_md_si=depth_to,
+    )
+    assert response.status_code == 422, response.text
+    assert expected_message in response.json()["error"]["message"]
+
+
+async def test_zero_is_a_valid_measured_depth_interval(fabric: Fabric) -> None:
+    response = await _create(fabric, fabric.alpha, depth_from_md_si=0.0, depth_to_md_si=0.0)
+    assert response.status_code == 201, response.text
+    assert response.json()["depth_from_md_si"] == 0.0
+    assert response.json()["depth_to_md_si"] == 0.0
+
+
+async def test_correction_cannot_invert_an_existing_measured_depth_interval(fabric: Fabric) -> None:
+    created = (
+        await _create(fabric, fabric.alpha, depth_from_md_si=1000.0, depth_to_md_si=1200.0)
+    ).json()
+    response = await fabric.http.patch(
+        f"/api/v1/operations/{created['id']}",
+        json={
+            "expected_updated_at": created["updated_at"],
+            "reason": "The source contains a reversed transcription",
+            "changes": {"depth_to_md_si": 900.0},
+        },
+        headers=fabric.alpha.headers,
+    )
+    assert response.status_code == 422, response.text
+    assert "depth_to_md_si must not precede depth_from_md_si" in response.json()["error"]["message"]
+
+
+async def test_operation_timestamps_require_offsets_and_ordered_windows(fabric: Fabric) -> None:
+    naive = await _create(fabric, fabric.alpha, actual_start="2026-03-15T06:00:00")
+    assert naive.status_code == 422, naive.text
+    assert "timezone offset" in str(naive.json()["error"]["details"]["issues"])
+
+    reversed_window = await _create(
+        fabric,
+        fabric.alpha,
+        actual_start="2026-03-15T08:00:00+00:00",
+        actual_end="2026-03-15T07:00:00+00:00",
+    )
+    assert reversed_window.status_code == 422, reversed_window.text
+    assert "actual_end must not precede actual_start" in reversed_window.json()["error"]["message"]
+
+    reversed_plan = await _create(
+        fabric,
+        fabric.alpha,
+        planned_start="2026-03-15T08:00:00+00:00",
+        planned_end="2026-03-15T07:00:00+00:00",
+    )
+    assert reversed_plan.status_code == 422, reversed_plan.text
+    assert "planned_end must not precede planned_start" in reversed_plan.json()["error"]["message"]
+
+
+async def test_operation_correction_rejects_naive_datetime(fabric: Fabric) -> None:
+    created = (await _create(fabric, fabric.alpha, actual_start="2026-03-15T06:00:00+00:00")).json()
+    response = await fabric.http.patch(
+        f"/api/v1/operations/{created['id']}",
+        json={
+            "expected_updated_at": created["updated_at"],
+            "reason": "The timestamp source omitted its timezone",
+            "changes": {"actual_start": "2026-03-15T06:30:00"},
+        },
+        headers=fabric.alpha.headers,
+    )
+    assert response.status_code == 422, response.text
+    assert "timezone offset" in response.json()["error"]["message"]
+
+    inverted_end = await fabric.http.patch(
+        f"/api/v1/operations/{created['id']}",
+        json={
+            "expected_updated_at": created["updated_at"],
+            "reason": "The end timestamp must not precede the start",
+            "changes": {"actual_end": "2026-03-15T05:30:00+00:00"},
+        },
+        headers=fabric.alpha.headers,
+    )
+    assert inverted_end.status_code == 422, inverted_end.text
+    assert "actual_end must not precede actual_start" in inverted_end.json()["error"]["message"]
+
+
 async def test_a_planned_operation_starts_planned_and_may_move(fabric: Fabric) -> None:
     response = await _create(fabric, fabric.alpha, operation_class="plan", sequence=1)
     assert response.status_code == 201, response.text

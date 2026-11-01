@@ -40,28 +40,45 @@ function SectionBody({ section }: { section: ReportSection }) {
   if (section.items.length === 0) {
     return (
       <EmptyState
-        message={section.empty_reason ?? t('reports.emptySection')}
-        hint={section.empty_reason ? undefined : 'Nothing was recorded or computed for this section.'}
+        message={section.note ?? t('reports.emptySection')}
+        hint={section.note ? undefined : t('reports.emptySectionHint')}
       />
     )
   }
   const keys = Array.from(new Set(section.items.flatMap((item) => Object.keys(item)))).slice(0, 8)
   return (
-    <Table
-      rows={section.items}
-      rowKey={(_row, index: number) => `${section.key}-${index}`}
-      columns={keys.map((key) => ({
-        key,
-        header: humanise(key),
-        render: (row: Record<string, unknown>) => {
-          const value = row[key]
-          if (value === null || value === undefined) return '—'
-          if (typeof value === 'object') return <Json value={value} max={30} />
-          return String(value)
-        },
-      }))}
-    />
+    <div className="space-y-3">
+      {section.note ? <p className="text-xs text-graphite-500">{section.note}</p> : null}
+      <Table
+        rows={section.items}
+        rowKey={(_row, index: number) => `${section.key}-${index}`}
+        columns={keys.map((key) => ({
+          key,
+          header: humanise(key),
+          render: (row: Record<string, unknown>) => {
+            const value = row[key]
+            if (value === null || value === undefined) return '—'
+            if (typeof value === 'object') return <Json value={value} max={30} />
+            return String(value)
+          },
+        }))}
+      />
+    </div>
   )
+}
+
+function downloadReportJson(blob: Blob, kind: string, wellId: string): void {
+  const safeKind = kind.replace(/[^a-zA-Z0-9_-]/g, '_')
+  const safeWellId = wellId.replace(/[^a-zA-Z0-9_-]/g, '_')
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `drillai-${safeKind}-${safeWellId}.json`
+  link.style.display = 'none'
+  document.body.append(link)
+  link.click()
+  link.remove()
+  window.setTimeout(() => URL.revokeObjectURL(url), 0)
 }
 
 export default function ReportsWorkspace() {
@@ -75,6 +92,10 @@ export default function ReportsWorkspace() {
   const build = useMutation({
     mutationFn: (reportKind: string) => drillingApi.buildReport(id, reportKind),
     onSuccess: (data) => setReport(data.report),
+  })
+  const exportJson = useMutation({
+    mutationFn: (reportKind: string) => drillingApi.exportReport(id, reportKind),
+    onSuccess: (blob, reportKind) => downloadReportJson(blob, reportKind, id),
   })
 
   return (
@@ -128,26 +149,31 @@ export default function ReportsWorkspace() {
                 {report.period_from && <Badge tone="neutral">from {formatDateTime(report.period_from)}</Badge>}
                 {report.period_to && <Badge tone="neutral">to {formatDateTime(report.period_to)}</Badge>}
                 <Badge tone="neutral">{report.sections.length} sections</Badge>
+                <Button
+                  onClick={() => exportJson.mutate(report.kind)}
+                  disabled={exportJson.isPending}
+                  data-testid="report-export-json"
+                >
+                  {exportJson.isPending ? t('reports.exporting') : t('reports.exportJson')}
+                </Button>
               </>
             }
           >
             <div className="flex flex-wrap gap-2">
               {report.sections.map((section) => (
                 <Badge key={section.key} tone={SECTION_TONE[section.kind]}>
-                  {humanise(section.kind)}: {section.items.length}
+                  {humanise(section.kind)}: {section.count}
                 </Badge>
               ))}
             </div>
-            {report.limitations.length > 0 && (
-              <ul className="mt-3 list-disc ps-4 text-[11px] text-warning">
-                {report.limitations.map((limitation) => (
-                  <li key={limitation}>{limitation}</li>
-                ))}
-              </ul>
-            )}
-            {report.sources.length > 0 && (
-              <p className="mt-2 text-[11px] text-graphite-500">sources: {report.sources.join(', ')}</p>
-            )}
+            {exportJson.error ? (
+              <ErrorState error={exportJson.error} onRetry={() => exportJson.mutate(report.kind)} />
+            ) : null}
+            <p className="mt-3 text-xs text-graphite-500">{report.rendering_note}</p>
+            <details className="mt-3 rounded border border-graphite-200 p-3 text-xs dark:border-graphite-800">
+              <summary className="cursor-pointer font-medium">{t('reports.metadata')}</summary>
+              <div className="mt-2"><Json value={report.metadata} max={80} /></div>
+            </details>
           </Card>
 
           {report.sections.map((section) => (

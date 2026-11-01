@@ -16,7 +16,8 @@
  */
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -26,9 +27,21 @@ import OperationsWorkspace from './OperationsWorkspace'
 import eventsFixture from '../../test/fixtures/events-list.json'
 import operationsFixture from '../../test/fixtures/operations-list.json'
 import timelineFixture from '../../test/fixtures/operations-timeline.json'
-import type { EventRow, OperationRow, TimelinePage } from '../../api/types'
+import type { EventRow, OperationRow, TimelinePage, WellStructure } from '../../api/types'
 
 const operations = operationsFixture as unknown as { items: OperationRow[]; total: number }
+const manualStructure = {
+  well: { project_id: 'project_capture', active_wellbore_id: 'wellbore_capture' },
+  wellbores: [
+    {
+      id: 'wellbore_capture',
+      name: 'Main bore',
+      status: 'drilling',
+      datum: 'kb',
+      sections: [{ id: 'section_capture', sequence: 1, name: 'Surface hole' }],
+    },
+  ],
+} as unknown as WellStructure
 const events = eventsFixture as unknown as { items: EventRow[]; total: number }
 const timeline = timelineFixture as unknown as TimelinePage
 
@@ -40,6 +53,9 @@ const served = vi.hoisted(() => ({
   operationsFail: false,
   operations: null as unknown,
   events: null as unknown,
+  wellStructure: null as unknown,
+  createOperation: vi.fn(),
+  createEvent: vi.fn(),
 }))
 
 vi.mock('../../api/endpoints', () => ({
@@ -50,6 +66,9 @@ vi.mock('../../api/endpoints', () => ({
         : Promise.resolve(served.operations),
     listEvents: () => Promise.resolve(served.events),
     wellTimeline: () => Promise.resolve(timelineFixture),
+    wellStructure: () => Promise.resolve(served.wellStructure),
+    createOperation: served.createOperation,
+    createEvent: served.createEvent,
     transitionOperation: vi.fn(),
     updateOperation: vi.fn(),
     transitionEvent: vi.fn(),
@@ -95,6 +114,9 @@ beforeEach(() => {
   served.operationsFail = false
   served.operations = operationsFixture
   served.events = eventsFixture
+  served.wellStructure = manualStructure
+  served.createOperation.mockReset().mockResolvedValue({})
+  served.createEvent.mockReset().mockResolvedValue({})
   window.localStorage.clear()
 })
 
@@ -110,6 +132,46 @@ describe('OperationsWorkspace: the operations tab', () => {
       expect(screen.getByText(row.name)).toBeInTheDocument()
     }
     expect(screen.getByText(`${operations.total} records matching the current filter`)).toBeInTheDocument()
+  })
+
+  it('opens the manual-operation form and creates an actual with scoped provenance', async () => {
+    const user = userEvent.setup()
+    renderWorkspace()
+
+    await user.click(screen.getByTestId('manual-operation-toggle'))
+    await screen.findByTestId('manual-operation-form')
+    await user.type(screen.getByTestId('manual-operation-name'), 'Manual drilling entry')
+    await user.click(screen.getByTestId('manual-operation-submit'))
+
+    await waitFor(() => expect(served.createOperation).toHaveBeenCalledTimes(1))
+    expect(served.createOperation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        project_id: 'project_capture',
+        well_id: 'wel_capture',
+        wellbore_id: 'wellbore_capture',
+        name: 'Manual drilling entry',
+        operation_class: 'actual',
+        kind: 'drilling',
+        status: 'completed',
+        source_kind: 'manual',
+      }),
+      expect.stringMatching(/^ui-operation-create-wel_capture-/),
+    )
+  })
+
+  it('blocks a manual operation whose ending measured depth precedes its start', async () => {
+    const user = userEvent.setup()
+    renderWorkspace()
+
+    await user.click(screen.getByTestId('manual-operation-toggle'))
+    await screen.findByTestId('manual-operation-form')
+    await user.type(screen.getByTestId('manual-operation-name'), 'Invalid depth interval')
+    await user.type(screen.getByTestId('manual-operation-depth-from'), '1100')
+    await user.type(screen.getByTestId('manual-operation-depth-to'), '1000')
+    await user.click(screen.getByTestId('manual-operation-submit'))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Measured depth to must not be less than measured depth from.')
+    expect(served.createOperation).not.toHaveBeenCalled()
   })
 
   it('shows an actual operation’s actual hours and labels it an actual', async () => {
@@ -175,6 +237,55 @@ describe('OperationsWorkspace: the events tab', () => {
     await screen.findByText(record.title)
     expect(screen.getAllByRole('row').slice(1)).toHaveLength(events.items.length)
     expect(screen.getByText(`${events.total} records matching the current filter`)).toBeInTheDocument()
+  })
+
+  it('opens the manual-event form and records an event without inferring NPT or a cause', async () => {
+    const user = userEvent.setup()
+    renderWorkspace('?tab=events')
+
+    await user.click(screen.getByTestId('manual-event-toggle'))
+    await screen.findByTestId('manual-event-form')
+    await user.type(screen.getByTestId('manual-event-title'), 'Manual safety observation')
+    await user.click(screen.getByTestId('manual-event-submit'))
+
+    await waitFor(() => expect(served.createEvent).toHaveBeenCalledTimes(1))
+    expect(served.createEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        well_id: 'wel_capture',
+        title: 'Manual safety observation',
+        kind: 'observation',
+        severity: 'low',
+        is_npt: false,
+        cause_basis: 'unknown',
+        classification_source: 'recorded',
+        source_kind: 'manual',
+      }),
+      expect.stringMatching(/^ui-event-create-wel_capture-/),
+    )
+  })
+
+  it('requires an explicit category and positive hours before charging a manual event as NPT', async () => {
+    const user = userEvent.setup()
+    renderWorkspace('?tab=events')
+
+    await user.click(screen.getByTestId('manual-event-toggle'))
+    await screen.findByTestId('manual-event-form')
+    await user.type(screen.getByTestId('manual-event-title'), 'Manual stuck-pipe event')
+    await user.click(screen.getByTestId('manual-event-is-npt'))
+    await user.selectOptions(screen.getByTestId('manual-event-npt-category'), 'stuck_pipe')
+    await user.type(screen.getByTestId('manual-event-npt-hours'), '1.5')
+    await user.click(screen.getByTestId('manual-event-submit'))
+
+    await waitFor(() => expect(served.createEvent).toHaveBeenCalledTimes(1))
+    expect(served.createEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'Manual stuck-pipe event',
+        is_npt: true,
+        npt_category: 'stuck_pipe',
+        npt_hours: 1.5,
+      }),
+      expect.stringMatching(/^ui-event-create-wel_capture-/),
+    )
   })
 
   it('charges NPT from the event’s own hours and category', async () => {

@@ -111,6 +111,36 @@ describe('request: transport', () => {
     expect((init.headers as Record<string, string>)['X-Dev-Roles']).toBe('viewer')
   })
 
+  it('returns exact JSON download bytes after validating the response body', async () => {
+    const bytes = '{"report":{"kind":"daily_drilling"}}'
+    fetchMock.mockResolvedValue(
+      new Response(bytes, {
+        headers: { 'Content-Type': 'application/json', ETag: '"server-digest"' },
+      }),
+    )
+
+    const blob = await api.getBlob('/wells/wel_1/reports/daily_drilling/export', {
+      validate: (payload) =>
+        typeof payload === 'object' && payload !== null && 'report' in payload
+          ? null
+          : 'expected report envelope',
+    })
+
+    expect(await blob.text()).toBe(bytes)
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe('/api/v1/wells/wel_1/reports/daily_drilling/export')
+    expect((init.headers as Record<string, string>).Accept).toBe('application/json')
+  })
+
+  it('refuses a non-JSON successful download instead of saving an HTML error page', async () => {
+    fetchMock.mockResolvedValue(
+      new Response('<html>proxy error</html>', { headers: { 'Content-Type': 'text/html' } }),
+    )
+    const error = (await api.getBlob('/reports/export').catch((caught: unknown) => caught)) as ApiError
+    expect(error).toBeInstanceOf(ApiError)
+    expect(error.kind).toBe('malformed')
+  })
+
   it('returns undefined for an empty 204 response instead of throwing on JSON parse', async () => {
     fetchMock.mockResolvedValue(new Response(null, { status: 204 }))
     await expect(request('/workflows/wfl_1')).resolves.toBeUndefined()

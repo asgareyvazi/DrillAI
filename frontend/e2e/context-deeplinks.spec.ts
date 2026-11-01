@@ -251,7 +251,7 @@ test.describe('context, deep links and reloads', () => {
           query: '',
           status: 404,
           maxMatches: 1,
-          reason: 'the journey follows a deep link to a run the server confirms does not exist',
+          reason: 'the missing-run deep link is a terminal 404 and must not be silently replayed',
         },
       ],
     })

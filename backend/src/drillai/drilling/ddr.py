@@ -1617,6 +1617,44 @@ class DdrProcessor:
             for record, values in valid_rows
             if record.id not in existing_by_record
         ]
+        if new_rows:
+            current_actual_trajectories = (
+                await self.session.execute(
+                    select(Trajectory).where(
+                        Trajectory.org_id == self.org_id,
+                        Trajectory.wellbore_id == document.wellbore_id,
+                        Trajectory.kind == "actual",
+                        Trajectory.is_current.is_(True),
+                    )
+                )
+            ).scalars().all()
+            incompatible_trajectories = [
+                trajectory
+                for trajectory in current_actual_trajectories
+                if trajectory.source_document_id != document.id
+            ]
+            if incompatible_trajectories:
+                reason = (
+                    "survey-frame compatibility has not been explicitly established: the existing "
+                    "current trajectory is anchored to a different or unattributed document, and "
+                    "vertical datum and azimuth-reference compatibility cannot be inferred; queued "
+                    "for human review"
+                )
+                for record, _values in new_rows:
+                    report.records_needing_review.append(record.id)
+                    report.not_promoted.append(
+                        {
+                            "record_id": record.id,
+                            "record_type": "survey_station",
+                            "reason": reason,
+                        }
+                    )
+                report.warnings.append(
+                    f"did not promote {len(new_rows)} survey station(s) from document {document.id}; "
+                    "cross-document survey-frame compatibility requires explicit human evidence"
+                )
+                return
+
         if dry_run:
             report.trajectory_stations_created = len(new_rows)
             return

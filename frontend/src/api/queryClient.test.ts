@@ -23,6 +23,11 @@ describe('the query client', () => {
     expect(queries?.networkMode).toBe('always')
   })
 
+  it('does not replay a cached terminal failure just because an observer remounts', () => {
+    const queries = createQueryClient().getDefaultOptions().queries
+    expect(queries?.retryOnMount).toBe(false)
+  })
+
   it('does not refetch every screen when a window regains focus, and holds data for a minute', () => {
     const queries = createQueryClient().getDefaultOptions().queries
     expect(queries?.refetchOnWindowFocus).toBe(false)

@@ -100,11 +100,12 @@ it holds to and `docs/FRONTEND_TESTING.md` lists what is verified and how.
 | --- | --- | --- |
 | Frontend types | `cd frontend && npm run typecheck` | strict TypeScript with `noUncheckedIndexedAccess` across app, E2E specs and Node config |
 | Frontend lint | `cd frontend && npm run lint` | unused code, `any`, React rules |
-| Frontend unit/component | `cd frontend && npm test` | 340 passed in 32 files |
+| Frontend unit/component | `cd frontend && npm test` | 356 passed in 35 files |
 | Frontend build | `cd frontend && npm run build` | `tsc -b` plus the production Vite build |
-| Backend tests | `cd backend && DRILLAI_TEST_POSTGRES=1 .venv/bin/python -m pytest` | 1,509 passed, 0 skipped in 100 files (embedded PostgreSQL enabled) |
+| Backend tests | `cd backend && DRILLAI_TEST_POSTGRES=1 .venv/bin/python -m pytest` | 1,555 passed, 0 skipped in 106 files (embedded PostgreSQL enabled) |
 | Backend lint | `cd backend && .venv/bin/python -m ruff check .` | style and import hygiene |
 | Migrations | `cd backend && .venv/bin/python -m alembic upgrade head && .venv/bin/python -m alembic check` | no model/migration drift, against a fresh database |
+| Supply chain and secrets | `backend/.venv/bin/python scripts/verify_supply_chain_and_secrets.py` | full-SHA Actions pins, workspace secret scan, `pip-audit`, full frontend `npm audit` at moderate, and production audit at high |
 | Stack verification | `backend/.venv/bin/python scripts/verify_stack.py` | 16 multi-process scenarios: clean migration, backend, dedicated `connector-worker`, real WITSML 1.4.1.1 SOAP & ETP 1.2 Binary Avro ingest, soak metrics, restart recovery & stop |
 | Vendor interop runner | `backend/.venv/bin/python scripts/verify_external_vendor_interop.py --mode harness` | offline WITSML 1.4.1.1 SOAP & ETP 1.2 Binary Avro conformance + opt-in `--mode external` vendor probe |
 | Docker Compose smoke gate | `POSTGRES_PASSWORD=... docker compose up -d --build` | multi-container PostgreSQL, Alembic migrate, backend, `connector-worker`, and Nginx frontend proxy |
@@ -112,12 +113,13 @@ it holds to and `docs/FRONTEND_TESTING.md` lists what is verified and how.
 
 Set `DRILLAI_TEST_POSTGRES=1` to run the twelve PostgreSQL-backed persistence, migration, promotion-index,
 backup/restore, pgvector, worker-fencing, concurrent-upload, and concurrent SQL-CAS tests through the
-repository's embedded PostgreSQL (`pgserver`). The completed PostgreSQL-enabled run reports **1,509 passed, 0 skipped** in 100 test files.
-With the flag unset, the same 1,509-test inventory reports **1,497 passed, 12 skipped**; the skipped cases are the PostgreSQL-marked integration tests, not counted as passes. Linux CI runs the PostgreSQL-enabled suite, while native Windows deselects the twelve PostgreSQL-marked cases with `-m "not postgres"`.
+repository's embedded PostgreSQL (`pgserver`). The completed PostgreSQL-enabled run reports **1,555 passed, 0 skipped** in 106 test files.
+With the flag unset, the same 1,555-test inventory reports **1,543 passed, 12 skipped**; the skipped cases are the PostgreSQL-marked integration tests, not counted as passes. Linux CI runs the PostgreSQL-enabled suite, while native Windows deselects the twelve PostgreSQL-marked cases with `-m "not postgres"`.
 See `docs/WINDOWS-SETUP.md`, `docs/mission-reports/PRODUCTION-READINESS-MATRIX.md`, and
 `docs/mission-reports/CP16-MISSION-REPORT.md` for historical commit-stamped verification provenance. The
-[CP51–CP58 final assurance review](docs/mission-reports/CP51-58-FINAL-ASSURANCE.md) records the current
-worktree evidence, residuals, and the absence of a CI run on its uncommitted contents.
+[CP51–CP58 final assurance review](docs/mission-reports/CP51-58-FINAL-ASSURANCE.md) records that mission's
+exact-head CI evidence and residuals; the current CP59–CP75 source audit and results are in the
+[capability matrix](docs/mission-reports/CP59-CP75-CAPABILITY-MATRIX.md) and final assurance report.
 
 The end-to-end suite is 17 spec files across three deployments of the same product — development
 identity, deterministic fault injection, and authentication enabled — covering the cockpit,
