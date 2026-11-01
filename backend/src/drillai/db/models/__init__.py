@@ -40,6 +40,20 @@ from drillai.db.models.asset import (
     WellFormationMarker,
     WellSection,
 )
+from drillai.db.models.daily_reports import (
+    DAILY_REPORT_PARAMETER_SPECS,
+    REPORT_ACTIVITY_KINDS,
+    REPORT_DEPTH_REFERENCES,
+    REPORT_RECONCILIATION_STATES,
+    REPORT_REVISION_STATUSES,
+    REPORT_SHIFT_CODES,
+    REPORT_SOURCE_KINDS,
+    REPORT_TIME_BASES,
+    DailyDrillingReport,
+    DailyDrillingReportRevision,
+    DailyReportActivity,
+    DailyReportMeasurement,
+)
 from drillai.db.models.design import (
     ARTIFACT_KINDS,
     ARTIFACT_STATES,
@@ -194,8 +208,9 @@ ALL_MODELS = [
     Trajectory, TrajectoryStation,
     # engineering artefacts & assurance
     Artifact, ArtifactVersion, Requirement, Standard, Risk, Lesson, ValidationFinding,
-    # operations, events, measurements
+    # operations, events, measurements and governed daily drilling reports
     Operation, NptCode, Event, TimeSeries, TimeSeriesPoint, Alert, AlertRule, OutboxEvent,
+    DailyDrillingReport, DailyDrillingReportRevision, DailyReportActivity, DailyReportMeasurement,
     # tools, materials, services, readiness
     ServiceCompany, Service, CatalogItem, InventoryItem, EquipmentUnit, Certification,
     BomRequirement, ReadinessAssessment, ReadinessItem,
@@ -234,6 +249,7 @@ __all__ = [
     "CONNECTOR_PROFILES",
     "CONNECTOR_PROVIDERS",
     "CONNECTOR_RUNTIME_STATUSES",
+    "DAILY_REPORT_PARAMETER_SPECS",
     "DATUMS",
     "DOC_STATUSES",
     "DOC_TYPES",
@@ -263,6 +279,13 @@ __all__ = [
     "REGION_KINDS",
     "REGISTRY_KINDS",
     "REGISTRY_STATUSES",
+    "REPORT_ACTIVITY_KINDS",
+    "REPORT_DEPTH_REFERENCES",
+    "REPORT_RECONCILIATION_STATES",
+    "REPORT_REVISION_STATUSES",
+    "REPORT_SHIFT_CODES",
+    "REPORT_SOURCE_KINDS",
+    "REPORT_TIME_BASES",
     "RESOURCE_KINDS",
     "RUN_EVENT_TYPES",
     "RUN_STATUSES",
@@ -303,6 +326,10 @@ __all__ = [
     "ConnectorEvent",
     "ConnectorRun",
     "Conversation",
+    "DailyDrillingReport",
+    "DailyDrillingReportRevision",
+    "DailyReportActivity",
+    "DailyReportMeasurement",
     "Derivation",
     "Document",
     "DocumentChunk",

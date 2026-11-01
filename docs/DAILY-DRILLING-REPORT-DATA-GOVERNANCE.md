@@ -1,0 +1,80 @@
+# Daily Drilling Report Domain and Data Governance
+
+**Decision record:** CP77 (2026-11-01)
+**Status:** Accepted for implementation on `arena/9d8f5568-drillai`
+**Scope:** Daily drilling report (DDR) identity, revision lifecycle, measurement/activity records, import reconciliation, provenance and authorization. This is a domain decision, not field or production acceptance.
+
+## Context
+
+Source review found no first-class DDR entity or revision lifecycle. A DDR is currently a document classification whose extracted records may be promoted into operations, events, trajectories, and twin aspects. That pipeline cannot, by itself, answer which report is authoritative, who corrected a value, what a reviewer accepted, which earlier revision it replaced, or whether an import has converged with a manual report. `ReportingService` builds a transient structured payload and the drilling router exports JSON; neither is a persisted report.
+
+The surrounding platform supplies useful patterns: immutable raw artifacts and document/region provenance; schema-versioned extracted records; tenant-scoped asset resolution; operation/event compare-and-swap and audit; `ChangeRecord` for domain history; `AuditLog` for authorization evidence; and a unit registry that refuses unlabelled or dimensionally invalid measurements. The DDR domain will compose those patterns, not replace their source records.
+
+## Decisions
+
+### 1. Separate logical report identity from report revisions
+
+- A `DailyDrillingReport` is the stable logical identity for one tenant, wellbore, local report date, and normalized identity key. The identity key is the normalized operator report number when supplied, otherwise the explicit shift code. Database uniqueness prevents duplicate logical reports; request idempotency handles safe retries. A changed source document with the same identity is a conflict to reconcile, never a second silently accepted report.
+- The report stores organization, well, and wellbore scope. The well must own the wellbore, all referenced rows must belong to the same organization, and scope disagreement is rejected. New report/source relationships use database foreign keys where the referenced entity is local; service validation still checks tenant and hierarchy because ordinary single-column FKs cannot establish tenant ownership.
+- `DailyDrillingReportRevision` holds a monotonic revision number, typed report metadata/content, status, submit/review actors and times, decision reason, edit version, and optional superseded revision. `(report_id, revision_number)` is unique. A correction is a new revision; an approved historical revision is never edited in place.
+- Drafts may be edited only through a server service with an expected edit version. Submission freezes the revision. A reviewer may approve or reject with a reason and must be a different principal from the submitter. A correction after rejection or approval forks a new draft from the relevant revision. Approval history remains queryable when a later revision supersedes the earlier one.
+- The logical report tracks the latest revision and latest approved revision separately. A draft correction must not make the previously approved revision appear unapproved or erase its audit history.
+
+### 2. Model engineering data as typed records, not an arbitrary JSON payload
+
+- Header fields, operational narrative fields, report identity, timestamps, status, actors and revision numbers are typed columns.
+- Activity spans are separate `DailyReportActivity` rows. Their activity/event class is a controlled vocabulary; operation/NPT classifications are validated against existing canonical vocabularies. Start and end instants are independently nullable and each carries an explicit basis. Depth endpoints are numeric SI metres with an explicit depth reference and basis. A reporting-period boundary is never substituted for an activity/event instant.
+- Numeric measurements are separate `DailyReportMeasurement` rows with a controlled `parameter_key`, expected dimension, canonical SI value/unit, exact source numeric value/unit, value basis, optional explicitly based observation time, and optional depth with reference/basis. The service derives the expected dimension/canonical unit from the parameter catalogue and calls `drillai.telemetry.units.convert`; callers cannot choose an unrelated dimension or claim that an unlabelled number is SI.
+- The initial parameter catalogue is intentionally limited to quantities already supported by the unit engine and a named operational use (measured/hole/bit depth, ROP, WOB, rotary speed, flow rate, standpipe pressure, torque, hookload, mud weight, temperature and funnel-viscosity time). No derived or unsupported quantity is invented to make an import look complete. Extending the catalogue requires a dimension, canonical unit, accepted source units, validation ranges where justified, tests, UI labels and documentation.
+- Narrative-only values remain bounded text columns. Unmapped, ambiguous or unsupported extracted values remain linked source evidence for a human reviewer; they are not smuggled into an untyped JSON measurements blob. JSON is reserved for explicitly schema-versioned configuration/evidence metadata, not the report's engineering facts.
+
+### 3. Treat reporting period, event time and ingestion time as different facts
+
+- `report_date` is the local civil date printed/declared by the report; `report_timezone` is an explicit IANA timezone. It is not recomputed from UTC, machine locale or organization defaults.
+- Any provided instant must contain an offset and is normalized to UTC for storage. Period start/end are optional, independently sourced reporting-period facts; if both are supplied they must be ordered. No period boundary is used as an activity's start, event time or observation time.
+- Each activity endpoint and measurement timestamp is nullable and has a vocabulary such as `observed`, `reported`, `calculated`, `planned`, `inferred`, or `unknown`. Unknown time is represented as no instant plus `unknown`, not a fabricated timestamp. If the source only says the report ends at a time, that remains a period boundary.
+- Every depth states its reference (`md`, `tvd`, `tvdss`, or `unknown`) and basis. Unknown datum/reference is preserved and cannot be converted or merged into a referenced trajectory. A single general report depth does not overwrite `well_sections.actual_bottom_md_si`; the established progress source remains unchanged.
+
+### 4. Preserve source lineage and distinguish source evidence from decisions
+
+- An imported report revision names its source `Document`; its report header, activities and measurements may each cite the exact `ExtractedRecord`, page and region that supported them. Foreign keys protect local record existence; services verify document/record/region tenant and scope agreement and that the source has not been quarantined or superseded.
+- The original document, raw bytes and extracted values remain unchanged by reconciliation. Human acceptance, correction, rejection, and reason are explicit review decisions. A correction keeps the source value and unit alongside the corrected accepted value; the audit/change record identifies the actor, affected field/row, before/after digest or value, source and reason without copying sensitive raw document text into the governance ledger.
+- `AuditLog` answers who was authorized to perform a mutation. `ChangeRecord` and numbered revisions answer what the domain record changed into and from. Both are written transactionally with the mutation; neither is a substitute for the original document.
+- Derived operation/event projections are separate domain records linked to their originating report revision/activity, idempotent on promotion identity, and marked as report-derived. Approval does not silently rewrite or delete other projections. Reconciliation of a correction to already-promoted operational records is an explicit, audited action with conflicts surfaced to a human.
+
+### 5. Server-side authorization, concurrency and retention
+
+- Read, draft/edit, submit, review/approve, reconcile/import and export are distinct permissions/actions. The router declares permission dependencies; the service repeats organization/scope checks; action-level authorization is enforced server-side. UI visibility is never the authorization boundary.
+- Create/import, transitions, corrections and exports support idempotency where retries could duplicate effects. Edits use compare-and-swap `edit_version`; transitions lock/check current state and revision in the same transaction. Concurrent edits or decisions fail as conflicts rather than last-write-wins.
+- State changes, child replacement, `AuditLog`, `ChangeRecord`, idempotency completion, and any promotion/outbox write share a transaction. No public hard-delete route exists. Source documents and referenced revisions are retained; retirement/withdrawal is a governed state change subject to the organization's retention/legal-hold policy.
+- A new table carries `org_id`, explicit indexes and uniqueness, relationships with deliberate `RESTRICT`/cascade behavior, and portable constraints usable on both SQLite and PostgreSQL. Any migration touching existing records must reject unexplained/ambiguous legacy values instead of guessing a repair.
+
+### 6. Import and manual entry share one business lifecycle
+
+- Manual and imported reports create the same logical report and draft revision, use the same typed validation and source/time/unit contracts, submit/review/approve through the same state machine, and render the same revision/export schema.
+- Import is a proposal: extraction confidence, page/region evidence, rule-validation state, missing fields and conflicts are visible. Human reconciliation is field/row aware and distinguishes accept-as-extracted, correct, reject, and unresolved. Parsing, OCR, deterministic rules and high confidence do not equal human or engineering approval.
+- Repeated identical imports are idempotent. A changed document for an existing report identity, an ambiguous shift/report number, stale revision, duplicate activity or incompatible asset scope is a visible conflict. No automatic approval or silent overwrite.
+
+## Initial implementation contract
+
+The CP77 ORM and additive migration introduce the logical report, revision, activity and measurement tables. Database constraints cover report identity, revision numbering/edit versions, period/time/depth basis, parameter-to-dimension/canonical-unit contracts, reconciliation vocabularies, source references, and composite same-tenant parent/revision relationships. Downgrade preflights all four tables and refuses to discard populated report evidence. API/service work must next support safe manual draft creation/read/update/history/transitions, then connect import/reconciliation. The browser must show revision/status, source and time/depth/unit basis and conflicts in English and Persian, with LTR technical identifiers inside RTL text. A real-browser test must exercise create, edit, stale-write rejection, submit, independent review, history and denied roles against the API.
+
+## CP77 implementation evidence
+
+- `backend/src/drillai/db/models/daily_reports.py` defines `DailyDrillingReport`, `DailyDrillingReportRevision`, `DailyReportActivity` and `DailyReportMeasurement`; the module has no arbitrary JSON column. Numeric measurements preserve original and accepted input value/unit alongside canonical values, and controlled parameter keys determine dimension/canonical unit.
+- Migration `backend/alembic/versions/c5ca12bb7b5d_daily_drilling_report_domain.py` adds four tables, indexes, local-source foreign keys, report identity/revision constraints, typed provenance checks, and composite tenant FKs from revisions/children. It refuses downgrade while any report data exists.
+- `backend/tests/drilling/test_daily_report_domain.py`: SQLite model constraints **4 passed**, 1 PostgreSQL-marked test skipped in the default run; PostgreSQL-selected test **1 passed** against embedded PostgreSQL. The tests cover duplicate identity, parameter/dimension mismatch, tenant-mismatched children, and refusal to call a period-end an activity instant.
+- `backend/tests/db/test_daily_report_domain_migration.py`: fresh additive migration, schema comparison, populated-data downgrade refusal, empty downgrade/re-upgrade, and `alembic check` passed on SQLite.
+- This is data-model/migration acceptance only. Report services, routes, authorization, manual/import workflows, audit/revision behavior, UI and end-user acceptance remain subsequent CP78–80 work.
+
+## Acceptance and residual evidence
+
+Software acceptance is the schema/migration and application behavior described above, with contract, API, service, audit, tenant-isolation, idempotency, concurrency, rollback and browser tests on SQLite and PostgreSQL where available. It does **not** establish:
+
+- approved-corpus OCR or extraction accuracy;
+- live LLM accuracy, source-grounded usefulness, or review-free automation;
+- survey datum/azimuth compatibility or engineering/field acceptance;
+- external connector/vendor interoperability or delivered-notification receipts;
+- production deployment, backup restore, physical PITR, RPO/RTO, or qualified operator/user acceptance.
+
+Those require real, authorized and independently recorded evidence. Until then, the product must state the limit and provide a safe manual/review path.
