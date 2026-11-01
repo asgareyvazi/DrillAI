@@ -5,6 +5,7 @@ from __future__ import annotations
 from drillai.api.routers import (
     assets,
     context,
+    daily_reports,
     documents,
     drilling,
     evidence,
@@ -20,6 +21,7 @@ from drillai.api.routers import (
 __all__ = [
     "assets",
     "context",
+    "daily_reports",
     "documents",
     "drilling",
     "evidence",

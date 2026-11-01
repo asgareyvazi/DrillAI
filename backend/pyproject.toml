@@ -22,6 +22,7 @@ dependencies = [
   "jsonschema>=4.23,<5",
   "referencing>=0.35,<1",
   "cryptography>=44.0",
+  "tzdata>=2024.1",
   "setuptools>=83.0.0",
   # --- persistence ---
   "SQLAlchemy>=2.0.36,<2.1",

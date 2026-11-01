@@ -105,7 +105,7 @@ class DailyDrillingReport(Base, IdMixin, TimestampMixin, OrgScopedMixin):
     shift_code: Mapped[str] = mapped_column(String(24), nullable=False)
     shift_label: Mapped[str | None] = mapped_column(String(80))
     report_number: Mapped[str | None] = mapped_column(String(120), index=True)
-    #: Normalized report number, or ``shift:<code>`` when no report number was supplied.
+    #: Normalized report number, or normalized shift identity (including a custom shift label).
     identity_key: Mapped[str] = mapped_column(String(180), nullable=False)
     latest_revision_number: Mapped[int] = mapped_column(IntType, default=1, server_default="1", nullable=False)
     latest_approved_revision_number: Mapped[int | None] = mapped_column(IntType)

@@ -11,6 +11,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from drillai.db.models import (
+    DAILY_REPORT_PARAMETER_SPECS,
     Base,
     DailyDrillingReport,
     DailyDrillingReportRevision,
@@ -299,3 +300,14 @@ async def test_postgres_enforces_daily_report_composite_tenant_and_unit_contract
     )
     with pytest.raises(IntegrityError):
         await session.flush()
+
+
+def test_daily_report_parameter_contract_matches_domain_and_converter_registries():
+    from drillai.telemetry.units import CANONICAL_UNIT, unit_dimensions
+    from drillai.units.registry import get_unit
+
+    for parameter_key, (dimension, canonical_unit, _depth_reference) in DAILY_REPORT_PARAMETER_SPECS.items():
+        assert CANONICAL_UNIT[dimension] == canonical_unit, parameter_key
+        assert dimension in unit_dimensions(canonical_unit), parameter_key
+        # The DDR service uses the shared physical conversion registry; its canonical unit must exist.
+        assert get_unit(canonical_unit).symbol == canonical_unit, parameter_key

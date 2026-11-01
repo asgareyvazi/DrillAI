@@ -34,6 +34,12 @@ PLATFORM_ACTIONS: tuple[tuple[str, ActionLevel, str, str], ...] = (
     ),
     ("event.read", ActionLevel.OBSERVE, "Read events: what happened on a well.", "operation.read"),
     (
+        "daily_report.read",
+        ActionLevel.OBSERVE,
+        "Read tenant-scoped daily drilling reports and their immutable revision history.",
+        "daily_report.read",
+    ),
+    (
         "timeseries.read",
         ActionLevel.OBSERVE,
         "Read telemetry channels, windows and latest values.",
@@ -76,6 +82,36 @@ PLATFORM_ACTIONS: tuple[tuple[str, ActionLevel, str, str], ...] = (
         ActionLevel.DRAFT,
         "Create or edit a candidate (non-approved) artefact version.",
         "artifact.draft",
+    ),
+    (
+        "daily_report.create",
+        ActionLevel.DRAFT,
+        "Create a manually authored daily drilling report draft.",
+        "daily_report.write",
+    ),
+    (
+        "daily_report.edit",
+        ActionLevel.DRAFT,
+        "Edit a daily report draft using its compare-and-swap edit version.",
+        "daily_report.write",
+    ),
+    (
+        "daily_report.revise",
+        ActionLevel.DRAFT,
+        "Create a numbered correction from an approved, rejected or withdrawn report revision.",
+        "daily_report.write",
+    ),
+    (
+        "daily_report.submit",
+        ActionLevel.DRAFT,
+        "Submit a reconciled report revision for independent human review.",
+        "daily_report.submit",
+    ),
+    (
+        "daily_report.withdraw",
+        ActionLevel.DRAFT,
+        "Withdraw a report draft or submission that the caller owns.",
+        "daily_report.withdraw",
     ),
     (
         "project.create",
@@ -324,6 +360,18 @@ PLATFORM_ACTIONS: tuple[tuple[str, ActionLevel, str, str], ...] = (
         "Approve an artefact version (human authority).",
         "action:artifact.approve",
     ),
+    (
+        "daily_report.approve",
+        ActionLevel.EXECUTE_WITH_APPROVAL,
+        "Approve a submitted daily report revision as its independent human reviewer.",
+        "daily_report.approve",
+    ),
+    (
+        "daily_report.reject",
+        ActionLevel.EXECUTE_WITH_APPROVAL,
+        "Reject a submitted daily report revision with a recorded reason.",
+        "daily_report.reject",
+    ),
     # Starting a run is a draft-level act: the definition is versioned and every node carries its
     # own level, so side effects are gated where they happen (an L4 node suspends the run and
     # raises an approval request naming exactly what will be done). Gating the run itself at L4
@@ -382,7 +430,7 @@ def ensure_platform_actions_registered() -> dict[str, ActionRef]:
                 description,
                 permission=permission,
                 # Deciding an approval must not require a prior approval to exist.
-                self_authorizing=key == "approval.decide",
+                self_authorizing=key in {"approval.decide", "daily_report.approve", "daily_report.reject"},
                 replace=True,
             )
         _REGISTERED = True

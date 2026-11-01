@@ -87,6 +87,7 @@ ROLE_CATALOGUE: tuple[Role, ...] = (
             # same slip is what the note below about `operations.*` records.
             "operation.read",
             "event.read",
+            "daily_report.read",
             # The operational monitor is a *read* of the well: the current channel values, how old they
             # are and which alerts are open. A viewer who may read the well may read what it is doing;
             # the writes (recording a measurement, acknowledging an alert) are DRAFT-level actions this
@@ -124,6 +125,11 @@ ROLE_CATALOGUE: tuple[Role, ...] = (
             # engineer who records the day's events cannot read them back.
             "operation.*",
             "event.read",
+            # Engineers create/edit/submit drafts but do not hold the L4 decision permission.
+            "daily_report.read",
+            "daily_report.write",
+            "daily_report.submit",
+            "daily_report.withdraw",
             # Recording telemetry and answering its alerts: the action levels are DRAFT, which is this
             # role's ceiling. `live.read` is separate from `timeseries.read` on purpose — a socket is a
             # different entitlement from a query, and a role can be given one without the other.
@@ -173,6 +179,7 @@ ROLE_CATALOGUE: tuple[Role, ...] = (
             # It looked like the drilling supervisor could record operations and in fact granted no such
             # thing.
             "operation.*",
+            "daily_report.*",
             # Same read gate as the engineer's: the supervisor reviews the events the shift recorded,
             # and `event.read` is the permission those endpoints check.
             "event.read",
@@ -243,6 +250,7 @@ ROLE_CATALOGUE: tuple[Role, ...] = (
             "well.read",
             "field.read",
             "project.read",
+            "daily_report.read",
             "dashboard.read",
             "registry.read",
         ),

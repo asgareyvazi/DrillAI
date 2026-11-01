@@ -27,6 +27,7 @@ from drillai.api.routers import (
     auth,
     connectors,
     context,
+    daily_reports,
     documents,
     drilling,
     evidence,
@@ -263,6 +264,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.include_router(context.router, prefix=prefix)
         app.include_router(documents.router, prefix=prefix)
         app.include_router(evidence.router, prefix=prefix)
+        app.include_router(daily_reports.router, prefix=prefix)
         app.include_router(operations.router, prefix=prefix)
         app.include_router(timeseries.router, prefix=prefix)
         app.include_router(connectors.router, prefix=prefix)
