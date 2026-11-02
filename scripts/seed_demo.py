@@ -265,6 +265,34 @@ DEMO_USERS: tuple[tuple[str, str, str, list[str]], ...] = (
 )
 
 
+async def _drop_schema(engine: Any, metadata: Any) -> None:
+    """Drop a development schema even when SQLite contains self-referencing rows.
+
+    SQLite enforces self-referential foreign keys while dropping a populated table, unlike the
+    server databases supported by the app. The seed's ``--reset`` path must also work after an E2E
+    run has created immutable report revisions that refer to earlier revisions in the same table.
+    Disable enforcement only on this reset connection, restore it before returning it to the pool,
+    and leave other database dialects on SQLAlchemy's normal dependency-ordered drop path.
+    """
+    if engine.dialect.name != "sqlite":
+        async with engine.begin() as connection:
+            await connection.run_sync(metadata.drop_all)
+        return
+
+    async with engine.connect() as connection:
+        await connection.exec_driver_sql("PRAGMA foreign_keys=OFF")
+        await connection.commit()
+        try:
+            await connection.run_sync(metadata.drop_all)
+            await connection.commit()
+        except BaseException:
+            await connection.rollback()
+            raise
+        finally:
+            await connection.exec_driver_sql("PRAGMA foreign_keys=ON")
+            await connection.commit()
+
+
 async def seed(database_url: str, *, reset: bool, blob_dir: pathlib.Path) -> dict[str, Any]:
     if os.environ.get("DRILLAI_ENVIRONMENT", "").strip().lower() == "production":
         raise SeedError("Refusing to seed synthetic demo data or demo credentials in production environment")
@@ -287,8 +315,7 @@ async def seed(database_url: str, *, reset: bool, blob_dir: pathlib.Path) -> dic
     application = create_app(settings)
     engine = application.state.database.engine
     if reset:
-        async with engine.begin() as connection:
-            await connection.run_sync(Base.metadata.drop_all)
+        await _drop_schema(engine, Base.metadata)
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)
     application.state.catalogues = _warm_registries()

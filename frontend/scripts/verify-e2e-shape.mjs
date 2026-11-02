@@ -2,7 +2,7 @@
  * Fail closed if Playwright's collected E2E inventory changes without an explicit CI review.
  *
  * This is a collection-only check: `--list` does not start the API/web servers or run tests. The
- * actual suite still runs immediately afterwards and must report 121 passes in each OS job.
+ * actual suite still runs immediately afterwards and must report 122 passes in each OS job.
  */
 import { spawnSync } from 'node:child_process'
 import path from 'node:path'
@@ -40,7 +40,7 @@ const totalMatch = plain.match(/^Total:\s*(\d+)\s+tests\s+in\s+(\d+)\s+files\s*$
 const total = totalMatch?.[1] ? Number(totalMatch[1]) : Number.NaN
 const files = totalMatch?.[2] ? Number(totalMatch[2]) : Number.NaN
 const expected = new Map([
-  ['chromium', 114],
+  ['chromium', 115],
   ['chromium-faults', 4],
   ['chromium-auth', 3],
 ])
@@ -49,13 +49,13 @@ const mismatches = [...expected].flatMap(([project, expectedCount]) => {
   const actualCount = counts.get(project)
   return actualCount === expectedCount ? [] : [`${project}: expected ${expectedCount}, collected ${actualCount ?? 'none'}`]
 })
-if (total !== 121) mismatches.push(`total: expected 121, collected ${Number.isNaN(total) ? 'no total line' : total}`)
-if (files !== 17) mismatches.push(`files: expected 17, collected ${Number.isNaN(files) ? 'no total line' : files}`)
-if (actualSum !== 121) mismatches.push(`project sum: expected 121, collected ${actualSum}`)
+if (total !== 122) mismatches.push(`total: expected 122, collected ${Number.isNaN(total) ? 'no total line' : total}`)
+if (files !== 18) mismatches.push(`files: expected 18, collected ${Number.isNaN(files) ? 'no total line' : files}`)
+if (actualSum !== 122) mismatches.push(`project sum: expected 122, collected ${actualSum}`)
 
 if (mismatches.length > 0) {
   process.stderr.write(`${plain}\n`)
-  throw new Error(`E2E inventory does not match the reviewed 121-test plan:\n- ${mismatches.join('\n- ')}`)
+  throw new Error(`E2E inventory does not match the reviewed 122-test plan:\n- ${mismatches.join('\n- ')}`)
 }
 
-console.log('E2E inventory verified: 121 tests in 17 files; chromium=114, chromium-faults=4, chromium-auth=3.')
+console.log('E2E inventory verified: 122 tests in 18 files; chromium=115, chromium-faults=4, chromium-auth=3.')

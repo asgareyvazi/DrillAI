@@ -32,6 +32,15 @@ import type {
   ApprovalRow,
   AuditTrail,
   ContextBundle,
+  DailyReportCatalogue,
+  DailyReportCreatePayload,
+  DailyReportDecisionPayload,
+  DailyReportDetail,
+  DailyReportEditPayload,
+  DailyReportHistory,
+  DailyReportList,
+  DailyReportMutationResponse,
+  DailyReportRevisionDetail,
   DdrProcessingReport,
   AuditLogEntry,
   DocumentRow,
@@ -603,6 +612,113 @@ export const drillingApi = {
       signal,
       validate: expect.object('report'),
     }),
+
+  // ------------------------------------------------------------------ governed daily drilling reports
+  dailyReportCatalogue: (signal?: AbortSignal) =>
+    api.get<DailyReportCatalogue>('/daily-report-parameters', { signal, validate: expect.object('parameters') }),
+  listDailyReports: (
+    wellId: string,
+    params: { report_date_from?: string; report_date_to?: string; shift_code?: string; status?: string; limit?: number; offset?: number } = {},
+    signal?: AbortSignal,
+  ) =>
+    api.get<DailyReportList>(`/wells/${enc(wellId)}/daily-reports`, {
+      query: params,
+      signal,
+      validate: expect.paged(),
+    }),
+  getDailyReport: (wellId: string, reportId: string, signal?: AbortSignal) =>
+    api.get<DailyReportDetail>(`/wells/${enc(wellId)}/daily-reports/${enc(reportId)}`, {
+      signal,
+      validate: expect.object('report'),
+    }),
+  getDailyReportHistory: (
+    wellId: string,
+    reportId: string,
+    params: { limit?: number; offset?: number } = {},
+    signal?: AbortSignal,
+  ) =>
+    api.get<DailyReportHistory>(`/wells/${enc(wellId)}/daily-reports/${enc(reportId)}/history`, {
+      query: params,
+      signal,
+      validate: expect.paged(),
+    }),
+  getDailyReportRevision: (wellId: string, reportId: string, revisionNumber: number, signal?: AbortSignal) =>
+    api.get<DailyReportRevisionDetail>(
+      `/wells/${enc(wellId)}/daily-reports/${enc(reportId)}/revisions/${revisionNumber}`,
+      { signal, validate: expect.object('revision') },
+    ),
+  createDailyReport: (wellId: string, body: DailyReportCreatePayload, idempotencyKey?: string) =>
+    api.post<DailyReportMutationResponse>(
+      `/wells/${enc(wellId)}/daily-reports`,
+      body,
+      idempotencyHeader(idempotencyKey),
+    ),
+  updateDailyReportDraft: (
+    wellId: string,
+    reportId: string,
+    revisionNumber: number,
+    body: DailyReportEditPayload,
+    idempotencyKey?: string,
+  ) =>
+    api.patch<DailyReportMutationResponse>(
+      `/wells/${enc(wellId)}/daily-reports/${enc(reportId)}/revisions/${revisionNumber}`,
+      body,
+      idempotencyHeader(idempotencyKey),
+    ),
+  createDailyReportCorrection: (wellId: string, reportId: string, reason: string, idempotencyKey?: string) =>
+    api.post<DailyReportMutationResponse>(
+      `/wells/${enc(wellId)}/daily-reports/${enc(reportId)}/corrections`,
+      { reason },
+      idempotencyHeader(idempotencyKey),
+    ),
+  submitDailyReport: (
+    wellId: string,
+    reportId: string,
+    revisionNumber: number,
+    body: DailyReportDecisionPayload,
+    idempotencyKey?: string,
+  ) =>
+    api.post<DailyReportMutationResponse>(
+      `/wells/${enc(wellId)}/daily-reports/${enc(reportId)}/revisions/${revisionNumber}/submit`,
+      body,
+      idempotencyHeader(idempotencyKey),
+    ),
+  approveDailyReport: (
+    wellId: string,
+    reportId: string,
+    revisionNumber: number,
+    body: DailyReportDecisionPayload,
+    idempotencyKey?: string,
+  ) =>
+    api.post<DailyReportMutationResponse>(
+      `/wells/${enc(wellId)}/daily-reports/${enc(reportId)}/revisions/${revisionNumber}/approve`,
+      body,
+      idempotencyHeader(idempotencyKey),
+    ),
+  rejectDailyReport: (
+    wellId: string,
+    reportId: string,
+    revisionNumber: number,
+    body: DailyReportDecisionPayload,
+    idempotencyKey?: string,
+  ) =>
+    api.post<DailyReportMutationResponse>(
+      `/wells/${enc(wellId)}/daily-reports/${enc(reportId)}/revisions/${revisionNumber}/reject`,
+      body,
+      idempotencyHeader(idempotencyKey),
+    ),
+  withdrawDailyReport: (
+    wellId: string,
+    reportId: string,
+    revisionNumber: number,
+    body: DailyReportDecisionPayload,
+    idempotencyKey?: string,
+  ) =>
+    api.post<DailyReportMutationResponse>(
+      `/wells/${enc(wellId)}/daily-reports/${enc(reportId)}/revisions/${revisionNumber}/withdraw`,
+      body,
+      idempotencyHeader(idempotencyKey),
+    ),
 
   // ------------------------------------------------------------------ workflows
   listWorkflows: (signal?: AbortSignal) => api.get<Page<Workflow>>('/workflows', { signal, validate: expect.paged() }),

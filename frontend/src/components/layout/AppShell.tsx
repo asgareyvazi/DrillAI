@@ -34,6 +34,7 @@ export const NAV_ITEMS: NavItem[] = [
   { to: '/wells/:wellId/optimisation', labelKey: 'nav.optimisation', scope: 'well' },
   { to: '/wells/:wellId/advisor', labelKey: 'nav.advisor', scope: 'well' },
   { to: '/wells/:wellId/reports', labelKey: 'nav.reports', scope: 'well' },
+  { to: '/wells/:wellId/daily-reports', labelKey: 'nav.dailyReports', scope: 'well' },
   { to: '/workflows', labelKey: 'nav.workflowStudio', scope: 'global' },
   { to: '/runs', labelKey: 'nav.runs', scope: 'global' },
   { to: '/library', labelKey: 'nav.library', scope: 'global' },

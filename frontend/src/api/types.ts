@@ -1151,6 +1151,262 @@ export interface ReportKind {
   description: string
 }
 
+// --------------------------------------------------------------------------- daily drilling reports
+
+export type DailyReportStatus = 'draft' | 'submitted' | 'approved' | 'rejected' | 'withdrawn'
+export type DailyReportTimeBasis = 'observed' | 'reported' | 'calculated' | 'planned' | 'inferred' | 'unknown'
+export type DailyReportResolutionState = 'manual' | 'proposed' | 'accepted' | 'corrected' | 'rejected' | 'unresolved'
+
+export interface DailyReportParameter {
+  key: string
+  /** Domain dimension from the drilling measurement contract, not an inferred unit label. */
+  dimension: string
+  canonical_unit: string
+  accepted_units: string[]
+  required_depth_reference: string | null
+}
+
+export interface DailyReportCatalogue {
+  parameters: DailyReportParameter[]
+  activity_kinds: string[]
+  operation_kinds: string[]
+  npt_categories: string[]
+  cause_bases: string[]
+  shift_codes: string[]
+  revision_statuses: DailyReportStatus[]
+  source_kinds: string[]
+  time_bases: DailyReportTimeBasis[]
+  depth_references: string[]
+  reconciliation_states: DailyReportResolutionState[]
+}
+
+export interface DailyReportActivityInput {
+  activity_kind: string
+  operation_kind?: string | null
+  npt_category?: string | null
+  title: string
+  description?: string | null
+  start_at?: string | null
+  start_time_basis?: DailyReportTimeBasis
+  end_at?: string | null
+  end_time_basis?: DailyReportTimeBasis
+  duration_value?: number | null
+  duration_unit?: string | null
+  duration_basis?: DailyReportTimeBasis
+  depth_from_value?: number | null
+  depth_from_unit?: string | null
+  depth_to_value?: number | null
+  depth_to_unit?: string | null
+  depth_reference?: string
+  depth_basis?: DailyReportTimeBasis
+  cause_basis?: string
+  source_document_id?: string | null
+  source_record_id?: string | null
+  source_region_id?: string | null
+  source_page_number?: number | null
+  operation_id?: string | null
+  event_id?: string | null
+}
+
+export interface DailyReportMeasurementInput {
+  parameter_key: string
+  value: number
+  unit: string
+  value_basis: DailyReportTimeBasis
+  observed_at?: string | null
+  time_basis?: DailyReportTimeBasis
+  depth_value?: number | null
+  depth_unit?: string | null
+  depth_reference?: string | null
+  depth_basis?: DailyReportTimeBasis
+  source_document_id?: string | null
+  source_record_id?: string | null
+  source_region_id?: string | null
+  source_page_number?: number | null
+}
+
+export interface DailyReportContentInput {
+  period_start_at?: string | null
+  period_end_at?: string | null
+  summary?: string | null
+  operations_summary?: string | null
+  safety_notes?: string | null
+  next_period_plan?: string | null
+  environmental_notes?: string | null
+  source_document_id?: string | null
+  source_record_id?: string | null
+  source_region_id?: string | null
+  source_page_number?: number | null
+  activities?: DailyReportActivityInput[]
+  measurements?: DailyReportMeasurementInput[]
+}
+
+export interface DailyReportCreatePayload {
+  wellbore_id: string
+  report_date: string
+  report_timezone: string
+  shift_code: string
+  shift_label?: string | null
+  report_number?: string | null
+  content: DailyReportContentInput
+}
+
+export interface DailyReportEditPayload {
+  expected_edit_version: number
+  reason: string
+  content: DailyReportContentInput
+}
+
+export interface DailyReportRevisionSummary {
+  id: string
+  report_id: string
+  revision_number: number
+  edit_version: number
+  status: DailyReportStatus
+  source_kind: string
+  source_document_id: string | null
+  source_record_id: string | null
+  source_region_id: string | null
+  source_page_number: number | null
+  period_start_at: string | null
+  period_end_at: string | null
+  summary: string | null
+  operations_summary: string | null
+  safety_notes: string | null
+  next_period_plan: string | null
+  environmental_notes: string | null
+  supersedes_revision_id: string | null
+  created_by: string
+  created_at: string | null
+  updated_at: string | null
+  submitted_by: string | null
+  submitted_at: string | null
+  decided_by: string | null
+  decided_at: string | null
+  decision_reason: string | null
+  content_hash: string | null
+}
+
+export interface DailyReportActivity {
+  id: string
+  sequence: number
+  activity_kind: string
+  operation_kind: string | null
+  npt_category: string | null
+  title: string
+  description: string | null
+  start_at: string | null
+  start_time_basis: DailyReportTimeBasis
+  end_at: string | null
+  end_time_basis: DailyReportTimeBasis
+  duration_seconds: number | null
+  duration_source_value: number | null
+  duration_source_unit: string | null
+  duration_basis: DailyReportTimeBasis
+  depth_from_si: number | null
+  depth_from_source_value: number | null
+  depth_from_source_unit: string | null
+  depth_to_si: number | null
+  depth_to_source_value: number | null
+  depth_to_source_unit: string | null
+  depth_reference: string
+  depth_basis: DailyReportTimeBasis
+  cause_basis: string
+  resolution_state: DailyReportResolutionState
+  source_document_id: string | null
+  source_record_id: string | null
+  source_region_id: string | null
+  source_page_number: number | null
+  operation_id: string | null
+  event_id: string | null
+}
+
+export interface DailyReportMeasurement {
+  id: string
+  parameter_key: string
+  ordinal: number
+  dimension: string
+  canonical_unit: string
+  value_si: number
+  source_value: number
+  source_unit: string
+  accepted_input_value: number
+  accepted_input_unit: string
+  value_basis: DailyReportTimeBasis
+  observed_at: string | null
+  time_basis: DailyReportTimeBasis
+  depth_si: number | null
+  depth_source_value: number | null
+  depth_source_unit: string | null
+  depth_reference: string
+  depth_basis: DailyReportTimeBasis
+  resolution_state: DailyReportResolutionState
+  source_document_id: string | null
+  source_record_id: string | null
+  source_region_id: string | null
+  source_page_number: number | null
+}
+
+export interface DailyReportRevision extends DailyReportRevisionSummary {
+  content_hash_verified: boolean
+  activities: DailyReportActivity[]
+  measurements: DailyReportMeasurement[]
+}
+
+export interface DailyReport {
+  id: string
+  well_id: string
+  wellbore_id: string
+  report_date: string
+  report_timezone: string
+  shift_code: string
+  shift_label: string | null
+  report_number: string | null
+  identity_key: string
+  latest_revision_number: number
+  latest_approved_revision_number: number | null
+  created_by: string
+  created_at: string | null
+  updated_at: string | null
+  latest_revision: DailyReportRevisionSummary | null
+}
+
+export interface DailyReportList {
+  items: DailyReport[]
+  total: number
+  limit: number
+  offset: number
+}
+
+export interface DailyReportDetail {
+  report: DailyReport
+  latest_revision: DailyReportRevision
+  latest_approved_revision: DailyReportRevisionSummary | null
+}
+
+export interface DailyReportRevisionDetail {
+  report: DailyReport
+  revision: DailyReportRevision
+}
+
+export interface DailyReportHistory {
+  report: DailyReport
+  items: DailyReportRevisionSummary[]
+  total: number
+  limit: number
+  offset: number
+}
+
+export interface DailyReportMutationResponse {
+  report: DailyReport
+  revision: DailyReportRevision
+}
+
+export interface DailyReportDecisionPayload {
+  expected_edit_version: number
+  reason: string
+}
+
 // --------------------------------------------------------------------------- dependencies
 
 export interface DependencyNode {

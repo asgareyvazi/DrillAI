@@ -27,6 +27,7 @@ from drillai.db.models import (
     REPORT_SOURCE_KINDS,
     REPORT_TIME_BASES,
 )
+from drillai.db.models.operations import CAUSE_BASES, NPT_CATEGORIES, OPERATION_KINDS
 from drillai.drilling.daily_reports import DailyReportService
 from drillai.security.actions import authorize
 from drillai.units.registry import get_unit, known_units
@@ -202,6 +203,9 @@ async def daily_report_parameters(
     return {
         "parameters": parameters,
         "activity_kinds": list(REPORT_ACTIVITY_KINDS),
+        "operation_kinds": list(OPERATION_KINDS),
+        "npt_categories": list(NPT_CATEGORIES),
+        "cause_bases": list(CAUSE_BASES),
         "shift_codes": list(REPORT_SHIFT_CODES),
         "revision_statuses": list(REPORT_REVISION_STATUSES),
         "source_kinds": list(REPORT_SOURCE_KINDS),

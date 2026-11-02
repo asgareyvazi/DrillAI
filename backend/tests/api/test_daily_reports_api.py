@@ -146,6 +146,8 @@ async def test_daily_report_manual_revision_submit_approve_and_correct(client, d
     assert set(catalogue) >= {"depth_md", "mud_weight"}
     assert "ppg" in catalogue["mud_weight"]["accepted_units"]
     assert "kg/m3" in catalogue["mud_weight"]["accepted_units"]
+    assert {"other", "npt", "operation"} <= set(parameter_catalogue.json()["activity_kinds"])
+    assert "stuck_pipe" in parameter_catalogue.json()["npt_categories"]
 
     edited_payload = copy.deepcopy(payload["content"])
     edited_payload["summary"] = "Reviewed manually; the entered source values remain visible."
