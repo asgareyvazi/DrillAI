@@ -47,6 +47,46 @@ async def _upload_depth_record(client, *, name: str = "Review well") -> tuple[st
     return well_id, document_id, record
 
 
+async def _upload_survey_record(client, *, survey_csv: bytes | None = None) -> tuple[str, str, dict]:
+    project_response = await client.post(
+        "/api/v1/projects",
+        json={"name": "Survey review project", "operator": "Test operator"},
+        headers=headers(),
+    )
+    assert project_response.status_code == 201, project_response.text
+    well_response = await client.post(
+        "/api/v1/wells",
+        json={
+            "project_id": project_response.json()["id"],
+            "name": "Survey review well",
+            "well_type": "development_producer",
+        },
+        headers=headers(),
+    )
+    assert well_response.status_code == 201, well_response.text
+    well_id = well_response.json()["id"]
+    upload = await client.post(
+        "/api/v1/documents",
+        headers=headers(),
+        files={
+            "file": (
+                "survey.csv",
+                survey_csv or b"MD (m),Inclination (deg),Azimuth (deg)\n500,12,180\n",
+                "text/csv",
+            )
+        },
+        data={"well_id": well_id, "doc_type": "ddr"},
+    )
+    assert upload.status_code == 201, upload.text
+    document_id = upload.json()["document"]["id"]
+    detail = await client.get(f"/api/v1/documents/{document_id}", headers=headers())
+    assert detail.status_code == 200, detail.text
+    record = next(
+        item for item in detail.json()["records"] if item["record_type"] == "survey_station"
+    )
+    return well_id, document_id, record
+
+
 def _review_body(record: dict, *, depth: float, reason: str = "Checked against the source page") -> dict:
     return {
         "expected_version": record["review_version"],
@@ -150,6 +190,74 @@ async def test_review_corrects_validates_audits_and_replays_idempotently(client,
     assert review_entries[0]["before"]["validation_notes_truncated"] is False
     assert "payload_sha256" in review_entries[0]["after"]
     assert "bit_depth_si" not in str(review_entries[0]["after"])
+
+
+async def test_survey_review_validates_frame_identity_datum_correction_and_audits(client):
+    _well_id, document_id, record = await _upload_survey_record(client)
+    assert record["payload"]["azimuth_reference"] == "unknown"
+    assert record["payload"]["datum"] == "unknown"
+
+    url = f"/api/v1/documents/{document_id}/records/{record['id']}/review"
+    incomplete = dict(record["payload"])
+    incomplete.update({"azimuth_reference": "grid", "datum": "rkb"})
+    missing_id = await client.patch(
+        url,
+        headers=headers("engineer", **{"Idempotency-Key": "survey-review-missing-frame-id"}),
+        json={
+            "expected_version": 1,
+            "decision": "validate",
+            "reason": "Reference type was checked but the frame identity was not available",
+            "changes": {"payload": incomplete},
+        },
+    )
+    assert missing_id.status_code == 422, missing_id.text
+    assert "requires azimuth_reference_id" in missing_id.json()["error"]["message"]
+
+    invalid_correction = {
+        **incomplete,
+        "azimuth_reference_id": "EPSG:32631",
+        "grid_correction_deg": 361.0,
+    }
+    invalid = await client.patch(
+        url,
+        headers=headers("engineer", **{"Idempotency-Key": "survey-review-invalid-correction"}),
+        json={
+            "expected_version": 1,
+            "decision": "validate",
+            "reason": "Check correction limits",
+            "changes": {"payload": invalid_correction},
+        },
+    )
+    assert invalid.status_code == 422, invalid.text
+    assert "grid_correction_deg" in invalid.json()["error"]["message"]
+
+    corrected = {**incomplete, "azimuth_reference_id": "EPSG:32631", "grid_correction_deg": 2.5}
+    response = await client.patch(
+        url,
+        headers=headers("engineer", **{"Idempotency-Key": "survey-review-valid-frame"}),
+        json={
+            "expected_version": 1,
+            "decision": "validate",
+            "reason": "Source page declares EPSG:32631 and RKB",
+            "changes": {"payload": corrected},
+        },
+    )
+    assert response.status_code == 200, response.text
+    updated = response.json()
+    assert updated["payload"]["azimuth_reference"] == "grid"
+    assert updated["payload"]["azimuth_reference_id"] == "EPSG:32631"
+    assert updated["payload"]["grid_correction_deg"] == pytest.approx(2.5)
+    assert updated["payload"]["datum"] == "rkb"
+    assert updated["validation_state"] == "human_validated"
+    assert updated["review_version"] == 2
+
+    audit = await client.get(f"/api/v1/wells/{_well_id}/audit-log", headers=headers())
+    assert audit.status_code == 200, audit.text
+    review_entries = [item for item in audit.json()["items"] if item["action"] == "document.record_review"]
+    assert len(review_entries) == 1
+    assert review_entries[0]["details"]["changed_fields"] == ["payload"]
+    assert "payload_sha256" in review_entries[0]["after"]
+    assert "EPSG:32631" not in str(review_entries[0]["after"])
 
 
 async def test_human_validated_record_can_receive_a_versioned_correction(client):

@@ -437,8 +437,8 @@ async def test_f_cp16_02_and_03_cross_tenant_isolation_across_twin_workflows_con
                 "well_id": ids["well_b"],
                 "inputs": {
                     "stations": [
-                        {"md_si": 0.0, "inclination_deg": 0.0, "azimuth_deg": 0.0},
-                        {"md_si": 500.0, "inclination_deg": 2.0, "azimuth_deg": 45.0},
+                        {"md_si": 0.0, "inclination_deg": 0.0, "azimuth_deg": 0.0, "azimuth_reference": "grid", "azimuth_reference_id": "test-grid"},
+                        {"md_si": 500.0, "inclination_deg": 2.0, "azimuth_deg": 45.0, "azimuth_reference": "grid", "azimuth_reference_id": "test-grid"},
                     ]
                 },
             },
@@ -453,8 +453,8 @@ async def test_f_cp16_02_and_03_cross_tenant_isolation_across_twin_workflows_con
                 "persist": False,
                 "inputs": {
                     "stations": [
-                        {"md_si": 0.0, "inclination_deg": 0.0, "azimuth_deg": 0.0},
-                        {"md_si": 500.0, "inclination_deg": 2.0, "azimuth_deg": 45.0},
+                        {"md_si": 0.0, "inclination_deg": 0.0, "azimuth_deg": 0.0, "azimuth_reference": "grid", "azimuth_reference_id": "test-grid"},
+                        {"md_si": 500.0, "inclination_deg": 2.0, "azimuth_deg": 45.0, "azimuth_reference": "grid", "azimuth_reference_id": "test-grid"},
                     ]
                 },
             },
@@ -705,8 +705,8 @@ def test_f_cp16_06_independent_physics_reference_benchmarks():
         "trajectory.minimum_curvature",
         {
             "stations": [
-                {"md_si": 0.0, "inclination_deg": 0.0, "azimuth_deg": 90.0},
-                {"md_si": 300.0, "inclination_deg": 90.0, "azimuth_deg": 90.0},
+                {"md_si": 0.0, "inclination_deg": 0.0, "azimuth_deg": 90.0, "azimuth_reference": "grid", "azimuth_reference_id": "test-grid"},
+                {"md_si": 300.0, "inclination_deg": 90.0, "azimuth_deg": 90.0, "azimuth_reference": "grid", "azimuth_reference_id": "test-grid"},
             ]
         },
     )
@@ -993,7 +993,7 @@ def test_cp16_10_documentation_and_contract_consistency_guard():
 
     # 4. E2E spec file count and backend test file count must match README.md and docs/FRONTEND_TESTING.md
     e2e_spec_files = sorted((REPO_ROOT / "frontend" / "e2e").glob("*.spec.ts"))
-    assert len(e2e_spec_files) == 17
+    assert len(e2e_spec_files) == 18
     backend_test_files = sorted((REPO_ROOT / "backend" / "tests").rglob("test_*.py"))
     assert len(backend_test_files) >= 78
     assert f"{len(backend_test_files)} files" in readme_text or f"{len(backend_test_files)} test files" in readme_text
@@ -1016,15 +1016,15 @@ def test_cp16_10_documentation_and_contract_consistency_guard():
         tuple(int(value.replace(",", "")) if value else 0 for value in (passed, skipped, deselected))
         for passed, skipped, deselected in backend_totals
     }
-    assert parsed_totals == {(1555, 0, 0), (1543, 12, 0)}, (
+    assert parsed_totals == {(1621, 0, 0), (1608, 13, 0)}, (
         f"README.md backend totals do not match the verified runs: {parsed_totals}"
     )
-    assert {sum(counts) for counts in parsed_totals} == {1555}, (
+    assert {sum(counts) for counts in parsed_totals} == {1621}, (
         "The PostgreSQL-enabled and SQLite-only totals must describe the same collected inventory."
     )
 
-    assert "121 passed" in readme_text
-    assert "356 passed" in readme_text
-    assert "121 passed" in fe_testing_text
+    assert "123 passed" in readme_text
+    assert "373 passed" in readme_text
+    assert "123 passed" in fe_testing_text
     assert "42" in fe_testing_text
 

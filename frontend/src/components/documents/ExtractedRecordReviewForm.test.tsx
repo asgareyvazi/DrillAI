@@ -36,7 +36,8 @@ const record: ExtractionRecord = {
   is_demo_fixture: false,
 }
 
-function renderForm(onSubmit = vi.fn(), currentRecord = record) {
+function renderForm(onSubmit = vi.fn(), currentRecord = record, locale: 'en' | 'fa' = 'en') {
+  window.localStorage.setItem('drillai.locale', locale)
   const onCancel = vi.fn()
   const onChanged = vi.fn()
   const onRefresh = vi.fn()
@@ -57,6 +58,36 @@ function renderForm(onSubmit = vi.fn(), currentRecord = record) {
 }
 
 describe('ExtractedRecordReviewForm', () => {
+  it('shows survey-specific provenance guidance without treating unknown values as compatible', () => {
+    const surveyRecord: ExtractionRecord = {
+      ...record,
+      record_type: 'survey_station',
+      payload: {
+        md_si: 500,
+        inclination_deg: 12,
+        azimuth_deg: 180,
+        azimuth_reference: 'unknown',
+        azimuth_reference_id: null,
+        datum: 'unknown',
+      },
+    }
+    renderForm(vi.fn(), surveyRecord)
+    expect(screen.getByText(/Keep unknown values unknown/)).toBeInTheDocument()
+  })
+
+  it('renders survey-frame guidance in Persian while keeping JSON in LTR order', () => {
+    const surveyRecord: ExtractionRecord = {
+      ...record,
+      record_type: 'survey_station',
+      payload: { azimuth_reference: 'unknown', azimuth_reference_id: null, datum: 'unknown' },
+    }
+    renderForm(vi.fn(), surveyRecord, 'fa')
+    expect(screen.getByText(/برای ایستگاه‌های برداشت/)).toBeInTheDocument()
+    expect(document.documentElement).toHaveAttribute('dir', 'rtl')
+    expect(screen.getByTestId('extracted-record-review-payload')).toHaveAttribute('dir', 'ltr')
+    window.localStorage.setItem('drillai.locale', 'en')
+  })
+
   it('submits a versioned human validation with corrected payload and an audit reason', async () => {
     const user = userEvent.setup()
     const { onSubmit } = renderForm()

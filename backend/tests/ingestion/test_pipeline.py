@@ -474,10 +474,94 @@ def test_survey_converts_declared_depth_and_angle_units_and_keeps_raw_unit_conte
     assert station.payload["md_si"] == pytest.approx(152.4)
     assert station.payload["inclination_deg"] == pytest.approx(90.0)
     assert station.payload["azimuth_deg"] == pytest.approx(180.0)
+    assert station.payload["azimuth_reference"] == "unknown"
+    assert station.payload["azimuth_reference_id"] is None
+    assert "unknown_azimuth_reference" in station.quality_flags
     assert station.unit_context == {"md_si": "ft", "inclination_deg": "rad", "azimuth_deg": "rad"}
     assert station.field_locations["md_si"]["row"] == 2
     assert station.field_locations["inclination_deg"]["column"] == 2
     assert station.field_locations["azimuth_deg"]["column"] == 3
+
+
+def test_survey_preserves_explicit_azimuth_reference_type_and_frame_identity():
+    from drillai.ingestion.extractors import extract
+
+    parsed = parse_bytes(
+        b"MD (m),Inclination (deg),Grid Azimuth (deg),Azimuth Reference ID,Vertical Datum\n"
+        b"100,10,30,EPSG:32631,RKB\n",
+        filename="survey-explicit-grid.csv",
+    )
+    drafts, warnings = extract(parsed, doc_type="survey_report")
+    station = next(draft for draft in drafts if draft.record_type == "survey_station")
+
+    assert warnings == []
+    assert station.payload["azimuth_reference"] == "grid"
+    assert station.payload["azimuth_reference_id"] == "EPSG:32631"
+    assert station.payload["datum"] == "rkb"
+    assert "unknown_azimuth_reference" not in station.quality_flags
+    assert "unknown_vertical_datum" not in station.quality_flags
+    assert station.field_locations["azimuth_reference"]["column"] == 3
+    assert station.field_locations["azimuth_reference_id"]["column"] == 4
+    assert station.field_locations["datum"]["column"] == 5
+
+
+@pytest.mark.parametrize(("source_datum", "expected_datum"), [("CF", "cf"), ("Derrick Floor", "derrick_floor")])
+def test_survey_preserves_supported_nonstandard_vertical_datum_labels(source_datum, expected_datum):
+    from drillai.ingestion.extractors import extract
+
+    parsed = parse_bytes(
+        f"MD (m),Inclination (deg),Grid Azimuth (deg),Azimuth Reference ID,Vertical Datum\n"
+        f"100,10,30,EPSG:32631,{source_datum}\n".encode(),
+        filename="survey-other-datum.csv",
+    )
+    drafts, _warnings = extract(parsed, doc_type="survey_report")
+    station = next(draft for draft in drafts if draft.record_type == "survey_station")
+
+    assert station.payload["datum"] == expected_datum
+    assert "unknown_vertical_datum" not in station.quality_flags
+
+
+def test_survey_preserves_explicit_signed_grid_correction_as_provenance():
+    from drillai.ingestion.extractors import extract
+
+    parsed = parse_bytes(
+        b"MD (m),Inclination (deg),Magnetic Azimuth (deg),Azimuth Reference ID,Grid Correction (deg),Vertical Datum\n"
+        b"100,10,30,magnetic-model-2026,2.5,MSL\n",
+        filename="survey-correction-provenance.csv",
+    )
+    drafts, warnings = extract(parsed, doc_type="survey_report")
+    station = next(draft for draft in drafts if draft.record_type == "survey_station")
+
+    assert warnings == []
+    assert station.payload["azimuth_reference"] == "magnetic"
+    assert station.payload["azimuth_reference_id"] == "magnetic-model-2026"
+    assert station.payload["grid_correction_deg"] == pytest.approx(2.5)
+    assert station.payload["datum"] == "msl"
+    assert station.unit_context["grid_correction_deg"] == "deg"
+
+
+def test_survey_keeps_unknown_or_conflicting_azimuth_reference_unclassified():
+    from drillai.ingestion.extractors import extract
+
+    unclassified = parse_bytes(
+        b"MD (m),Inclination (deg),Azimuth (deg)\n100,10,30\n",
+        filename="survey-unknown-frame.csv",
+    )
+    drafts, _warnings = extract(unclassified, doc_type="survey_report")
+    station = next(draft for draft in drafts if draft.record_type == "survey_station")
+    assert station.payload["azimuth_reference"] == "unknown"
+    assert "unknown_azimuth_reference" in station.quality_flags
+
+    conflict = parse_bytes(
+        b"MD (m),Inclination (deg),Grid Azimuth (deg),Azimuth Reference\n"
+        b"100,10,30,magnetic\n",
+        filename="survey-conflicting-frame.csv",
+    )
+    drafts, _warnings = extract(conflict, doc_type="survey_report")
+    station = next(draft for draft in drafts if draft.record_type == "survey_station")
+    assert station.payload["azimuth_reference"] == "unknown"
+    assert "conflicting_azimuth_reference_labels" in station.quality_flags
+    assert "unknown_azimuth_reference" in station.quality_flags
 
 
 def test_survey_does_not_coerce_ambiguous_depth_or_nonfinite_angles():
@@ -497,7 +581,12 @@ def test_survey_does_not_coerce_ambiguous_depth_or_nonfinite_angles():
     )
     drafts, _warnings = extract(valid_depth, doc_type="survey_report")
     station = next(draft for draft in drafts if draft.record_type == "survey_station")
-    assert station.payload == {"md_si": 500.0}
+    assert station.payload == {
+        "md_si": 500.0,
+        "datum": "unknown",
+        "azimuth_reference": "unknown",
+        "azimuth_reference_id": None,
+    }
     assert "inclination_deg" not in station.field_locations
     assert "azimuth_deg" not in station.field_locations
     assert "ambiguous_or_invalid_inclination" in station.quality_flags

@@ -141,10 +141,22 @@ def _validate_review_value_shape(original: Any, corrected: Any, *, path: str) ->
     raise ValidationFailed(f"stored {path} uses an unsupported correction type")
 
 
-def _validate_review_payload_shape(original: dict[str, Any], corrected: dict[str, Any]) -> None:
-    if set(corrected) != set(original):
-        raise ValidationFailed("corrected payload must preserve the stored record fields")
-    _validate_review_value_shape(original, corrected, path="payload")
+def _validate_review_payload_shape(
+    original: dict[str, Any], corrected: dict[str, Any], *, record_type: str
+) -> None:
+    allowed_additions = (
+        {"azimuth_reference", "azimuth_reference_id", "datum", "grid_correction_deg"}
+        if record_type == "survey_station"
+        else set()
+    )
+    missing = set(original) - set(corrected)
+    added = set(corrected) - set(original)
+    if missing or added - allowed_additions:
+        raise ValidationFailed("corrected payload must preserve stored fields; only documented survey metadata may be added")
+    for key, old_value in original.items():
+        _validate_review_value_shape(old_value, corrected[key], path=f"payload.{key}")
+    for key in added:
+        _validate_review_value_shape(None, corrected[key], path=f"payload.{key}")
 
 
 def _validate_review_domain_payload(record_type: str, payload: dict[str, Any]) -> None:
@@ -158,8 +170,31 @@ def _validate_review_domain_payload(record_type: str, payload: dict[str, Any]) -
         ):
             raise ValidationFailed("survey station inclination_deg must be between 0 and 180 degrees")
         azimuth = payload.get("azimuth_deg")
-        if azimuth is not None and (not _is_finite_number(azimuth) or not 0 <= azimuth <= 360):
-            raise ValidationFailed("survey station azimuth_deg must be between 0 and 360 degrees")
+        if azimuth is not None and (not _is_finite_number(azimuth) or not 0 <= azimuth < 360):
+            raise ValidationFailed("survey station azimuth_deg must be within [0, 360)")
+        reference = payload.get("azimuth_reference", "unknown")
+        if not isinstance(reference, str) or reference not in {"grid", "true", "magnetic", "unknown"}:
+            raise ValidationFailed("survey station azimuth_reference must be grid, true, magnetic, or unknown")
+        reference_id = payload.get("azimuth_reference_id")
+        if reference_id is not None and (
+            not isinstance(reference_id, str)
+            or not reference_id.strip()
+            or reference_id != reference_id.strip()
+            or len(reference_id) > 120
+            or not reference_id.isprintable()
+        ):
+            raise ValidationFailed("survey station azimuth_reference_id must be printable text up to 120 characters")
+        if reference != "unknown" and reference_id is None:
+            raise ValidationFailed("a known survey azimuth_reference requires azimuth_reference_id")
+        datum = payload.get("datum", "unknown")
+        if not isinstance(datum, str) or datum not in {"rkb", "msl", "gl", "cf", "derrick_floor", "unknown"}:
+            raise ValidationFailed("survey station datum must be rkb, msl, gl, cf, derrick_floor, or unknown")
+        correction = payload.get("grid_correction_deg")
+        if correction is not None:
+            if not _is_finite_number(correction) or not -360 <= correction <= 360:
+                raise ValidationFailed("survey station grid_correction_deg must be finite and between -360 and 360")
+            if reference == "unknown":
+                raise ValidationFailed("grid_correction_deg requires a known source azimuth_reference")
     elif record_type == "depth_reading":
         for field_name, value in payload.items():
             if field_name.endswith("_si") and value is not None and (
@@ -679,7 +714,9 @@ async def review_extracted_record(
         if payload.changes.payload is None:
             raise ValidationFailed("a corrected payload must be a JSON object, not null")
         corrected_payload = payload.changes.payload
-        _validate_review_payload_shape(dict(record.payload or {}), corrected_payload)
+        _validate_review_payload_shape(
+            dict(record.payload or {}), corrected_payload, record_type=record.record_type
+        )
         _validate_review_domain_payload(record.record_type, corrected_payload)
         try:
             encoded_payload = json.dumps(

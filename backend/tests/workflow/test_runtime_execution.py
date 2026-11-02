@@ -33,9 +33,9 @@ from drillai.workflow.service import WorkflowService
 
 SURVEY = {
     "stations": [
-        {"md_si": 0.0, "inclination_deg": 0.0, "azimuth_deg": 0.0},
-        {"md_si": 1000.0, "inclination_deg": 0.0, "azimuth_deg": 0.0},
-        {"md_si": 1300.0, "inclination_deg": 30.0, "azimuth_deg": 0.0},
+        {"md_si": 0.0, "inclination_deg": 0.0, "azimuth_deg": 0.0, "azimuth_reference": "grid", "azimuth_reference_id": "test-grid"},
+        {"md_si": 1000.0, "inclination_deg": 0.0, "azimuth_deg": 0.0, "azimuth_reference": "grid", "azimuth_reference_id": "test-grid"},
+        {"md_si": 1300.0, "inclination_deg": 30.0, "azimuth_deg": 0.0, "azimuth_reference": "grid", "azimuth_reference_id": "test-grid"},
     ]
 }
 

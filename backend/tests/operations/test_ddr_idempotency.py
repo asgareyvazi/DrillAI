@@ -921,6 +921,10 @@ async def test_incomplete_survey_rows_are_reviewed_and_never_promoted(fabric: Fa
             b"MD (m),Inclination (deg),Azimuth (deg)\n600,NaN,Infinity\n",
             "survey-invalid-angles.csv",
         ),
+        (
+            b"MD (m),Inclination (deg),Azimuth (deg)\n700,10,30\n",
+            "survey-missing-reference-and-datum.csv",
+        ),
     )
     for payload, filename in payloads:
         document = await _upload_report(
@@ -963,12 +967,56 @@ async def test_incomplete_survey_rows_are_reviewed_and_never_promoted(fabric: Fa
         assert record.promoted_to_id is None
 
 
+async def test_survey_grid_correction_is_retained_but_never_applied_by_ddr_promotion(fabric: Fabric) -> None:
+    from drillai.db.models import Trajectory
+
+    document = await _upload_report(
+        fabric,
+        payload=(
+            b"MD (m),Inclination (deg),Magnetic Azimuth (deg),Azimuth Reference ID,"
+            b"Grid Correction (deg),Vertical Datum\n"
+            b"500,12,30,magnetic-model-2026,2.5,RKB\n"
+        ),
+        filename="survey-magnetic-correction.csv",
+        content_type="text/csv",
+        doc_type="ddr",
+    )
+    report = await _process(fabric, document["id"])
+
+    async with fabric.session() as session:
+        record = (
+            await session.execute(
+                select(ExtractedRecord).where(
+                    ExtractedRecord.document_id == document["id"],
+                    ExtractedRecord.record_type == "survey_station",
+                )
+            )
+        ).scalar_one()
+        stations = (
+            await session.execute(select(TrajectoryStation).where(TrajectoryStation.evidence_ref == record.id))
+        ).scalars().all()
+        trajectories = (
+            await session.execute(select(Trajectory).where(Trajectory.source_document_id == document["id"]))
+        ).scalars().all()
+
+    assert record.payload["azimuth_reference"] == "magnetic"
+    assert record.payload["azimuth_reference_id"] == "magnetic-model-2026"
+    assert record.payload["grid_correction_deg"] == pytest.approx(2.5)
+    assert report["counts"]["trajectory_stations"] == 0
+    assert record.id in report["records_needing_review"]
+    assert any("not applied by DDR promotion" in row["reason"] for row in report["not_promoted"])
+    assert stations == [] and trajectories == []
+
+
 async def test_survey_retry_reuses_the_existing_station_and_evidence_link(fabric: Fabric) -> None:
     from drillai.db.models import EvidenceLink
 
     document = await _upload_report(
         fabric,
-        payload=b"MD (m),Inclination (deg),Azimuth (deg)\n500,12,180\n",
+        payload=(
+            b"MD (m),Inclination (deg),Grid Azimuth (deg),Azimuth Reference ID,Vertical Datum\n"
+            b"500,12,180,EPSG:32631,RKB\n"
+        ),
         filename="survey-valid.csv",
         content_type="text/csv",
         doc_type="ddr",
@@ -1010,12 +1058,21 @@ async def test_survey_retry_reuses_the_existing_station_and_evidence_link(fabric
     assert stations[0].azimuth_deg == pytest.approx(180.0)
 
 
-async def test_survey_from_new_document_is_held_for_review_when_frame_compatibility_is_unproven(
+async def test_survey_from_new_document_is_held_when_frame_identity_or_datum_differs(
     fabric: Fabric,
 ) -> None:
-    """A later document cannot append stations to a current trajectory without frame evidence."""
+    """A later document cannot append stations under a different explicit frame or datum."""
 
-    def survey_report(report_number: str, report_date: str, md: int, inclination: int, azimuth: int) -> bytes:
+    def survey_report(
+        report_number: str,
+        report_date: str,
+        md: int,
+        inclination: int,
+        azimuth: int,
+        *,
+        frame_id: str = "EPSG:32631",
+        datum: str = "RKB",
+    ) -> bytes:
         return (
             "Daily Drilling Report - SYNTHETIC TEST DATA - Well NF-12\n"
             f"Report No,{report_number}\n"
@@ -1023,8 +1080,8 @@ async def test_survey_from_new_document_is_held_for_review_when_frame_compatibil
             "Well,NF-12\n"
             "Rig,RIG-SYNTH-7\n"
             "Section,8-1/2 in\n"
-            "MD (m),Inclination (deg),Azimuth (deg)\n"
-            f"{md},{inclination},{azimuth}\n"
+            "MD (m),Inclination (deg),Grid Azimuth (deg),Azimuth Reference ID,Vertical Datum\n"
+            f"{md},{inclination},{azimuth},{frame_id},{datum}\n"
         ).encode()
 
     first_document = await _upload_report(
@@ -1034,7 +1091,9 @@ async def test_survey_from_new_document_is_held_for_review_when_frame_compatibil
     )
     second_document = await _upload_report(
         fabric,
-        payload=survey_report("RPT-SURVEY-102", "2026-03-16", 600, 13, 181),
+        payload=survey_report(
+            "RPT-SURVEY-102", "2026-03-16", 600, 13, 181, frame_id="EPSG:32632", datum="MSL"
+        ),
         filename="survey-102.csv",
     )
     first = await _process(fabric, first_document["id"])
@@ -1045,10 +1104,10 @@ async def test_survey_from_new_document_is_held_for_review_when_frame_compatibil
     assert len(second["records_needing_review"]) == 1
     assert any(
         row.get("record_id") == second["records_needing_review"][0]
-        and "survey-frame compatibility" in row.get("reason", "")
+        and "do not match the existing current trajectory" in row.get("reason", "")
         for row in second["not_promoted"]
     )
-    assert any("cross-document survey-frame compatibility" in warning for warning in second["warnings"])
+    assert any("incompatible with the current trajectory" in warning for warning in second["warnings"])
 
     retry = await _process(fabric, second_document["id"])
     assert retry["counts"]["trajectory_stations"] == 0
@@ -1085,6 +1144,78 @@ async def test_survey_from_new_document_is_held_for_review_when_frame_compatibil
     assert len(stations) == 1 and stations[0].md_si == pytest.approx(500.0)
     assert len(records) == 2
     assert stations[0].evidence_ref == next(record.id for record in records if record.document_id == first_document["id"])
+
+
+async def test_survey_from_new_document_appends_only_when_exact_frame_and_datum_match(fabric: Fabric) -> None:
+    def survey_report(report_number: str, report_date: str, md: int, azimuth: int) -> bytes:
+        return (
+            "Daily Drilling Report - SYNTHETIC TEST DATA - Well NF-12\n"
+            f"Report No,{report_number}\n"
+            f"Date,{report_date}\n"
+            "Well,NF-12\n"
+            "Rig,RIG-SYNTH-7\n"
+            "Section,8-1/2 in\n"
+            "MD (m),Inclination (deg),Grid Azimuth (deg),Azimuth Reference ID,Vertical Datum\n"
+            f"{md},12,{azimuth},EPSG:32631,RKB\n"
+        ).encode()
+
+    first_document = await _upload_report(
+        fabric,
+        payload=survey_report("RPT-SURVEY-MATCH-1", "2026-03-15", 500, 180),
+        filename="survey-match-101.csv",
+    )
+    second_document = await _upload_report(
+        fabric,
+        payload=survey_report("RPT-SURVEY-MATCH-2", "2026-03-16", 600, 181),
+        filename="survey-match-102.csv",
+    )
+    first = await _process(fabric, first_document["id"])
+    second = await _process(fabric, second_document["id"])
+    assert first["counts"]["trajectory_stations"] == 1
+    assert second["counts"]["trajectory_stations"] == 1
+    assert second["survey_frame_declarations"] == [
+        {"azimuth_reference": "grid", "azimuth_reference_id": "EPSG:32631", "datum": "rkb"}
+    ]
+
+    async with fabric.session() as session:
+        trajectory = (
+            await session.execute(
+                select(Trajectory).where(
+                    Trajectory.org_id == fabric.org_id(fabric.alpha),
+                    Trajectory.wellbore_id == fabric.alpha.wellbore_id,
+                    Trajectory.kind == "actual",
+                    Trajectory.is_current.is_(True),
+                )
+            )
+        ).scalar_one()
+        stations = (
+            await session.execute(
+                select(TrajectoryStation)
+                .where(TrajectoryStation.wellbore_id == fabric.alpha.wellbore_id)
+                .order_by(TrajectoryStation.md_si)
+            )
+        ).scalars().all()
+        audit = (
+            await session.execute(
+                select(AuditLog).where(
+                    AuditLog.resource_id == second_document["id"],
+                    AuditLog.action == "document.process",
+                )
+            )
+        ).scalar_one()
+
+    assert trajectory.datum == "rkb"
+    assert trajectory.azimuth_reference == "grid"
+    assert trajectory.azimuth_reference_id == "EPSG:32631"
+    assert len(stations) == 2
+    assert stations[1].input_azimuth_deg == pytest.approx(181.0)
+    assert stations[1].input_azimuth_reference == "grid"
+    assert stations[1].input_azimuth_reference_id == "EPSG:32631"
+    assert stations[1].grid_correction_deg is None
+    assert stations[1].raw_source["vertical_datum"] == "rkb"
+    assert audit.details["survey_frame_declarations"] == second["survey_frame_declarations"]
+    assert trajectory.validation["state"] == "not_independently_validated"
+    assert trajectory.validation["is_valid"] is False
 
 
 async def test_a_document_that_is_not_a_ddr_is_refused_with_a_reason(fabric: Fabric) -> None:

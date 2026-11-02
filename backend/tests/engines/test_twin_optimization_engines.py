@@ -19,8 +19,9 @@ def registry():
 
 def _survey(*stations: tuple[float, float, float]) -> dict:
     return {
+        "datum": "rkb",
         "stations": [
-            {"md_si": md, "inclination_deg": inclination, "azimuth_deg": azimuth}
+            {"md_si": md, "inclination_deg": inclination, "azimuth_deg": azimuth, "azimuth_reference": "grid", "azimuth_reference_id": "test-grid"}
             for md, inclination, azimuth in stations
         ]
     }
@@ -41,13 +42,67 @@ def test_identical_surveys_report_no_deviation(registry):
     assert not result.violations
 
 
+@pytest.mark.parametrize("datum", ["cf", "derrick_floor"])
+def test_twin_accepts_matching_declared_vertical_datum_types(registry, datum):
+    survey = {**_survey((0.0, 0.0, 0.0), (1000.0, 0.0, 0.0)), "datum": datum}
+    _spec, result = registry.execute("twin.reconciliation", {"planned": survey, "actual": survey})
+
+    assert not result.violations
+    assert result.outputs.datum == datum
+    assert result.outputs.tracking_status == "on_plan"
+
+
+def test_twin_refuses_datum_or_azimuth_frame_mismatch(registry):
+    planned = _survey((0.0, 0.0, 0.0), (1000.0, 5.0, 10.0))
+    actual = {
+        "datum": "rkb",
+        "stations": [
+            {
+                "md_si": 0.0,
+                "inclination_deg": 0.0,
+                "azimuth_deg": 0.0,
+                "azimuth_reference": "grid",
+                "azimuth_reference_id": "EPSG:32632",
+            },
+            {
+                "md_si": 1000.0,
+                "inclination_deg": 5.0,
+                "azimuth_deg": 10.0,
+                "azimuth_reference": "grid",
+                "azimuth_reference_id": "EPSG:32632",
+            },
+        ]
+    }
+    _spec, result = registry.execute("twin.reconciliation", {"planned": planned, "actual": actual})
+    assert {violation.name for violation in result.violations} == {"incompatible_azimuth_reference"}
+    assert result.outputs.tracking_status == "unknown"
+    assert result.outputs.azimuth_reference == "unknown"
+    assert result.outputs.compared_station_count == 0
+
+    _spec, datum_result = registry.execute(
+        "twin.reconciliation",
+        {"planned": {**planned, "datum": "rkb"}, "actual": {**planned, "datum": "msl"}},
+    )
+    assert {violation.name for violation in datum_result.violations} == {"incompatible_vertical_datums"}
+    assert datum_result.outputs.tracking_status == "unknown"
+
+    _spec, unknown_datum_result = registry.execute(
+        "twin.reconciliation",
+        {"planned": {**planned, "datum": "unknown"}, "actual": {**planned, "datum": "unknown"}},
+    )
+    assert {violation.name for violation in unknown_datum_result.violations} == {"unknown_vertical_datum"}
+    assert unknown_datum_result.outputs.datum == "unknown"
+    assert unknown_datum_result.outputs.tracking_status == "unknown"
+
+
 def test_lateral_deviation_beyond_tolerance_raises_violation(registry):
     planned = _survey((0.0, 0.0, 0.0), (1000.0, 0.0, 0.0))
     # Build an actual well that walks 40 m east over the same interval.
     actual = {
+        "datum": "rkb",
         "stations": [
-            {"md_si": 0.0, "inclination_deg": 0.0, "azimuth_deg": 90.0},
-            {"md_si": 1000.0, "inclination_deg": 4.0, "azimuth_deg": 90.0},
+            {"md_si": 0.0, "inclination_deg": 0.0, "azimuth_deg": 90.0, "azimuth_reference": "grid", "azimuth_reference_id": "test-grid"},
+            {"md_si": 1000.0, "inclination_deg": 4.0, "azimuth_deg": 90.0, "azimuth_reference": "grid", "azimuth_reference_id": "test-grid"},
         ]
     }
     _spec, result = registry.execute(
@@ -87,12 +142,22 @@ def test_short_actual_survey_warns_about_uncovered_stations(registry):
 
 def test_tie_in_anchor_absorbs_a_constant_lateral_shift(registry):
     stations = [
-        {"md_si": 0.0, "inclination_deg": 0.0, "azimuth_deg": 0.0},
-        {"md_si": 1000.0, "inclination_deg": 0.0, "azimuth_deg": 0.0},
+        {"md_si": 0.0, "inclination_deg": 0.0, "azimuth_deg": 0.0, "azimuth_reference": "grid", "azimuth_reference_id": "test-grid"},
+        {"md_si": 1000.0, "inclination_deg": 0.0, "azimuth_deg": 0.0, "azimuth_reference": "grid", "azimuth_reference_id": "test-grid"},
     ]
     # The actual survey is the plan but tied in 40 m north (a different slot / KB).
-    actual = {"stations": stations, "tie_in": {"ns_si": 40.0, "ew_si": 0.0, "tvd_si": 0.0}}
-    payload = {"planned": {"stations": stations}, "actual": actual}
+    actual = {
+        "datum": "rkb",
+        "stations": stations,
+        "tie_in": {
+            "ns_si": 40.0,
+            "ew_si": 0.0,
+            "tvd_si": 0.0,
+            "azimuth_reference": "grid",
+            "azimuth_reference_id": "test-grid",
+        },
+    }
+    payload = {"planned": {"datum": "rkb", "stations": stations}, "actual": actual}
     _spec, anchored = registry.execute(
         "twin.reconciliation", {**payload, "anchor_actual_to_planned_start": True}
     )

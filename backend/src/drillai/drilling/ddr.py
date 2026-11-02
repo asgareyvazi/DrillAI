@@ -257,6 +257,7 @@ class ProcessingReport:
     events_updated: list[str] = field(default_factory=list)
     twin_aspects: list[dict[str, str]] = field(default_factory=list)
     trajectory_stations_created: int = 0
+    survey_frame_declarations: list[dict[str, str]] = field(default_factory=list)
     records_promoted: list[str] = field(default_factory=list)
     records_needing_review: list[str] = field(default_factory=list)
     not_promoted: list[dict[str, str]] = field(default_factory=list)
@@ -277,6 +278,7 @@ class ProcessingReport:
             "events_updated": self.events_updated,
             "twin_aspects": self.twin_aspects,
             "trajectory_stations_created": self.trajectory_stations_created,
+            "survey_frame_declarations": self.survey_frame_declarations,
             "records_promoted": self.records_promoted,
             "records_needing_review": self.records_needing_review,
             "not_promoted": self.not_promoted,
@@ -1509,10 +1511,10 @@ class DdrProcessor:
                 )
             return
 
-        valid_rows: list[tuple[ExtractedRecord, dict[str, float | None]]] = []
+        valid_rows: list[tuple[ExtractedRecord, dict[str, Any]]] = []
         for record in rows:
             payload = record.payload or {}
-            values: dict[str, float | None] = {}
+            values: dict[str, Any] = {}
             invalid: list[str] = []
             for field_name in ("md_si", "inclination_deg", "azimuth_deg"):
                 value = payload.get(field_name)
@@ -1528,8 +1530,41 @@ class DdrProcessor:
                 invalid.append("md_si must be greater than zero")
             if "inclination_deg" in values and not 0 <= values["inclination_deg"] <= 180:
                 invalid.append("inclination_deg must be between 0 and 180 degrees")
-            if "azimuth_deg" in values and not 0 <= values["azimuth_deg"] <= 360:
-                invalid.append("azimuth_deg must be between 0 and 360 degrees")
+            if "azimuth_deg" in values and not 0 <= values["azimuth_deg"] < 360:
+                invalid.append("azimuth_deg must be within [0, 360)")
+
+            azimuth_reference = payload.get("azimuth_reference")
+            azimuth_reference_id = payload.get("azimuth_reference_id")
+            if not isinstance(azimuth_reference, str) or azimuth_reference not in {"grid", "true", "magnetic"}:
+                invalid.append("azimuth_reference must be explicitly declared as grid, true, or magnetic")
+            if (
+                not isinstance(azimuth_reference_id, str)
+                or not azimuth_reference_id.strip()
+                or len(azimuth_reference_id.strip()) > 120
+                or not azimuth_reference_id.isprintable()
+            ):
+                invalid.append("azimuth_reference_id must be explicit printable text up to 120 characters")
+            else:
+                values["azimuth_reference_id"] = azimuth_reference_id.strip()
+            if isinstance(azimuth_reference, str) and azimuth_reference in {"grid", "true", "magnetic"}:
+                values["azimuth_reference"] = azimuth_reference
+
+            datum = payload.get("datum")
+            if not isinstance(datum, str) or datum not in {"rkb", "msl", "gl", "cf", "derrick_floor"}:
+                invalid.append("vertical datum must be explicitly declared as rkb, msl, gl, cf, or derrick_floor")
+            else:
+                values["datum"] = datum
+
+            correction = payload.get("grid_correction_deg")
+            if correction is not None:
+                if isinstance(correction, bool) or not isinstance(correction, (int, float)) or not math.isfinite(float(correction)):
+                    invalid.append("grid_correction_deg must be a finite signed number when supplied")
+                else:
+                    values["grid_correction_deg"] = float(correction)
+                    invalid.append(
+                        "a declared grid correction requires an explicit target grid frame and is not applied by DDR promotion"
+                    )
+
             tvd = payload.get("tvd_si")
             if tvd is not None:
                 if isinstance(tvd, bool) or not isinstance(tvd, (int, float)) or not math.isfinite(float(tvd)):
@@ -1542,7 +1577,9 @@ class DdrProcessor:
                     {
                         "record_id": record.id,
                         "record_type": "survey_station",
-                        "reason": "invalid survey station; " + "; ".join(invalid) + "; queued for human review",
+                        "reason": "invalid or incomplete survey station; "
+                        + "; ".join(invalid)
+                        + "; queued for human review",
                     }
                 )
                 continue
@@ -1551,6 +1588,35 @@ class DdrProcessor:
 
         if not valid_rows:
             return
+
+        declared_frames = {
+            (values["azimuth_reference"], values["azimuth_reference_id"], values["datum"])
+            for _record, values in valid_rows
+        }
+        if len(declared_frames) != 1:
+            reason = (
+                "survey stations in this promotion batch declare different azimuth reference identities "
+                "or vertical datums; a common trajectory frame cannot be inferred, so all stations are queued "
+                "for human review"
+            )
+            for record, _values in valid_rows:
+                report.records_needing_review.append(record.id)
+                report.not_promoted.append(
+                    {"record_id": record.id, "record_type": "survey_station", "reason": reason}
+                )
+            report.warnings.append(
+                f"did not promote {len(valid_rows)} survey station(s) from document {document.id}; "
+                "the batch has incompatible declared frames or vertical datums"
+            )
+            return
+        batch_reference, batch_reference_id, batch_datum = next(iter(declared_frames))
+        report.survey_frame_declarations.append(
+            {
+                "azimuth_reference": batch_reference,
+                "azimuth_reference_id": batch_reference_id,
+                "datum": batch_datum,
+            }
+        )
 
         # Serialize station-index allocation and the read-before-write idempotency check across
         # different source documents for the same wellbore on PostgreSQL. The document row itself is
@@ -1598,6 +1664,56 @@ class DdrProcessor:
             if station.evidence_ref:
                 existing_by_record.setdefault(station.evidence_ref, station)
 
+        if existing_by_record:
+            persisted_trajectories = (
+                await self.session.execute(
+                    select(Trajectory).where(
+                        Trajectory.org_id == self.org_id,
+                        Trajectory.wellbore_id == document.wellbore_id,
+                        Trajectory.id.in_({station.trajectory_id for station in existing_by_record.values()}),
+                    )
+                )
+            ).scalars().all()
+            trajectory_by_id = {trajectory.id: trajectory for trajectory in persisted_trajectories}
+            incompatible_replays: list[str] = []
+            for record, values in valid_rows:
+                station = existing_by_record.get(record.id)
+                if station is None:
+                    continue
+                trajectory = trajectory_by_id.get(station.trajectory_id)
+                compatible = (
+                    trajectory is not None
+                    and trajectory.azimuth_reference == batch_reference
+                    and trajectory.azimuth_reference_id == batch_reference_id
+                    and trajectory.datum == batch_datum
+                    and station.input_azimuth_deg is not None
+                    and math.isclose(station.input_azimuth_deg, values["azimuth_deg"], rel_tol=0.0, abs_tol=1e-9)
+                    and math.isclose(station.azimuth_deg, values["azimuth_deg"], rel_tol=0.0, abs_tol=1e-9)
+                    and station.input_azimuth_reference == values["azimuth_reference"]
+                    and station.input_azimuth_reference_id == values["azimuth_reference_id"]
+                    and station.grid_correction_deg == values.get("grid_correction_deg")
+                )
+                if not compatible:
+                    incompatible_replays.append(record.id)
+            if incompatible_replays:
+                for record_id in incompatible_replays:
+                    report.records_needing_review.append(record_id)
+                    report.not_promoted.append(
+                        {
+                            "record_id": record_id,
+                            "record_type": "survey_station",
+                            "reason": (
+                                "an existing promoted station does not preserve the current source frame, "
+                                "datum, raw azimuth, and correction provenance; queued for human review"
+                            ),
+                        }
+                    )
+                report.warnings.append(
+                    f"did not reuse {len(incompatible_replays)} existing survey station(s); persisted frame "
+                    "or raw correction provenance does not match the reviewed source record"
+                )
+                return
+
         if not dry_run:
             for record, _values in valid_rows:
                 existing_station = existing_by_record.get(record.id)
@@ -1631,13 +1747,16 @@ class DdrProcessor:
             incompatible_trajectories = [
                 trajectory
                 for trajectory in current_actual_trajectories
-                if trajectory.source_document_id != document.id
+                if (
+                    trajectory.azimuth_reference != batch_reference
+                    or trajectory.azimuth_reference_id != batch_reference_id
+                    or trajectory.datum != batch_datum
+                )
             ]
             if incompatible_trajectories:
                 reason = (
-                    "survey-frame compatibility has not been explicitly established: the existing "
-                    "current trajectory is anchored to a different or unattributed document, and "
-                    "vertical datum and azimuth-reference compatibility cannot be inferred; queued "
+                    "the declared azimuth reference type and frame identity or vertical datum do not match "
+                    "the existing current trajectory; compatibility is not inferred and stations are queued "
                     "for human review"
                 )
                 for record, _values in new_rows:
@@ -1651,7 +1770,7 @@ class DdrProcessor:
                     )
                 report.warnings.append(
                     f"did not promote {len(new_rows)} survey station(s) from document {document.id}; "
-                    "cross-document survey-frame compatibility requires explicit human evidence"
+                    "the declared frame type/identity and vertical datum are incompatible with the current trajectory"
                 )
                 return
 
@@ -1682,25 +1801,34 @@ class DdrProcessor:
                 kind="actual",
                 name=f"Actual trajectory (from {document.title or document.id})",
                 source_document_id=document.id,
+                datum=batch_datum,
+                azimuth_reference=batch_reference,
+                azimuth_reference_id=batch_reference_id,
                 is_current=True,
                 version=version,
                 created_by=self.actor_id or "ddr_processor",
                 validation={
-                    "is_valid": True,
+                    "is_valid": False,
+                    "state": "not_independently_validated",
+                    "declared_azimuth_frame": {
+                        "type": batch_reference,
+                        "id": batch_reference_id,
+                    },
+                    "declared_vertical_datum": batch_datum,
                     "issues": [
                         {
                             "severity": "warning",
                             "code": "not_independently_validated",
                             "message": (
-                                "stations transcribed from a report; positional accuracy depends on "
-                                "the survey programme and has not been independently verified"
+                                "stations and frame metadata were transcribed from a report; positional "
+                                "accuracy and the source declaration have not been independently verified"
                             ),
                         }
                     ],
                 },
                 notes=(
-                    "stations transcribed from a report; positional accuracy depends on the survey "
-                    "programme and has not been independently verified"
+                    "stations transcribed from a report; explicit source-declared azimuth frame and "
+                    "vertical datum are retained, but positional accuracy has not been independently verified"
                 ),
             )
             self.session.add(trajectory)
@@ -1731,6 +1859,10 @@ class DdrProcessor:
                 md_si=values["md_si"],
                 inclination_deg=values["inclination_deg"],
                 azimuth_deg=values["azimuth_deg"],
+                input_azimuth_deg=values["azimuth_deg"],
+                input_azimuth_reference=values["azimuth_reference"],
+                input_azimuth_reference_id=values["azimuth_reference_id"],
+                grid_correction_deg=values.get("grid_correction_deg"),
                 tvd_si=values["tvd_si"],
                 source="report",
                 measured_at=(
@@ -1739,7 +1871,16 @@ class DdrProcessor:
                     else None
                 ),
                 evidence_ref=record.id,
-                raw_source={"record_id": record.id, "payload": record.payload or {}},
+                quality_flags=list(record.quality_flags or []),
+                raw_source={
+                    "record_id": record.id,
+                    "payload": record.payload or {},
+                    "input_azimuth_reference": values["azimuth_reference"],
+                    "input_azimuth_reference_id": values["azimuth_reference_id"],
+                    "input_azimuth_deg": values["azimuth_deg"],
+                    "grid_correction_deg": values.get("grid_correction_deg"),
+                    "vertical_datum": values["datum"],
+                },
             )
             self.session.add(station)
             await self.session.flush()
@@ -1974,6 +2115,7 @@ class DdrProcessor:
                         "events_created": len(report.events_created),
                         "events_updated": len(report.events_updated),
                         "records_promoted": len(report.records_promoted),
+                        "survey_frame_declarations": report.survey_frame_declarations,
                         "records_needing_review": len(report.records_needing_review),
                         "twin_aspects": len(report.twin_aspects),
                         "npt_hours_classified": round(report.npt_hours_classified, 3),

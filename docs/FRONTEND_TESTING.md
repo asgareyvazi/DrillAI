@@ -11,9 +11,9 @@ is confined to unit and component tests, where it isolates a boundary rather tha
 | Types | `cd frontend && npm run typecheck` | strict TypeScript with `noUncheckedIndexedAccess` enabled in the app, E2E, and Node-config projects; includes tests and E2E specs |
 | Lint | `cd frontend && npm run lint` | no unused code, no `any` slipping in, React rules |
 | Build | `cd frontend && npm run build` | `tsc -b` plus a production Vite build |
-| Unit + component | `cd frontend && npm test` | 356 passed in 35 files: values, units, the API boundary, cancellation, the request-failure oracle, permissions, identity settings, the shared UI states, and the pages' contracts |
-| End-to-end | `cd frontend && npm run e2e` | 121 passed in 17 spec files: the real stack through a browser, in three deployments |
-| Backend | `cd backend && DRILLAI_TEST_POSTGRES=1 .venv/bin/python -m pytest` | 1,555 passed, 0 skipped in 106 files (embedded PostgreSQL enabled) |
+| Unit + component | `cd frontend && npm test` | 373 passed in 37 files: values, units, the API boundary, cancellation, the request-failure oracle, permissions, identity settings, the shared UI states, document-review guidance and direction, and the pages' contracts |
+| End-to-end | `cd frontend && npm run e2e` | 123 passed in 18 spec files: the real stack through a browser, in three deployments |
+| Backend | `cd backend && DRILLAI_TEST_POSTGRES=1 .venv/bin/python -m pytest` | 1,621 passed, 0 skipped in 114 files (embedded PostgreSQL enabled) |
 | Backend lint | `cd backend && .venv/bin/python -m ruff check .` | backend style and import hygiene |
 | Migrations | `cd backend && .venv/bin/python -m alembic upgrade head && .venv/bin/python -m alembic check` | no model/migration drift — against a **fresh** database |
 | Supply chain + secrets | `backend/.venv/bin/python scripts/verify_supply_chain_and_secrets.py` | full-SHA Actions pins, tracked/untracked/eligible ignored text scan, `pip-audit`, full frontend `npm audit` at moderate, and production audit at high |
@@ -34,12 +34,13 @@ extras with `pip install -e "backend[dev,ocr]"` (the bootstrap scripts and CI do
 inject deterministic providers and do not require a Tesseract executable. Tesseract and language data
 remain opt-in operating-system dependencies, as described in `CONNECTORS_AND_OPERATIONS.md`.
 
-Twelve tests across nine files assert against a real PostgreSQL: two in `tests/db/test_persistence.py`
+Thirteen tests across ten files assert against a real PostgreSQL: two in `tests/db/test_persistence.py`
 (JSON and timestamp behavior SQLite cannot prove, and that the Alembic baseline creates exactly the
 schema the models declare); one in `tests/db/test_migrations_postgres.py` (the whole migration chain,
 drift, downgrade/re-upgrade, and duplicate regulator identifiers); one in
 `tests/db/test_cp18_postgres_backup_restore.py` (logical backup/restore and migration recovery drill);
 one in `tests/db/test_promotion_identity_migration.py` (PostgreSQL promotion fingerprint uniqueness and tenant scope);
+one in `tests/drilling/test_daily_report_domain.py` (composite tenant FKs and typed report-domain checks);
 three in `tests/documents/test_document_identity.py` (operation-aware identity migration backfill/downgrade,
 concurrent uploads of one logical document, and concurrent uploads into different scopes); one in
 `tests/test_cp20_integration_completeness.py` (pgvector retrieval); one in
@@ -55,11 +56,11 @@ PostgreSQL flag is set:
 cd backend && DRILLAI_TEST_POSTGRES=1 .venv/bin/python -m pytest
 ```
 
-The completed enabled-PostgreSQL run reports **1,555 passed, 0 skipped** across 106 test files. With the
-PostgreSQL flag unset, the same collected inventory reports **1,543 passed, 12 skipped**; those 12 cases
+The completed enabled-PostgreSQL run reports **1,621 passed, 0 skipped** across 114 test files. With the
+PostgreSQL flag unset, the same collected inventory reports **1,608 passed, 13 skipped**; all 13 cases
 are PostgreSQL-marked and are not represented as passes. CI runs the enabled suite on Linux (the `pgserver`
 dev dependency is in `backend/pyproject.toml`); the Windows job uses `-m "not postgres"` to deselect
-those integration cases. Windows reports one expected skip for the POSIX-only Tesseract CLI subprocess fixture; `-rs` prints its reason and the Windows gate accepts exactly that single skip, no additional skips.
+those 13 integration cases. Windows reports one expected skip for the POSIX-only Tesseract CLI subprocess fixture; `-rs` prints its reason and the Windows gate accepts exactly that single skip, no additional skips.
 
 ## Unit and component tests
 
@@ -118,8 +119,8 @@ cd frontend && npx playwright test e2e/well-cockpit.spec.ts --project=chromium
 Playwright starts six servers. The application code is identical in all three deployments; what
 differs is the deployment they are pointed at. A CI run that executes only `chromium` certifies a
 third of the suite, so all three projects run. `npm run e2e:verify-shape` checks the exact reviewed
-inventory before execution: **121 tests in 17 files** (`chromium=114`, `chromium-faults=4`,
-`chromium-auth=3`). CI then requires **121 passed** in each platform job; the inventory check itself
+inventory before execution: **123 tests in 18 files** (`chromium=116`, `chromium-faults=4`,
+`chromium-auth=3`). CI then requires **123 passed** in each platform job; the inventory check itself
 is collection-only and is not reported as executed tests.
 
 | Project | Deployment | What only it can prove |
@@ -130,7 +131,7 @@ is collection-only and is not reported as executed tests.
 
 ### The journeys
 
-121 journeys in 17 spec files. The list is the coverage; the counts are what the suite reports.
+123 journeys in 18 spec files. The list is the coverage; the counts are what the suite reports.
 
 | Spec | Journeys | Covers |
 | --- | --- | --- |
@@ -222,8 +223,8 @@ checkout → provenance → Python 3.11 + Node 22 (npm cache)
 → frontend install (`npm ci`, lockfile authoritative)
 → typecheck → lint → unit tests → build
 → backend tests (DRILLAI_TEST_POSTGRES=1) → ruff → migration check on a fresh database
-→ reviewed E2E inventory (121 tests: Chromium 114, faults 4, auth 3)
-→ the complete end-to-end suite (main + faults + auth; exactly 121 passes)
+→ reviewed E2E inventory (123 tests: Chromium 116, faults 4, auth 3)
+→ the complete end-to-end suite (main + faults + auth; exactly 123 passes)
 → Playwright evidence, uploaded only after a failure
 ```
 
@@ -247,12 +248,12 @@ end-to-end steps, and collected no artifacts; it was removed in the following co
 (see `docs/mission-reports/FRONTEND-MISSION.md`, §CP6).
 
 Linux runs the full PostgreSQL-enabled backend suite and Docker Compose deployment gate. Windows
-runs the native SQLite backend suite with `-m "not postgres"` (the twelve PostgreSQL-marked cases are
+runs the native SQLite backend suite with `-m "not postgres"` (the thirteen PostgreSQL-marked cases are
 not run on Windows), the multi-process stack and local vendor-harness checks, and the complete
 frontend/E2E suite; Docker Compose is Linux-only. The external vendor probe makes zero network calls
 without configured endpoints/credentials, so no live interoperability certification is inferred.
-Both platform jobs run the reviewed E2E inventory and require all 121 journeys to pass across
-Chromium (114), faults (4), and auth (3). Do not interpret the Windows PostgreSQL exclusions or
+Both platform jobs run the reviewed E2E inventory and require all 123 journeys to pass across
+Chromium (116), faults (4), and auth (3). Do not interpret the Windows PostgreSQL exclusions or
 Linux-only Compose gate as tests passed on Windows.
 
 The workflow is read-only (`permissions: contents: read`), uses no secrets, and never writes to the

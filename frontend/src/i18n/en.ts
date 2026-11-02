@@ -475,6 +475,7 @@ export const en = {
     rejectRecord: 'Reject this record',
     reviewPayload: 'Corrected payload (JSON)',
     reviewPayloadHint: 'Preserve the stored keys, list lengths and value types. The server checks the record-specific engineering ranges.',
+    reviewSurveyFrameHint: 'For survey stations, confirm azimuth_reference and its exact azimuth_reference_id, plus datum (rkb, msl, gl, cf, or derrick_floor), only from source evidence. Keep unknown values unknown. A signed grid_correction_deg is provenance only; DDR promotion does not apply it.',
     reviewObservedAt: 'Observed at',
     reviewTimezoneHint: 'Your browser-local time is converted to UTC before submission.',
     reviewDepthMd: 'Measured depth (MD)',

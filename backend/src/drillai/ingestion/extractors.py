@@ -983,19 +983,124 @@ class DepthReadingExtractor(Extractor):
                 )
 
 
+def _azimuth_reference_from_header(label: str) -> str | None:
+    """Return only a reference type stated explicitly in an azimuth column heading."""
+    markers = {
+        name for name in ("grid", "true", "magnetic") if re.search(rf"\b{name}\b", label.casefold())
+    }
+    if len(markers) > 1:
+        return "conflict"
+    return next(iter(markers), None)
+
+
+def _parse_azimuth_reference(value: str | None) -> str | None:
+    """Parse controlled reference labels; unknown text remains unclassified for human review."""
+    if value is None:
+        return None
+    normalized = re.sub(r"[^a-z0-9]+", " ", value.casefold()).strip()
+    aliases = {
+        "grid": "grid",
+        "grid north": "grid",
+        "grid azimuth": "grid",
+        "true": "true",
+        "true north": "true",
+        "true azimuth": "true",
+        "magnetic": "magnetic",
+        "magnetic north": "magnetic",
+        "magnetic azimuth": "magnetic",
+        "unknown": "unknown",
+        "unspecified": "unknown",
+        "not specified": "unknown",
+        "not reported": "unknown",
+        "n a": "unknown",
+        "na": "unknown",
+        "none": "unknown",
+    }
+    return aliases.get(normalized)
+
+
+def _parse_vertical_datum(value: str | None) -> str | None:
+    """Parse explicit vertical-datum declarations without assigning a default."""
+    if value is None:
+        return None
+    normalized = re.sub(r"[^a-z0-9]+", " ", value.casefold()).strip()
+    aliases = {
+        "rkb": "rkb",
+        "kb": "rkb",
+        "kelly bushing": "rkb",
+        "rotary kelly bushing": "rkb",
+        "msl": "msl",
+        "mean sea level": "msl",
+        "gl": "gl",
+        "ground level": "gl",
+        "cf": "cf",
+        "casing flange": "cf",
+        "derrick floor": "derrick_floor",
+        "derrick floor datum": "derrick_floor",
+        "unknown": "unknown",
+        "unspecified": "unknown",
+        "not specified": "unknown",
+        "not reported": "unknown",
+        "n a": "unknown",
+        "na": "unknown",
+        "none": "unknown",
+    }
+    return aliases.get(normalized)
+
+
+def _clean_azimuth_reference_id(value: str | None) -> str | None:
+    if value is None:
+        return None
+    cleaned = value.strip()
+    if not cleaned or len(cleaned) > 120 or not cleaned.isprintable():
+        return None
+    return cleaned
+
+
 class SurveyTableExtractor(Extractor):
     """Survey stations (MD, inclination, azimuth) from survey tables."""
 
     key = "survey_table"
     name = "Survey stations"
-    version = "1.1.0"
+    version = "1.2.0"
     doc_types = ("ddr", "drilling_document", "program", "survey_report", "other")
     priority = 50
 
     _HEADER_ALIASES = {
         "md": {"md", "measured depth", "md depth", "depth md", "measured depth md", "md measured depth"},
         "inclination": {"inc", "incl", "inclination", "inclination angle"},
-        "azimuth": {"azi", "azim", "azimuth"},
+        "azimuth": {
+            "azi",
+            "azim",
+            "azimuth",
+            "grid azimuth",
+            "true azimuth",
+            "magnetic azimuth",
+            "azimuth grid",
+            "azimuth true",
+            "azimuth magnetic",
+            "grid azi",
+            "true azi",
+            "magnetic azi",
+        },
+        "azimuth_reference": {"azimuth reference", "azimuth ref", "north reference", "north ref"},
+        "azimuth_reference_id": {
+            "azimuth reference id",
+            "azimuth frame id",
+            "reference frame id",
+            "grid reference id",
+            "coordinate reference system",
+            "crs",
+            "epsg",
+        },
+        "datum": {"datum", "vertical datum", "tvd datum", "depth datum", "vertical reference datum"},
+        "grid_correction_deg": {
+            "grid correction",
+            "grid correction deg",
+            "signed grid correction",
+            "signed grid correction deg",
+            "azimuth correction to grid",
+        },
     }
 
     @staticmethod
@@ -1032,19 +1137,34 @@ class SurveyTableExtractor(Extractor):
                 azimuth_header_unit = (
                     _unit_from_header(header[column_of["azimuth"]]) if "azimuth" in column_of else ""
                 )
+                azimuth_header_reference = (
+                    _azimuth_reference_from_header(header[column_of["azimuth"]]) if "azimuth" in column_of else None
+                )
+                correction_header_unit = (
+                    _unit_from_header(header[column_of["grid_correction_deg"]])
+                    if "grid_correction_deg" in column_of
+                    else ""
+                )
                 md_unit = md_header_unit or "m"
                 inclination_unit = inclination_header_unit or "deg"
                 azimuth_unit = azimuth_header_unit or "deg"
+                correction_unit = correction_header_unit or "deg"
                 # Unknown explicit units must fail closed; silently treating e.g. kilometres as
                 # metres or mils as degrees would produce plausible but materially wrong stations.
                 _depth_unit_factor(md_unit)
                 _angle_to_degrees(0.0, inclination_unit)
                 if "azimuth" in column_of:
                     _angle_to_degrees(0.0, azimuth_unit)
-                inferred_units = not md_header_unit or not inclination_header_unit or (
-                    "azimuth" in column_of and not azimuth_header_unit
+                if "grid_correction_deg" in column_of:
+                    _angle_to_degrees(0.0, correction_unit)
+                inferred_units = (
+                    not md_header_unit
+                    or not inclination_header_unit
+                    or ("azimuth" in column_of and not azimuth_header_unit)
+                    or ("grid_correction_deg" in column_of and not correction_header_unit)
                 )
                 header_row = int(region.table.get("header_row") or 0)
+                header_cells = region.table["cells"][header_row] if header_row < len(region.table["cells"]) else []
                 for row in region.table["cells"][header_row + 1:]:
                     if not row or any(cell.get("hidden_row") or cell.get("hidden_sheet") for cell in row):
                         continue
@@ -1067,6 +1187,71 @@ class SurveyTableExtractor(Extractor):
                     if column_of["md"] < len(row) and (locator := _cell_locator(region, row[column_of["md"]])):
                         field_locations["md_si"] = locator
                     quality_flags: list[str] = ["unit_inferred"] if inferred_units else []
+                    raw_datum = cell_value("datum")
+                    datum = _parse_vertical_datum(raw_datum)
+                    if raw_datum is not None and datum is None:
+                        datum = "unknown"
+                        quality_flags.append("unrecognized_vertical_datum")
+                    if datum is None:
+                        datum = "unknown"
+                    payload["datum"] = datum
+                    if datum == "unknown":
+                        quality_flags.append("unknown_vertical_datum")
+                    if (
+                        "datum" in column_of
+                        and column_of["datum"] < len(row)
+                        and (locator := _cell_locator(region, row[column_of["datum"]]))
+                    ):
+                        field_locations["datum"] = locator
+
+                    raw_reference = cell_value("azimuth_reference")
+                    parsed_row_reference = _parse_azimuth_reference(raw_reference)
+                    if azimuth_header_reference == "conflict":
+                        azimuth_reference = "unknown"
+                        quality_flags.append("conflicting_azimuth_reference_labels")
+                    elif raw_reference is not None and parsed_row_reference is None:
+                        azimuth_reference = "unknown"
+                        quality_flags.append("unrecognized_azimuth_reference")
+                    elif raw_reference is not None:
+                        azimuth_reference = parsed_row_reference or "unknown"
+                        if (
+                            azimuth_reference != "unknown"
+                            and azimuth_header_reference is not None
+                            and azimuth_reference != azimuth_header_reference
+                        ):
+                            azimuth_reference = "unknown"
+                            quality_flags.append("conflicting_azimuth_reference_labels")
+                    else:
+                        azimuth_reference = (
+                            azimuth_header_reference if azimuth_header_reference not in (None, "conflict") else "unknown"
+                        )
+                    if azimuth_reference == "unknown":
+                        quality_flags.append("unknown_azimuth_reference")
+                    payload["azimuth_reference"] = azimuth_reference
+                    reference_column = column_of.get("azimuth_reference")
+                    if reference_column is not None and reference_column < len(row):
+                        locator = _cell_locator(region, row[reference_column])
+                    elif "azimuth" in column_of and column_of["azimuth"] < len(header_cells):
+                        locator = _cell_locator(region, header_cells[column_of["azimuth"]])
+                    else:
+                        locator = None
+                    if locator:
+                        field_locations["azimuth_reference"] = locator
+
+                    raw_reference_id = cell_value("azimuth_reference_id")
+                    reference_id = _clean_azimuth_reference_id(raw_reference_id)
+                    payload["azimuth_reference_id"] = reference_id
+                    if raw_reference_id is not None and reference_id is None:
+                        quality_flags.append("invalid_azimuth_reference_id")
+                    elif azimuth_reference != "unknown" and reference_id is None:
+                        quality_flags.append("azimuth_reference_identity_missing")
+                    if (
+                        "azimuth_reference_id" in column_of
+                        and column_of["azimuth_reference_id"] < len(row)
+                        and (locator := _cell_locator(region, row[column_of["azimuth_reference_id"]]))
+                    ):
+                        field_locations["azimuth_reference_id"] = locator
+
                     if inclination := cell_value("inclination"):
                         parsed_inclination = _to_float(inclination)
                         if parsed_inclination is None:
@@ -1085,12 +1270,24 @@ class SurveyTableExtractor(Extractor):
                             quality_flags.append("ambiguous_or_invalid_azimuth")
                         else:
                             parsed_azimuth = _angle_to_degrees(parsed_azimuth, azimuth_unit)
-                            if not 0 <= parsed_azimuth <= 360:
+                            if not 0 <= parsed_azimuth < 360:
                                 quality_flags.append("azimuth_out_of_range")
                             else:
                                 payload["azimuth_deg"] = parsed_azimuth
                                 if locator := _cell_locator(region, row[column_of["azimuth"]]):
                                     field_locations["azimuth_deg"] = locator
+                    if raw_correction := cell_value("grid_correction_deg"):
+                        parsed_correction = _to_float(raw_correction)
+                        if parsed_correction is None:
+                            quality_flags.append("ambiguous_or_invalid_grid_correction")
+                        else:
+                            parsed_correction = _angle_to_degrees(parsed_correction, correction_unit)
+                            if not -360 <= parsed_correction <= 360:
+                                quality_flags.append("grid_correction_out_of_range")
+                            else:
+                                payload["grid_correction_deg"] = parsed_correction
+                                if locator := _cell_locator(region, row[column_of["grid_correction_deg"]]):
+                                    field_locations["grid_correction_deg"] = locator
                     yield ExtractedRecordDraft(
                         record_type="survey_station",
                         payload=payload,
@@ -1105,6 +1302,11 @@ class SurveyTableExtractor(Extractor):
                             "md_si": md_unit,
                             "inclination_deg": inclination_unit,
                             **({"azimuth_deg": azimuth_unit} if "azimuth" in column_of else {}),
+                            **(
+                                {"grid_correction_deg": correction_unit}
+                                if "grid_correction_deg" in column_of
+                                else {}
+                            ),
                         },
                         quality_flags=quality_flags,
                         source_locator=_table_row_locator(region, row),

@@ -54,8 +54,8 @@ def upgrade() -> None:
         sa.CheckConstraint("(resolution_state = 'proposed' AND decided_by IS NULL AND decided_at IS NULL AND reason IS NULL) OR (resolution_state <> 'proposed' AND decided_by IS NOT NULL AND decided_at IS NOT NULL AND reason IS NOT NULL AND length(trim(reason)) > 0)", name="ck_daily_report_reconciliations_daily_report_reconciliation_decision_complete"),
         sa.ForeignKeyConstraint(["revision_id", "org_id"], ["daily_drilling_report_revisions.id", "daily_drilling_report_revisions.org_id"], name="fk_daily_report_reconciliation_revision_tenant", ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["source_document_id"], ["documents.id"], name="fk_daily_report_reconciliations_source_document_id_documents", ondelete="RESTRICT"),
-        sa.ForeignKeyConstraint(["source_record_id"], ["extracted_records.id"], name="fk_daily_report_reconciliations_source_record_id_extracted_records", ondelete="RESTRICT"),
-        sa.ForeignKeyConstraint(["source_region_id"], ["document_regions.id"], name="fk_daily_report_reconciliations_source_region_id_document_regions", ondelete="RESTRICT"),
+        sa.ForeignKeyConstraint(["source_record_id"], ["extracted_records.id"], name=op.f("fk_daily_report_reconciliations_source_record_id_extracted_records"), ondelete="RESTRICT"),
+        sa.ForeignKeyConstraint(["source_region_id"], ["document_regions.id"], name=op.f("fk_daily_report_reconciliations_source_region_id_document_regions"), ondelete="RESTRICT"),
         sa.PrimaryKeyConstraint("id", name="pk_daily_report_reconciliations"),
         sa.UniqueConstraint("revision_id", "target_key", name="uq_daily_report_reconciliation_target"),
     )

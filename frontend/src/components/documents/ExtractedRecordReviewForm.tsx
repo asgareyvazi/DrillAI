@@ -172,6 +172,11 @@ export function ExtractedRecordReviewForm({
           data-testid="extracted-record-review-payload"
         />
       </Field>
+      {record.record_type === 'survey_station' ? (
+        <p className="rounded border border-graphite-200 bg-graphite-50 p-2 text-xs text-graphite-700 dark:border-graphite-800 dark:bg-graphite-950 dark:text-graphite-300">
+          {t('documents.reviewSurveyFrameHint')}
+        </p>
+      ) : null}
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label={t('documents.reviewObservedAt')} hint={t('documents.reviewTimezoneHint')}>
           <input

@@ -106,8 +106,8 @@ def test_cp19_02_independent_analytical_benchmarks_for_all_14_engines() -> None:
         "trajectory.minimum_curvature",
         {
             "stations": [
-                {"md_si": 0.0, "inclination_deg": 0.0, "azimuth_deg": 0.0},
-                {"md_si": 1000.0, "inclination_deg": 30.0, "azimuth_deg": 90.0},
+                {"md_si": 0.0, "inclination_deg": 0.0, "azimuth_deg": 0.0, "azimuth_reference": "grid", "azimuth_reference_id": "test-grid"},
+                {"md_si": 1000.0, "inclination_deg": 30.0, "azimuth_deg": 90.0, "azimuth_reference": "grid", "azimuth_reference_id": "test-grid"},
             ]
         },
     )
@@ -463,16 +463,24 @@ def test_cp19_02_independent_analytical_benchmarks_for_all_14_engines() -> None:
         "twin.reconciliation",
         {
             "planned": {
+                "datum": "rkb",
                 "stations": [
-                    {"md_si": 0.0, "inclination_deg": 0.0, "azimuth_deg": 0.0},
-                    {"md_si": 1000.0, "inclination_deg": 0.0, "azimuth_deg": 0.0},
+                    {"md_si": 0.0, "inclination_deg": 0.0, "azimuth_deg": 0.0, "azimuth_reference": "grid", "azimuth_reference_id": "test-grid"},
+                    {"md_si": 1000.0, "inclination_deg": 0.0, "azimuth_deg": 0.0, "azimuth_reference": "grid", "azimuth_reference_id": "test-grid"},
                 ]
             },
             "actual": {
-                "tie_in": {"tvd_si": 0.0, "ns_si": 0.0, "ew_si": 12.0},
+                "datum": "rkb",
+                "tie_in": {
+                    "tvd_si": 0.0,
+                    "ns_si": 0.0,
+                    "ew_si": 12.0,
+                    "azimuth_reference": "grid",
+                    "azimuth_reference_id": "test-grid",
+                },
                 "stations": [
-                    {"md_si": 0.0, "inclination_deg": 0.0, "azimuth_deg": 0.0},
-                    {"md_si": 1000.0, "inclination_deg": 0.0, "azimuth_deg": 0.0},
+                    {"md_si": 0.0, "inclination_deg": 0.0, "azimuth_deg": 0.0, "azimuth_reference": "grid", "azimuth_reference_id": "test-grid"},
+                    {"md_si": 1000.0, "inclination_deg": 0.0, "azimuth_deg": 0.0, "azimuth_reference": "grid", "azimuth_reference_id": "test-grid"},
                 ],
             },
             "anchor_actual_to_planned_start": False,

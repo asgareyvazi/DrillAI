@@ -568,6 +568,8 @@ class TrajectoryProvider(SectionProvider):
                 data={
                     "kind": trajectory.kind,
                     "datum": trajectory.datum,
+                    "azimuth_reference": trajectory.azimuth_reference,
+                    "azimuth_reference_id": trajectory.azimuth_reference_id,
                     "version": trajectory.version,
                     "station_count": trajectory.station_count,
                     "total_md_si": trajectory.total_md_si,
@@ -622,6 +624,10 @@ class TrajectoryProvider(SectionProvider):
                         "md_si": station.md_si,
                         "inclination_deg": station.inclination_deg,
                         "azimuth_deg": station.azimuth_deg,
+                        "input_azimuth_deg": station.input_azimuth_deg,
+                        "input_azimuth_reference": station.input_azimuth_reference,
+                        "input_azimuth_reference_id": station.input_azimuth_reference_id,
+                        "grid_correction_deg": station.grid_correction_deg,
                         "tvd_si": station.tvd_si,
                         "ns_si": station.ns_si,
                         "ew_si": station.ew_si,
@@ -634,7 +640,17 @@ class TrajectoryProvider(SectionProvider):
                     source_ids=[station.id],
                     cites=[station.evidence_ref] if station.evidence_ref else [],
                     observed_at=station.measured_at,
-                    units={"md_si": "m", "tvd_si": "m", "ns_si": "m", "ew_si": "m", "inclination_deg": "deg", "azimuth_deg": "deg", "dls_deg_per_30m": "deg/30m"},
+                    units={
+                        "md_si": "m",
+                        "tvd_si": "m",
+                        "ns_si": "m",
+                        "ew_si": "m",
+                        "inclination_deg": "deg",
+                        "azimuth_deg": "deg",
+                        "input_azimuth_deg": "deg",
+                        "grid_correction_deg": "deg",
+                        "dls_deg_per_30m": "deg/30m",
+                    },
                 )
             )
         if not stations:

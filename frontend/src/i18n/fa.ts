@@ -473,6 +473,7 @@ export const fa = {
     rejectRecord: 'رد این رکورد',
     reviewPayload: 'محمولهٔ اصلاح‌شده (JSON)',
     reviewPayloadHint: 'کلیدهای ذخیره‌شده، طول فهرست‌ها و نوع مقادیر را حفظ کنید. سرور بازه‌های مهندسیِ مخصوص رکورد را بررسی می‌کند.',
+    reviewSurveyFrameHint: 'برای ایستگاه‌های برداشت، azimuth_reference و شناسهٔ دقیق azimuth_reference_id و نیز datum (rkb، msl، gl، cf یا derrick_floor) را فقط بر پایهٔ شاهد منبع تأیید کنید. مقدار نامعلوم را نامعلوم نگه دارید. grid_correction_deg علامت‌دار فقط سابقهٔ منشأ است؛ ارتقای DDR آن را اعمال نمی‌کند.',
     reviewObservedAt: 'زمان مشاهده',
     reviewTimezoneHint: 'زمان محلی مرورگر پیش از ارسال به UTC تبدیل می‌شود.',
     reviewDepthMd: 'عمق اندازه‌گیری‌شده (MD)',

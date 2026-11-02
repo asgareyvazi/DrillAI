@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import math
 from itertools import pairwise
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -28,7 +29,7 @@ from drillai.engines.trajectory import TrajectoryEngineInput, minimum_curvature
 from drillai.units.registry import quantity_field
 
 METHOD = "plan-vs-actual deviation (minimum curvature, linear MD interpolation)"
-ENGINE_VERSION = "1.1.0"
+ENGINE_VERSION = "1.2.0"
 
 STATUS_OK = "on_plan"
 STATUS_WATCH = "watch"
@@ -78,6 +79,9 @@ class TrackReconciliationOutput(BaseModel):
     model_config = ConfigDict(extra="forbid")
     method: str = METHOD
     engine_version: str = ENGINE_VERSION
+    datum: Literal["rkb", "msl", "gl", "cf", "derrick_floor", "unknown"]
+    azimuth_reference: Literal["grid", "true", "magnetic", "unknown"]
+    azimuth_reference_id: str | None
     stations: list[StationDeviation]
     station_count: int
     compared_station_count: int
@@ -102,20 +106,26 @@ class TrackReconciliationOutput(BaseModel):
     notes: list[str] = Field(default_factory=list)
 
 
-def _normalised(inputs: TrajectoryEngineInput) -> list[dict[str, float]]:
-    """Run minimum curvature and return plain dicts (index, md, tvd, ns, ew)."""
+def _normalised(
+    inputs: TrajectoryEngineInput,
+) -> tuple[list[dict[str, float]], str, str]:
+    """Run minimum curvature and retain the exact reference frame used for the coordinates."""
     result = minimum_curvature(inputs)
     if result.violations:
         raise _TrajectoryInvalidError(result.violations)
-    return [
-        {
-            "md_si": station.md_si,
-            "tvd_si": station.tvd_si,
-            "ns_si": station.ns_si,
-            "ew_si": station.ew_si,
-        }
-        for station in result.outputs.stations
-    ]
+    return (
+        [
+            {
+                "md_si": station.md_si,
+                "tvd_si": station.tvd_si,
+                "ns_si": station.ns_si,
+                "ew_si": station.ew_si,
+            }
+            for station in result.outputs.stations
+        ],
+        result.outputs.azimuth_reference,
+        result.outputs.azimuth_reference_id,
+    )
 
 
 class _TrajectoryInvalidError(Exception):
@@ -151,8 +161,8 @@ def compute_reconciliation(inputs: TrajectoryComparisonInput) -> EngineResult:
     notes: list[str] = []
 
     try:
-        planned = _normalised(inputs.planned)
-        actual = _normalised(inputs.actual)
+        planned, planned_reference, planned_reference_id = _normalised(inputs.planned)
+        actual, actual_reference, actual_reference_id = _normalised(inputs.actual)
     except _TrajectoryInvalidError as exc:
         for violation in exc.violations:
             violations.append(
@@ -165,6 +175,50 @@ def compute_reconciliation(inputs: TrajectoryComparisonInput) -> EngineResult:
             )
         return EngineResult(
             outputs=_empty_output(inputs, reason="the supplied survey could not be evaluated"),
+            warnings=warnings,
+            violations=violations,
+            assumptions_applied=[METHOD],
+        )
+
+    if inputs.planned.datum == "unknown" or inputs.actual.datum == "unknown":
+        violations.append(
+            ConstraintViolation(
+                name="unknown_vertical_datum",
+                message=(
+                    f"planned datum {inputs.planned.datum!r} and actual datum {inputs.actual.datum!r} must both be "
+                    "explicitly declared; unknown vertical datums are not considered compatible"
+                ),
+                severity="error",
+                source="survey datum declarations",
+            )
+        )
+    elif inputs.planned.datum != inputs.actual.datum:
+        violations.append(
+            ConstraintViolation(
+                name="incompatible_vertical_datums",
+                message=(
+                    f"planned datum {inputs.planned.datum!r} differs from actual datum {inputs.actual.datum!r}; "
+                    "datum compatibility is not inferred or converted"
+                ),
+                severity="error",
+                source="survey datum declarations",
+            )
+        )
+    if (planned_reference, planned_reference_id) != (actual_reference, actual_reference_id):
+        violations.append(
+            ConstraintViolation(
+                name="incompatible_azimuth_reference",
+                message=(
+                    f"planned azimuth frame {(planned_reference, planned_reference_id)!r} differs from actual "
+                    f"azimuth frame {(actual_reference, actual_reference_id)!r}; coordinates were not compared"
+                ),
+                severity="error",
+                source="survey azimuth-reference declarations",
+            )
+        )
+    if violations:
+        return EngineResult(
+            outputs=_empty_output(inputs, reason="survey reference compatibility is not established"),
             warnings=warnings,
             violations=violations,
             assumptions_applied=[METHOD],
@@ -272,15 +326,19 @@ def compute_reconciliation(inputs: TrajectoryComparisonInput) -> EngineResult:
     else:
         tracking_status = STATUS_OK
 
-    planned_total = inputs.planned.stations[-1].md_si
-    actual_total = inputs.actual.stations[-1].md_si
+    planned_total = max(station.md_si for station in inputs.planned.stations)
+    actual_total = max(station.md_si for station in inputs.actual.stations)
     notes.extend(
         [
             f"lateral tolerance {inputs.lateral_tolerance_si:.1f} m, vertical tolerance {inputs.vertical_tolerance_si:.1f} m",
+            f"both surveys use declared {planned_reference} frame {planned_reference_id!r} and datum {inputs.planned.datum!r}",
             "actual position sampled at planned stations using linear interpolation in MD",
         ]
     )
     outputs = TrackReconciliationOutput(
+        datum=inputs.planned.datum,
+        azimuth_reference=planned_reference,
+        azimuth_reference_id=planned_reference_id,
         stations=stations,
         station_count=len(planned),
         compared_station_count=len(stations),
@@ -314,6 +372,7 @@ def compute_reconciliation(inputs: TrajectoryComparisonInput) -> EngineResult:
             else "the actual survey was used exactly as supplied: a tie-in difference appears as deviation"
         ),
         "tolerances are supplied by the caller; the defaults are indicative, not a standard",
+        "planned and actual vertical datums and azimuth frame identities must match exactly; no compatibility is inferred",
     ]
     return EngineResult(
         outputs=outputs,
@@ -328,9 +387,12 @@ def compute_reconciliation(inputs: TrajectoryComparisonInput) -> EngineResult:
 
 
 def _empty_output(inputs: TrajectoryComparisonInput, *, reason: str) -> TrackReconciliationOutput:
-    planned_total = inputs.planned.stations[-1].md_si if inputs.planned.stations else 0.0
-    actual_total = inputs.actual.stations[-1].md_si if inputs.actual.stations else 0.0
+    planned_total = max((station.md_si for station in inputs.planned.stations), default=0.0)
+    actual_total = max((station.md_si for station in inputs.actual.stations), default=0.0)
     return TrackReconciliationOutput(
+        datum=inputs.planned.datum if inputs.planned.datum == inputs.actual.datum else "unknown",
+        azimuth_reference="unknown",
+        azimuth_reference_id=None,
         stations=[],
         station_count=len(inputs.planned.stations),
         compared_station_count=0,

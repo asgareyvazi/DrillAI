@@ -257,9 +257,9 @@ async def test_engine_run_is_audited_with_hashes(client):
             "well_id": well_id,
             "inputs": {
                 "stations": [
-                    {"md_si": 0.0, "inclination_deg": 0.0, "azimuth_deg": 0.0},
-                    {"md_si": 500.0, "inclination_deg": 1.5, "azimuth_deg": 45.0},
-                    {"md_si": 1000.0, "inclination_deg": 3.0, "azimuth_deg": 45.0},
+                    {"md_si": 0.0, "inclination_deg": 0.0, "azimuth_deg": 0.0, "azimuth_reference": "grid", "azimuth_reference_id": "test-grid"},
+                    {"md_si": 500.0, "inclination_deg": 1.5, "azimuth_deg": 45.0, "azimuth_reference": "grid", "azimuth_reference_id": "test-grid"},
+                    {"md_si": 1000.0, "inclination_deg": 3.0, "azimuth_deg": 45.0, "azimuth_reference": "grid", "azimuth_reference_id": "test-grid"},
                 ],
             },
         },
@@ -348,8 +348,8 @@ def _engine_graph() -> dict:
                 "config": {"engine_key": "trajectory.minimum_curvature"},
                 "inputs": {
                     "stations": [
-                        {"md_si": 0.0, "inclination_deg": 0.0, "azimuth_deg": 0.0},
-                        {"md_si": 600.0, "inclination_deg": 2.0, "azimuth_deg": 30.0},
+                        {"md_si": 0.0, "inclination_deg": 0.0, "azimuth_deg": 0.0, "azimuth_reference": "grid", "azimuth_reference_id": "test-grid"},
+                        {"md_si": 600.0, "inclination_deg": 2.0, "azimuth_deg": 30.0, "azimuth_reference": "grid", "azimuth_reference_id": "test-grid"},
                     ],
                 },
             },
@@ -884,7 +884,7 @@ async def test_permissions_are_enforced_per_route(client):
     engine_denied = await client.post(
         "/api/v1/registry/engines/trajectory.minimum_curvature/run",
         headers=headers("viewer"),
-        json={"inputs": {"stations": [{"md_si": 0.0, "inclination_deg": 0.0, "azimuth_deg": 0.0}]}},
+        json={"inputs": {"stations": [{"md_si": 0.0, "inclination_deg": 0.0, "azimuth_deg": 0.0, "azimuth_reference": "grid", "azimuth_reference_id": "test-grid"}]}},
     )
     assert engine_denied.status_code == 403
 

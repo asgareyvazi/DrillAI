@@ -101,28 +101,26 @@ it holds to and `docs/FRONTEND_TESTING.md` lists what is verified and how.
 | --- | --- | --- |
 | Frontend types | `cd frontend && npm run typecheck` | strict TypeScript with `noUncheckedIndexedAccess` across app, E2E specs and Node config |
 | Frontend lint | `cd frontend && npm run lint` | unused code, `any`, React rules |
-| Frontend unit/component | `cd frontend && npm test` | 356 passed in 35 files |
+| Frontend unit/component | `cd frontend && npm test` | 373 passed in 37 files |
 | Frontend build | `cd frontend && npm run build` | `tsc -b` plus the production Vite build |
-| Backend tests | `cd backend && DRILLAI_TEST_POSTGRES=1 .venv/bin/python -m pytest` | 1,555 passed, 0 skipped in 106 files (embedded PostgreSQL enabled) |
+| Backend tests | `cd backend && DRILLAI_TEST_POSTGRES=1 .venv/bin/python -m pytest` | 1,621 passed, 0 skipped in 114 files (embedded PostgreSQL enabled) |
 | Backend lint | `cd backend && .venv/bin/python -m ruff check .` | style and import hygiene |
 | Migrations | `cd backend && .venv/bin/python -m alembic upgrade head && .venv/bin/python -m alembic check` | no model/migration drift, against a fresh database |
 | Supply chain and secrets | `backend/.venv/bin/python scripts/verify_supply_chain_and_secrets.py` | full-SHA Actions pins, workspace secret scan, `pip-audit`, full frontend `npm audit` at moderate, and production audit at high |
 | Stack verification | `backend/.venv/bin/python scripts/verify_stack.py` | 16 multi-process scenarios: clean migration, backend, dedicated `connector-worker`, real WITSML 1.4.1.1 SOAP & ETP 1.2 Binary Avro ingest, soak metrics, restart recovery & stop |
 | Vendor interop runner | `backend/.venv/bin/python scripts/verify_external_vendor_interop.py --mode harness` | offline WITSML 1.4.1.1 SOAP & ETP 1.2 Binary Avro conformance + opt-in `--mode external` vendor probe |
 | Docker Compose smoke gate | `POSTGRES_PASSWORD=... docker compose up -d --build` | multi-container PostgreSQL, Alembic migrate, backend, `connector-worker`, and Nginx frontend proxy |
-| End-to-end | `cd frontend && npm run e2e` | 121 passed browser journeys in 17 spec files against the real stack (Chromium 114, faults 4, auth 3) |
+| End-to-end | `cd frontend && npm run e2e` | 123 passed browser journeys in 18 spec files against the real stack (Chromium 116, faults 4, auth 3) |
 
-Set `DRILLAI_TEST_POSTGRES=1` to run the twelve PostgreSQL-backed persistence, migration, promotion-index,
-backup/restore, pgvector, worker-fencing, concurrent-upload, and concurrent SQL-CAS tests through the
-repository's embedded PostgreSQL (`pgserver`). The completed PostgreSQL-enabled run reports **1,555 passed, 0 skipped** in 106 test files.
-With the flag unset, the same 1,555-test inventory reports **1,543 passed, 12 skipped**; the skipped cases are the PostgreSQL-marked integration tests, not counted as passes. Linux CI runs the PostgreSQL-enabled suite, while native Windows deselects the twelve PostgreSQL-marked cases with `-m "not postgres"`. The Windows suite additionally reports one exact, expected skip for the POSIX-only Tesseract subprocess fixture; its skip reason is asserted by CI and no other skips are accepted.
+Set `DRILLAI_TEST_POSTGRES=1` to run the thirteen PostgreSQL-backed tests across ten files covering persistence, migrations, report-domain constraints, promotion identity, backup/restore, pgvector, worker fencing, concurrent uploads, and concurrent SQL-CAS through the repository's embedded PostgreSQL (`pgserver`). The completed PostgreSQL-enabled run reports **1,621 passed, 0 skipped** in 114 test files.
+With the flag unset, the same 1,621-test inventory reports **1,608 passed, 13 skipped**; all 13 skipped cases are PostgreSQL-marked integrations, not counted as passes. Linux CI runs the PostgreSQL-enabled suite, while native Windows deselects those 13 PostgreSQL-marked cases with `-m "not postgres"`. The Windows suite additionally reports one exact, expected skip for the POSIX-only Tesseract subprocess fixture; its skip reason is asserted by CI and no other skips are accepted.
 See `docs/WINDOWS-SETUP.md`, `docs/mission-reports/PRODUCTION-READINESS-MATRIX.md`, and
 `docs/mission-reports/CP16-MISSION-REPORT.md` for historical commit-stamped verification provenance. The
 [CP51–CP58 final assurance review](docs/mission-reports/CP51-58-FINAL-ASSURANCE.md) records that mission's
 exact-head CI evidence and residuals; the current CP59–CP75 source audit and results are in the
 [capability matrix](docs/mission-reports/CP59-CP75-CAPABILITY-MATRIX.md) and final assurance report.
 
-The end-to-end suite is 17 spec files across three deployments of the same product — development
+The end-to-end suite is 18 spec files across three deployments of the same product — development
 identity, deterministic fault injection, and authentication enabled — covering the cockpit,
 live operational monitor (`live-operations.spec.ts`), telemetry connector registry & real WITSML/ETP
 protocols (`connectors-platform.spec.ts`: WITSML 1.4.1.1 SOAP, production ETP 1.2 Binary Avro
@@ -142,9 +140,9 @@ CI is triggered on every push to `arena/**` session branches (`.github/workflows
 frontend typecheck/lint/unit/build, the full backend suite with embedded PostgreSQL, lint/migration
 checks, multi-process stack verification, Docker Compose smoke, the reviewed E2E inventory, and all
 three Playwright projects. Native Windows runs the corresponding frontend gates, the backend suite
-excluding the twelve PostgreSQL-marked cases (which are exercised on Linux), stack/vendor-harness
+excluding the thirteen PostgreSQL-marked cases (which are exercised on Linux), stack/vendor-harness
 checks, the same inventory, and all three E2E projects; it does not run Docker Compose. Both platforms
-require exactly 121 E2E passes (Chromium 114, faults 4, auth 3). Evidence uploads only after failure.
+require exactly 123 E2E passes (Chromium 116, faults 4, auth 3). Evidence uploads only after failure.
 Every required gate is a separate step that fails the job; there is no `continue-on-error`. The only
 `|| true` uses are best-effort Docker Compose cleanup in the exit trap, not test or deployment gates.
 
