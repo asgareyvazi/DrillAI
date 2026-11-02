@@ -9,7 +9,7 @@ revision history and the outbox event.
 from __future__ import annotations
 
 import datetime as dt
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, Header, Query, Request
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -131,6 +131,36 @@ class DailyReportCreate(_StrictModel):
     shift_label: str | None = Field(default=None, max_length=80)
     report_number: str | None = Field(default=None, max_length=120)
     content: DailyReportContentInput = Field(default_factory=DailyReportContentInput)
+
+
+class DailyReportFieldSource(_StrictModel):
+    field_key: str = Field(min_length=1, max_length=48)
+    source_record_id: str = Field(min_length=1, max_length=64)
+    source_path: str = Field(
+        min_length=8,
+        max_length=256,
+        pattern=r"^payload(?:\.[A-Za-z0-9_-]+)*$",
+        description="A field path within the immutable extracted-record payload, e.g. payload.summary.",
+    )
+
+
+class DailyReportImport(DailyReportCreate):
+    source_document_id: str = Field(min_length=1, max_length=64)
+    source_record_id: str | None = Field(default=None, max_length=64)
+    source_region_id: str | None = Field(default=None, max_length=64)
+    source_page_number: int | None = Field(default=None, ge=1)
+    field_sources: list[DailyReportFieldSource] = Field(default_factory=list, max_length=32)
+
+
+class DailyReportReconciliationChange(_StrictModel):
+    target_key: str = Field(min_length=1, max_length=180)
+    decision: Literal["accepted", "corrected", "rejected", "unresolved"]
+
+
+class DailyReportReconciliation(_StrictModel):
+    expected_edit_version: int = Field(ge=1)
+    reason: str = Field(min_length=1, max_length=2000)
+    decisions: list[DailyReportReconciliationChange] = Field(min_length=1, max_length=500)
 
 
 class DailyReportEdit(_StrictModel):
@@ -261,6 +291,32 @@ async def create_daily_report(
     return await _remember(session, org_id=org_id, key=idempotency_key, scope=scope, response=response)
 
 
+@router.post(
+    "/wells/{well_id}/daily-reports/imports",
+    status_code=201,
+    summary="Create an unapproved draft from a source document",
+)
+async def import_daily_report(
+    well_id: str,
+    payload: DailyReportImport,
+    request: Request,
+    session: Annotated[AsyncSession, Depends(get_db)],
+    auth: Annotated[AuthContext, Depends(require("daily_report.write"))],
+    idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key", max_length=160)] = None,
+) -> dict[str, Any]:
+    authorize(auth.principal, "daily_report.import", context={"well_id": well_id})
+    org_id = auth.org_id or ""
+    scope = f"daily_report.import:{well_id}"
+    body = {"well_id": well_id, **payload.model_dump(mode="json")}
+    if (replayed := await _replay(session, org_id=org_id, key=idempotency_key, scope=scope, body=body)) is not None:
+        return replayed
+    response = await _service(session, auth, request).create_import(
+        well_id,
+        payload.model_dump(mode="python"),
+    )
+    return await _remember(session, org_id=org_id, key=idempotency_key, scope=scope, response=response)
+
+
 @router.get("/wells/{well_id}/daily-reports/{report_id}", summary="Read the current report revision")
 async def get_daily_report(
     well_id: str,
@@ -327,6 +383,41 @@ async def update_daily_report_draft(
         expected_edit_version=payload.expected_edit_version,
         reason=payload.reason,
         content=payload.content.model_dump(mode="python"),
+    )
+    return await _remember(session, org_id=org_id, key=idempotency_key, scope=scope, response=response)
+
+
+@router.post(
+    "/wells/{well_id}/daily-reports/{report_id}/revisions/{revision_number}/reconcile",
+    summary="Reconcile source-linked fields and rows in an imported draft",
+)
+async def reconcile_daily_report(
+    well_id: str,
+    report_id: str,
+    revision_number: int,
+    payload: DailyReportReconciliation,
+    request: Request,
+    session: Annotated[AsyncSession, Depends(get_db)],
+    auth: Annotated[AuthContext, Depends(require("daily_report.write"))],
+    idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key", max_length=160)] = None,
+) -> dict[str, Any]:
+    authorize(
+        auth.principal,
+        "daily_report.reconcile",
+        context={"well_id": well_id, "daily_report_id": report_id},
+    )
+    org_id = auth.org_id or ""
+    scope = f"daily_report.reconcile:{report_id}:{revision_number}"
+    body = payload.model_dump(mode="json")
+    if (replayed := await _replay(session, org_id=org_id, key=idempotency_key, scope=scope, body=body)) is not None:
+        return replayed
+    response = await _service(session, auth, request).reconcile(
+        well_id,
+        report_id,
+        revision_number,
+        expected_edit_version=payload.expected_edit_version,
+        reason=payload.reason,
+        decisions=[item.model_dump(mode="python") for item in payload.decisions],
     )
     return await _remember(session, org_id=org_id, key=idempotency_key, scope=scope, response=response)
 

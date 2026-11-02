@@ -1257,6 +1257,51 @@ export interface DailyReportEditPayload {
   content: DailyReportContentInput
 }
 
+export type DailyReportReconciliationTargetKind = 'revision_field' | 'activity' | 'measurement'
+export type DailyReportReconciliationDecision = 'accepted' | 'corrected' | 'rejected' | 'unresolved'
+
+export interface DailyReportFieldSource {
+  field_key: string
+  source_record_id: string
+  source_path: string
+}
+
+export interface DailyReportImportPayload extends DailyReportCreatePayload {
+  source_document_id: string
+  source_record_id?: string | null
+  source_region_id?: string | null
+  source_page_number?: number | null
+  field_sources?: DailyReportFieldSource[]
+}
+
+export interface DailyReportReconciliationPayload {
+  expected_edit_version: number
+  reason: string
+  decisions: Array<{ target_key: string; decision: DailyReportReconciliationDecision }>
+}
+
+export interface DailyReportReconciliation {
+  id: string
+  target_key: string
+  target_kind: DailyReportReconciliationTargetKind
+  target_id: string | null
+  field_key: string
+  source_document_id: string
+  source_record_id: string
+  source_region_id: string | null
+  source_page_number: number | null
+  source_path: string
+  source_review_version: number
+  source_fingerprint: string
+  source_value_hash: string
+  proposed_value_hash: string
+  proposal_matches_current: boolean
+  resolution_state: Exclude<DailyReportResolutionState, 'manual'>
+  reason: string | null
+  decided_by: string | null
+  decided_at: string | null
+}
+
 export interface DailyReportRevisionSummary {
   id: string
   report_id: string
@@ -1351,6 +1396,7 @@ export interface DailyReportRevision extends DailyReportRevisionSummary {
   content_hash_verified: boolean
   activities: DailyReportActivity[]
   measurements: DailyReportMeasurement[]
+  reconciliation: DailyReportReconciliation[]
 }
 
 export interface DailyReport {

@@ -40,9 +40,27 @@ interface DailyReportRecord {
 interface DailyReportRead {
   report: DailyReportRecord
   latest_revision: DailyReportRevisionSummary & {
+    source_kind: 'manual' | 'import' | 'connector'
+    source_document_id: string | null
+    source_record_id: string | null
     summary: string | null
+    reconciliation: Array<{
+      target_kind: 'revision_field' | 'activity' | 'measurement'
+      field_key: string
+      source_document_id: string
+      source_record_id: string
+      source_region_id: string | null
+      source_page_number: number | null
+      source_path: string
+      resolution_state: string
+      proposal_matches_current: boolean
+    }>
     activities: Array<{
       title: string
+      source_document_id: string | null
+      source_record_id: string | null
+      source_region_id: string | null
+      source_page_number: number | null
       start_at: string | null
       start_time_basis: string
       duration_seconds: number | null
@@ -55,6 +73,10 @@ interface DailyReportRead {
     }>
     measurements: Array<{
       parameter_key: string
+      source_document_id: string | null
+      source_record_id: string | null
+      source_region_id: string | null
+      source_page_number: number | null
       source_value: number
       source_unit: string
       accepted_input_value: number
@@ -64,6 +86,19 @@ interface DailyReportRead {
       value_basis: string
     }>
   }
+}
+
+interface ImportedDocumentDetail {
+  document: { id: string; title: string; status: string }
+  records: Array<{
+    id: string
+    record_type: string
+    validation_state: string
+    page_number: number | null
+    region_id: string | null
+    payload: Record<string, unknown>
+  }>
+  ingestion_jobs: Array<{ status: string }>
 }
 
 interface DailyReportHistory {
@@ -80,7 +115,159 @@ async function enterReason(page: import('./fixtures').Page, reason: string) {
   await page.getByTestId('daily-report-action-confirm').click()
 }
 
-test.describe('the manual daily-report lifecycle in a real browser', () => {
+test.describe('daily-report lifecycle in a real browser', () => {
+  test('imports and reconciles rows against an actual extracted CSV source', async ({
+    page,
+    request,
+    consoleErrors,
+    failedResponses,
+  }) => {
+    const tag = Date.now().toString(36)
+    const summary = `Synthetic source-backed summary ${tag}.`
+    const project = await apiPost<{ id: string }>(
+      request,
+      '/projects',
+      { name: `E2E DDR import project ${tag}` },
+      'wellManager',
+    )
+    const well = await apiPost<{ id: string }>(
+      request,
+      '/wells',
+      { project_id: project.id, name: `E2E-DDR-IMPORT-${tag}`, well_type: 'development_producer' },
+      'engineer',
+    )
+    const wellbore = await apiPost<{ id: string }>(
+      request,
+      `/wells/${well.id}/wellbores`,
+      { name: 'Main bore', purpose: 'original' },
+      'engineer',
+    )
+    const csv = [
+      'summary,operation,duration (h),depth md (m),mud weight (ppg)',
+      `${summary},Drilling ahead,8,2450,12.5`,
+      '',
+    ].join('\n')
+    const upload = await request.post('/api/v1/documents', {
+      headers: { 'X-Dev-Roles': 'engineer' },
+      multipart: {
+        file: {
+          name: `synthetic-ddr-import-${tag}.csv`,
+          mimeType: 'text/csv',
+          buffer: Buffer.from(csv, 'utf8'),
+        },
+        well_id: well.id,
+        wellbore_id: wellbore.id,
+        doc_type: 'ddr',
+        title: `Synthetic DDR import ${tag}`,
+      },
+    })
+    expect(upload.ok(), `upload -> ${upload.status()}`).toBeTruthy()
+    const uploaded = (await upload.json()) as { document: { id: string } }
+    await expect.poll(async () => {
+      const detail = await apiGet<ImportedDocumentDetail>(request, `/documents/${uploaded.document.id}`, 'engineer')
+      return detail.records.some((record) =>
+        record.record_type === 'operation_row' &&
+        record.validation_state === 'extracted' &&
+        record.payload.summary === summary &&
+        record.payload.operation === 'Drilling ahead' &&
+        record.payload.duration_hours === 8 &&
+        record.payload.depth_md_si === 2450,
+      )
+    }, { timeout: 60_000, message: 'the CSV extractor must preserve the source row values and provenance' }).toBe(true)
+    const document = await apiGet<ImportedDocumentDetail>(request, `/documents/${uploaded.document.id}`, 'engineer')
+    const sourceRecord = document.records.find((record) =>
+      record.record_type === 'operation_row' && record.payload.summary === summary,
+    )
+    expect(sourceRecord, 'the uploaded CSV must produce the row used by the import').toBeTruthy()
+    if (!sourceRecord) throw new Error('extracted operation source record is missing')
+
+    await page.goto(`/wells/${well.id}/daily-reports`)
+    await expect(page.getByTestId('daily-report-import-open')).toBeEnabled()
+    await page.getByTestId('daily-report-import-open').click()
+    await page.getByTestId('daily-report-import-document').selectOption(uploaded.document.id)
+    await page.getByTestId('daily-report-import-record').selectOption(sourceRecord.id)
+    await page.getByTestId('daily-report-import-summary-source').selectOption('payload.summary')
+    await page.getByTestId('daily-report-import-wellbore').selectOption(wellbore.id)
+    await page.getByTestId('daily-report-import-date').fill('2026-11-02')
+    await page.getByTestId('daily-report-import-timezone').fill('Europe/Amsterdam')
+    await page.getByTestId('daily-report-import-shift').selectOption('day')
+    await page.getByLabel('Operator report number').fill(`DDR-IMPORT-${tag}`)
+
+    await page.getByTestId('daily-report-import-add-activity').click()
+    await page.locator('#import-activity-0-kind').selectOption('operation')
+    await page.locator('#import-activity-0-operation').selectOption('drilling')
+    await page.locator('#import-activity-0-title').fill(String(sourceRecord.payload.operation))
+    await page.locator('#import-activity-0-duration').fill(String(sourceRecord.payload.duration_hours))
+    await page.locator('#import-activity-0-duration-unit').selectOption('h')
+    await page.locator('#import-activity-0-duration-basis').selectOption('reported')
+    await page.locator('#import-activity-0-source').selectOption(sourceRecord.id)
+
+    await page.getByTestId('daily-report-import-add-measurement').click()
+    await page.getByTestId('daily-report-import-measurement-0-parameter').selectOption('mud_weight')
+    await page.getByTestId('daily-report-import-measurement-0-value').fill('12.5')
+    await page.getByTestId('daily-report-import-measurement-0-unit').selectOption('ppg')
+    await page.getByTestId('daily-report-import-measurement-0-source').selectOption(sourceRecord.id)
+
+    await page.getByTestId('daily-report-import-submit').click()
+    await expect(page.getByTestId('daily-report-import-form')).toHaveCount(0)
+    await expect(page.getByTestId('daily-report-reconciliation')).toBeVisible()
+
+    const listed = await apiGet<{ items: DailyReportRecord[]; total: number }>(
+      request,
+      `/wells/${well.id}/daily-reports?limit=20`,
+      'engineer',
+    )
+    const importedRow = listed.items.find((item) => item.report_number === `DDR-IMPORT-${tag}`)
+    expect(importedRow, 'the imported report must be persisted by the backend').toBeTruthy()
+    if (!importedRow) throw new Error('imported daily report is missing from the API')
+    const importedRead = await apiGet<DailyReportRead>(request, reportPath(well.id, importedRow.id), 'engineer')
+    expect(importedRead.latest_revision.source_kind).toBe('import')
+    expect(importedRead.latest_revision.source_document_id).toBe(uploaded.document.id)
+    expect(importedRead.latest_revision.summary).toBe(summary)
+    expect(importedRead.latest_revision.activities[0]).toEqual(expect.objectContaining({
+      title: 'Drilling ahead',
+      duration_source_value: 8,
+      duration_source_unit: 'h',
+      source_document_id: uploaded.document.id,
+      source_record_id: sourceRecord.id,
+      source_region_id: sourceRecord.region_id,
+      source_page_number: sourceRecord.page_number,
+    }))
+    expect(importedRead.latest_revision.measurements[0]).toEqual(expect.objectContaining({
+      parameter_key: 'mud_weight',
+      source_value: 12.5,
+      source_unit: 'ppg',
+      source_document_id: uploaded.document.id,
+      source_record_id: sourceRecord.id,
+      source_region_id: sourceRecord.region_id,
+      source_page_number: sourceRecord.page_number,
+    }))
+    expect(importedRead.latest_revision.reconciliation).toHaveLength(3)
+    expect(importedRead.latest_revision.reconciliation.map((item) => item.resolution_state)).toEqual([
+      'proposed', 'proposed', 'proposed',
+    ])
+    expect(importedRead.latest_revision.reconciliation.every((item) => item.proposal_matches_current)).toBe(true)
+    expect(importedRead.latest_revision.reconciliation.every((item) =>
+      item.source_document_id === uploaded.document.id && item.source_record_id === sourceRecord.id &&
+      item.source_region_id === sourceRecord.region_id && item.source_page_number === sourceRecord.page_number,
+    )).toBe(true)
+
+    const decisionSelects = page.getByTestId('daily-report-reconciliation').locator('select')
+    await expect(decisionSelects).toHaveCount(3)
+    for (const decision of await decisionSelects.all()) await decision.selectOption('accepted')
+    await page.getByTestId('daily-report-reconciliation-reason').fill('Compared every proposed value with the extracted CSV row.')
+    await page.getByTestId('daily-report-reconciliation-submit').click()
+    await expect(page.getByText('Every source proposal has a recorded disposition.')).toBeVisible()
+    await expect(page.getByTestId('daily-report-submit')).toBeEnabled()
+
+    const reconciled = await apiGet<DailyReportRead>(request, reportPath(well.id, importedRow.id), 'engineer')
+    expect(reconciled.latest_revision.edit_version).toBe(2)
+    expect(reconciled.latest_revision.reconciliation.map((item) => item.resolution_state)).toEqual([
+      'accepted', 'accepted', 'accepted',
+    ])
+    expectNoFailures(consoleErrors, failedResponses)
+  })
+
   test('preserves explicit provenance, reviewer separation, history, corrections and withdrawal', async ({
     page,
     request,

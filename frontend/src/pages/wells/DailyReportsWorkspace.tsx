@@ -9,7 +9,10 @@ import {
   type DailyReportCreatePayload,
   type DailyReportDecisionPayload,
   type DailyReportEditPayload,
+  type DailyReportImportPayload,
   type DailyReportMeasurementInput,
+  type DailyReportReconciliationDecision,
+  type DailyReportReconciliationPayload,
   type DailyReportRevision,
   type DailyReportStatus,
   type DailyReportTimeBasis,
@@ -50,6 +53,10 @@ type ActivityDraft = {
   depth_reference: string
   depth_basis: string
   cause_basis: string
+  source_document_id: string
+  source_record_id: string
+  source_region_id: string
+  source_page_number: string
 }
 
 type MeasurementDraft = {
@@ -64,6 +71,10 @@ type MeasurementDraft = {
   depth_unit: string
   depth_reference: string
   depth_basis: string
+  source_document_id: string
+  source_record_id: string
+  source_region_id: string
+  source_page_number: string
 }
 
 type ReportFormState = {
@@ -80,6 +91,10 @@ type ReportFormState = {
   safety_notes: string
   next_period_plan: string
   environmental_notes: string
+  source_document_id: string
+  source_record_id: string
+  source_region_id: string
+  source_page_number: string
   reason: string
   activities: ActivityDraft[]
   measurements: MeasurementDraft[]
@@ -103,6 +118,13 @@ type CorrectionVariables = {
 }
 
 type CreateVariables = { payload: DailyReportCreatePayload; idempotencyKey: string }
+type ImportVariables = { payload: DailyReportImportPayload; idempotencyKey: string }
+type ReconciliationVariables = {
+  reportId: string
+  revisionNumber: number
+  payload: DailyReportReconciliationPayload
+  idempotencyKey: string
+}
 type EditVariables = {
   reportId: string
   revisionNumber: number
@@ -132,6 +154,10 @@ function emptyActivity(): ActivityDraft {
     depth_reference: 'unknown',
     depth_basis: 'unknown',
     cause_basis: 'unknown',
+    source_document_id: '',
+    source_record_id: '',
+    source_region_id: '',
+    source_page_number: '',
   }
 }
 
@@ -148,6 +174,10 @@ function emptyMeasurement(): MeasurementDraft {
     depth_unit: '',
     depth_reference: 'unknown',
     depth_basis: 'unknown',
+    source_document_id: '',
+    source_record_id: '',
+    source_region_id: '',
+    source_page_number: '',
   }
 }
 
@@ -166,6 +196,10 @@ function emptyForm(): ReportFormState {
     safety_notes: '',
     next_period_plan: '',
     environmental_notes: '',
+    source_document_id: '',
+    source_record_id: '',
+    source_region_id: '',
+    source_page_number: '',
     reason: '',
     activities: [],
     measurements: [],
@@ -187,6 +221,10 @@ function revisionForm(report: DailyReport, revision: DailyReportRevision): Repor
     safety_notes: revision.safety_notes ?? '',
     next_period_plan: revision.next_period_plan ?? '',
     environmental_notes: revision.environmental_notes ?? '',
+    source_document_id: revision.source_document_id ?? '',
+    source_record_id: revision.source_record_id ?? '',
+    source_region_id: revision.source_region_id ?? '',
+    source_page_number: revision.source_page_number === null ? '' : String(revision.source_page_number),
     reason: '',
     activities: revision.activities.map((activity) => ({
       key: localRowKey(),
@@ -209,6 +247,10 @@ function revisionForm(report: DailyReport, revision: DailyReportRevision): Repor
       depth_reference: activity.depth_reference,
       depth_basis: activity.depth_basis,
       cause_basis: activity.cause_basis,
+      source_document_id: activity.source_document_id ?? '',
+      source_record_id: activity.source_record_id ?? '',
+      source_region_id: activity.source_region_id ?? '',
+      source_page_number: activity.source_page_number === null ? '' : String(activity.source_page_number),
     })),
     measurements: revision.measurements.map((measurement) => ({
       key: localRowKey(),
@@ -222,6 +264,10 @@ function revisionForm(report: DailyReport, revision: DailyReportRevision): Repor
       depth_unit: measurement.depth_source_unit ?? '',
       depth_reference: measurement.depth_reference,
       depth_basis: measurement.depth_basis,
+      source_document_id: measurement.source_document_id ?? '',
+      source_record_id: measurement.source_record_id ?? '',
+      source_region_id: measurement.source_region_id ?? '',
+      source_page_number: measurement.source_page_number === null ? '' : String(measurement.source_page_number),
     })),
   }
 }
@@ -253,6 +299,12 @@ function finiteNumber(value: string): number | null {
 
 function nonEmpty(value: string): string | null {
   return value.trim() || null
+}
+
+function positiveInteger(value: string): number | null {
+  if (!value.trim()) return null
+  const number = Number(value)
+  return Number.isInteger(number) && number >= 1 ? number : null
 }
 
 function activityHasInput(activity: ActivityDraft): boolean {
@@ -404,6 +456,10 @@ function toContent(form: ReportFormState): DailyReportContentInput {
       depth_reference: hasDepth ? activity.depth_reference : 'unknown',
       depth_basis: (hasDepth ? activity.depth_basis : 'unknown') as DailyReportTimeBasis,
       cause_basis: activity.cause_basis || 'unknown',
+      source_document_id: nonEmpty(activity.source_document_id),
+      source_record_id: nonEmpty(activity.source_record_id),
+      source_region_id: nonEmpty(activity.source_region_id),
+      source_page_number: positiveInteger(activity.source_page_number),
     }
   })
   const measurements: DailyReportMeasurementInput[] = form.measurements
@@ -421,6 +477,10 @@ function toContent(form: ReportFormState): DailyReportContentInput {
         depth_unit: depth === null ? null : measurement.depth_unit,
         depth_reference: measurement.depth_reference,
         depth_basis: (depth === null ? 'unknown' : measurement.depth_basis) as DailyReportTimeBasis,
+        source_document_id: nonEmpty(measurement.source_document_id),
+        source_record_id: nonEmpty(measurement.source_record_id),
+        source_region_id: nonEmpty(measurement.source_region_id),
+        source_page_number: positiveInteger(measurement.source_page_number),
       }
     })
   return {
@@ -431,6 +491,10 @@ function toContent(form: ReportFormState): DailyReportContentInput {
     safety_notes: nonEmpty(form.safety_notes),
     next_period_plan: nonEmpty(form.next_period_plan),
     environmental_notes: nonEmpty(form.environmental_notes),
+    source_document_id: nonEmpty(form.source_document_id),
+    source_record_id: nonEmpty(form.source_record_id),
+    source_region_id: nonEmpty(form.source_region_id),
+    source_page_number: positiveInteger(form.source_page_number),
     activities,
     measurements,
   }
@@ -597,6 +661,8 @@ function formErrorText(error: string | null, t: (key: string) => string): string
   if (!error) return null
   const messages: Record<string, string> = {
     wellbore: 'dailyReports.validationWellbore',
+    sourceDocument: 'dailyReports.validationSourceDocument',
+    sourceRecord: 'dailyReports.validationSourceRecord',
     date: 'dailyReports.validationDate',
     timezone: 'dailyReports.validationTimezone',
     shift: 'dailyReports.validationShift',
@@ -943,6 +1009,620 @@ function DailyReportEditor({
   )
 }
 
+function sourceTextFields(payload: Record<string, unknown>, prefix = 'payload', depth = 0): Array<{ path: string; value: string }> {
+  if (depth > 3) return []
+  const output: Array<{ path: string; value: string }> = []
+  for (const [key, value] of Object.entries(payload)) {
+    if (!/^[A-Za-z0-9_-]+$/.test(key)) continue
+    const path = `${prefix}.${key}`
+    if (typeof value === 'string') output.push({ path, value })
+    else if (value && typeof value === 'object' && !Array.isArray(value)) {
+      output.push(...sourceTextFields(value as Record<string, unknown>, path, depth + 1))
+    }
+  }
+  return output
+}
+
+type DailyReportImportFormProps = {
+  wellId: string
+  catalogue: DailyReportCatalogue
+  wellbores: Wellbore[]
+  wellboresLoading: boolean
+  wellboresError: unknown
+  onRetryWellbores: () => void
+  gateDisabled: boolean
+  gateReason: string
+  isSaving: boolean
+  error: unknown
+  onRetry: () => void
+  onCancel: () => void
+  onOpenExistingReport: (reportId: string) => void
+  onSubmit: (payload: DailyReportImportPayload) => void
+}
+
+function DailyReportImportForm({
+  wellId,
+  catalogue,
+  wellbores,
+  wellboresLoading,
+  wellboresError,
+  onRetryWellbores,
+  gateDisabled,
+  gateReason,
+  isSaving,
+  error,
+  onRetry,
+  onCancel,
+  onOpenExistingReport,
+  onSubmit,
+}: DailyReportImportFormProps) {
+  const { t, locale } = useI18n()
+  const [form, setForm] = useState<ReportFormState>(emptyForm)
+  const [selectedRecordId, setSelectedRecordId] = useState('')
+  const [sourceFieldPaths, setSourceFieldPaths] = useState<Record<string, string>>({})
+  const [validationError, setValidationError] = useState<string | null>(null)
+  const conflictReportId = error instanceof ApiError && error.kind === 'conflict' && typeof error.details.report_id === 'string'
+    ? error.details.report_id
+    : null
+  const documentsQuery = useQuery({
+    queryKey: ['daily-report-import-documents', wellId],
+    queryFn: ({ signal }) => drillingApi.listDocuments({ well_id: wellId, doc_type: 'ddr' }, signal),
+    enabled: Boolean(wellId),
+  })
+  const documentId = form.source_document_id
+  const documentQuery = useQuery({
+    queryKey: ['daily-report-import-document', documentId],
+    queryFn: ({ signal }) => drillingApi.getDocument(documentId, signal),
+    enabled: Boolean(documentId),
+  })
+  const records = documentQuery.data?.records ?? []
+  const importableRecords = records.filter((record) => !['rejected', 'superseded'].includes(record.validation_state))
+  const selectedRecord = importableRecords.find((record) => record.id === selectedRecordId)
+  const summarySources = useMemo(
+    () => selectedRecord ? sourceTextFields(selectedRecord.payload) : [],
+    [selectedRecord],
+  )
+  const wellboreOptions = wellbores.map((item) => ({
+    value: item.id,
+    label: `${item.name} · ${item.sequence}${item.is_active ? ' · ●' : ''}`,
+  }))
+  const recordOptions = importableRecords.map((record) => ({
+    value: record.id,
+    label: `${record.record_type} · ${record.validation_state} · ${record.id}`,
+  }))
+  const shiftOptions = catalogue.shift_codes.map((value) => ({ value, label: labelEnum(t, 'shifts', value) }))
+  const timeOptions = catalogue.time_bases.map((value) => ({ value, label: labelEnum(t, 'timeBases', value) }))
+  const depthOptions = catalogue.depth_references.map((value) => ({ value, label: labelEnum(t, 'depthReferences', value) }))
+  const causeOptions = catalogue.cause_bases.map((value) => ({ value, label: labelEnum(t, 'causeBases', value) }))
+  const activityOptions = catalogue.activity_kinds.map((value) => ({ value, label: labelEnum(t, 'activities', value) }))
+  const activityUnitOptions = [...new Set(catalogue.parameters.flatMap((parameter) => parameter.accepted_units))]
+  const durationUnitOptions = activityUnitOptions.filter((unit) => ['s', 'min', 'h', 'day'].includes(unit))
+  const lengthUnitOptions = catalogue.parameters.find((parameter) => parameter.key === 'depth_md')?.accepted_units ?? []
+  const patchForm = (patch: Partial<ReportFormState>) => setForm((current) => ({ ...current, ...patch }))
+  const patchActivity = (index: number, patch: Partial<ActivityDraft>) => {
+    setForm((current) => ({
+      ...current,
+      activities: current.activities.map((item, row) => row === index ? { ...item, ...patch } : item),
+    }))
+  }
+  const patchMeasurement = (index: number, patch: Partial<MeasurementDraft>) => {
+    setForm((current) => ({
+      ...current,
+      measurements: current.measurements.map((item, row) => row === index ? { ...item, ...patch } : item),
+    }))
+  }
+  const sourceRecordMetadata = (id: string) => {
+    const record = importableRecords.find((item) => item.id === id)
+    return {
+      source_document_id: id ? documentId : '',
+      source_region_id: record?.region_id ?? '',
+      source_page_number: record?.page_number == null ? '' : String(record.page_number),
+    }
+  }
+  const chooseDocument = (id: string) => {
+    setForm((current) => ({
+      ...current,
+      source_document_id: id,
+      source_record_id: '',
+      source_region_id: '',
+      source_page_number: '',
+      activities: current.activities.map((item) => ({
+        ...item,
+        source_document_id: '',
+        source_record_id: '',
+        source_region_id: '',
+        source_page_number: '',
+      })),
+      measurements: current.measurements.map((item) => ({
+        ...item,
+        source_document_id: '',
+        source_record_id: '',
+        source_region_id: '',
+        source_page_number: '',
+      })),
+    }))
+    setSelectedRecordId('')
+    setSourceFieldPaths({})
+  }
+  const chooseRecord = (id: string) => {
+    setSelectedRecordId(id)
+    patchForm({ source_record_id: id, ...sourceRecordMetadata(id) })
+    setSourceFieldPaths({})
+  }
+  const chooseActivitySource = (index: number, id: string) => {
+    patchActivity(index, { source_record_id: id, ...sourceRecordMetadata(id) })
+  }
+  const chooseMeasurementSource = (index: number, id: string) => {
+    patchMeasurement(index, { source_record_id: id, ...sourceRecordMetadata(id) })
+  }
+  const chooseFieldSource = (
+    fieldKey: 'summary' | 'operations_summary' | 'safety_notes' | 'next_period_plan' | 'environmental_notes',
+    path: string,
+  ) => {
+    setSourceFieldPaths((current) => ({ ...current, [fieldKey]: path }))
+    const source = summarySources.find((item) => item.path === path)
+    if (source) setForm((current) => ({ ...current, [fieldKey]: source.value }))
+  }
+  const sourceRowOptions = [
+    { value: '', label: t('dailyReports.noSource') },
+    ...recordOptions,
+  ]
+  const submitForm = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const errorKey = !documentId ? 'sourceDocument' : validateForm(form, catalogue, 'create')
+    if (errorKey) {
+      setValidationError(formErrorText(errorKey, t))
+      return
+    }
+    if (!form.wellbore_id) {
+      setValidationError(t('dailyReports.validationWellbore'))
+      return
+    }
+    if (!documentQuery.data || (selectedRecordId && !selectedRecord)) {
+      setValidationError(t('dailyReports.validationSourceRecord'))
+      return
+    }
+    const mappedRowRecordIds = [...form.activities, ...form.measurements]
+      .map((row) => row.source_record_id)
+      .filter(Boolean)
+    if (Object.values(sourceFieldPaths).some(Boolean) && !selectedRecordId) {
+      setValidationError(t('dailyReports.validationSourceRecord'))
+      return
+    }
+    if (mappedRowRecordIds.some((id) => !importableRecords.some((record) => record.id === id))) {
+      setValidationError(t('dailyReports.validationSourceRecord'))
+      return
+    }
+    const content = toContent({ ...form, source_document_id: documentId, source_record_id: selectedRecordId })
+    onSubmit({
+      wellbore_id: form.wellbore_id,
+      report_date: form.report_date,
+      report_timezone: form.report_timezone.trim(),
+      shift_code: form.shift_code,
+      shift_label: form.shift_code === 'custom' ? nonEmpty(form.shift_label) : null,
+      report_number: nonEmpty(form.report_number),
+      source_document_id: documentId,
+      source_record_id: selectedRecordId || undefined,
+      field_sources: Object.entries(sourceFieldPaths)
+        .filter(([, source_path]) => Boolean(source_path))
+        .map(([field_key, source_path]) => ({ field_key, source_record_id: selectedRecordId, source_path })),
+      content: {
+        ...content,
+        source_document_id: documentId,
+        source_record_id: selectedRecordId || undefined,
+      },
+    })
+  }
+
+  const sourcePathOptions = [
+    { value: '', label: t('dailyReports.noSourceMapping') },
+    ...summarySources.map((source) => ({ value: source.path, label: source.path })),
+  ]
+  const sourceableFields = [
+    { fieldKey: 'summary', label: t('dailyReports.summary') },
+    { fieldKey: 'operations_summary', label: t('dailyReports.operationsSummary') },
+    { fieldKey: 'safety_notes', label: t('dailyReports.safetyNotes') },
+    { fieldKey: 'next_period_plan', label: t('dailyReports.nextPeriodPlan') },
+    { fieldKey: 'environmental_notes', label: t('dailyReports.environmentalNotes') },
+  ] as const
+
+  return (
+    <Card
+      title={t('dailyReports.importReport')}
+      subtitle={t('dailyReports.importSafetyNote')}
+      className="mb-4"
+      data-testid="daily-report-import-form"
+    >
+      <form aria-label={t('dailyReports.importReport')} onSubmit={submitForm} noValidate>
+        <fieldset className="mb-6 space-y-4">
+          <legend className="mb-3 text-sm font-semibold">{t('dailyReports.sourceEvidence')}</legend>
+          <p className="text-xs text-graphite-500">{t('dailyReports.importSafetyNote')}</p>
+          {documentsQuery.isPending ? <Loading /> : documentsQuery.error ? (
+            <ErrorState error={documentsQuery.error} onRetry={() => { void documentsQuery.refetch() }} />
+          ) : (
+            <SelectField
+              id="daily-report-import-document"
+              label={t('dailyReports.sourceDocument')}
+              value={documentId}
+              options={(documentsQuery.data?.items ?? []).map((document) => ({
+                value: document.id,
+                label: `${document.title} · ${document.status} · ${document.id}`,
+              }))}
+              onChange={chooseDocument}
+              placeholder={t('dailyReports.selectSourceDocument')}
+              required
+              testId="daily-report-import-document"
+            />
+          )}
+          {documentId && documentQuery.isPending && <Loading />}
+          {documentId && documentQuery.error && <ErrorState error={documentQuery.error} onRetry={() => { void documentQuery.refetch() }} />}
+          {documentQuery.data && (
+            <div className="space-y-3 rounded-md border border-graphite-200 p-3 dark:border-graphite-700" data-testid="daily-report-import-source-detail">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge tone={documentQuery.data.document.status === 'extracted' ? 'ok' : 'warning'}>{documentQuery.data.document.status}</Badge>
+                <span className="text-xs">{documentQuery.data.document.title}</span>
+                <bdi dir="ltr" className="text-[11px] text-graphite-500">{documentQuery.data.document.id}</bdi>
+              </div>
+              <p className="text-xs text-graphite-500">{t('dailyReports.extractionIsNotValidation')}</p>
+              <SelectField
+                id="daily-report-import-record"
+                label={t('dailyReports.selectExtractedRecord')}
+                value={selectedRecordId}
+                options={recordOptions}
+                onChange={chooseRecord}
+                placeholder={t('dailyReports.chooseOption')}
+                help={t('dailyReports.extractedRecordHint')}
+                testId="daily-report-import-record"
+              />
+              {records.length === 0 && <p className="text-xs text-graphite-500">{t('dailyReports.noExtractedRecords')}</p>}
+              {records.length > 0 && importableRecords.length === 0 && <p className="text-xs text-warning">{t('dailyReports.noImportableRecords')}</p>}
+              {selectedRecord && (
+                <div className="space-y-2 rounded bg-graphite-50 p-3 dark:bg-graphite-950" data-testid="daily-report-import-record-detail">
+                  <div className="flex flex-wrap items-center gap-2 text-xs">
+                    <Badge>{selectedRecord.validation_state}</Badge>
+                    <span>{selectedRecord.record_type}</span>
+                    <bdi dir="ltr" className="font-mono">{selectedRecord.id}</bdi>
+                    {selectedRecord.method && <span>{t('dailyReports.extractionMethod')}: <bdi dir="ltr">{selectedRecord.method}</bdi></span>}
+                    {selectedRecord.confidence !== null && <span>{t('dailyReports.extractionConfidence')}: <bdi dir="ltr">{formatNumber(selectedRecord.confidence, locale)}</bdi></span>}
+                  </div>
+                  <pre dir="ltr" className="max-h-56 overflow-auto whitespace-pre-wrap break-words rounded border border-graphite-200 bg-white p-2 text-[11px] dark:border-graphite-700 dark:bg-graphite-900">
+                    {JSON.stringify(selectedRecord.payload, null, 2)}
+                  </pre>
+                  {selectedRecord.payload_truncated && <p className="text-xs text-warning">{t('dailyReports.sourcePayloadTruncated')}</p>}
+                </div>
+              )}
+            </div>
+          )}
+        </fieldset>
+
+        <fieldset className="mb-6 space-y-4">
+          <legend className="mb-3 text-sm font-semibold">{t('dailyReports.identity')}</legend>
+          {wellboresLoading ? <Loading /> : wellboresError ? (
+            <ErrorState error={wellboresError} onRetry={onRetryWellbores} />
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <SelectField
+                id="daily-report-import-wellbore"
+                label={t('dailyReports.wellbore')}
+                value={form.wellbore_id}
+                options={wellboreOptions}
+                onChange={(wellbore_id) => patchForm({ wellbore_id })}
+                placeholder={t('dailyReports.selectWellbore')}
+                required
+                testId="daily-report-import-wellbore"
+              />
+              <TextField id="daily-report-import-date" label={t('dailyReports.reportDate')} value={form.report_date} onChange={(report_date) => patchForm({ report_date })} placeholder="2026-03-15" required dir="ltr" testId="daily-report-import-date" />
+              <TextField id="daily-report-import-timezone" label={t('dailyReports.reportTimezone')} value={form.report_timezone} onChange={(report_timezone) => patchForm({ report_timezone })} required dir="ltr" help={t('dailyReports.timezoneHint')} testId="daily-report-import-timezone" />
+              <SelectField id="daily-report-import-shift" label={t('dailyReports.shift')} value={form.shift_code} options={shiftOptions} onChange={(shift_code) => patchForm({ shift_code })} placeholder={t('dailyReports.chooseOption')} required testId="daily-report-import-shift" />
+              {form.shift_code === 'custom' && <TextField id="daily-report-import-shift-label" label={t('dailyReports.shiftLabel')} value={form.shift_label} onChange={(shift_label) => patchForm({ shift_label })} required />}
+              <TextField id="daily-report-import-number" label={t('dailyReports.reportNumber')} value={form.report_number} onChange={(report_number) => patchForm({ report_number })} dir="auto" />
+            </div>
+          )}
+        </fieldset>
+
+        <fieldset className="mb-6 space-y-4">
+          <legend className="mb-3 text-sm font-semibold">{t('dailyReports.content')}</legend>
+          <p className="text-xs text-graphite-500">{t('dailyReports.timestampHint')}</p>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <TextField id="daily-report-import-period-start" label={t('dailyReports.periodStart')} value={form.period_start_at} onChange={(period_start_at) => patchForm({ period_start_at })} placeholder="2026-03-15T08:00:00+01:00" dir="ltr" />
+            <TextField id="daily-report-import-period-end" label={t('dailyReports.periodEnd')} value={form.period_end_at} onChange={(period_end_at) => patchForm({ period_end_at })} placeholder="2026-03-15T20:00:00+01:00" dir="ltr" />
+            <TextAreaField id="daily-report-import-summary" label={t('dailyReports.summary')} value={form.summary} onChange={(summary) => patchForm({ summary })} rows={4} />
+            <TextAreaField id="daily-report-import-operations" label={t('dailyReports.operationsSummary')} value={form.operations_summary} onChange={(operations_summary) => patchForm({ operations_summary })} rows={4} />
+            <TextAreaField id="daily-report-import-safety" label={t('dailyReports.safetyNotes')} value={form.safety_notes} onChange={(safety_notes) => patchForm({ safety_notes })} rows={3} />
+            <TextAreaField id="daily-report-import-next-plan" label={t('dailyReports.nextPeriodPlan')} value={form.next_period_plan} onChange={(next_period_plan) => patchForm({ next_period_plan })} rows={3} />
+            <TextAreaField id="daily-report-import-environmental" label={t('dailyReports.environmentalNotes')} value={form.environmental_notes} onChange={(environmental_notes) => patchForm({ environmental_notes })} rows={3} />
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            {sourceableFields.map(({ fieldKey, label }) => (
+              <SelectField
+                key={fieldKey}
+                id={fieldKey === 'summary' ? 'daily-report-import-summary-source' : `daily-report-import-${fieldKey}-source`}
+                label={t('dailyReports.mapFieldSource', { field: label })}
+                value={sourceFieldPaths[fieldKey] ?? ''}
+                options={sourcePathOptions}
+                onChange={(path) => chooseFieldSource(fieldKey, path)}
+                placeholder={t('dailyReports.noSourceMapping')}
+                disabled={!selectedRecord || summarySources.length === 0}
+                help={t('dailyReports.sourceMappingHint')}
+                testId={fieldKey === 'summary' ? 'daily-report-import-summary-source' : `daily-report-import-${fieldKey}-source`}
+              />
+            ))}
+          </div>
+        </fieldset>
+
+        <fieldset className="mb-6 space-y-4">
+          <legend className="mb-3 text-sm font-semibold">{t('dailyReports.activities')}</legend>
+          <p className="text-xs text-graphite-500">{t('dailyReports.importRowsHint')}</p>
+          <div className="flex justify-end">
+            <Button size="sm" onClick={() => patchForm({ activities: [...form.activities, emptyActivity()] })} data-testid="daily-report-import-add-activity">{t('dailyReports.addActivity')}</Button>
+          </div>
+          {form.activities.map((activity, index) => (
+            <fieldset key={activity.key} className="rounded-md border border-graphite-200 p-3 dark:border-graphite-700" data-testid="daily-report-import-activity-row">
+              <legend className="px-1 text-xs font-semibold">{t('dailyReports.activity', { number: index + 1 })}</legend>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <SelectField id={`import-activity-${index}-kind`} label={t('dailyReports.activityKind')} value={activity.activity_kind} options={activityOptions} onChange={(activity_kind) => patchActivity(index, { activity_kind })} placeholder={t('dailyReports.chooseOption')} required />
+                {activity.activity_kind === 'operation' && <SelectField id={`import-activity-${index}-operation`} label={t('dailyReports.operationKind')} value={activity.operation_kind} options={catalogue.operation_kinds.map((value) => ({ value, label: labelEnum(t, 'operationKinds', value) }))} onChange={(operation_kind) => patchActivity(index, { operation_kind })} placeholder={t('dailyReports.chooseOption')} required />}
+                {activity.activity_kind === 'npt' && <SelectField id={`import-activity-${index}-npt`} label={t('dailyReports.nptCategory')} value={activity.npt_category} options={catalogue.npt_categories.map((value) => ({ value, label: labelEnum(t, 'nptCategories', value) }))} onChange={(npt_category) => patchActivity(index, { npt_category })} placeholder={t('dailyReports.chooseOption')} required />}
+                <TextField id={`import-activity-${index}-title`} label={t('dailyReports.activityTitle')} value={activity.title} onChange={(title) => patchActivity(index, { title })} required />
+                <SelectField id={`import-activity-${index}-source`} label={t('dailyReports.sourceRecord')} value={activity.source_record_id} options={sourceRowOptions} onChange={(source_record_id) => chooseActivitySource(index, source_record_id)} placeholder={t('dailyReports.noSourceMapping')} help={t('dailyReports.rowSourceHint')} />
+                <TextAreaField id={`import-activity-${index}-description`} label={t('dailyReports.activityDescription')} value={activity.description} onChange={(description) => patchActivity(index, { description })} rows={2} />
+                <TextField id={`import-activity-${index}-start`} label={t('dailyReports.startAt')} value={activity.start_at} onChange={(start_at) => patchActivity(index, { start_at })} placeholder="2026-03-15T08:00:00+01:00" dir="ltr" />
+                <SelectField id={`import-activity-${index}-start-basis`} label={t('dailyReports.startTimeBasis')} value={activity.start_time_basis} options={timeOptions} onChange={(start_time_basis) => patchActivity(index, { start_time_basis })} placeholder={t('dailyReports.chooseOption')} />
+                <TextField id={`import-activity-${index}-end`} label={t('dailyReports.endAt')} value={activity.end_at} onChange={(end_at) => patchActivity(index, { end_at })} placeholder="2026-03-15T20:00:00+01:00" dir="ltr" />
+                <SelectField id={`import-activity-${index}-end-basis`} label={t('dailyReports.endTimeBasis')} value={activity.end_time_basis} options={timeOptions} onChange={(end_time_basis) => patchActivity(index, { end_time_basis })} placeholder={t('dailyReports.chooseOption')} />
+                <TextField id={`import-activity-${index}-duration`} label={t('dailyReports.durationValue')} value={activity.duration_value} onChange={(duration_value) => patchActivity(index, { duration_value })} inputMode="decimal" dir="ltr" />
+                <SelectField id={`import-activity-${index}-duration-unit`} label={t('dailyReports.durationUnit')} value={activity.duration_unit} options={durationUnitOptions.map((value) => ({ value, label: value }))} onChange={(duration_unit) => patchActivity(index, { duration_unit })} placeholder={t('dailyReports.selectUnit')} />
+                <SelectField id={`import-activity-${index}-duration-basis`} label={t('dailyReports.durationBasis')} value={activity.duration_basis} options={timeOptions} onChange={(duration_basis) => patchActivity(index, { duration_basis })} placeholder={t('dailyReports.chooseOption')} />
+                <TextField id={`import-activity-${index}-depth-from`} label={t('dailyReports.depthFrom')} value={activity.depth_from_value} onChange={(depth_from_value) => patchActivity(index, { depth_from_value })} inputMode="decimal" dir="ltr" />
+                <SelectField id={`import-activity-${index}-depth-from-unit`} label={t('dailyReports.unit')} value={activity.depth_from_unit} options={lengthUnitOptions.map((value) => ({ value, label: value }))} onChange={(depth_from_unit) => patchActivity(index, { depth_from_unit })} placeholder={t('dailyReports.selectUnit')} />
+                <TextField id={`import-activity-${index}-depth-to`} label={t('dailyReports.depthTo')} value={activity.depth_to_value} onChange={(depth_to_value) => patchActivity(index, { depth_to_value })} inputMode="decimal" dir="ltr" />
+                <SelectField id={`import-activity-${index}-depth-to-unit`} label={t('dailyReports.unit')} value={activity.depth_to_unit} options={lengthUnitOptions.map((value) => ({ value, label: value }))} onChange={(depth_to_unit) => patchActivity(index, { depth_to_unit })} placeholder={t('dailyReports.selectUnit')} />
+                <SelectField id={`import-activity-${index}-depth-reference`} label={t('dailyReports.depthReference')} value={activity.depth_reference} options={depthOptions} onChange={(depth_reference) => patchActivity(index, { depth_reference })} placeholder={t('dailyReports.chooseOption')} />
+                <SelectField id={`import-activity-${index}-depth-basis`} label={t('dailyReports.depthBasis')} value={activity.depth_basis} options={timeOptions} onChange={(depth_basis) => patchActivity(index, { depth_basis })} placeholder={t('dailyReports.chooseOption')} />
+                <SelectField id={`import-activity-${index}-cause-basis`} label={t('dailyReports.causeBasis')} value={activity.cause_basis} options={causeOptions} onChange={(cause_basis) => patchActivity(index, { cause_basis })} placeholder={t('dailyReports.chooseOption')} />
+              </div>
+              <div className="mt-3 flex justify-end">
+                <Button size="sm" variant="ghost" onClick={() => patchForm({ activities: form.activities.filter((_, row) => row !== index) })} aria-label={`${t('dailyReports.removeActivity')} ${index + 1}`}>
+                  {t('dailyReports.removeActivity')}
+                </Button>
+              </div>
+            </fieldset>
+          ))}
+        </fieldset>
+
+        <fieldset className="mb-6 space-y-4">
+          <legend className="mb-3 text-sm font-semibold">{t('dailyReports.measurements')}</legend>
+          <p className="text-xs text-graphite-500">{t('dailyReports.importRowsHint')}</p>
+          <div className="flex justify-end">
+            <Button size="sm" onClick={() => patchForm({ measurements: [...form.measurements, emptyMeasurement()] })} data-testid="daily-report-import-add-measurement">{t('dailyReports.addMeasurement')}</Button>
+          </div>
+          {form.measurements.map((measurement, index) => {
+            const parameter = catalogue.parameters.find((item) => item.key === measurement.parameter_key)
+            const requiredReference = parameter?.required_depth_reference ?? null
+            return (
+              <fieldset key={measurement.key} className="rounded-md border border-graphite-200 p-3 dark:border-graphite-700" data-testid="daily-report-import-measurement-row">
+                <legend className="px-1 text-xs font-semibold">{t('dailyReports.measurement', { number: index + 1 })}</legend>
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  <SelectField id={`import-measurement-${index}-parameter`} label={t('dailyReports.parameter')} value={measurement.parameter_key} options={catalogue.parameters.map((item) => ({ value: item.key, label: t(`dailyReports.parameterLabels.${item.key}`) }))} onChange={(parameter_key) => {
+                    const requiredReference = catalogue.parameters.find((item) => item.key === parameter_key)?.required_depth_reference
+                    patchMeasurement(index, { parameter_key, unit: '', depth_reference: requiredReference ?? 'unknown' })
+                  }} placeholder={t('dailyReports.selectParameter')} required testId={`daily-report-import-measurement-${index}-parameter`} />
+                  <TextField id={`import-measurement-${index}-value`} label={t('dailyReports.value')} value={measurement.value} onChange={(value) => patchMeasurement(index, { value })} inputMode="decimal" dir="ltr" required testId={`daily-report-import-measurement-${index}-value`} />
+                  <SelectField id={`import-measurement-${index}-unit`} label={t('dailyReports.unit')} value={measurement.unit} options={(parameter?.accepted_units ?? []).map((value) => ({ value, label: value }))} onChange={(unit) => patchMeasurement(index, { unit })} placeholder={t('dailyReports.selectUnit')} required testId={`daily-report-import-measurement-${index}-unit`} />
+                  <SelectField id={`import-measurement-${index}-source`} label={t('dailyReports.sourceRecord')} value={measurement.source_record_id} options={sourceRowOptions} onChange={(source_record_id) => chooseMeasurementSource(index, source_record_id)} placeholder={t('dailyReports.noSourceMapping')} help={t('dailyReports.rowSourceHint')} testId={`daily-report-import-measurement-${index}-source`} />
+                  <SelectField id={`import-measurement-${index}-basis`} label={t('dailyReports.valueBasis')} value={measurement.value_basis} options={timeOptions} onChange={(value_basis) => patchMeasurement(index, { value_basis })} placeholder={t('dailyReports.chooseOption')} required />
+                  <TextField id={`import-measurement-${index}-observed`} label={t('dailyReports.observedAt')} value={measurement.observed_at} onChange={(observed_at) => patchMeasurement(index, { observed_at })} placeholder="2026-03-15T08:00:00+01:00" dir="ltr" />
+                  <SelectField id={`import-measurement-${index}-time-basis`} label={t('dailyReports.timeBasis')} value={measurement.time_basis} options={timeOptions} onChange={(time_basis) => patchMeasurement(index, { time_basis })} placeholder={t('dailyReports.chooseOption')} />
+                  <TextField id={`import-measurement-${index}-depth`} label={t('dailyReports.depthValue')} value={measurement.depth_value} onChange={(depth_value) => patchMeasurement(index, { depth_value })} inputMode="decimal" dir="ltr" />
+                  <SelectField id={`import-measurement-${index}-depth-unit`} label={t('dailyReports.unit')} value={measurement.depth_unit} options={lengthUnitOptions.map((value) => ({ value, label: value }))} onChange={(depth_unit) => patchMeasurement(index, { depth_unit })} placeholder={t('dailyReports.selectUnit')} />
+                  <SelectField id={`import-measurement-${index}-depth-reference`} label={t('dailyReports.depthReference')} value={measurement.depth_reference} options={depthOptions} onChange={(depth_reference) => patchMeasurement(index, { depth_reference })} placeholder={t('dailyReports.chooseOption')} disabled={Boolean(requiredReference)} help={requiredReference ? labelEnum(t, 'depthReferences', requiredReference) : undefined} />
+                  <SelectField id={`import-measurement-${index}-depth-basis`} label={t('dailyReports.depthBasis')} value={measurement.depth_basis} options={timeOptions} onChange={(depth_basis) => patchMeasurement(index, { depth_basis })} placeholder={t('dailyReports.chooseOption')} />
+                  <div className="flex items-end justify-end">
+                    <Button size="sm" variant="ghost" onClick={() => patchForm({ measurements: form.measurements.filter((_, row) => row !== index) })}>{t('dailyReports.removeMeasurement')}</Button>
+                  </div>
+                </div>
+              </fieldset>
+            )
+          })}
+        </fieldset>
+
+        {validationError && <p role="alert" className="mb-3 text-xs text-danger">{validationError}</p>}
+        {gateDisabled && <p className="mb-3 text-xs text-graphite-500">{gateReason}</p>}
+        {Boolean(error) && <div className="mb-3"><ErrorState error={error} onRetry={onRetry} /></div>}
+        {conflictReportId && (
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-md border border-warning/40 bg-amber-50 p-3 dark:bg-amber-950/30">
+            <p className="text-xs text-warning">{t('dailyReports.importConflictHint')}</p>
+            <Button onClick={() => onOpenExistingReport(conflictReportId)} data-testid="daily-report-import-open-existing">
+              {t('dailyReports.openExistingReport')}
+            </Button>
+          </div>
+        )}
+        <div className="flex flex-wrap justify-end gap-2">
+          <Button onClick={onCancel}>{t('dailyReports.cancel')}</Button>
+          <Button type="submit" variant="primary" disabled={gateDisabled || isSaving || documentsQuery.isPending || Boolean(documentsQuery.error) || Boolean(documentId && (documentQuery.isPending || documentQuery.error))} data-testid="daily-report-import-submit">
+            {isSaving ? t('dailyReports.importing') : t('dailyReports.importReport')}
+          </Button>
+        </div>
+      </form>
+    </Card>
+  )
+}
+
+type DailyReportReconciliationPanelProps = {
+  wellId: string
+  revision: DailyReportRevision
+  gateDisabled: boolean
+  gateReason: string
+  isSaving: boolean
+  error: unknown
+  onRetry: () => void
+  onSubmit: (payload: DailyReportReconciliationPayload) => void
+}
+
+function DailyReportReconciliationPanel({
+  wellId,
+  revision,
+  gateDisabled,
+  gateReason,
+  isSaving,
+  error,
+  onRetry,
+  onSubmit,
+}: DailyReportReconciliationPanelProps) {
+  const { t, locale } = useI18n()
+  const [reason, setReason] = useState('')
+  const [decisions, setDecisions] = useState<Record<string, DailyReportReconciliationDecision | ''>>({})
+  const proposals = revision.reconciliation
+  const sourceDocumentId = revision.source_document_id ?? proposals[0]?.source_document_id ?? ''
+  const documentQuery = useQuery({
+    queryKey: ['daily-report-reconciliation-document', wellId, sourceDocumentId],
+    queryFn: ({ signal }) => drillingApi.getDocument(sourceDocumentId, signal),
+    enabled: Boolean(wellId && sourceDocumentId && proposals.length),
+  })
+  const pendingCount = proposals.filter((proposal) =>
+    proposal.resolution_state === 'proposed' || proposal.resolution_state === 'unresolved',
+  ).length
+  const changedDecisions = proposals.flatMap((proposal) => {
+    const selected = decisions[proposal.target_key] ?? (proposal.resolution_state === 'proposed' ? '' : proposal.resolution_state)
+    return selected && selected !== proposal.resolution_state
+      ? [{ target_key: proposal.target_key, decision: selected }]
+      : []
+  })
+
+  const submit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (gateDisabled || isSaving || !reason.trim() || changedDecisions.length === 0) return
+    onSubmit({
+      expected_edit_version: revision.edit_version,
+      reason: reason.trim(),
+      decisions: changedDecisions,
+    })
+  }
+
+  return (
+    <Card
+      title={t('dailyReports.reconciliationTitle')}
+      subtitle={t('dailyReports.reconciliationHelp')}
+      data-testid="daily-report-reconciliation"
+    >
+      <p className="mb-4 rounded-md bg-amber-50 p-3 text-xs text-warning dark:bg-amber-950/30" role="status" aria-live="polite">
+        {pendingCount
+          ? t('dailyReports.reconciliationPending', { count: formatNumber(pendingCount, locale, 0) })
+          : t('dailyReports.reconciliationComplete')}
+      </p>
+      {proposals.length === 0 ? (
+        <p className="text-xs text-graphite-500">{t('dailyReports.noReconciliation')}</p>
+      ) : (
+        <form onSubmit={submit}>
+          <div className="space-y-3">
+            {proposals.map((proposal) => {
+              const selected = decisions[proposal.target_key] ?? (proposal.resolution_state === 'proposed' ? '' : proposal.resolution_state)
+              const record = documentQuery.data?.records.find((item) => item.id === proposal.source_record_id)
+              const sourceText = record && proposal.source_path !== 'payload'
+                ? sourceTextFields(record.payload).find((item) => item.path === proposal.source_path)?.value
+                : null
+              const isRejected = proposal.resolution_state === 'rejected'
+              const currentFieldValue = proposal.target_kind === 'revision_field'
+                ? (revision as unknown as Record<string, unknown>)[proposal.field_key]
+                : null
+              const fieldHasValue = typeof currentFieldValue === 'string' && currentFieldValue.trim() !== ''
+              const targetSummary = proposal.target_kind === 'activity'
+                ? revision.activities.find((item) => item.id === proposal.target_id)?.title
+                : proposal.target_kind === 'measurement'
+                  ? (() => {
+                    const row = revision.measurements.find((item) => item.id === proposal.target_id)
+                    return row ? `${row.parameter_key}: ${formatNumber(row.source_value, locale)} ${row.source_unit}` : null
+                  })()
+                  : typeof currentFieldValue === 'string' ? currentFieldValue : null
+              return (
+                <article key={proposal.id} className="rounded-md border border-graphite-200 p-3 dark:border-graphite-700" data-testid="daily-report-reconciliation-item">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge tone={proposal.resolution_state === 'accepted' || proposal.resolution_state === 'corrected' ? 'ok' : proposal.resolution_state === 'rejected' ? 'danger' : 'warning'}>
+                      {labelEnum(t, 'resolutions', proposal.resolution_state)}
+                    </Badge>
+                    <span className="text-xs font-semibold">{proposal.target_kind === 'revision_field' ? t('dailyReports.reportField') : proposal.target_kind === 'activity' ? t('dailyReports.activityRow') : t('dailyReports.measurementRow')}</span>
+                    <bdi dir="ltr" className="break-all font-mono text-[11px]">{proposal.field_key}</bdi>
+                  </div>
+                  {targetSummary && <p className="mt-2 break-words text-sm">{targetSummary}</p>}
+                  <dl className="mt-3 grid gap-2 text-xs sm:grid-cols-2">
+                    <ProvenanceItem label={t('dailyReports.sourceDocument')} value={proposal.source_document_id} />
+                    <ProvenanceItem label={t('dailyReports.sourceRecord')} value={proposal.source_record_id} />
+                    {proposal.source_region_id && <ProvenanceItem label={t('dailyReports.sourceRegion')} value={proposal.source_region_id} />}
+                    {proposal.source_page_number !== null && <ProvenanceItem label={t('dailyReports.sourcePage')} value={String(proposal.source_page_number)} />}
+                    <ProvenanceItem label={t('dailyReports.sourcePath')} value={proposal.source_path} />
+                    <ProvenanceItem label={t('dailyReports.sourceReviewVersion')} value={String(proposal.source_review_version)} />
+                  </dl>
+                  <div className="mt-3 rounded-md bg-graphite-50 p-3 dark:bg-graphite-950">
+                    <p className={proposal.proposal_matches_current ? 'text-xs text-ok' : 'text-xs text-warning'}>
+                      {proposal.proposal_matches_current ? t('dailyReports.proposalMatches') : t('dailyReports.proposalChanged')}
+                    </p>
+                    {documentQuery.isPending ? <div className="mt-2"><Loading /></div> : documentQuery.error ? (
+                      <div className="mt-2"><ErrorState error={documentQuery.error} onRetry={() => { void documentQuery.refetch() }} /></div>
+                    ) : record ? (
+                      <details className="mt-2">
+                        <summary className="cursor-pointer text-xs font-medium">{t('dailyReports.inspectSourceRecord')}</summary>
+                        <div className="mt-2 space-y-2">
+                          {sourceText !== null && <div><p className="text-[11px] text-graphite-500">{proposal.source_path}</p><pre dir="auto" className="whitespace-pre-wrap break-words rounded border border-graphite-200 bg-white p-2 text-xs dark:border-graphite-700 dark:bg-graphite-900">{sourceText}</pre></div>}
+                          <pre dir="ltr" className="max-h-64 overflow-auto whitespace-pre-wrap break-words rounded border border-graphite-200 bg-white p-2 text-[11px] dark:border-graphite-700 dark:bg-graphite-900">{JSON.stringify(record.payload, null, 2)}</pre>
+                          {record.payload_truncated && <p className="text-xs text-warning">{t('dailyReports.sourcePayloadTruncated')}</p>}
+                          <p className="text-[11px] text-graphite-500">{record.validation_state} · {t('dailyReports.sourceReviewVersion')}: {formatNumber(record.review_version, locale, 0)}</p>
+                        </div>
+                      </details>
+                    ) : (
+                      <p className="text-xs text-warning">{t('dailyReports.sourceRecordUnavailable')}</p>
+                    )}
+                  </div>
+                  <label className="mt-3 block space-y-1.5">
+                    <FieldLabel>{t('dailyReports.reconciliationDecision')}</FieldLabel>
+                    <select
+                      aria-label={t('dailyReports.reconciliationDecisionFor', { target: proposal.field_key })}
+                      value={selected}
+                      disabled={gateDisabled || isSaving}
+                      onChange={(event) => setDecisions((current) => ({
+                        ...current,
+                        [proposal.target_key]: event.target.value as DailyReportReconciliationDecision | '',
+                      }))}
+                      className="w-full rounded-md border border-graphite-300 bg-white px-2.5 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-60 dark:border-graphite-700 dark:bg-graphite-950"
+                    >
+                      <option value="">{t('dailyReports.chooseOption')}</option>
+                      <option value="accepted" disabled={!proposal.proposal_matches_current || isRejected}>{t('dailyReports.acceptProposal')}</option>
+                      <option value="corrected" disabled={proposal.proposal_matches_current || isRejected}>{t('dailyReports.markCorrected')}</option>
+                      <option value="rejected" disabled={isRejected ? false : proposal.target_kind === 'revision_field' && fieldHasValue}>{t('dailyReports.rejectProposal')}</option>
+                      <option value="unresolved" disabled={isRejected}>{t('dailyReports.leaveUnresolved')}</option>
+                    </select>
+                  </label>
+                  {proposal.target_kind === 'revision_field' && fieldHasValue && (
+                    <p className="mt-1 text-[11px] text-graphite-500">{t('dailyReports.clearFieldBeforeReject')}</p>
+                  )}
+                </article>
+              )
+            })}
+          </div>
+          <div className="mt-4 space-y-3">
+            <TextAreaField
+              id="daily-report-reconciliation-reason"
+              label={t('dailyReports.reconciliationReason')}
+              value={reason}
+              onChange={setReason}
+              rows={2}
+              required
+              help={t('dailyReports.reasonHint')}
+              testId="daily-report-reconciliation-reason"
+            />
+            {gateDisabled && <p className="text-xs text-graphite-500">{gateReason}</p>}
+            {Boolean(error) && <div><ErrorState error={error} onRetry={onRetry} /></div>}
+            <div className="flex justify-end">
+              <Button type="submit" variant="primary" disabled={gateDisabled || isSaving || !reason.trim() || changedDecisions.length === 0} data-testid="daily-report-reconciliation-submit">
+                {isSaving ? t('dailyReports.saving') : t('dailyReports.saveReconciliation')}
+              </Button>
+            </div>
+          </div>
+        </form>
+      )}
+    </Card>
+  )
+}
+
 function SourceProvenance({ revision }: { revision: DailyReportRevision }) {
   const { t } = useI18n()
   const hasSource = revision.source_document_id || revision.source_record_id || revision.source_region_id || revision.source_page_number
@@ -1104,6 +1784,7 @@ export default function DailyReportsWorkspace() {
   const [reportDateTo, setReportDateTo] = useState('')
   const [listOffset, setListOffset] = useState(0)
   const [formMode, setFormMode] = useState<FormMode | null>(null)
+  const [importOpen, setImportOpen] = useState(false)
   const [form, setForm] = useState<ReportFormState>(emptyForm)
   const [actionMode, setActionMode] = useState<ActionMode | null>(null)
   const [actionReason, setActionReason] = useState('')
@@ -1111,6 +1792,8 @@ export default function DailyReportsWorkspace() {
   const [localActionError, setLocalActionError] = useState<string | null>(null)
 
   const createGate = useActionGate('daily_report.create')
+  const importGate = useActionGate('daily_report.import')
+  const reconcileGate = useActionGate('daily_report.reconcile')
   const editGate = useActionGate('daily_report.edit')
   const reviseGate = useActionGate('daily_report.revise')
   const submitGate = useActionGate('daily_report.submit')
@@ -1170,6 +1853,10 @@ export default function DailyReportsWorkspace() {
     : latestRevision
   const isViewingLatest = !selectedRevisionNumber || selectedRevisionNumber === report?.latest_revision_number
   const revisionFingerprintValid = activeRevision?.content_hash_verified === true
+  const pendingReconciliationCount = activeRevision?.reconciliation.filter((item) =>
+    item.resolution_state === 'proposed' || item.resolution_state === 'unresolved',
+  ).length ?? 0
+  const submissionBlockedByReconciliation = pendingReconciliationCount > 0
 
   const refreshAll = () => {
     void queryClient.invalidateQueries({ queryKey: ['daily-reports', wellId] })
@@ -1185,6 +1872,7 @@ export default function DailyReportsWorkspace() {
     else next.set('revision', String(revisionNumber))
     setSearchParams(next)
     setFormMode(null)
+    setImportOpen(false)
     setActionMode(null)
     setActionReason('')
     setNotice('')
@@ -1195,6 +1883,7 @@ export default function DailyReportsWorkspace() {
     next.delete('revision')
     setSearchParams(next)
     setFormMode(null)
+    setImportOpen(false)
     setActionMode(null)
   }
 
@@ -1205,6 +1894,17 @@ export default function DailyReportsWorkspace() {
       await queryClient.invalidateQueries({ queryKey: ['daily-reports', wellId] })
       selectReport(result.report.id)
       setNotice('dailyReports.reportCreated')
+    },
+  })
+  const importMutation = useMutation({
+    mutationFn: ({ payload, idempotencyKey }: ImportVariables) => drillingApi.importDailyReport(wellId, payload, idempotencyKey),
+    onSuccess: async (result) => {
+      setImportOpen(false)
+      await queryClient.invalidateQueries({ queryKey: ['daily-reports', wellId] })
+      await queryClient.invalidateQueries({ queryKey: ['daily-report-detail', wellId, result.report.id] })
+      await queryClient.invalidateQueries({ queryKey: ['daily-report-history', wellId, result.report.id] })
+      selectReport(result.report.id)
+      setNotice('dailyReports.importCreated')
     },
   })
   const editMutation = useMutation({
@@ -1220,6 +1920,16 @@ export default function DailyReportsWorkspace() {
       next.set('report', result.report.id)
       next.delete('revision')
       setSearchParams(next)
+    },
+  })
+  const reconciliationMutation = useMutation({
+    mutationFn: ({ reportId, revisionNumber, payload, idempotencyKey }: ReconciliationVariables) =>
+      drillingApi.reconcileDailyReport(wellId, reportId, revisionNumber, payload, idempotencyKey),
+    onSuccess: async (result) => {
+      setNotice('dailyReports.reconciliationSaved')
+      await queryClient.invalidateQueries({ queryKey: ['daily-reports', wellId] })
+      await queryClient.invalidateQueries({ queryKey: ['daily-report-detail', wellId, result.report.id] })
+      await queryClient.invalidateQueries({ queryKey: ['daily-report-history', wellId, result.report.id] })
     },
   })
   const actionMutation = useMutation({
@@ -1257,8 +1967,15 @@ export default function DailyReportsWorkspace() {
     },
   })
 
-  const mutationError = formMode === 'create' ? createMutation.error : formMode === 'edit' ? editMutation.error : null
+  const mutationError = importOpen
+    ? importMutation.error
+    : formMode === 'create' ? createMutation.error : formMode === 'edit' ? editMutation.error : null
   const mutationRetry = () => {
+    if (importOpen && importMutation.error) {
+      if (importMutation.error instanceof ApiError && importMutation.error.kind === 'conflict') refreshAll()
+      else if (importMutation.variables) importMutation.mutate(importMutation.variables)
+      return
+    }
     if (formMode === 'create' && createMutation.error) {
       if (createMutation.error instanceof ApiError && createMutation.error.kind === 'conflict') refreshAll()
       else if (createMutation.variables) createMutation.mutate(createMutation.variables)
@@ -1279,8 +1996,14 @@ export default function DailyReportsWorkspace() {
     if (correctionMutation.error instanceof ApiError && correctionMutation.error.kind === 'conflict') refreshAll()
     else if (correctionMutation.variables) correctionMutation.mutate(correctionMutation.variables)
   }
+  const reconciliationRetry = () => {
+    if (reconciliationMutation.error instanceof ApiError && reconciliationMutation.error.kind === 'conflict') refreshAll()
+    else if (reconciliationMutation.variables) reconciliationMutation.mutate(reconciliationMutation.variables)
+  }
 
   const openCreate = () => {
+    setImportOpen(false)
+    importMutation.reset()
     setForm(emptyForm())
     setListOffset(0)
     setFormMode('create')
@@ -1289,8 +2012,24 @@ export default function DailyReportsWorkspace() {
     createMutation.reset()
     editMutation.reset()
   }
+  const openImport = () => {
+    setFormMode(null)
+    setImportOpen(true)
+    setActionMode(null)
+    setNotice('')
+    importMutation.reset()
+    createMutation.reset()
+    editMutation.reset()
+  }
+  const openExistingImportConflict = (reportId: string) => {
+    setImportOpen(false)
+    importMutation.reset()
+    selectReport(reportId)
+  }
   const openEdit = () => {
     if (!report || !latestRevision || !isViewingLatest) return
+    setImportOpen(false)
+    importMutation.reset()
     setForm(revisionForm(report, latestRevision))
     setFormMode('edit')
     setActionMode(null)
@@ -1329,9 +2068,16 @@ export default function DailyReportsWorkspace() {
       },
     })
   }
+  const submitImport = (payload: DailyReportImportPayload) => {
+    importMutation.mutate({ payload, idempotencyKey: newIdempotencyKey() })
+  }
   const performAction = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (!activeRevision || !report || !actionMode) return
+    if (actionMode === 'submit' && submissionBlockedByReconciliation) {
+      setLocalActionError('dailyReports.reconciliationSubmitBlocked')
+      return
+    }
     if (
       actionMode === 'submit' &&
       !activeRevision.activities.length &&
@@ -1430,6 +2176,14 @@ export default function DailyReportsWorkspace() {
   const canCorrectState = Boolean(latestRevision && ['approved', 'rejected', 'withdrawn'].includes(latestRevision.status))
   const selectedRevisionLoading = Boolean(selectedRevisionNumber && selectedRevisionNumber !== report?.latest_revision_number && oldRevisionQuery.isPending)
   const selectedRevisionError = Boolean(selectedRevisionNumber && selectedRevisionNumber !== report?.latest_revision_number && oldRevisionQuery.error)
+  const reconciliationGateDisabled = Boolean(
+    reconcileGate.suggestDisabled || !isViewingLatest || activeRevision?.status !== 'draft' || !revisionFingerprintValid,
+  )
+  const reconciliationGateReason = !isViewingLatest || activeRevision?.status !== 'draft'
+    ? t('dailyReports.actionUnavailable')
+    : !revisionFingerprintValid
+      ? t('dailyReports.fingerprintMismatch')
+      : reconcileGate.reason
 
   return (
     <div className="space-y-4" data-testid="daily-reports-workspace">
@@ -1442,6 +2196,9 @@ export default function DailyReportsWorkspace() {
             <Button onClick={refreshAll} aria-label={t('dailyReports.refresh')}>
               {t('dailyReports.refresh')}
             </Button>
+            <Button onClick={openImport} disabled={importGate.suggestDisabled} title={importGate.reason || undefined} data-testid="daily-report-import-open">
+              {t('dailyReports.importReport')}
+            </Button>
             <Button variant="primary" onClick={openCreate} disabled={createGate.suggestDisabled} title={createGate.reason || undefined} data-testid="daily-report-new">
               {t('dailyReports.newReport')}
             </Button>
@@ -1451,8 +2208,28 @@ export default function DailyReportsWorkspace() {
 
       {notice && <p role="status" aria-live="polite" className="rounded-md border border-ok/30 bg-emerald-50 p-3 text-sm text-ok dark:bg-emerald-950/30">{t(notice)}</p>}
       {createGate.suggestDisabled && <p className="text-xs text-graphite-500" data-testid="daily-report-create-gate">{createGate.reason}</p>}
+      {importGate.suggestDisabled && <p className="text-xs text-graphite-500" data-testid="daily-report-import-gate">{importGate.reason}</p>}
       {catalogueQuery.isPending && <Card><Loading /></Card>}
       {catalogueQuery.error && <ErrorState error={catalogueQuery.error} onRetry={() => { void catalogueQuery.refetch() }} />}
+
+      {importOpen && catalogue && (
+        <DailyReportImportForm
+          wellId={wellId}
+          catalogue={catalogue}
+          wellbores={wellbores}
+          wellboresLoading={wellboresQuery.isPending}
+          wellboresError={wellboresQuery.error}
+          onRetryWellbores={() => { void wellboresQuery.refetch() }}
+          gateDisabled={importGate.suggestDisabled}
+          gateReason={importGate.reason}
+          isSaving={importMutation.isPending}
+          error={mutationError}
+          onRetry={mutationRetry}
+          onCancel={() => { setImportOpen(false); importMutation.reset() }}
+          onOpenExistingReport={openExistingImportConflict}
+          onSubmit={submitImport}
+        />
+      )}
 
       {formMode && catalogue && (
         <DailyReportEditor
@@ -1555,7 +2332,7 @@ export default function DailyReportsWorkspace() {
                       </Button>
                     )}
                     {latestRevision && isViewingLatest && latestRevision.status === 'draft' && (
-                      <Button variant="primary" onClick={() => { setActionMode('submit'); setActionReason(''); setActionMutationErrorReset() }} disabled={submitGate.suggestDisabled || !revisionFingerprintValid} title={submitGate.reason || (!revisionFingerprintValid ? t('dailyReports.fingerprintMismatch') : undefined)} data-testid="daily-report-submit">
+                      <Button variant="primary" onClick={() => { setActionMode('submit'); setActionReason(''); setActionMutationErrorReset() }} disabled={submitGate.suggestDisabled || !revisionFingerprintValid || submissionBlockedByReconciliation} title={submitGate.reason || (!revisionFingerprintValid ? t('dailyReports.fingerprintMismatch') : submissionBlockedByReconciliation ? t('dailyReports.reconciliationSubmitBlocked') : undefined)} data-testid="daily-report-submit">
                         {t('dailyReports.submitForReview')}
                       </Button>
                     )}
@@ -1612,6 +2389,7 @@ export default function DailyReportsWorkspace() {
                   <div className="mt-3 space-y-1 text-xs text-graphite-500" aria-live="polite" data-testid="daily-report-action-gate-reasons">
                     {latestRevision.status === 'draft' && editGate.suggestDisabled && <p>{editGate.reason}</p>}
                     {latestRevision.status === 'draft' && submitGate.suggestDisabled && <p>{submitGate.reason}</p>}
+                    {latestRevision.status === 'draft' && submissionBlockedByReconciliation && <p>{t('dailyReports.reconciliationSubmitBlocked')}</p>}
                     {latestRevision.status === 'submitted' && submitterIsCurrentUser && <p className="text-warning">{t('dailyReports.authorCannotReview')}</p>}
                     {latestRevision.status === 'submitted' && !submitterIsCurrentUser && approveGate.suggestDisabled && <p>{approveGate.reason}</p>}
                     {latestRevision.status === 'submitted' && !submitterIsCurrentUser && rejectGate.suggestDisabled && rejectGate.reason !== approveGate.reason && <p>{rejectGate.reason}</p>}
@@ -1622,6 +2400,28 @@ export default function DailyReportsWorkspace() {
                 )}
                 {localActionError && <p role="alert" className="mt-3 text-xs text-danger">{t(localActionError)}</p>}
               </Card>
+
+              {activeRevision?.source_kind === 'import' && (
+                <DailyReportReconciliationPanel
+                  key={`${activeRevision.id}:${activeRevision.edit_version}`}
+                  wellId={wellId}
+                  revision={activeRevision}
+                  gateDisabled={reconciliationGateDisabled}
+                  gateReason={reconciliationGateReason}
+                  isSaving={reconciliationMutation.isPending}
+                  error={reconciliationMutation.error}
+                  onRetry={reconciliationRetry}
+                  onSubmit={(payload) => {
+                    if (!report) return
+                    reconciliationMutation.mutate({
+                      reportId: report.id,
+                      revisionNumber: activeRevision.revision_number,
+                      payload,
+                      idempotencyKey: newIdempotencyKey(),
+                    })
+                  }}
+                />
+              )}
 
               {actionMode && activeRevision && (
                 <Card title={actionMode === 'correct' ? t('dailyReports.createCorrection') : t('dailyReports.reviewReason')}>

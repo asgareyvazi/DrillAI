@@ -40,6 +40,16 @@ REPORT_ACTIVITY_KINDS = ("operation", "npt", "event", "safety", "milestone", "ot
 REPORT_TIME_BASES = ("observed", "reported", "calculated", "planned", "inferred", "unknown")
 REPORT_DEPTH_REFERENCES = ("md", "tvd", "tvdss", "unknown")
 REPORT_RECONCILIATION_STATES = ("manual", "proposed", "accepted", "corrected", "rejected", "unresolved")
+REPORT_RECONCILIATION_TARGET_KINDS = ("revision_field", "activity", "measurement")
+REPORT_RECONCILIATION_REVISION_FIELDS = (
+    "period_start_at",
+    "period_end_at",
+    "summary",
+    "operations_summary",
+    "safety_notes",
+    "next_period_plan",
+    "environmental_notes",
+)
 
 # Each entry is (dimension, canonical unit, required depth reference). Values are deliberately limited
 # to quantities supported by the telemetry unit converter and named in the DDR governance decision.
@@ -425,11 +435,102 @@ class DailyReportMeasurement(Base, IdMixin, CreatedAtMixin, OrgScopedMixin):
     source_page_number: Mapped[int | None] = mapped_column(IntType)
 
 
+class DailyReportReconciliation(Base, IdMixin, TimestampMixin, OrgScopedMixin):
+    """One source-linked imported report field/row and its explicit human disposition.
+
+    The original extracted payload remains in ``ExtractedRecord``; this row stores only its immutable
+    identity/version/fingerprint and hashes of the proposed and currently accepted values. The
+    revision and typed child tables remain the authoritative report content.
+    """
+
+    __tablename__ = "daily_report_reconciliations"
+    id_prefix = "drc"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["revision_id", "org_id"],
+            ["daily_drilling_report_revisions.id", "daily_drilling_report_revisions.org_id"],
+            ondelete="CASCADE",
+            name="fk_daily_report_reconciliation_revision_tenant",
+        ),
+        UniqueConstraint("revision_id", "target_key", name="uq_daily_report_reconciliation_target"),
+        CheckConstraint("length(trim(target_key)) > 0", name="daily_report_reconciliation_target_nonempty"),
+        CheckConstraint(
+            "target_kind IN ('revision_field', 'activity', 'measurement')",
+            name="daily_report_reconciliation_target_kind_valid",
+        ),
+        CheckConstraint(
+            "(target_kind = 'revision_field' AND target_id IS NULL) OR "
+            "(target_kind IN ('activity', 'measurement') AND target_id IS NOT NULL)",
+            name="daily_report_reconciliation_target_id_consistent",
+        ),
+        CheckConstraint(
+            "(target_kind = 'revision_field' AND field_key IN ("
+            + ", ".join(f"'{field}'" for field in REPORT_RECONCILIATION_REVISION_FIELDS)
+            + ")) OR (target_kind = 'activity' AND field_key = 'activity') OR "
+            "(target_kind = 'measurement' AND field_key IN ("
+            + ", ".join(f"'{key}'" for key in DAILY_REPORT_PARAMETER_SPECS)
+            + "))",
+            name="daily_report_reconciliation_target_field_consistent",
+        ),
+        CheckConstraint("length(trim(field_key)) > 0", name="daily_report_reconciliation_field_nonempty"),
+        CheckConstraint(
+            "source_page_number IS NULL OR source_page_number >= 1",
+            name="daily_report_reconciliation_page_positive",
+        ),
+        CheckConstraint("source_review_version >= 1", name="daily_report_reconciliation_source_version_positive"),
+        CheckConstraint(
+            "length(source_fingerprint) = 64 AND length(source_value_hash) = 64 "
+            "AND length(proposed_value_hash) = 64",
+            name="daily_report_reconciliation_hashes_sha256",
+        ),
+        CheckConstraint(
+            "resolution_state IN ('proposed', 'accepted', 'corrected', 'rejected', 'unresolved')",
+            name="daily_report_reconciliation_state_valid",
+        ),
+        CheckConstraint(
+            "(resolution_state = 'proposed' AND decided_by IS NULL AND decided_at IS NULL AND reason IS NULL) OR "
+            "(resolution_state <> 'proposed' AND decided_by IS NOT NULL AND decided_at IS NOT NULL "
+            "AND reason IS NOT NULL AND length(trim(reason)) > 0)",
+            name="daily_report_reconciliation_decision_complete",
+        ),
+        Index("ix_daily_report_reconciliation_revision_state", "org_id", "revision_id", "resolution_state"),
+        Index("ix_daily_report_reconciliation_source", "org_id", "source_record_id"),
+    )
+
+    revision_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    target_key: Mapped[str] = mapped_column(String(180), nullable=False)
+    target_kind: Mapped[str] = mapped_column(String(24), nullable=False)
+    target_id: Mapped[str | None] = mapped_column(String(64), index=True)
+    field_key: Mapped[str] = mapped_column(String(48), nullable=False)
+    source_document_id: Mapped[str] = mapped_column(
+        ForeignKey("documents.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    source_record_id: Mapped[str] = mapped_column(
+        ForeignKey("extracted_records.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    source_region_id: Mapped[str | None] = mapped_column(
+        ForeignKey("document_regions.id", ondelete="RESTRICT"), index=True
+    )
+    source_page_number: Mapped[int | None] = mapped_column(IntType)
+    source_path: Mapped[str] = mapped_column(String(256), nullable=False)
+    source_review_version: Mapped[int] = mapped_column(IntType, nullable=False)
+    source_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    source_value_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    proposed_value_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    resolution_state: Mapped[str] = mapped_column(String(24), default="proposed", server_default="proposed", nullable=False)
+    reason: Mapped[str | None] = mapped_column(Text)
+    decided_by: Mapped[str | None] = mapped_column(String(64))
+    decided_at: Mapped[dt.datetime | None] = mapped_column(UtcDateTime)
+    created_by: Mapped[str] = mapped_column(String(64), nullable=False)
+
+
 __all__ = [
     "DAILY_REPORT_PARAMETER_SPECS",
     "REPORT_ACTIVITY_KINDS",
     "REPORT_DEPTH_REFERENCES",
+    "REPORT_RECONCILIATION_REVISION_FIELDS",
     "REPORT_RECONCILIATION_STATES",
+    "REPORT_RECONCILIATION_TARGET_KINDS",
     "REPORT_REVISION_STATUSES",
     "REPORT_SHIFT_CODES",
     "REPORT_SOURCE_KINDS",
@@ -438,4 +539,5 @@ __all__ = [
     "DailyDrillingReportRevision",
     "DailyReportActivity",
     "DailyReportMeasurement",
+    "DailyReportReconciliation",
 ]

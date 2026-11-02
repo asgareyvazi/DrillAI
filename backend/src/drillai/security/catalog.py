@@ -96,6 +96,18 @@ PLATFORM_ACTIONS: tuple[tuple[str, ActionLevel, str, str], ...] = (
         "daily_report.write",
     ),
     (
+        "daily_report.import",
+        ActionLevel.DRAFT,
+        "Create a source-linked, explicitly unapproved daily report import draft.",
+        "daily_report.write",
+    ),
+    (
+        "daily_report.reconcile",
+        ActionLevel.DRAFT,
+        "Accept, correct, reject or leave source-linked report fields and rows unresolved.",
+        "daily_report.write",
+    ),
+    (
         "daily_report.revise",
         ActionLevel.DRAFT,
         "Create a numbered correction from an approved, rejected or withdrawn report revision.",

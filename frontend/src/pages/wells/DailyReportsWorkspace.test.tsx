@@ -9,6 +9,7 @@ import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { ApiError } from '../../api/client'
 import type {
   DailyReport,
   DailyReportCatalogue,
@@ -28,7 +29,11 @@ const mocks = vi.hoisted(() => ({
   getDailyReport: vi.fn(),
   getDailyReportHistory: vi.fn(),
   getDailyReportRevision: vi.fn(),
+  listDocuments: vi.fn(),
+  getDocument: vi.fn(),
   createDailyReport: vi.fn(),
+  importDailyReport: vi.fn(),
+  reconcileDailyReport: vi.fn(),
   updateDailyReportDraft: vi.fn(),
   createDailyReportCorrection: vi.fn(),
   submitDailyReport: vi.fn(),
@@ -45,7 +50,11 @@ vi.mock('../../api/endpoints', () => ({
     getDailyReport: mocks.getDailyReport,
     getDailyReportHistory: mocks.getDailyReportHistory,
     getDailyReportRevision: mocks.getDailyReportRevision,
+    listDocuments: mocks.listDocuments,
+    getDocument: mocks.getDocument,
     createDailyReport: mocks.createDailyReport,
+    importDailyReport: mocks.importDailyReport,
+    reconcileDailyReport: mocks.reconcileDailyReport,
     updateDailyReportDraft: mocks.updateDailyReportDraft,
     createDailyReportCorrection: mocks.createDailyReportCorrection,
     submitDailyReport: mocks.submitDailyReport,
@@ -134,6 +143,7 @@ const revision = {
   content_hash_verified: true,
   activities: [],
   measurements: [],
+  reconciliation: [],
 } satisfies DailyReportRevision
 
 const report = {
@@ -168,6 +178,39 @@ const history = {
   offset: 0,
 } satisfies DailyReportHistory
 
+const sourceDocumentRow = {
+  id: 'doc_ddr_1',
+  title: 'Field DDR 15',
+  status: 'extracted',
+  doc_type: 'ddr',
+}
+const extractedRecord = {
+  id: 'record_1',
+  record_type: 'report_header',
+  validation_state: 'extracted',
+  payload: {
+    summary: 'Mud check recorded from source.',
+    operations_summary: 'Drilled ahead from source.',
+    safety_notes: 'No safety incident reported in the source.',
+    next_period_plan: 'Continue drilling from source.',
+    environmental_notes: 'No environmental issue reported in the source.',
+  },
+  payload_truncated: false,
+  method: 'regex_header',
+  confidence: 0.83,
+  page_number: 1,
+  region_id: 'region_1',
+  review_version: 1,
+}
+const extractedDocument = {
+  document: sourceDocumentRow,
+  records: [extractedRecord],
+  ingestion_jobs: [],
+  region_count: 1,
+  chunks: [],
+  evidence_links: [],
+}
+
 function renderWorkspace(path = '/wells/well_1/daily-reports') {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } })
   function Wrapper({ children }: { children: ReactNode }) {
@@ -195,7 +238,11 @@ beforeEach(() => {
   mocks.getDailyReport.mockReset().mockResolvedValue(detail)
   mocks.getDailyReportHistory.mockReset().mockResolvedValue(history)
   mocks.getDailyReportRevision.mockReset().mockResolvedValue({ report, revision })
+  mocks.listDocuments.mockReset().mockResolvedValue({ items: [sourceDocumentRow], total: 1, limit: 50, offset: 0 })
+  mocks.getDocument.mockReset().mockResolvedValue(extractedDocument)
   mocks.createDailyReport.mockReset().mockResolvedValue({ report, revision })
+  mocks.importDailyReport.mockReset().mockResolvedValue({ report, revision })
+  mocks.reconcileDailyReport.mockReset().mockResolvedValue({ report, revision })
   mocks.updateDailyReportDraft.mockReset().mockResolvedValue({ report, revision })
   mocks.createDailyReportCorrection.mockReset().mockResolvedValue({ report, revision })
   mocks.submitDailyReport.mockReset().mockResolvedValue({ report, revision })
@@ -251,6 +298,176 @@ describe('DailyReportsWorkspace', () => {
     }))
     expect(await screen.findByText('Current revision')).toBeInTheDocument()
     expect(screen.queryByText('Content differs from its stored fingerprint; do not approve it.')).not.toBeInTheDocument()
+  })
+
+  it('imports a source-linked draft without treating extraction as approval and maps each supported narrative field', async () => {
+    const user = userEvent.setup()
+    renderWorkspace()
+
+    await user.click(await screen.findByTestId('daily-report-import-open'))
+    await user.selectOptions(await screen.findByTestId('daily-report-import-document'), 'doc_ddr_1')
+    await user.selectOptions(await screen.findByTestId('daily-report-import-record'), 'record_1')
+    await user.selectOptions(await screen.findByTestId('daily-report-import-summary-source'), 'payload.summary')
+    await user.selectOptions(await screen.findByTestId('daily-report-import-operations_summary-source'), 'payload.operations_summary')
+    await user.selectOptions(await screen.findByTestId('daily-report-import-safety_notes-source'), 'payload.safety_notes')
+    await user.selectOptions(await screen.findByTestId('daily-report-import-next_period_plan-source'), 'payload.next_period_plan')
+    await user.selectOptions(await screen.findByTestId('daily-report-import-environmental_notes-source'), 'payload.environmental_notes')
+    await user.selectOptions(await screen.findByTestId('daily-report-import-wellbore'), 'wb_1')
+    await user.type(screen.getByTestId('daily-report-import-date'), '2026-03-15')
+    await user.type(screen.getByTestId('daily-report-import-timezone'), 'Europe/Amsterdam')
+    await user.selectOptions(screen.getByTestId('daily-report-import-shift'), 'day')
+    await user.click(screen.getByTestId('daily-report-import-add-measurement'))
+    await screen.findByTestId('daily-report-import-measurement-row')
+    await user.selectOptions(screen.getByTestId('daily-report-import-measurement-0-parameter'), 'mud_weight')
+    await user.type(screen.getByTestId('daily-report-import-measurement-0-value'), '9.2')
+    await user.selectOptions(screen.getByTestId('daily-report-import-measurement-0-unit'), 'ppg')
+    await user.selectOptions(screen.getByTestId('daily-report-import-measurement-0-source'), 'record_1')
+
+    expect(screen.getByLabelText('Summary')).toHaveValue('Mud check recorded from source.')
+    expect(screen.getByText('Machine-extracted data remains unvalidated until a person checks it against the cited evidence.')).toBeInTheDocument()
+    await user.click(screen.getByTestId('daily-report-import-submit'))
+
+    await waitFor(() => expect(mocks.importDailyReport).toHaveBeenCalledTimes(1))
+    const [wellId, payload, idempotencyKey] = mocks.importDailyReport.mock.calls[0] as [string, Record<string, unknown>, string]
+    expect(wellId).toBe('well_1')
+    expect(idempotencyKey).toBeTruthy()
+    expect(payload).toEqual(expect.objectContaining({
+      wellbore_id: 'wb_1',
+      report_date: '2026-03-15',
+      report_timezone: 'Europe/Amsterdam',
+      shift_code: 'day',
+      source_document_id: 'doc_ddr_1',
+      source_record_id: 'record_1',
+      field_sources: [
+        { field_key: 'summary', source_record_id: 'record_1', source_path: 'payload.summary' },
+        { field_key: 'operations_summary', source_record_id: 'record_1', source_path: 'payload.operations_summary' },
+        { field_key: 'safety_notes', source_record_id: 'record_1', source_path: 'payload.safety_notes' },
+        { field_key: 'next_period_plan', source_record_id: 'record_1', source_path: 'payload.next_period_plan' },
+        { field_key: 'environmental_notes', source_record_id: 'record_1', source_path: 'payload.environmental_notes' },
+      ],
+      content: expect.objectContaining({
+        summary: 'Mud check recorded from source.',
+        operations_summary: 'Drilled ahead from source.',
+        safety_notes: 'No safety incident reported in the source.',
+        next_period_plan: 'Continue drilling from source.',
+        environmental_notes: 'No environmental issue reported in the source.',
+        source_document_id: 'doc_ddr_1',
+        source_record_id: 'record_1',
+        measurements: [expect.objectContaining({
+          parameter_key: 'mud_weight',
+          value: 9.2,
+          unit: 'ppg',
+          source_document_id: 'doc_ddr_1',
+          source_record_id: 'record_1',
+          source_region_id: 'region_1',
+          source_page_number: 1,
+        })],
+      }),
+    }))
+  })
+
+  it('opens the existing report on duplicate import identity instead of creating or overwriting a report', async () => {
+    const user = userEvent.setup()
+    mocks.importDailyReport.mockRejectedValue(new ApiError(
+      409,
+      'daily_report.identity_conflict',
+      'A report with this identity already exists.',
+      { report_id: 'report_1' },
+      null,
+      false,
+      { kind: 'conflict', messageFromServer: true },
+    ))
+    renderWorkspace()
+
+    await user.click(await screen.findByTestId('daily-report-import-open'))
+    await user.selectOptions(await screen.findByTestId('daily-report-import-document'), 'doc_ddr_1')
+    await user.selectOptions(await screen.findByTestId('daily-report-import-record'), 'record_1')
+    await user.selectOptions(await screen.findByTestId('daily-report-import-summary-source'), 'payload.summary')
+    await user.selectOptions(await screen.findByTestId('daily-report-import-wellbore'), 'wb_1')
+    await user.type(screen.getByTestId('daily-report-import-date'), '2026-03-15')
+    await user.type(screen.getByTestId('daily-report-import-timezone'), 'Europe/Amsterdam')
+    await user.selectOptions(screen.getByTestId('daily-report-import-shift'), 'day')
+    await user.click(screen.getByTestId('daily-report-import-submit'))
+
+    const openExisting = await screen.findByTestId('daily-report-import-open-existing')
+    expect(screen.getByText('The existing report was not overwritten and no duplicate was created. Open it to review its current revision or start a reasoned correction.')).toBeInTheDocument()
+    await user.click(openExisting)
+    expect(await screen.findByTestId('daily-report-detail')).toBeInTheDocument()
+    await waitFor(() => expect(mocks.getDailyReport).toHaveBeenCalledWith('well_1', 'report_1', expect.any(AbortSignal)))
+    expect(mocks.importDailyReport).toHaveBeenCalledTimes(1)
+    expect(mocks.createDailyReport).not.toHaveBeenCalled()
+  })
+
+  it('shows cited extraction evidence and submits a reasoned, versioned reconciliation decision', async () => {
+    const user = userEvent.setup()
+    const proposal = {
+      id: 'reconciliation_1',
+      target_key: 'field:summary',
+      target_kind: 'revision_field',
+      target_id: null,
+      field_key: 'summary',
+      source_document_id: 'doc_ddr_1',
+      source_record_id: 'record_1',
+      source_region_id: 'region_1',
+      source_page_number: 1,
+      source_path: 'payload.summary',
+      source_review_version: 1,
+      source_fingerprint: 'sha256:source',
+      source_value_hash: 'sha256:source-value',
+      proposed_value_hash: 'sha256:proposal',
+      proposal_matches_current: true,
+      resolution_state: 'proposed',
+      reason: null,
+      decided_by: null,
+      decided_at: null,
+    } as const
+    const importedRevision = {
+      ...revision,
+      source_kind: 'import',
+      source_document_id: 'doc_ddr_1',
+      source_record_id: 'record_1',
+      reconciliation: [proposal],
+    } satisfies DailyReportRevision
+    const importedReport = { ...report, latest_revision: importedRevision } satisfies DailyReport
+    const importedDetail = {
+      report: importedReport,
+      latest_revision: importedRevision,
+      latest_approved_revision: null,
+    } satisfies DailyReportDetail
+    const importedHistory = {
+      report: importedReport,
+      items: [importedRevision],
+      total: 1,
+      limit: 50,
+      offset: 0,
+    } satisfies DailyReportHistory
+    mocks.listDailyReports.mockResolvedValue({ items: [importedReport], total: 1, limit: 50, offset: 0 })
+    mocks.getDailyReport.mockResolvedValue(importedDetail)
+    mocks.getDailyReportHistory.mockResolvedValue(importedHistory)
+    mocks.reconcileDailyReport.mockResolvedValue({ report: importedReport, revision: importedRevision })
+
+    renderWorkspace('/wells/well_1/daily-reports?report=report_1')
+    await screen.findByTestId('daily-report-reconciliation')
+    expect(screen.getByTestId('daily-report-submit')).toBeDisabled()
+    expect(screen.getByText('Resolve every imported or unresolved source proposal before submitting this report for review.')).toBeInTheDocument()
+    await user.click(await screen.findByText('Inspect cited extraction record and payload'))
+    expect(await screen.findByText('Mud check recorded from source.')).toBeInTheDocument()
+    const decision = screen.getByRole('combobox', { name: 'Decision for summary' })
+    expect(screen.getByRole('option', { name: 'Mark corrected' })).toBeDisabled()
+    expect(screen.getByRole('option', { name: 'Reject proposal' })).toBeDisabled()
+    await user.selectOptions(decision, 'accepted')
+    await user.type(screen.getByTestId('daily-report-reconciliation-reason'), 'Compared with the cited source record.')
+    await user.click(screen.getByTestId('daily-report-reconciliation-submit'))
+
+    await waitFor(() => expect(mocks.reconcileDailyReport).toHaveBeenCalledTimes(1))
+    const [wellId, reportId, revisionNumber, payload, idempotencyKey] = mocks.reconcileDailyReport.mock.calls[0] as [string, string, number, Record<string, unknown>, string]
+    expect([wellId, reportId, revisionNumber]).toEqual(['well_1', 'report_1', 1])
+    expect(payload).toEqual({
+      expected_edit_version: 1,
+      reason: 'Compared with the cited source record.',
+      decisions: [{ target_key: 'field:summary', decision: 'accepted' }],
+    })
+    expect(idempotencyKey).toBeTruthy()
   })
 
   it('sends status, shift, date and page filters to the server and rejects a reversed date range locally', async () => {

@@ -44,7 +44,9 @@ from drillai.db.models.daily_reports import (
     DAILY_REPORT_PARAMETER_SPECS,
     REPORT_ACTIVITY_KINDS,
     REPORT_DEPTH_REFERENCES,
+    REPORT_RECONCILIATION_REVISION_FIELDS,
     REPORT_RECONCILIATION_STATES,
+    REPORT_RECONCILIATION_TARGET_KINDS,
     REPORT_REVISION_STATUSES,
     REPORT_SHIFT_CODES,
     REPORT_SOURCE_KINDS,
@@ -53,6 +55,7 @@ from drillai.db.models.daily_reports import (
     DailyDrillingReportRevision,
     DailyReportActivity,
     DailyReportMeasurement,
+    DailyReportReconciliation,
 )
 from drillai.db.models.design import (
     ARTIFACT_KINDS,
@@ -211,6 +214,7 @@ ALL_MODELS = [
     # operations, events, measurements and governed daily drilling reports
     Operation, NptCode, Event, TimeSeries, TimeSeriesPoint, Alert, AlertRule, OutboxEvent,
     DailyDrillingReport, DailyDrillingReportRevision, DailyReportActivity, DailyReportMeasurement,
+    DailyReportReconciliation,
     # tools, materials, services, readiness
     ServiceCompany, Service, CatalogItem, InventoryItem, EquipmentUnit, Certification,
     BomRequirement, ReadinessAssessment, ReadinessItem,
@@ -281,7 +285,9 @@ __all__ = [
     "REGISTRY_STATUSES",
     "REPORT_ACTIVITY_KINDS",
     "REPORT_DEPTH_REFERENCES",
+    "REPORT_RECONCILIATION_REVISION_FIELDS",
     "REPORT_RECONCILIATION_STATES",
+    "REPORT_RECONCILIATION_TARGET_KINDS",
     "REPORT_REVISION_STATUSES",
     "REPORT_SHIFT_CODES",
     "REPORT_SOURCE_KINDS",
@@ -330,6 +336,7 @@ __all__ = [
     "DailyDrillingReportRevision",
     "DailyReportActivity",
     "DailyReportMeasurement",
+    "DailyReportReconciliation",
     "Derivation",
     "Document",
     "DocumentChunk",

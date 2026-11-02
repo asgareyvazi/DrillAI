@@ -38,8 +38,10 @@ import type {
   DailyReportDetail,
   DailyReportEditPayload,
   DailyReportHistory,
+  DailyReportImportPayload,
   DailyReportList,
   DailyReportMutationResponse,
+  DailyReportReconciliationPayload,
   DailyReportRevisionDetail,
   DdrProcessingReport,
   AuditLogEntry,
@@ -653,6 +655,12 @@ export const drillingApi = {
       body,
       idempotencyHeader(idempotencyKey),
     ),
+  importDailyReport: (wellId: string, body: DailyReportImportPayload, idempotencyKey?: string) =>
+    api.post<DailyReportMutationResponse>(
+      `/wells/${enc(wellId)}/daily-reports/imports`,
+      body,
+      idempotencyHeader(idempotencyKey),
+    ),
   updateDailyReportDraft: (
     wellId: string,
     reportId: string,
@@ -662,6 +670,18 @@ export const drillingApi = {
   ) =>
     api.patch<DailyReportMutationResponse>(
       `/wells/${enc(wellId)}/daily-reports/${enc(reportId)}/revisions/${revisionNumber}`,
+      body,
+      idempotencyHeader(idempotencyKey),
+    ),
+  reconcileDailyReport: (
+    wellId: string,
+    reportId: string,
+    revisionNumber: number,
+    body: DailyReportReconciliationPayload,
+    idempotencyKey?: string,
+  ) =>
+    api.post<DailyReportMutationResponse>(
+      `/wells/${enc(wellId)}/daily-reports/${enc(reportId)}/revisions/${revisionNumber}/reconcile`,
       body,
       idempotencyHeader(idempotencyKey),
     ),

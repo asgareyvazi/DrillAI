@@ -83,6 +83,625 @@ def _report_payload(wellbore_id: str) -> dict:
     }
 
 
+async def _create_import_evidence(client, db, well_id: str, wellbore_id: str) -> tuple[str, str]:
+    from sqlalchemy import select
+
+    from drillai.core.serialization import content_hash
+    from drillai.db.models import Document, ExtractedRecord
+
+    uploaded = await client.post(
+        "/api/v1/documents",
+        files={"file": ("import-source.txt", b"DAILY DRILLING REPORT\nSynthetic integration-test evidence.\n", "text/plain")},
+        data={"well_id": well_id, "wellbore_id": wellbore_id, "doc_type": "ddr"},
+        headers=headers("engineer"),
+    )
+    assert uploaded.status_code == 201, uploaded.text
+    document_id = uploaded.json()["document"]["id"]
+    async with db.session_factory() as session:
+        document = (
+            await session.execute(select(Document).where(Document.id == document_id))
+        ).scalar_one()
+        record_payload = {
+            "summary": "Extracted summary awaiting human review.",
+            "operations_summary": "Extracted operations narrative awaiting human review.",
+            "safety_notes": "Extracted safety narrative awaiting human review.",
+            "next_period_plan": "Extracted next-period plan awaiting human review.",
+            "environmental_notes": "Extracted environmental narrative awaiting human review.",
+        }
+        record = ExtractedRecord(
+            org_id=document.org_id,
+            document_id=document.id,
+            project_id=document.project_id,
+            well_id=document.well_id,
+            wellbore_id=document.wellbore_id,
+            record_type="daily_summary",
+            payload_schema_key="test.daily_report_import",
+            payload_schema_version=1,
+            payload=record_payload,
+            method="rule",
+            validation_state="extracted",
+            fingerprint=content_hash(record_payload),
+        )
+        session.add(record)
+        await session.flush()
+        record_id = record.id
+        await session.commit()
+    return document_id, record_id
+
+
+@pytest.mark.asyncio
+async def test_imported_daily_report_reconciliation_measurements_and_correction(client, db):
+    well_id, wellbore_id = await _create_well(client)
+    document_id, record_id = await _create_import_evidence(client, db, well_id, wellbore_id)
+    content = {
+        "source_document_id": document_id,
+        "source_record_id": record_id,
+        "summary": "Extracted summary awaiting human review.",
+        "operations_summary": "Time and depth are not inferred from ingestion metadata.",
+        "activities": [
+            {
+                "activity_kind": "operation",
+                "operation_kind": "drilling",
+                "title": "Proposed drilling interval",
+                "source_document_id": document_id,
+                "source_record_id": record_id,
+                "duration_value": 8.0,
+                "duration_unit": "h",
+                "duration_basis": "reported",
+            }
+        ],
+        "measurements": [
+            {
+                "parameter_key": "mud_weight",
+                "value": 9.2,
+                "unit": "ppg",
+                "value_basis": "reported",
+                "source_document_id": document_id,
+                "source_record_id": record_id,
+            }
+        ],
+    }
+    payload = {
+        "wellbore_id": wellbore_id,
+        "report_date": "2026-11-02",
+        "report_timezone": "UTC",
+        "shift_code": "day",
+        "report_number": "DDR-IMPORT-01",
+        "source_document_id": document_id,
+        "source_record_id": record_id,
+        "field_sources": [
+            {"field_key": "summary", "source_record_id": record_id, "source_path": "payload.summary"}
+        ],
+        "content": content,
+    }
+    imported = await client.post(
+        f"/api/v1/wells/{well_id}/daily-reports/imports",
+        json=payload,
+        headers={**headers("engineer"), "Idempotency-Key": "daily-report-import-reconcile-1"},
+    )
+    assert imported.status_code == 201, imported.text
+    original = imported.json()
+    report_id = original["report"]["id"]
+    revision = original["revision"]
+    assert revision["source_kind"] == "import"
+    assert revision["status"] == "draft"
+    assert revision["content_hash_verified"] is True
+    assert {item["resolution_state"] for item in revision["activities"]} == {"proposed"}
+    assert {item["resolution_state"] for item in revision["measurements"]} == {"proposed"}
+    assert {item["resolution_state"] for item in revision["reconciliation"]} == {"proposed"}
+    assert all(item["proposal_matches_current"] for item in revision["reconciliation"])
+    assert len(revision["reconciliation"]) == 3
+    assert revision["measurements"][0]["observed_at"] is None
+    assert revision["measurements"][0]["time_basis"] == "unknown"
+    replayed_import = await client.post(
+        f"/api/v1/wells/{well_id}/daily-reports/imports",
+        json=payload,
+        headers={**headers("engineer"), "Idempotency-Key": "daily-report-import-reconcile-1"},
+    )
+    assert replayed_import.status_code == 201, replayed_import.text
+    assert replayed_import.json() == original
+    denied_import = await client.post(
+        f"/api/v1/wells/{well_id}/daily-reports/imports", json=payload, headers=headers("viewer")
+    )
+    assert denied_import.status_code == 403
+
+    blocked = await client.post(
+        f"/api/v1/wells/{well_id}/daily-reports/{report_id}/revisions/1/submit",
+        json={"expected_edit_version": 1, "reason": "Attempt before reconciliation."},
+        headers=headers("engineer"),
+    )
+    assert blocked.status_code == 422, blocked.text
+    assert blocked.json()["error"]["details"]["target_count"] == 3
+
+    target_keys = {item["target_kind"]: item["target_key"] for item in revision["reconciliation"]}
+    denied_reconcile = await client.post(
+        f"/api/v1/wells/{well_id}/daily-reports/{report_id}/revisions/1/reconcile",
+        json={
+            "expected_edit_version": 1,
+            "reason": "Viewer is not authorized to resolve proposals.",
+            "decisions": [{"target_key": next(iter(target_keys.values())), "decision": "accepted"}],
+        },
+        headers=headers("viewer"),
+    )
+    assert denied_reconcile.status_code == 403
+    first_decision = await client.post(
+        f"/api/v1/wells/{well_id}/daily-reports/{report_id}/revisions/1/reconcile",
+        json={
+            "expected_edit_version": 1,
+            "reason": "Independently checked the imported values against the source document.",
+            "decisions": [{"target_key": key, "decision": "accepted"} for key in target_keys.values()],
+        },
+        headers={**headers("engineer"), "Idempotency-Key": "daily-report-reconcile-1"},
+    )
+    assert first_decision.status_code == 200, first_decision.text
+    assert first_decision.json()["revision"]["edit_version"] == 2
+    assert {item["resolution_state"] for item in first_decision.json()["revision"]["reconciliation"]} == {"accepted"}
+    assert first_decision.json()["revision"]["measurements"][0]["resolution_state"] == "accepted"
+    stale_edit_version = await client.post(
+        f"/api/v1/wells/{well_id}/daily-reports/{report_id}/revisions/1/reconcile",
+        json={
+            "expected_edit_version": 1,
+            "reason": "A stale reconciliation writer must not overwrite decisions.",
+            "decisions": [{"target_key": target_keys["revision_field"], "decision": "accepted"}],
+        },
+        headers=headers("engineer"),
+    )
+    assert stale_edit_version.status_code == 409
+    assert stale_edit_version.json()["error"]["details"]["current_edit_version"] == 2
+
+    corrected_content = copy.deepcopy(content)
+    corrected_content["summary"] = "Human-corrected summary after checking the source."
+    corrected_content["measurements"][0]["value"] = 9.3
+    edited = await client.patch(
+        f"/api/v1/wells/{well_id}/daily-reports/{report_id}/revisions/1",
+        json={
+            "expected_edit_version": 2,
+            "reason": "Correct the narrative and mud-weight entry during source review.",
+            "content": corrected_content,
+        },
+        headers={**headers("engineer"), "Idempotency-Key": "daily-report-import-edit-1"},
+    )
+    assert edited.status_code == 200, edited.text
+    assert edited.json()["revision"]["edit_version"] == 3
+    decisions_after_edit = {item["target_key"]: item["resolution_state"] for item in edited.json()["revision"]["reconciliation"]}
+    assert decisions_after_edit[target_keys["revision_field"]] == "proposed"
+    assert decisions_after_edit[target_keys["measurement"]] == "proposed"
+    assert decisions_after_edit[target_keys["activity"]] == "accepted"
+    proposal_match_by_key = {
+        item["target_key"]: item["proposal_matches_current"] for item in edited.json()["revision"]["reconciliation"]
+    }
+    assert proposal_match_by_key[target_keys["revision_field"]] is False
+    assert proposal_match_by_key[target_keys["measurement"]] is False
+    assert proposal_match_by_key[target_keys["activity"]] is True
+    assert {item["resolution_state"] for item in edited.json()["revision"]["measurements"]} == {"proposed"}
+    incorrect_accept = await client.post(
+        f"/api/v1/wells/{well_id}/daily-reports/{report_id}/revisions/1/reconcile",
+        json={
+            "expected_edit_version": 3,
+            "reason": "An edited value cannot be accepted as unchanged source output.",
+            "decisions": [{"target_key": target_keys["revision_field"], "decision": "accepted"}],
+        },
+        headers=headers("engineer"),
+    )
+    assert incorrect_accept.status_code == 422
+    assert "mark it corrected" in incorrect_accept.json()["error"]["message"]
+
+    final_decisions = await client.post(
+        f"/api/v1/wells/{well_id}/daily-reports/{report_id}/revisions/1/reconcile",
+        json={
+            "expected_edit_version": 3,
+            "reason": "Verified the corrected field and measurement against the cited source.",
+            "decisions": [
+                {"target_key": target_keys["revision_field"], "decision": "corrected"},
+                {"target_key": target_keys["measurement"], "decision": "corrected"},
+                {"target_key": target_keys["activity"], "decision": "accepted"},
+            ],
+        },
+        headers={**headers("engineer"), "Idempotency-Key": "daily-report-reconcile-2"},
+    )
+    assert final_decisions.status_code == 200, final_decisions.text
+    assert {item["resolution_state"] for item in final_decisions.json()["revision"]["reconciliation"]} == {"corrected", "accepted"}
+    assert final_decisions.json()["revision"]["measurements"][0]["resolution_state"] == "corrected"
+    assert final_decisions.json()["revision"]["measurements"][0]["source_value"] == 9.3
+
+    submitted = await client.post(
+        f"/api/v1/wells/{well_id}/daily-reports/{report_id}/revisions/1/submit",
+        json={"expected_edit_version": 4, "reason": "Submit the fully reconciled import."},
+        headers=headers("engineer"),
+    )
+    assert submitted.status_code == 200, submitted.text
+    approved = await client.post(
+        f"/api/v1/wells/{well_id}/daily-reports/{report_id}/revisions/1/approve",
+        json={"expected_edit_version": 5, "reason": "Independent review of the imported report is complete."},
+        headers=headers("drilling_supervisor"),
+    )
+    assert approved.status_code == 200, approved.text
+
+    correction = await client.post(
+        f"/api/v1/wells/{well_id}/daily-reports/{report_id}/corrections",
+        json={"reason": "Create a follow-up correction with new source reconciliation proposals."},
+        headers=headers("drilling_supervisor"),
+    )
+    assert correction.status_code == 201, correction.text
+    corrected_revision = correction.json()["revision"]
+    assert corrected_revision["source_kind"] == "import"
+    assert corrected_revision["content_hash_verified"] is True
+    assert len(corrected_revision["reconciliation"]) == 3
+    assert {item["resolution_state"] for item in corrected_revision["reconciliation"]} == {"proposed"}
+    assert {item["resolution_state"] for item in corrected_revision["measurements"]} == {"proposed"}
+
+    blocked_correction = await client.post(
+        f"/api/v1/wells/{well_id}/daily-reports/{report_id}/revisions/2/submit",
+        json={"expected_edit_version": 1, "reason": "Correction must be reconciled again."},
+        headers=headers("engineer"),
+    )
+    assert blocked_correction.status_code == 422, blocked_correction.text
+    correction_keys = [item["target_key"] for item in corrected_revision["reconciliation"]]
+    reconciled_correction = await client.post(
+        f"/api/v1/wells/{well_id}/daily-reports/{report_id}/revisions/2/reconcile",
+        json={
+            "expected_edit_version": 1,
+            "reason": "Rechecked the corrected revision's source links.",
+            "decisions": [{"target_key": key, "decision": "accepted"} for key in correction_keys],
+        },
+        headers=headers("drilling_supervisor"),
+    )
+    assert reconciled_correction.status_code == 200, reconciled_correction.text
+    assert reconciled_correction.json()["revision"]["edit_version"] == 2
+
+
+@pytest.mark.asyncio
+async def test_import_supports_source_proposals_for_every_reconciliable_report_field(client, db):
+    well_id, wellbore_id = await _create_well(client)
+    document_id, record_id = await _create_import_evidence(client, db, well_id, wellbore_id)
+    field_values = {
+        "summary": "Extracted summary awaiting human review.",
+        "operations_summary": "Extracted operations narrative awaiting human review.",
+        "safety_notes": "Extracted safety narrative awaiting human review.",
+        "next_period_plan": "Extracted next-period plan awaiting human review.",
+        "environmental_notes": "Extracted environmental narrative awaiting human review.",
+    }
+    imported = await client.post(
+        f"/api/v1/wells/{well_id}/daily-reports/imports",
+        json={
+            "wellbore_id": wellbore_id,
+            "report_date": "2026-11-03",
+            "report_timezone": "UTC",
+            "shift_code": "day",
+            "report_number": "DDR-ALL-FIELD-SOURCES",
+            "source_document_id": document_id,
+            "source_record_id": record_id,
+            "field_sources": [
+                {"field_key": field_key, "source_record_id": record_id, "source_path": f"payload.{field_key}"}
+                for field_key in field_values
+            ],
+            "content": {
+                "source_document_id": document_id,
+                "source_record_id": record_id,
+                **field_values,
+            },
+        },
+        headers=headers("engineer"),
+    )
+    assert imported.status_code == 201, imported.text
+    reconciliation = imported.json()["revision"]["reconciliation"]
+    assert {item["field_key"] for item in reconciliation} == set(field_values)
+    assert {item["source_path"] for item in reconciliation} == {
+        f"payload.{field_key}" for field_key in field_values
+    }
+    assert {item["resolution_state"] for item in reconciliation} == {"proposed"}
+    assert all(item["proposal_matches_current"] for item in reconciliation)
+
+
+@pytest.mark.asyncio
+async def test_duplicate_import_identity_returns_existing_report_without_mutating_or_creating(client, db):
+    well_id, wellbore_id = await _create_well(client)
+    document_id, record_id = await _create_import_evidence(client, db, well_id, wellbore_id)
+    payload = {
+        "wellbore_id": wellbore_id,
+        "report_date": "2026-11-06",
+        "report_timezone": "UTC",
+        "shift_code": "day",
+        "report_number": "DDR-IMPORT-IDEMPOTENT-CONFLICT",
+        "source_document_id": document_id,
+        "source_record_id": record_id,
+        "field_sources": [
+            {"field_key": "summary", "source_record_id": record_id, "source_path": "payload.summary"}
+        ],
+        "content": {
+            "summary": "Extracted summary awaiting human review.",
+            "source_document_id": document_id,
+            "source_record_id": record_id,
+        },
+    }
+    first = await client.post(
+        f"/api/v1/wells/{well_id}/daily-reports/imports", json=payload, headers=headers("engineer")
+    )
+    assert first.status_code == 201, first.text
+    original = first.json()
+
+    conflicting_payload = copy.deepcopy(payload)
+    conflicting_payload["content"]["summary"] = "A conflicting retry must never overwrite the existing revision."
+    conflict = await client.post(
+        f"/api/v1/wells/{well_id}/daily-reports/imports",
+        json=conflicting_payload,
+        headers=headers("engineer"),
+    )
+    assert conflict.status_code == 409, conflict.text
+    assert conflict.json()["error"]["details"]["report_id"] == original["report"]["id"]
+    assert "no duplicate draft was created" in conflict.json()["error"]["message"]
+
+    listing = await client.get(f"/api/v1/wells/{well_id}/daily-reports?limit=20", headers=headers("engineer"))
+    assert listing.status_code == 200, listing.text
+    assert listing.json()["total"] == 1
+    assert [item["id"] for item in listing.json()["items"]] == [original["report"]["id"]]
+    current = await client.get(
+        f"/api/v1/wells/{well_id}/daily-reports/{original['report']['id']}", headers=headers("engineer")
+    )
+    assert current.status_code == 200, current.text
+    assert current.json()["latest_revision"]["summary"] == "Extracted summary awaiting human review."
+    assert current.json()["latest_revision"]["content_hash_verified"] is True
+    assert current.json()["latest_revision"]["edit_version"] == 1
+
+
+@pytest.mark.asyncio
+async def test_rejected_source_row_is_retained_but_cannot_make_a_blank_report_submittable(client, db):
+    well_id, wellbore_id = await _create_well(client)
+    document_id, record_id = await _create_import_evidence(client, db, well_id, wellbore_id)
+    payload = {
+        "wellbore_id": wellbore_id,
+        "report_date": "2026-11-04",
+        "report_timezone": "UTC",
+        "shift_code": "24h",
+        "report_number": "DDR-IMPORT-REJECT-ROW",
+        "source_document_id": document_id,
+        "source_record_id": record_id,
+        "content": {
+            "source_document_id": document_id,
+            "source_record_id": record_id,
+            "activities": [
+                {
+                    "activity_kind": "operation",
+                    "operation_kind": "drilling",
+                    "title": "Unsupported extracted row",
+                    "source_document_id": document_id,
+                    "source_record_id": record_id,
+                }
+            ],
+            "measurements": [
+                {
+                    "parameter_key": "mud_weight",
+                    "value": 9.2,
+                    "unit": "ppg",
+                    "value_basis": "reported",
+                    "source_document_id": document_id,
+                    "source_record_id": record_id,
+                }
+            ],
+        },
+    }
+    imported = await client.post(
+        f"/api/v1/wells/{well_id}/daily-reports/imports", json=payload, headers=headers("engineer")
+    )
+    assert imported.status_code == 201, imported.text
+    revision = imported.json()["revision"]
+    targets = {item["target_kind"]: item["target_key"] for item in revision["reconciliation"]}
+    rejected = await client.post(
+        f"/api/v1/wells/{well_id}/daily-reports/{imported.json()['report']['id']}/revisions/1/reconcile",
+        json={
+            "expected_edit_version": 1,
+            "reason": "The cited document does not support this proposed operation row.",
+            "decisions": [
+                {"target_key": targets["activity"], "decision": "rejected"},
+                {"target_key": targets["measurement"], "decision": "rejected"},
+            ],
+        },
+        headers=headers("engineer"),
+    )
+    assert rejected.status_code == 200, rejected.text
+    after = rejected.json()["revision"]
+    assert len(after["activities"]) == 1
+    assert after["activities"][0]["resolution_state"] == "rejected"
+    assert len(after["measurements"]) == 1
+    assert after["measurements"][0]["resolution_state"] == "rejected"
+    assert {item["target_key"]: item["resolution_state"] for item in after["reconciliation"]} == {
+        targets["activity"]: "rejected",
+        targets["measurement"]: "rejected",
+    }
+    changed_rejected_activity = await client.patch(
+        f"/api/v1/wells/{well_id}/daily-reports/{imported.json()['report']['id']}/revisions/1",
+        json={
+            "expected_edit_version": 2,
+            "reason": "Attempt to alter a rejected source activity.",
+            "content": {
+                "source_document_id": document_id,
+                "source_record_id": record_id,
+                "activities": [{
+                    "activity_kind": "operation",
+                    "operation_kind": "drilling",
+                    "title": "Altered rejected proposal",
+                    "source_document_id": document_id,
+                    "source_record_id": record_id,
+                }],
+                "measurements": [{
+                    "parameter_key": "mud_weight",
+                    "value": 9.2,
+                    "unit": "ppg",
+                    "value_basis": "reported",
+                    "source_document_id": document_id,
+                    "source_record_id": record_id,
+                }],
+            },
+        },
+        headers=headers("engineer"),
+    )
+    assert changed_rejected_activity.status_code == 409, changed_rejected_activity.text
+    assert "rejected source activity is immutable" in changed_rejected_activity.json()["error"]["message"]
+    changed_rejected_measurement = await client.patch(
+        f"/api/v1/wells/{well_id}/daily-reports/{imported.json()['report']['id']}/revisions/1",
+        json={
+            "expected_edit_version": 2,
+            "reason": "Attempt to alter a rejected source measurement.",
+            "content": {
+                "source_document_id": document_id,
+                "source_record_id": record_id,
+                "activities": [{
+                    "activity_kind": "operation",
+                    "operation_kind": "drilling",
+                    "title": "Unsupported extracted row",
+                    "source_document_id": document_id,
+                    "source_record_id": record_id,
+                }],
+                "measurements": [{
+                    "parameter_key": "mud_weight",
+                    "value": 9.3,
+                    "unit": "ppg",
+                    "value_basis": "reported",
+                    "source_document_id": document_id,
+                    "source_record_id": record_id,
+                }],
+            },
+        },
+        headers=headers("engineer"),
+    )
+    assert changed_rejected_measurement.status_code == 409, changed_rejected_measurement.text
+    assert "rejected source measurement is immutable" in changed_rejected_measurement.json()["error"]["message"]
+    edited = await client.patch(
+        f"/api/v1/wells/{well_id}/daily-reports/{imported.json()['report']['id']}/revisions/1",
+        json={
+            "expected_edit_version": 2,
+            "reason": "Keep the rejected source proposal in the audit-visible draft history.",
+            "content": {"source_document_id": document_id, "source_record_id": record_id},
+        },
+        headers=headers("engineer"),
+    )
+    assert edited.status_code == 200, edited.text
+    assert edited.json()["revision"]["activities"][0]["resolution_state"] == "rejected"
+    assert edited.json()["revision"]["measurements"][0]["resolution_state"] == "rejected"
+    edited_states = {
+        item["target_key"]: item["resolution_state"] for item in edited.json()["revision"]["reconciliation"]
+    }
+    assert edited_states == {targets["activity"]: "rejected", targets["measurement"]: "rejected"}
+    blocked_blank_report = await client.post(
+        f"/api/v1/wells/{well_id}/daily-reports/{imported.json()['report']['id']}/revisions/1/submit",
+        json={"expected_edit_version": 3, "reason": "Submit after rejecting unsupported extracted row."},
+        headers=headers("engineer"),
+    )
+    assert blocked_blank_report.status_code == 422, blocked_blank_report.text
+    assert "blank report cannot be submitted" in blocked_blank_report.json()["error"]["message"]
+
+
+@pytest.mark.parametrize("stale_mode", ["review_version", "payload"])
+@pytest.mark.asyncio
+async def test_import_reconciliation_rejects_stale_extraction_evidence(client, db, stale_mode):
+    from sqlalchemy import select
+
+    from drillai.db.models import ExtractedRecord
+
+    well_id, wellbore_id = await _create_well(client)
+    document_id, record_id = await _create_import_evidence(client, db, well_id, wellbore_id)
+    payload = {
+        "wellbore_id": wellbore_id,
+        "report_date": "2026-11-03",
+        "report_timezone": "UTC",
+        "shift_code": "night",
+        "report_number": "DDR-IMPORT-STALE",
+        "source_document_id": document_id,
+        "field_sources": [
+            {"field_key": "summary", "source_record_id": record_id, "source_path": "payload.summary"}
+        ],
+        "content": {
+            "summary": "Extracted summary awaiting human review.",
+            "source_record_id": record_id,
+            "source_document_id": document_id,
+        },
+    }
+    imported = await client.post(
+        f"/api/v1/wells/{well_id}/daily-reports/imports", json=payload, headers=headers("engineer")
+    )
+    assert imported.status_code == 201, imported.text
+    revision = imported.json()["revision"]
+    field_key = revision["reconciliation"][0]["target_key"]
+    async with db.session_factory() as session:
+        record = (
+            await session.execute(select(ExtractedRecord).where(ExtractedRecord.id == record_id))
+        ).scalar_one()
+        if stale_mode == "review_version":
+            record.review_version += 1
+        else:
+            # The fingerprint is intentionally left untouched: a payload mutation without a review
+            # version/fingerprint update must still be caught by the persisted source-value hash.
+            record.payload = {"summary": "Changed extraction payload without a version bump."}
+        await session.commit()
+
+    stale = await client.post(
+        f"/api/v1/wells/{well_id}/daily-reports/{imported.json()['report']['id']}/revisions/1/reconcile",
+        json={
+            "expected_edit_version": 1,
+            "reason": "Attempt to accept a stale source proposal.",
+            "decisions": [{"target_key": field_key, "decision": "accepted"}],
+        },
+        headers=headers("engineer"),
+    )
+    assert stale.status_code == 409, stale.text
+    assert "source evidence changed" in stale.json()["error"]["message"]
+
+
+@pytest.mark.asyncio
+async def test_reconciliation_refuses_a_revision_with_a_tampered_content_fingerprint(client, db):
+    from sqlalchemy import select
+
+    from drillai.db.models import DailyDrillingReportRevision
+
+    well_id, wellbore_id = await _create_well(client)
+    document_id, record_id = await _create_import_evidence(client, db, well_id, wellbore_id)
+    imported = await client.post(
+        f"/api/v1/wells/{well_id}/daily-reports/imports",
+        json={
+            "wellbore_id": wellbore_id,
+            "report_date": "2026-11-05",
+            "report_timezone": "UTC",
+            "shift_code": "day",
+            "report_number": "DDR-IMPORT-TAMPERED",
+            "source_document_id": document_id,
+            "source_record_id": record_id,
+            "field_sources": [{"field_key": "summary", "source_record_id": record_id, "source_path": "payload.summary"}],
+            "content": {
+                "summary": "Source-derived summary",
+                "source_document_id": document_id,
+                "source_record_id": record_id,
+            },
+        },
+        headers=headers("engineer"),
+    )
+    assert imported.status_code == 201, imported.text
+    report_id = imported.json()["report"]["id"]
+    target_key = imported.json()["revision"]["reconciliation"][0]["target_key"]
+    async with db.session_factory() as session:
+        revision = (
+            await session.execute(select(DailyDrillingReportRevision).where(DailyDrillingReportRevision.id == imported.json()["revision"]["id"]))
+        ).scalar_one()
+        revision.summary = "Tampered without a new content fingerprint"
+        await session.commit()
+
+    denied = await client.post(
+        f"/api/v1/wells/{well_id}/daily-reports/{report_id}/revisions/1/reconcile",
+        json={
+            "expected_edit_version": 1,
+            "reason": "Attempt to accept a proposal on a tampered revision.",
+            "decisions": [{"target_key": target_key, "decision": "accepted"}],
+        },
+        headers=headers("engineer"),
+    )
+    assert denied.status_code == 409, denied.text
+    assert "does not match its stored revision fingerprint" in denied.json()["error"]["message"]
+    detail = await client.get(f"/api/v1/wells/{well_id}/daily-reports/{report_id}", headers=headers("engineer"))
+    assert detail.status_code == 200, detail.text
+    assert detail.json()["latest_revision"]["edit_version"] == 1
+    assert detail.json()["latest_revision"]["content_hash_verified"] is False
+    assert detail.json()["latest_revision"]["reconciliation"][0]["resolution_state"] == "proposed"
+
+
 @pytest.mark.asyncio
 async def test_daily_report_manual_revision_submit_approve_and_correct(client, db):
     well_id, wellbore_id = await _create_well(client)

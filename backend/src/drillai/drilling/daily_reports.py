@@ -30,6 +30,7 @@ from drillai.db.models import (
     DAILY_REPORT_PARAMETER_SPECS,
     REPORT_ACTIVITY_KINDS,
     REPORT_DEPTH_REFERENCES,
+    REPORT_RECONCILIATION_REVISION_FIELDS,
     REPORT_REVISION_STATUSES,
     REPORT_SHIFT_CODES,
     REPORT_TIME_BASES,
@@ -37,6 +38,7 @@ from drillai.db.models import (
     DailyDrillingReportRevision,
     DailyReportActivity,
     DailyReportMeasurement,
+    DailyReportReconciliation,
     Document,
     DocumentRegion,
     Event,
@@ -441,6 +443,365 @@ class DailyReportService:
             "revision": await self._revision_detail(report, revision, activities, measurements),
         }
 
+    async def create_import(self, well_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+        """Create a proposed report revision from explicitly mapped document evidence.
+
+        This operation never validates extracted records or accepts their content. It creates a
+        normal report draft, retains source links, and persists proposed hashes and versions so a
+        separate human reconciliation step can accept, correct, reject or leave each mapped field/row
+        unresolved before submission.
+        """
+        self._authorize("daily_report.import", well_id=well_id)
+        wellbore_id = _nonempty_text(payload.get("wellbore_id"), "wellbore_id", 64)
+        source_document_id = _nonempty_text(payload.get("source_document_id"), "source_document_id", 64)
+        scope = await self._resolve_well(well_id, wellbore_id)
+        identity = self._normalize_identity(payload)
+        source_document = await self._validate_evidence(
+            scope,
+            source_document_id=source_document_id,
+            source_record_id=payload.get("source_record_id"),
+            source_region_id=payload.get("source_region_id"),
+            source_page_number=payload.get("source_page_number"),
+            allow_unvalidated_record=True,
+        )
+        document = (
+            await self.session.execute(
+                select(Document).where(
+                    Document.id == source_document["source_document_id"],
+                    Document.org_id == self.org_id,
+                )
+            )
+        ).scalar_one_or_none()
+        if document is None:
+            raise NotFound(f"source document {source_document_id!r} not found")
+        if document.doc_type not in {"ddr", "drilling_document"}:
+            raise ValidationFailed(
+                "only documents classified as daily drilling reports can seed an imported report draft",
+                details={"source_document_id": document.id, "doc_type": document.doc_type},
+            )
+        if document.well_id != well_id or document.wellbore_id not in {None, wellbore_id}:
+            raise ValidationFailed(
+                "source document scope must match the report well and wellbore",
+                details={"source_document_id": document.id, "well_id": document.well_id, "wellbore_id": document.wellbore_id},
+            )
+
+        content_input = payload.get("content")
+        if not isinstance(content_input, dict):
+            raise ValidationFailed("content must be an object")
+        content_input = dict(content_input)
+        supplied_source_document = content_input.get("source_document_id")
+        if supplied_source_document not in {None, source_document_id}:
+            raise ValidationFailed("content source_document_id must match the import source document")
+        content_input["source_document_id"] = source_document_id
+        if source_document["source_record_id"] is not None:
+            content_input.setdefault("source_record_id", source_document["source_record_id"])
+        if source_document["source_region_id"] is not None:
+            content_input.setdefault("source_region_id", source_document["source_region_id"])
+        if source_document["source_page_number"] is not None:
+            content_input.setdefault("source_page_number", source_document["source_page_number"])
+        prepared = await self._prepare_content(
+            content_input,
+            scope=scope,
+            source_kind="import",
+            allow_unvalidated_source_records=True,
+        )
+        for child in (*prepared.activities, *prepared.measurements):
+            record_id = child.get("source_record_id")
+            if record_id and child.get("source_document_id") != source_document_id:
+                raise ValidationFailed(
+                    "each imported row's extracted record must belong to the selected source document",
+                    details={"source_record_id": record_id, "source_document_id": source_document_id},
+                )
+
+        duplicate = (
+            await self.session.execute(
+                select(DailyDrillingReport).where(
+                    DailyDrillingReport.org_id == self.org_id,
+                    DailyDrillingReport.wellbore_id == scope.wellbore_id,
+                    DailyDrillingReport.report_date == identity["report_date"],
+                    DailyDrillingReport.identity_key == identity["identity_key"],
+                )
+            )
+        ).scalar_one_or_none()
+        if duplicate is not None:
+            raise Conflict(
+                "a report with this identity already exists; no duplicate draft was created. Open the existing report and review or correct it through the normal revision lifecycle",
+                details={
+                    "report_id": duplicate.id,
+                    "revision_number": duplicate.latest_revision_number,
+                    "source_document_id": source_document_id,
+                    "report_date": identity["report_date"].isoformat(),
+                    "identity_key": identity["identity_key"],
+                },
+            )
+
+        report = DailyDrillingReport(
+            org_id=self.org_id,
+            well_id=scope.well_id,
+            wellbore_id=scope.wellbore_id,
+            created_by=self.principal.id if self.principal else "",
+            latest_revision_number=1,
+            **identity,
+        )
+        try:
+            async with self.session.begin_nested():
+                self.session.add(report)
+                await self.session.flush()
+        except IntegrityError as exc:
+            if not _is_named_constraint(exc, "uq_daily_drilling_report_identity"):
+                raise
+            existing = (
+                await self.session.execute(
+                    select(DailyDrillingReport).where(
+                        DailyDrillingReport.org_id == self.org_id,
+                        DailyDrillingReport.wellbore_id == scope.wellbore_id,
+                        DailyDrillingReport.report_date == identity["report_date"],
+                        DailyDrillingReport.identity_key == identity["identity_key"],
+                    )
+                )
+            ).scalar_one_or_none()
+            raise Conflict(
+                "another report was created concurrently for this import identity; no duplicate draft was created. Open the existing report and review or correct it through the normal revision lifecycle",
+                details={"report_id": existing.id if existing else None, "source_document_id": source_document_id},
+            ) from exc
+
+        revision = DailyDrillingReportRevision(
+            org_id=self.org_id,
+            report_id=report.id,
+            revision_number=1,
+            edit_version=1,
+            status="draft",
+            source_kind="import",
+            created_by=self.principal.id if self.principal else "",
+            **prepared.revision_fields,
+        )
+        self.session.add(revision)
+        await self.session.flush()
+        activities = self._activity_rows(revision.id, prepared.activities, resolution_state="proposed")
+        measurements = self._measurement_rows(revision.id, prepared.measurements, resolution_state="proposed")
+        # Rows that the operator entered directly in the import editor are manual facts, not extracted
+        # proposals. Only rows linked to the selected source record require reconciliation.
+        for row in activities:
+            if row.source_record_id is None:
+                row.resolution_state = "manual"
+        for row in measurements:
+            if row.source_record_id is None:
+                row.resolution_state = "manual"
+        self.session.add_all([*activities, *measurements])
+        await self.session.flush()
+
+        field_sources = payload.get("field_sources", [])
+        if not isinstance(field_sources, list) or len(field_sources) > 32:
+            raise ValidationFailed("field_sources must be a list with at most 32 entries")
+        seen_fields: set[str] = set()
+        decisions: list[DailyReportReconciliation] = []
+        for item in field_sources:
+            if not isinstance(item, dict):
+                raise ValidationFailed("each field source must be an object")
+            field_key = _nonempty_text(item.get("field_key"), "field_key", 48)
+            if field_key not in REPORT_RECONCILIATION_REVISION_FIELDS:
+                raise ValidationFailed(
+                    "field source target is not a reconcilable revision field",
+                    details={"field_key": field_key, "allowed": list(REPORT_RECONCILIATION_REVISION_FIELDS)},
+                )
+            if field_key in seen_fields:
+                raise ValidationFailed("only one source proposal may be mapped to a revision field", details={"field_key": field_key})
+            seen_fields.add(field_key)
+            record = await self._import_source_record(
+                scope,
+                source_document_id=source_document_id,
+                source_record_id=item.get("source_record_id"),
+            )
+            source_path = _nonempty_text(item.get("source_path"), "source_path", 256)
+            source_value = _record_payload_path(record.payload or {}, source_path)
+            if source_value is _MISSING:
+                raise ValidationFailed(
+                    "source_path does not identify a value in the extracted record payload",
+                    details={"source_record_id": record.id, "source_path": source_path},
+                )
+            target_value = prepared.revision_fields[field_key]
+            decisions.append(
+                self._new_reconciliation(
+                    revision=revision,
+                    target_key=f"field:{field_key}",
+                    target_kind="revision_field",
+                    target_id=None,
+                    field_key=field_key,
+                    source_document_id=source_document_id,
+                    source_record=record,
+                    source_path=source_path,
+                    source_value=source_value,
+                    proposed_value=target_value,
+                )
+            )
+        for row in activities:
+            if row.source_record_id is None:
+                continue
+            record = await self._import_source_record(
+                scope,
+                source_document_id=source_document_id,
+                source_record_id=row.source_record_id,
+            )
+            decisions.append(
+                self._new_reconciliation(
+                    revision=revision,
+                    target_key=f"activity:{record.id}:{row.sequence}",
+                    target_kind="activity",
+                    target_id=row.id,
+                    field_key="activity",
+                    source_document_id=source_document_id,
+                    source_record=record,
+                    source_path="payload",
+                    source_value=record.payload or {},
+                    proposed_value=self._activity_proposal_value(row),
+                )
+            )
+        for row in measurements:
+            if row.source_record_id is None:
+                continue
+            record = await self._import_source_record(
+                scope,
+                source_document_id=source_document_id,
+                source_record_id=row.source_record_id,
+            )
+            decisions.append(
+                self._new_reconciliation(
+                    revision=revision,
+                    target_key=f"measurement:{record.id}:{row.parameter_key}:{row.ordinal}",
+                    target_kind="measurement",
+                    target_id=row.id,
+                    field_key=row.parameter_key,
+                    source_document_id=source_document_id,
+                    source_record=record,
+                    source_path="payload",
+                    source_value=record.payload or {},
+                    proposed_value=self._measurement_proposal_value(row),
+                )
+            )
+        self.session.add_all(decisions)
+        revision.content_hash = self._content_hash(report, revision, activities, measurements)
+        await self.session.flush()
+
+        after = self._revision_audit_state(revision, activities, measurements)
+        after["reconciliation"] = [self._reconciliation_out(row) for row in decisions]
+        await self._record_change(
+            report,
+            revision,
+            action="daily_report.import",
+            change_type="import_proposed",
+            permission="daily_report.write",
+            fields=["source_document", "identity", "content", "reconciliation"],
+            before={},
+            after=after,
+            reason="Source extraction is proposed only; no field or row was automatically accepted.",
+        )
+        await emit(
+            self.session,
+            org_id=self.org_id,
+            type="daily_report.changed",
+            subject_kind="daily_drilling_report",
+            subject_id=report.id,
+            well_id=report.well_id,
+            wellbore_id=report.wellbore_id,
+            payload={
+                "report_id": report.id,
+                "revision_number": 1,
+                "status": "draft",
+                "action": "import_proposed",
+                "source_document_id": source_document_id,
+            },
+        )
+        return {
+            "report": self._report_out(report, revision),
+            "revision": await self._revision_detail(report, revision, activities, measurements),
+        }
+
+    async def _import_source_record(
+        self,
+        scope: _ResolvedWell,
+        *,
+        source_document_id: str,
+        source_record_id: Any,
+    ) -> ExtractedRecord:
+        record_id = _nonempty_text(source_record_id, "source_record_id", 64)
+        record = (
+            await self.session.execute(
+                select(ExtractedRecord)
+                .where(
+                    ExtractedRecord.id == record_id,
+                    ExtractedRecord.org_id == self.org_id,
+                )
+                .with_for_update()
+            )
+        ).scalar_one_or_none()
+        if record is None:
+            raise NotFound(f"source record {record_id!r} not found")
+        if record.document_id != source_document_id:
+            raise ValidationFailed(
+                "source record does not belong to the selected import document",
+                details={"source_record_id": record.id, "source_document_id": source_document_id},
+            )
+        if record.validation_state in {"rejected", "superseded"}:
+            raise ValidationFailed(
+                "rejected or superseded extracted records cannot be imported",
+                details={"source_record_id": record.id, "validation_state": record.validation_state},
+            )
+        await self._validate_evidence(
+            scope,
+            source_document_id=source_document_id,
+            source_record_id=record.id,
+            source_region_id=record.region_id,
+            source_page_number=record.page_number,
+            allow_unvalidated_record=True,
+        )
+        return record
+
+    def _new_reconciliation(
+        self,
+        *,
+        revision: DailyDrillingReportRevision,
+        target_key: str,
+        target_kind: str,
+        target_id: str | None,
+        field_key: str,
+        source_document_id: str,
+        source_record: ExtractedRecord,
+        source_path: str,
+        source_value: Any,
+        proposed_value: Any,
+    ) -> DailyReportReconciliation:
+        return DailyReportReconciliation(
+            org_id=self.org_id,
+            revision_id=revision.id,
+            target_key=target_key,
+            target_kind=target_kind,
+            target_id=target_id,
+            field_key=field_key,
+            source_document_id=source_document_id,
+            source_record_id=source_record.id,
+            source_region_id=source_record.region_id,
+            source_page_number=source_record.page_number,
+            source_path=source_path,
+            source_review_version=source_record.review_version,
+            source_fingerprint=source_record.fingerprint or content_hash(source_record.payload or {}),
+            source_value_hash=content_hash(source_value),
+            proposed_value_hash=content_hash(proposed_value),
+            resolution_state="proposed",
+            created_by=self.principal.id if self.principal else "",
+        )
+
+    @staticmethod
+    def _activity_proposal_value(row: DailyReportActivity) -> dict[str, Any]:
+        values = DailyReportService._activity_hash_value(row)
+        values.pop("resolution_state", None)
+        return values
+
+    @staticmethod
+    def _measurement_proposal_value(row: DailyReportMeasurement) -> dict[str, Any]:
+        values = DailyReportService._measurement_hash_value(row)
+        values.pop("resolution_state", None)
+        return values
+
     async def update_draft(
         self,
         well_id: str,
@@ -457,16 +818,43 @@ class DailyReportService:
         revision = await self._revision(report.id, revision_number, lock=True)
         self._require_editable(revision, expected_edit_version)
         scope = await self._resolve_well(well_id, report.wellbore_id)
+        if revision.source_kind == "import":
+            content = dict(content)
+            if content.get("source_document_id") not in {None, revision.source_document_id}:
+                raise ValidationFailed("an imported draft cannot change its source document")
+            content["source_document_id"] = revision.source_document_id
+            if revision.source_record_id is not None:
+                content.setdefault("source_record_id", revision.source_record_id)
+            if revision.source_region_id is not None:
+                content.setdefault("source_region_id", revision.source_region_id)
+            if revision.source_page_number is not None:
+                content.setdefault("source_page_number", revision.source_page_number)
         prepared = await self._prepare_content(
             content,
             scope=scope,
             source_kind=revision.source_kind,
             allow_unvalidated_source_records=revision.source_kind != "manual",
         )
+        if revision.source_kind == "import":
+            for child in (*prepared.activities, *prepared.measurements):
+                if child.get("source_record_id") and child.get("source_document_id") != revision.source_document_id:
+                    raise ValidationFailed("imported rows must retain the report revision's source document")
         before_activities, before_measurements = await self._children(revision.id)
+        reconciliation_rows = (
+            await self.session.execute(
+                select(DailyReportReconciliation).where(
+                    DailyReportReconciliation.org_id == self.org_id,
+                    DailyReportReconciliation.revision_id == revision.id,
+                )
+            )
+        ).scalars().all()
+        if revision.source_kind == "import":
+            for item in reconciliation_rows:
+                await self._assert_reconciliation_source_current(item, scope)
         before_hash = self._content_hash(report, revision, before_activities, before_measurements)
         self._require_hash_matches(revision, before_hash)
         before = self._revision_audit_state(revision, before_activities, before_measurements)
+        before["reconciliation"] = [self._reconciliation_out(row) for row in reconciliation_rows]
         now = utc_now()
         result = await self.session.execute(
             update(DailyDrillingReportRevision)
@@ -507,9 +895,153 @@ class DailyReportService:
         measurements = self._measurement_rows(revision.id, prepared.measurements, resolution_state=resolution_state)
         self.session.add_all([*activities, *measurements])
         await self.session.flush()
+        if revision.source_kind == "import":
+            reconciliation_by_key = {item.target_key: item for item in reconciliation_rows}
+            before_activities_by_id = {row.id: row for row in before_activities}
+            before_measurements_by_id = {row.id: row for row in before_measurements}
+            retained_keys: set[str] = set()
+            new_reconciliation: list[DailyReportReconciliation] = []
+            for item in reconciliation_rows:
+                if item.target_kind == "revision_field":
+                    value_hash = content_hash(getattr(revision, item.field_key))
+                    if item.resolution_state != "rejected" and value_hash != item.proposed_value_hash:
+                        item.resolution_state = "proposed"
+                        item.reason = None
+                        item.decided_by = None
+                        item.decided_at = None
+            for row in activities:
+                if row.source_record_id is None:
+                    continue
+                target_key = f"activity:{row.source_record_id}:{row.sequence}"
+                retained_keys.add(target_key)
+                decision_row = reconciliation_by_key.get(target_key)
+                if decision_row is None:
+                    record = await self._import_source_record(
+                        scope,
+                        source_document_id=revision.source_document_id or "",
+                        source_record_id=row.source_record_id,
+                    )
+                    decision_row = self._new_reconciliation(
+                        revision=revision,
+                        target_key=target_key,
+                        target_kind="activity",
+                        target_id=row.id,
+                        field_key="activity",
+                        source_document_id=revision.source_document_id or "",
+                        source_record=record,
+                        source_path="payload",
+                        source_value=record.payload or {},
+                        proposed_value=self._activity_proposal_value(row),
+                    )
+                    new_reconciliation.append(decision_row)
+                elif decision_row.resolution_state == "rejected":
+                    previous = before_activities_by_id.get(decision_row.target_id or "")
+                    if previous is None or content_hash(self._activity_proposal_value(row)) != content_hash(
+                        self._activity_proposal_value(previous)
+                    ):
+                        raise Conflict("a rejected source activity is immutable in this revision")
+                    decision_row.target_id = row.id
+                    row.resolution_state = "rejected"
+                else:
+                    decision_row.target_id = row.id
+                    if content_hash(self._activity_proposal_value(row)) != decision_row.proposed_value_hash:
+                        decision_row.resolution_state = "proposed"
+                        decision_row.reason = None
+                        decision_row.decided_by = None
+                        decision_row.decided_at = None
+                    row.resolution_state = decision_row.resolution_state
+            for row in measurements:
+                if row.source_record_id is None:
+                    continue
+                target_key = f"measurement:{row.source_record_id}:{row.parameter_key}:{row.ordinal}"
+                retained_keys.add(target_key)
+                decision_row = reconciliation_by_key.get(target_key)
+                if decision_row is None:
+                    record = await self._import_source_record(
+                        scope,
+                        source_document_id=revision.source_document_id or "",
+                        source_record_id=row.source_record_id,
+                    )
+                    decision_row = self._new_reconciliation(
+                        revision=revision,
+                        target_key=target_key,
+                        target_kind="measurement",
+                        target_id=row.id,
+                        field_key=row.parameter_key,
+                        source_document_id=revision.source_document_id or "",
+                        source_record=record,
+                        source_path="payload",
+                        source_value=record.payload or {},
+                        proposed_value=self._measurement_proposal_value(row),
+                    )
+                    new_reconciliation.append(decision_row)
+                elif decision_row.resolution_state == "rejected":
+                    previous = before_measurements_by_id.get(decision_row.target_id or "")
+                    if previous is None or content_hash(self._measurement_proposal_value(row)) != content_hash(
+                        self._measurement_proposal_value(previous)
+                    ):
+                        raise Conflict("a rejected source measurement is immutable in this revision")
+                    decision_row.target_id = row.id
+                    row.resolution_state = "rejected"
+                else:
+                    decision_row.target_id = row.id
+                    if content_hash(self._measurement_proposal_value(row)) != decision_row.proposed_value_hash:
+                        decision_row.resolution_state = "proposed"
+                        decision_row.reason = None
+                        decision_row.decided_by = None
+                        decision_row.decided_at = None
+                    row.resolution_state = decision_row.resolution_state
+            old_activities_by_id = {row.id: row for row in before_activities}
+            old_measurements_by_id = {row.id: row for row in before_measurements}
+            rejected_clones: list[tuple[DailyReportReconciliation, DailyReportActivity | DailyReportMeasurement]] = []
+            for item in reconciliation_rows:
+                if item.target_kind not in {"activity", "measurement"} or item.target_key in retained_keys:
+                    continue
+                if item.resolution_state != "rejected":
+                    item.resolution_state = "rejected"
+                    item.reason = reason
+                    item.decided_by = self.principal.id if self.principal else ""
+                    item.decided_at = now
+                old_row = (
+                    old_activities_by_id.get(item.target_id)
+                    if item.target_kind == "activity"
+                    else old_measurements_by_id.get(item.target_id)
+                )
+                if old_row is not None:
+                    if item.target_kind == "activity":
+                        rejected_row = self._clone_activities(revision.id, [old_row])[0]
+                        activities.append(rejected_row)
+                    else:
+                        rejected_row = self._clone_measurements(revision.id, [old_row])[0]
+                        used_ordinals = {
+                            row.ordinal for row in measurements if row.parameter_key == rejected_row.parameter_key
+                        }
+                        if rejected_row.ordinal in used_ordinals:
+                            rejected_row.ordinal = max(used_ordinals, default=-1) + 1
+                        measurements.append(rejected_row)
+                    rejected_row.resolution_state = "rejected"
+                    retained_keys.add(item.target_key)
+                    self.session.add(rejected_row)
+                    rejected_clones.append((item, rejected_row))
+            if new_reconciliation:
+                self.session.add_all(new_reconciliation)
+            if rejected_clones:
+                await self.session.flush()
+                for item, row in rejected_clones:
+                    item.target_id = row.id
+            await self.session.flush()
         revision.content_hash = self._content_hash(report, revision, activities, measurements)
         await self.session.flush()
         after = self._revision_audit_state(revision, activities, measurements)
+        current_reconciliation = (
+            await self.session.execute(
+                select(DailyReportReconciliation).where(
+                    DailyReportReconciliation.org_id == self.org_id,
+                    DailyReportReconciliation.revision_id == revision.id,
+                ).order_by(DailyReportReconciliation.target_key.asc())
+            )
+        ).scalars().all()
+        after["reconciliation"] = [self._reconciliation_out(row) for row in current_reconciliation]
         await self._record_change(
             report,
             revision,
@@ -538,6 +1070,223 @@ class DailyReportService:
             },
         )
         return {"report": self._report_out(report, revision), "revision": await self._revision_detail(report, revision, activities, measurements)}
+
+    async def reconcile(
+        self,
+        well_id: str,
+        report_id: str,
+        revision_number: int,
+        *,
+        expected_edit_version: int,
+        reason: str,
+        decisions: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        """Record human decisions for imported fields/rows using compare-and-swap semantics."""
+        self._authorize("daily_report.reconcile", well_id=well_id, report_id=report_id)
+        reason = _required_reason(reason)
+        if not decisions or len(decisions) > 500:
+            raise ValidationFailed("reconciliation must contain between 1 and 500 decisions")
+        keys = [_nonempty_text(item.get("target_key"), "target_key", 180) for item in decisions]
+        if len(keys) != len(set(keys)):
+            raise ValidationFailed("a reconciliation request may not repeat a target_key")
+        report = await self._report(well_id, report_id, lock=True)
+        revision = await self._revision(report.id, revision_number, lock=True)
+        self._require_editable(revision, expected_edit_version)
+        if revision.source_kind != "import":
+            raise ValidationFailed("only imported revisions have source reconciliation decisions")
+        scope = await self._resolve_well(well_id, report.wellbore_id)
+        rows = (
+            await self.session.execute(
+                select(DailyReportReconciliation).where(
+                    DailyReportReconciliation.org_id == self.org_id,
+                    DailyReportReconciliation.revision_id == revision.id,
+                    DailyReportReconciliation.target_key.in_(keys),
+                )
+            )
+        ).scalars().all()
+        by_key = {row.target_key: row for row in rows}
+        missing = sorted(set(keys) - set(by_key))
+        if missing:
+            raise NotFound("one or more reconciliation targets were not found", details={"target_keys": missing})
+        activities, measurements = await self._children(revision.id)
+        self._require_hash_matches(revision, self._content_hash(report, revision, activities, measurements))
+        all_before_decisions = (
+            await self.session.execute(
+                select(DailyReportReconciliation).where(
+                    DailyReportReconciliation.org_id == self.org_id,
+                    DailyReportReconciliation.revision_id == revision.id,
+                ).order_by(DailyReportReconciliation.target_key.asc())
+            )
+        ).scalars().all()
+        before = self._revision_audit_state(revision, activities, measurements)
+        before["reconciliation"] = [self._reconciliation_out(row) for row in all_before_decisions]
+        now = utc_now()
+        result = await self.session.execute(
+            update(DailyDrillingReportRevision)
+            .where(
+                DailyDrillingReportRevision.id == revision.id,
+                DailyDrillingReportRevision.org_id == self.org_id,
+                DailyDrillingReportRevision.status == "draft",
+                DailyDrillingReportRevision.edit_version == expected_edit_version,
+            )
+            .values(edit_version=expected_edit_version + 1, updated_at=now)
+            .execution_options(synchronize_session=False)
+        )
+        if result.rowcount != 1:
+            await self._raise_stale_revision(report.id, revision_number, expected_edit_version)
+        revision.edit_version = expected_edit_version + 1
+        revision.updated_at = now
+
+        for change in decisions:
+            target_key = _nonempty_text(change.get("target_key"), "target_key", 180)
+            requested_state = change.get("decision")
+            if requested_state not in {"accepted", "corrected", "rejected", "unresolved"}:
+                raise ValidationFailed("reconciliation decision is not recognized")
+            decision_row = by_key[target_key]
+            if decision_row.resolution_state == "rejected" and requested_state != "rejected":
+                raise Conflict("a rejected import proposal cannot be re-opened; create a correction from source evidence")
+            await self._assert_reconciliation_source_current(decision_row, scope)
+            current_value: Any
+            target_row: DailyReportActivity | DailyReportMeasurement | None = None
+            if decision_row.target_kind == "revision_field":
+                if decision_row.field_key not in REPORT_RECONCILIATION_REVISION_FIELDS:
+                    raise ValidationFailed("stored reconciliation field is outside the supported revision contract")
+                current_value = getattr(revision, decision_row.field_key)
+            elif decision_row.target_kind == "activity":
+                target_row = (
+                    await self.session.execute(
+                        select(DailyReportActivity).where(
+                            DailyReportActivity.id == decision_row.target_id,
+                            DailyReportActivity.org_id == self.org_id,
+                            DailyReportActivity.revision_id == revision.id,
+                        )
+                    )
+                ).scalar_one_or_none()
+                if target_row is None:
+                    raise Conflict("the imported activity changed or was removed; reload the revision")
+                current_value = self._activity_proposal_value(target_row)
+            elif decision_row.target_kind == "measurement":
+                target_row = (
+                    await self.session.execute(
+                        select(DailyReportMeasurement).where(
+                            DailyReportMeasurement.id == decision_row.target_id,
+                            DailyReportMeasurement.org_id == self.org_id,
+                            DailyReportMeasurement.revision_id == revision.id,
+                        )
+                    )
+                ).scalar_one_or_none()
+                if target_row is None:
+                    raise Conflict("the imported measurement changed or was removed; reload the revision")
+                current_value = self._measurement_proposal_value(target_row)
+            else:
+                raise ValidationFailed("stored reconciliation target kind is invalid")
+
+            current_hash = content_hash(current_value)
+            if requested_state == "accepted" and current_hash != decision_row.proposed_value_hash:
+                raise ValidationFailed(
+                    "the mapped value changed after import; mark it corrected or restore the original proposal",
+                    details={"target_key": target_key},
+                )
+            if requested_state == "corrected" and current_hash == decision_row.proposed_value_hash:
+                raise ValidationFailed(
+                    "a corrected decision requires an edited value that differs from the imported proposal",
+                    details={"target_key": target_key},
+                )
+            if requested_state == "rejected":
+                if decision_row.target_kind == "revision_field" and current_value not in (None, ""):
+                    raise ValidationFailed(
+                        "clear a rejected optional field in the draft before rejecting its source proposal",
+                        details={"target_key": target_key},
+                    )
+                if target_row is not None:
+                    target_row.resolution_state = "rejected"
+            elif target_row is not None:
+                target_row.resolution_state = requested_state
+
+            decision_row.resolution_state = requested_state
+            decision_row.reason = reason
+            decision_row.decided_by = self.principal.id if self.principal else ""
+            decision_row.decided_at = now
+            decision_row.updated_at = now
+
+        await self.session.flush()
+        activities, measurements = await self._children(revision.id)
+        revision.content_hash = self._content_hash(report, revision, activities, measurements)
+        await self.session.flush()
+        after = self._revision_audit_state(revision, activities, measurements)
+        all_decisions = (
+            await self.session.execute(
+                select(DailyReportReconciliation).where(
+                    DailyReportReconciliation.org_id == self.org_id,
+                    DailyReportReconciliation.revision_id == revision.id,
+                ).order_by(DailyReportReconciliation.target_key.asc())
+            )
+        ).scalars().all()
+        after["reconciliation"] = [self._reconciliation_out(row) for row in all_decisions]
+        await self._record_change(
+            report,
+            revision,
+            action="daily_report.reconcile",
+            change_type="reconciled",
+            permission="daily_report.write",
+            fields=["reconciliation", "content"],
+            before=before,
+            after=after,
+            reason=reason,
+        )
+        await emit(
+            self.session,
+            org_id=self.org_id,
+            type="daily_report.changed",
+            subject_kind="daily_drilling_report",
+            subject_id=report.id,
+            well_id=report.well_id,
+            wellbore_id=report.wellbore_id,
+            payload={
+                "report_id": report.id,
+                "revision_number": revision.revision_number,
+                "edit_version": revision.edit_version,
+                "status": revision.status,
+                "action": "reconciled",
+                "targets": len(decisions),
+            },
+        )
+        return {
+            "report": self._report_out(report, revision),
+            "revision": await self._revision_detail(report, revision, activities, measurements),
+        }
+
+    async def _assert_reconciliation_source_current(
+        self,
+        decision: DailyReportReconciliation,
+        scope: _ResolvedWell,
+    ) -> None:
+        record = await self._import_source_record(
+            scope,
+            source_document_id=decision.source_document_id,
+            source_record_id=decision.source_record_id,
+        )
+        current_fingerprint = record.fingerprint or content_hash(record.payload or {})
+        source_value = _record_payload_path(record.payload or {}, decision.source_path)
+        current_source_hash = None if source_value is _MISSING else content_hash(source_value)
+        if (
+            record.review_version != decision.source_review_version
+            or current_fingerprint != decision.source_fingerprint
+            or current_source_hash != decision.source_value_hash
+        ):
+            raise Conflict(
+                "source evidence changed after import; refresh the extraction and create or reconcile a new proposal",
+                details={
+                    "source_record_id": record.id,
+                    "source_path": decision.source_path,
+                    "expected_review_version": decision.source_review_version,
+                    "current_review_version": record.review_version,
+                    "expected_fingerprint": decision.source_fingerprint,
+                    "current_fingerprint": current_fingerprint,
+                    "expected_source_value_hash": decision.source_value_hash,
+                    "current_source_value_hash": current_source_hash,
+                },
+            )
 
     async def create_correction(
         self,
@@ -568,6 +1317,14 @@ class DailyReportService:
         await self._validate_revision_sources(
             report, source, source_activities, source_measurements, scope=scope
         )
+        source_reconciliation = (
+            await self.session.execute(
+                select(DailyReportReconciliation).where(
+                    DailyReportReconciliation.org_id == self.org_id,
+                    DailyReportReconciliation.revision_id == source.id,
+                )
+            )
+        ).scalars().all()
 
         # Reserve the next revision number with a database compare-and-swap. The unique constraint is
         # the final authority on PostgreSQL and SQLite; the parent pointer and new revision commit or
@@ -616,14 +1373,120 @@ class DailyReportService:
                 raise
             raise Conflict("another correction was created concurrently; reload the report and retry") from exc
 
-        activities = self._clone_activities(revision.id, source_activities)
-        measurements = self._clone_measurements(revision.id, source_measurements)
+        activities = self._clone_activities(
+            revision.id, [row for row in source_activities if row.resolution_state != "rejected"]
+        )
+        measurements = self._clone_measurements(
+            revision.id, [row for row in source_measurements if row.resolution_state != "rejected"]
+        )
+        if revision.source_kind == "import":
+            for row in activities:
+                row.resolution_state = "proposed" if row.source_record_id is not None else "manual"
+            for row in measurements:
+                row.resolution_state = "proposed" if row.source_record_id is not None else "manual"
         self.session.add_all([*activities, *measurements])
         await self.session.flush()
+        if revision.source_kind == "import":
+            source_decisions = {item.target_key: item for item in source_reconciliation}
+            correction_decisions: list[DailyReportReconciliation] = []
+            for row in activities:
+                if row.source_record_id is None:
+                    continue
+                target_key = f"activity:{row.source_record_id}:{row.sequence}"
+                source_decision = source_decisions.get(target_key)
+                if source_decision is None or source_decision.resolution_state == "rejected":
+                    raise Conflict("the correction lost its source activity reconciliation lineage")
+                correction_decisions.append(
+                    DailyReportReconciliation(
+                        org_id=self.org_id,
+                        revision_id=revision.id,
+                        target_key=target_key,
+                        target_kind="activity",
+                        target_id=row.id,
+                        field_key=source_decision.field_key,
+                        source_document_id=source_decision.source_document_id,
+                        source_record_id=source_decision.source_record_id,
+                        source_region_id=source_decision.source_region_id,
+                        source_page_number=source_decision.source_page_number,
+                        source_path=source_decision.source_path,
+                        source_review_version=source_decision.source_review_version,
+                        source_fingerprint=source_decision.source_fingerprint,
+                        source_value_hash=source_decision.source_value_hash,
+                        proposed_value_hash=content_hash(self._activity_proposal_value(row)),
+                        resolution_state="proposed",
+                        created_by=self.principal.id if self.principal else "",
+                    )
+                )
+            for row in measurements:
+                if row.source_record_id is None:
+                    continue
+                target_key = f"measurement:{row.source_record_id}:{row.parameter_key}:{row.ordinal}"
+                source_decision = source_decisions.get(target_key)
+                if source_decision is None or source_decision.resolution_state == "rejected":
+                    raise Conflict("the correction lost its source measurement reconciliation lineage")
+                correction_decisions.append(
+                    DailyReportReconciliation(
+                        org_id=self.org_id,
+                        revision_id=revision.id,
+                        target_key=target_key,
+                        target_kind="measurement",
+                        target_id=row.id,
+                        field_key=source_decision.field_key,
+                        source_document_id=source_decision.source_document_id,
+                        source_record_id=source_decision.source_record_id,
+                        source_region_id=source_decision.source_region_id,
+                        source_page_number=source_decision.source_page_number,
+                        source_path=source_decision.source_path,
+                        source_review_version=source_decision.source_review_version,
+                        source_fingerprint=source_decision.source_fingerprint,
+                        source_value_hash=source_decision.source_value_hash,
+                        proposed_value_hash=content_hash(self._measurement_proposal_value(row)),
+                        resolution_state="proposed",
+                        created_by=self.principal.id if self.principal else "",
+                    )
+                )
+            for source_decision in source_reconciliation:
+                if source_decision.target_kind != "revision_field" or source_decision.resolution_state == "rejected":
+                    continue
+                if source_decision.field_key not in REPORT_RECONCILIATION_REVISION_FIELDS:
+                    raise Conflict("the correction source contains an unsupported revision field mapping")
+                correction_decisions.append(
+                    DailyReportReconciliation(
+                        org_id=self.org_id,
+                        revision_id=revision.id,
+                        target_key=source_decision.target_key,
+                        target_kind="revision_field",
+                        target_id=None,
+                        field_key=source_decision.field_key,
+                        source_document_id=source_decision.source_document_id,
+                        source_record_id=source_decision.source_record_id,
+                        source_region_id=source_decision.source_region_id,
+                        source_page_number=source_decision.source_page_number,
+                        source_path=source_decision.source_path,
+                        source_review_version=source_decision.source_review_version,
+                        source_fingerprint=source_decision.source_fingerprint,
+                        source_value_hash=source_decision.source_value_hash,
+                        proposed_value_hash=content_hash(getattr(revision, source_decision.field_key)),
+                        resolution_state="proposed",
+                        created_by=self.principal.id if self.principal else "",
+                    )
+                )
+            self.session.add_all(correction_decisions)
+            await self.session.flush()
         revision.content_hash = self._content_hash(report, revision, activities, measurements)
         await self.session.flush()
         before = self._revision_audit_state(source, source_activities, source_measurements)
+        before["reconciliation"] = [self._reconciliation_out(row) for row in source_reconciliation]
         after = self._revision_audit_state(revision, activities, measurements)
+        correction_ledger = (
+            await self.session.execute(
+                select(DailyReportReconciliation).where(
+                    DailyReportReconciliation.org_id == self.org_id,
+                    DailyReportReconciliation.revision_id == revision.id,
+                ).order_by(DailyReportReconciliation.target_key.asc())
+            )
+        ).scalars().all()
+        after["reconciliation"] = [self._reconciliation_out(row) for row in correction_ledger]
         await self._record_change(
             report,
             revision,
@@ -672,7 +1535,7 @@ class DailyReportService:
         activities, measurements = await self._children(revision.id)
         if not _has_meaningful_content(revision, activities, measurements):
             raise ValidationFailed("a blank report cannot be submitted")
-        self._require_reconciled(activities, measurements)
+        await self._require_reconciled(activities, measurements, revision_id=revision.id)
         scope = await self._resolve_well(well_id, report.wellbore_id)
         await self._validate_revision_sources(report, revision, activities, measurements, scope=scope)
         digest = self._content_hash(report, revision, activities, measurements)
@@ -751,7 +1614,7 @@ class DailyReportService:
                 details={"report_id": report.id, "revision_number": revision_number},
             )
         activities, measurements = await self._children(revision.id)
-        self._require_reconciled(activities, measurements)
+        await self._require_reconciled(activities, measurements, revision_id=revision.id)
         scope = await self._resolve_well(well_id, report.wellbore_id)
         await self._validate_revision_sources(report, revision, activities, measurements, scope=scope)
         self._require_hash_matches(revision, self._content_hash(report, revision, activities, measurements))
@@ -1448,7 +2311,9 @@ class DailyReportService:
         for value in values:
             row_values = dict(value)
             # The default is selected by the lifecycle, not by a client-controlled field.
-            row_values["resolution_state"] = resolution_state
+            row_values["resolution_state"] = (
+                "manual" if resolution_state == "manual" or row_values.get("source_record_id") is None else resolution_state
+            )
             rows.append(
                 DailyReportActivity(
                     org_id=self.org_id,
@@ -1472,7 +2337,9 @@ class DailyReportService:
             key = row_values["parameter_key"]
             row_values["ordinal"] = ordinals.get(key, 0)
             ordinals[key] = row_values["ordinal"] + 1
-            row_values["resolution_state"] = resolution_state
+            row_values["resolution_state"] = (
+                "manual" if resolution_state == "manual" or row_values.get("source_record_id") is None else resolution_state
+            )
             rows.append(
                 DailyReportMeasurement(
                     org_id=self.org_id,
@@ -1652,6 +2519,16 @@ class DailyReportService:
                 source_page_number=row.source_page_number,
                 allow_unvalidated_record=revision.source_kind != "manual",
             )
+        reconciliation = (
+            await self.session.execute(
+                select(DailyReportReconciliation).where(
+                    DailyReportReconciliation.org_id == self.org_id,
+                    DailyReportReconciliation.revision_id == revision.id,
+                )
+            )
+        ).scalars().all()
+        for item in reconciliation:
+            await self._assert_reconciliation_source_current(item, scope)
 
     async def _raise_stale_revision(self, report_id: str, revision_number: int, expected: int) -> None:
         current = (
@@ -1697,21 +2574,34 @@ class DailyReportService:
                 },
             )
 
-    def _require_reconciled(
+    async def _require_reconciled(
         self,
         activities: list[DailyReportActivity],
         measurements: list[DailyReportMeasurement],
+        *,
+        revision_id: str,
     ) -> None:
         pending_activities = [row.id for row in activities if row.resolution_state in {"proposed", "unresolved"}]
         pending_measurements = [row.id for row in measurements if row.resolution_state in {"proposed", "unresolved"}]
-        if pending_activities or pending_measurements:
+        pending_decisions = (
+            await self.session.execute(
+                select(DailyReportReconciliation.target_key).where(
+                    DailyReportReconciliation.org_id == self.org_id,
+                    DailyReportReconciliation.revision_id == revision_id,
+                    DailyReportReconciliation.resolution_state.in_(("proposed", "unresolved")),
+                ).order_by(DailyReportReconciliation.target_key.asc())
+            )
+        ).scalars().all()
+        if pending_activities or pending_measurements or pending_decisions:
             raise ValidationFailed(
-                "all imported or unresolved report fields must be reconciled before submission",
+                "all imported or unresolved report fields and rows must be reconciled before submission",
                 details={
                     "activity_ids": pending_activities[:50],
                     "measurement_ids": pending_measurements[:50],
                     "activity_count": len(pending_activities),
                     "measurement_count": len(pending_measurements),
+                    "target_keys": list(pending_decisions[:100]),
+                    "target_count": len(pending_decisions),
                 },
             )
 
@@ -1845,12 +2735,68 @@ class DailyReportService:
         if activities is None or measurements is None:
             activities, measurements = await self._children(revision.id)
         calculated_hash = self._content_hash(report, revision, activities, measurements)
+        reconciliation_rows = (
+            await self.session.execute(
+                select(DailyReportReconciliation)
+                .where(
+                    DailyReportReconciliation.org_id == self.org_id,
+                    DailyReportReconciliation.revision_id == revision.id,
+                )
+                .order_by(DailyReportReconciliation.target_key.asc())
+            )
+        ).scalars().all()
         summary = self._revision_summary(revision) or {}
+        activity_by_id = {row.id: row for row in activities}
+        measurement_by_id = {row.id: row for row in measurements}
+        reconciliation_out = []
+        for row in reconciliation_rows:
+            current_value: Any = None
+            target_exists = False
+            if row.target_kind == "revision_field" and row.field_key in REPORT_RECONCILIATION_REVISION_FIELDS:
+                current_value = getattr(revision, row.field_key)
+                target_exists = True
+            elif row.target_kind == "activity":
+                activity = activity_by_id.get(row.target_id or "")
+                if activity is not None:
+                    current_value = self._activity_proposal_value(activity)
+                    target_exists = True
+            elif row.target_kind == "measurement":
+                measurement = measurement_by_id.get(row.target_id or "")
+                if measurement is not None:
+                    current_value = self._measurement_proposal_value(measurement)
+                    target_exists = True
+            serialized = self._reconciliation_out(row)
+            serialized["proposal_matches_current"] = target_exists and content_hash(current_value) == row.proposed_value_hash
+            reconciliation_out.append(serialized)
         return {
             **summary,
             "content_hash_verified": bool(revision.content_hash and revision.content_hash == calculated_hash),
             "activities": [self._activity_out(row) for row in activities],
             "measurements": [self._measurement_out(row) for row in measurements],
+            "reconciliation": reconciliation_out,
+        }
+
+    @staticmethod
+    def _reconciliation_out(row: DailyReportReconciliation) -> dict[str, Any]:
+        return {
+            "id": row.id,
+            "target_key": row.target_key,
+            "target_kind": row.target_kind,
+            "target_id": row.target_id,
+            "field_key": row.field_key,
+            "source_document_id": row.source_document_id,
+            "source_record_id": row.source_record_id,
+            "source_region_id": row.source_region_id,
+            "source_page_number": row.source_page_number,
+            "source_path": row.source_path,
+            "source_review_version": row.source_review_version,
+            "source_fingerprint": row.source_fingerprint,
+            "source_value_hash": row.source_value_hash,
+            "proposed_value_hash": row.proposed_value_hash,
+            "resolution_state": row.resolution_state,
+            "reason": row.reason,
+            "decided_by": row.decided_by,
+            "decided_at": _iso(row.decided_at),
         }
 
     @staticmethod
@@ -1935,6 +2881,22 @@ class DailyReportService:
 
 
 # --------------------------------------------------------------------------- pure validation helpers
+
+
+_MISSING = object()
+
+
+def _record_payload_path(payload: dict[str, Any], source_path: str) -> Any:
+    """Resolve a bounded dot path within an extracted record payload; never accepts ORM/SQL paths."""
+    parts = source_path.split(".")
+    if not parts or parts[0] != "payload" or any(not part for part in parts):
+        raise ValidationFailed("source_path must begin with payload and use non-empty field names")
+    value: Any = payload
+    for part in parts[1:]:
+        if not isinstance(value, dict) or part not in value:
+            return _MISSING
+        value = value[part]
+    return value
 
 
 def _normalize_identifier(value: str) -> str:
@@ -2043,7 +3005,9 @@ def _has_meaningful_content(
     activities: list[DailyReportActivity],
     measurements: list[DailyReportMeasurement],
 ) -> bool:
-    if activities or measurements:
+    if any(row.resolution_state != "rejected" for row in activities) or any(
+        row.resolution_state != "rejected" for row in measurements
+    ):
         return True
     return any(
         value and value.strip()
