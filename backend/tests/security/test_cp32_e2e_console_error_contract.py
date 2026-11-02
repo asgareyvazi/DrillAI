@@ -27,8 +27,9 @@ This module makes the class of defect impossible to ship again:
    ``frontend/tsconfig.e2e.json``, which the root ``frontend/tsconfig.json`` references. Until this
    contract, a spec could not even name an import that did not exist, and the mistake was found by a
    CI job on a platform nobody had looked at.
-4. **A failing journey says what it saw.** Both CI jobs copy the Playwright failure messages into
-   the step annotation, so a red run names the assertion that failed rather than only a count.
+4. **A failing journey says what it saw.** Both CI jobs use the shared Playwright result verifier,
+   which copies `Error`, `Expected` and `Received` diagnostics into the step annotation instead of
+   reporting only a count.
 
 The checks are static: they read the files the suite and the workflow actually use, so they fail
 before the commit reaches CI rather than after it.
@@ -241,13 +242,17 @@ def test_cp32_ci_reports_the_playwright_failure_message() -> None:
     jobs = workflow["jobs"]
     assert "certification" in jobs and "windows-certification" in jobs
 
-    linux_step = _step_text(jobs["certification"], "End-to-end suite (main, faults and auth stacks)")
-    windows_step = _step_text(jobs["windows-certification"], "Playwright E2E certification")
+    linux_step = _step_text(jobs["certification"], "Run and verify real-browser E2E suite")
+    windows_step = _step_text(jobs["windows-certification"], "Run and verify real-browser Playwright suite")
+    verifier = _read(REPO_ROOT / "frontend" / "scripts" / "verify-e2e-run.mjs")
 
     for name, step in (("linux", linux_step), ("windows", windows_step)):
-        assert "Error" in step and "Received" in step, (
-            f"the {name} end-to-end step must copy the Playwright failure messages into its "
-            "annotation, so a red run says which assertion failed instead of only how many did."
+        assert "verify-e2e-run.mjs" in step, (
+            f"the {name} step must validate actual Playwright execution using the shared verifier"
+        )
+    for diagnostic in ("Error", "Expected", "Received"):
+        assert diagnostic in verifier, (
+            f"a failed browser run must preserve {diagnostic} diagnostics in its CI annotation"
         )
 
 
@@ -281,13 +286,19 @@ def test_cp32_the_certification_jobs_reject_skips() -> None:
 
     linux_step = _step_text(jobs["certification"], "Backend tests")
     windows_step = _step_text(jobs["windows-certification"], "Backend SQLite test suite")
+    verifier = _read(REPO_ROOT / "scripts" / "verify_backend_test_inventory.py")
 
-    assert "*skipped*" in linux_step, (
-        "the Linux backend step must fail the job when the suite reports a skipped test"
+    for name, step in (("linux", linux_step), ("windows", windows_step)):
+        assert "verify_backend_test_inventory.py" in step, (
+            f"the {name} backend gate must use the shared test-inventory verifier"
+        )
+    assert "actual_counts != expected_counts" in verifier, (
+        "backend CI must fail when pass, skip, or deselection totals differ from the reviewed manifest"
     )
-    assert "skipped" in windows_step, (
-        "the Windows backend step must fail the job when the summary reports a skipped test"
+    assert "expected_skip_reason" in verifier and "verify_windows_skip" in verifier, (
+        "Windows CI must accept only the specifically reviewed POSIX-only OCR subprocess skip"
     )
+    assert "pytest_exit_code != 0" in verifier, "pytest's real process failure must remain fatal"
 
 
 def _step_text(job: dict, step_name_prefix: str) -> str:

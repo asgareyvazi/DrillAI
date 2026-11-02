@@ -12,7 +12,7 @@ is confined to unit and component tests, where it isolates a boundary rather tha
 | Lint | `cd frontend && npm run lint` | no unused code, no `any` slipping in, React rules |
 | Build | `cd frontend && npm run build` | `tsc -b` plus a production Vite build |
 | Unit + component | `cd frontend && npm test` | 373 passed in 37 files: values, units, the API boundary, cancellation, the request-failure oracle, permissions, identity settings, the shared UI states, document-review guidance and direction, and the pages' contracts |
-| End-to-end | `cd frontend && npm run e2e` | 123 reviewed journeys in 18 spec files; inventory shape passed, real-browser execution not rerun for CP83 |
+| End-to-end | `cd frontend && npm run e2e` | 123 passed in a local Linux real-browser run (5.1m), across 18 files; exact-head cross-platform CI pending remediation |
 | Backend | `cd backend && DRILLAI_TEST_POSTGRES=1 .venv/bin/python -m pytest` | 1,621 passed, 0 skipped in 114 files (embedded PostgreSQL enabled) |
 | Backend lint | `cd backend && .venv/bin/python -m ruff check .` | backend style and import hygiene |
 | Migrations | `cd backend && .venv/bin/python -m alembic upgrade head && .venv/bin/python -m alembic check` | no model/migration drift — against a **fresh** database |
@@ -214,6 +214,16 @@ from the seed, the journey fails rather than skipping quietly.
 
 ## CI
 
+### CP83.1 publication-gate incident and remediation status
+
+The exact-head run [`41431413781`](https://github.com/asgareyvazi/DrillAI/actions/runs/41431413781) on `a61754dc0c0a23bb76b9ce6b2cbb580ec8d6844e` failed its wrappers, not the two underlying results:
+
+- Linux job `125230994278` completed the real Playwright run and reported **123 passed (5.3m)**, then failed because the wrapper still required 121. The run's collection check had already validated 123 tests in 18 files (Chromium 116, faults 4, auth 3).
+- Windows job `125230993794` ran pytest with exit code 0: **1,607 passed, 1 skipped, 13 deselected**. The skip was the exact POSIX-only OCR CLI fixture described above; all 13 deselections were PostgreSQL-marked tests. The PowerShell wrapper still expected 12 deselections, so the step failed and Windows stack, vendor-harness, E2E inventory and real Playwright steps were skipped.
+- Independently, the local Linux real-browser suite has now run and passed **123 tests in 5.1 minutes**; the execution verifier confirmed the runtime distribution (116/4/3 across 18 files). This is Linux-only local evidence, not Windows certification.
+
+The remediation replaces drifting CI literals with `ci/test-inventory.json`, checks the exact PostgreSQL test node IDs and platform totals, distinguishes E2E collection from actual execution, and validates Playwright's exit code, summary, project distribution and spec-file count. The new exact-head Linux and native-Windows CI result is **pending**; the failed run above is not being described as green.
+
 `.github/workflows/ci.yml` runs the same commands, in the same order, on pushes to `arena/**`, on
 pull requests targeting `arena/01a0dca0-drillai` or `main`, and on manual dispatch:
 
@@ -233,28 +243,29 @@ Each required gate is its own step, so a red run names the gate that failed. The
 not test or deployment gates. There is no `if: always()` outside the failure-artifact step: a required
 failure fails the job and skips what follows.
 
-The three testing gates **certify their own results** rather than trusting their inputs. The backend
-gate fails if the suite reports any skip (`DRILLAI_TEST_POSTGRES=1` is only evidence if the PostgreSQL
-tests actually ran) and if the postgres-marked tests are no longer collected; the end-to-end gate fails
-unless all three deployments ran tests and the run finished with no failure, flake or skip; the unit
-gate fails on a skip. This matters because GitHub serves raw logs from Azure blob storage, which some
-networks cannot reach: the step's conclusion stays readable through the API everywhere, so a green step
-has to mean the property held. The counts are written to the run summary as well, for anyone who opens
-the run, and `set -o pipefail` keeps each command's exit status as the step's. Each gate normalises the
-ANSI escapes the runner adds before it parses anything: the first version did not, and refused a run
-that had in fact passed. This was certified, not assumed — a temporary probe commit
-failed the backend gate on purpose and the run went red, skipped the backend lint, migration and
-end-to-end steps, and collected no artifacts; it was removed in the following commit
-(see `docs/mission-reports/FRONTEND-MISSION.md`, §CP6).
+The testing gates **certify their own results** rather than trusting their inputs. Backend expectations
+are centralized in `ci/test-inventory.json`. The Linux verifier requires the full PostgreSQL-enabled
+suite to pass with zero skips and compares every PostgreSQL-marked node ID with the reviewed list. The
+Windows verifier requires exactly 1,607 passes, one skip, and 13 deselections; it permits only the
+`tests/ingestion/test_ocr.py` POSIX-only temporary-shebang fixture with its exact reason, and confirms
+the deselections equal the reviewed PostgreSQL node-ID list. Any changed test identity or total must be
+reviewed in the manifest before CI can pass. Frontend unit tests reject skips.
 
-Linux runs the full PostgreSQL-enabled backend suite and Docker Compose deployment gate. Windows
-runs the native SQLite backend suite with `-m "not postgres"` (the thirteen PostgreSQL-marked cases are
-not run on Windows), the multi-process stack and local vendor-harness checks, and the complete
-frontend/E2E suite; Docker Compose is Linux-only. The external vendor probe makes zero network calls
-without configured endpoints/credentials, so no live interoperability certification is inferred.
-Both platform jobs run the reviewed E2E inventory and require all 123 journeys to pass across
-Chromium (116), faults (4), and auth (3). Do not interpret the Windows PostgreSQL exclusions or
-Linux-only Compose gate as tests passed on Windows.
+E2E inventory validation and execution are separate gates on both platforms. The inventory check
+collects the exact 116/4/3 distribution across 18 spec files; the following real-browser run must have
+exit code zero, report the manifest total as passed, and show the same project and file distribution in
+its executed test records. Playwright retries remain zero. Failure annotations preserve the relevant
+`Error`, `Expected`, and `Received` lines; full HTML/trace evidence uploads only after failure.
+This matters because some networks cannot reach GitHub's raw log object store: a green step's own
+conclusion and summary must still represent the checked property.
+
+Linux runs the full PostgreSQL-enabled backend suite and Docker Compose deployment gate. Windows runs
+the native SQLite backend suite with `-m "not postgres"` (the thirteen PostgreSQL-marked cases are not
+run on Windows), the multi-process stack and local vendor-harness checks, and the complete frontend/E2E
+suite; Docker Compose is Linux-only. The external vendor probe makes zero network calls without
+configured endpoints/credentials, so no live interoperability certification is inferred. Both platform
+jobs must run all 123 journeys across Chromium (116), faults (4), and auth (3). Do not interpret the
+Windows PostgreSQL exclusions or Linux-only Compose gate as tests passed on Windows.
 
 The workflow is read-only (`permissions: contents: read`), uses no secrets, and never writes to the
 repository.
