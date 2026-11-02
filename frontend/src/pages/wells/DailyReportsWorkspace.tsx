@@ -9,6 +9,7 @@ import {
   type DailyReportCreatePayload,
   type DailyReportDecisionPayload,
   type DailyReportEditPayload,
+  type DailyReportExportFormat,
   type DailyReportImportPayload,
   type DailyReportMeasurementInput,
   type DailyReportReconciliationDecision,
@@ -102,6 +103,29 @@ type ReportFormState = {
 
 type FormMode = 'create' | 'edit'
 type ActionMode = 'submit' | 'approve' | 'reject' | 'withdraw' | 'correct'
+type DailyReportExportVariables = {
+  reportId: string
+  revisionNumber: number
+  format: DailyReportExportFormat
+  locale: 'en' | 'fa'
+}
+
+const DAILY_REPORT_EXPORT_FORMATS: DailyReportExportFormat[] = ['pdf', 'docx', 'xlsx', 'json']
+
+function downloadDailyReportRevision(blob: Blob, revisionNumber: number, format: DailyReportExportFormat): void {
+  const objectUrl = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = objectUrl
+  link.download = `daily-report-revision-${revisionNumber}.${format}`
+  link.style.display = 'none'
+  document.body.append(link)
+  try {
+    link.click()
+  } finally {
+    link.remove()
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000)
+  }
+}
 
 type ReportActionVariables = {
   action: Exclude<ActionMode, 'correct'>
@@ -1800,6 +1824,7 @@ export default function DailyReportsWorkspace() {
   const approveGate = useActionGate('daily_report.approve')
   const rejectGate = useActionGate('daily_report.reject')
   const withdrawGate = useActionGate('daily_report.withdraw')
+  const exportGate = useActionGate('daily_report.export')
 
   const catalogueQuery = useQuery({
     queryKey: ['daily-report-catalogue'],
@@ -1966,6 +1991,20 @@ export default function DailyReportsWorkspace() {
       setSearchParams(next)
     },
   })
+  const exportMutation = useMutation({
+    mutationFn: async (variables: DailyReportExportVariables) => {
+      const blob = await drillingApi.exportDailyReportRevision(
+        wellId,
+        variables.reportId,
+        variables.revisionNumber,
+        variables.format,
+        variables.locale,
+      )
+      downloadDailyReportRevision(blob, variables.revisionNumber, variables.format)
+      return variables
+    },
+    onSuccess: () => setNotice('dailyReports.exportDownloaded'),
+  })
 
   const mutationError = importOpen
     ? importMutation.error
@@ -1999,6 +2038,25 @@ export default function DailyReportsWorkspace() {
   const reconciliationRetry = () => {
     if (reconciliationMutation.error instanceof ApiError && reconciliationMutation.error.kind === 'conflict') refreshAll()
     else if (reconciliationMutation.variables) reconciliationMutation.mutate(reconciliationMutation.variables)
+  }
+  const exportRetry = () => {
+    if (exportMutation.error instanceof ApiError && exportMutation.error.kind === 'conflict') {
+      refreshAll()
+      if (selectedRevisionNumber && selectedRevisionNumber !== report?.latest_revision_number) {
+        void oldRevisionQuery.refetch()
+      }
+    } else if (exportMutation.variables) {
+      exportMutation.mutate(exportMutation.variables)
+    }
+  }
+  const startExport = (format: DailyReportExportFormat) => {
+    if (!activeRevision || !report || activeRevision.status === 'draft') return
+    exportMutation.mutate({
+      reportId: report.id,
+      revisionNumber: activeRevision.revision_number,
+      format,
+      locale,
+    })
   }
 
   const openCreate = () => {
@@ -2400,6 +2458,48 @@ export default function DailyReportsWorkspace() {
                 )}
                 {localActionError && <p role="alert" className="mt-3 text-xs text-danger">{t(localActionError)}</p>}
               </Card>
+
+              {activeRevision && (
+                <Card
+                  title={t('dailyReports.exportTitle')}
+                  subtitle={t('dailyReports.exportDescription')}
+                  data-testid="daily-report-export-card"
+                >
+                  {activeRevision.status === 'draft' ? (
+                    <p className="text-xs text-graphite-600 dark:text-graphite-300" role="status">
+                      {t('dailyReports.exportDraftUnavailable')}
+                    </p>
+                  ) : (
+                    <div className="space-y-3">
+                      <p className="text-xs text-graphite-600 dark:text-graphite-300">
+                        {t('dailyReports.exportRevisionNote', { number: activeRevision.revision_number })}
+                      </p>
+                      <div className="flex flex-wrap gap-2" role="group" aria-label={t('dailyReports.exportFormats')}>
+                        {DAILY_REPORT_EXPORT_FORMATS.map((format) => (
+                          <Button
+                            key={format}
+                            onClick={() => startExport(format)}
+                            disabled={exportGate.suggestDisabled || !revisionFingerprintValid || exportMutation.isPending}
+                            title={exportGate.reason || (!revisionFingerprintValid ? t('dailyReports.fingerprintMismatch') : undefined)}
+                            aria-busy={exportMutation.isPending && exportMutation.variables?.format === format}
+                            data-testid={`daily-report-export-${format}`}
+                          >
+                            {exportMutation.isPending && exportMutation.variables?.format === format
+                              ? t('dailyReports.exporting')
+                              : t(`dailyReports.export${format.toUpperCase()}`)}
+                          </Button>
+                        ))}
+                      </div>
+                      {exportGate.suggestDisabled && <p className="text-xs text-graphite-500">{exportGate.reason}</p>}
+                      {!revisionFingerprintValid && <p className="text-xs text-danger">{t('dailyReports.fingerprintMismatch')}</p>}
+                      {exportMutation.isError && exportMutation.variables?.reportId === report.id &&
+                        exportMutation.variables.revisionNumber === activeRevision.revision_number && (
+                          <ErrorState error={exportMutation.error} onRetry={exportRetry} />
+                        )}
+                    </div>
+                  )}
+                </Card>
+              )}
 
               {activeRevision?.source_kind === 'import' && (
                 <DailyReportReconciliationPanel

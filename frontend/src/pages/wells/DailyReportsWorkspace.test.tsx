@@ -29,6 +29,7 @@ const mocks = vi.hoisted(() => ({
   getDailyReport: vi.fn(),
   getDailyReportHistory: vi.fn(),
   getDailyReportRevision: vi.fn(),
+  exportDailyReportRevision: vi.fn(),
   listDocuments: vi.fn(),
   getDocument: vi.fn(),
   createDailyReport: vi.fn(),
@@ -50,6 +51,7 @@ vi.mock('../../api/endpoints', () => ({
     getDailyReport: mocks.getDailyReport,
     getDailyReportHistory: mocks.getDailyReportHistory,
     getDailyReportRevision: mocks.getDailyReportRevision,
+    exportDailyReportRevision: mocks.exportDailyReportRevision,
     listDocuments: mocks.listDocuments,
     getDocument: mocks.getDocument,
     createDailyReport: mocks.createDailyReport,
@@ -238,6 +240,7 @@ beforeEach(() => {
   mocks.getDailyReport.mockReset().mockResolvedValue(detail)
   mocks.getDailyReportHistory.mockReset().mockResolvedValue(history)
   mocks.getDailyReportRevision.mockReset().mockResolvedValue({ report, revision })
+  mocks.exportDailyReportRevision.mockReset()
   mocks.listDocuments.mockReset().mockResolvedValue({ items: [sourceDocumentRow], total: 1, limit: 50, offset: 0 })
   mocks.getDocument.mockReset().mockResolvedValue(extractedDocument)
   mocks.createDailyReport.mockReset().mockResolvedValue({ report, revision })
@@ -298,6 +301,83 @@ describe('DailyReportsWorkspace', () => {
     }))
     expect(await screen.findByText('Current revision')).toBeInTheDocument()
     expect(screen.queryByText('Content differs from its stored fingerprint; do not approve it.')).not.toBeInTheDocument()
+  })
+
+  it('downloads an exact approved revision in the selected locale and shows export failures', async () => {
+    const approvedRevision = {
+      ...revision,
+      status: 'approved',
+      submitted_by: 'usr_author',
+      decided_by: 'usr_supervisor',
+      content_hash_verified: true,
+    } satisfies DailyReportRevision
+    const approvedReport = {
+      ...report,
+      latest_revision: approvedRevision,
+      latest_approved_revision_number: 1,
+    } satisfies DailyReport
+    const approvedDetail = {
+      report: approvedReport,
+      latest_revision: approvedRevision,
+      latest_approved_revision: approvedRevision,
+    } satisfies DailyReportDetail
+    const approvedHistory = {
+      report: approvedReport,
+      items: [approvedRevision],
+      total: 1,
+      limit: 50,
+      offset: 0,
+    } satisfies DailyReportHistory
+    const pdf = new Blob(['%PDF-1.4 synthetic revision'], { type: 'application/pdf' })
+    mocks.listDailyReports.mockResolvedValue({ items: [approvedReport], total: 1, limit: 50, offset: 0 })
+    mocks.getDailyReport.mockResolvedValue(approvedDetail)
+    mocks.getDailyReportHistory.mockResolvedValue(approvedHistory)
+    mocks.exportDailyReportRevision.mockResolvedValue(pdf)
+
+    const originalCreate = Object.getOwnPropertyDescriptor(URL, 'createObjectURL')
+    const originalRevoke = Object.getOwnPropertyDescriptor(URL, 'revokeObjectURL')
+    const createObjectURL = vi.fn().mockReturnValue('blob:daily-report-export')
+    const revokeObjectURL = vi.fn()
+    Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: createObjectURL })
+    Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: revokeObjectURL })
+    const downloadedNames: string[] = []
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
+      downloadedNames.push(this.download)
+    })
+
+    try {
+      const user = userEvent.setup()
+      renderWorkspace('/wells/well_1/daily-reports?report=report_1')
+      const exportButton = await screen.findByTestId('daily-report-export-pdf')
+      expect(exportButton).toBeEnabled()
+      expect(screen.getByText('Downloads exactly revision 1, including its source provenance and review status. Export does not imply additional engineering approval.')).toBeInTheDocument()
+      await user.click(exportButton)
+
+      await waitFor(() => expect(mocks.exportDailyReportRevision).toHaveBeenCalledWith('well_1', 'report_1', 1, 'pdf', 'en'))
+      expect(await screen.findByText('Revision export downloaded.')).toBeInTheDocument()
+      expect(createObjectURL).toHaveBeenCalledWith(pdf)
+      expect(downloadedNames).toEqual(['daily-report-revision-1.pdf'])
+
+      mocks.exportDailyReportRevision.mockRejectedValueOnce(new ApiError(
+        503,
+        'http_503',
+        'The export service is temporarily unavailable.',
+        {},
+        null,
+        true,
+        { kind: 'server', messageFromServer: true },
+      ))
+      await user.click(screen.getByTestId('daily-report-export-json'))
+      expect(await screen.findByText('The export service is temporarily unavailable.')).toBeInTheDocument()
+      await user.click(screen.getByRole('button', { name: 'Retry' }))
+      await waitFor(() => expect(mocks.exportDailyReportRevision).toHaveBeenLastCalledWith('well_1', 'report_1', 1, 'json', 'en'))
+    } finally {
+      clickSpy.mockRestore()
+      if (originalCreate) Object.defineProperty(URL, 'createObjectURL', originalCreate)
+      else Reflect.deleteProperty(URL, 'createObjectURL')
+      if (originalRevoke) Object.defineProperty(URL, 'revokeObjectURL', originalRevoke)
+      else Reflect.deleteProperty(URL, 'revokeObjectURL')
+    }
   })
 
   it('imports a source-linked draft without treating extraction as approval and maps each supported narrative field', async () => {

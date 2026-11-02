@@ -1154,6 +1154,7 @@ export interface ReportKind {
 // --------------------------------------------------------------------------- daily drilling reports
 
 export type DailyReportStatus = 'draft' | 'submitted' | 'approved' | 'rejected' | 'withdrawn'
+export type DailyReportExportFormat = 'json' | 'pdf' | 'docx' | 'xlsx'
 export type DailyReportTimeBasis = 'observed' | 'reported' | 'calculated' | 'planned' | 'inferred' | 'unknown'
 export type DailyReportResolutionState = 'manual' | 'proposed' | 'accepted' | 'corrected' | 'rejected' | 'unresolved'
 

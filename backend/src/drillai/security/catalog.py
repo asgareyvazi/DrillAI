@@ -126,6 +126,12 @@ PLATFORM_ACTIONS: tuple[tuple[str, ActionLevel, str, str], ...] = (
         "daily_report.withdraw",
     ),
     (
+        "daily_report.export",
+        ActionLevel.DRAFT,
+        "Export an immutable daily-report revision with provenance and an audit record.",
+        "daily_report.export",
+    ),
+    (
         "project.create",
         ActionLevel.DRAFT,
         "Create a project (the top-level asset container).",

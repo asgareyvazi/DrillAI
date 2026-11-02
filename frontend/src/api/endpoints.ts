@@ -37,6 +37,7 @@ import type {
   DailyReportDecisionPayload,
   DailyReportDetail,
   DailyReportEditPayload,
+  DailyReportExportFormat,
   DailyReportHistory,
   DailyReportImportPayload,
   DailyReportList,
@@ -648,6 +649,17 @@ export const drillingApi = {
     api.get<DailyReportRevisionDetail>(
       `/wells/${enc(wellId)}/daily-reports/${enc(reportId)}/revisions/${revisionNumber}`,
       { signal, validate: expect.object('revision') },
+    ),
+  exportDailyReportRevision: (
+    wellId: string,
+    reportId: string,
+    revisionNumber: number,
+    format: DailyReportExportFormat,
+    locale: 'en' | 'fa',
+  ) =>
+    api.getBlob(
+      `/wells/${enc(wellId)}/daily-reports/${enc(reportId)}/revisions/${revisionNumber}/exports/${enc(format)}`,
+      { query: { locale } },
     ),
   createDailyReport: (wellId: string, body: DailyReportCreatePayload, idempotencyKey?: string) =>
     api.post<DailyReportMutationResponse>(

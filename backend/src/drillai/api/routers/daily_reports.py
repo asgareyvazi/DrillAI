@@ -9,13 +9,16 @@ revision history and the outbox event.
 from __future__ import annotations
 
 import datetime as dt
+import hashlib
 from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, Depends, Header, Query, Request
+from fastapi import APIRouter, Depends, Header, Query, Request, Response
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from drillai.api.deps import AuthContext, get_db, require
+from drillai.core.audit import record_audit
+from drillai.core.errors import Conflict, ValidationFailed
 from drillai.core.idempotency import complete, replay_or_reserve
 from drillai.db.models import (
     DAILY_REPORT_PARAMETER_SPECS,
@@ -28,6 +31,12 @@ from drillai.db.models import (
     REPORT_TIME_BASES,
 )
 from drillai.db.models.operations import CAUSE_BASES, NPT_CATEGORIES, OPERATION_KINDS
+from drillai.drilling.daily_report_exports import (
+    EXPORT_EXTENSIONS,
+    EXPORT_MEDIA_TYPES,
+    DailyReportExportError,
+    render_daily_report_export,
+)
 from drillai.drilling.daily_reports import DailyReportService
 from drillai.security.actions import authorize
 from drillai.units.registry import get_unit, known_units
@@ -354,6 +363,87 @@ async def get_daily_report_revision(
     auth: Annotated[AuthContext, Depends(require("daily_report.read"))],
 ) -> dict[str, Any]:
     return await _service(session, auth, request).get_revision(well_id, report_id, revision_number)
+
+
+@router.get(
+    "/wells/{well_id}/daily-reports/{report_id}/revisions/{revision_number}/exports/{export_format}",
+    summary="Export one fingerprint-verified immutable daily-report revision",
+    response_class=Response,
+)
+async def export_daily_report_revision(
+    well_id: str,
+    report_id: str,
+    revision_number: int,
+    export_format: Literal["json", "pdf", "docx", "xlsx"],
+    request: Request,
+    session: Annotated[AsyncSession, Depends(get_db)],
+    auth: Annotated[AuthContext, Depends(require("daily_report.export"))],
+    locale: Literal["en", "fa"] = Query(default="en"),
+) -> Response:
+    """Export a selected immutable revision; each successful artifact is provenance-audited."""
+    authorize(
+        auth.principal,
+        "daily_report.export",
+        context={"well_id": well_id, "daily_report_id": report_id, "revision_number": revision_number},
+    )
+    resolved = await _service(session, auth, request).get_revision(well_id, report_id, revision_number)
+    report = resolved["report"]
+    revision = resolved["revision"]
+    if revision.get("status") not in {"submitted", "approved", "rejected", "withdrawn"}:
+        raise Conflict("only immutable, non-draft daily-report revisions can be exported")
+    if revision.get("content_hash_verified") is not True:
+        raise Conflict("daily-report revision fingerprint is missing or does not match")
+
+    generated_at = dt.datetime.now(dt.UTC)
+    try:
+        artifact = render_daily_report_export(
+            report,
+            revision,
+            export_format=export_format,
+            locale=locale,
+            generated_at=generated_at,
+        )
+    except DailyReportExportError as exc:
+        raise ValidationFailed("daily-report revision cannot be represented in the requested export format") from exc
+
+    digest = hashlib.sha256(artifact).hexdigest()
+    org_id = auth.org_id or ""
+    await record_audit(
+        session,
+        org_id=org_id,
+        principal=auth.principal,
+        action="daily_report.export",
+        resource_kind="daily_report_revision",
+        resource_id=str(revision.get("id") or f"{report_id}:{revision_number}"),
+        permission="daily_report.export",
+        request_id=getattr(request.state, "request_id", None),
+        well_id=well_id,
+        details={
+            "report_id": report_id,
+            "revision_id": revision.get("id"),
+            "revision_number": revision_number,
+            "revision_status": revision.get("status"),
+            "revision_content_hash": revision.get("content_hash"),
+            "revision_content_hash_verified": True,
+            "format": export_format,
+            "locale": locale,
+            "bytes": len(artifact),
+            "artifact_sha256": digest,
+            "generated_at": generated_at.isoformat(),
+        },
+    )
+    filename = f"daily-report-revision-{revision_number}.{EXPORT_EXTENSIONS[export_format]}"
+    return Response(
+        content=artifact,
+        media_type=EXPORT_MEDIA_TYPES[export_format],
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "private, no-store",
+            "X-Content-Type-Options": "nosniff",
+            "Content-Security-Policy": "default-src 'none'; sandbox",
+            "ETag": f'"{digest}"',
+        },
+    )
 
 
 @router.patch(

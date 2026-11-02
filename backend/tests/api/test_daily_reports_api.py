@@ -1158,3 +1158,212 @@ async def test_daily_report_failure_rolls_back_mutation_and_idempotency_key(clie
     )
     assert retried.status_code == 201, retried.text
     assert retried.json()["revision"]["status"] == "draft"
+
+
+@pytest.mark.asyncio
+async def test_daily_report_immutable_revision_exports_are_safe_permissioned_and_audited(client, db):
+    from io import BytesIO
+    from zipfile import ZipFile
+
+    from openpyxl import load_workbook
+    from sqlalchemy import select
+
+    from drillai.db.models import AuditLog, DailyDrillingReportRevision
+
+    well_id, wellbore_id = await _create_well(client)
+    payload = _report_payload(wellbore_id)
+    payload["content"]["summary"] = 'حفاری پیشرفت کرد: =HYPERLINK("https://example.invalid")'
+    payload["content"]["activities"][0]["description"] = "<script>alert('not markup')</script>"
+    created = await client.post(
+        f"/api/v1/wells/{well_id}/daily-reports",
+        json=payload,
+        headers=headers("engineer"),
+    )
+    assert created.status_code == 201, created.text
+    report_id = created.json()["report"]["id"]
+    revision_id = created.json()["revision"]["id"]
+    export_url = f"/api/v1/wells/{well_id}/daily-reports/{report_id}/revisions/1/exports"
+
+    # Drafts are never downloadable, and a read-only user cannot gain export rights from access to
+    # the report/history screens.
+    draft_export = await client.get(f"{export_url}/json", headers=headers("engineer"))
+    assert draft_export.status_code == 409, draft_export.text
+
+    submitted = await client.post(
+        f"/api/v1/wells/{well_id}/daily-reports/{report_id}/revisions/1/submit",
+        json={"expected_edit_version": 1, "reason": "Ready for independent review."},
+        headers=headers("engineer"),
+    )
+    assert submitted.status_code == 200, submitted.text
+    approved = await client.post(
+        f"/api/v1/wells/{well_id}/daily-reports/{report_id}/revisions/1/approve",
+        json={"expected_edit_version": 2, "reason": "Independent review complete."},
+        headers=headers("drilling_supervisor"),
+    )
+    assert approved.status_code == 200, approved.text
+    correction = await client.post(
+        f"/api/v1/wells/{well_id}/daily-reports/{report_id}/corrections",
+        json={"reason": "Open a new numbered correction without changing approved history."},
+        headers=headers("drilling_supervisor"),
+    )
+    assert correction.status_code == 201, correction.text
+    assert correction.json()["revision"]["revision_number"] == 2
+    assert correction.json()["revision"]["status"] == "draft"
+    latest_draft_export = await client.get(
+        f"/api/v1/wells/{well_id}/daily-reports/{report_id}/revisions/2/exports/json",
+        headers=headers("engineer"),
+    )
+    assert latest_draft_export.status_code == 409, latest_draft_export.text
+
+    denied = await client.get(f"{export_url}/json", headers=headers("viewer"))
+    assert denied.status_code == 403, denied.text
+
+    formats = {
+        "json": "application/json",
+        "pdf": "application/pdf",
+        "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    }
+    artifacts = {}
+    for export_format, media_type in formats.items():
+        response = await client.get(
+            f"{export_url}/{export_format}?locale=fa",
+            headers=headers("engineer"),
+        )
+        assert response.status_code == 200, response.text
+        assert response.headers["content-type"].startswith(media_type)
+        assert response.headers["content-disposition"].startswith("attachment; filename=\"daily-report-revision-1.")
+        assert response.headers["cache-control"] == "private, no-store"
+        assert response.headers["x-content-type-options"] == "nosniff"
+        assert response.headers["content-security-policy"] == "default-src 'none'; sandbox"
+        assert len(response.content) > 100
+        artifacts[export_format] = response
+
+    assert artifacts["json"].content.startswith(b"{")
+    json_export = artifacts["json"].json()
+    assert json_export["export_manifest"]["revision_id"] == revision_id
+    assert json_export["export_manifest"]["revision_content_hash_verified"] is True
+    assert "دلالت بر تأیید مهندسی بیشتر ندارد" in json_export["export_manifest"]["export_notice"]
+    assert json_export["revision"]["summary"] == payload["content"]["summary"]
+    assert artifacts["pdf"].content.startswith(b"%PDF-")
+
+    with ZipFile(BytesIO(artifacts["docx"].content)) as archive:
+        document_xml = archive.read("word/document.xml").decode("utf-8")
+        assert "گزارش روزانه حفاری" in document_xml
+        assert "حفاری پیشرفت کرد" in document_xml
+        assert "حفاری" in document_xml and "وزن گل" in document_xml
+        assert "<w:bidi" in document_xml and "<w:rtl" in document_xml
+        # Narrative text is ordinary text, not injected document markup.
+        assert "&lt;script&gt;" in document_xml
+        assert "این خروجی به‌تنهایی دلالت بر تأیید مهندسی بیشتر ندارد" in document_xml
+
+    workbook = load_workbook(BytesIO(artifacts["xlsx"].content), data_only=False)
+    assert len(workbook.sheetnames) == 4
+    assert all(workbook[sheet].sheet_view.rightToLeft is True for sheet in workbook.sheetnames)
+    report_sheet = workbook[workbook.sheetnames[0]]
+    report_labels = {row[0].value for row in report_sheet.iter_rows() if row[0].value is not None}
+    assert {"قالب خروجی", "زبان خروجی", "یادداشت خروجی و بازبینی مهندسی"} <= report_labels
+    assert "شناسه عملیات پیوندشده" in {
+        cell.value for cell in workbook[workbook.sheetnames[1]][1]
+    }
+    assert "شناسه رویداد پیوندشده" in {
+        cell.value for cell in workbook[workbook.sheetnames[1]][1]
+    }
+    assert "عمق استاندارد از (متر)" in {
+        cell.value for cell in workbook[workbook.sheetnames[1]][1]
+    }
+    assert "عمق وابسته استاندارد (متر)" in {
+        cell.value for cell in workbook[workbook.sheetnames[2]][1]
+    }
+    summary_cell = next(
+        cell
+        for row in workbook[workbook.sheetnames[0]].iter_rows()
+        for cell in row
+        if cell.value == payload["content"]["summary"]
+    )
+    assert summary_cell.data_type == "s"  # formula-like user text stays a literal string
+
+    async with db.session_factory() as session:
+        export_audits = (
+            await session.execute(
+                select(AuditLog).where(
+                    AuditLog.action == "daily_report.export",
+                    AuditLog.resource_kind == "daily_report_revision",
+                    AuditLog.resource_id == revision_id,
+                )
+            )
+        ).scalars().all()
+    assert len(export_audits) == len(formats)
+    by_format = {row.details["format"]: row for row in export_audits}
+    assert set(by_format) == set(formats)
+    for export_format, row in by_format.items():
+        assert row.permission_decision["required"] == "daily_report.export"
+        assert row.permission_decision["granted"] is True
+        assert row.details["report_id"] == report_id
+        assert row.details["revision_id"] == revision_id
+        assert row.details["revision_content_hash_verified"] is True
+        assert row.details["locale"] == "fa"
+        assert row.details["bytes"] == len(artifacts[export_format].content)
+        assert row.details["artifact_sha256"] == artifacts[export_format].headers["etag"].strip('"')
+
+    # A corrupt revision fingerprint fails closed before any artifact or success audit is returned.
+    async with db.session_factory() as session:
+        row = (
+            await session.execute(
+                select(DailyDrillingReportRevision).where(DailyDrillingReportRevision.id == revision_id)
+            )
+        ).scalar_one()
+        row.content_hash = "0" * 64
+        await session.commit()
+    tampered = await client.get(f"{export_url}/json", headers=headers("engineer"))
+    assert tampered.status_code == 409, tampered.text
+    async with db.session_factory() as session:
+        count = len(
+            (
+                await session.execute(
+                    select(AuditLog.id).where(
+                        AuditLog.action == "daily_report.export",
+                        AuditLog.resource_kind == "daily_report_revision",
+                        AuditLog.resource_id == revision_id,
+                    )
+                )
+            ).all()
+        )
+    assert count == len(formats)
+
+
+@pytest.mark.asyncio
+async def test_daily_report_export_audit_failure_does_not_deliver_artifact(client, app, monkeypatch):
+    import httpx
+
+    from drillai.api.routers import daily_reports as daily_reports_router
+
+    well_id, wellbore_id = await _create_well(client)
+    created = await client.post(
+        f"/api/v1/wells/{well_id}/daily-reports",
+        json=_report_payload(wellbore_id),
+        headers=headers("engineer"),
+    )
+    assert created.status_code == 201, created.text
+    report_id = created.json()["report"]["id"]
+    submitted = await client.post(
+        f"/api/v1/wells/{well_id}/daily-reports/{report_id}/revisions/1/submit",
+        json={"expected_edit_version": 1, "reason": "Ready for independent review."},
+        headers=headers("engineer"),
+    )
+    assert submitted.status_code == 200, submitted.text
+
+    async def fail_audit(*_args, **_kwargs):
+        raise RuntimeError("injected export-audit failure")
+
+    transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
+    with monkeypatch.context() as patch:
+        patch.setattr(daily_reports_router, "record_audit", fail_audit)
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as failing_client:
+            failed = await failing_client.get(
+                f"/api/v1/wells/{well_id}/daily-reports/{report_id}/revisions/1/exports/pdf",
+                headers=headers("engineer"),
+            )
+    assert failed.status_code == 500
+    assert failed.content != b"%PDF-"
+    assert "injected export-audit failure" not in failed.text

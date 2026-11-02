@@ -3,6 +3,7 @@
  * revisions in the browser. Reads and independent authorization refusals are checked against the API.
  */
 
+import { readFile } from 'node:fs/promises'
 import {
   apiAttempt,
   apiGet,
@@ -473,6 +474,31 @@ test.describe('daily-report lifecycle in a real browser', () => {
     await expect(page.getByRole('heading', { level: 1, name: 'گزارش‌های روزانه حفاری' })).toBeVisible()
     await expect(page.getByTestId('daily-report-detail')).toContainText('تأییدشده')
     await expect(page.locator('bdi[dir="ltr"]').first()).toContainText(well.id)
+
+    // Export the selected historical revision (not the current draft) from the Persian UI. The
+    // download is a real binary response, and the API independently refuses a viewer without the
+    // dedicated export entitlement.
+    const revisionExportPath = `${reportPath(well.id, reportId)}/revisions/1/exports/pdf`
+    const pdfResponsePromise = page.waitForResponse((response) =>
+      response.url().includes(revisionExportPath) && response.url().includes('locale=fa'),
+    )
+    const downloadPromise = page.waitForEvent('download')
+    await page.getByTestId('daily-report-export-pdf').click()
+    const [pdfResponse, download] = await Promise.all([pdfResponsePromise, downloadPromise])
+    expect(pdfResponse.status()).toBe(200)
+    expect(pdfResponse.headers()['content-type']).toContain('application/pdf')
+    const downloadedPath = await download.path()
+    expect(downloadedPath).toBeTruthy()
+    if (!downloadedPath) throw new Error('PDF export download has no saved artifact path')
+    expect((await readFile(downloadedPath)).subarray(0, 5).toString('ascii')).toBe('%PDF-')
+    expect(download.suggestedFilename()).toBe('daily-report-revision-1.pdf')
+    await expect(page.getByText('خروجی نسخه دریافت شد.')).toBeVisible()
+
+    const deniedExport = await request.get(`/api/v1${revisionExportPath}?locale=fa`, {
+      headers: { 'X-Dev-Roles': 'viewer' },
+    })
+    expect(deniedExport.status()).toBe(403)
+    expect((await deniedExport.json()).error.code).toBe('security.permission_denied')
 
     expectNoFailures(consoleErrors, failedResponses)
   })

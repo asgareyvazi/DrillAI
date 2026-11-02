@@ -129,10 +129,26 @@ describe('request: transport', () => {
     expect(await blob.text()).toBe(bytes)
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
     expect(url).toBe('/api/v1/wells/wel_1/reports/daily_drilling/export')
-    expect((init.headers as Record<string, string>).Accept).toBe('application/json')
+    expect((init.headers as Record<string, string>).Accept).toContain('application/json')
   })
 
-  it('refuses a non-JSON successful download instead of saving an HTML error page', async () => {
+  it.each([
+    'application/pdf',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  ])('returns exact bytes for allowlisted %s downloads', async (contentType) => {
+    const bytes = new Uint8Array([0, 1, 2, 0xff, 0x80])
+    fetchMock.mockResolvedValue(new Response(bytes, { headers: { 'Content-Type': `${contentType}; version=1` } }))
+
+    const blob = await api.getBlob('/daily-reports/ddr_1/revisions/2/exports/file')
+
+    expect(blob.type).toContain(contentType)
+    expect(new Uint8Array(await blob.arrayBuffer())).toEqual(bytes)
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect((init.headers as Record<string, string>).Accept).toContain(contentType)
+  })
+
+  it('refuses unsupported successful media types instead of saving an HTML error page', async () => {
     fetchMock.mockResolvedValue(
       new Response('<html>proxy error</html>', { headers: { 'Content-Type': 'text/html' } }),
     )
@@ -140,6 +156,16 @@ describe('request: transport', () => {
     expect(error).toBeInstanceOf(ApiError)
     expect(error.kind).toBe('malformed')
   })
+
+  it.each(['application/octet-stream', 'application/zip'])(
+    'rejects successful unapproved binary MIME type %s',
+    async (contentType) => {
+      fetchMock.mockResolvedValue(new Response(new Uint8Array([1, 2, 3]), { headers: { 'Content-Type': contentType } }))
+      const error = (await api.getBlob('/reports/export').catch((caught: unknown) => caught)) as ApiError
+      expect(error).toBeInstanceOf(ApiError)
+      expect(error.kind).toBe('malformed')
+    },
+  )
 
   it('returns undefined for an empty 204 response instead of throwing on JSON parse', async () => {
     fetchMock.mockResolvedValue(new Response(null, { status: 204 }))

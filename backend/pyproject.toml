@@ -35,6 +35,9 @@ dependencies = [
   "pypdf>=5.1",
   "python-docx>=1.1",
   "openpyxl>=3.1",
+  "reportlab>=4.2,<5",
+  "arabic-reshaper>=3.0,<4",
+  "python-bidi>=0.6,<1",
 ]
 
 [project.optional-dependencies]
@@ -55,6 +58,11 @@ drillai-worker = "drillai.telemetry.worker:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/drillai"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"src/drillai/assets/fonts/DejaVuSans.ttf" = "drillai/assets/fonts/DejaVuSans.ttf"
+"src/drillai/assets/fonts/DejaVuSans-Bold.ttf" = "drillai/assets/fonts/DejaVuSans-Bold.ttf"
+"src/drillai/assets/fonts/LICENSE-DejaVu.txt" = "drillai/assets/fonts/LICENSE-DejaVu.txt"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

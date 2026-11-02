@@ -55,6 +55,20 @@ export const DEFAULT_TIMEOUT_MS = Number(import.meta.env.VITE_API_TIMEOUT_MS ?? 
 
 /** Longest prefix of an unreadable body kept for diagnosis. A body is never rendered wholesale. */
 const PREVIEW_LIMIT = 400
+const DOWNLOAD_MIME_TYPES = new Set([
+  'application/pdf',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+])
+
+function normalizedMimeType(value: string | null): string {
+  return value?.split(';', 1)[0]?.trim().toLowerCase() ?? ''
+}
+
+function isJsonMimeType(value: string | null): boolean {
+  const mimeType = normalizedMimeType(value)
+  return mimeType === 'application/json' || mimeType.endsWith('+json')
+}
 
 export interface ApiClientIdentity {
   token?: string | null
@@ -393,7 +407,7 @@ export interface RequestOptions {
    * name and the decision to send one at all belong to the transport boundary.
    */
   idempotencyKey?: string
-  /** Return the validated response bytes as a Blob after checking the JSON contract. */
+  /** Return exact JSON-download bytes or a MIME-allowlisted binary artifact as a Blob. */
   responseType?: 'json' | 'blob'
 }
 
@@ -480,7 +494,12 @@ function readEnvelope(payload: unknown, status: number, statusText: string): Env
 
 export async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const method = (options.method ?? 'GET').toUpperCase()
-  const headers: Record<string, string> = { Accept: 'application/json' }
+  const headers: Record<string, string> = {
+    Accept:
+      options.responseType === 'blob'
+        ? 'application/json, application/pdf, application/vnd.openxmlformats-officedocument.wordprocessingml.document, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        : 'application/json',
+  }
   if (identity.token) headers.Authorization = `Bearer ${identity.token}`
   else if (identity.devRoles && !identity.sessionId && !import.meta.env.PROD) {
     headers['X-Dev-Roles'] = identity.devRoles
@@ -559,10 +578,26 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
   const contentType = response.headers.get('content-type')
   if (response.status === 204) return undefined as T
 
-  // Keep the original bytes for authorized downloads while inspecting a text copy through the same
-  // JSON/error contract as ordinary API reads. The download is not reserialized client-side, so its
-  // bytes continue to match the server's ETag and audit digest.
+  // Keep original bytes for downloads. JSON exports use the same validation/error contract as other
+  // API reads; only the fixed PDF/DOCX/XLSX MIME allowlist bypasses JSON parsing. Returned bytes are
+  // never reserialized, so they continue to match the server's ETag and audit digest.
   const rawBlob = options.responseType === 'blob' ? await response.blob() : null
+  if (rawBlob && response.ok) {
+    const mimeType = normalizedMimeType(contentType)
+    if (DOWNLOAD_MIME_TYPES.has(mimeType)) return rawBlob as T
+    if (!isJsonMimeType(contentType)) {
+      const snippet = await rawBlob.slice(0, PREVIEW_LIMIT + 1).text()
+      throw new ApiError(
+        response.status,
+        'protocol.malformed_response',
+        'The server returned a download with an unsupported media type.',
+        { content_type: contentType, preview: preview(snippet) },
+        requestId,
+        false,
+        { kind: 'malformed', path, contentType },
+      )
+    }
+  }
   const text = rawBlob ? await rawBlob.text() : await response.text()
   let payload: unknown = null
   let parseFailed = false
@@ -670,7 +705,7 @@ export const expect = {
 export const api = {
   get: <T>(path: string, options: Omit<RequestOptions, 'method' | 'body'> = {}) =>
     request<T>(path, { ...options, method: 'GET' }),
-  /** Download exact response bytes after validating the same JSON API contract and error envelope. */
+  /** Download exact JSON or allowlisted PDF/DOCX/XLSX bytes while preserving structured API errors. */
   getBlob: (path: string, options: Omit<RequestOptions, 'method' | 'body' | 'responseType'> = {}) =>
     request<Blob>(path, { ...options, method: 'GET', responseType: 'blob' }),
   post: <T>(path: string, body?: unknown, options: Omit<RequestOptions, 'method' | 'body'> = {}) =>

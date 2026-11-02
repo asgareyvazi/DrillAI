@@ -130,6 +130,7 @@ ROLE_CATALOGUE: tuple[Role, ...] = (
             "daily_report.write",
             "daily_report.submit",
             "daily_report.withdraw",
+            "daily_report.export",
             # Recording telemetry and answering its alerts: the action levels are DRAFT, which is this
             # role's ceiling. `live.read` is separate from `timeseries.read` on purpose — a socket is a
             # different entitlement from a query, and a role can be given one without the other.
