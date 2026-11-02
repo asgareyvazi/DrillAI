@@ -62,9 +62,10 @@ class Settings(BaseSettings):
     # are operator-installed host/container dependencies and are never downloaded at request time.
     ocr_enabled: bool = False
     ocr_executable: str = "tesseract"
-    ocr_languages: str = "eng"
+    ocr_languages: str = "eng+fas"
     ocr_timeout_seconds: float = Field(default=30.0, ge=1.0, le=120.0)
     ocr_max_pages: int = Field(default=20, ge=1, le=200)
+    ocr_max_concurrency: int = Field(default=2, ge=1, le=8)
     ocr_dpi: int = Field(default=200, ge=72, le=300)
     ocr_max_page_pixels: int = Field(default=12_000_000, ge=100_000, le=30_000_000)
 
@@ -198,7 +199,7 @@ class Settings(BaseSettings):
     @field_validator("ocr_languages")
     @classmethod
     def _validate_ocr_languages(cls, value: str) -> str:
-        parts = re.split(r"[+,]", value) if isinstance(value, str) else []
+        parts = [part.strip() for part in re.split(r"[+,]", value)] if isinstance(value, str) else []
         if (
             not parts
             or len(value) > 120

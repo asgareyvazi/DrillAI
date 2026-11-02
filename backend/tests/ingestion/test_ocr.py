@@ -11,13 +11,25 @@ from __future__ import annotations
 import csv
 import io
 import os
+import subprocess
 from pathlib import Path
 
 import pytest
 from pypdf import PdfWriter
 
+from drillai.ingestion import ocr as ocr_module
 from drillai.ingestion.ocr import OcrLine, OcrUnavailable, TesseractOcrProvider, parse_tesseract_tsv
 from drillai.ingestion.parsers import parse_bytes
+
+
+@pytest.fixture(autouse=True)
+def clear_tesseract_diagnostic_cache():
+    with ocr_module._TESSERACT_DIAGNOSTIC_CACHE_LOCK:
+        ocr_module._TESSERACT_DIAGNOSTIC_CACHE.clear()
+    yield
+    with ocr_module._TESSERACT_DIAGNOSTIC_CACHE_LOCK:
+        ocr_module._TESSERACT_DIAGNOSTIC_CACHE.clear()
+
 
 _COLUMNS = (
     "level",
@@ -212,6 +224,12 @@ def test_tesseract_cli_adapter_uses_stdin_and_bounds_child_output(tmp_path: Path
     script.write_text(
         "#!/usr/bin/env python3\n"
         "import os, sys\n"
+        "if sys.argv[1:] == ['--version']:\n"
+        " print('tesseract 5.3.0')\n"
+        " sys.exit(0)\n"
+        "if sys.argv[1:] == ['--list-langs']:\n"
+        " print('List of available languages (2):\\neng\\nfas')\n"
+        " sys.exit(0)\n"
         "assert sys.argv[1:] == ['stdin', 'stdout', '--psm', '6', '-l', 'eng+fas', 'tsv']\n"
         "assert sys.stdin.buffer.read() == b'png-contract'\n"
         "assert 'DRILLAI_TEST_SECRET' not in os.environ\n"
@@ -225,6 +243,7 @@ def test_tesseract_cli_adapter_uses_stdin_and_bounds_child_output(tmp_path: Path
         languages="eng,fas", executable=str(script), timeout_seconds=5, max_output_bytes=1024
     )
     assert provider.availability() == (True, None)
+    assert provider.version == "tesseract-cli-tsv-v2; tesseract 5.3.0"
     lines = provider.recognize(b"png-contract")
     assert len(lines) == 1
     assert lines[0].text == "Drill"
@@ -254,3 +273,191 @@ def test_tesseract_provider_availability_is_explicit_for_missing_executable() ->
     assert reason == "Tesseract executable was not found on the server PATH"
     with pytest.raises(OcrUnavailable, match="not found"):
         provider.recognize(b"image")
+
+
+def test_tesseract_diagnostics_verify_languages_and_capture_runtime_version(monkeypatch) -> None:
+    from drillai.ingestion import ocr
+
+    monkeypatch.setattr(ocr.shutil, "which", lambda _executable: "/opt/tesseract")
+
+    outputs = iter(
+        [
+            b"tesseract 5.4.1\n",
+            b"List of available languages (1):\neng\n",
+        ]
+    )
+
+    class FakeProcess:
+        def __init__(self, output: bytes):
+            self.stdout = io.BytesIO(output)
+            self.returncode = 0
+
+        def wait(self, timeout=None):
+            return self.returncode
+
+        def poll(self):
+            return self.returncode
+
+        def kill(self):
+            self.returncode = -9
+
+    def popen(_command, **kwargs):
+        assert kwargs["stdin"] == subprocess.DEVNULL
+        assert kwargs["stdout"] == subprocess.PIPE
+        assert kwargs["stderr"] == subprocess.STDOUT
+        return FakeProcess(next(outputs))
+
+    monkeypatch.setattr(ocr.subprocess, "Popen", popen)
+    provider = TesseractOcrProvider(languages="eng+fas")
+
+    diagnostics = provider.diagnostics()
+
+    assert diagnostics["available"] is False
+    assert diagnostics["runtime_version"] == "tesseract 5.4.1"
+    assert diagnostics["available_languages"] == ["eng"]
+    assert diagnostics["missing_languages"] == ["fas"]
+    assert diagnostics["reason"] == "Tesseract is missing configured language data: fas"
+    assert provider.version == "tesseract-cli-tsv-v2; tesseract 5.4.1"
+
+
+def test_tesseract_diagnostic_version_rejects_path_or_untrusted_process_text(monkeypatch) -> None:
+    from drillai.ingestion import ocr
+
+    monkeypatch.setattr(ocr.shutil, "which", lambda _executable: "/opt/tesseract")
+
+    class UntrustedVersionProcess:
+        def __init__(self):
+            self.stdout = io.BytesIO(b"tesseract /private/deploy/path 5.4.1\\n")
+            self.returncode = 0
+
+        def wait(self, timeout=None):
+            return self.returncode
+
+        def poll(self):
+            return self.returncode
+
+        def kill(self):
+            self.returncode = -9
+
+    monkeypatch.setattr(
+        ocr.subprocess,
+        "Popen",
+        lambda *_args, **_kwargs: UntrustedVersionProcess(),
+    )
+    report = TesseractOcrProvider(executable="tesseract").diagnostics()
+
+    assert report["available"] is False
+    assert report["reason"] == "Tesseract returned an unrecognised version response"
+    assert "/private/deploy/path" not in str(report)
+
+
+def test_tesseract_runtime_diagnostics_are_cached_across_provider_instances(monkeypatch) -> None:
+    from drillai.ingestion import ocr
+
+    monkeypatch.setattr(ocr.shutil, "which", lambda _executable: "/opt/tesseract")
+    calls: list[str] = []
+
+    class FakeProcess:
+        def __init__(self, command):
+            calls.append(command[-1])
+            output = (
+                b"tesseract 5.4.1\n"
+                if command[-1] == "--version"
+                else b"List of available languages (2):\neng\nfas\n"
+            )
+            self.stdout = io.BytesIO(output)
+            self.returncode = 0
+
+        def wait(self, timeout=None):
+            return self.returncode
+
+        def poll(self):
+            return self.returncode
+
+        def kill(self):
+            self.returncode = -9
+
+    monkeypatch.setattr(ocr.subprocess, "Popen", lambda command, **_kwargs: FakeProcess(command))
+    first_provider = TesseractOcrProvider(executable="tesseract")
+    second_provider = TesseractOcrProvider(executable="tesseract")
+
+    first_version = first_provider.version
+    first = first_provider.diagnostics()
+    second = second_provider.diagnostics()
+    second["available_languages"].append("tampered")
+
+    assert first_version == "tesseract-cli-tsv-v2; tesseract 5.4.1"
+    assert calls == ["--version", "--list-langs"]
+    assert second_provider.version == "tesseract-cli-tsv-v2; tesseract 5.4.1"
+    assert first["available_languages"] == ["eng", "fas"]
+
+
+def test_tesseract_diagnostic_probe_timeout_is_reported_without_raw_process_output(monkeypatch) -> None:
+    from drillai.ingestion import ocr
+
+    monkeypatch.setattr(ocr.shutil, "which", lambda _executable: "/opt/tesseract")
+
+    class TimeoutProcess:
+        def __init__(self):
+            self.stdout = io.BytesIO(b"")
+            self.returncode = None
+
+        def wait(self, timeout=None):
+            if timeout is not None:
+                raise subprocess.TimeoutExpired("tesseract --version", timeout, output=b"/private/path")
+            return self.returncode
+
+        def poll(self):
+            return self.returncode
+
+        def kill(self):
+            self.returncode = -9
+
+    monkeypatch.setattr(ocr.subprocess, "Popen", lambda *_args, **_kwargs: TimeoutProcess())
+    provider = TesseractOcrProvider(executable="tesseract")
+    diagnostics = provider.diagnostics()
+    assert diagnostics["available"] is False
+    assert diagnostics["reason"] == "Tesseract diagnostic probe timed out"
+    assert "/private/path" not in str(diagnostics)
+
+
+def test_tesseract_diagnostic_probe_caps_output_before_buffering_unbounded_data(monkeypatch) -> None:
+    from drillai.ingestion import ocr
+
+    monkeypatch.setattr(ocr.shutil, "which", lambda _executable: "/opt/tesseract")
+
+    class NoisyProcess:
+        def __init__(self):
+            self.stdout = io.BytesIO(b"x" * (ocr.MAX_DIAGNOSTIC_OUTPUT_BYTES + 100_000))
+            self.returncode = 0
+
+        def wait(self, timeout=None):
+            return self.returncode
+
+        def poll(self):
+            return self.returncode
+
+        def kill(self):
+            self.returncode = -9
+
+    monkeypatch.setattr(ocr.subprocess, "Popen", lambda *_args, **_kwargs: NoisyProcess())
+    provider = TesseractOcrProvider(executable="tesseract")
+
+    diagnostics = provider.diagnostics()
+
+    assert diagnostics["available"] is False
+    assert diagnostics["reason"] == "Tesseract diagnostic output exceeded the configured bound"
+
+
+def test_tesseract_process_concurrency_limit_fails_fast(monkeypatch) -> None:
+    from drillai.ingestion import ocr
+
+    monkeypatch.setattr(ocr.shutil, "which", lambda _executable: "/opt/tesseract")
+    provider = TesseractOcrProvider(executable="tesseract", max_concurrency=1)
+    semaphore = ocr._process_semaphore(1)
+    assert semaphore.acquire(blocking=False)
+    try:
+        with pytest.raises(OcrUnavailable, match="concurrency limit"):
+            provider.recognize(b"rendered-png")
+    finally:
+        semaphore.release()

@@ -300,22 +300,34 @@ backend/.venv/bin/python scripts/verify_postgres_dr_drill.py
 
 ### 7.2 OCR Runtime and Limits
 
-OCR is opt-in and disabled by default (`DRILLAI_OCR_ENABLED=false`). To enable the bounded PDF OCR path, install the optional Python extra (`cd backend && .venv/bin/pip install -e '.[ocr]'`), install the Tesseract executable and each selected trained-data language at the operating-system level, then explicitly configure `DRILLAI_OCR_ENABLED=true`, `DRILLAI_OCR_EXECUTABLE`, and `DRILLAI_OCR_LANGUAGES` (for example `eng+fas`). Python dependencies alone do not install Tesseract or its language packs.
+OCR is opt-in and disabled by default (`DRILLAI_OCR_ENABLED=false`). The standard backend Docker image installs the PDFium Python extra (`backend[ocr]`) plus OS-level Tesseract and English/Persian trained data (`eng` and `fas`); it does not download OCR assets at request time. Native deployments must install Tesseract and every configured language pack themselves. Set `DRILLAI_OCR_ENABLED=true` only after explicit commissioning; `DRILLAI_OCR_EXECUTABLE` and `DRILLAI_OCR_LANGUAGES` default to `tesseract` and `eng+fas`. The app probes `tesseract --version` and `--list-langs` with bounded time/output, checks each configured language, and records the adapter plus actual runtime version. A missing executable/language pack/PDFium renderer is reported as unavailable; it never becomes a silent empty extraction.
 
-Defaults are 30 seconds per page, 20 blank/image-only pages per PDF, 200 DPI, and 12,000,000 rendered pixels per page; configuration enforces the documented upper bounds. Missing Tesseract/PDFium, a page limit, unsafe render dimensions, timeout, OCR failure, or truncated output remains an explicit incomplete page state. Do not treat OCR confidence, a successful process exit, or any parser result as semantic correctness. OCR results retain page/line geometry and confidence where supplied by the provider; operator review is still required for source-critical values.
+Run a deployment-local preflight in the same backend container/venv used by ingestion:
 
-No approved real-world benchmark corpus or measured OCR accuracy is bundled with this repository. To run the local-only benchmark, stage operator-approved PDFs and UTF-8 ground-truth text outside Git, pin each file with SHA-256 in a schema-version-1 manifest, and run:
+```bash
+cd backend
+.venv/bin/python -m drillai.ingestion.ocr_runtime --require-runtime
+# Docker Compose alternative: docker compose exec backend python -m drillai.ingestion.ocr_runtime --require-runtime
+```
+
+The preflight prints a secret-free JSON dependency/configuration report, including enabled state, configured/installed languages, PDFium version, safe resource limits and a `quality_evaluated: false` marker. It exits non-zero when a required runtime component is missing. When OCR is enabled, `/api/v1/health/ready` includes the same check and reports `degraded` if Tesseract, configured language data or PDFium is unavailable; the bounded probe runs off the event loop and its immutable dependency result is cached for that process. Restart the API after changing the image, executable or language data. When disabled, OCR is explicitly `disabled` and does not block application readiness. Runtime presence does not establish OCR accuracy or engineering acceptance.
+
+Defaults are 30 seconds per page, at most 20 blank/image-only pages per PDF, two concurrent Tesseract processes, 200 DPI, and 12,000,000 rendered pixels per page; configuration enforces the documented upper bounds. Uploaded images are passed to Tesseract over stdin (never a shell or user-controlled filename), child environments are allowlisted, TSV output and PDF pixels are bounded, and timeout/concurrency saturation/page limits/unsafe dimensions/OCR failure/truncation remain explicit incomplete page states. Confidence, if supplied, is a word/line transcription signal—not a probability of engineering correctness. Source-critical values still require human reconciliation.
+
+No approved real-world benchmark corpus, gold labels, or measured OCR accuracy is bundled with this repository. Stage operator-approved PDFs and UTF-8 ground truth outside Git and create a schema-version-2 manifest. The manifest pins each PDF and label by SHA-256 and carries corpus identity/version/classification, declared languages, sampling method, ground-truth review protocol, and per-case locale/document class plus `development`, `validation`, or `holdout` split. Split membership and holdout independence must be governed by the corpus operator; the runner reports declarations but cannot verify leakage or independence. Its approval object requires `declaration: "operator_attests_approved"`, a reference, owner role, and timezone-aware `approved_at`; this is operator-attested metadata only. The runner cannot verify consent, governance approval, sampling representativeness, or label adjudication. Use non-identifying case IDs/role references. Run:
 
 ```bash
 cd backend
 .venv/bin/python -m drillai.ingestion.ocr_benchmark \
-  --manifest /secure/ocr/manifest.json \
+  --manifest /secure/ocr/manifest-v2.json \
   --corpus-root /secure/ocr/corpus \
   --languages eng+fas \
+  --max-concurrency 2 \
+  --max-total-edit-cells 250000000 \
   --output /secure/ocr/benchmark-result.json
 ```
 
-The runner reads no network sources, limits file sizes/case count/edit-distance work, refuses path traversal and digest mismatches, and writes aggregate CER/WER plus per-case hashes/status without transcripts. Missing runtime exits with status 2; failed or incomplete cases exit non-zero. No accuracy result is asserted by the synthetic provider tests, and no result should be called representative without an approved, versioned corpus and operator validation.
+The local-only runner reads no network sources, validates corpus metadata and paths, verifies all pinned file hashes, bounds file/case/edit-distance work, and writes no source paths or recognized/ground-truth transcripts. The report includes manifest/corpus declarations, runtime/adapter versions, per-case hashes/status, weighted CER/WER, per-split totals, and locale/document-class/split strata. Pooled totals intentionally mix declared splits and are labeled as such; use `split_totals.holdout` for operator-declared holdout-only transcription metrics, while remembering that holdout independence is unverified by the runner. `status: complete` means only that every selected case was processed and scored—it is not a quality pass or release approval. Missing runtime exits 2; incomplete/failed evaluation exits non-zero; no metric threshold is embedded. Synthetic-provider tests verify mechanics only and are not OCR results. No Tesseract executable or approved real corpus/ground truth is available in this workspace, so no corpus benchmark or accuracy result is claimed.
 
 ### 7.3 Versioned Extracted-Record Review
 

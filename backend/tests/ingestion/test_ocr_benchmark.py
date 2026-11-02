@@ -22,6 +22,23 @@ from drillai.ingestion.ocr_benchmark import (
 )
 
 
+def _corpus_metadata() -> dict:
+    return {
+        "id": "approved-field-corpus-2026q4",
+        "version": "1.0.0",
+        "classification": "restricted",
+        "approval": {
+            "declaration": "operator_attests_approved",
+            "reference": "GOV-123",
+            "owner_role": "data-steward",
+            "approved_at": "2026-11-02T12:00:00Z",
+        },
+        "languages": ["eng", "fas"],
+        "sampling_method": "stratified random sample by document class and locale",
+        "ground_truth_protocol": "two independent transcriptions followed by documented adjudication",
+    }
+
+
 def test_levenshtein_and_cer_wer_are_exact_after_documented_normalization() -> None:
     assert levenshtein_distance("kitten", "sitting") == 3
     metrics = error_rates("Cat   sat", "cat sit")
@@ -53,7 +70,8 @@ def test_manifest_pins_both_source_pdf_and_ground_truth_hashes(tmp_path) -> None
     (corpus / "scans" / "scan.pdf").write_bytes(pdf)
     (corpus / "labels" / "scan.txt").write_text(label, encoding="utf-8")
     manifest_body = {
-        "schema_version": 1,
+        "schema_version": 2,
+        "corpus": _corpus_metadata(),
         "cases": [
             {
                 "id": "scan-001",
@@ -61,6 +79,9 @@ def test_manifest_pins_both_source_pdf_and_ground_truth_hashes(tmp_path) -> None
                 "pdf_sha256": hashlib.sha256(pdf).hexdigest(),
                 "ground_truth": "labels/scan.txt",
                 "ground_truth_sha256": hashlib.sha256(label.encode()).hexdigest(),
+                "locale": "fa",
+                "document_class": "daily_report",
+                "split": "holdout",
                 "page_numbers": [1, 2],
             }
         ],
@@ -70,8 +91,11 @@ def test_manifest_pins_both_source_pdf_and_ground_truth_hashes(tmp_path) -> None
     manifest_path.write_bytes(manifest_raw)
 
     manifest, cases, manifest_digest = load_manifest(manifest_path)
-    assert manifest["schema_version"] == 1
+    assert manifest["schema_version"] == 2
+    assert manifest["corpus"]["approval"]["declaration"] == "operator_attests_approved"
     assert cases[0].case_id == "scan-001"
+    assert cases[0].locale == "fa"
+    assert cases[0].split == "holdout"
     assert cases[0].page_numbers == (1, 2)
     assert manifest_digest == hashlib.sha256(manifest_raw).hexdigest()
     loaded_pdf, source_path = _read_pinned_file(
@@ -79,6 +103,48 @@ def test_manifest_pins_both_source_pdf_and_ground_truth_hashes(tmp_path) -> None
     )
     assert loaded_pdf == pdf
     assert source_path == corpus / "scans" / "scan.pdf"
+
+
+def test_manifest_requires_self_attested_governance_and_bilingual_case_strata(tmp_path) -> None:
+    manifest = {
+        "schema_version": 2,
+        "corpus": _corpus_metadata(),
+        "cases": [
+            {
+                "id": "scan-001",
+                "pdf": "scan.pdf",
+                "pdf_sha256": "0" * 64,
+                "ground_truth": "scan.txt",
+                "ground_truth_sha256": "1" * 64,
+                "locale": "fa",
+                "document_class": "daily_report",
+                "split": "holdout",
+            }
+        ],
+    }
+    path = tmp_path / "manifest.json"
+    manifest["corpus"]["approval"]["approved_at"] = "2026-11-02T12:00:00"
+    path.write_text(json.dumps(manifest), encoding="utf-8")
+    with pytest.raises(BenchmarkInputError, match="timezone"):
+        load_manifest(path)
+
+    manifest["corpus"] = _corpus_metadata()
+    manifest["corpus"]["languages"] = ["eng"]
+    path.write_text(json.dumps(manifest), encoding="utf-8")
+    with pytest.raises(BenchmarkInputError, match="omits fas"):
+        load_manifest(path)
+
+    manifest["corpus"]["languages"] = ["eng", "fas"]
+    manifest["corpus"]["approval"]["declaration"] = "approved"
+    path.write_text(json.dumps(manifest), encoding="utf-8")
+    with pytest.raises(BenchmarkInputError, match="operator_attests_approved"):
+        load_manifest(path)
+
+    manifest["corpus"] = _corpus_metadata()
+    manifest["cases"][0]["locale"] = {"invalid": "type"}
+    path.write_text(json.dumps(manifest), encoding="utf-8")
+    with pytest.raises(BenchmarkInputError, match="locale"):
+        load_manifest(path)
 
 
 def test_manifest_rejects_path_traversal_windows_paths_and_digest_mismatch(tmp_path) -> None:
@@ -99,10 +165,21 @@ def test_manifest_rejects_path_traversal_windows_paths_and_digest_mismatch(tmp_p
 
 
 def test_benchmark_is_blocked_truthfully_when_tesseract_is_unavailable(tmp_path) -> None:
-    manifest = {"schema_version": 1}
+    manifest = {"schema_version": 2, "corpus": _corpus_metadata()}
+    case = BenchmarkCase(
+        case_id="pending",
+        pdf_path="scan.pdf",
+        pdf_sha256="0" * 64,
+        ground_truth_path="scan.txt",
+        ground_truth_sha256="1" * 64,
+        page_numbers=None,
+        locale="en",
+        document_class="daily_report",
+        split="holdout",
+    )
     report = run_benchmark(
         manifest,
-        [],
+        [case],
         "0" * 64,
         corpus_root=tmp_path,
         provider=TesseractOcrProvider(executable="drillai-no-such-tesseract-executable"),
@@ -119,7 +196,8 @@ def test_cli_reports_missing_runtime_as_blocked_and_exits_nonzero(tmp_path) -> N
     manifest_path.write_text(
         json.dumps(
             {
-                "schema_version": 1,
+                "schema_version": 2,
+                "corpus": _corpus_metadata(),
                 "cases": [
                     {
                         "id": "pending",
@@ -127,6 +205,9 @@ def test_cli_reports_missing_runtime_as_blocked_and_exits_nonzero(tmp_path) -> N
                         "pdf_sha256": "0" * 64,
                         "ground_truth": "scan.txt",
                         "ground_truth_sha256": "1" * 64,
+                        "locale": "en",
+                        "document_class": "daily_report",
+                        "split": "holdout",
                     }
                 ],
             }
@@ -153,6 +234,230 @@ def test_cli_reports_missing_runtime_as_blocked_and_exits_nonzero(tmp_path) -> N
     assert report["cases"] == []
 
 
+def test_benchmark_report_is_stratified_and_omits_transcripts(tmp_path, monkeypatch) -> None:
+    from drillai.ingestion import ocr_benchmark
+
+    pdf = b"fixture bytes; parser is replaced below and this is not OCR evidence"
+    label = "حفاری در ۳۲۰۰ متر"
+    development_label = "حفاری در ۳۱۰۰ متر"
+    (tmp_path / "scan.pdf").write_bytes(pdf)
+    (tmp_path / "scan.txt").write_text(label, encoding="utf-8")
+    (tmp_path / "scan-development.txt").write_text(development_label, encoding="utf-8")
+    case = BenchmarkCase(
+        case_id="synthetic-mechanics-only",
+        pdf_path="scan.pdf",
+        pdf_sha256=hashlib.sha256(pdf).hexdigest(),
+        ground_truth_path="scan.txt",
+        ground_truth_sha256=hashlib.sha256(label.encode()).hexdigest(),
+        page_numbers=None,
+        locale="fa",
+        document_class="daily_report",
+        split="holdout",
+    )
+    development_case = BenchmarkCase(
+        case_id="synthetic-development-mechanics-only",
+        pdf_path="scan.pdf",
+        pdf_sha256=hashlib.sha256(pdf).hexdigest(),
+        ground_truth_path="scan-development.txt",
+        ground_truth_sha256=hashlib.sha256(development_label.encode()).hexdigest(),
+        page_numbers=None,
+        locale="fa",
+        document_class="daily_report",
+        split="development",
+    )
+
+    class AvailableProvider:
+        name = "test-provider"
+        version = "test-adapter-only"
+        languages = ("eng", "fas")
+
+        @staticmethod
+        def availability():
+            return True, None
+
+    monkeypatch.setattr(
+        ocr_benchmark,
+        "parse_bytes",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            pages=[SimpleNamespace(page_number=1, ocr_applied=True, ocr_status="applied", text=label)]
+        ),
+    )
+    report = run_benchmark(
+        {"schema_version": 2, "corpus": _corpus_metadata()},
+        [case, development_case],
+        "2" * 64,
+        corpus_root=tmp_path,
+        provider=AvailableProvider(),  # type: ignore[arg-type]
+    )
+
+    assert report["status"] == "complete"  # processing status only, not an OCR quality acceptance
+    assert report["evaluation_scope"] == "holdout_included"
+    assert report["corpus_approval_evidence"] == "operator_attested_not_independently_verified"
+    assert report["totals"]["holdout_evaluated_cases"] == 1
+    assert report["split_integrity_evidence"] == "operator_declared_not_independently_verified"
+    assert "holdout independence is unverified" in report["metrics_scope_note"]
+    assert report["totals"]["cer"] > 0.0  # pooled development + holdout metrics are explicitly not holdout-only
+    assert report["totals"]["wer"] > 0.0
+    assert report["split_totals"]["holdout"]["cer"] == 0.0
+    assert report["split_totals"]["holdout"]["wer"] == 0.0
+    assert report["split_totals"]["development"]["cer"] > 0.0
+    assert report["split_totals"]["development"]["wer"] > 0.0
+    assert report["strata"][0]["locale"] == "fa"
+    assert report["strata"][0]["document_class"] == "daily_report"
+    assert {stratum["split"] for stratum in report["strata"]} == {"development", "holdout"}
+    assert label not in json.dumps(report, ensure_ascii=False)
+    assert report["quality_assessment"] == "transcription error metrics only; no engineering or production acceptance"
+
+
+def test_benchmark_failure_report_does_not_leak_paths_or_transcript_fragments(tmp_path, monkeypatch) -> None:
+    from drillai.ingestion import ocr_benchmark
+
+    pdf = b"pdf bytes"
+    label = "private ground-truth transcript"
+    (tmp_path / "scan.pdf").write_bytes(pdf)
+    (tmp_path / "scan.txt").write_text(label, encoding="utf-8")
+    case = BenchmarkCase(
+        case_id="private-case-id",
+        pdf_path="scan.pdf",
+        pdf_sha256=hashlib.sha256(pdf).hexdigest(),
+        ground_truth_path="scan.txt",
+        ground_truth_sha256=hashlib.sha256(label.encode()).hexdigest(),
+        page_numbers=None,
+        locale="en",
+        document_class="daily_report",
+        split="holdout",
+    )
+
+    class AvailableProvider:
+        name = "test-provider"
+        version = "test-adapter-only"
+        languages = ("eng", "fas")
+
+        @staticmethod
+        def availability():
+            return True, None
+
+    monkeypatch.setattr(
+        ocr_benchmark,
+        "parse_bytes",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            ValueError(f"failed at {tmp_path}/scan.pdf: {label}")
+        ),
+    )
+    report = run_benchmark(
+        {"schema_version": 2, "corpus": _corpus_metadata()},
+        [case],
+        "4" * 64,
+        corpus_root=tmp_path,
+        provider=AvailableProvider(),  # type: ignore[arg-type]
+    )
+    serialized = json.dumps(report, ensure_ascii=False)
+    assert report["status"] == "incomplete"
+    assert report["cases"][0]["reason"] == "processing failed (ValueError)"
+    assert str(tmp_path) not in serialized
+    assert label not in serialized
+    assert "scan.pdf" not in serialized
+
+
+def test_benchmark_enforces_one_aggregate_edit_distance_budget(tmp_path, monkeypatch) -> None:
+    from drillai.ingestion import ocr_benchmark
+
+    pdf = b"pdf bytes"
+    label = "a sufficiently long engineering label"
+    (tmp_path / "scan.pdf").write_bytes(pdf)
+    (tmp_path / "scan.txt").write_text(label, encoding="utf-8")
+    case = BenchmarkCase(
+        case_id="over-budget",
+        pdf_path="scan.pdf",
+        pdf_sha256=hashlib.sha256(pdf).hexdigest(),
+        ground_truth_path="scan.txt",
+        ground_truth_sha256=hashlib.sha256(label.encode()).hexdigest(),
+        page_numbers=None,
+        locale="en",
+        document_class="daily_report",
+        split="holdout",
+    )
+
+    class AvailableProvider:
+        name = "test-provider"
+        version = "test-adapter-only"
+        languages = ("eng", "fas")
+
+        @staticmethod
+        def availability():
+            return True, None
+
+    monkeypatch.setattr(
+        ocr_benchmark,
+        "parse_bytes",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            pages=[SimpleNamespace(page_number=1, ocr_applied=True, ocr_status="applied", text=label)]
+        ),
+    )
+    report = run_benchmark(
+        {"schema_version": 2, "corpus": _corpus_metadata()},
+        [case],
+        "3" * 64,
+        corpus_root=tmp_path,
+        provider=AvailableProvider(),  # type: ignore[arg-type]
+        max_total_edit_cells=1,
+    )
+    assert report["status"] == "incomplete"
+    assert report["cases"][0]["status"] == "failed"
+    assert "aggregate edit-distance work" in report["cases"][0]["reason"]
+    assert report["totals"]["edit_distance_cells_used"] == 0
+    assert report["totals"]["edit_distance_cell_limit"] == 1
+
+
+def test_benchmark_rejects_per_metric_workload_before_scoring_or_leaking_text(tmp_path, monkeypatch) -> None:
+    from drillai.ingestion import ocr_benchmark
+
+    pdf = b"pdf bytes"
+    label = "a" * 5001
+    (tmp_path / "scan.pdf").write_bytes(pdf)
+    (tmp_path / "scan.txt").write_text(label, encoding="utf-8")
+    case = BenchmarkCase(
+        case_id="per-metric-budget",
+        pdf_path="scan.pdf",
+        pdf_sha256=hashlib.sha256(pdf).hexdigest(),
+        ground_truth_path="scan.txt",
+        ground_truth_sha256=hashlib.sha256(label.encode()).hexdigest(),
+        page_numbers=None,
+        locale="en",
+        document_class="daily_report",
+        split="holdout",
+    )
+
+    class AvailableProvider:
+        name = "test-provider"
+        version = "test-adapter-only"
+        languages = ("eng", "fas")
+
+        @staticmethod
+        def availability():
+            return True, None
+
+    monkeypatch.setattr(
+        ocr_benchmark,
+        "parse_bytes",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            pages=[SimpleNamespace(page_number=1, ocr_applied=True, ocr_status="applied", text=label)]
+        ),
+    )
+    report = run_benchmark(
+        {"schema_version": 2, "corpus": _corpus_metadata()},
+        [case],
+        "5" * 64,
+        corpus_root=tmp_path,
+        provider=AvailableProvider(),  # type: ignore[arg-type]
+    )
+
+    assert report["status"] == "incomplete"
+    assert all("per-metric edit-distance workload" in item["reason"] for item in report["cases"])
+    assert report["totals"]["edit_distance_cells_used"] == 0
+    assert label not in json.dumps(report)
+
+
 def test_benchmark_does_not_score_truncated_ocr_output(tmp_path, monkeypatch) -> None:
     from drillai.ingestion import ocr_benchmark
 
@@ -167,12 +472,15 @@ def test_benchmark_does_not_score_truncated_ocr_output(tmp_path, monkeypatch) ->
         ground_truth_path="scan.txt",
         ground_truth_sha256=hashlib.sha256(label.encode()).hexdigest(),
         page_numbers=None,
+        locale="en",
+        document_class="daily_report",
+        split="holdout",
     )
 
     class AvailableProvider:
         name = "test-provider"
         version = "contract-only"
-        languages = ("eng",)
+        languages = ("eng", "fas")
 
         @staticmethod
         def availability():
@@ -193,7 +501,7 @@ def test_benchmark_does_not_score_truncated_ocr_output(tmp_path, monkeypatch) ->
         ),
     )
     report = run_benchmark(
-        {"schema_version": 1},
+        {"schema_version": 2, "corpus": _corpus_metadata()},
         [case],
         "1" * 64,
         corpus_root=tmp_path,

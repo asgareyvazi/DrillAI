@@ -1,9 +1,10 @@
 """Bounded OCR adapter used only when an operator explicitly enables OCR.
 
-The backend does not bundle Tesseract or language data. Install the optional ``ocr`` extra for PDF
-rasterization, install Tesseract plus the configured language packs at the host/container layer, and set
-``DRILLAI_OCR_ENABLED=true``. Missing runtime pieces remain visible in the parsed document instead of
-turning a scanned PDF into an apparently complete, empty extraction.
+The Python package does not itself bundle Tesseract or language data; the standard backend image installs
+Tesseract plus English/Persian packs, while native deployments must install the configured packs. Install
+the optional ``ocr`` extra for PDF rasterization and set ``DRILLAI_OCR_ENABLED=true`` only after runtime
+commissioning. Missing runtime pieces remain visible in the parsed document instead of turning a scanned
+PDF into an apparently complete, empty extraction.
 
 Uploaded bytes are passed to the executable over stdin; no user-controlled filename or shell command is
 used. This module reports word-derived line boxes and confidence supplied by Tesseract, not semantic
@@ -21,7 +22,7 @@ import shutil
 import subprocess
 import threading
 from contextlib import suppress
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol
 
@@ -34,6 +35,24 @@ __all__ = [
 ]
 
 MAX_TSV_BYTES = 16 * 1024 * 1024
+MAX_DIAGNOSTIC_OUTPUT_BYTES = 128 * 1024
+DIAGNOSTIC_TIMEOUT_SECONDS = 3.0
+TESSERACT_ADAPTER_VERSION = "tesseract-cli-tsv-v2"
+_PROCESS_SEMAPHORES: dict[int, threading.BoundedSemaphore] = {}
+_PROCESS_SEMAPHORES_LOCK = threading.Lock()
+_TESSERACT_DIAGNOSTIC_CACHE: dict[tuple[str, str, float, str, str], dict[str, object]] = {}
+_TESSERACT_DIAGNOSTIC_CACHE_LOCK = threading.Lock()
+
+
+def _process_semaphore(limit: int) -> threading.BoundedSemaphore:
+    # One semaphore per configured limit; all providers created under the same application settings
+    # share it, so concurrent uploads cannot start unbounded Tesseract processes.
+    with _PROCESS_SEMAPHORES_LOCK:
+        semaphore = _PROCESS_SEMAPHORES.get(limit)
+        if semaphore is None:
+            semaphore = threading.BoundedSemaphore(limit)
+            _PROCESS_SEMAPHORES[limit] = semaphore
+        return semaphore
 
 
 @dataclass(frozen=True)
@@ -142,17 +161,37 @@ def parse_tesseract_tsv(data: bytes) -> list[OcrLine]:
     return lines
 
 
-@dataclass(frozen=True)
+@dataclass
 class TesseractOcrProvider:
-    """Run installed Tesseract with a fixed TSV protocol and bounded timeout/output."""
+    """Run installed Tesseract with a fixed TSV protocol and bounded timeout/output.
 
-    languages: str = "eng"
+    Availability includes an inexpensive, time-bounded version and installed-language probe. The
+    application records the adapter and runtime versions separately from confidence/transcription
+    quality; neither version nor confidence is an accuracy claim.
+    """
+
+    languages: str = "eng+fas"
     executable: str = "tesseract"
     timeout_seconds: float = 30.0
     max_output_bytes: int = 4 * 1024 * 1024
+    max_concurrency: int = 2
 
     name: str = "tesseract"
-    version: str = "tesseract-cli-tsv-v1"
+    _runtime_version: str | None = field(default=None, init=False, repr=False)
+    _installed_languages: tuple[str, ...] = field(default=(), init=False, repr=False)
+    _diagnostic_reason: str | None = field(default=None, init=False, repr=False)
+
+    @property
+    def adapter_version(self) -> str:
+        return TESSERACT_ADAPTER_VERSION
+
+    @property
+    def version(self) -> str:
+        if self._runtime_version is None and self._diagnostic_reason is None:
+            self.diagnostics()
+        if self._runtime_version:
+            return f"{self.adapter_version}; {self._runtime_version}"
+        return self.adapter_version
 
     def __post_init__(self) -> None:
         parts = re.split(r"[+,]", self.languages) if isinstance(self.languages, str) else []
@@ -164,13 +203,15 @@ class TesseractOcrProvider:
             raise ValueError("languages must be a list of Tesseract language identifiers")
         # Tesseract separates multiple languages with '+'. Accept comma-separated operator config,
         # but convert it here rather than passing a separator its CLI does not define.
-        object.__setattr__(self, "languages", "+".join(parts))
+        self.languages = "+".join(parts)
         if not self.executable or "\x00" in self.executable:
             raise ValueError("executable must be a non-empty path")
         if not math.isfinite(self.timeout_seconds) or not 1 <= self.timeout_seconds <= 120:
             raise ValueError("timeout_seconds must be between 1 and 120")
         if not 1024 <= self.max_output_bytes <= MAX_TSV_BYTES:
             raise ValueError(f"max_output_bytes must be between 1 KiB and {MAX_TSV_BYTES} bytes")
+        if isinstance(self.max_concurrency, bool) or not isinstance(self.max_concurrency, int) or not 1 <= self.max_concurrency <= 8:
+            raise ValueError("max_concurrency must be an integer between 1 and 8")
 
     def _resolved_executable(self) -> str | None:
         resolved = shutil.which(self.executable)
@@ -181,20 +222,9 @@ class TesseractOcrProvider:
             return str(candidate.resolve())
         return None
 
-    def availability(self) -> tuple[bool, str | None]:
-        if self._resolved_executable() is None:
-            return False, "Tesseract executable was not found on the server PATH"
-        return True, None
-
-    def recognize(self, image_png: bytes) -> list[OcrLine]:
-        executable = self._resolved_executable()
-        if executable is None:
-            raise OcrUnavailable("Tesseract executable was not found on the server PATH")
-        if not image_png:
-            raise OcrUnavailable("rendered page image is empty")
-
+    def _child_environment(self) -> dict[str, str]:
         # Do not forward application credentials or arbitrary request-scoped environment variables to
-        # the OCR child process. Operators may set TESSDATA_PREFIX to point at installed language data.
+        # the OCR child process. Operators may set TESSDATA_PREFIX for installed language data.
         child_env = {
             "PATH": os.environ.get("PATH", ""),
             "OMP_THREAD_LIMIT": "1",
@@ -205,6 +235,208 @@ class TesseractOcrProvider:
             for key in ("SYSTEMROOT", "WINDIR", "TEMP", "TMP", "PATHEXT"):
                 if os.environ.get(key):
                     child_env[key] = os.environ[key]
+        return child_env
+
+    def _run_diagnostic(self, executable: str, argument: str) -> tuple[str | None, str | None]:
+        try:
+            process = subprocess.Popen(
+                [executable, argument],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                env=self._child_environment(),
+                bufsize=0,
+            )
+        except OSError:
+            return None, "Tesseract diagnostic probe could not be started"
+        assert process.stdout is not None
+        output = bytearray()
+        output_overflow = threading.Event()
+        reader_errors: list[Exception] = []
+
+        def read_bounded_output() -> None:
+            try:
+                while True:
+                    chunk = process.stdout.read(16 * 1024)
+                    if not chunk:
+                        return
+                    remaining = MAX_DIAGNOSTIC_OUTPUT_BYTES + 1 - len(output)
+                    if len(chunk) > remaining:
+                        output.extend(chunk[:remaining])
+                        output_overflow.set()
+                        with suppress(OSError):
+                            process.kill()
+                        return
+                    output.extend(chunk)
+            except (OSError, ValueError) as exc:
+                reader_errors.append(exc)
+
+        reader = threading.Thread(target=read_bounded_output, name="drillai-ocr-diagnostic", daemon=True)
+        reader.start()
+        timed_out = False
+        try:
+            process.wait(timeout=DIAGNOSTIC_TIMEOUT_SECONDS)
+        except subprocess.TimeoutExpired:
+            timed_out = True
+            with suppress(OSError):
+                process.kill()
+            process.wait()
+        finally:
+            if process.poll() is None:
+                with suppress(OSError):
+                    process.kill()
+                process.wait()
+            reader.join(timeout=1.0)
+            if reader.is_alive():
+                with suppress(OSError):
+                    process.stdout.close()
+                reader.join(timeout=1.0)
+            with suppress(OSError):
+                process.stdout.close()
+
+        if timed_out:
+            return None, "Tesseract diagnostic probe timed out"
+        if output_overflow.is_set() or len(output) > MAX_DIAGNOSTIC_OUTPUT_BYTES:
+            return None, "Tesseract diagnostic output exceeded the configured bound"
+        if reader.is_alive():
+            return None, "Tesseract diagnostic output reader did not stop"
+        if reader_errors:
+            return None, "Tesseract diagnostic output could not be read"
+        if process.returncode != 0:
+            return None, "Tesseract diagnostic command failed"
+        return bytes(output).decode("utf-8", errors="replace"), None
+
+    def diagnostics(self) -> dict[str, object]:
+        """Return a cached, bounded probe of the immutable deployed OCR runtime."""
+        key = (
+            self.executable,
+            self.languages,
+            self.timeout_seconds,
+            os.environ.get("PATH", ""),
+            os.environ.get("TESSDATA_PREFIX", ""),
+        )
+        with _TESSERACT_DIAGNOSTIC_CACHE_LOCK:
+            snapshot = _TESSERACT_DIAGNOSTIC_CACHE.get(key)
+            if snapshot is None:
+                snapshot = self._probe_diagnostics()
+                if len(_TESSERACT_DIAGNOSTIC_CACHE) >= 32:
+                    _TESSERACT_DIAGNOSTIC_CACHE.pop(next(iter(_TESSERACT_DIAGNOSTIC_CACHE)))
+                _TESSERACT_DIAGNOSTIC_CACHE[key] = {
+                    **snapshot,
+                    "configured_languages": list(snapshot["configured_languages"]),
+                    "available_languages": list(snapshot["available_languages"]),
+                    "missing_languages": list(snapshot["missing_languages"]),
+                }
+                snapshot = _TESSERACT_DIAGNOSTIC_CACHE[key]
+
+            runtime_version = snapshot.get("runtime_version")
+            self._runtime_version = runtime_version if isinstance(runtime_version, str) else None
+            self._installed_languages = tuple(snapshot.get("available_languages", []))
+            reason = snapshot.get("reason")
+            self._diagnostic_reason = reason if isinstance(reason, str) else None
+            return {
+                **snapshot,
+                "configured_languages": list(snapshot["configured_languages"]),
+                "available_languages": list(snapshot["available_languages"]),
+                "missing_languages": list(snapshot["missing_languages"]),
+            }
+
+    def _probe_diagnostics(self) -> dict[str, object]:
+        """Return bounded runtime facts without exposing executable paths or process output."""
+        configured = self.languages.split("+")
+        result: dict[str, object] = {
+            "available": False,
+            "runtime_version": None,
+            "configured_languages": configured,
+            "available_languages": [],
+            "missing_languages": configured,
+            "reason": None,
+        }
+        executable = self._resolved_executable()
+        if executable is None:
+            result["reason"] = "Tesseract executable was not found on the server PATH"
+            self._runtime_version = None
+            self._installed_languages = ()
+            self._diagnostic_reason = str(result["reason"])
+            return result
+
+        version_output, error = self._run_diagnostic(executable, "--version")
+        if error or not version_output:
+            result["reason"] = error or "Tesseract returned an empty version response"
+            self._runtime_version = None
+            self._installed_languages = ()
+            self._diagnostic_reason = str(result["reason"])
+            return result
+        raw_version_line = next(
+            (line.strip() for line in version_output.splitlines() if "tesseract" in line.casefold()),
+            None,
+        )
+        version_match = (
+            re.fullmatch(r"tesseract\s+([0-9][A-Za-z0-9._+-]{0,80})", raw_version_line, re.IGNORECASE)
+            if raw_version_line
+            else None
+        )
+        if not version_match:
+            result["reason"] = "Tesseract returned an unrecognised version response"
+            self._runtime_version = None
+            self._installed_languages = ()
+            self._diagnostic_reason = str(result["reason"])
+            return result
+        version_line = f"tesseract {version_match.group(1)}"
+
+        languages_output, error = self._run_diagnostic(executable, "--list-langs")
+        if error or languages_output is None:
+            result["runtime_version"] = version_line[:120]
+            result["reason"] = error or "Tesseract returned no language inventory"
+            self._runtime_version = version_line[:120]
+            self._installed_languages = ()
+            self._diagnostic_reason = str(result["reason"])
+            return result
+        installed = tuple(sorted({
+            line.strip()
+            for line in languages_output.splitlines()
+            if re.fullmatch(r"[A-Za-z0-9_-]{1,40}", line.strip())
+        }))
+        missing = sorted(set(configured) - set(installed))
+        self._runtime_version = version_line[:120]
+        self._installed_languages = installed
+        self._diagnostic_reason = (
+            "Tesseract is missing configured language data: " + ", ".join(missing) if missing else None
+        )
+        result.update(
+            {
+                "available": not missing,
+                "runtime_version": self._runtime_version,
+                "available_languages": list(installed),
+                "missing_languages": missing,
+                "reason": self._diagnostic_reason,
+            }
+        )
+        return result
+
+    def availability(self) -> tuple[bool, str | None]:
+        diagnostics = self.diagnostics()
+        return bool(diagnostics["available"]), diagnostics["reason"] if isinstance(diagnostics["reason"], str) else None
+
+    def recognize(self, image_png: bytes) -> list[OcrLine]:
+        executable = self._resolved_executable()
+        if executable is None:
+            raise OcrUnavailable("Tesseract executable was not found on the server PATH")
+        if not image_png:
+            raise OcrUnavailable("rendered page image is empty")
+
+        semaphore = _process_semaphore(self.max_concurrency)
+        if not semaphore.acquire(blocking=False):
+            raise OcrUnavailable(
+                f"OCR concurrency limit ({self.max_concurrency}) is reached; retry when capacity is available"
+            )
+        try:
+            return self._recognize_acquired(image_png, executable)
+        finally:
+            semaphore.release()
+
+    def _recognize_acquired(self, image_png: bytes, executable: str) -> list[OcrLine]:
+        child_env = self._child_environment()
         try:
             process = subprocess.Popen(
                 [executable, "stdin", "stdout", "--psm", "6", "-l", self.languages, "tsv"],

@@ -7,6 +7,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
+# Install the optional OCR renderer and local Tesseract runtime into the image. OCR remains disabled
+# by default; enabling it never triggers a runtime package or language-data download.
+RUN apt-get update && \
+    apt-get install --no-install-recommends -y tesseract-ocr tesseract-ocr-eng tesseract-ocr-fas && \
+    rm -rf /var/lib/apt/lists/*
+
 RUN groupadd --gid 1001 drillai && \
     useradd --uid 1001 --gid drillai --create-home --shell /bin/bash drillai
 
@@ -15,7 +21,7 @@ COPY alembic ./alembic
 COPY src ./src
 
 RUN pip install --upgrade pip && \
-    pip install . && \
+    pip install '.[ocr]' && \
     mkdir -p /var/lib/drillai/blobs && \
     chown -R drillai:drillai /app /var/lib/drillai
 

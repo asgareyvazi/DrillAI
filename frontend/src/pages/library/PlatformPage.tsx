@@ -24,6 +24,17 @@ export default function PlatformPage() {
   const providers = useQuery({ queryKey: ['providers'], queryFn: ({ signal }) => drillingApi.providers(signal) })
   const version = useQuery({ queryKey: ['version'], queryFn: ({ signal }) => drillingApi.version(signal) })
   const health = useQuery({ queryKey: ['health-ready'], queryFn: ({ signal }) => drillingApi.healthReady(signal) })
+  const readinessStatus = typeof health.data?.status === 'string' ? health.data.status : null
+  const readinessChecks = health.data?.checks && typeof health.data.checks === 'object'
+    ? health.data.checks as Record<string, unknown>
+    : null
+  const ocrCheck = readinessChecks?.ocr && typeof readinessChecks.ocr === 'object'
+    ? readinessChecks.ocr as Record<string, unknown>
+    : null
+  const ocrStatus = typeof ocrCheck?.status === 'string' ? ocrCheck.status : 'disabled'
+  const configuredOcrLanguages = Array.isArray(ocrCheck?.configured_languages)
+    ? ocrCheck.configured_languages.map(String).join(', ')
+    : null
 
   return (
     <div className="space-y-4">
@@ -86,9 +97,40 @@ export default function PlatformPage() {
               {(data) => <Json value={data} max={40} />}
             </Async>
             <div className="mt-2">
-              {health.data ? <Badge tone="ok">ready</Badge> : health.error ? <Badge tone="danger">unreachable</Badge> : <Badge tone="neutral">checking</Badge>}
+              {health.data ? (
+                <Badge tone={readinessStatus === 'ok' ? 'ok' : 'warning'}>
+                  {readinessStatus === 'ok' ? t('platform.deploymentReady') : t('platform.deploymentDegraded')}
+                </Badge>
+              ) : health.error ? (
+                <Badge tone="danger">{t('platform.deploymentUnreachable')}</Badge>
+              ) : (
+                <Badge tone="neutral">{t('common.loading')}</Badge>
+              )}
             </div>
             {health.error && <ErrorState error={health.error} />}
+            {ocrCheck && (
+              <div className="mt-3 space-y-2 rounded-md border border-graphite-200 p-3 text-xs dark:border-graphite-700">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-medium">{t('platform.ocrRuntime')}</span>
+                  <Badge tone={ocrStatus === 'ready' ? 'ok' : ocrStatus === 'blocked' ? 'warning' : 'neutral'}>
+                    {ocrStatus === 'ready'
+                      ? t('platform.ocrRuntimeReady')
+                      : ocrStatus === 'blocked'
+                        ? t('platform.ocrRuntimeBlocked')
+                        : t('platform.ocrRuntimeDisabled')}
+                  </Badge>
+                </div>
+                {configuredOcrLanguages && (
+                  <p className="text-graphite-600 dark:text-graphite-300">
+                    {t('platform.ocrConfiguredLanguages')}: <bdi dir="ltr">{configuredOcrLanguages}</bdi>
+                  </p>
+                )}
+                <p className="text-graphite-600 dark:text-graphite-300">{t('platform.ocrQualityNotEvaluated')}</p>
+                {typeof ocrCheck.reason === 'string' && (
+                  <p className="text-warning-700 dark:text-warning-300" role="status">{ocrCheck.reason}</p>
+                )}
+              </div>
+            )}
           </Card>
 
           <Card title={t('platform.providers')} dense>

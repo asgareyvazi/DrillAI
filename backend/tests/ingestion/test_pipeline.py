@@ -1138,6 +1138,7 @@ async def test_ocr_pipeline_persists_applied_state_and_provider_provenance(sessi
     class ContractProvider:
         name = "pipeline-contract-test"
         version = "synthetic-contract-v1"
+        languages = "eng+fas"
 
         def availability(self):
             return True, None
@@ -1169,6 +1170,7 @@ async def test_ocr_pipeline_persists_applied_state_and_provider_provenance(sessi
     assert outcome.document is not None
     assert outcome.document.ocr_required is False
     assert outcome.document.extraction_summary["ocr"]["ocr_applied_pages"] == [1]
+    assert outcome.document.extraction_summary["ocr"]["ocr_languages"] == "eng+fas"
     page = (
         await session.execute(select(DocumentPage).where(DocumentPage.document_id == outcome.document.id))
     ).scalar_one()
@@ -1176,6 +1178,8 @@ async def test_ocr_pipeline_persists_applied_state_and_provider_provenance(sessi
     assert page.layout["ocr"]["provider"] == "pipeline-contract-test"
     assert outcome.job.pipeline["ocr_enabled"] is True
     assert outcome.job.pipeline["ocr_provider"] == "pipeline-contract-test"
+    assert outcome.job.pipeline["ocr_provider_version"] == "synthetic-contract-v1"
+    assert outcome.job.pipeline["ocr_languages"] == "eng+fas"
     # The provider is synthetic test output. This verifies data flow, not recognition accuracy.
 
 

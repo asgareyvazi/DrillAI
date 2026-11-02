@@ -1175,6 +1175,7 @@ class PdfParser:
                 "ocr_enabled": provider is not None,
                 "ocr_provider": provider.name if provider is not None else None,
                 "ocr_provider_version": provider.version if provider is not None else None,
+                "ocr_languages": getattr(provider, "languages", None) if provider is not None else None,
                 "ocr_applied_pages": [page.page_number for page in pages if page.ocr_applied],
                 "ocr_required": bool(ocr_required_pages),
                 "ocr_required_pages": ocr_required_pages,

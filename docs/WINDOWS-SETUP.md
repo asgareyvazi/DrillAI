@@ -61,6 +61,16 @@ What `.\scripts\bootstrap.ps1` does automatically:
 - Runs `npm ci` in `frontend\`.
 - Invokes `node scripts/prepare-chromium.mjs` inside `frontend\`, which detects `win32` and automatically installs Playwright's native Windows Chromium binary if not already present.
 
+Native Windows OCR remains opt-in: install a compatible Tesseract executable and the `eng`/`fas` trained-data packs yourself, then set `DRILLAI_OCR_ENABLED=true` and `DRILLAI_OCR_LANGUAGES=eng+fas`. Check the same Windows environment/venv the API will use with:
+
+```powershell
+Push-Location backend
+.\.venv\Scripts\python.exe -m drillai.ingestion.ocr_runtime --require-runtime
+Pop-Location
+```
+
+The preflight validates the executable, selected language data, and PDFium import only. A passing check is not OCR-quality or engineering-acceptance evidence. The container image installs the runtime dependencies, but OCR remains disabled unless configured.
+
 ---
 
 ## 4. Environment Configuration & Database Initialization (PowerShell)

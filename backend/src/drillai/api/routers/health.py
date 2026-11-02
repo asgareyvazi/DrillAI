@@ -6,6 +6,7 @@ counts, whether an LLM provider is configured) instead of a hard-coded ``{"statu
 
 from __future__ import annotations
 
+import asyncio
 import time
 from typing import Annotated, Any
 
@@ -54,6 +55,16 @@ async def readiness(
     }
     checks["vector_backend"] = settings.vector_backend
     checks["blob_backend"] = settings.blob_backend
+    from drillai.ingestion.ocr_runtime import inspect_ocr_runtime
+
+    ocr = await asyncio.to_thread(
+        inspect_ocr_runtime,
+        settings,
+        probe_when_disabled=False,
+    )
+    checks["ocr"] = ocr
+    if settings.ocr_enabled and not ocr["required_ready"]:
+        healthy = False
     worker = getattr(request.app.state, "connector_worker", None)
     checks["connector_worker"] = {
         "in_process_enabled": settings.connector_worker_enabled,

@@ -326,6 +326,7 @@ async def upload_document(
             languages=settings.ocr_languages,
             executable=settings.ocr_executable,
             timeout_seconds=settings.ocr_timeout_seconds,
+            max_concurrency=settings.ocr_max_concurrency,
         )
         if settings.ocr_enabled
         else None
