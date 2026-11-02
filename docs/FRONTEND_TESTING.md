@@ -12,7 +12,7 @@ is confined to unit and component tests, where it isolates a boundary rather tha
 | Lint | `cd frontend && npm run lint` | no unused code, no `any` slipping in, React rules |
 | Build | `cd frontend && npm run build` | `tsc -b` plus a production Vite build |
 | Unit + component | `cd frontend && npm test` | 373 passed in 37 files: values, units, the API boundary, cancellation, the request-failure oracle, permissions, identity settings, the shared UI states, document-review guidance and direction, and the pages' contracts |
-| End-to-end | `cd frontend && npm run e2e` | 123 passed in 18 spec files: the real stack through a browser, in three deployments |
+| End-to-end | `cd frontend && npm run e2e` | 123 reviewed journeys in 18 spec files; inventory shape passed, real-browser execution not rerun for CP83 |
 | Backend | `cd backend && DRILLAI_TEST_POSTGRES=1 .venv/bin/python -m pytest` | 1,621 passed, 0 skipped in 114 files (embedded PostgreSQL enabled) |
 | Backend lint | `cd backend && .venv/bin/python -m ruff check .` | backend style and import hygiene |
 | Migrations | `cd backend && .venv/bin/python -m alembic upgrade head && .venv/bin/python -m alembic check` | no model/migration drift — against a **fresh** database |

@@ -1023,8 +1023,8 @@ def test_cp16_10_documentation_and_contract_consistency_guard():
         "The PostgreSQL-enabled and SQLite-only totals must describe the same collected inventory."
     )
 
-    assert "123 passed" in readme_text
+    assert "123 reviewed journeys" in readme_text
     assert "373 passed" in readme_text
-    assert "123 passed" in fe_testing_text
+    assert "123 reviewed journeys" in fe_testing_text
     assert "42" in fe_testing_text
 
