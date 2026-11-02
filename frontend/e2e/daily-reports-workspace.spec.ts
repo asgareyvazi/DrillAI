@@ -335,7 +335,7 @@ test.describe('daily-report lifecycle in a real browser', () => {
 
     await page.getByTestId('daily-report-create-submit').click()
     await expect(page.getByTestId('daily-report-editor')).toHaveCount(0)
-    await expect(page.getByText(`DDR-E2E-${tag}`, { exact: true })).toBeVisible()
+    await expect(page.getByTestId('daily-report-list').getByText(`DDR-E2E-${tag}`, { exact: true })).toBeVisible()
 
     const listed = await apiGet<{ items: DailyReportRecord[]; total: number }>(
       request,

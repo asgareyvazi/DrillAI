@@ -39,6 +39,26 @@
   "e2e": {
     "total": 123,
     "files": 18,
+    "spec_files": [
+      "a11y.spec.ts",
+      "checkpoint5.spec.ts",
+      "connectors-platform.spec.ts",
+      "context-deeplinks.spec.ts",
+      "daily-reports-workspace.spec.ts",
+      "documents-evidence.spec.ts",
+      "error-auth.spec.ts",
+      "error-faults.spec.ts",
+      "error-matrix.spec.ts",
+      "identity-permissions.spec.ts",
+      "live-operations.spec.ts",
+      "master-data.spec.ts",
+      "operations-workspace.spec.ts",
+      "rtl.spec.ts",
+      "run-events.spec.ts",
+      "run-monitor.spec.ts",
+      "well-cockpit.spec.ts",
+      "workflow-studio.spec.ts"
+    ],
     "projects": {
       "chromium": 116,
       "chromium-faults": 4,

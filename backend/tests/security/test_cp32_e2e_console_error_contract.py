@@ -245,11 +245,30 @@ def test_cp32_ci_reports_the_playwright_failure_message() -> None:
     linux_step = _step_text(jobs["certification"], "Run and verify real-browser E2E suite")
     windows_step = _step_text(jobs["windows-certification"], "Run and verify real-browser Playwright suite")
     verifier = _read(REPO_ROOT / "frontend" / "scripts" / "verify-e2e-run.mjs")
+    shape_verifier = _read(REPO_ROOT / "frontend" / "scripts" / "verify-e2e-shape.mjs")
+    playwright_config = _read(REPO_ROOT / "frontend" / "playwright.config.ts")
+    inventory = json.loads(_read(REPO_ROOT / "ci" / "test-inventory.json"))["e2e"]
 
+    assert len(inventory["spec_files"]) == inventory["files"], (
+        "the reviewed E2E inventory must enumerate every spec file, not only its total count"
+    )
     for name, step in (("linux", linux_step), ("windows", windows_step)):
         assert "verify-e2e-run.mjs" in step, (
             f"the {name} step must validate actual Playwright execution using the shared verifier"
         )
+        assert "e2e-results.json" in step, (
+            f"the {name} step must pass the actual Playwright JSON report to the verifier"
+        )
+    assert "outputFile: 'test-results/e2e-results.json'" in playwright_config, (
+        "CI must emit Playwright's structured execution report rather than infer project results "
+        "from platform-specific console glyphs"
+    )
+    assert "report.stats" in verifier and "test.results" in verifier and "expectedFiles" in verifier, (
+        "the E2E verifier must check structured outcomes and exact executed project/file records"
+    )
+    assert "expectedFiles" in shape_verifier, (
+        "the pre-run shape check must reject added, removed, or renamed E2E spec files"
+    )
     for diagnostic in ("Error", "Expected", "Received"):
         assert diagnostic in verifier, (
             f"a failed browser run must preserve {diagnostic} diagnostics in its CI annotation"

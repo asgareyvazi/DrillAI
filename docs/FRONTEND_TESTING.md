@@ -12,7 +12,7 @@ is confined to unit and component tests, where it isolates a boundary rather tha
 | Lint | `cd frontend && npm run lint` | no unused code, no `any` slipping in, React rules |
 | Build | `cd frontend && npm run build` | `tsc -b` plus a production Vite build |
 | Unit + component | `cd frontend && npm test` | 373 passed in 37 files: values, units, the API boundary, cancellation, the request-failure oracle, permissions, identity settings, the shared UI states, document-review guidance and direction, and the pages' contracts |
-| End-to-end | `cd frontend && npm run e2e` | 123 passed in a local Linux real-browser run (5.1m), across 18 files; exact-head cross-platform CI pending remediation |
+| End-to-end | `cd frontend && npm run e2e` | CI-mode Linux real-browser run: 123 passed in 4.9m; Playwright JSON verified 18 exact reviewed spec files, Chromium 116, faults 4, auth 3, with zero skips, flaky results, or retries. Exact-head cross-platform CI is pending. |
 | Backend | `cd backend && DRILLAI_TEST_POSTGRES=1 .venv/bin/python -m pytest` | 1,621 passed, 0 skipped in 114 files (embedded PostgreSQL enabled) |
 | Backend lint | `cd backend && .venv/bin/python -m ruff check .` | backend style and import hygiene |
 | Migrations | `cd backend && .venv/bin/python -m alembic upgrade head && .venv/bin/python -m alembic check` | no model/migration drift — against a **fresh** database |
@@ -119,9 +119,11 @@ cd frontend && npx playwright test e2e/well-cockpit.spec.ts --project=chromium
 Playwright starts six servers. The application code is identical in all three deployments; what
 differs is the deployment they are pointed at. A CI run that executes only `chromium` certifies a
 third of the suite, so all three projects run. `npm run e2e:verify-shape` checks the exact reviewed
-inventory before execution: **123 tests in 18 files** (`chromium=116`, `chromium-faults=4`,
-`chromium-auth=3`). CI then requires **123 passed** in each platform job; the inventory check itself
-is collection-only and is not reported as executed tests.
+spec-file set and counts before execution: **123 tests in 18 files** (`chromium=116`,
+`chromium-faults=4`, `chromium-auth=3`). The CI run emits Playwright's structured JSON report; the
+post-run verifier requires a zero process exit, a 123-passed CLI summary, zero skipped/flaky/unexpected
+results, exactly one passing zero-retry attempt per test, and the reviewed project distribution and
+exact spec-file set. The inventory check itself is collection-only and is not reported as executed tests.
 
 | Project | Deployment | What only it can prove |
 | --- | --- | --- |
@@ -216,13 +218,16 @@ from the seed, the journey fails rather than skipping quietly.
 
 ### CP83.1 publication-gate incident and remediation status
 
-The exact-head run [`41431413781`](https://github.com/asgareyvazi/DrillAI/actions/runs/41431413781) on `a61754dc0c0a23bb76b9ce6b2cbb580ec8d6844e` failed its wrappers, not the two underlying results:
+The original exact-head run [`41431413781`](https://github.com/asgareyvazi/DrillAI/actions/runs/41431413781) on `a61754dc0c0a23bb76b9ce6b2cbb580ec8d6844e` failed its wrappers, not the two underlying results:
 
-- Linux job `125230994278` completed the real Playwright run and reported **123 passed (5.3m)**, then failed because the wrapper still required 121. The run's collection check had already validated 123 tests in 18 files (Chromium 116, faults 4, auth 3).
-- Windows job `125230993794` ran pytest with exit code 0: **1,607 passed, 1 skipped, 13 deselected**. The skip was the exact POSIX-only OCR CLI fixture described above; all 13 deselections were PostgreSQL-marked tests. The PowerShell wrapper still expected 12 deselections, so the step failed and Windows stack, vendor-harness, E2E inventory and real Playwright steps were skipped.
-- Independently, the local Linux real-browser suite has now run and passed **123 tests in 5.1 minutes**; the execution verifier confirmed the runtime distribution (116/4/3 across 18 files). This is Linux-only local evidence, not Windows certification.
+- Linux job `125230994278` completed the real Playwright run and reported **123 passed (5.3m)**, then failed because the wrapper still required 121. Its collection check had validated 123 tests in 18 files (Chromium 116, faults 4, auth 3).
+- Windows job `125230993794` ran pytest with exit code 0: **1,607 passed, 1 skipped, 13 deselected**. The skip was the exact POSIX-only OCR CLI fixture described above; all 13 deselections were PostgreSQL-marked tests. The PowerShell wrapper still expected 12 deselections, so Windows stack, vendor-harness, E2E inventory and real Playwright steps did not run in that attempt.
 
-The remediation replaces drifting CI literals with `ci/test-inventory.json`, checks the exact PostgreSQL test node IDs and platform totals, distinguishes E2E collection from actual execution, and validates Playwright's exit code, summary, project distribution and spec-file count. The new exact-head Linux and native-Windows CI result is **pending**; the failed run above is not being described as green.
+The first correction at `8603207` fixed the stale totals and added shared inventory gates. Exact-head run [`41451881219`](https://github.com/asgareyvazi/DrillAI/actions/runs/41451881219) then passed every Linux gate, including the full actual browser suite. On native Windows, backend, lint, migration, stack, vendor-harness and pre-run E2E inventory passed; the browser command exited 0 and printed **123 passed**, but the wrapper failed because its console parser observed zero project/file records. Therefore that Windows attempt did not verify the runtime 116/4/3 distribution and is not CI-certified.
+
+A local CI-mode Linux real-browser rerun passed **123 tests in 4.9 minutes**. Playwright's JSON report showed `expected=123`, `unexpected=0`, `skipped=0`, `flaky=0`; the structured verifier confirmed all 18 reviewed spec files, project totals 116/4/3 and one passing attempt per test with zero retries. The run also exposed a strict-mode ambiguity in the daily-report list assertion; it was corrected by scoping the same visibility assertion to the report list, and the full browser suite passed afterward. This is local Linux evidence, not native-Windows certification.
+
+The current remediation keeps backend node IDs and platform totals in `ci/test-inventory.json`, adds the exact 18-spec filename set, distinguishes collection from execution, and validates Playwright's exit code, CLI summary, structured JSON outcomes, actual project/file distribution, and zero retries. The new exact-head Linux and native-Windows CI result is **pending**; neither failed run above is described as green.
 
 `.github/workflows/ci.yml` runs the same commands, in the same order, on pushes to `arena/**`, on
 pull requests targeting `arena/01a0dca0-drillai` or `main`, and on manual dispatch:
@@ -251,13 +256,14 @@ Windows verifier requires exactly 1,607 passes, one skip, and 13 deselections; i
 the deselections equal the reviewed PostgreSQL node-ID list. Any changed test identity or total must be
 reviewed in the manifest before CI can pass. Frontend unit tests reject skips.
 
-E2E inventory validation and execution are separate gates on both platforms. The inventory check
-collects the exact 116/4/3 distribution across 18 spec files; the following real-browser run must have
-exit code zero, report the manifest total as passed, and show the same project and file distribution in
-its executed test records. Playwright retries remain zero. Failure annotations preserve the relevant
-`Error`, `Expected`, and `Received` lines; full HTML/trace evidence uploads only after failure.
-This matters because some networks cannot reach GitHub's raw log object store: a green step's own
-conclusion and summary must still represent the checked property.
+E2E inventory validation and execution are separate gates on both platforms. The pre-run collection
+check requires the exact 116/4/3 project distribution and exact reviewed 18-spec filename set. The
+following real-browser run must have exit code zero and a 123-passed CLI summary; its structured JSON
+report must show 123 expected passes, zero unexpected/flaky/skipped results, exactly one successful
+zero-retry attempt per test, and the same exact project and filename inventory. Failure annotations
+preserve the relevant `Error`, `Expected`, and `Received` lines; full HTML/trace/JSON evidence uploads
+only after failure. This matters because some networks cannot reach GitHub's raw log object store: a
+green step's own conclusion and summary must still represent the checked property.
 
 Linux runs the full PostgreSQL-enabled backend suite and Docker Compose deployment gate. Windows runs
 the native SQLite backend suite with `-m "not postgres"` (the thirteen PostgreSQL-marked cases are not

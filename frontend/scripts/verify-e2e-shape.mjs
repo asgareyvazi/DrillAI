@@ -17,8 +17,18 @@ const runner = path.join(here, 'run-e2e.mjs')
 const manifestPath = path.join(repositoryRoot, 'ci', 'test-inventory.json')
 const { e2e: expected } = JSON.parse(readFileSync(manifestPath, 'utf8'))
 
-if (!expected || typeof expected.total !== 'number' || typeof expected.files !== 'number' || !expected.projects) {
+if (
+  !expected || typeof expected.total !== 'number' || typeof expected.files !== 'number' ||
+  !expected.projects || !Array.isArray(expected.spec_files)
+) {
   throw new Error(`E2E inventory manifest is incomplete: ${manifestPath}`)
+}
+if (
+  expected.spec_files.length !== expected.files ||
+  new Set(expected.spec_files).size !== expected.spec_files.length ||
+  expected.spec_files.some((file) => typeof file !== 'string' || !file.endsWith('.spec.ts'))
+) {
+  throw new Error('E2E inventory manifest must list each reviewed spec file exactly once')
 }
 const expectedTotal = Object.values(expected.projects).reduce((sum, count) => sum + count, 0)
 if (expectedTotal !== expected.total) {
@@ -41,9 +51,12 @@ if (result.status !== 0) {
 
 const plain = output.replace(/\u001b\[[0-9;]*[a-zA-Z]/g, '')
 const counts = new Map(Object.keys(expected.projects).map((project) => [project, 0]))
+const collectedFiles = new Set()
 for (const line of plain.split(/\r?\n/)) {
   const match = line.match(/^\s*\[([^\]]+)\]\s+›/)
   if (match?.[1] && counts.has(match[1])) counts.set(match[1], (counts.get(match[1]) ?? 0) + 1)
+  const fileMatch = line.match(/(?:^|\s)(\S+\.spec\.ts):\d+(?::\d+)?\s+›/)
+  if (fileMatch?.[1]) collectedFiles.add(fileMatch[1].replaceAll('\\', '/').split('/').at(-1))
 }
 
 const totalMatch = plain.match(/^Total:\s*(\d+)\s+tests\s+in\s+(\d+)\s+files\s*$/m)
@@ -58,6 +71,16 @@ if (total !== expected.total) {
 }
 if (files !== expected.files) {
   mismatches.push(`files: expected ${expected.files}, collected ${Number.isNaN(files) ? 'no total line' : files}`)
+}
+if (collectedFiles.size !== expected.files) {
+  mismatches.push(`spec files: expected ${expected.files} unique files, collected ${collectedFiles.size}`)
+}
+const expectedFiles = new Set(expected.spec_files)
+for (const file of expectedFiles) {
+  if (!collectedFiles.has(file)) mismatches.push(`reviewed spec file was not collected: ${file}`)
+}
+for (const file of collectedFiles) {
+  if (!expectedFiles.has(file)) mismatches.push(`unreviewed spec file was collected: ${file}`)
 }
 const actualSum = [...counts.values()].reduce((sum, count) => sum + count, 0)
 if (actualSum !== expected.total) mismatches.push(`project sum: expected ${expected.total}, collected ${actualSum}`)

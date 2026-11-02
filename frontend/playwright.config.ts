@@ -65,7 +65,9 @@ export default defineConfig({
   retries: 0,
   timeout: 90_000,
   expect: { timeout: 15_000 },
-  reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : [['list']],
+  reporter: process.env.CI
+    ? [['list'], ['html', { open: 'never' }], ['json', { outputFile: 'test-results/e2e-results.json' }]]
+    : [['list']],
   globalSetup: './e2e/global-setup.ts',
   use: {
     baseURL: WEB_URL,

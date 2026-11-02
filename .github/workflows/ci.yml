@@ -271,6 +271,7 @@ jobs:
         working-directory: frontend
         run: |
           set -o pipefail
+          rm -f test-results/e2e-results.json
           set +e
           npm run e2e 2>&1 | tee "$RUNNER_TEMP/e2e.log"
           pipeline_status=("${PIPESTATUS[@]}")
@@ -281,7 +282,7 @@ jobs:
             echo "::error::could not record the complete Playwright log (tee exit=$tee_exit)"
             exit 1
           fi
-          verdict="$(node scripts/verify-e2e-run.mjs "$RUNNER_TEMP/e2e.log" "$e2e_exit")"
+          verdict="$(node scripts/verify-e2e-run.mjs "$RUNNER_TEMP/e2e.log" "$e2e_exit" test-results/e2e-results.json)"
           echo "$verdict"
           {
             echo '### Real-browser E2E suite (main, faults and auth stacks)'
@@ -453,9 +454,11 @@ jobs:
         run: |
           $ErrorActionPreference = "Continue"
           $logFile = Join-Path $env:RUNNER_TEMP "win-e2e.log"
+          $reportFile = Join-Path $PWD "test-results/e2e-results.json"
+          if (Test-Path $reportFile) { Remove-Item -Force $reportFile }
           npm run e2e 2>&1 | Tee-Object -FilePath $logFile
           $e2eExit = $LASTEXITCODE
-          & node scripts/verify-e2e-run.mjs $logFile $e2eExit
+          & node scripts/verify-e2e-run.mjs $logFile $e2eExit $reportFile
           if ($LASTEXITCODE -ne 0) { throw "Real Playwright execution did not match the reviewed manifest" }
 
       - name: Upload Windows Playwright evidence on failure
