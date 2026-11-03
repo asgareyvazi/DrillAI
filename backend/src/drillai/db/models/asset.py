@@ -18,7 +18,7 @@ from __future__ import annotations
 import datetime as dt
 from decimal import Decimal
 
-from sqlalchemy import Boolean, Float, ForeignKey, Index, String, UniqueConstraint, text
+from sqlalchemy import Boolean, CheckConstraint, Float, ForeignKey, Index, String, UniqueConstraint, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from drillai.db.base import (
@@ -73,6 +73,8 @@ SECTION_KINDS = (
 TRAJECTORY_KINDS = ("plan", "design", "actual", "revised", "proposed", "interpolated", "anti_collision")
 SURVEY_SOURCES = ("plan", "mwd", "ems", "gyro", "north_seeking_gyro", "tie_in", "interpolated", "manual")
 DATUMS = ("rkb", "msl", "gl", "cf", "derrick_floor")
+TRAJECTORY_DATUM_PROVENANCE = ("unknown", "source_document", "engine_input", "legacy_unverified")
+TRAJECTORY_STATION_TIME_PROVENANCE = ("unknown", "source_record", "legacy_unverified")
 
 
 class Project(Base, IdMixin, TimestampMixin, OrgScopedMixin):
@@ -364,6 +366,12 @@ class Trajectory(Base, IdMixin, TimestampMixin, OrgScopedMixin):
 
     __tablename__ = "trajectories"
     id_prefix = "trj"
+    __table_args__ = (
+        CheckConstraint(
+            "datum_provenance IN ('unknown', 'source_document', 'engine_input', 'legacy_unverified')",
+            name="datum_provenance_valid",
+        ),
+    )
 
     wellbore_id: Mapped[str] = mapped_column(
         ForeignKey("wellbores.id", ondelete="CASCADE"), nullable=False, index=True
@@ -372,6 +380,13 @@ class Trajectory(Base, IdMixin, TimestampMixin, OrgScopedMixin):
     kind: Mapped[str] = mapped_column(String(40), default="plan", nullable=False, index=True)
     version: Mapped[int] = mapped_column(default=1, nullable=False)
     datum: Mapped[str] = mapped_column(String(24), default="unknown", nullable=False)
+    datum_provenance: Mapped[str] = mapped_column(
+        String(32),
+        default="unknown",
+        server_default=text("'unknown'"),
+        nullable=False,
+        comment="source of the vertical datum declaration; legacy values remain unverified",
+    )
     is_current: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
     created_by: Mapped[str | None] = mapped_column(String(64))
     engine_run_id: Mapped[str | None] = mapped_column(String(64))
@@ -402,6 +417,17 @@ class TrajectoryStation(Base, IdMixin, CreatedAtMixin, OrgScopedMixin):
 
     __tablename__ = "trajectory_stations"
     id_prefix = "sta"
+    __table_args__ = (
+        CheckConstraint(
+            "measured_at_provenance IN ('unknown', 'source_record', 'legacy_unverified')",
+            name="measured_at_provenance_valid",
+        ),
+        CheckConstraint(
+            "(measured_at IS NULL AND measured_at_provenance IN ('unknown', 'legacy_unverified')) OR "
+            "(measured_at IS NOT NULL AND measured_at_provenance = 'source_record')",
+            name="measured_at_provenance_consistent",
+        ),
+    )
 
     trajectory_id: Mapped[str] = mapped_column(
         ForeignKey("trajectories.id", ondelete="CASCADE"), nullable=False, index=True
@@ -427,6 +453,13 @@ class TrajectoryStation(Base, IdMixin, CreatedAtMixin, OrgScopedMixin):
     toolface_deg: Mapped[float | None] = mapped_column(Float)
     source: Mapped[str] = mapped_column(String(40), default="plan", nullable=False)
     measured_at: Mapped[dt.datetime | None] = mapped_column(UtcDateTime)
+    measured_at_provenance: Mapped[str] = mapped_column(
+        String(32),
+        default="unknown",
+        server_default=text("'unknown'"),
+        nullable=False,
+        comment="only source_record timestamps may be exposed as station measurement instants",
+    )
     magnetic_reference: Mapped[str | None] = mapped_column(String(40))
     grid_correction_deg: Mapped[float | None] = mapped_column(Float)
     quality_flags: Mapped[list] = mapped_column(JsonType, default=list, nullable=False)

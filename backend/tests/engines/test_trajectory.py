@@ -38,6 +38,7 @@ def test_build_and_hold_matches_analytical_ratio_factor(engines):
     )
     output = result.outputs
     assert output.datum == "unknown"
+    assert all(station.tvdss_si is None for station in output.stations)
     angle_rad = math.radians(BUILD_ANGLE_DEG)
     ratio_factor = 2.0 / angle_rad * math.tan(angle_rad / 2.0)
 
@@ -307,9 +308,35 @@ def test_turn_rate_wraps_shortest_azimuth_direction_at_north(engines):
     assert result.outputs.max_dls_deg_per_30m == pytest.approx(0.2)
 
 
-def test_true_vertical_depth_subsea_uses_kb_elevation(engines):
-    _, result = engines.execute("trajectory.minimum_curvature", {"stations": _build_and_hold_well(), "kb_elevation_si": 30.0})
+def test_true_vertical_depth_subsea_uses_kb_elevation_only_for_rkb_input(engines):
+    _, result = engines.execute(
+        "trajectory.minimum_curvature",
+        {"stations": _build_and_hold_well(), "datum": "rkb", "kb_elevation_si": 30.0},
+    )
     assert result.outputs.stations[-1].tvdss_si == pytest.approx(result.outputs.total_tvd_si - 30.0)
+
+
+def test_tvdss_is_not_inferred_for_unsupported_vertical_datums(engines):
+    for datum in ("unknown", "gl", "cf", "derrick_floor"):
+        _, result = engines.execute(
+            "trajectory.minimum_curvature",
+            {"stations": _build_and_hold_well(), "datum": datum, "kb_elevation_si": 30.0},
+        )
+        assert all(station.tvdss_si is None for station in result.outputs.stations)
+
+    _, rkb_without_kb = engines.execute(
+        "trajectory.minimum_curvature",
+        {"stations": _build_and_hold_well(), "datum": "rkb"},
+    )
+    assert all(station.tvdss_si is None for station in rkb_without_kb.outputs.stations)
+
+
+def test_msl_referenced_tvd_is_already_tvdss(engines):
+    _, result = engines.execute(
+        "trajectory.minimum_curvature",
+        {"stations": _build_and_hold_well(), "datum": "msl", "kb_elevation_si": 30.0},
+    )
+    assert result.outputs.stations[-1].tvdss_si == pytest.approx(result.outputs.total_tvd_si)
 
 
 def test_dls_is_constant_through_the_build(engines):
@@ -356,6 +383,13 @@ def test_duplicate_measured_depth_is_rejected(engines):
     stations = _build_and_hold_well()
     stations.append({"md_si": HOLD_MD_M, "inclination_deg": 1.0, "azimuth_deg": 0.0, "azimuth_reference": "grid", "azimuth_reference_id": "test-grid"})
     with pytest.raises(ValueError, match="duplicate"):
+        engines.execute("trajectory.minimum_curvature", {"stations": stations})
+
+
+def test_nonmonotonic_measured_depth_is_not_silently_reordered(engines):
+    stations = _build_and_hold_well()
+    stations[1], stations[2] = stations[2], stations[1]
+    with pytest.raises(ValueError, match="strictly increasing in input order"):
         engines.execute("trajectory.minimum_curvature", {"stations": stations})
 
 

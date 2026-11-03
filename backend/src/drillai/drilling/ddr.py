@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import contextlib
 import datetime as dt
+import itertools
 import math
 import re
 from dataclasses import dataclass, field
@@ -234,6 +235,24 @@ def _valid_nonnegative_number(value: Any) -> bool:
     return math.isfinite(numeric) and numeric >= 0.0
 
 
+def _same_finite_number(value: object, expected: object) -> bool:
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, (int, float))
+        or isinstance(expected, bool)
+        or not isinstance(expected, (int, float))
+    ):
+        return False
+    try:
+        numeric = float(value)
+        target = float(expected)
+    except (OverflowError, ValueError):
+        return False
+    return math.isfinite(numeric) and math.isfinite(target) and math.isclose(
+        numeric, target, rel_tol=0.0, abs_tol=1e-9
+    )
+
+
 def _first_valid_depth(*values: Any) -> float | None:
     """Choose the first finite non-negative MD source without treating zero as absent."""
     for value in values:
@@ -403,7 +422,7 @@ class DdrProcessor:
                         document_not_quarantined_condition(),
                         *extracted_record_scope_conditions(),
                     )
-                    .order_by(ExtractedRecord.page_number, ExtractedRecord.created_at)
+                    .order_by(ExtractedRecord.page_number, ExtractedRecord.created_at, ExtractedRecord.id)
                 )
             )
             .scalars()
@@ -1487,6 +1506,89 @@ class DdrProcessor:
                     {"aspect": "well_section.current_md", "state_kind": "actual", "id": section.id}
                 )
 
+    @staticmethod
+    def _trajectory_is_uncomputed_source_capture(
+        trajectory: Trajectory, stations: list[TrajectoryStation]
+    ) -> bool:
+        """Only append to an explicitly source-captured trajectory with no derived calculation state."""
+        validation = trajectory.validation if isinstance(trajectory.validation, dict) else {}
+        if (
+            trajectory.datum_provenance != "source_document"
+            or not trajectory.source_document_id
+            or trajectory.engine_run_id is not None
+            or validation.get("state") != "not_independently_validated"
+            or validation.get("is_valid") is not False
+            or trajectory.station_count != len(stations)
+            or not stations
+        ):
+            return False
+        computed_fields = (
+            "ns_si",
+            "ew_si",
+            "tvdss_si",
+            "dls_deg_per_30m",
+            "build_rate_deg_per_30m",
+            "turn_rate_deg_per_30m",
+            "closure_distance_si",
+            "closure_azimuth_deg",
+            "vertical_section_si",
+            "method",
+            "engine_version",
+        )
+        if any(getattr(station, field_name) is not None for station in stations for field_name in computed_fields):
+            return False
+
+        for station in stations:
+            raw_source = station.raw_source if isinstance(station.raw_source, dict) else {}
+            raw_payload = raw_source.get("payload")
+            if (
+                station.source != "report"
+                or not station.evidence_ref
+                or not isinstance(raw_payload, dict)
+                or raw_source.get("record_id") != station.evidence_ref
+                or raw_source.get("vertical_datum") != trajectory.datum
+                or raw_source.get("vertical_datum_provenance") != "source_document"
+                or raw_source.get("input_azimuth_reference") != trajectory.azimuth_reference
+                or raw_source.get("input_azimuth_reference_id") != trajectory.azimuth_reference_id
+                or station.input_azimuth_reference != trajectory.azimuth_reference
+                or station.input_azimuth_reference_id != trajectory.azimuth_reference_id
+                or station.input_azimuth_deg is None
+                or not _same_finite_number(station.input_azimuth_deg, station.azimuth_deg)
+                or station.grid_correction_deg is not None
+                or not _same_finite_number(raw_payload.get("md_si"), station.md_si)
+                or not _same_finite_number(raw_payload.get("inclination_deg"), station.inclination_deg)
+                or not _same_finite_number(raw_payload.get("azimuth_deg"), station.input_azimuth_deg)
+                or raw_payload.get("azimuth_reference") != trajectory.azimuth_reference
+                or raw_payload.get("azimuth_reference_id") != trajectory.azimuth_reference_id
+                or raw_payload.get("datum") != trajectory.datum
+                or raw_source.get("input_azimuth_deg") is None
+                or not _same_finite_number(raw_source.get("input_azimuth_deg"), station.input_azimuth_deg)
+                or raw_source.get("grid_correction_deg") is not None
+                or raw_source.get("measured_at_provenance") != station.measured_at_provenance
+            ):
+                return False
+            if station.measured_at_provenance == "source_record":
+                if station.measured_at is None:
+                    return False
+                if raw_source.get("source_measured_at") != ensure_utc(station.measured_at).isoformat():
+                    return False
+            elif station.measured_at_provenance == "unknown":
+                if station.measured_at is not None or raw_source.get("source_measured_at") is not None:
+                    return False
+            else:
+                return False
+
+        deepest = max(stations, key=lambda station: station.md_si)
+        if trajectory.total_md_si is None or not math.isclose(
+            trajectory.total_md_si, deepest.md_si, rel_tol=0.0, abs_tol=1e-9
+        ):
+            return False
+        if deepest.tvd_si is None:
+            return trajectory.total_tvd_si is None
+        return trajectory.total_tvd_si is not None and math.isclose(
+            trajectory.total_tvd_si, deepest.tvd_si, rel_tol=0.0, abs_tol=1e-9
+        )
+
     async def _promote_surveys(
         self,
         document: Document,
@@ -1526,8 +1628,8 @@ class DdrProcessor:
                     invalid.append(f"non-finite {field_name}")
                     continue
                 values[field_name] = numeric
-            if "md_si" in values and values["md_si"] <= 0:
-                invalid.append("md_si must be greater than zero")
+            if "md_si" in values and values["md_si"] < 0:
+                invalid.append("md_si must be non-negative")
             if "inclination_deg" in values and not 0 <= values["inclination_deg"] <= 180:
                 invalid.append("inclination_deg must be between 0 and 180 degrees")
             if "azimuth_deg" in values and not 0 <= values["azimuth_deg"] < 360:
@@ -1587,6 +1689,26 @@ class DdrProcessor:
             valid_rows.append((record, values))
 
         if not valid_rows:
+            return
+
+        batch_depths = [values["md_si"] for _record, values in valid_rows]
+        if len(set(batch_depths)) != len(batch_depths):
+            order_issue = "survey batch contains duplicate measured depths"
+        elif any(current < previous for previous, current in itertools.pairwise(batch_depths)):
+            order_issue = "survey batch measured depths are not strictly increasing in source order"
+        else:
+            order_issue = None
+        if order_issue is not None:
+            reason = f"{order_issue}; rows are queued for human review rather than reordered or merged"
+            for record, _values in valid_rows:
+                report.records_needing_review.append(record.id)
+                report.not_promoted.append(
+                    {"record_id": record.id, "record_type": "survey_station", "reason": reason}
+                )
+            report.warnings.append(
+                f"did not promote {len(valid_rows)} survey station(s) from document {document.id}; "
+                "measured-depth ordering or uniqueness must be reviewed against the source"
+            )
             return
 
         declared_frames = {
@@ -1681,17 +1803,41 @@ class DdrProcessor:
                 if station is None:
                     continue
                 trajectory = trajectory_by_id.get(station.trajectory_id)
+                raw_source = station.raw_source if isinstance(station.raw_source, dict) else {}
                 compatible = (
                     trajectory is not None
+                    and trajectory.datum_provenance == "source_document"
+                    and bool(trajectory.source_document_id)
                     and trajectory.azimuth_reference == batch_reference
                     and trajectory.azimuth_reference_id == batch_reference_id
                     and trajectory.datum == batch_datum
+                    and station.source == "report"
+                    and station.evidence_ref == record.id
+                    and raw_source.get("record_id") == record.id
+                    and raw_source.get("payload") == (record.payload or {})
+                    and raw_source.get("vertical_datum") == batch_datum
+                    and raw_source.get("vertical_datum_provenance") == "source_document"
+                    and raw_source.get("input_azimuth_reference") == batch_reference
+                    and raw_source.get("input_azimuth_reference_id") == batch_reference_id
+                    and station.md_si == values["md_si"]
+                    and station.inclination_deg == values["inclination_deg"]
                     and station.input_azimuth_deg is not None
-                    and math.isclose(station.input_azimuth_deg, values["azimuth_deg"], rel_tol=0.0, abs_tol=1e-9)
-                    and math.isclose(station.azimuth_deg, values["azimuth_deg"], rel_tol=0.0, abs_tol=1e-9)
+                    and _same_finite_number(station.input_azimuth_deg, values["azimuth_deg"])
+                    and _same_finite_number(station.azimuth_deg, values["azimuth_deg"])
                     and station.input_azimuth_reference == values["azimuth_reference"]
                     and station.input_azimuth_reference_id == values["azimuth_reference_id"]
                     and station.grid_correction_deg == values.get("grid_correction_deg")
+                    and raw_source.get("input_azimuth_deg") is not None
+                    and _same_finite_number(raw_source["input_azimuth_deg"], values["azimuth_deg"])
+                    and raw_source.get("grid_correction_deg") == values.get("grid_correction_deg")
+                    and station.measured_at_provenance
+                    == ("source_record" if record.observed_at is not None else "unknown")
+                    and station.measured_at
+                    == (ensure_utc(record.observed_at) if record.observed_at is not None else None)
+                    and raw_source.get("measured_at_provenance")
+                    == ("source_record" if record.observed_at is not None else "unknown")
+                    and raw_source.get("source_measured_at")
+                    == (ensure_utc(record.observed_at).isoformat() if record.observed_at is not None else None)
                 )
                 if not compatible:
                     incompatible_replays.append(record.id)
@@ -1733,44 +1879,85 @@ class DdrProcessor:
             for record, values in valid_rows
             if record.id not in existing_by_record
         ]
+        current_trajectory: Trajectory | None = None
         if new_rows:
             current_actual_trajectories = (
                 await self.session.execute(
-                    select(Trajectory).where(
+                    select(Trajectory)
+                    .where(
                         Trajectory.org_id == self.org_id,
                         Trajectory.wellbore_id == document.wellbore_id,
                         Trajectory.kind == "actual",
                         Trajectory.is_current.is_(True),
                     )
+                    .with_for_update()
                 )
             ).scalars().all()
-            incompatible_trajectories = [
-                trajectory
-                for trajectory in current_actual_trajectories
+            append_block_reason: str | None = None
+            current_stations: list[TrajectoryStation] = []
+            if len(current_actual_trajectories) > 1:
+                append_block_reason = (
+                    "multiple current actual trajectories exist for this wellbore; the target is ambiguous "
+                    "and the source rows are queued for human review"
+                )
+            elif current_actual_trajectories:
+                current_trajectory = current_actual_trajectories[0]
                 if (
-                    trajectory.azimuth_reference != batch_reference
-                    or trajectory.azimuth_reference_id != batch_reference_id
-                    or trajectory.datum != batch_datum
-                )
-            ]
-            if incompatible_trajectories:
-                reason = (
-                    "the declared azimuth reference type and frame identity or vertical datum do not match "
-                    "the existing current trajectory; compatibility is not inferred and stations are queued "
-                    "for human review"
-                )
+                    current_trajectory.azimuth_reference != batch_reference
+                    or current_trajectory.azimuth_reference_id != batch_reference_id
+                    or current_trajectory.datum != batch_datum
+                ):
+                    append_block_reason = (
+                        "the declared azimuth reference type and frame identity or vertical datum do not match "
+                        "the existing current trajectory; compatibility is not inferred and stations are queued "
+                        "for human review"
+                    )
+                else:
+                    current_stations = (
+                        await self.session.execute(
+                            select(TrajectoryStation)
+                            .where(
+                                TrajectoryStation.org_id == self.org_id,
+                                TrajectoryStation.trajectory_id == current_trajectory.id,
+                                TrajectoryStation.wellbore_id == document.wellbore_id,
+                            )
+                            .order_by(TrajectoryStation.station_index)
+                        )
+                    ).scalars().all()
+                    current_depths = [station.md_si for station in current_stations]
+                    if not self._trajectory_is_uncomputed_source_capture(current_trajectory, current_stations):
+                        append_block_reason = (
+                            "the current trajectory has unverified datum provenance or calculated/stale state; "
+                            "appending would invalidate its calculation, so the source rows are queued for human review"
+                        )
+                    elif (
+                        any(not math.isfinite(depth) for depth in current_depths)
+                        or len(set(current_depths)) != len(current_depths)
+                        or any(current < previous for previous, current in itertools.pairwise(current_depths))
+                    ):
+                        append_block_reason = (
+                            "the current trajectory has non-finite, duplicate, or nonmonotonic measured depths; "
+                            "the source rows are queued for human review"
+                        )
+                    elif current_depths and new_rows[0][1]["md_si"] <= current_depths[-1]:
+                        append_block_reason = (
+                            "new survey measured depths overlap or precede the current trajectory; append-only "
+                            "promotion would create duplicate or nonmonotonic stations, so the source rows are "
+                            "queued for human review"
+                        )
+            if append_block_reason is not None:
                 for record, _values in new_rows:
                     report.records_needing_review.append(record.id)
                     report.not_promoted.append(
                         {
                             "record_id": record.id,
                             "record_type": "survey_station",
-                            "reason": reason,
+                            "reason": append_block_reason,
                         }
                     )
                 report.warnings.append(
                     f"did not promote {len(new_rows)} survey station(s) from document {document.id}; "
-                    "the declared frame type/identity and vertical datum are incompatible with the current trajectory"
+                    "the current trajectory is not an append-safe, strictly ordered source capture"
                 )
                 return
 
@@ -1802,6 +1989,7 @@ class DdrProcessor:
                 name=f"Actual trajectory (from {document.title or document.id})",
                 source_document_id=document.id,
                 datum=batch_datum,
+                datum_provenance="source_document",
                 azimuth_reference=batch_reference,
                 azimuth_reference_id=batch_reference_id,
                 is_current=True,
@@ -1847,7 +2035,6 @@ class DdrProcessor:
             ).scalars().all()
         }
         next_index = max(existing_indexes, default=-1) + 1
-        report_date = self._report_date(document, records)
         for record, values in new_rows:
             while next_index in existing_indexes:
                 next_index += 1
@@ -1865,11 +2052,8 @@ class DdrProcessor:
                 grid_correction_deg=values.get("grid_correction_deg"),
                 tvd_si=values["tvd_si"],
                 source="report",
-                measured_at=(
-                    ensure_utc(record.observed_at or report_date)
-                    if record.observed_at is not None or report_date is not None
-                    else None
-                ),
+                measured_at=ensure_utc(record.observed_at) if record.observed_at is not None else None,
+                measured_at_provenance="source_record" if record.observed_at is not None else "unknown",
                 evidence_ref=record.id,
                 quality_flags=list(record.quality_flags or []),
                 raw_source={
@@ -1880,6 +2064,11 @@ class DdrProcessor:
                     "input_azimuth_deg": values["azimuth_deg"],
                     "grid_correction_deg": values.get("grid_correction_deg"),
                     "vertical_datum": values["datum"],
+                    "vertical_datum_provenance": "source_document",
+                    "measured_at_provenance": "source_record" if record.observed_at is not None else "unknown",
+                    "source_measured_at": ensure_utc(record.observed_at).isoformat()
+                    if record.observed_at is not None
+                    else None,
                 },
             )
             self.session.add(station)

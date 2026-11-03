@@ -272,6 +272,24 @@ def _parse_date(text: str) -> dt.datetime | None:
     return result[0] if result is not None else None
 
 
+def _parse_station_timestamp(value: str | None) -> dt.datetime | None:
+    """Parse only an explicit timezone-aware ISO instant from a station-specific source cell."""
+    if value is None:
+        return None
+    text = value.strip()
+    if not text:
+        return None
+    if text.endswith(("Z", "z")):
+        text = f"{text[:-1]}+00:00"
+    try:
+        parsed = dt.datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        return None
+    return parsed.astimezone(dt.UTC)
+
+
 def _depth_unit_factor(unit: str) -> float:
     lowered = unit.strip().casefold().rstrip(".")
     factors = {
@@ -1062,12 +1080,22 @@ class SurveyTableExtractor(Extractor):
 
     key = "survey_table"
     name = "Survey stations"
-    version = "1.2.0"
+    version = "1.3.0"
     doc_types = ("ddr", "drilling_document", "program", "survey_report", "other")
     priority = 50
 
     _HEADER_ALIASES = {
         "md": {"md", "measured depth", "md depth", "depth md", "measured depth md", "md measured depth"},
+        "measured_at": {
+            "measured at",
+            "measured at time",
+            "measured datetime",
+            "measurement timestamp",
+            "measurement time",
+            "station timestamp",
+            "survey timestamp",
+            "survey time",
+        },
         "inclination": {"inc", "incl", "inclination", "inclination angle"},
         "azimuth": {
             "azi",
@@ -1179,7 +1207,7 @@ class SurveyTableExtractor(Extractor):
 
                     raw_md = cell_value("md")
                     md = _to_float(raw_md) if raw_md else None
-                    if md is None or md <= 0:
+                    if md is None or md < 0:
                         continue
                     md_si = _depth_to_si(md, md_unit)
                     payload: dict[str, Any] = {"md_si": md_si}
@@ -1288,6 +1316,18 @@ class SurveyTableExtractor(Extractor):
                                 payload["grid_correction_deg"] = parsed_correction
                                 if locator := _cell_locator(region, row[column_of["grid_correction_deg"]]):
                                     field_locations["grid_correction_deg"] = locator
+                    raw_measured_at = cell_value("measured_at")
+                    station_measured_at = _parse_station_timestamp(raw_measured_at)
+                    if raw_measured_at is not None:
+                        if station_measured_at is None:
+                            quality_flags.append("invalid_or_timezone_missing_station_timestamp")
+                        measured_at_column = column_of.get("measured_at")
+                        if (
+                            measured_at_column is not None
+                            and measured_at_column < len(row)
+                            and (locator := _cell_locator(region, row[measured_at_column]))
+                        ):
+                            field_locations["observed_at"] = locator
                     yield ExtractedRecordDraft(
                         record_type="survey_station",
                         payload=payload,
@@ -1296,6 +1336,7 @@ class SurveyTableExtractor(Extractor):
                         confidence=0.65,
                         method="table_row",
                         method_version=self.version,
+                        observed_at=station_measured_at,
                         depth_md_si=md_si,
                         excerpt=" | ".join(values)[:300],
                         unit_context={

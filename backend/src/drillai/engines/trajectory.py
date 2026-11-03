@@ -16,6 +16,7 @@ of being silently smoothed away.
 from __future__ import annotations
 
 import datetime as dt
+import itertools
 import math
 from typing import Literal
 
@@ -379,7 +380,12 @@ class TrajectoryEngineOutput(BaseModel):
 
 def minimum_curvature(inputs: TrajectoryEngineInput) -> EngineResult:
     """Compute the trajectory using the minimum-curvature method."""
-    stations = sorted(inputs.stations, key=lambda station: station.md_si)
+    stations = inputs.stations
+    measured_depths = [station.md_si for station in stations]
+    if len(set(measured_depths)) != len(measured_depths):
+        raise ValueError("duplicate measured depths in survey")
+    if any(current < previous for previous, current in itertools.pairwise(measured_depths)):
+        raise ValueError("measured depth must be strictly increasing in input order")
     target_reference, target_reference_id, corrected_azimuths = _resolve_azimuth_frame(
         stations,
         inputs.target_azimuth_reference,
@@ -388,13 +394,18 @@ def minimum_curvature(inputs: TrajectoryEngineInput) -> EngineResult:
     )
     warnings: list[str] = []
     violations: list[ConstraintViolation] = []
+    if inputs.datum == "unknown":
+        warnings.append("TVDSS was not calculated because the vertical datum is unknown")
+    elif inputs.datum == "rkb" and inputs.kb_elevation_si is None:
+        warnings.append("TVDSS was not calculated because an RKB-referenced TVD requires KB elevation above MSL")
+    elif inputs.datum not in {"rkb", "msl"}:
+        warnings.append(
+            f"TVDSS was not calculated because no MSL conversion is defined for the {inputs.datum} datum"
+        )
     if target_reference == "magnetic":
         warnings.append(
             "trajectory coordinates are referenced to magnetic north; they have not been converted to grid or true north"
         )
-
-    if len({station.md_si for station in stations}) != len(stations):
-        raise ValueError("duplicate measured depths in survey")
 
     results: list[SurveyStationResult] = []
     tie_in = inputs.tie_in or TieInPoint()
@@ -419,7 +430,7 @@ def minimum_curvature(inputs: TrajectoryEngineInput) -> EngineResult:
         tvd_si=tvd,
         ns_si=ns,
         ew_si=ew,
-        tvdss_si=_tvdss(tvd, inputs.kb_elevation_si),
+        tvdss_si=_tvdss(tvd, inputs.datum, inputs.kb_elevation_si),
         closure_distance_si=math.hypot(ns, ew),
         closure_azimuth_deg=_azimuth_deg(ns, ew),
         vertical_section_si=_vertical_section(ns, ew, inputs.vertical_section_azimuth_deg),
@@ -519,7 +530,7 @@ def minimum_curvature(inputs: TrajectoryEngineInput) -> EngineResult:
                 tvd_si=tvd,
                 ns_si=ns,
                 ew_si=ew,
-                tvdss_si=_tvdss(tvd, inputs.kb_elevation_si),
+                tvdss_si=_tvdss(tvd, inputs.datum, inputs.kb_elevation_si),
                 dls_deg_per_30m=dls,
                 build_rate_deg_per_30m=build_rate,
                 turn_rate_deg_per_30m=turn_rate,
@@ -589,10 +600,14 @@ def _average_dls(results: list[SurveyStationResult]) -> float:
     return weighted / total_length
 
 
-def _tvdss(tvd: float, kb_elevation_si: float | None) -> float | None:
-    if kb_elevation_si is None:
-        return None
-    return tvd - kb_elevation_si
+def _tvdss(tvd: float, datum: str, kb_elevation_si: float | None) -> float | None:
+    """Return TVDSS only when the input datum has an explicit, compatible MSL conversion."""
+    if datum == "msl":
+        return tvd
+    if datum == "rkb" and kb_elevation_si is not None:
+        # TVD is positive downward from RKB; KB elevation is positive upward from MSL.
+        return tvd - kb_elevation_si
+    return None
 
 
 def _azimuth_deg(ns: float, ew: float) -> float:

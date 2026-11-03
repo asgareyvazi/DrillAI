@@ -1058,6 +1058,48 @@ async def test_survey_retry_reuses_the_existing_station_and_evidence_link(fabric
     assert stations[0].azimuth_deg == pytest.approx(180.0)
 
 
+async def test_report_period_is_not_promoted_as_a_survey_station_measurement_time(fabric: Fabric) -> None:
+    document = await _upload_report(
+        fabric,
+        payload=(
+            b"MD (m),Inclination (deg),Grid Azimuth (deg),Azimuth Reference ID,Vertical Datum,Station Timestamp\n"
+            b"500,12,180,EPSG:32631,RKB,2026-03-15T12:00:00+02:00\n"
+            b"600,13,181,EPSG:32631,RKB,\n"
+        ),
+        filename="survey-time-provenance.csv",
+        content_type="text/csv",
+        doc_type="ddr",
+        period_start="2026-03-10T00:00:00+00:00",
+    )
+    report = await _process(fabric, document["id"])
+
+    async with fabric.session() as session:
+        records = (
+            await session.execute(
+                select(ExtractedRecord)
+                .where(
+                    ExtractedRecord.document_id == document["id"],
+                    ExtractedRecord.record_type == "survey_station",
+                )
+                .order_by(ExtractedRecord.depth_md_si)
+            )
+        ).scalars().all()
+        stations = (
+            await session.execute(
+                select(TrajectoryStation)
+                .where(TrajectoryStation.evidence_ref.in_([record.id for record in records]))
+                .order_by(TrajectoryStation.md_si)
+            )
+        ).scalars().all()
+
+    expected_station_time = dt.datetime(2026, 3, 15, 10, tzinfo=dt.UTC)
+    assert report["counts"]["trajectory_stations"] == 2
+    assert [record.observed_at for record in records] == [expected_station_time, None]
+    assert [station.measured_at for station in stations] == [expected_station_time, None]
+    assert [station.measured_at_provenance for station in stations] == ["source_record", "unknown"]
+    assert all(station.measured_at != dt.datetime(2026, 3, 10, tzinfo=dt.UTC) for station in stations)
+
+
 async def test_survey_from_new_document_is_held_when_frame_identity_or_datum_differs(
     fabric: Fabric,
 ) -> None:
@@ -1107,7 +1149,7 @@ async def test_survey_from_new_document_is_held_when_frame_identity_or_datum_dif
         and "do not match the existing current trajectory" in row.get("reason", "")
         for row in second["not_promoted"]
     )
-    assert any("incompatible with the current trajectory" in warning for warning in second["warnings"])
+    assert any("not an append-safe" in warning for warning in second["warnings"])
 
     retry = await _process(fabric, second_document["id"])
     assert retry["counts"]["trajectory_stations"] == 0
@@ -1144,6 +1186,91 @@ async def test_survey_from_new_document_is_held_when_frame_identity_or_datum_dif
     assert len(stations) == 1 and stations[0].md_si == pytest.approx(500.0)
     assert len(records) == 2
     assert stations[0].evidence_ref == next(record.id for record in records if record.document_id == first_document["id"])
+
+
+async def test_survey_append_refuses_a_calculated_or_stale_current_trajectory(fabric: Fabric) -> None:
+    common_header = (
+        b"MD (m),Inclination (deg),Grid Azimuth (deg),Azimuth Reference ID,Vertical Datum\n"
+    )
+    first_document = await _upload_report(
+        fabric,
+        payload=common_header + b"500,12,180,EPSG:32631,RKB\n",
+        filename="survey-calculated-base.csv",
+    )
+    second_document = await _upload_report(
+        fabric,
+        payload=common_header + b"600,13,181,EPSG:32631,RKB\n",
+        filename="survey-calculated-append.csv",
+    )
+    first = await _process(fabric, first_document["id"])
+    assert first["counts"]["trajectory_stations"] == 1
+
+    async with fabric.session() as session:
+        trajectory = (
+            await session.execute(
+                select(Trajectory).where(
+                    Trajectory.org_id == fabric.org_id(fabric.alpha),
+                    Trajectory.wellbore_id == fabric.alpha.wellbore_id,
+                    Trajectory.kind == "actual",
+                    Trajectory.is_current.is_(True),
+                )
+            )
+        ).scalar_one()
+        station = (
+            await session.execute(
+                select(TrajectoryStation).where(TrajectoryStation.trajectory_id == trajectory.id)
+            )
+        ).scalar_one()
+        station.method = "minimum_curvature"
+        station.engine_version = "review-fixture"
+        station.ns_si = 0.0
+        await session.commit()
+
+    second = await _process(fabric, second_document["id"])
+    assert second["counts"]["trajectory_stations"] == 0
+    assert len(second["records_needing_review"]) == 1
+    assert "calculated/stale state" in second["not_promoted"][0]["reason"]
+    async with fabric.session() as session:
+        stations = (
+            await session.execute(select(TrajectoryStation).where(TrajectoryStation.wellbore_id == fabric.alpha.wellbore_id))
+        ).scalars().all()
+    assert len(stations) == 1
+
+
+async def test_legacy_datum_provenance_prevents_station_retry_reuse(fabric: Fabric) -> None:
+    document = await _upload_report(
+        fabric,
+        payload=(
+            b"MD (m),Inclination (deg),Grid Azimuth (deg),Azimuth Reference ID,Vertical Datum\n"
+            b"500,12,180,EPSG:32631,RKB\n"
+        ),
+        filename="survey-legacy-replay.csv",
+    )
+    first = await _process(fabric, document["id"])
+    assert first["counts"]["trajectory_stations"] == 1
+    async with fabric.session() as session:
+        trajectory = (
+            await session.execute(
+                select(Trajectory).where(
+                    Trajectory.org_id == fabric.org_id(fabric.alpha),
+                    Trajectory.wellbore_id == fabric.alpha.wellbore_id,
+                    Trajectory.kind == "actual",
+                    Trajectory.is_current.is_(True),
+                )
+            )
+        ).scalar_one()
+        trajectory.datum_provenance = "legacy_unverified"
+        await session.commit()
+
+    retry = await _process(fabric, document["id"])
+    assert retry["counts"]["trajectory_stations"] == 0
+    assert len(retry["records_needing_review"]) == 1
+    assert "does not preserve the current source frame" in retry["not_promoted"][0]["reason"]
+    async with fabric.session() as session:
+        stations = (
+            await session.execute(select(TrajectoryStation).where(TrajectoryStation.wellbore_id == fabric.alpha.wellbore_id))
+        ).scalars().all()
+    assert len(stations) == 1
 
 
 async def test_survey_from_new_document_appends_only_when_exact_frame_and_datum_match(fabric: Fabric) -> None:

@@ -568,6 +568,7 @@ class TrajectoryProvider(SectionProvider):
                 data={
                     "kind": trajectory.kind,
                     "datum": trajectory.datum,
+                    "datum_provenance": trajectory.datum_provenance,
                     "azimuth_reference": trajectory.azimuth_reference,
                     "azimuth_reference_id": trajectory.azimuth_reference_id,
                     "version": trajectory.version,
@@ -597,11 +598,13 @@ class TrajectoryProvider(SectionProvider):
             station_stmt = station_stmt.where(TrajectoryStation.md_si <= scope.depth_to_si)
         if scope.period_from is not None:
             station_stmt = station_stmt.where(
+                TrajectoryStation.measured_at_provenance == "source_record",
                 TrajectoryStation.measured_at.is_not(None),
                 TrajectoryStation.measured_at >= scope.period_from,
             )
         if scope.period_to is not None:
             station_stmt = station_stmt.where(
+                TrajectoryStation.measured_at_provenance == "source_record",
                 TrajectoryStation.measured_at.is_not(None),
                 TrajectoryStation.measured_at <= scope.period_to,
             )
@@ -633,13 +636,16 @@ class TrajectoryProvider(SectionProvider):
                         "ew_si": station.ew_si,
                         "dls_deg_per_30m": station.dls_deg_per_30m,
                         "source": station.source,
+                        "measured_at_provenance": station.measured_at_provenance,
                         "method": station.method,
                         "engine_version": station.engine_version,
                     },
                     source_kind="database",
                     source_ids=[station.id],
                     cites=[station.evidence_ref] if station.evidence_ref else [],
-                    observed_at=station.measured_at,
+                    observed_at=(
+                        station.measured_at if station.measured_at_provenance == "source_record" else None
+                    ),
                     units={
                         "md_si": "m",
                         "tvd_si": "m",
@@ -1448,11 +1454,13 @@ def _evidence_scope_condition(scope):
         station_stmt = station_stmt.where(TrajectoryStation.md_si <= scope.depth_to_si)
     if scope.period_from is not None:
         station_stmt = station_stmt.where(
+            TrajectoryStation.measured_at_provenance == "source_record",
             TrajectoryStation.measured_at.is_not(None),
             TrajectoryStation.measured_at >= scope.period_from,
         )
     if scope.period_to is not None:
         station_stmt = station_stmt.where(
+            TrajectoryStation.measured_at_provenance == "source_record",
             TrajectoryStation.measured_at.is_not(None),
             TrajectoryStation.measured_at <= scope.period_to,
         )

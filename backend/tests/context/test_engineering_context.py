@@ -442,6 +442,7 @@ async def test_event_and_station_evidence_prove_scope_time_depth_and_document_co
         azimuth_deg=180.0,
         source="survey",
         measured_at=dt.datetime(2026, 2, 5, 12, tzinfo=dt.UTC),
+        measured_at_provenance="source_record",
     )
     other_station = TrajectoryStation(
         org_id=well_context["org"].id,
@@ -453,6 +454,7 @@ async def test_event_and_station_evidence_prove_scope_time_depth_and_document_co
         azimuth_deg=90.0,
         source="survey",
         measured_at=dt.datetime(2026, 1, 5, 12, tzinfo=dt.UTC),
+        measured_at_provenance="source_record",
     )
     target_event = Event(
         org_id=well_context["org"].id,
@@ -689,6 +691,7 @@ async def test_one_trajectory_can_use_trusted_stations_from_multiple_documents(s
         azimuth_deg=90.0,
         source="report",
         measured_at=source_record.observed_at,
+        measured_at_provenance="source_record",
         evidence_ref=source_record.id,
     )
     other_station = TrajectoryStation(
@@ -701,6 +704,7 @@ async def test_one_trajectory_can_use_trusted_stations_from_multiple_documents(s
         azimuth_deg=90.0,
         source="report",
         measured_at=other_record.observed_at,
+        measured_at_provenance="source_record",
         evidence_ref=other_record.id,
     )
     session.add_all([source_station, other_station])
@@ -1077,6 +1081,7 @@ async def test_trajectory_period_filters_observation_times_not_creation_or_summa
                 inclination_deg=1.0,
                 azimuth_deg=10.0,
                 measured_at=dt.datetime(2026, 2, 10, tzinfo=dt.UTC),
+                measured_at_provenance="source_record",
             ),
             TrajectoryStation(
                 org_id=well_context["org"].id,
@@ -1087,6 +1092,7 @@ async def test_trajectory_period_filters_observation_times_not_creation_or_summa
                 inclination_deg=2.0,
                 azimuth_deg=20.0,
                 measured_at=dt.datetime(2026, 1, 10, tzinfo=dt.UTC),
+                measured_at_provenance="source_record",
             ),
             TrajectoryStation(
                 org_id=well_context["org"].id,

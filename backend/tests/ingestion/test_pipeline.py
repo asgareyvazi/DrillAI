@@ -483,6 +483,26 @@ def test_survey_converts_declared_depth_and_angle_units_and_keeps_raw_unit_conte
     assert station.field_locations["azimuth_deg"]["column"] == 3
 
 
+def test_survey_timestamp_requires_a_station_specific_timezone_aware_instant():
+    from drillai.ingestion.extractors import extract
+
+    parsed = parse_bytes(
+        b"MD (m),Inclination (deg),Grid Azimuth (deg),Azimuth Reference ID,Vertical Datum,Station Timestamp\n"
+        b"100,10,30,EPSG:32631,RKB,2026-03-15T12:00:00+02:00\n"
+        b"200,11,31,EPSG:32631,RKB,2026-03-16T12:00:00\n",
+        filename="survey-station-times.csv",
+    )
+    drafts, warnings = extract(parsed, doc_type="survey_report")
+    stations = [draft for draft in drafts if draft.record_type == "survey_station"]
+
+    assert warnings == []
+    assert len(stations) == 2
+    assert stations[0].observed_at == dt.datetime(2026, 3, 15, 10, tzinfo=dt.UTC)
+    assert stations[0].field_locations["observed_at"]["column"] == 6
+    assert stations[1].observed_at is None
+    assert "invalid_or_timezone_missing_station_timestamp" in stations[1].quality_flags
+
+
 def test_survey_preserves_explicit_azimuth_reference_type_and_frame_identity():
     from drillai.ingestion.extractors import extract
 
@@ -981,8 +1001,8 @@ async def test_csv_survey_rows_become_records_with_depths(session, context):
     records = (
         await session.execute(select(ExtractedRecord).where(ExtractedRecord.record_type == "survey_station"))
     ).scalars().all()
-    assert [record.depth_md_si for record in records] == [500.0, 1000.0]
-    assert records[0].payload["inclination_deg"] == pytest.approx(1.5)
+    assert [record.depth_md_si for record in records] == [0.0, 500.0, 1000.0]
+    assert records[1].payload["inclination_deg"] == pytest.approx(1.5)
     assert outcome.stats["records"] == len(outcome.record_ids)
 
     assert outcome.document is not None
@@ -990,7 +1010,7 @@ async def test_csv_survey_rows_become_records_with_depths(session, context):
         await session.execute(select(DocumentChunk).where(DocumentChunk.document_id == outcome.document.id))
     ).scalars().all()
     assert chunks
-    assert all(chunk.depth_from_si == pytest.approx(500.0) for chunk in chunks)
+    assert all(chunk.depth_from_si == pytest.approx(0.0) for chunk in chunks)
     assert all(chunk.depth_to_si == pytest.approx(1000.0) for chunk in chunks)
 
 
@@ -1126,7 +1146,10 @@ async def test_csv_cell_locators_survive_extraction_and_evidence_persistence(ses
     )
     record = (
         await session.execute(
-            select(ExtractedRecord).where(ExtractedRecord.record_type == "survey_station")
+            select(ExtractedRecord).where(
+                ExtractedRecord.record_type == "survey_station",
+                ExtractedRecord.depth_md_si == 500.0,
+            )
         )
     ).scalars().one()
     link = (
@@ -1155,7 +1178,7 @@ async def test_docx_program_table_is_ingested(session, context):
     records = (
         await session.execute(select(ExtractedRecord).where(ExtractedRecord.record_type == "survey_station"))
     ).scalars().all()
-    assert {record.payload["md_si"] for record in records} == {500.0}
+    assert {record.payload["md_si"] for record in records} == {0.0, 500.0}
 
     header = (
         await session.execute(select(ExtractedRecord).where(ExtractedRecord.record_type == "report_header"))

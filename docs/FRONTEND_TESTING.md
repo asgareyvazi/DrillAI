@@ -12,8 +12,8 @@ is confined to unit and component tests, where it isolates a boundary rather tha
 | Lint | `cd frontend && npm run lint` | no unused code, no `any` slipping in, React rules |
 | Build | `cd frontend && npm run build` | `tsc -b` plus a production Vite build |
 | Unit + component | `cd frontend && npm test` | 373 passed in 37 files: values, units, the API boundary, cancellation, the request-failure oracle, permissions, identity settings, the shared UI states, document-review guidance and direction, and the pages' contracts |
-| End-to-end | `cd frontend && npm run e2e` | CI-mode Linux real-browser run: 123 passed in 4.9m; Playwright JSON verified 18 exact reviewed spec files, Chromium 116, faults 4, auth 3, with zero skips, flaky results, or retries. Exact-head cross-platform CI is pending. |
-| Backend | `cd backend && DRILLAI_TEST_POSTGRES=1 .venv/bin/python -m pytest` | 1,621 passed, 0 skipped in 114 files (embedded PostgreSQL enabled) |
+| End-to-end | `cd frontend && npm run e2e` | CI-mode Linux real-browser run: 123 passed in 4.9m; Playwright JSON verified 18 exact reviewed spec files, Chromium 116, faults 4, auth 3, with zero skips, flaky results, or retries. Cross-platform run 41457013404 verified the CP83.1 SHA; CP83.2/final-SHA CI is pending. |
+| Backend | `cd backend && DRILLAI_TEST_POSTGRES=1 .venv/bin/python -m pytest` | CP83.2 complete run: 1,629 passed, 0 skipped in 115 files (embedded PostgreSQL enabled; one benign XDG runtime warning). Default SQLite run: 1,616 passed, 13 PostgreSQL-marked skips. |
 | Backend lint | `cd backend && .venv/bin/python -m ruff check .` | backend style and import hygiene |
 | Migrations | `cd backend && .venv/bin/python -m alembic upgrade head && .venv/bin/python -m alembic check` | no model/migration drift — against a **fresh** database |
 | Supply chain + secrets | `backend/.venv/bin/python scripts/verify_supply_chain_and_secrets.py` | full-SHA Actions pins, tracked/untracked/eligible ignored text scan, `pip-audit`, full frontend `npm audit` at moderate, and production audit at high |
@@ -56,9 +56,7 @@ PostgreSQL flag is set:
 cd backend && DRILLAI_TEST_POSTGRES=1 .venv/bin/python -m pytest
 ```
 
-The completed enabled-PostgreSQL run reports **1,621 passed, 0 skipped** across 114 test files. With the
-PostgreSQL flag unset, the same collected inventory reports **1,608 passed, 13 skipped**; all 13 cases
-are PostgreSQL-marked and are not represented as passes. CI runs the enabled suite on Linux (the `pgserver`
+The current CP83.2 enabled-PostgreSQL run reports **1,629 passed, 0 skipped** across 115 test files (one benign `XDG_RUNTIME_DIR` warning). With the PostgreSQL flag unset, the same inventory reports **1,616 passed, 13 skipped**; all 13 cases are PostgreSQL-marked and are not represented as passes. CI runs the enabled suite on Linux (the `pgserver`
 dev dependency is in `backend/pyproject.toml`); the Windows job uses `-m "not postgres"` to deselect
 those 13 integration cases. Windows reports one expected skip for the POSIX-only Tesseract CLI subprocess fixture; `-rs` prints its reason and the Windows gate accepts exactly that single skip, no additional skips.
 
@@ -227,7 +225,7 @@ The first correction at `8603207` fixed the stale totals and added shared invent
 
 A local CI-mode Linux real-browser rerun passed **123 tests in 4.9 minutes**. Playwright's JSON report showed `expected=123`, `unexpected=0`, `skipped=0`, `flaky=0`; the structured verifier confirmed all 18 reviewed spec files, project totals 116/4/3 and one passing attempt per test with zero retries. The run also exposed a strict-mode ambiguity in the daily-report list assertion; it was corrected by scoping the same visibility assertion to the report list, and the full browser suite passed afterward. This is local Linux evidence, not native-Windows certification.
 
-The current remediation keeps backend node IDs and platform totals in `ci/test-inventory.json`, adds the exact 18-spec filename set, distinguishes collection from execution, and validates Playwright's exit code, CLI summary, structured JSON outcomes, actual project/file distribution, and zero retries. The new exact-head Linux and native-Windows CI result is **pending**; neither failed run above is described as green.
+The current remediation keeps backend node IDs and platform totals in `ci/test-inventory.json`, adds the exact 18-spec filename set, distinguishes collection from execution, and validates Playwright's exit code, CLI summary, structured JSON outcomes, actual project/file distribution, and zero retries. Exact-head run [`41457013404`](https://github.com/asgareyvazi/DrillAI/actions/runs/41457013404) tested `e75d8c1ce92dd1adb2bc07c5a10d17303a7eb0b` and completed successfully: `gh run view` reported conclusion `success` for Linux job `125316148652` and native Windows job `125316148199`; every required gate step in both jobs was successful. The failure-only Playwright-evidence upload steps were skipped as designed. Attempts to retrieve either job log returned EOF from GitHub's results log archive, so that run's per-test output totals could not be independently recovered; the run is status-verified, but this document does not invent counts from unavailable logs. This run certifies the CP83.1 SHA only; it does not cover the following CP83.2 changes or the final CP76–CP96 SHA.
 
 `.github/workflows/ci.yml` runs the same commands, in the same order, on pushes to `arena/**`, on
 pull requests targeting `arena/01a0dca0-drillai` or `main`, and on manual dispatch:
@@ -251,7 +249,7 @@ failure fails the job and skips what follows.
 The testing gates **certify their own results** rather than trusting their inputs. Backend expectations
 are centralized in `ci/test-inventory.json`. The Linux verifier requires the full PostgreSQL-enabled
 suite to pass with zero skips and compares every PostgreSQL-marked node ID with the reviewed list. The
-Windows verifier requires exactly 1,607 passes, one skip, and 13 deselections; it permits only the
+Current Windows verifier inventory requires exactly 1,615 passes, one skip, and 13 deselections; it permits only the
 `tests/ingestion/test_ocr.py` POSIX-only temporary-shebang fixture with its exact reason, and confirms
 the deselections equal the reviewed PostgreSQL node-ID list. Any changed test identity or total must be
 reviewed in the manifest before CI can pass. Frontend unit tests reject skips.

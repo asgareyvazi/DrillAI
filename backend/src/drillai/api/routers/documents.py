@@ -162,8 +162,8 @@ def _validate_review_payload_shape(
 def _validate_review_domain_payload(record_type: str, payload: dict[str, Any]) -> None:
     if record_type == "survey_station":
         md = payload.get("md_si")
-        if md is not None and (not _is_finite_number(md) or md <= 0):
-            raise ValidationFailed("survey station md_si must be a finite number greater than zero")
+        if md is not None and (not _is_finite_number(md) or md < 0):
+            raise ValidationFailed("survey station md_si must be a finite non-negative number")
         inclination = payload.get("inclination_deg")
         if inclination is not None and (
             not _is_finite_number(inclination) or not 0 <= inclination <= 180

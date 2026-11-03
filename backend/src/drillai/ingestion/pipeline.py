@@ -1067,7 +1067,13 @@ class IngestionPipeline:
                 payload_schema_key=draft.payload_schema_key,
                 payload_schema_version=draft.payload_schema_version,
                 payload=draft.payload,
-                observed_at=draft.observed_at or document.period_start or document.issue_date,
+                # A survey station's measured_at is station-specific; a document period or issue date
+                # describes the report, not when that measurement was taken.
+                observed_at=(
+                    draft.observed_at
+                    if draft.record_type == "survey_station"
+                    else draft.observed_at or document.period_start or document.issue_date
+                ),
                 depth_md_si=draft.depth_md_si,
                 depth_tvd_si=draft.depth_tvd_si,
                 method=draft.method,
