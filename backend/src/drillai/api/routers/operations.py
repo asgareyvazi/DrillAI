@@ -67,16 +67,27 @@ class OperationCreate(BaseModel):
     parent_operation_id: str | None = None
     code: str | None = Field(default=None, max_length=60)
     planned_start: dt.datetime | None = None
+    planned_start_basis: str | None = None
     planned_end: dt.datetime | None = None
+    planned_end_basis: str | None = None
     actual_start: dt.datetime | None = None
+    actual_start_basis: str | None = None
     actual_end: dt.datetime | None = None
+    actual_end_basis: str | None = None
     planned_duration_hours: float | None = Field(default=None, ge=0)
+    planned_duration_basis: str | None = None
     actual_duration_hours: float | None = Field(default=None, ge=0)
+    actual_duration_basis: str | None = None
     depth_from_md_si: float | None = None
+    depth_from_md_basis: str | None = None
     depth_to_md_si: float | None = None
+    depth_to_md_basis: str | None = None
     hole_diameter_si: float | None = None
+    hole_diameter_basis: str | None = None
     npt_hours: float | None = Field(default=None, ge=0)
+    npt_hours_basis: str | None = None
     invisible_lost_time_hours: float | None = Field(default=None, ge=0)
+    invisible_lost_time_basis: str | None = None
     is_productive: bool | None = None
     remarks: str | None = None
     source_kind: str = "manual"
@@ -130,6 +141,7 @@ class OperationPatch(BaseModel):
     expected_updated_at: dt.datetime
     reason: str = Field(min_length=1, max_length=2000)
     changes: dict[str, Any] = Field(min_length=1)
+    provenance: dict[str, str] = Field(default_factory=dict)
 
     @field_validator("expected_updated_at")
     @classmethod
@@ -184,15 +196,22 @@ class EventCreate(BaseModel):
     severity: str = "low"
     status: str = "open"
     occurred_at: dt.datetime | None = None
+    occurred_at_basis: str | None = None
     ended_at: dt.datetime | None = None
+    ended_at_basis: str | None = None
     description: str | None = None
     duration_hours: float | None = Field(default=None, ge=0)
+    duration_basis: str | None = None
     depth_md_si: float | None = None
+    depth_md_basis: str | None = None
     depth_tvd_si: float | None = None
+    depth_tvd_basis: str | None = None
     npt_hours: float | None = Field(default=None, ge=0)
+    npt_hours_basis: str | None = None
     npt_category: str | None = None
     is_npt: bool | None = None
     cost_usd: float | None = Field(default=None, ge=0)
+    cost_basis: str | None = None
     root_cause: str | None = None
     immediate_action: str | None = None
     corrective_action: str | None = None
@@ -234,6 +253,7 @@ class EventCreate(BaseModel):
             "severity",
             "status",
             "occurred_at",
+            "occurred_at_basis",
             "cause_basis",
             "classification_source",
             "source_kind",
@@ -252,6 +272,7 @@ class EventPatch(BaseModel):
     expected_updated_at: dt.datetime
     reason: str = Field(min_length=1, max_length=2000)
     changes: dict[str, Any] = Field(min_length=1)
+    provenance: dict[str, str] = Field(default_factory=dict)
 
     @field_validator("expected_updated_at")
     @classmethod
@@ -403,7 +424,7 @@ async def update_operation(
     org_id = auth.org_id or ""
     changes = payload.validated_changes()
     scope = f"operation.update:{operation_id}"
-    body = {"changes": changes, "reason": payload.reason}
+    body = {"changes": changes, "reason": payload.reason, "provenance": payload.provenance}
     if (replayed := await _replay(session, org_id=org_id, key=idempotency_key, scope=scope, payload=body)) is not None:
         return replayed
     operation, recorded = await _operation_service(session, auth).update(
@@ -411,6 +432,7 @@ async def update_operation(
         expected_updated_at=payload.expected_updated_at,
         reason=payload.reason,
         changes=changes,
+        provenance=payload.provenance,
     )
     return await _remember(
         session,
@@ -549,6 +571,7 @@ async def create_event(
         kind=payload.kind,
         severity=payload.severity,
         occurred_at=payload.occurred_at,
+        occurred_at_basis=payload.occurred_at_basis,
         operation_id=payload.operation_id,
         status=payload.status,
         source_kind=payload.source_kind,
@@ -597,7 +620,7 @@ async def update_event(
     authorize(auth.principal, "event.update")
     org_id = auth.org_id or ""
     scope = f"event.update:{event_id}"
-    body = {"changes": payload.changes, "reason": payload.reason}
+    body = {"changes": payload.changes, "reason": payload.reason, "provenance": payload.provenance}
     if (replayed := await _replay(session, org_id=org_id, key=idempotency_key, scope=scope, payload=body)) is not None:
         return replayed
     event, recorded = await _event_service(session, auth).update(
@@ -605,6 +628,7 @@ async def update_event(
         expected_updated_at=payload.expected_updated_at,
         reason=payload.reason,
         changes=payload.changes,
+        provenance=payload.provenance,
     )
     return await _remember(
         session,

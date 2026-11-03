@@ -44,6 +44,7 @@ async def test_promotion_identity_unique_indexes_enforce_tenant_scoped_identity_
         kind="npt",
         title="Original event",
         occurred_at=dt.datetime(2026, 3, 15, tzinfo=dt.UTC),
+        occurred_at_basis="source_record",
         promotion_fingerprint="same-promotion-fingerprint",
     )
     pg_session.add_all([operation, event])
@@ -72,6 +73,7 @@ async def test_promotion_identity_unique_indexes_enforce_tenant_scoped_identity_
                     kind="npt",
                     title="Duplicate event",
                     occurred_at=dt.datetime(2026, 3, 16, tzinfo=dt.UTC),
+                    occurred_at_basis="source_record",
                     promotion_fingerprint=event.promotion_fingerprint,
                 )
             )
@@ -93,6 +95,7 @@ async def test_promotion_identity_unique_indexes_enforce_tenant_scoped_identity_
                 kind="npt",
                 title="Other tenant event",
                 occurred_at=dt.datetime(2026, 3, 15, tzinfo=dt.UTC),
+                occurred_at_basis="source_record",
                 promotion_fingerprint=event.promotion_fingerprint,
             ),
         ]
@@ -115,10 +118,10 @@ def test_promotion_identity_migration_refuses_duplicates_then_enforces_uniquenes
     config = _config(database_url)
     command.upgrade(config, "c0f6d8a9b271")
 
-    async def insert_duplicates() -> tuple[str, str, str]:
+    async def insert_duplicates() -> tuple[str, str]:
         from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-        from drillai.db.models import Event, Operation, Organization
+        from drillai.db.models import Organization
 
         engine = create_async_engine(database_url)
         factory = async_sessionmaker(engine, expire_on_commit=False)
@@ -127,42 +130,58 @@ def test_promotion_identity_migration_refuses_duplicates_then_enforces_uniquenes
                 org = Organization(slug="promotion-migration", name="Promotion migration")
                 session.add(org)
                 await session.flush()
-                common = {
-                    "org_id": org.id,
-                    "promotion_fingerprint": "same-document-record-fingerprint",
-                    "source_document_id": "doc_legacy_source",
-                    "source_record_id": "rec_legacy_source",
-                }
+                row_ids = (
+                    ("opr_legacy_duplicate_1", "opr_legacy_duplicate_2")
+                    if model_name == "operation"
+                    else ("evn_legacy_duplicate_1", "evn_legacy_duplicate_2")
+                )
                 if model_name == "operation":
-                    rows = [
-                        Operation(
-                            **common,
-                            well_id="wel_legacy",
-                            wellbore_id="wlb_legacy",
-                            operation_class="actual",
-                            sequence=index,
-                            name=f"Legacy operation {index}",
-                            source_kind="ddr_promotion",
-                        )
-                        for index in (1, 2)
-                    ]
+                    await session.execute(
+                        sa.text(
+                            "INSERT INTO operations "
+                            "(id, org_id, well_id, wellbore_id, operation_class, sequence, name, kind, phase, "
+                            "status, is_productive, source, source_document_id, data_quality, attributes, "
+                            "is_demo_fixture, source_record_id, promotion_fingerprint, source_kind) VALUES "
+                            "(:id, :org_id, 'wel_legacy', 'wlb_legacy', 'actual', :sequence, :name, "
+                            "'drilling', 'completed', 'completed', 1, 'report', 'doc_legacy_source', "
+                            "'extracted', '{}', 0, 'rec_legacy_source', 'same-document-record-fingerprint', "
+                            "'ddr_promotion')"
+                        ),
+                        [
+                            {
+                                "id": row_id,
+                                "org_id": org.id,
+                                "sequence": index,
+                                "name": f"Legacy operation {index}",
+                            }
+                            for index, row_id in enumerate(row_ids, start=1)
+                        ],
+                    )
                 else:
-                    rows = [
-                        Event(
-                            **common,
-                            project_id="prj_legacy",
-                            well_id="wel_legacy",
-                            kind="npt",
-                            title=f"Legacy event {index}",
-                            occurred_at=dt.datetime(2026, 3, index, tzinfo=dt.UTC),
-                            source_kind="ddr_promotion",
-                            classification_source="derived",
-                        )
-                        for index in (1, 2)
-                    ]
-                session.add_all(rows)
+                    await session.execute(
+                        sa.text(
+                            "INSERT INTO events "
+                            "(id, org_id, project_id, well_id, kind, is_npt, title, occurred_at, severity, "
+                            "status, source, source_document_id, tags, attributes, is_demo_fixture, "
+                            "source_record_id, promotion_fingerprint, source_kind, cause_basis, "
+                            "classification_source) VALUES "
+                            "(:id, :org_id, 'prj_legacy', 'wel_legacy', 'npt', 1, :title, :occurred_at, "
+                            "'high', 'closed', 'report', 'doc_legacy_source', '[]', '{}', 0, "
+                            "'rec_legacy_source', 'same-document-record-fingerprint', 'ddr_promotion', "
+                            "'unknown', 'derived')"
+                        ),
+                        [
+                            {
+                                "id": row_id,
+                                "org_id": org.id,
+                                "title": f"Legacy event {index}",
+                                "occurred_at": dt.datetime(2026, 3, index, tzinfo=dt.UTC),
+                            }
+                            for index, row_id in enumerate(row_ids, start=1)
+                        ],
+                    )
                 await session.commit()
-                return rows[0].id, rows[1].id
+                return row_ids
         finally:
             await engine.dispose()
 
@@ -240,6 +259,7 @@ def test_promotion_identity_migration_refuses_duplicates_then_enforces_uniquenes
                             kind="npt",
                             title="Other tenant event",
                             occurred_at=dt.datetime(2026, 3, 1, tzinfo=dt.UTC),
+                            occurred_at_basis="source_record",
                             source_kind="ddr_promotion",
                             classification_source="derived",
                         )

@@ -35,6 +35,12 @@ from drillai.db.models import (
 )
 from drillai.db.models.operations import NPT_CATEGORIES
 from drillai.documents.access import operational_source_conditions
+from drillai.operations.time_windows import (
+    TIME_WINDOW_BASES,
+    event_time_expressions,
+    interval_overlap_conditions,
+    operation_time_expressions,
+)
 
 #: Which recorded source a reported total is built from.
 NPT_BASES = ("events", "operations")
@@ -93,6 +99,9 @@ class NptEvent:
     classification_source: str
     evidence_ref: str | None
     document_id: str | None
+    started_at_basis: str = "unknown"
+    ended_at_basis: str = "unknown"
+    hours_basis: str = "unknown"
     note: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
@@ -106,7 +115,10 @@ class NptEvent:
             "cause": self.cause,
             "hours": round(self.hours, 3),
             "started_at": self.started_at.isoformat() if self.started_at else None,
+            "started_at_basis": self.started_at_basis,
             "ended_at": self.ended_at.isoformat() if self.ended_at else None,
+            "ended_at_basis": self.ended_at_basis,
+            "hours_basis": self.hours_basis,
             "depth_md_si": self.depth_md_si,
             "section_id": self.section_id,
             "operation_id": self.operation_id,
@@ -252,10 +264,16 @@ class NptService:
             clauses.append(Event.section_id == section_id)
         if operation_id is not None:
             clauses.append(Event.operation_id == operation_id)
-        if since is not None:
-            clauses.append(Event.occurred_at >= since)
-        if until is not None:
-            clauses.append(Event.occurred_at <= until)
+        if since is not None or until is not None:
+            event_start, event_end = event_time_expressions()
+            clauses.extend(
+                interval_overlap_conditions(
+                    event_start,
+                    event_end,
+                    since=since,
+                    until=until,
+                )
+            )
         return clauses
 
     async def events_for_well(
@@ -269,6 +287,7 @@ class NptService:
         limit: int | None = None,
     ) -> list[NptEvent]:
         codes = await self._code_map()
+        event_start, _event_end = event_time_expressions()
         stmt = (
             select(Event)
             .where(
@@ -280,14 +299,18 @@ class NptService:
                     until=until,
                 )
             )
-            .order_by(Event.occurred_at)
+            .order_by(event_start.is_(None).asc(), event_start.asc(), Event.id.asc())
         )
         if limit is not None:
             stmt = stmt.limit(limit)
         rows = list((await self.session.execute(stmt)).scalars().all())
         cases: list[NptEvent] = []
         for row in rows:
-            hours = float(row.npt_hours or row.duration_hours or 0.0)
+            hours_value = row.npt_hours if row.npt_hours is not None else row.duration_hours
+            hours = float(hours_value or 0.0)
+            hours_basis = (
+                row.npt_hours_basis if row.npt_hours is not None else row.duration_basis
+            )
             code = codes.get(row.npt_code) if row.npt_code else None
             classification = "recorded" if row.npt_code or row.npt_category else "unclassified"
             cases.append(
@@ -303,8 +326,13 @@ class NptService:
                     code=row.npt_code,
                     cause=row.root_cause or row.description,
                     hours=hours,
-                    started_at=row.occurred_at,
-                    ended_at=row.ended_at,
+                    started_at=(
+                        row.occurred_at if row.occurred_at_basis in TIME_WINDOW_BASES else None
+                    ),
+                    ended_at=row.ended_at if row.ended_at_basis in TIME_WINDOW_BASES else None,
+                    started_at_basis=row.occurred_at_basis,
+                    ended_at_basis=row.ended_at_basis,
+                    hours_basis=hours_basis,
                     depth_md_si=row.depth_md_si,
                     section_id=row.section_id,
                     operation_id=row.operation_id,
@@ -326,7 +354,7 @@ class NptService:
         since: dt.datetime | None = None,
         until: dt.datetime | None = None,
     ) -> list[Any]:
-        started = func.coalesce(Operation.actual_start, Operation.planned_start)
+        operation_start, operation_end = operation_time_expressions()
         clauses: list[Any] = [
             Operation.org_id == self.org_id,
             Operation.well_id == well_id,
@@ -339,10 +367,15 @@ class NptService:
             clauses.append(Operation.section_id == section_id)
         if operation_id is not None:
             clauses.append(Operation.id == operation_id)
-        if since is not None:
-            clauses.append(started >= since)
-        if until is not None:
-            clauses.append(started <= until)
+        if since is not None or until is not None:
+            clauses.extend(
+                interval_overlap_conditions(
+                    operation_start,
+                    operation_end,
+                    since=since,
+                    until=until,
+                )
+            )
         return clauses
 
     async def operations_with_npt(
@@ -355,6 +388,7 @@ class NptService:
         until: dt.datetime | None = None,
         limit: int | None = None,
     ) -> list[NptEvent]:
+        operation_start, _operation_end = operation_time_expressions()
         stmt = (
             select(Operation)
             .where(
@@ -366,7 +400,7 @@ class NptService:
                     until=until,
                 )
             )
-            .order_by(Operation.actual_start)
+            .order_by(operation_start.is_(None).asc(), operation_start.asc(), Operation.id.asc())
         )
         if limit is not None:
             stmt = stmt.limit(limit)
@@ -376,6 +410,11 @@ class NptService:
             hours = float(row.npt_hours or 0.0)
             if hours <= 0:
                 continue
+            planned = row.operation_class in {"plan", "forecast"}
+            started_at = row.planned_start if planned else row.actual_start
+            ended_at = row.planned_end if planned else row.actual_end
+            started_at_basis = row.planned_start_basis if planned else row.actual_start_basis
+            ended_at_basis = row.planned_end_basis if planned else row.actual_end_basis
             cases.append(
                 NptEvent(
                     id=row.id,
@@ -386,9 +425,12 @@ class NptService:
                     code=row.code,
                     cause=row.remarks,
                     hours=hours,
-                    started_at=row.actual_start or row.planned_start,
-                    ended_at=row.actual_end or row.planned_end,
-                    depth_md_si=row.depth_to_md_si or row.depth_from_md_si,
+                    started_at=(started_at if started_at_basis in TIME_WINDOW_BASES else None),
+                    ended_at=ended_at if ended_at_basis in TIME_WINDOW_BASES else None,
+                    started_at_basis=started_at_basis,
+                    ended_at_basis=ended_at_basis,
+                    hours_basis=row.npt_hours_basis,
+                    depth_md_si=row.depth_to_md_si if row.depth_to_md_si is not None else row.depth_from_md_si,
                     section_id=row.section_id,
                     operation_id=row.id,
                     operator_controllable=None,
@@ -466,16 +508,15 @@ class NptService:
             )
         ).one()
 
+        event_start, _event_end = event_time_expressions()
+        event_year = extract("year", event_start)
+        event_month = extract("month", event_start)
         months = (
             await self.session.execute(
-                select(
-                    extract("year", Event.occurred_at),
-                    extract("month", Event.occurred_at),
-                    func.sum(hours),
-                )
-                .where(*clauses, Event.occurred_at.is_not(None))
-                .group_by(extract("year", Event.occurred_at), extract("month", Event.occurred_at))
-                .order_by(extract("year", Event.occurred_at), extract("month", Event.occurred_at))
+                select(event_year, event_month, func.sum(hours))
+                .where(*clauses, event_start.is_not(None))
+                .group_by(event_year, event_month)
+                .order_by(event_year, event_month)
             )
         ).all()
         return {
@@ -505,7 +546,7 @@ class NptService:
     async def _operation_aggregates(self, clauses: list[Any]) -> dict[str, Any]:
         """The same groups for the operations basis, where the category is the row's own claim."""
         hours = Operation.npt_hours
-        started = func.coalesce(Operation.actual_start, Operation.planned_start)
+        started, _ended = operation_time_expressions()
 
         async def grouped(key_expr: Any, label_expr: Any) -> list[tuple]:
             stmt = (
@@ -525,7 +566,7 @@ class NptService:
         months = (
             await self.session.execute(
                 select(extract("year", started), extract("month", started), func.sum(hours))
-                .where(*clauses)
+                .where(*clauses, started.is_not(None))
                 .group_by(extract("year", started), extract("month", started))
                 .order_by(extract("year", started), extract("month", started))
             )

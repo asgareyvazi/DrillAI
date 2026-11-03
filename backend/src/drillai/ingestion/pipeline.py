@@ -1067,15 +1067,20 @@ class IngestionPipeline:
                 payload_schema_key=draft.payload_schema_key,
                 payload_schema_version=draft.payload_schema_version,
                 payload=draft.payload,
-                # A survey station's measured_at is station-specific; a document period or issue date
-                # describes the report, not when that measurement was taken.
-                observed_at=(
-                    draft.observed_at
-                    if draft.record_type == "survey_station"
-                    else draft.observed_at or document.period_start or document.issue_date
+                # ``observed_at`` is record-specific evidence only. Document period/issue dates remain
+                # on Document and are never copied into a measurement/event timestamp as a fallback.
+                observed_at=draft.observed_at,
+                observed_at_basis=(
+                    "unknown"
+                    if draft.observed_at is None
+                    else "report_header_date"
+                    if draft.record_type == "report_header"
+                    else "source_record"
                 ),
                 depth_md_si=draft.depth_md_si,
+                depth_md_basis="source_record" if draft.depth_md_si is not None else "unknown",
                 depth_tvd_si=draft.depth_tvd_si,
+                depth_tvd_basis="source_record" if draft.depth_tvd_si is not None else "unknown",
                 method=draft.method,
                 method_version=draft.method_version,
                 confidence=draft.confidence,

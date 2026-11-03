@@ -178,6 +178,9 @@ def _parse_report_instant(raw: str, *, on_date: dt.datetime | None) -> dt.dateti
     wall-clock time.
     """
     text = raw.strip()
+    # A date-only cell is a report/date anchor, not an occurrence at midnight.
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", text):
+        return None
     try:
         return parse_iso_datetime_utc(text)
     except ValueError:
@@ -370,8 +373,8 @@ class DdrProcessor:
         Resolution order is the explicit reporting period start, the document issue date, then the
         parsed report-header value. A lone period end is an interval boundary, not evidence of when an
         event occurred, so it is not promoted into a point timestamp. Ingestion time is deliberately
-        not a report-date fallback: absent source time stays unknown and is marked separately where a
-        required event timestamp forces an ingestion-time placeholder.
+        not a report-date fallback: absent source time stays unknown. This anchor remains report
+        metadata and is never substituted for an event occurrence time.
         """
         if document.period_start is not None:
             return ensure_utc(document.period_start)
@@ -390,23 +393,19 @@ class DdrProcessor:
     def _event_time(
         *,
         record: ExtractedRecord,
-        linked: Operation | None,
-        report_date: dt.datetime | None,
         existing: Event | None = None,
-    ) -> tuple[dt.datetime, str]:
-        if linked is not None and linked.actual_start is not None:
-            return ensure_utc(linked.actual_start), "linked_operation_start"
-        if record.observed_at is not None:
-            return ensure_utc(record.observed_at), "extracted_record_observed_at"
-        if report_date is not None:
-            return ensure_utc(report_date), "document_report_date"
-        if existing is not None:
-            return ensure_utc(existing.occurred_at), (existing.attributes or {}).get(
-                "occurred_at_basis", "previously_recorded_timestamp"
-            )
-        # Event.occurred_at is required in storage. When source time is absent, use the persisted
-        # extraction record creation time and label it as ingestion time, never as incident time.
-        return ensure_utc(record.created_at), "ingestion_timestamp_fallback"
+    ) -> tuple[dt.datetime | None, str]:
+        """Return only an event-specific source/operator instant; every other time stays unknown."""
+        acceptable = {"source_record", "operator_entered"}
+        if record.observed_at is not None and record.observed_at_basis in acceptable:
+            return ensure_utc(record.observed_at), record.observed_at_basis
+        if (
+            existing is not None
+            and existing.occurred_at is not None
+            and existing.occurred_at_basis in acceptable
+        ):
+            return ensure_utc(existing.occurred_at), existing.occurred_at_basis
+        return None, "unknown"
 
     async def _records(self, document_id: str) -> list[ExtractedRecord]:
         return list(
@@ -638,8 +637,8 @@ class DdrProcessor:
         report_date = self._report_date(document, records)
         if report_date is None:
             report.warnings.append(
-                "the document carries no report date, so promoted operations have no start time; "
-                "operation sequencing is preserved but the timeline cannot place them"
+                "the document has no report-date anchor; operation times are retained only when "
+                "a row contains its own source time, and unknown times remain unset"
             )
         existing_operations = await self._existing_operations_for_document(document)
         existing: set[str] = set()
@@ -661,10 +660,6 @@ class DdrProcessor:
                     existing_by_fingerprint.setdefault(fingerprint_value, operation)
         by_fingerprint: dict[str, Operation] = {}
         last: Operation | None = None
-        # A DDR time breakdown is an ordered list of durations, not a list of absolute timestamps.
-        # Replaying the durations forward from the report date rebuilds the shift's real timeline;
-        # an explicit start time in the row wins over the cursor, because it is direct evidence.
-        cursor = report_date
 
         operation_service = OperationService(
             self.session,
@@ -710,27 +705,39 @@ class DdrProcessor:
             started: dt.datetime | None = None
             time_basis = "unknown"
             if isinstance(explicit, str):
-                with contextlib.suppress(ValueError, TypeError):
-                    started = _parse_report_instant(
-                        explicit,
-                        on_date=report_date or record.observed_at,
+                clock_only = bool(
+                    re.fullmatch(
+                        r"(?:\d{1,2}[:.]\d{2}(?::\d{2})?|\d{4}(?:\d{2})?)",
+                        explicit.strip(),
                     )
+                )
+                anchor = report_date
+                if anchor is None and record.observed_at_basis == "report_header_date":
+                    anchor = record.observed_at
+                with contextlib.suppress(ValueError, TypeError):
+                    started = _parse_report_instant(explicit, on_date=anchor)
                 if started is not None:
-                    time_basis = "explicit_time_in_row"
-            observed_at = ensure_utc(record.observed_at) if record.observed_at is not None else None
-            if started is None and observed_at is not None and (report_date is None or observed_at != report_date):
-                started = observed_at
-                time_basis = "record_observed_at"
-            if started is None and cursor is not None:
-                # A document-level report date is a day anchor, not an explicit per-row timestamp.
-                # Replaying the ordered durations keeps the activity chain instead of pinning every
-                # operation to the same midnight observation.
-                started = cursor
-                time_basis = "replayed_from_report_duration" if last is not None else "report_date"
+                    # A row-level clock paired with a report date remains visibly anchored; it is
+                    # never treated as an observed instant by time-window queries.
+                    time_basis = "report_date_anchor" if clock_only else "source_record"
+            if (
+                started is None
+                and record.observed_at is not None
+                and record.observed_at_basis in {"source_record", "operator_entered"}
+            ):
+                started = ensure_utc(record.observed_at)
+                time_basis = record.observed_at_basis
             end = (
                 started + dt.timedelta(hours=duration_hours)
                 if started is not None and duration_hours is not None
                 else None
+            )
+            end_basis = "duration_derived" if end is not None else "unknown"
+            depth_md = _first_valid_depth(
+                payload.get("depth_md_si"),
+                record.depth_md_si
+                if record.depth_md_basis in {"source_record", "operator_entered"}
+                else None,
             )
             if kind == "unknown":
                 report.warnings.append(
@@ -766,21 +773,31 @@ class DdrProcessor:
                             "name": str(name)[:300],
                             "kind": kind,
                             "remarks": text[:2000] or None,
+                            "actual_start": started,
+                            "actual_end": end,
+                            "actual_duration_hours": duration_hours,
+                            "depth_to_md_si": depth_md,
                         }
                         if payload.get("code") is not None:
                             changes["code"] = str(payload["code"])[:60]
-                        if started is not None:
-                            changes["actual_start"] = started
-                        if duration_hours is not None:
-                            changes["actual_duration_hours"] = duration_hours
-                            if end is not None:
-                                changes["actual_end"] = end
-                        depth_md = payload.get("depth_md_si")
-                        if _valid_nonnegative_number(depth_md):
-                            changes["depth_to_md_si"] = float(depth_md)
+                        provenance = {
+                            "actual_start": time_basis if started is not None else "unknown",
+                            "actual_end": end_basis,
+                            "actual_duration_hours": "reported" if duration_hours is not None else "unknown",
+                            "depth_to_md_si": "source_record" if depth_md is not None else "unknown",
+                        }
                         changed = {
                             key: value for key, value in changes.items() if getattr(operation, key) != value
                         }
+                        basis_fields = {
+                            "actual_start": "actual_start_basis",
+                            "actual_end": "actual_end_basis",
+                            "actual_duration_hours": "actual_duration_basis",
+                            "depth_to_md_si": "depth_to_md_basis",
+                        }
+                        for field_name, basis in provenance.items():
+                            if getattr(operation, basis_fields[field_name]) != basis:
+                                changed[field_name] = changes[field_name]
                         if changed:
                             if await self._operation_has_manual_edits(operation):
                                 report.warnings.append(
@@ -800,6 +817,7 @@ class DdrProcessor:
                                         expected_updated_at=operation.updated_at,
                                         reason="DDR source record changed on retry",
                                         changes=changed,
+                                        provenance=provenance,
                                         audit_metadata={
                                             "source": "ddr_reconciliation",
                                             "source_document_id": document.id,
@@ -819,12 +837,6 @@ class DdrProcessor:
                     report.operations_hours += duration_hours if duration_hours is not None else (
                         operation.actual_duration_hours or 0.0
                     )
-                    effective_end = end if end is not None else operation.actual_end
-                    effective_start = started if started is not None else operation.actual_start
-                    if effective_end is not None:
-                        cursor = effective_end
-                    elif cursor is not None and effective_start is not None:
-                        cursor = max(cursor, effective_start)
                 report.operations_linked.append(record.id)
                 continue
 
@@ -847,9 +859,13 @@ class DdrProcessor:
                 source_record_id=record.id,
                 code=str(payload.get("code"))[:60] if payload.get("code") else None,
                 actual_start=started,
+                actual_start_basis=time_basis if started is not None else "unknown",
                 actual_end=end,
+                actual_end_basis=end_basis,
                 actual_duration_hours=duration_hours,
-                depth_to_md_si=(float(payload["depth_md_si"]) if _valid_nonnegative_number(payload.get("depth_md_si")) else None),
+                actual_duration_basis="reported" if duration_hours is not None else "unknown",
+                depth_to_md_si=depth_md,
+                depth_to_md_basis="source_record" if depth_md is not None else "unknown",
                 is_productive=True,
                 promotion_fingerprint=fingerprint,
                 data_quality="extracted",
@@ -870,10 +886,6 @@ class DdrProcessor:
             if dry_run:
                 report.operations_created.append(operation.id)
                 last = operation
-                if end is not None:
-                    cursor = end
-                elif started is not None and cursor is not None:
-                    cursor = max(cursor, started)
                 continue
             await self._link_evidence(
                 subject_kind="operation",
@@ -890,10 +902,6 @@ class DdrProcessor:
             report.records_promoted.append(record.id)
             report.operations_created.append(operation.id)
             last = operation
-            if end is not None:
-                cursor = end
-            elif started is not None and cursor is not None:
-                cursor = max(cursor, started)
         return by_fingerprint
 
     async def _promote_npt_events(
@@ -913,7 +921,6 @@ class DdrProcessor:
         may be refreshed; acknowledged/closed or recorded events are left for a person to resolve.
         """
         await ensure_standard_npt_codes(self.session, self.org_id)
-        report_date = self._report_date(document, records)
         existing_events = await self._existing_events_for_document(document)
         existing_by_fingerprint: dict[str, Event] = {}
         existing_by_record: dict[str, Event] = {}
@@ -991,15 +998,20 @@ class DdrProcessor:
                 }
                 event_occurred_at, event_time_basis = self._event_time(
                     record=record,
-                    linked=linked,
-                    report_date=report_date,
                     existing=existing_event,
                 )
-                desired_attributes["occurred_at_basis"] = event_time_basis
+                desired_attributes.pop("occurred_at_basis", None)
                 depth_md_si = _first_valid_depth(
-                    linked.depth_to_md_si if linked is not None else None,
                     payload.get("depth_md_si"),
-                    record.depth_md_si,
+                    record.depth_md_si
+                    if record.depth_md_basis in {"source_record", "operator_entered"}
+                    else None,
+                )
+                depth_tvd_si = _first_valid_depth(
+                    payload.get("depth_tvd_si"),
+                    record.depth_tvd_si
+                    if record.depth_tvd_basis in {"source_record", "operator_entered"}
+                    else None,
                 )
                 desired = {
                     "kind": "npt" if hours else "problem",
@@ -1012,10 +1024,17 @@ class DdrProcessor:
                     ),
                     "description": text[:4000] or None,
                     "occurred_at": event_occurred_at,
-                    "ended_at": linked.actual_end if linked is not None else existing_event.ended_at,
+                    "occurred_at_basis": event_time_basis,
+                    "ended_at": None,
+                    "ended_at_basis": "unknown",
                     "duration_hours": hours,
+                    "duration_basis": "reported" if hours is not None else "unknown",
                     "npt_hours": hours,
+                    "npt_hours_basis": "reported" if hours is not None else "unknown",
                     "depth_md_si": depth_md_si,
+                    "depth_md_basis": "source_record" if depth_md_si is not None else "unknown",
+                    "depth_tvd_si": depth_tvd_si,
+                    "depth_tvd_basis": "source_record" if depth_tvd_si is not None else "unknown",
                     "is_npt": bool(hours),
                     "severity": "high"
                     if classification.label in {"well_control", "stuck_pipe"}
@@ -1142,6 +1161,7 @@ class DdrProcessor:
                             )
                             if next_total != current_total:
                                 operation.npt_hours = next_total
+                                operation.npt_hours_basis = "calculated"
                                 if next_total > 0.0:
                                     operation.is_productive = False
                                 operation_rollup_change = {
@@ -1180,16 +1200,24 @@ class DdrProcessor:
                 )
                 continue
 
-            occurred, event_time_basis = self._event_time(
-                record=record,
-                linked=linked,
-                report_date=report_date,
-            )
-            if event_time_basis == "ingestion_timestamp_fallback":
+            occurred, event_time_basis = self._event_time(record=record)
+            if occurred is None:
                 report.warnings.append(
-                    f"NPT record {record.id} has no source-backed event time; the required occurred_at "
-                    "uses extraction-record creation time, not a verified incident time"
+                    f"NPT record {record.id} has no source-backed occurrence time; it remains unknown "
+                    "and will not match time-window filters"
                 )
+            depth_md_si = _first_valid_depth(
+                payload.get("depth_md_si"),
+                record.depth_md_si
+                if record.depth_md_basis in {"source_record", "operator_entered"}
+                else None,
+            )
+            depth_tvd_si = _first_valid_depth(
+                payload.get("depth_tvd_si"),
+                record.depth_tvd_si
+                if record.depth_tvd_basis in {"source_record", "operator_entered"}
+                else None,
+            )
             event = Event(
                 org_id=self.org_id,
                 project_id=document.project_id,
@@ -1205,16 +1233,19 @@ class DdrProcessor:
                 title=f"{classification.label.replace('_', ' ').title()} reported in {document.title or document.id}",
                 description=text[:4000] or None,
                 occurred_at=occurred,
-                ended_at=(linked.actual_end if linked is not None else None),
+                occurred_at_basis=event_time_basis,
+                ended_at=None,
+                ended_at_basis="unknown",
                 duration_hours=hours,
-                depth_md_si=_first_valid_depth(
-                    linked.depth_to_md_si if linked is not None else None,
-                    payload.get("depth_md_si"),
-                    record.depth_md_si,
-                ),
-                depth_tvd_si=record.depth_tvd_si,
+                duration_basis="reported" if hours is not None else "unknown",
+                depth_md_si=depth_md_si,
+                depth_md_basis="source_record" if depth_md_si is not None else "unknown",
+                depth_tvd_si=depth_tvd_si,
+                depth_tvd_basis="source_record" if depth_tvd_si is not None else "unknown",
                 severity="high" if classification.label in {"well_control", "stuck_pipe"} else "medium",
                 npt_hours=hours,
+                npt_hours_basis="reported" if hours is not None else "unknown",
+                cost_basis="unknown",
                 # **Deliberately no root cause.** The text below is the record's own words and it is
                 # stored as the description; writing the same string into `root_cause` asserted a
                 # causal claim the report never made. Neither the extractors nor the classifier
@@ -1242,7 +1273,6 @@ class DdrProcessor:
                     "operator_controllable": controllable,
                     "classified_from": record.record_type,
                     "attributed_operation_id": linked.id if linked is not None else None,
-                    "occurred_at_basis": event_time_basis,
                 },
             )
             self.session.add(event)
@@ -1260,6 +1290,7 @@ class DdrProcessor:
             if hours and linked is not None:
                 # The operation row's NPT roll-up, and its productivity flag, agree with the event.
                 linked.npt_hours = (linked.npt_hours or 0.0) + hours
+                linked.npt_hours_basis = "calculated"
                 linked.is_productive = False
             if record.promoted_to_id is None:
                 record.promoted_to_kind = "event"

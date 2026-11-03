@@ -69,7 +69,12 @@ from drillai.documents.access import (
     trajectory_station_evidence_document_condition,
 )
 from drillai.observability.tracing import get_metrics, get_tracer
-from drillai.operations.time_windows import operation_time_expressions
+from drillai.operations.time_windows import (
+    DEPTH_WINDOW_BASES,
+    TIME_WINDOW_BASES,
+    event_time_expressions,
+    operation_time_expressions,
+)
 from drillai.security.rbac import permissions_match
 from drillai.twin.service import TwinService
 
@@ -542,11 +547,15 @@ class TrajectoryProvider(SectionProvider):
             if scoped_operation is None:
                 return _empty(section, "requested operation not found in this well/project"), []
             # Operations have their own wellbore locator. Apply it before selecting a trajectory,
-            # even if this request did not redundantly include wellbore_id.
+            # even if this request did not redundantly include wellbore_id. Depths without a trusted
+            # measurement basis cannot narrow the station set.
             stmt = stmt.where(Trajectory.wellbore_id == scoped_operation.wellbore_id)
-            operation_range = (scoped_operation.depth_from_md_si, scoped_operation.depth_to_md_si)
+            operation_range = _trusted_operation_depth_interval(scoped_operation)
             if operation_range == (None, None):
-                return _empty(section, "requested operation has no depth interval for survey filtering"), []
+                return _empty(
+                    section,
+                    "requested operation has no trusted depth interval for survey filtering",
+                ), []
 
         trajectory = (await session.execute(stmt)).scalars().first()
         if trajectory is None:
@@ -747,9 +756,12 @@ class FormationProvider(SectionProvider):
             ).scalar_one_or_none()
             if scoped_operation is None:
                 return _empty(section, "requested operation not found in this well/project"), []
-            operation_range = (scoped_operation.depth_from_md_si, scoped_operation.depth_to_md_si)
+            operation_range = _trusted_operation_depth_interval(scoped_operation)
             if operation_range == (None, None):
-                return _empty(section, "requested operation has no depth interval to scope formation markers"), []
+                return _empty(
+                    section,
+                    "requested operation has no trusted depth interval to scope formation markers",
+                ), []
             stmt = stmt.where(WellFormationMarker.wellbore_id == scoped_operation.wellbore_id)
 
         markers = (await session.execute(stmt.order_by(WellFormationMarker.md_si))).scalars().all()
@@ -886,9 +898,15 @@ class OperationsProvider(SectionProvider):
         if scope.operation_id:
             stmt = stmt.where(Operation.id == scope.operation_id)
         if scope.depth_from_si is not None or scope.depth_to_si is not None:
-            stmt = stmt.where(
-                *_depth_scope_conditions(scope, Operation.depth_from_md_si, Operation.depth_to_md_si)
+            depth_start = case(
+                (Operation.depth_from_md_basis.in_(DEPTH_WINDOW_BASES), Operation.depth_from_md_si),
+                else_=None,
             )
+            depth_end = case(
+                (Operation.depth_to_md_basis.in_(DEPTH_WINDOW_BASES), Operation.depth_to_md_si),
+                else_=None,
+            )
+            stmt = stmt.where(*_depth_scope_conditions(scope, depth_start, depth_end))
         if scope.period_from is not None or scope.period_to is not None:
             operation_start, operation_end = _operation_period_expressions()
             stmt = stmt.where(*_interval_scope_conditions(scope, operation_start, operation_end))
@@ -910,18 +928,40 @@ class OperationsProvider(SectionProvider):
                         "status": row.status,
                         "sequence": row.sequence,
                         "depth_from_md_si": row.depth_from_md_si,
+                        "depth_from_md_basis": row.depth_from_md_basis,
                         "depth_to_md_si": row.depth_to_md_si,
+                        "depth_to_md_basis": row.depth_to_md_basis,
                         "planned_start": row.planned_start.isoformat() if row.planned_start else None,
+                        "planned_start_basis": row.planned_start_basis,
+                        "planned_end": row.planned_end.isoformat() if row.planned_end else None,
+                        "planned_end_basis": row.planned_end_basis,
                         "actual_start": row.actual_start.isoformat() if row.actual_start else None,
+                        "actual_start_basis": row.actual_start_basis,
+                        "actual_end": row.actual_end.isoformat() if row.actual_end else None,
+                        "actual_end_basis": row.actual_end_basis,
                         "planned_duration_hours": row.planned_duration_hours,
+                        "planned_duration_basis": row.planned_duration_basis,
                         "actual_duration_hours": row.actual_duration_hours,
+                        "actual_duration_basis": row.actual_duration_basis,
                         "npt_hours": row.npt_hours,
+                        "npt_hours_basis": row.npt_hours_basis,
                         "is_productive": row.is_productive,
                         "data_quality": row.data_quality,
                         "remarks": row.remarks,
                     },
                     source_kind="database",
                     source_ids=[row.id],
+                    provenance={
+                        "planned_start": row.planned_start_basis,
+                        "planned_end": row.planned_end_basis,
+                        "actual_start": row.actual_start_basis,
+                        "actual_end": row.actual_end_basis,
+                        "depth_from_md_si": row.depth_from_md_basis,
+                        "depth_to_md_si": row.depth_to_md_basis,
+                        "planned_duration_hours": row.planned_duration_basis,
+                        "actual_duration_hours": row.actual_duration_basis,
+                        "npt_hours": row.npt_hours_basis,
+                    },
                     units={"depth_from_md_si": "m", "depth_to_md_si": "m", "planned_duration_hours": "h", "actual_duration_hours": "h", "npt_hours": "h"},
                 )
             )
@@ -1015,6 +1055,14 @@ class ExtractedRecordsProvider(SectionProvider):
             return _empty(section, "no well or project in scope"), []
         if scope.formation_id is not None:
             return _empty(section, "extracted records do not carry a formation locator"), []
+        record_depth = case(
+            (ExtractedRecord.depth_md_basis.in_(DEPTH_WINDOW_BASES), ExtractedRecord.depth_md_si),
+            else_=None,
+        )
+        record_observed_at = case(
+            (ExtractedRecord.observed_at_basis.in_(TIME_WINDOW_BASES), ExtractedRecord.observed_at),
+            else_=None,
+        )
         stmt = (
             select(ExtractedRecord)
             .join(Document, Document.id == ExtractedRecord.document_id)
@@ -1040,15 +1088,21 @@ class ExtractedRecordsProvider(SectionProvider):
         if scope.operation_id:
             stmt = stmt.where(ExtractedRecord.operation_id == scope.operation_id)
         if scope.depth_from_si is not None or scope.depth_to_si is not None:
-            stmt = stmt.where(*_depth_scope_conditions(scope, ExtractedRecord.depth_md_si, ExtractedRecord.depth_md_si))
+            stmt = stmt.where(*_depth_scope_conditions(scope, record_depth, record_depth))
         if scope.period_from is not None or scope.period_to is not None:
-            stmt = stmt.where(*_interval_scope_conditions(scope, ExtractedRecord.observed_at, ExtractedRecord.observed_at))
+            stmt = stmt.where(*_interval_scope_conditions(scope, record_observed_at, record_observed_at))
         rows = (await session.execute(stmt)).scalars().all()
         ids: list[str] = []
         for row in rows:
-            if not scope.depth_overlaps(row.depth_md_si, row.depth_md_si):
+            depth_value = (
+                row.depth_md_si if row.depth_md_basis in DEPTH_WINDOW_BASES else None
+            )
+            observed_at = (
+                row.observed_at if row.observed_at_basis in TIME_WINDOW_BASES else None
+            )
+            if not scope.depth_overlaps(depth_value, depth_value):
                 continue
-            if not scope.period_overlaps(row.observed_at, row.observed_at):
+            if not scope.period_overlaps(observed_at, observed_at):
                 continue
             ids.append(row.id)
             section.items.append(
@@ -1062,7 +1116,12 @@ class ExtractedRecordsProvider(SectionProvider):
                     cites=[row.document_id],
                     confidence=row.confidence,
                     data_quality=row.validation_state,
-                    observed_at=row.observed_at,
+                    observed_at=observed_at,
+                    provenance={
+                        "observed_at": row.observed_at_basis,
+                        "depth_md_si": row.depth_md_basis,
+                        "depth_tvd_si": row.depth_tvd_basis,
+                    },
                     units=row.unit_context,
                     notes=list(row.quality_flags or []),
                 )
@@ -1123,6 +1182,14 @@ def _source_document_available(document_id, org_id: str):
 def _operation_period_expressions():
     """Share the coherent actual-vs-planned interval rule with the operational read APIs."""
     return operation_time_expressions()
+
+
+def _trusted_operation_depth_interval(operation: Operation) -> tuple[float | None, float | None]:
+    """Use only source/operator/engine-backed operation depths to narrow engineering context."""
+    return (
+        operation.depth_from_md_si if operation.depth_from_md_basis in DEPTH_WINDOW_BASES else None,
+        operation.depth_to_md_si if operation.depth_to_md_basis in DEPTH_WINDOW_BASES else None,
+    )
 
 
 def _evidence_scope_condition(scope):
@@ -1200,22 +1267,18 @@ def _evidence_scope_condition(scope):
         record_conditions.append(ExtractedRecord.operation_id == scope.operation_id)
     if scope.formation_id is not None:
         record_conditions.append(false())
-    if scope.depth_from_si is not None:
-        record_conditions.extend(
-            (ExtractedRecord.depth_md_si.is_not(None), ExtractedRecord.depth_md_si >= scope.depth_from_si)
+    if scope.depth_from_si is not None or scope.depth_to_si is not None:
+        record_depth = case(
+            (ExtractedRecord.depth_md_basis.in_(DEPTH_WINDOW_BASES), ExtractedRecord.depth_md_si),
+            else_=None,
         )
-    if scope.depth_to_si is not None:
-        record_conditions.extend(
-            (ExtractedRecord.depth_md_si.is_not(None), ExtractedRecord.depth_md_si <= scope.depth_to_si)
+        record_conditions.extend(_depth_scope_conditions(scope, record_depth, record_depth))
+    if scope.period_from is not None or scope.period_to is not None:
+        record_time = case(
+            (ExtractedRecord.observed_at_basis.in_(TIME_WINDOW_BASES), ExtractedRecord.observed_at),
+            else_=None,
         )
-    if scope.period_from is not None:
-        record_conditions.extend(
-            (ExtractedRecord.observed_at.is_not(None), ExtractedRecord.observed_at >= scope.period_from)
-        )
-    if scope.period_to is not None:
-        record_conditions.extend(
-            (ExtractedRecord.observed_at.is_not(None), ExtractedRecord.observed_at <= scope.period_to)
-        )
+        record_conditions.extend(_interval_scope_conditions(scope, record_time, record_time))
 
     operation_conditions = [
         Operation.id == EvidenceLink.subject_id,
@@ -1278,14 +1341,15 @@ def _evidence_scope_condition(scope):
     if scope.formation_id is not None:
         operation_conditions.append(false())
     if scope.depth_from_si is not None or scope.depth_to_si is not None:
-        depth_start = func.coalesce(Operation.depth_from_md_si, Operation.depth_to_md_si)
-        depth_end = func.coalesce(Operation.depth_to_md_si, Operation.depth_from_md_si)
-        operation_conditions.append(depth_start.is_not(None))
-        operation_conditions.append(depth_end.is_not(None))
-        if scope.depth_from_si is not None:
-            operation_conditions.append(depth_end >= scope.depth_from_si)
-        if scope.depth_to_si is not None:
-            operation_conditions.append(depth_start <= scope.depth_to_si)
+        depth_start = case(
+            (Operation.depth_from_md_basis.in_(DEPTH_WINDOW_BASES), Operation.depth_from_md_si),
+            else_=None,
+        )
+        depth_end = case(
+            (Operation.depth_to_md_basis.in_(DEPTH_WINDOW_BASES), Operation.depth_to_md_si),
+            else_=None,
+        )
+        operation_conditions.extend(_depth_scope_conditions(scope, depth_start, depth_end))
     if scope.period_from is not None or scope.period_to is not None:
         operation_start, operation_end = _operation_period_expressions()
         operation_conditions.extend(_interval_scope_conditions(scope, operation_start, operation_end))
@@ -1364,12 +1428,16 @@ def _evidence_scope_condition(scope):
         event_conditions.append(Event.operation_id == scope.operation_id)
     if scope.formation_id is not None:
         event_conditions.append(false())
-    if scope.depth_from_si is not None:
-        event_conditions.extend((Event.depth_md_si.is_not(None), Event.depth_md_si >= scope.depth_from_si))
-    if scope.depth_to_si is not None:
-        event_conditions.extend((Event.depth_md_si.is_not(None), Event.depth_md_si <= scope.depth_to_si))
+    if scope.depth_from_si is not None or scope.depth_to_si is not None:
+        event_conditions.extend(
+            (
+                Event.depth_md_basis.in_(("source_record", "operator_entered")),
+                *_depth_scope_conditions(scope, Event.depth_md_si, Event.depth_md_si),
+            )
+        )
     if scope.period_from is not None or scope.period_to is not None:
-        event_conditions.extend(_interval_scope_conditions(scope, Event.occurred_at, Event.ended_at))
+        event_start, event_end = event_time_expressions()
+        event_conditions.extend(_interval_scope_conditions(scope, event_start, event_end))
 
     station_stmt = (
         select(TrajectoryStation.id)
@@ -2218,6 +2286,8 @@ class ContextBuilder:
                 cite = f" [{','.join(item.cites)}]" if item.cites else ""
                 state = f" ({item.state_kind})" if item.state_kind else ""
                 lines.append(f"- {item.kind}{state}: {item.label or item.id or ''}{cite}")
+                for field, basis in sorted(item.provenance.items()):
+                    lines.append(f"    provenance {field} = {basis}")
                 for key, value in sorted(item.data.items()):
                     if value is None or value == [] or value == {}:
                         continue

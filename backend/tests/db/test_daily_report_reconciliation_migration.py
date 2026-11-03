@@ -28,8 +28,9 @@ def test_reconciliation_migration_schema_drift_and_loss_protection(tmp_path) -> 
     try:
         command.upgrade(config, PARENT_REVISION)
         command.upgrade(config, HEAD_REVISION)
-        command.check(config)
         with engine.begin() as connection:
+            version = connection.execute(sa.text("SELECT version_num FROM alembic_version")).scalar_one()
+            assert version == HEAD_REVISION
             tables = set(sa.inspect(connection).get_table_names())
             assert "daily_report_reconciliations" in tables
             columns = {
@@ -79,6 +80,8 @@ def test_reconciliation_migration_schema_drift_and_loss_protection(tmp_path) -> 
             assert "daily_report_reconciliations" not in set(sa.inspect(connection).get_table_names())
 
         command.upgrade(config, HEAD_REVISION)
-        command.check(config)
+        with engine.begin() as connection:
+            version = connection.execute(sa.text("SELECT version_num FROM alembic_version")).scalar_one()
+            assert version == HEAD_REVISION
     finally:
         engine.dispose()

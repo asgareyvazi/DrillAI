@@ -25,6 +25,7 @@ import math
 import re
 import shutil
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -170,36 +171,48 @@ async def test_f_cp16_01_slow_dns_does_not_block_event_loop_in_async_validation_
     await app.state.database.create_all()
     ids = await _seed_two_tenants(app)
 
-    def _slow_getaddrinfo(host: str, port: int):
-        time.sleep(0.18)
-        return [(2, 1, 6, "", ("93.184.216.34", port))]
-
-    monkeypatch.setattr(connectors_mod, "_custom_dns_resolver", _slow_getaddrinfo)
-
-    max_tick_lag_s = 0.0
+    event_loop_thread_id = threading.get_ident()
+    tick_count = 0
+    tick_times: list[float] = []
+    dns_observations: list[dict[str, float | int | str]] = []
+    interval = 0.01
     stop_ticker = asyncio.Event()
 
+    def _slow_getaddrinfo(host: str, port: int, *args, **kwargs):
+        before = tick_count
+        started = time.perf_counter()
+        resolver_thread_id = threading.get_ident()
+        time.sleep(0.18)
+        finished = time.perf_counter()
+        dns_observations.append(
+            {
+                "host": host,
+                "started": started,
+                "finished": finished,
+                "thread_id": resolver_thread_id,
+                "ticks_before": before,
+                "ticks_after": tick_count,
+            }
+        )
+        resolved_ip = "127.0.0.1" if len(dns_observations) >= 3 else "93.184.216.34"
+        return [(2, 1, 6, "", (resolved_ip, port))]
+
     async def _ticker() -> None:
-        nonlocal max_tick_lag_s
-        interval = 0.01
+        nonlocal tick_count
         last = time.perf_counter()
+        tick_times.append(last)
         while not stop_ticker.is_set():
             await asyncio.sleep(interval)
             now = time.perf_counter()
-            lag = (now - last) - interval
-            if lag > max_tick_lag_s:
-                max_tick_lag_s = lag
+            tick_count += 1
+            tick_times.append(now)
             last = now
 
     ticker_task = asyncio.create_task(_ticker())
     try:
         # 1. Direct call with require_dns_resolution=False and no custom resolver (using monkeypatched socket.getaddrinfo)
         monkeypatch.setattr(connectors_mod, "_custom_dns_resolver", None)
-        monkeypatch.setattr(
-            connectors_mod.socket,
-            "getaddrinfo",
-            lambda host, port, *a, **kw: (time.sleep(0.18) or [(2, 1, 6, "", ("93.184.216.34", port))]),
-        )
+        monkeypatch.setattr(connectors_mod.socket, "getaddrinfo", _slow_getaddrinfo)
         pinned = await resolve_and_pin_endpoint_async(
             "https://slow-rig.corp.example:8443/witsml/servlet",
             "witsml.1.4.1.1.soap_http",
@@ -242,19 +255,31 @@ async def test_f_cp16_01_slow_dns_does_not_block_event_loop_in_async_validation_
         worker = ConnectorWorker(app.state.database, worker_id="wrk-cp16-loop", allow_loopback=False)
         claimed = await worker.claim_connector(created["id"])
         assert claimed is not None
-        monkeypatch.setattr(
-            connectors_mod.socket,
-            "getaddrinfo",
-            lambda host, port, *a, **kw: (time.sleep(0.18) or [(2, 1, 6, "", ("127.0.0.1", port))]),
-        )
+        monkeypatch.setattr(connectors_mod.socket, "getaddrinfo", _slow_getaddrinfo)
         await worker.execute_claimed_poll(claimed)
     finally:
         stop_ticker.set()
         await ticker_task
         await app.state.database.dispose()
 
-    # Each DNS call slept 180ms on a worker thread; the event loop tick lag must remain well below 100ms.
-    assert max_tick_lag_s < 0.09, f"Event loop was blocked during DNS validation: max_tick_lag_s={max_tick_lag_s:.3f}s"
+    # Every slow lookup must run off the event-loop thread and permit timer progress while blocked.
+    assert len(dns_observations) == 3
+    assert all(observation["host"] == "slow-rig.corp.example" for observation in dns_observations)
+    assert all(observation["thread_id"] != event_loop_thread_id for observation in dns_observations)
+    assert all(observation["ticks_after"] > observation["ticks_before"] for observation in dns_observations)
+
+    dns_tick_lags = [
+        (tick_times[index] - tick_times[index - 1]) - interval
+        for observation in dns_observations
+        for index in range(1, len(tick_times))
+        if tick_times[index - 1] <= observation["finished"]
+        and tick_times[index] >= observation["started"]
+    ]
+    assert dns_tick_lags, "no event-loop ticks overlapped the deliberately slow DNS lookups"
+    max_dns_tick_lag_s = max(dns_tick_lags)
+    assert max_dns_tick_lag_s < 0.09, (
+        f"Event loop lagged during slow DNS resolution: max_tick_lag_s={max_dns_tick_lag_s:.3f}s"
+    )
 
 
 # ===========================================================================
@@ -1016,15 +1041,15 @@ def test_cp16_10_documentation_and_contract_consistency_guard():
         tuple(int(value.replace(",", "")) if value else 0 for value in (passed, skipped, deselected))
         for passed, skipped, deselected in backend_totals
     }
-    assert parsed_totals == {(1621, 0, 0), (1608, 13, 0)}, (
+    assert parsed_totals == {(1635, 0, 0), (1622, 13, 0)}, (
         f"README.md backend totals do not match the verified runs: {parsed_totals}"
     )
-    assert {sum(counts) for counts in parsed_totals} == {1621}, (
+    assert {sum(counts) for counts in parsed_totals} == {1635}, (
         "The PostgreSQL-enabled and SQLite-only totals must describe the same collected inventory."
     )
 
     assert "123 passed" in readme_text
-    assert "373 passed" in readme_text
+    assert "374 passed" in readme_text
     assert "123 passed" in fe_testing_text
     assert "42" in fe_testing_text
 

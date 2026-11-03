@@ -327,15 +327,24 @@ export interface OperationSummary {
   operation_class: string | null
   sequence: number | null
   planned_start: string | null
+  planned_start_basis: string
   planned_end: string | null
+  planned_end_basis: string
   actual_start: string | null
+  actual_start_basis: string
   actual_end: string | null
+  actual_end_basis: string
   planned_duration_hours: number | null
+  planned_duration_basis: string
   actual_duration_hours: number | null
+  actual_duration_basis: string
   duration_variance_hours: number | null
   npt_hours: number | null
+  npt_hours_basis: string
   depth_from_md_si: number | null
+  depth_from_md_basis: string
   depth_to_md_si: number | null
+  depth_to_md_basis: string
   is_productive: boolean | null
   data_quality: string | null
   source: string | null
@@ -377,7 +386,10 @@ export interface NptCase {
   cause: string | null
   hours: number
   started_at: string | null
+  started_at_basis: string
   ended_at: string | null
+  ended_at_basis: string
+  hours_basis: string
   depth_md_si: number | null
   section_id: string | null
   operation_id: string | null
@@ -490,6 +502,8 @@ export interface TimelineEntry {
   id: string
   at: string | null
   end_at: string | null
+  time_basis: string | null
+  end_time_basis: string | null
   title: string
   summary: string | null
   status: string | null
@@ -519,12 +533,22 @@ export interface OperationCreatePayload {
   kind?: string
   phase?: string | null
   status?: string
+  planned_start?: string | null
+  planned_start_basis?: string
+  planned_end?: string | null
+  planned_end_basis?: string
   actual_start?: string | null
+  actual_start_basis?: string
   actual_end?: string | null
+  actual_end_basis?: string
   actual_duration_hours?: number | null
+  actual_duration_basis?: string
   depth_from_md_si?: number | null
+  depth_from_md_basis?: string
   depth_to_md_si?: number | null
+  depth_to_md_basis?: string
   npt_hours?: number | null
+  npt_hours_basis?: string
   is_productive?: boolean | null
   remarks?: string | null
   source_kind?: string
@@ -537,12 +561,20 @@ export interface EventCreatePayload {
   kind?: string
   severity?: string
   occurred_at?: string | null
+  occurred_at_basis?: string
   ended_at?: string | null
+  ended_at_basis?: string
   description?: string | null
   duration_hours?: number | null
+  duration_basis?: string
   depth_md_si?: number | null
+  depth_md_basis?: string
   depth_tvd_si?: number | null
+  depth_tvd_basis?: string
   npt_hours?: number | null
+  npt_hours_basis?: string
+  cost_usd?: number | null
+  cost_basis?: string
   npt_category?: string | null
   is_npt?: boolean | null
   root_cause?: string | null
@@ -575,18 +607,30 @@ export interface OperationRow {
   phase: string
   status: string
   planned_start: string | null
+  planned_start_basis: string
   planned_end: string | null
+  planned_end_basis: string
   actual_start: string | null
+  actual_start_basis: string
   actual_end: string | null
+  actual_end_basis: string
   planned_duration_hours: number | null
+  planned_duration_basis: string
   actual_duration_hours: number | null
+  actual_duration_basis: string
   depth_from_md_si: number | null
+  depth_from_md_basis: string
   depth_to_md_si: number | null
+  depth_to_md_basis: string
   hole_diameter_si: number | null
+  hole_diameter_basis: string
   is_productive: boolean | null
   npt_hours: number | null
+  npt_hours_basis: string
   invisible_lost_time_hours: number | null
+  invisible_lost_time_basis: string
   cost_usd: number | null
+  cost_basis: string
   source: string | null
   source_kind: string | null
   source_document_id: string | null
@@ -622,17 +666,26 @@ export interface EventRow {
   title: string
   description: string | null
   occurred_at: string | null
+  occurred_at_basis: string
+  unqualified_occurred_at?: string | null
   ended_at: string | null
+  ended_at_basis: string
+  unqualified_ended_at?: string | null
   duration_hours: number | null
+  duration_basis: string
   depth_md_si: number | null
+  depth_md_basis: string
   depth_tvd_si: number | null
+  depth_tvd_basis: string
   severity: string
   status: string
   is_npt: boolean
   npt_code: string | null
   npt_category: string | null
   npt_hours: number | null
+  npt_hours_basis: string
   cost_usd: number | null
+  cost_basis: string
   root_cause: string | null
   cause_basis: string
   classification_source: string
@@ -716,8 +769,11 @@ export interface ExtractionRecord {
   page_number: number | null
   region_id: string | null
   depth_md_si: number | null
+  depth_md_basis: string
   depth_tvd_si: number | null
+  depth_tvd_basis: string
   observed_at: string | null
+  observed_at_basis: string
   /** How the row was read (`regex_header`, `table_row`, `label_value`, …) and by which version. */
   method: string | null
   method_version: string | null

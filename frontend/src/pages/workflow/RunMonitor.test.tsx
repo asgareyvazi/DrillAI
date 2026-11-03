@@ -248,6 +248,19 @@ describe('run monitor: a run waiting for a human', () => {
     expect([...sequences].sort((a, b) => a - b)).toEqual(sequences)
   })
 
+  it('keeps a missing occurrence time unknown instead of using the event creation time', async () => {
+    const first = at(waiting.events ?? [], 0, 'waiting run events')
+    api.getRun.mockResolvedValue({
+      ...waiting,
+      events: [{ ...first, occurred_at: null, created_at: '2050-01-01T00:00:00Z' }],
+    })
+    renderMonitor(url)
+    await userEvent.click(await screen.findByRole('tab', { name: /event/i }))
+    const row = await screen.findByTestId('run-event')
+    expect(within(row).getByText('Unknown')).toBeInTheDocument()
+    expect(within(row).queryByText(/2050/)).not.toBeInTheDocument()
+  })
+
   it('tells the approver what they are deciding, and blocks resuming an undecided approval', async () => {
     renderMonitor(url)
     const card = await screen.findByTestId('approval-card')

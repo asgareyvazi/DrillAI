@@ -53,6 +53,56 @@ async def test_create_an_event(fabric: Fabric) -> None:
     assert set(body["allowed_transitions"]) == {"acknowledged", "investigating", "closed", "cancelled"}
 
 
+async def test_missing_occurrence_time_stays_unknown_in_the_api(fabric: Fabric) -> None:
+    response = await fabric.http.post(
+        "/api/v1/events",
+        json={"well_id": fabric.alpha.well_id, "title": "Undated observation", "kind": "observation"},
+        headers=fabric.alpha.headers,
+    )
+    assert response.status_code == 201, response.text
+    body = response.json()
+    assert body["occurred_at"] is None
+    assert body["occurred_at_basis"] == "unknown"
+    assert body["unqualified_occurred_at"] is None
+    assert body["created_at"] is not None
+
+
+async def test_unverified_event_time_is_not_serialized_as_an_occurrence_or_time_filtered(fabric: Fabric) -> None:
+    response = await _create(
+        fabric,
+        fabric.alpha,
+        title="Legacy timestamp without source provenance",
+        occurred_at_basis="legacy_unverified",
+    )
+    assert response.status_code == 201, response.text
+    body = response.json()
+    assert body["occurred_at"] is None
+    assert body["occurred_at_basis"] == "legacy_unverified"
+    assert body["unqualified_occurred_at"].startswith("2026-03-15T07:15:00")
+
+    listing = await fabric.http.get(
+        "/api/v1/events",
+        params={
+            "well_id": fabric.alpha.well_id,
+            "since": "2026-03-15T00:00:00+00:00",
+            "until": "2026-03-16T00:00:00+00:00",
+        },
+        headers=fabric.alpha.headers,
+    )
+    assert listing.status_code == 200, listing.text
+    assert body["id"] not in {item["id"] for item in listing.json()["items"]}
+
+
+async def test_event_rejects_a_report_date_anchor_as_an_occurrence_time(fabric: Fabric) -> None:
+    response = await _create(
+        fabric,
+        fabric.alpha,
+        occurred_at_basis="report_date_anchor",
+    )
+    assert response.status_code == 422, response.text
+    assert "occurred_at_basis is not recognised" in response.json()["error"]["message"]
+
+
 async def test_event_timestamps_require_offsets_and_valid_depths(fabric: Fabric) -> None:
     naive = await _create(fabric, fabric.alpha, occurred_at="2026-03-15T07:15:00")
     assert naive.status_code == 422, naive.text
@@ -347,7 +397,8 @@ async def test_the_lifecycle_moves_forward_only(fabric: Fabric) -> None:
     assert closed.status_code == 200, closed.text
     body = closed.json()
     assert body["status"] == "closed"
-    assert body["ended_at"] is not None
+    assert body["ended_at"] is None, "a lifecycle close is not an observed event end time"
+    assert body["ended_at_basis"] == "unknown"
     assert body["allowed_transitions"] == []
 
     reopened = await fabric.http.post(

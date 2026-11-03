@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import datetime as dt
 
-from sqlalchemy import Boolean, Float, ForeignKey, Index, String, text
+from sqlalchemy import Boolean, CheckConstraint, Float, ForeignKey, Index, String, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from drillai.db.base import (
@@ -344,6 +344,28 @@ class ExtractedRecord(Base, IdMixin, CreatedAtMixin, OrgScopedMixin):
 
     __tablename__ = "extracted_records"
     id_prefix = "rec"
+    __table_args__ = (
+        CheckConstraint(
+            "observed_at_basis IN ('unknown', 'source_record', 'report_header_date', "
+            "'operator_entered', 'legacy_unverified')",
+            name="extracted_record_time_provenance_valid",
+        ),
+        CheckConstraint(
+            "depth_md_basis IN ('unknown', 'source_record', 'operator_entered', 'engine_derived', "
+            "'legacy_unverified') AND depth_tvd_basis IN ('unknown', 'source_record', "
+            "'operator_entered', 'engine_derived', 'legacy_unverified')",
+            name="extracted_record_depth_provenance_valid",
+        ),
+        CheckConstraint(
+            "((observed_at IS NULL AND observed_at_basis IN ('unknown', 'legacy_unverified')) OR "
+            "(observed_at IS NOT NULL AND observed_at_basis <> 'unknown')) AND "
+            "((depth_md_si IS NULL AND depth_md_basis IN ('unknown', 'legacy_unverified')) OR "
+            "(depth_md_si IS NOT NULL AND depth_md_basis <> 'unknown')) AND "
+            "((depth_tvd_si IS NULL AND depth_tvd_basis IN ('unknown', 'legacy_unverified')) OR "
+            "(depth_tvd_si IS NOT NULL AND depth_tvd_basis <> 'unknown'))",
+            name="extracted_record_provenance_consistent",
+        ),
+    )
 
     document_id: Mapped[str | None] = mapped_column(
         ForeignKey("documents.id", ondelete="CASCADE"), index=True
@@ -360,8 +382,17 @@ class ExtractedRecord(Base, IdMixin, CreatedAtMixin, OrgScopedMixin):
     payload_schema_version: Mapped[int] = mapped_column(IntType, default=1, nullable=False)
     payload: Mapped[dict] = mapped_column(JsonType, default=dict, nullable=False)
     observed_at: Mapped[dt.datetime | None] = mapped_column(UtcDateTime, index=True)
+    observed_at_basis: Mapped[str] = mapped_column(
+        String(32), default="legacy_unverified", server_default=text("'unknown'"), nullable=False
+    )
     depth_md_si: Mapped[float | None] = mapped_column(Float)
+    depth_md_basis: Mapped[str] = mapped_column(
+        String(32), default="legacy_unverified", server_default=text("'unknown'"), nullable=False
+    )
     depth_tvd_si: Mapped[float | None] = mapped_column(Float)
+    depth_tvd_basis: Mapped[str] = mapped_column(
+        String(32), default="legacy_unverified", server_default=text("'unknown'"), nullable=False
+    )
     method: Mapped[str] = mapped_column(String(40), default="rule", nullable=False)
     method_version: Mapped[str | None] = mapped_column(String(40))
     confidence: Mapped[float | None] = mapped_column(Float)

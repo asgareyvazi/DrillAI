@@ -41,11 +41,14 @@ from drillai.core.ids import new_id
 from drillai.db.models import (
     CAUSE_BASES,
     CLASSIFICATION_SOURCES,
+    DEPTH_PROVENANCE_BASES,
     EVENT_KINDS,
     EVENT_SEVERITIES,
     EVENT_STATUSES,
+    EVENT_TIME_PROVENANCE_BASES,
     NPT_CATEGORIES,
     SOURCE_KINDS,
+    VALUE_PROVENANCE_BASES,
     Document,
     Event,
     EvidenceLink,
@@ -65,7 +68,7 @@ from drillai.documents.scope import (
     validate_source_record,
     validate_source_scope,
 )
-from drillai.operations.time_windows import interval_overlap_conditions
+from drillai.operations.time_windows import event_time_expressions, interval_overlap_conditions
 from drillai.security.actions import Principal
 from drillai.telemetry.outbox import emit
 
@@ -164,6 +167,133 @@ def _parse_datetime_change(field_name: str, value: Any) -> dt.datetime | None:
     return parsed.astimezone(dt.UTC)
 
 
+_EVENT_TIME_FIELDS = {
+    "occurred_at": "occurred_at_basis",
+    "ended_at": "ended_at_basis",
+}
+_EVENT_DEPTH_BASIS_FIELDS = {
+    "depth_md_si": "depth_md_basis",
+    "depth_tvd_si": "depth_tvd_basis",
+}
+_EVENT_VALUE_BASIS_FIELDS = {
+    "duration_hours": "duration_basis",
+    "npt_hours": "npt_hours_basis",
+    "cost_usd": "cost_basis",
+}
+def _event_basis_for_value(
+    *,
+    field: str,
+    value: Any,
+    basis: str | None,
+    allowed: tuple[str, ...],
+    default: str,
+) -> str:
+    selected = ("unknown" if value is None else default) if basis is None else basis
+    if selected not in allowed:
+        raise ValidationFailed(
+            f"{field}_basis is not recognised",
+            details={"field": f"{field}_basis", "value": selected, "allowed": list(allowed)},
+        )
+    if field in _EVENT_TIME_FIELDS and value is not None and selected not in {
+        "source_record",
+        "operator_entered",
+        "legacy_unverified",
+    }:
+        raise ValidationFailed(
+            f"{field} cannot use a report anchor, linked operation, or derived time as an observed event time"
+        )
+    if value is None and selected not in {"unknown", "legacy_unverified"}:
+        raise ValidationFailed(f"{field}_basis requires a value")
+    if value is not None and selected == "unknown":
+        raise ValidationFailed(f"{field} cannot have unknown provenance when a value is present")
+    return selected
+
+
+def _prepare_event_create_provenance(
+    *,
+    occurred_at: dt.datetime | None,
+    occurred_at_basis: str | None,
+    fields: dict[str, Any],
+    source_kind: str,
+) -> str:
+    time_default = "operator_entered" if source_kind == "manual" else "legacy_unverified"
+    selected_occurred_basis = _event_basis_for_value(
+        field="occurred_at",
+        value=occurred_at,
+        basis=occurred_at_basis,
+        allowed=EVENT_TIME_PROVENANCE_BASES,
+        default=time_default,
+    )
+    ended_at = fields.get("ended_at")
+    fields["ended_at_basis"] = _event_basis_for_value(
+        field="ended_at",
+        value=ended_at,
+        basis=fields.get("ended_at_basis"),
+        allowed=EVENT_TIME_PROVENANCE_BASES,
+        default=time_default,
+    )
+    for field, basis_field in _EVENT_DEPTH_BASIS_FIELDS.items():
+        fields[basis_field] = _event_basis_for_value(
+            field=field,
+            value=fields.get(field),
+            basis=fields.get(basis_field),
+            allowed=DEPTH_PROVENANCE_BASES,
+            default="operator_entered" if source_kind == "manual" else "legacy_unverified",
+        )
+    for field, basis_field in _EVENT_VALUE_BASIS_FIELDS.items():
+        fields[basis_field] = _event_basis_for_value(
+            field=field,
+            value=fields.get(field),
+            basis=fields.get(basis_field),
+            allowed=VALUE_PROVENANCE_BASES,
+            default="reported" if source_kind == "manual" else "legacy_unverified",
+        )
+    return selected_occurred_basis
+
+
+def _apply_event_update_provenance(
+    changes: dict[str, Any], *, provenance: dict[str, str] | None
+) -> None:
+    supplied = provenance or {}
+    allowed_fields = {*_EVENT_TIME_FIELDS, *_EVENT_DEPTH_BASIS_FIELDS, *_EVENT_VALUE_BASIS_FIELDS}
+    unknown = set(supplied) - allowed_fields
+    if unknown:
+        raise ValidationFailed(
+            "provenance was supplied for fields that are not mutable event measurements",
+            details={"fields": sorted(unknown), "allowed": sorted(allowed_fields)},
+        )
+    for field, basis_field in _EVENT_TIME_FIELDS.items():
+        if field not in changes:
+            continue
+        changes[basis_field] = _event_basis_for_value(
+            field=field,
+            value=changes[field],
+            basis=supplied.get(field),
+            allowed=EVENT_TIME_PROVENANCE_BASES,
+            default="operator_entered",
+        )
+    for field, basis_field in _EVENT_DEPTH_BASIS_FIELDS.items():
+        if field not in changes:
+            continue
+        changes[basis_field] = _event_basis_for_value(
+            field=field,
+            value=changes[field],
+            basis=supplied.get(field),
+            allowed=DEPTH_PROVENANCE_BASES,
+            default="operator_entered",
+        )
+    for field, basis_field in _EVENT_VALUE_BASIS_FIELDS.items():
+        if field not in changes:
+            continue
+        changes[basis_field] = _event_basis_for_value(
+            field=field,
+            value=changes[field],
+            basis=supplied.get(field),
+            allowed=VALUE_PROVENANCE_BASES,
+            default="reported",
+        )
+
+
 class EventService:
     """Reads and writes for ``events``. Every method is organization-scoped."""
 
@@ -237,16 +367,17 @@ class EventService:
             stmt = stmt.where(Event.source_kind == source_kind)
         if document_id:
             stmt = stmt.where(Event.source_document_id == document_id)
+        event_start, event_end = event_time_expressions()
         if since is not None or until is not None:
             stmt = stmt.where(
                 *interval_overlap_conditions(
-                    Event.occurred_at,
-                    Event.ended_at,
+                    event_start,
+                    event_end,
                     since=since,
                     until=until,
                 )
             )
-        return stmt.order_by(Event.occurred_at.asc(), Event.id.asc())
+        return stmt.order_by(event_start.is_(None).asc(), event_start.asc(), Event.id.asc())
 
     async def count(self, stmt: Select) -> int:
         return (await self.session.execute(select(func.count()).select_from(stmt.subquery()))).scalar_one()
@@ -275,6 +406,7 @@ class EventService:
         kind: str = "observation",
         severity: str = "low",
         occurred_at: dt.datetime | None = None,
+        occurred_at_basis: str | None = None,
         operation_id: str | None = None,
         status: str = "open",
         source_kind: str = "manual",
@@ -345,6 +477,12 @@ class EventService:
             source_kind=source_kind,
             cited=bool(evidence_ref or source_record_id),
         )
+        occurred_at_basis = _prepare_event_create_provenance(
+            occurred_at=occurred_at,
+            occurred_at_basis=occurred_at_basis,
+            fields=fields,
+            source_kind=source_kind,
+        )
         if (
             fields.get("ended_at") is not None
             and occurred_at is not None
@@ -395,7 +533,8 @@ class EventService:
             title=title,
             severity=severity,
             status=status,
-            occurred_at=occurred_at or dt.datetime.now(tz=dt.UTC),
+            occurred_at=occurred_at,
+            occurred_at_basis=occurred_at_basis,
             # ``is_npt`` is about accounting, ``kind`` is about what happened. A caller may state
             # either; neither is derived from the other, and a category without hours is not
             # automatically NPT. ``not_npt`` is the vocabulary's way of saying "classified, and the
@@ -462,6 +601,7 @@ class EventService:
         expected_updated_at: dt.datetime,
         reason: str,
         changes: dict[str, Any],
+        provenance: dict[str, str] | None = None,
     ) -> tuple[Event, list[ChangeRecord]]:
         self._require(reason=reason)
         changes = dict(changes)
@@ -514,6 +654,7 @@ class EventService:
         for field_name in ("npt_hours", "duration_hours", "depth_md_si", "depth_tvd_si"):
             if field_name in changes:
                 _validate_nonnegative_measurement(field_name, changes[field_name])
+        _apply_event_update_provenance(changes, provenance=provenance)
         target_npt_category = changes.get("npt_category", event.npt_category)
         target_is_npt = changes.get("is_npt", event.is_npt)
         target_npt_hours = changes.get("npt_hours", event.npt_hours)
@@ -664,10 +805,8 @@ class EventService:
             )
         before = event.status
         event.status = status
-        if status == "closed" and event.ended_at is None:
-            # Closing an event that never recorded an end is normal for a point-in-time occurrence;
-            # the end is stamped, not invented as a duration.
-            event.ended_at = event.occurred_at
+        # A lifecycle transition is administrative time, not the event's actual end time. Leave
+        # ended_at unset unless a user or source record explicitly recorded an end.
         await self.session.flush()
         await record_audit(
             self.session,

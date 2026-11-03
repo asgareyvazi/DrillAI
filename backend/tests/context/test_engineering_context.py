@@ -116,9 +116,13 @@ async def well_context(session):
             sequence=sequence,
             name=f"Drill {section.name}",
             actual_start=dt.datetime(2026, 1 if is_surface else 2, 5, tzinfo=dt.UTC),
+            actual_start_basis="source_record",
             actual_end=dt.datetime(2026, 1 if is_surface else 2, 6, tzinfo=dt.UTC),
+            actual_end_basis="source_record",
             depth_from_md_si=0.0 if is_surface else 800.0,
+            depth_from_md_basis="source_record",
             depth_to_md_si=800.0 if is_surface else 1500.0,
+            depth_to_md_basis="source_record",
         )
         session.add(operation)
         await session.flush()
@@ -187,7 +191,9 @@ async def well_context(session):
             section_id=section.id,
             operation_id=operation.id,
             depth_md_si=depth_md,
+            depth_md_basis="source_record",
             observed_at=observed_at,
+            observed_at_basis="source_record",
             record_type="mud_properties",
             payload_schema_key="extracted.mud_properties",
             payload={"mud_weight": 9.2 if section is surface else 12.4},
@@ -350,7 +356,9 @@ async def test_evidence_period_is_proved_by_the_linked_record_or_operation(sessi
         payload_schema_key="extracted.depth_reading",
         payload={"bit_depth_si": 1400.0},
         observed_at=dt.datetime(2026, 3, 1, tzinfo=dt.UTC),
+        observed_at_basis="source_record",
         depth_md_si=1400.0,
+        depth_md_basis="source_record",
         method="test",
         confidence=0.9,
         validation_state="extracted",
@@ -365,7 +373,9 @@ async def test_evidence_period_is_proved_by_the_linked_record_or_operation(sessi
         sequence=99,
         name="March-only operation",
         actual_start=dt.datetime(2026, 3, 2, tzinfo=dt.UTC),
+        actual_start_basis="source_record",
         actual_end=dt.datetime(2026, 3, 3, tzinfo=dt.UTC),
+        actual_end_basis="source_record",
     )
     session.add_all([out_of_period_record, out_of_period_operation])
     await session.flush()
@@ -467,8 +477,11 @@ async def test_event_and_station_evidence_prove_scope_time_depth_and_document_co
         category="lost_circulation",
         title="Target-section event",
         occurred_at=dt.datetime(2026, 2, 5, 10, tzinfo=dt.UTC),
+        occurred_at_basis="source_record",
         ended_at=dt.datetime(2026, 2, 5, 11, tzinfo=dt.UTC),
+        ended_at_basis="source_record",
         depth_md_si=1000.0,
+        depth_md_basis="source_record",
         source="report",
         source_document_id=target_document.id,
     )
@@ -483,10 +496,30 @@ async def test_event_and_station_evidence_prove_scope_time_depth_and_document_co
         category="weather",
         title="Other-section event",
         occurred_at=dt.datetime(2026, 1, 5, 10, tzinfo=dt.UTC),
+        occurred_at_basis="source_record",
         ended_at=dt.datetime(2026, 1, 5, 11, tzinfo=dt.UTC),
+        ended_at_basis="source_record",
         depth_md_si=400.0,
+        depth_md_basis="source_record",
         source="report",
         source_document_id=other_document.id,
+    )
+    unverified_event = Event(
+        org_id=well_context["org"].id,
+        project_id=well_context["project"].id,
+        well_id=well_context["well"].id,
+        wellbore_id=well_context["wellbore"].id,
+        section_id=well_context["intermediate"].id,
+        operation_id=target_operation.id,
+        kind="npt",
+        category="lost_circulation",
+        title="Unverified event timestamp",
+        occurred_at=dt.datetime(2026, 2, 5, 10, tzinfo=dt.UTC),
+        occurred_at_basis="legacy_unverified",
+        depth_md_si=1000.0,
+        depth_md_basis="source_record",
+        source="report",
+        source_document_id=target_document.id,
     )
     quarantined_artifact = RawArtifact(
         org_id=well_context["org"].id,
@@ -525,12 +558,17 @@ async def test_event_and_station_evidence_prove_scope_time_depth_and_document_co
         category="lost_circulation",
         title="Derived from quarantined source",
         occurred_at=dt.datetime(2026, 2, 5, 10, tzinfo=dt.UTC),
+        occurred_at_basis="source_record",
         ended_at=dt.datetime(2026, 2, 5, 11, tzinfo=dt.UTC),
+        ended_at_basis="source_record",
         depth_md_si=1000.0,
+        depth_md_basis="source_record",
         source="report",
         source_document_id=quarantined_document.id,
     )
-    session.add_all([target_station, other_station, target_event, other_event, quarantined_event])
+    session.add_all(
+        [target_station, other_station, target_event, other_event, unverified_event, quarantined_event]
+    )
     await session.flush()
     target_station_link = EvidenceLink(
         org_id=well_context["org"].id,
@@ -556,6 +594,15 @@ async def test_event_and_station_evidence_prove_scope_time_depth_and_document_co
         subject_id=target_event.id,
         evidence_kind="event",
         evidence_id=target_event.id,
+        document_id=target_document.id,
+        well_id=well_context["well"].id,
+    )
+    unverified_event_link = EvidenceLink(
+        org_id=well_context["org"].id,
+        subject_kind="event",
+        subject_id=unverified_event.id,
+        evidence_kind="event",
+        evidence_id=unverified_event.id,
         document_id=target_document.id,
         well_id=well_context["well"].id,
     )
@@ -591,6 +638,7 @@ async def test_event_and_station_evidence_prove_scope_time_depth_and_document_co
             target_station_link,
             other_station_link,
             target_event_link,
+            unverified_event_link,
             mismatched_event_document_link,
             other_event_link,
             quarantined_event_link,
@@ -623,6 +671,7 @@ async def test_event_and_station_evidence_prove_scope_time_depth_and_document_co
         target_event_link.id: "event",
     }
     assert other_station_link.id not in returned
+    assert unverified_event_link.id not in returned
     assert mismatched_event_document_link.id not in returned
     assert other_event_link.id not in returned
     assert quarantined_event_link.id not in returned
@@ -645,7 +694,9 @@ async def test_one_trajectory_can_use_trusted_stations_from_multiple_documents(s
             payload_schema_key="extracted.survey_station",
             payload={"md_si": md_si, "inclination_deg": 4.0, "azimuth_deg": 90.0},
             observed_at=observed_at,
+            observed_at_basis="source_record",
             depth_md_si=md_si,
+            depth_md_basis="source_record",
             method="survey_table",
             confidence=0.95,
             validation_state="rule_validated",
@@ -922,7 +973,9 @@ async def test_trajectory_scope_derives_wellbore_from_section_and_operation(sess
         sequence=3,
         name="Side-track drilling",
         depth_from_md_si=800.0,
+        depth_from_md_basis="source_record",
         depth_to_md_si=1000.0,
+        depth_to_md_basis="source_record",
     )
     primary_trajectory = Trajectory(
         org_id=well_context["org"].id,
@@ -1004,6 +1057,21 @@ async def test_trajectory_scope_derives_wellbore_from_section_and_operation(sess
     ]
     assert all(item.kind != "trajectory_summary" for item in operation_result.items)
 
+    side_operation.depth_from_md_basis = "legacy_unverified"
+    side_operation.depth_to_md_basis = "legacy_unverified"
+    await session.flush()
+    untrusted_operation_bundle = await default_context_builder().build(
+        session,
+        _request(
+            well_context,
+            scope={"wellbore_id": None, "operation_id": side_operation.id},
+            sections=["trajectory"],
+        ),
+    )
+    untrusted_operation_result = untrusted_operation_bundle.section("trajectory")
+    assert untrusted_operation_result is not None and untrusted_operation_result.is_empty
+    assert "trusted depth interval" in (untrusted_operation_result.empty_reason or "")
+
 
 async def test_operation_period_uses_class_specific_timestamps_without_mixing_actual_and_plan(session, well_context):
     planned = Operation(
@@ -1016,7 +1084,9 @@ async def test_operation_period_uses_class_specific_timestamps_without_mixing_ac
         sequence=10,
         name="February planned operation",
         planned_start=dt.datetime(2026, 2, 10, tzinfo=dt.UTC),
+        planned_start_basis="source_record",
         planned_end=dt.datetime(2026, 2, 11, tzinfo=dt.UTC),
+        planned_end_basis="source_record",
         actual_start=dt.datetime(2026, 3, 10, tzinfo=dt.UTC),
         actual_end=dt.datetime(2026, 3, 11, tzinfo=dt.UTC),
     )

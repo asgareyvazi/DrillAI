@@ -749,8 +749,15 @@ async def review_extracted_record(
                     f"corrected {payload_key} must be null or a finite non-negative SI value"
                 )
             update_values[column_key] = float(value) if value is not None else None
+            basis_field = f"{column_key.removesuffix('_si')}_basis"
+            update_values[basis_field] = "operator_entered" if value is not None else "unknown"
 
-    for field_name in ("observed_at", "depth_md_si", "depth_tvd_si"):
+    basis_fields = {
+        "observed_at": "observed_at_basis",
+        "depth_md_si": "depth_md_basis",
+        "depth_tvd_si": "depth_tvd_basis",
+    }
+    for field_name, basis_field in basis_fields.items():
         if field_name not in changed_fields:
             continue
         value = getattr(payload.changes, field_name)
@@ -763,6 +770,7 @@ async def review_extracted_record(
         ):
             raise ValidationFailed(f"{field_name} must be a finite non-negative SI value")
         update_values[field_name] = value
+        update_values[basis_field] = "operator_entered" if value is not None else "unknown"
 
     if payload.decision == "validate":
         update_values["validated_by"] = auth.principal.id
@@ -779,8 +787,11 @@ async def review_extracted_record(
         "validation_notes_truncated": len(previous_validation_notes) > 512,
         "payload_sha256": _review_payload_hash(record.payload or {}),
         "observed_at": record.observed_at.isoformat() if record.observed_at else None,
+        "observed_at_basis": record.observed_at_basis,
         "depth_md_si": record.depth_md_si,
+        "depth_md_basis": record.depth_md_basis,
         "depth_tvd_si": record.depth_tvd_si,
+        "depth_tvd_basis": record.depth_tvd_basis,
     }
     result = await session.execute(
         update(ExtractedRecord)
@@ -814,8 +825,11 @@ async def review_extracted_record(
         "review_version": record.review_version,
         "payload_sha256": _review_payload_hash(record.payload or {}),
         "observed_at": record.observed_at.isoformat() if record.observed_at else None,
+        "observed_at_basis": record.observed_at_basis,
         "depth_md_si": record.depth_md_si,
+        "depth_md_basis": record.depth_md_basis,
         "depth_tvd_si": record.depth_tvd_si,
+        "depth_tvd_basis": record.depth_tvd_basis,
     }
     await record_audit(
         session,

@@ -194,7 +194,7 @@ async def test_ddr_promotion_produces_operations_events_and_state(client):
     assert all(item["how_to_supply"] for item in state["missing"])
 
 
-async def test_ddr_date_replays_ordered_durations_into_a_utc_operation_timeline(client, db):
+async def test_ddr_report_date_and_durations_do_not_fabricate_operation_event_times(client, db):
     ids = await _well_with_report(client)
     listing = await client.get(
         "/api/v1/operations",
@@ -203,18 +203,11 @@ async def test_ddr_date_replays_ordered_durations_into_a_utc_operation_timeline(
     )
     assert listing.status_code == 200, listing.text
     operations = listing.json()["items"]
-    assert [item["actual_start"] for item in operations] == [
-        "2026-03-15T00:00:00+00:00",
-        "2026-03-15T08:30:00+00:00",
-        "2026-03-15T09:00:00+00:00",
-        "2026-03-15T15:00:00+00:00",
-    ]
-    assert [item["actual_end"] for item in operations] == [
-        "2026-03-15T08:30:00+00:00",
-        "2026-03-15T09:00:00+00:00",
-        "2026-03-15T15:00:00+00:00",
-        "2026-03-15T17:30:00+00:00",
-    ]
+    assert [item["actual_start"] for item in operations] == [None] * 4
+    assert [item["actual_end"] for item in operations] == [None] * 4
+    assert [item["actual_start_basis"] for item in operations] == ["unknown"] * 4
+    assert [item["actual_end_basis"] for item in operations] == ["unknown"] * 4
+    assert [item["actual_duration_basis"] for item in operations] == ["reported"] * 4
 
     async with db.session() as session:
         promoted = (
@@ -224,12 +217,7 @@ async def test_ddr_date_replays_ordered_durations_into_a_utc_operation_timeline(
                 ).order_by(Operation.sequence)
             )
         ).scalars().all()
-    assert [row.attributes["time_basis"] for row in promoted] == [
-        "report_date",
-        "replayed_from_report_duration",
-        "replayed_from_report_duration",
-        "replayed_from_report_duration",
-    ]
+    assert [row.attributes["time_basis"] for row in promoted] == ["unknown"] * 4
 
 
 async def test_ddr_period_start_precedes_issue_date_and_is_normalized_to_utc(client, db):
@@ -259,12 +247,10 @@ async def test_ddr_period_start_precedes_issue_date_and_is_normalized_to_utc(cli
         headers=headers(),
     )
     operations = listing.json()["items"]
-    assert [item["actual_start"] for item in operations] == [
-        "2026-03-15T04:00:00+00:00",
-        "2026-03-15T12:30:00+00:00",
-        "2026-03-15T13:00:00+00:00",
-        "2026-03-15T19:00:00+00:00",
-    ]
+    assert [item["actual_start"] for item in operations] == [None] * 4
+    assert [item["actual_start_basis"] for item in operations] == ["unknown"] * 4
+    assert [item["actual_end"] for item in operations] == [None] * 4
+    assert [item["actual_end_basis"] for item in operations] == ["unknown"] * 4
     async with db.session() as session:
         promoted = (
             await session.execute(
@@ -273,8 +259,9 @@ async def test_ddr_period_start_precedes_issue_date_and_is_normalized_to_utc(cli
                 ).order_by(Operation.sequence)
             )
         ).scalars().all()
-    assert promoted[0].actual_start == dt.datetime(2026, 3, 15, 4, tzinfo=dt.UTC)
-    assert promoted[0].attributes["time_basis"] == "report_date"
+    assert promoted[0].actual_start is None
+    assert promoted[0].actual_start_basis == "unknown"
+    assert promoted[0].attributes["time_basis"] == "unknown"
 
 
 async def test_generic_depth_parameter_is_not_reinterpreted_as_measured_depth(client, db):

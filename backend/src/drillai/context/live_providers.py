@@ -311,14 +311,17 @@ class RecentEventsProvider(SectionProvider):
                         "subject_kind": row.subject_kind,
                         "subject_id": row.subject_id,
                         "occurred_at": row.occurred_at.isoformat() if row.occurred_at else None,
+                        "occurred_at_basis": "system_recorded",
                         "published_at": row.published_at.isoformat() if row.published_at else None,
+                        "published_at_basis": "system_recorded",
                         "schema_version": row.schema_version,
                         "trace_id": row.trace_id,
                         "payload": dict(row.payload or {}),
                     },
                     source_kind="event_stream",
                     source_ids=[row.id] + ([row.well_id] if row.well_id else []),
-                    observed_at=row.occurred_at,
+                    # This is the system's stream-event time, not a physical event occurrence.
+                    provenance={"occurred_at": "system_recorded", "published_at": "system_recorded"},
                     received_at=row.published_at,
                     notes=[f"stream sequence {stream_seq}"],
                 )

@@ -47,6 +47,43 @@ import {
 } from '../../lib/format'
 import { useSession } from '../../stores/session'
 
+function ProvenanceTime({ value, basis }: { value: string | null; basis?: string | null }) {
+  const { t, locale } = useI18n()
+  return (
+    <span className="inline-flex flex-col gap-0.5 text-[11px]">
+      <span dir="ltr">{value ? formatDateTime(value, locale) : t('common.unknown')}</span>
+      <span className="text-graphite-500">{t(`operations.timeBasis.${basis || 'unknown'}`)}</span>
+    </span>
+  )
+}
+
+type OperationTimeFields = {
+  operation_class: string | null
+  planned_start: string | null
+  planned_start_basis: string
+  planned_end: string | null
+  planned_end_basis: string
+  actual_start: string | null
+  actual_start_basis: string
+  actual_end: string | null
+  actual_end_basis: string
+}
+
+function OperationTimeWindow({ operation }: { operation: OperationTimeFields }) {
+  const planned = operation.operation_class === 'plan' || operation.operation_class === 'forecast'
+  const start = planned ? operation.planned_start : operation.actual_start
+  const startBasis = planned ? operation.planned_start_basis : operation.actual_start_basis
+  const end = planned ? operation.planned_end : operation.actual_end
+  const endBasis = planned ? operation.planned_end_basis : operation.actual_end_basis
+  return (
+    <span className="inline-flex flex-wrap items-center gap-1">
+      <ProvenanceTime value={start} basis={startBasis} />
+      <span aria-hidden="true">→</span>
+      <ProvenanceTime value={end} basis={endBasis} />
+    </span>
+  )
+}
+
 // --------------------------------------------------------------------------- overview
 
 function ProgressCard({ state }: { state: DrillingState }) {
@@ -146,22 +183,22 @@ function OperationCard({ state }: { state: DrillingState }) {
             {op ? (
               <>
                 <p className="mt-1 text-sm font-medium">{op.name}</p>
-                <p className="text-[11px] text-graphite-500">
-                  {op.actual_start
-                    ? `${formatDateTime(op.actual_start, locale)} → ${op.actual_end ? formatDateTime(op.actual_end, locale) : 'in progress'}`
-                    : op.planned_start
-                      ? `planned ${formatDateTime(op.planned_start, locale)} → ${formatDateTime(op.planned_end, locale)}`
-                      : 'no time recorded for this operation'}
-                  {op.actual_duration_hours !== null && <> · {formatDuration(op.actual_duration_hours)}</>}
-                  {op.planned_duration_hours !== null && op.actual_duration_hours === null && (
-                    <> · planned {formatDuration(op.planned_duration_hours)}</>
-                  )}
-                  {op.depth_to_md_si !== null && (
-                    <>
-                      {' '}· to depth {formatNumber(op.depth_to_md_si, locale, 0)} {unitSystem === 'oilfield' ? 'ft' : 'm'}
-                    </>
-                  )}
-                </p>
+                <div className="space-y-1 text-[11px] text-graphite-500">
+                  <OperationTimeWindow operation={op} />
+                  <p>
+                    {op.actual_duration_hours !== null && (
+                      <>· {formatDuration(op.actual_duration_hours)} · {t(`operations.valueBasis.${op.actual_duration_basis}`)}</>
+                    )}
+                    {op.planned_duration_hours !== null && op.actual_duration_hours === null && (
+                      <>· {formatDuration(op.planned_duration_hours)} · {t(`operations.valueBasis.${op.planned_duration_basis}`)}</>
+                    )}
+                    {op.depth_to_md_si !== null && (
+                      <>
+                        {' '}· to depth {formatNumber(op.depth_to_md_si, locale, 0)} {unitSystem === 'oilfield' ? 'ft' : 'm'} · {t(`operations.depthBasis.${op.depth_to_md_basis}`)}
+                      </>
+                    )}
+                  </p>
+                </div>
                 <div className="mt-1.5 flex flex-wrap items-center gap-2">
                   <Badge tone="neutral">{humanise(op.operation_class ?? 'unclassified')}</Badge>
                   {op.data_quality && <Badge tone="warning">{op.data_quality}</Badge>}
@@ -589,7 +626,7 @@ export default function WellCockpit() {
                       className="flex flex-wrap items-start gap-3 rounded-md border border-graphite-100 px-3 py-2 dark:border-graphite-800"
                     >
                       <span className="w-36 shrink-0 font-mono text-[11px] text-graphite-500">
-                        {formatDateTime(entry.at, locale)}
+                        <ProvenanceTime value={entry.at} basis={entry.time_basis} />
                       </span>
                       <span className="w-28 shrink-0">
                         <Badge tone={entry.kind.includes('npt') ? 'danger' : entry.kind.includes('engine') ? 'info' : 'neutral'}>
@@ -691,8 +728,15 @@ export default function WellCockpit() {
                         key: 'window',
                         header: 'Window',
                         render: (row) => (
-                          <span className="text-[11px]">
-                            {formatDateTime(row.started_at, locale)} → {formatDateTime(row.ended_at, locale)}
+                          <span className="inline-flex flex-col gap-1">
+                            <span className="flex flex-wrap items-center gap-1">
+                              <ProvenanceTime value={row.started_at} basis={row.started_at_basis} />
+                              <span aria-hidden="true">→</span>
+                              <ProvenanceTime value={row.ended_at} basis={row.ended_at_basis} />
+                            </span>
+                            <span className="text-[10px] text-graphite-500">
+                              {t(`operations.valueBasis.${row.hours_basis}`)}
+                            </span>
                           </span>
                         ),
                       },

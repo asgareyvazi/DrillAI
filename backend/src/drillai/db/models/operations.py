@@ -14,7 +14,7 @@ from __future__ import annotations
 import datetime as dt
 from decimal import Decimal
 
-from sqlalchemy import Boolean, Float, ForeignKey, Index, String, UniqueConstraint
+from sqlalchemy import Boolean, CheckConstraint, Float, ForeignKey, Index, String, UniqueConstraint, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from drillai.db.base import (
@@ -92,6 +92,76 @@ CLASSIFICATION_SOURCES = ("recorded", "derived", "unclassified")
 #: was raised.
 EVENT_STATUSES = ("open", "acknowledged", "investigating", "closed", "cancelled")
 EVENT_SEVERITIES = ("low", "medium", "high", "critical")
+
+#: Provenance values for temporal fields. Report-level anchors and duration replay remain explicit
+#: but are not silently promoted to observed event times by time-scoped analytics.
+TIME_PROVENANCE_BASES = (
+    "unknown",
+    "source_record",
+    "operator_entered",
+    "linked_operation",
+    "report_date_anchor",
+    "duration_derived",
+    "duration_replayed",
+    "legacy_unverified",
+)
+
+#: Event timestamps may only carry actual event-time provenance or an explicit unknown/legacy state.
+EVENT_TIME_PROVENANCE_BASES = (
+    "unknown",
+    "source_record",
+    "operator_entered",
+    "legacy_unverified",
+)
+
+#: Depth values preserve where the reference came from, independently of SI unit conversion.
+DEPTH_PROVENANCE_BASES = (
+    "unknown",
+    "source_record",
+    "operator_entered",
+    "linked_operation",
+    "engine_derived",
+    "legacy_unverified",
+)
+
+#: Numeric values may be observed, reported, calculated, planned, inferred, or unclassified.
+VALUE_PROVENANCE_BASES = (
+    "unknown",
+    "observed",
+    "reported",
+    "calculated",
+    "planned",
+    "inferred",
+    "legacy_unverified",
+)
+
+
+def _basis_sql(values: tuple[str, ...]) -> str:
+    return ", ".join(f"'{value}'" for value in values)
+
+
+def _valid_basis_constraint(
+    name: str, fields: tuple[str, ...], values: tuple[str, ...]
+) -> CheckConstraint:
+    allowed = _basis_sql(values)
+    return CheckConstraint(
+        " AND ".join(f"{field} IN ({allowed})" for field in fields),
+        name=name,
+    )
+
+
+def _basis_consistency_constraint(
+    name: str, pairs: tuple[tuple[str, str], ...]
+) -> CheckConstraint:
+    return CheckConstraint(
+        " AND ".join(
+            f"(({value} IS NULL AND {basis} IN ('unknown', 'legacy_unverified')) OR "
+            f"({value} IS NOT NULL AND {basis} <> 'unknown'))"
+            for value, basis in pairs
+        ),
+        name=name,
+    )
+
 
 EVENT_KINDS = (
     "incident",
@@ -216,6 +286,45 @@ class Operation(Base, IdMixin, TimestampMixin, OrgScopedMixin):
             "promotion_fingerprint",
             unique=True,
         ),
+        _valid_basis_constraint(
+            "operation_time_provenance_valid",
+            ("planned_start_basis", "planned_end_basis", "actual_start_basis", "actual_end_basis"),
+            TIME_PROVENANCE_BASES,
+        ),
+        _valid_basis_constraint(
+            "operation_depth_provenance_valid",
+            ("depth_from_md_basis", "depth_to_md_basis"),
+            DEPTH_PROVENANCE_BASES,
+        ),
+        _valid_basis_constraint(
+            "operation_value_provenance_valid",
+            (
+                "planned_duration_basis",
+                "actual_duration_basis",
+                "hole_diameter_basis",
+                "npt_hours_basis",
+                "invisible_lost_time_basis",
+                "cost_basis",
+            ),
+            VALUE_PROVENANCE_BASES,
+        ),
+        _basis_consistency_constraint(
+            "operation_provenance_consistent",
+            (
+                ("planned_start", "planned_start_basis"),
+                ("planned_end", "planned_end_basis"),
+                ("actual_start", "actual_start_basis"),
+                ("actual_end", "actual_end_basis"),
+                ("planned_duration_hours", "planned_duration_basis"),
+                ("actual_duration_hours", "actual_duration_basis"),
+                ("depth_from_md_si", "depth_from_md_basis"),
+                ("depth_to_md_si", "depth_to_md_basis"),
+                ("hole_diameter_si", "hole_diameter_basis"),
+                ("npt_hours", "npt_hours_basis"),
+                ("invisible_lost_time_hours", "invisible_lost_time_basis"),
+                ("cost_usd", "cost_basis"),
+            ),
+        ),
     )
     id_prefix = "opr"
 
@@ -233,18 +342,54 @@ class Operation(Base, IdMixin, TimestampMixin, OrgScopedMixin):
     phase: Mapped[str] = mapped_column(String(24), default="completed", nullable=False, index=True)
     status: Mapped[str] = mapped_column(String(24), default="completed", nullable=False)
     planned_start: Mapped[dt.datetime | None] = mapped_column(UtcDateTime, index=True)
+    planned_start_basis: Mapped[str] = mapped_column(
+        String(32), default="legacy_unverified", server_default=text("'unknown'"), nullable=False
+    )
     planned_end: Mapped[dt.datetime | None] = mapped_column(UtcDateTime)
+    planned_end_basis: Mapped[str] = mapped_column(
+        String(32), default="legacy_unverified", server_default=text("'unknown'"), nullable=False
+    )
     actual_start: Mapped[dt.datetime | None] = mapped_column(UtcDateTime, index=True)
+    actual_start_basis: Mapped[str] = mapped_column(
+        String(32), default="legacy_unverified", server_default=text("'unknown'"), nullable=False
+    )
     actual_end: Mapped[dt.datetime | None] = mapped_column(UtcDateTime)
+    actual_end_basis: Mapped[str] = mapped_column(
+        String(32), default="legacy_unverified", server_default=text("'unknown'"), nullable=False
+    )
     planned_duration_hours: Mapped[float | None] = mapped_column(Float)
+    planned_duration_basis: Mapped[str] = mapped_column(
+        String(32), default="legacy_unverified", server_default=text("'unknown'"), nullable=False
+    )
     actual_duration_hours: Mapped[float | None] = mapped_column(Float)
+    actual_duration_basis: Mapped[str] = mapped_column(
+        String(32), default="legacy_unverified", server_default=text("'unknown'"), nullable=False
+    )
     depth_from_md_si: Mapped[float | None] = mapped_column(Float)
+    depth_from_md_basis: Mapped[str] = mapped_column(
+        String(32), default="legacy_unverified", server_default=text("'unknown'"), nullable=False
+    )
     depth_to_md_si: Mapped[float | None] = mapped_column(Float)
+    depth_to_md_basis: Mapped[str] = mapped_column(
+        String(32), default="legacy_unverified", server_default=text("'unknown'"), nullable=False
+    )
     hole_diameter_si: Mapped[float | None] = mapped_column(Float)
+    hole_diameter_basis: Mapped[str] = mapped_column(
+        String(32), default="legacy_unverified", server_default=text("'unknown'"), nullable=False
+    )
     is_productive: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     npt_hours: Mapped[float | None] = mapped_column(Float)
+    npt_hours_basis: Mapped[str] = mapped_column(
+        String(32), default="legacy_unverified", server_default=text("'unknown'"), nullable=False
+    )
     invisible_lost_time_hours: Mapped[float | None] = mapped_column(Float)
+    invisible_lost_time_basis: Mapped[str] = mapped_column(
+        String(32), default="legacy_unverified", server_default=text("'unknown'"), nullable=False
+    )
     cost_usd: Mapped[Decimal | None] = mapped_column(Money)
+    cost_basis: Mapped[str] = mapped_column(
+        String(32), default="legacy_unverified", server_default=text("'unknown'"), nullable=False
+    )
     program_artifact_version_id: Mapped[str | None] = mapped_column(String(64), index=True)
     bha_run_id: Mapped[str | None] = mapped_column(String(64), index=True)
     bit_run_id: Mapped[str | None] = mapped_column(String(64))
@@ -299,6 +444,33 @@ class Event(Base, IdMixin, TimestampMixin, OrgScopedMixin):
             "promotion_fingerprint",
             unique=True,
         ),
+        _valid_basis_constraint(
+            "event_time_provenance_valid",
+            ("occurred_at_basis", "ended_at_basis"),
+            EVENT_TIME_PROVENANCE_BASES,
+        ),
+        _valid_basis_constraint(
+            "event_depth_provenance_valid",
+            ("depth_md_basis", "depth_tvd_basis"),
+            DEPTH_PROVENANCE_BASES,
+        ),
+        _valid_basis_constraint(
+            "event_value_provenance_valid",
+            ("duration_basis", "npt_hours_basis", "cost_basis"),
+            VALUE_PROVENANCE_BASES,
+        ),
+        _basis_consistency_constraint(
+            "event_provenance_consistent",
+            (
+                ("occurred_at", "occurred_at_basis"),
+                ("ended_at", "ended_at_basis"),
+                ("duration_hours", "duration_basis"),
+                ("depth_md_si", "depth_md_basis"),
+                ("depth_tvd_si", "depth_tvd_basis"),
+                ("npt_hours", "npt_hours_basis"),
+                ("cost_usd", "cost_basis"),
+            ),
+        ),
     )
     id_prefix = "evn"
 
@@ -314,14 +486,35 @@ class Event(Base, IdMixin, TimestampMixin, OrgScopedMixin):
     is_npt: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
     title: Mapped[str] = mapped_column(String(400), nullable=False)
     description: Mapped[str | None] = mapped_column(TextType)
-    occurred_at: Mapped[dt.datetime] = mapped_column(UtcDateTime, nullable=False, index=True)
+    occurred_at: Mapped[dt.datetime | None] = mapped_column(UtcDateTime, nullable=True, index=True)
+    occurred_at_basis: Mapped[str] = mapped_column(
+        String(32), default="unknown", server_default=text("'unknown'"), nullable=False
+    )
     ended_at: Mapped[dt.datetime | None] = mapped_column(UtcDateTime)
+    ended_at_basis: Mapped[str] = mapped_column(
+        String(32), default="unknown", server_default=text("'unknown'"), nullable=False
+    )
     duration_hours: Mapped[float | None] = mapped_column(Float)
+    duration_basis: Mapped[str] = mapped_column(
+        String(32), default="legacy_unverified", server_default=text("'unknown'"), nullable=False
+    )
     depth_md_si: Mapped[float | None] = mapped_column(Float)
+    depth_md_basis: Mapped[str] = mapped_column(
+        String(32), default="legacy_unverified", server_default=text("'unknown'"), nullable=False
+    )
     depth_tvd_si: Mapped[float | None] = mapped_column(Float)
+    depth_tvd_basis: Mapped[str] = mapped_column(
+        String(32), default="legacy_unverified", server_default=text("'unknown'"), nullable=False
+    )
     severity: Mapped[str] = mapped_column(String(24), default="low", nullable=False, index=True)
     npt_hours: Mapped[float | None] = mapped_column(Float)
+    npt_hours_basis: Mapped[str] = mapped_column(
+        String(32), default="legacy_unverified", server_default=text("'unknown'"), nullable=False
+    )
     cost_usd: Mapped[Decimal | None] = mapped_column(Money)
+    cost_basis: Mapped[str] = mapped_column(
+        String(32), default="legacy_unverified", server_default=text("'unknown'"), nullable=False
+    )
     root_cause: Mapped[str | None] = mapped_column(TextType)
     immediate_action: Mapped[str | None] = mapped_column(TextType)
     corrective_action: Mapped[str | None] = mapped_column(TextType)

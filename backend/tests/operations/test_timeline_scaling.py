@@ -47,7 +47,9 @@ async def _seed_well(fabric: Fabric, *, operations: int = 300, events: int = 200
                     phase="completed",
                     status="completed",
                     actual_start=started,
+                    actual_start_basis="source_record",
                     actual_end=started + dt.timedelta(hours=1),
+                    actual_end_basis="source_record",
                     actual_duration_hours=1.0,
                     is_productive=True,
                 )
@@ -65,6 +67,7 @@ async def _seed_well(fabric: Fabric, *, operations: int = 300, events: int = 200
                     status="open",
                     severity="low",
                     occurred_at=occurred,
+                    occurred_at_basis="source_record",
                 )
             )
         await session.commit()

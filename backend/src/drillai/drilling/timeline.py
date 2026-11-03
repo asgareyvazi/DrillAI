@@ -43,6 +43,12 @@ from drillai.db.models import (
     Well,
 )
 from drillai.documents.access import operational_source_conditions
+from drillai.operations.time_windows import (
+    TIME_WINDOW_BASES,
+    event_time_expressions,
+    interval_overlap_conditions,
+    operation_time_expressions,
+)
 
 
 def sort_key(entry: Any) -> tuple[bool, dt.datetime, str, str]:
@@ -145,6 +151,8 @@ class TimelineEntry:
     at: dt.datetime | None
     end_at: dt.datetime | None
     title: str
+    time_basis: str | None = None
+    end_time_basis: str | None = None
     summary: str | None = None
     status: str | None = None
     category: str | None = None
@@ -166,6 +174,8 @@ class TimelineEntry:
             "id": self.id,
             "at": self.at.isoformat() if self.at else None,
             "end_at": self.end_at.isoformat() if self.end_at else None,
+            "time_basis": self.time_basis,
+            "end_time_basis": self.end_time_basis,
             "title": self.title,
             "summary": self.summary,
             "status": self.status,
@@ -214,12 +224,25 @@ class TimelineService:
             model.well_id == well_id,
             *source_conditions,
         )
-        if since is not None:
-            # An undated row is not "since" anything: the previous behaviour dropped it when a window
-            # was given, and dropping it in SQL keeps the same answer.
-            stmt = stmt.where(at_column.is_not(None), at_column >= since)
-        if until is not None:
-            stmt = stmt.where(at_column.is_not(None), at_column <= until)
+        if since is not None or until is not None:
+            if kind == "operation":
+                window_start, window_end = operation_time_expressions()
+                stmt = stmt.where(
+                    *interval_overlap_conditions(window_start, window_end, since=since, until=until)
+                )
+            elif kind == "event":
+                window_start, window_end = event_time_expressions()
+                stmt = stmt.where(
+                    *interval_overlap_conditions(window_start, window_end, since=since, until=until)
+                )
+            else:
+                # Non-operational streams have a single lifecycle timestamp rather than an observed
+                # drilling interval. An absent timestamp cannot satisfy a narrowed window.
+                stmt = stmt.where(at_column.is_not(None))
+                if since is not None:
+                    stmt = stmt.where(at_column >= since)
+                if until is not None:
+                    stmt = stmt.where(at_column <= until)
         condition = _after_condition(at_column, model.id, kind, after)
         if condition is not None:
             stmt = stmt.where(condition)
@@ -265,19 +288,24 @@ class TimelineService:
         )
 
         if "operation" in wanted:
-            rows = await stream(
-                Operation,
-                func.coalesce(Operation.actual_start, Operation.planned_start),
-                "operation",
-            )
+            operation_start, _operation_end = operation_time_expressions()
+            rows = await stream(Operation, operation_start, "operation")
             for row in rows:
-                started = row.actual_start or row.planned_start
+                planned = row.operation_class in {"plan", "forecast"}
+                recorded_start = row.planned_start if planned else row.actual_start
+                recorded_end = row.planned_end if planned else row.actual_end
+                start_basis = row.planned_start_basis if planned else row.actual_start_basis
+                end_basis = row.planned_end_basis if planned else row.actual_end_basis
+                started = recorded_start if start_basis in TIME_WINDOW_BASES else None
+                ended = recorded_end if end_basis in TIME_WINDOW_BASES else None
                 entries.append(
                     TimelineEntry(
                         kind="operation",
                         id=row.id,
                         at=started,
-                        end_at=row.actual_end or row.planned_end,
+                        end_at=ended,
+                        time_basis=start_basis,
+                        end_time_basis=end_basis,
                         title=row.name,
                         summary=row.remarks,
                         status=row.status,
@@ -301,6 +329,8 @@ class TimelineService:
                             "sequence": row.sequence,
                             "phase": row.phase,
                             "is_productive": row.is_productive,
+                            "recorded_start": recorded_start.isoformat() if recorded_start else None,
+                            "recorded_end": recorded_end.isoformat() if recorded_end else None,
                             "planned_duration_hours": row.planned_duration_hours,
                             "data_quality": row.data_quality,
                             "source": row.source,
@@ -309,14 +339,19 @@ class TimelineService:
                 )
 
         if "event" in wanted:
-            rows = await stream(Event, Event.occurred_at, "event")
+            event_start, _event_end = event_time_expressions()
+            rows = await stream(Event, event_start, "event")
             for row in rows:
+                occurred = row.occurred_at if row.occurred_at_basis in TIME_WINDOW_BASES else None
+                ended = row.ended_at if row.ended_at_basis in TIME_WINDOW_BASES else None
                 entries.append(
                     TimelineEntry(
                         kind="event",
                         id=row.id,
-                        at=row.occurred_at,
-                        end_at=row.ended_at,
+                        at=occurred,
+                        end_at=ended,
+                        time_basis=row.occurred_at_basis,
+                        end_time_basis=row.ended_at_basis,
                         title=row.title,
                         summary=row.description or row.root_cause,
                         status=row.status,
@@ -332,6 +367,8 @@ class TimelineService:
                         document_id=row.source_document_id,
                         attributes={
                             "kind": row.kind,
+                            "unqualified_occurred_at": row.occurred_at.isoformat() if row.occurred_at else None,
+                            "unqualified_ended_at": row.ended_at.isoformat() if row.ended_at else None,
                             "npt_code": row.npt_code,
                             "immediate_action": row.immediate_action,
                             "corrective_action": row.corrective_action,
@@ -352,6 +389,8 @@ class TimelineService:
                         at=row.period_start or row.created_at,
                         end_at=row.period_end,
                         title=row.title or row.document_number or row.id,
+                        time_basis=("report_date_anchor" if row.period_start is not None else "record_created_at"),
+                        end_time_basis=("report_date_anchor" if row.period_end is not None else "unknown"),
                         summary=(
                             f"{row.doc_type} · status {row.status} · "
                             f"{summary.get('records', 0)} records · {summary.get('chunks', 0)} chunks"
@@ -382,6 +421,7 @@ class TimelineService:
                         at=row.finished_at or row.started_at,
                         end_at=None,
                         title=f"{row.engine_key} v{row.engine_version}",
+                        time_basis="system_recorded",
                         summary=(
                             f"status {row.status}"
                             + (f" · {len(row.warnings)} warnings" if row.warnings else "")
@@ -417,6 +457,8 @@ class TimelineService:
                         at=row.created_at,
                         end_at=row.reviewed_at,
                         title=row.title,
+                        time_basis="record_created_at",
+                        end_time_basis="system_recorded" if row.reviewed_at is not None else "unknown",
                         summary=row.statement,
                         status=row.status,
                         category=f"{row.domain}:{row.kind}",
@@ -445,6 +487,7 @@ class TimelineService:
                         at=row.occurred_at,
                         end_at=None,
                         title=f"{row.subject_kind} · {row.change_type}",
+                        time_basis="system_recorded",
                         summary=row.reason,
                         status=row.change_type,
                         category=row.subject_kind,
@@ -474,6 +517,8 @@ class TimelineService:
                         at=row.requested_at,
                         end_at=row.decided_at,
                         title=row.title or f"{row.kind} approval",
+                        time_basis="system_recorded",
+                        end_time_basis="system_recorded" if row.decided_at is not None else "unknown",
                         summary=row.description or row.decision_note,
                         status=row.status,
                         category=row.kind,

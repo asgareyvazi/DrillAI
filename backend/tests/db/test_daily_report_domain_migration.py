@@ -71,8 +71,12 @@ def test_daily_report_migration_creates_typed_schema_and_refuses_data_loss_on_do
             assert "daily_drilling_reports" not in set(sa.inspect(connection).get_table_names())
 
         command.upgrade(config, HEAD_REVISION)
-        command.check(config)
+        # This migration test intentionally targets the historical CP83.2 head. Alembic's
+        # command.check compares against the repository's current metadata and refuses an older
+        # revision when later migrations exist; current-head drift is checked by the migration suite.
         with engine.begin() as connection:
+            version = connection.execute(sa.text("SELECT version_num FROM alembic_version")).scalar_one()
+            assert version == HEAD_REVISION
             assert "daily_report_measurements" in set(sa.inspect(connection).get_table_names())
     finally:
         engine.dispose()

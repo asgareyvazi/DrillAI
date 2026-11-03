@@ -452,6 +452,8 @@ export const drillingApi = {
       kind?: string
       source_kind?: string
       document_id?: string
+      since?: string
+      until?: string
       limit?: number
       offset?: number
     } = {},
@@ -463,7 +465,12 @@ export const drillingApi = {
     api.get<OperationRow>(`/operations/${enc(operationId)}`, { signal }),
   updateOperation: (
     operationId: string,
-    body: { expected_updated_at: string; reason: string; changes: Record<string, unknown> },
+    body: {
+      expected_updated_at: string
+      reason: string
+      changes: Record<string, unknown>
+      provenance?: Record<string, string>
+    },
     idempotencyKey?: string,
   ) =>
     api.patch<OperationRow & WithTransitions>(
@@ -499,6 +506,8 @@ export const drillingApi = {
       source_kind?: string
       is_npt?: boolean
       document_id?: string
+      since?: string
+      until?: string
       limit?: number
       offset?: number
     } = {},
@@ -509,7 +518,12 @@ export const drillingApi = {
   getEvent: (eventId: string, signal?: AbortSignal) => api.get<EventRow>(`/events/${enc(eventId)}`, { signal }),
   updateEvent: (
     eventId: string,
-    body: { expected_updated_at: string; reason: string; changes: Record<string, unknown> },
+    body: {
+      expected_updated_at: string
+      reason: string
+      changes: Record<string, unknown>
+      provenance?: Record<string, string>
+    },
     idempotencyKey?: string,
   ) =>
     api.patch<EventRow & WithTransitions>(`/events/${enc(eventId)}`, body, idempotencyHeader(idempotencyKey)),

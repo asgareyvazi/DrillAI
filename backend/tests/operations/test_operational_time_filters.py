@@ -129,3 +129,40 @@ async def test_event_window_includes_overlaps_and_excludes_outside_points(fabric
         created_ids["point occurrence inside the window"],
     }
     assert response.json()["total"] == 2
+
+
+async def test_report_anchors_and_derived_times_do_not_match_operation_time_windows(fabric: Fabric) -> None:
+    cases = [
+        ("report anchor", "report_date_anchor"),
+        ("linked start", "linked_operation"),
+        ("duration replay", "duration_replayed"),
+        ("source timestamp", "source_record"),
+    ]
+    created_ids: dict[str, str] = {}
+    for name, basis in cases:
+        response = await fabric.http.post(
+            "/api/v1/operations",
+            json={
+                "project_id": fabric.alpha.project_id,
+                "well_id": fabric.alpha.well_id,
+                "wellbore_id": fabric.alpha.wellbore_id,
+                "operation_class": "actual",
+                "kind": "drilling",
+                "name": name,
+                "actual_start": _at(11),
+                "actual_start_basis": basis,
+            },
+            headers=fabric.alpha.headers,
+        )
+        assert response.status_code == 201, response.text
+        assert response.json()["actual_start_basis"] == basis
+        created_ids[name] = response.json()["id"]
+
+    response = await fabric.http.get(
+        "/api/v1/operations",
+        params={"well_id": fabric.alpha.well_id, "since": _at(10), "until": _at(12)},
+        headers=fabric.alpha.headers,
+    )
+    assert response.status_code == 200, response.text
+    returned_ids = {item["id"] for item in response.json()["items"]}
+    assert returned_ids == {created_ids["source timestamp"]}

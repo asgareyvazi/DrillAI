@@ -498,7 +498,7 @@ function StreamStatusBadge({ status, received }: { status: RunStreamStatus; rece
 }
 
 function EventLog({ events }: { events: RunEvent[] }) {
-  const { t } = useI18n()
+  const { t, locale } = useI18n()
   if (events.length === 0) return <EmptyState message={t('workflow.noEvents')} />
   const ordered = [...events].sort((a, b) => (a.seq ?? 0) - (b.seq ?? 0))
   return (
@@ -512,7 +512,7 @@ function EventLog({ events }: { events: RunEvent[] }) {
         >
           <span className="w-10 shrink-0 font-mono text-[10px] text-graphite-500">#{event.seq}</span>
           <span className="w-36 shrink-0 font-mono text-[10px] text-graphite-500">
-            {formatDateTime(event.occurred_at ?? event.created_at ?? null)}
+            {event.occurred_at ? formatDateTime(event.occurred_at, locale) : t('common.unknown')}
           </span>
           <Badge tone={event.level === 'error' ? 'danger' : event.level === 'warning' ? 'warning' : 'neutral'}>
             {event.type}

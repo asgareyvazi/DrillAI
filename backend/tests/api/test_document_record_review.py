@@ -168,6 +168,8 @@ async def test_review_corrects_validates_audits_and_replays_idempotently(client,
     assert updated["validation_state"] == "human_validated"
     assert updated["payload"]["bit_depth_si"] == 1001.5
     assert updated["depth_md_si"] == 1001.5
+    assert updated["depth_md_basis"] == "operator_entered"
+    assert updated["observed_at_basis"] == "unknown"
     assert updated["validated_by"]
     assert updated["validated_at"]
 
@@ -367,7 +369,9 @@ async def test_review_can_clear_observed_time_and_canonical_depth_explicitly(cli
             await session.execute(select(ExtractedRecord).where(ExtractedRecord.id == record["id"]))
         ).scalar_one()
         row.observed_at = existing_time
+        row.observed_at_basis = "operator_entered"
         row.depth_md_si = 999.0
+        row.depth_md_basis = "operator_entered"
         await session.commit()
 
     response = await client.patch(
@@ -383,7 +387,9 @@ async def test_review_can_clear_observed_time_and_canonical_depth_explicitly(cli
     assert response.status_code == 200, response.text
     updated = response.json()
     assert updated["observed_at"] is None
+    assert updated["observed_at_basis"] == "unknown"
     assert updated["depth_md_si"] is None
+    assert updated["depth_md_basis"] == "unknown"
     assert updated["payload"]["bit_depth_si"] == 1000.0
     assert updated["review_version"] == 2
 

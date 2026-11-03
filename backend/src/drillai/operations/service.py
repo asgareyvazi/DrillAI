@@ -39,11 +39,14 @@ from drillai.core.audit import record_audit
 from drillai.core.errors import Conflict, NotFound, ValidationFailed
 from drillai.core.ids import new_id
 from drillai.db.models import (
+    DEPTH_PROVENANCE_BASES,
     OPERATION_CLASSES,
     OPERATION_KINDS,
     OPERATION_PHASES,
     OPERATION_STATUSES,
     SOURCE_KINDS,
+    TIME_PROVENANCE_BASES,
+    VALUE_PROVENANCE_BASES,
     Document,
     Event,
     EvidenceLink,
@@ -62,7 +65,11 @@ from drillai.documents.scope import (
     validate_source_record,
     validate_source_scope,
 )
-from drillai.operations.time_windows import interval_overlap_conditions, operation_time_expressions
+from drillai.operations.time_windows import (
+    event_time_expressions,
+    interval_overlap_conditions,
+    operation_time_expressions,
+)
 from drillai.security.actions import Principal
 from drillai.telemetry.outbox import emit
 
@@ -105,6 +112,131 @@ def _validate_operation_time_windows(values: dict[str, Any]) -> None:
             "actual_end": actual_end,
         }
     )
+
+
+_OPERATION_DEPTH_FIELDS = ("depth_from_md_si", "depth_to_md_si")
+_OPERATION_DEPTH_BASIS_FIELDS = {
+    "depth_from_md_si": "depth_from_md_basis",
+    "depth_to_md_si": "depth_to_md_basis",
+}
+_OPERATION_VALUE_BASIS_FIELDS = {
+    "planned_duration_hours": "planned_duration_basis",
+    "actual_duration_hours": "actual_duration_basis",
+    "hole_diameter_si": "hole_diameter_basis",
+    "npt_hours": "npt_hours_basis",
+    "invisible_lost_time_hours": "invisible_lost_time_basis",
+    "cost_usd": "cost_basis",
+}
+_OPERATION_VALUE_FIELDS = tuple(_OPERATION_VALUE_BASIS_FIELDS)
+
+
+def _basis_for_value(
+    *,
+    field: str,
+    value: Any,
+    basis: str | None,
+    allowed: tuple[str, ...],
+    default: str,
+) -> str:
+    selected = ("unknown" if value is None else default) if basis is None else basis
+    if selected not in allowed:
+        raise ValidationFailed(
+            f"{field}_basis is not recognised",
+            details={"field": f"{field}_basis", "value": selected, "allowed": list(allowed)},
+        )
+    if value is None and selected not in {"unknown", "legacy_unverified"}:
+        raise ValidationFailed(f"{field}_basis requires a value")
+    if value is not None and selected == "unknown":
+        raise ValidationFailed(f"{field} cannot have unknown provenance when a value is present")
+    return selected
+
+
+def _prepare_create_provenance(
+    fields: dict[str, Any], *, source_kind: str, operation_class: str
+) -> None:
+    """Assign or validate provenance for every persisted temporal, depth and numeric value."""
+    for field in _OPERATION_TIME_FIELDS:
+        value = fields.get(field)
+        default = "operator_entered" if source_kind == "manual" else "legacy_unverified"
+        fields[f"{field}_basis"] = _basis_for_value(
+            field=field,
+            value=value,
+            basis=fields.get(f"{field}_basis"),
+            allowed=TIME_PROVENANCE_BASES,
+            default=default,
+        )
+    for field, basis_field in _OPERATION_DEPTH_BASIS_FIELDS.items():
+        value = fields.get(field)
+        default = "operator_entered" if source_kind == "manual" else "legacy_unverified"
+        fields[basis_field] = _basis_for_value(
+            field=field,
+            value=value,
+            basis=fields.get(basis_field),
+            allowed=DEPTH_PROVENANCE_BASES,
+            default=default,
+        )
+    for field in _OPERATION_VALUE_FIELDS:
+        value = fields.get(field)
+        if field == "planned_duration_hours" or (
+            operation_class in {"plan", "forecast"} and field == "hole_diameter_si"
+        ):
+            default = "planned"
+        elif source_kind in {"manual", "ddr_promotion", "import"}:
+            default = "reported"
+        else:
+            default = "legacy_unverified"
+        basis_field = _OPERATION_VALUE_BASIS_FIELDS[field]
+        fields[basis_field] = _basis_for_value(
+            field=field,
+            value=value,
+            basis=fields.get(basis_field),
+            allowed=VALUE_PROVENANCE_BASES,
+            default=default,
+        )
+
+
+def _apply_update_provenance(
+    changes: dict[str, Any],
+    *,
+    provenance: dict[str, str] | None,
+    operation_class: str,
+) -> None:
+    """Attach service-controlled provenance to changed values; clients cannot set basis columns."""
+    supplied = provenance or {}
+    allowed_fields = {*_OPERATION_TIME_FIELDS, *_OPERATION_DEPTH_FIELDS, *_OPERATION_VALUE_FIELDS}
+    unknown = set(supplied) - allowed_fields
+    if unknown:
+        raise ValidationFailed(
+            "provenance was supplied for fields that are not mutable operation measurements",
+            details={"fields": sorted(unknown), "allowed": sorted(allowed_fields)},
+        )
+    for field in (*_OPERATION_TIME_FIELDS, *_OPERATION_DEPTH_FIELDS, *_OPERATION_VALUE_FIELDS):
+        if field not in changes:
+            continue
+        if field in _OPERATION_DEPTH_BASIS_FIELDS:
+            basis_field = _OPERATION_DEPTH_BASIS_FIELDS[field]
+            allowed = DEPTH_PROVENANCE_BASES
+            default = "operator_entered"
+        elif field in _OPERATION_TIME_FIELDS:
+            basis_field = f"{field}_basis"
+            allowed = TIME_PROVENANCE_BASES
+            default = "operator_entered"
+        else:
+            basis_field = _OPERATION_VALUE_BASIS_FIELDS[field]
+            allowed = VALUE_PROVENANCE_BASES
+            default = (
+                "planned"
+                if field == "planned_duration_hours"
+                or (field == "hole_diameter_si" and operation_class in {"plan", "forecast"})
+                else "reported"
+            )
+        changes[basis_field] = _basis_for_value(
+            field=field,
+            value=changes[field],
+            basis=supplied.get(field),
+            allowed=allowed,
+            default=default,
+        )
 
 
 #: Allowed status moves. ``cancelled`` is reachable from anything that has started, because work that
@@ -328,6 +460,11 @@ class OperationService:
                 "status is not recognised",
                 details={"field": "status", "value": target_status, "allowed": list(OPERATION_STATUSES)},
             )
+        _prepare_create_provenance(
+            fields,
+            source_kind=source_kind,
+            operation_class=operation_class,
+        )
         self._check_class_fields(operation_class, fields)
         self._validate_depth_interval(
             fields.get("depth_from_md_si"),
@@ -432,6 +569,7 @@ class OperationService:
         reason: str,
         changes: dict[str, Any],
         audit_metadata: dict[str, Any] | None = None,
+        provenance: dict[str, str] | None = None,
     ) -> tuple[Operation, list[ChangeRecord]]:
         """Apply an allowed change to an existing operation, with the version and a reason."""
         self._require(reason=reason)
@@ -474,6 +612,11 @@ class OperationService:
         self._validate_depth_interval(
             changes.get("depth_from_md_si", operation.depth_from_md_si),
             changes.get("depth_to_md_si", operation.depth_to_md_si),
+        )
+        _apply_update_provenance(
+            changes,
+            provenance=provenance,
+            operation_class=operation.operation_class,
         )
         if "kind" in changes and changes["kind"] not in OPERATION_KINDS:
             raise ValidationFailed(
@@ -678,6 +821,7 @@ class OperationService:
 
     async def events_for(self, operation_id: str, *, limit: int = 100) -> list[Event]:
         await self.get(operation_id)
+        event_start, _event_end = event_time_expressions()
         return list(
             (
                 await self.session.execute(
@@ -687,7 +831,7 @@ class OperationService:
                         Event.operation_id == operation_id,
                         *operational_source_conditions(Event),
                     )
-                    .order_by(Event.occurred_at.asc(), Event.id.asc())
+                    .order_by(event_start.is_(None).asc(), event_start.asc(), Event.id.asc())
                     .limit(limit)
                 )
             )
@@ -778,6 +922,8 @@ class OperationService:
         if operation_class not in {"plan", "forecast"}:
             return
         for field, value in fields.items():
+            if field.endswith("_basis"):
+                continue
             if field.startswith("actual_") and value is not None:
                 raise ValidationFailed(
                     f"a {operation_class} may not carry {field}",

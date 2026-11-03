@@ -47,6 +47,11 @@ from drillai.documents.access import (
     operational_source_conditions,
 )
 from drillai.documents.lifecycle import VALIDATED_STATES
+from drillai.operations.time_windows import (
+    TIME_WINDOW_BASES,
+    event_time_expressions,
+    operation_time_expressions,
+)
 from drillai.telemetry.service import TelemetryService
 
 #: How a "next operation" conclusion was reached. Kept as an explicit enum-like tuple so the
@@ -256,6 +261,7 @@ class WellStateService:
         )
 
     async def _operations(self, well_id: str) -> list[Operation]:
+        operation_start, _operation_end = operation_time_expressions()
         return list(
             (
                 await self.session.execute(
@@ -265,7 +271,7 @@ class WellStateService:
                         Operation.well_id == well_id,
                         *operational_source_conditions(Operation),
                     )
-                    .order_by(Operation.sequence, Operation.actual_start, Operation.planned_start)
+                    .order_by(Operation.sequence, operation_start, Operation.id)
                 )
             )
             .scalars()
@@ -273,6 +279,7 @@ class WellStateService:
         )
 
     async def _events(self, well_id: str) -> list[Event]:
+        event_start, _event_end = event_time_expressions()
         return list(
             (
                 await self.session.execute(
@@ -282,7 +289,7 @@ class WellStateService:
                         Event.well_id == well_id,
                         *operational_source_conditions(Event),
                     )
-                    .order_by(Event.occurred_at)
+                    .order_by(event_start.is_(None).asc(), event_start.asc(), Event.id.asc())
                 )
             )
             .scalars()
@@ -307,6 +314,8 @@ class WellStateService:
                         Operation.org_id == self.org_id,
                         Operation.well_id == well_id,
                         Operation.operation_class == "actual",
+                        Operation.actual_start_basis.in_(TIME_WINDOW_BASES),
+                        Operation.actual_start.is_not(None),
                         *operational_source_conditions(Operation),
                     )
                     .order_by(Operation.actual_start.desc())
@@ -360,7 +369,11 @@ class WellStateService:
         actual = [op for op in operations if op.operation_class == "actual"]
         planned = [op for op in operations if op.operation_class == "planned"]
 
-        started = [op for op in actual if op.actual_start is not None]
+        started = [
+            op
+            for op in actual
+            if op.actual_start is not None and op.actual_start_basis in TIME_WINDOW_BASES
+        ]
         window.recent = sorted(started, key=lambda op: op.actual_start or dt.datetime.min.replace(tzinfo=dt.UTC))[-12:]
         if started:
             window.current = max(started, key=lambda op: op.actual_start or dt.datetime.min.replace(tzinfo=dt.UTC))
@@ -880,19 +893,28 @@ def _operation_summary(operation: Operation | None) -> dict[str, Any] | None:
         "operation_class": operation.operation_class,
         "sequence": operation.sequence,
         "planned_start": operation.planned_start.isoformat() if operation.planned_start else None,
+        "planned_start_basis": operation.planned_start_basis,
         "planned_end": operation.planned_end.isoformat() if operation.planned_end else None,
+        "planned_end_basis": operation.planned_end_basis,
         "actual_start": operation.actual_start.isoformat() if operation.actual_start else None,
+        "actual_start_basis": operation.actual_start_basis,
         "actual_end": operation.actual_end.isoformat() if operation.actual_end else None,
+        "actual_end_basis": operation.actual_end_basis,
         "planned_duration_hours": operation.planned_duration_hours,
+        "planned_duration_basis": operation.planned_duration_basis,
         "actual_duration_hours": operation.actual_duration_hours,
+        "actual_duration_basis": operation.actual_duration_basis,
         "duration_variance_hours": (
             round(float(operation.actual_duration_hours) - float(operation.planned_duration_hours), 2)
             if operation.actual_duration_hours is not None and operation.planned_duration_hours is not None
             else None
         ),
         "npt_hours": operation.npt_hours,
+        "npt_hours_basis": operation.npt_hours_basis,
         "depth_from_md_si": operation.depth_from_md_si,
+        "depth_from_md_basis": operation.depth_from_md_basis,
         "depth_to_md_si": operation.depth_to_md_si,
+        "depth_to_md_basis": operation.depth_to_md_basis,
         "is_productive": operation.is_productive,
         "data_quality": operation.data_quality,
         "source": operation.source,

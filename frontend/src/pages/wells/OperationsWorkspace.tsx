@@ -133,6 +133,17 @@ function CauseBadge({ basis }: { basis: string }) {
   return <Badge tone={tone}>{t(`operations.cause.${basis === 'recorded' || basis === 'inferred' ? basis : 'unknown'}`)}</Badge>
 }
 
+function TimeValue({ value, basis }: { value: string | null; basis?: string | null }) {
+  const { t, locale } = useI18n()
+  const basisKey = basis || 'unknown'
+  return (
+    <span className="inline-flex flex-col gap-0.5">
+      <span dir="ltr">{value ? formatDateTime(value, locale) : t('common.unknown')}</span>
+      <span className="text-[10px] text-graphite-500">{t(`operations.timeBasis.${basisKey}`)}</span>
+    </span>
+  )
+}
+
 /** The provenance strip: where this row came from, and how to get back to the source. */
 function Provenance({ row, wellId }: { row: { source_kind: string | null; source_document_id: string | null; source_record_id: string | null; promotion_fingerprint?: string | null }; wellId: string }) {
   const { t } = useI18n()
@@ -1116,7 +1127,7 @@ export default function OperationsWorkspace() {
                     {
                       key: 'occurred_at',
                       header: t('operations.columns.occurred'),
-                      render: (row) => <span dir="ltr">{formatDateTime(row.occurred_at)}</span>,
+                      render: (row) => <TimeValue value={row.occurred_at} basis={row.occurred_at_basis} />,
                     },
                     { key: 'title', header: t('operations.columns.title'), render: (row) => row.title },
                     // The event's kind, its NPT category and its hours are three different claims.
@@ -1176,9 +1187,7 @@ export default function OperationsWorkspace() {
                         className="rounded-md border border-graphite-100 p-2 dark:border-graphite-800"
                       >
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className="font-mono text-[11px] text-graphite-500" dir="ltr">
-                            {formatDateTime(entry.at)}
-                          </span>
+                          <TimeValue value={entry.at} basis={entry.time_basis} />
                           <Badge tone="neutral">{humanise(entry.kind)}</Badge>
                           <span className="text-sm font-medium">{entry.title}</span>
                           {entry.npt && entry.npt_hours ? (
@@ -1228,16 +1237,16 @@ export default function OperationsWorkspace() {
               {[
                 [t('operations.detail.sequence'), String(operation.sequence)],
                 [t('operations.detail.phase'), humanise(operation.phase)],
-                [t('operations.detail.actualStart'), formatDateTime(operation.actual_start)],
-                [t('operations.detail.actualEnd'), formatDateTime(operation.actual_end)],
-                [t('operations.detail.plannedStart'), formatDateTime(operation.planned_start)],
-                [t('operations.detail.plannedEnd'), formatDateTime(operation.planned_end)],
+                [t('operations.detail.actualStart'), <TimeValue value={operation.actual_start} basis={operation.actual_start_basis} />],
+                [t('operations.detail.actualEnd'), <TimeValue value={operation.actual_end} basis={operation.actual_end_basis} />],
+                [t('operations.detail.plannedStart'), <TimeValue value={operation.planned_start} basis={operation.planned_start_basis} />],
+                [t('operations.detail.plannedEnd'), <TimeValue value={operation.planned_end} basis={operation.planned_end_basis} />],
                 [t('operations.detail.actualHours'), formatNumber(operation.actual_duration_hours)],
                 [t('operations.detail.plannedHours'), formatNumber(operation.planned_duration_hours)],
                 [t('operations.detail.nptHours'), formatNumber(operation.npt_hours)],
                 [t('operations.detail.productive'), operation.is_productive === null ? t('operations.detail.notStated') : operation.is_productive ? t('common.yes') : t('common.no')],
               ].map(([label, value]) => (
-                <div key={label}>
+                <div key={String(label)}>
                   <dt className="text-graphite-500">{label}</dt>
                   <dd dir="auto">{value}</dd>
                 </div>
@@ -1289,12 +1298,12 @@ export default function OperationsWorkspace() {
             </div>
             <dl className="grid grid-cols-2 gap-2 text-xs">
               {[
-                [t('operations.detail.occurred'), formatDateTime(event.occurred_at)],
-                [t('operations.detail.ended'), formatDateTime(event.ended_at)],
+                [t('operations.detail.occurred'), <TimeValue value={event.occurred_at} basis={event.occurred_at_basis} />],
+                [t('operations.detail.ended'), <TimeValue value={event.ended_at} basis={event.ended_at_basis} />],
                 [t('operations.detail.nptCategory'), event.npt_category ? humanise(event.npt_category) : t('operations.npt.notCharged')],
                 [t('operations.detail.nptHours'), event.is_npt ? formatNumber(event.npt_hours) : t('operations.npt.notCharged')],
               ].map(([label, value]) => (
-                <div key={label}>
+                <div key={String(label)}>
                   <dt className="text-graphite-500">{label}</dt>
                   <dd dir="auto">{value}</dd>
                 </div>

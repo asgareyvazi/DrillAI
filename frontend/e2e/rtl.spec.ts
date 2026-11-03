@@ -203,11 +203,10 @@ test.describe('the Persian interface', () => {
     expect(/[\u0600-\u06FF]/.test(mainText), 'the workspace renders Persian chrome').toBe(true)
     expect(asciiDigits(mainText)).toContain(String(recorded?.actual_duration_hours))
 
-    // Identifiers keep their own direction under the RTL paragraph: the timeline's monospace
-    // timestamps are technical strings, not sentences.
+    // Timestamps keep their own direction under the RTL paragraph: they are technical values, not sentences.
     await page.goto(`/wells/${wellId}/operations?tab=timeline`)
     await waitForLoaded(page)
-    expect(await resolvedDirection(page, '[data-testid="timeline-entries"] .font-mono')).toBe('ltr')
+    expect(await resolvedDirection(page, '[data-testid="timeline-entries"] [dir="ltr"]')).toBe('ltr')
   })
 
   test('does not mirror the workflow graph', async ({ page }) => {

@@ -286,7 +286,8 @@ async def test_a_correction_records_what_changed(fabric: Fabric) -> None:
     body = response.json()
     assert body["actual_duration_hours"] == 9.5
     assert body["changes"] == [
-        {"field": "actual_duration_hours", "before": None, "after": 9.5}
+        {"field": "actual_duration_hours", "before": None, "after": 9.5},
+        {"field": "actual_duration_basis", "before": "unknown", "after": "reported"},
     ]
 
 
@@ -1040,7 +1041,10 @@ async def test_every_mutation_writes_an_audit_entry(fabric: Fabric) -> None:
     assert [action for action, _details in actions] == ["operation.create", "operation.update"]
     update_details = actions[-1][1]
     assert update_details["reason"] == "corrected"
-    assert update_details["changes"] == [{"field": "npt_hours", "before": None, "after": 1.5}]
+    assert update_details["changes"] == [
+        {"field": "npt_hours", "before": None, "after": 1.5},
+        {"field": "npt_hours_basis", "before": "unknown", "after": "reported"},
+    ]
 
 
 async def _audit_actions(fabric: Fabric, subject_id: str) -> list[tuple[str, dict]]:

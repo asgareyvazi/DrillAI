@@ -15,6 +15,7 @@ def test_report_time_parser_normalizes_offsets_and_never_invents_a_missing_date(
     assert _parse_report_instant("2026-03-15T12:00:00+05:30", on_date=None) == dt.datetime(
         2026, 3, 15, 6, 30, tzinfo=dt.UTC
     )
+    assert _parse_report_instant("2026-03-15", on_date=report_day) is None
     assert _parse_report_instant("06:45", on_date=report_day) == dt.datetime(
         2026, 3, 15, 6, 45, tzinfo=dt.UTC
     )
@@ -46,24 +47,24 @@ def test_ddr_report_date_prefers_explicit_period_then_issue_date_then_header():
     ) is None, "a period-end boundary alone is not a source event timestamp"
 
 
-def test_npt_event_time_uses_source_timestamps_before_the_marked_ingestion_fallback():
-    fallback = dt.datetime(2026, 3, 15, 8, tzinfo=dt.UTC)
-    report_day = dt.datetime(2026, 3, 15, tzinfo=dt.UTC)
-    record = SimpleNamespace(observed_at=None, created_at=fallback)
-    linked = SimpleNamespace(actual_start=dt.datetime.fromisoformat("2026-03-15T09:00:00+01:00"))
+def test_npt_event_time_uses_only_source_backed_record_times():
+    source_time = dt.datetime(2026, 3, 15, 7, 15, tzinfo=dt.UTC)
+    record = SimpleNamespace(
+        observed_at=source_time,
+        observed_at_basis="source_record",
+        created_at=dt.datetime(2026, 3, 15, 8, tzinfo=dt.UTC),
+    )
+    assert DdrProcessor._event_time(record=record) == (source_time, "source_record")
 
-    assert DdrProcessor._event_time(record=record, linked=linked, report_date=report_day) == (
-        dt.datetime(2026, 3, 15, 8, tzinfo=dt.UTC),
-        "linked_operation_start",
+
+def test_npt_event_time_does_not_promote_report_header_or_ingestion_time():
+    report_day = dt.datetime(2026, 3, 15, tzinfo=dt.UTC)
+    record = SimpleNamespace(
+        observed_at=report_day,
+        observed_at_basis="report_header_date",
+        created_at=dt.datetime(2026, 3, 15, 8, tzinfo=dt.UTC),
     )
-    assert DdrProcessor._event_time(record=record, linked=None, report_date=report_day) == (
-        report_day,
-        "document_report_date",
-    )
-    assert DdrProcessor._event_time(record=record, linked=None, report_date=None) == (
-        fallback,
-        "ingestion_timestamp_fallback",
-    )
+    assert DdrProcessor._event_time(record=record) == (None, "unknown")
 
 
 def test_duration_validation_rejects_nonfinite_negative_and_unbounded_values():
@@ -73,12 +74,24 @@ def test_duration_validation_rejects_nonfinite_negative_and_unbounded_values():
     assert _valid_report_duration(99.999) is True
 
 
-def test_event_time_falls_back_to_the_existing_event_before_ingestion_time():
+def test_event_time_preserves_a_previously_source_backed_occurrence_only():
     old_occurrence = dt.datetime(2026, 3, 14, 23, tzinfo=dt.UTC)
-    record = SimpleNamespace(observed_at=None, created_at=dt.datetime(2026, 3, 15, 8, tzinfo=dt.UTC))
-    existing = SimpleNamespace(occurred_at=old_occurrence, attributes={"occurred_at_basis": "document_report_date"})
-
-    assert DdrProcessor._event_time(record=record, linked=None, report_date=None, existing=existing) == (
-        old_occurrence,
-        "document_report_date",
+    record = SimpleNamespace(
+        observed_at=None,
+        observed_at_basis="unknown",
+        created_at=dt.datetime(2026, 3, 15, 8, tzinfo=dt.UTC),
     )
+    trusted_existing = SimpleNamespace(
+        occurred_at=old_occurrence,
+        occurred_at_basis="source_record",
+    )
+    untrusted_existing = SimpleNamespace(
+        occurred_at=old_occurrence,
+        occurred_at_basis="report_date_anchor",
+    )
+
+    assert DdrProcessor._event_time(record=record, existing=trusted_existing) == (
+        old_occurrence,
+        "source_record",
+    )
+    assert DdrProcessor._event_time(record=record, existing=untrusted_existing) == (None, "unknown")

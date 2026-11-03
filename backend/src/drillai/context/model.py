@@ -160,6 +160,9 @@ class ContextItem(BaseModel):
     confidence: float | None = None
     data_quality: str | None = None
     observed_at: dt.datetime | None = None
+    #: Field-level time/depth/value provenance; this is separate from context section citations and
+    #: prevents an anchor or an unverified legacy value from masquerading as an observation.
+    provenance: dict[str, str] = Field(default_factory=dict)
     #: When the platform received the observation, when that differs from when it was measured. A value
     #: that arrived an hour after it was taken is a different fact from one that arrived immediately, and
     #: a consumer deciding whether to trust it needs both.

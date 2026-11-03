@@ -140,6 +140,7 @@ async def test_zero_measured_depth_keeps_priority_on_create_and_reconciliation(f
         stuck_pipe.payload = {**(stuck_pipe.payload or {}), "depth_md_si": 0.0}
         # Preserve a non-zero lower-priority extracted-field fallback to expose an `or` regression.
         stuck_pipe.depth_md_si = 2408.0
+        stuck_pipe.depth_md_basis = "operator_entered"
         await session.commit()
 
     first_report = await _process(fabric, document["id"])
@@ -513,7 +514,7 @@ async def test_a_promoted_event_attributes_the_loss_without_asserting_a_cause(fa
     assert stuck_operation["is_productive"] is False
 
 
-async def test_retry_refreshes_an_open_derived_event_after_record_reclassification(
+async def test_retry_refreshes_a_reclassified_event_without_inventing_neighbor_times(
     fabric: Fabric,
 ) -> None:
     document = await _upload_report(fabric)
@@ -572,11 +573,11 @@ async def test_retry_refreshes_an_open_derived_event_after_record_reclassificati
         operation_id = operation.id
         record_id = target.id
         following_operation_id = following_operation.id
-        following_operation_start = following_operation.actual_start
 
     preview = await _process(fabric, document["id"], dry_run=True)
     assert preview["events_updated"] == [event_id]
-    assert preview["operations_updated"] == [operation_id, following_operation_id]
+    # Changing a reported duration does not replay adjacent timestamps from the report date.
+    assert preview["operations_updated"] == [operation_id]
     assert preview["counts"]["events_updated"] == 1
     async with fabric.session() as session:
         unchanged = (await session.execute(select(Event).where(Event.id == event_id))).scalar_one()
@@ -586,7 +587,7 @@ async def test_retry_refreshes_an_open_derived_event_after_record_reclassificati
     second = await _process(fabric, document["id"])
     assert second["events_created"] == []
     assert second["events_updated"] == [event_id]
-    assert second["operations_updated"] == [operation_id, following_operation_id]
+    assert second["operations_updated"] == [operation_id]
     assert second["counts"]["events_updated"] == 1
     async with fabric.session() as session:
         refreshed = (await session.execute(select(Event).where(Event.id == event_id))).scalar_one()
@@ -598,13 +599,17 @@ async def test_retry_refreshes_an_open_derived_event_after_record_reclassificati
         assert "Stuck pipe while pulling out" in refreshed.description
         assert refreshed.npt_hours == pytest.approx(3.5)
         assert refreshed.duration_hours == pytest.approx(3.5)
+        assert refreshed.occurred_at is None
+        assert refreshed.occurred_at_basis == "unknown"
+        assert refreshed.ended_at is None
+        assert refreshed.ended_at_basis == "unknown"
         assert refreshed.is_npt is True
         operation = (await session.execute(select(Operation).where(Operation.id == refreshed.operation_id))).scalar_one()
         following = (
             await session.execute(select(Operation).where(Operation.id == following_operation_id))
         ).scalar_one()
-        assert following_operation_start is not None
-        assert following.actual_start == following_operation_start + dt.timedelta(hours=1)
+        assert following.actual_start is None
+        assert following.actual_start_basis == "unknown"
         assert operation.id == operation_id
         assert operation.name == "Stuck pipe while POOH"
         assert operation.kind == "jarring"
@@ -631,8 +636,6 @@ async def test_retry_refreshes_an_open_derived_event_after_record_reclassificati
     assert audits[0].details["reason"] == "DDR source record was reclassified on retry"
     assert audits[0].before["category"] == "lost_circulation"
     assert audits[0].after["category"] == "stuck_pipe"
-    assert audits[0].before["ended_at"] == "2026-03-15T17:30:00+00:00"
-    assert audits[0].after["ended_at"] == "2026-03-15T18:30:00+00:00"
     assert audits[0].details["operation_npt_rollup"] == {
         "operation_id": operation_id,
         "before": 2.5,

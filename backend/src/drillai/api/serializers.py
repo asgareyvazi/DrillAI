@@ -484,8 +484,11 @@ def extracted_record_out(
         "page_number": row.page_number,
         "region_id": row.region_id,
         "depth_md_si": row.depth_md_si,
+        "depth_md_basis": row.depth_md_basis,
         "depth_tvd_si": row.depth_tvd_si,
+        "depth_tvd_basis": row.depth_tvd_basis,
         "observed_at": _iso(row.observed_at),
+        "observed_at_basis": row.observed_at_basis,
         "method": row.method,
         "method_version": row.method_version,
         "confidence": row.confidence,
@@ -773,18 +776,30 @@ def operation_out(row: Any) -> dict[str, Any]:
         "phase": row.phase,
         "status": row.status,
         "planned_start": _iso(row.planned_start),
+        "planned_start_basis": row.planned_start_basis,
         "planned_end": _iso(row.planned_end),
+        "planned_end_basis": row.planned_end_basis,
         "actual_start": _iso(row.actual_start),
+        "actual_start_basis": row.actual_start_basis,
         "actual_end": _iso(row.actual_end),
+        "actual_end_basis": row.actual_end_basis,
         "planned_duration_hours": row.planned_duration_hours,
+        "planned_duration_basis": row.planned_duration_basis,
         "actual_duration_hours": row.actual_duration_hours,
+        "actual_duration_basis": row.actual_duration_basis,
         "depth_from_md_si": row.depth_from_md_si,
+        "depth_from_md_basis": row.depth_from_md_basis,
         "depth_to_md_si": row.depth_to_md_si,
+        "depth_to_md_basis": row.depth_to_md_basis,
         "hole_diameter_si": row.hole_diameter_si,
+        "hole_diameter_basis": row.hole_diameter_basis,
         "is_productive": row.is_productive,
         "npt_hours": row.npt_hours,
+        "npt_hours_basis": row.npt_hours_basis,
         "invisible_lost_time_hours": row.invisible_lost_time_hours,
+        "invisible_lost_time_basis": row.invisible_lost_time_basis,
         "cost_usd": float(row.cost_usd) if row.cost_usd is not None else None,
+        "cost_basis": row.cost_basis,
         "source": row.source,
         "source_kind": row.source_kind,
         "source_document_id": row.source_document_id,
@@ -816,11 +831,38 @@ def event_out(row: Any) -> dict[str, Any]:
         "category": row.category,
         "title": row.title,
         "description": row.description,
-        "occurred_at": _iso(row.occurred_at),
-        "ended_at": _iso(row.ended_at),
+        # Only source/operator-backed instants are event occurrence times. Retain any unqualified
+        # legacy or anchor timestamp under an explicitly non-occurrence name for audit consumers.
+        "occurred_at": (
+            _iso(row.occurred_at)
+            if row.occurred_at_basis in {"source_record", "operator_entered"}
+            else None
+        ),
+        "occurred_at_basis": row.occurred_at_basis,
+        "unqualified_occurred_at": (
+            _iso(row.occurred_at)
+            if row.occurred_at is not None
+            and row.occurred_at_basis not in {"source_record", "operator_entered"}
+            else None
+        ),
+        "ended_at": (
+            _iso(row.ended_at)
+            if row.ended_at_basis in {"source_record", "operator_entered"}
+            else None
+        ),
+        "ended_at_basis": row.ended_at_basis,
+        "unqualified_ended_at": (
+            _iso(row.ended_at)
+            if row.ended_at is not None
+            and row.ended_at_basis not in {"source_record", "operator_entered"}
+            else None
+        ),
         "duration_hours": row.duration_hours,
+        "duration_basis": row.duration_basis,
         "depth_md_si": row.depth_md_si,
+        "depth_md_basis": row.depth_md_basis,
         "depth_tvd_si": row.depth_tvd_si,
+        "depth_tvd_basis": row.depth_tvd_basis,
         "severity": row.severity,
         "status": row.status,
         "is_npt": row.is_npt,
@@ -832,7 +874,9 @@ def event_out(row: Any) -> dict[str, Any]:
         # case for anything written since.
         "npt_category_raw": (row.attributes or {}).get("npt_category_raw"),
         "npt_hours": row.npt_hours,
+        "npt_hours_basis": row.npt_hours_basis,
         "cost_usd": float(row.cost_usd) if row.cost_usd is not None else None,
+        "cost_basis": row.cost_basis,
         "root_cause": row.root_cause,
         "cause_basis": row.cause_basis,
         "classification_source": row.classification_source,
