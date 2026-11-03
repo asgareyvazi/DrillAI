@@ -5,9 +5,9 @@ Validates:
    (two-circulation Driller's Method) kill-sheet stroke/pressure schedules.
 2. CP23-B: Separation of static shoe `mud_weight_margin_si` (`kg/m3`) from preliminary single-bubble
    static `volumetric_kick_tolerance_si` (`m3`).
-3. CP23-C: Kill-rate pressure (`KRP`) annular-friction assumption disclosure, input provenance
-   verification (`recorded_scr_test` vs `estimated` / `manual_override`), `hydraulics.laminar`
-   `regime_validity` boundary (`Re > 2100`), and `tubulars.api_5c3` pipe-body scope boundary.
+3. CP23-C: Kill-rate pressure (`KRP`) annular-friction assumption disclosure, operator-declared
+   input-provenance labels (which are not source verification), `hydraulics.laminar` `regime_validity`
+   boundary (`Re > 2100`), and `tubulars.api_5c3` pipe-body scope boundary.
 """
 
 from __future__ import annotations
@@ -154,9 +154,16 @@ def test_cp23_kill_sheet_input_provenance_and_friction_assumptions(engines: Engi
             },
         },
     )
-    assert verified_res.outputs.input_provenance_verified is True
+    # Caller-supplied labels are provenance declarations only: the engine has no attached source record
+    # or signature verifier, so it must never claim that a safety-critical source was verified.
+    assert verified_res.outputs.input_provenance_verified is False
+    assert verified_res.outputs.input_provenance_status == "operator_declared_not_verified"
     assert verified_res.outputs.friction_assumption == "drillstring_dominated_krp_annular_friction_neglected"
-    assert not any("provenance" in w for w in verified_res.warnings)
+    assert any("operator-declared only" in warning for warning in verified_res.warnings)
+
+    _, absent_res = engines.execute("well_control.kill_sheet", base)
+    assert absent_res.outputs.input_provenance_verified is False
+    assert absent_res.outputs.input_provenance_status == "not_provided"
 
     _, estimated_res = engines.execute(
         "well_control.kill_sheet",
@@ -235,6 +242,7 @@ def test_cp23_hydraulics_turbulent_regime_validity_and_tubulars_scope(engines: E
     )
     assert tub_res.outputs.scope_classification == "pipe_body_only_connections_not_rated"
     assert tub_res.outputs.connection_verification_required is True
+    assert any("not field validation" in note for note in tub_res.outputs.notes)
 
 
 def test_cp23_output_unit_inference_consistency() -> None:

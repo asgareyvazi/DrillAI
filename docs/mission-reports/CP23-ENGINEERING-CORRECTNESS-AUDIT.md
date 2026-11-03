@@ -47,7 +47,7 @@ Prior to CP23, `backend/src/drillai/engines/wellcontrol.py` declared `parameters
 
 1. **Kill-Rate Pressure (`KRP`) Friction Assumption & Input Provenance (`well_control.kill_sheet`)**:
    - `KillSheetOutput.friction_assumption` explicitly records `"drillstring_dominated_krp_annular_friction_neglected"`.
-   - `KillSheetInput.input_provenance` accepts source tags per critical input (`"recorded_scr_test"`, `"lot_fit_test"`, `"estimated"`, `"manual_override"`). `KillSheetOutput.input_provenance_verified` is `True` only when verified provenance is supplied without `"estimated"` / `"manual_override"` overrides, and emits an explicit warning whenever estimated or manual-override provenance is present.
+   - CP86 re-review supersedes the earlier interpretation: `KillSheetInput.input_provenance` accepts caller-supplied tags such as `"recorded_scr_test"`, `"lot_fit_test"`, `"estimated"`, and `"manual_override"`; those tags are not linked to or verified against source records. `KillSheetOutput.input_provenance_verified` therefore remains `False`, and `input_provenance_status` reports `not_provided` or `operator_declared_not_verified`. The engine warns about operator declarations and about estimated/manual overrides; only an independent source/signature workflow could establish evidence.
 2. **Laminar vs Turbulent Validity Boundary (`hydraulics.laminar`)**:
    - `HydraulicsEngineOutput.regime_validity` is `"laminar_valid"` when all intervals satisfy `Re <= 2100`, and transitions to `"non_certified_turbulent_exceedance"` (alongside the `laminar_assumption` warning violation) whenever any interval exceeds `CRITICAL_REYNOLDS = 2100`.
 3. **Pipe-Body vs Connection Scope Boundary (`tubulars.api_5c3`)**:

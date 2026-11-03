@@ -119,6 +119,7 @@ class KillSheetOutput(BaseModel):
     volumetric_kick_tolerance_basis: str = "not_computed_requires_influx_density_and_annulus_capacity"
     friction_assumption: str = "drillstring_dominated_krp_annular_friction_neglected"
     input_provenance_verified: bool = False
+    input_provenance_status: Literal["not_provided", "operator_declared_not_verified"] = "not_provided"
     time_to_kill_si: float | None = None
     notes: list[str]
 
@@ -132,15 +133,18 @@ def compute_kill_sheet(inputs: KillSheetInput) -> EngineResult:
             "SICP exceeds SIDPP significantly: possible annulus obstruction or trapped pressure — verify before pumping"
         )
 
-    # Check input provenance when provided or flag unverified manual/estimated inputs
-    prov = inputs.input_provenance or {}
+    # Caller-supplied source tags are declarations, not evidence: this pure calculation cannot
+    # verify a document, signature, or measurement. Keep the historical boolean false and expose
+    # whether tags were supplied without upgrading them into verified provenance.
+    prov = {str(key): str(value).strip().lower() for key, value in (inputs.input_provenance or {}).items()}
+    input_provenance_verified = False
+    input_provenance_status = "operator_declared_not_verified" if prov else "not_provided"
+    if prov:
+        warnings.append(
+            "input provenance tags are operator-declared only; this engine does not verify signed SCR or LOT/FIT source records"
+        )
     unverified_sources = {"estimated", "manual_override", "assumed", "unverified"}
-    has_unverified_prov = any(str(v).lower() in unverified_sources for v in prov.values())
-    input_provenance_verified = bool(
-        prov
-        and not has_unverified_prov
-        and "slow_circulating_pressure_si" in prov
-    )
+    has_unverified_prov = any(value in unverified_sources for value in prov.values())
     if has_unverified_prov:
         warnings.append(
             "safety-critical kill-sheet inputs include estimated or manual_override provenance — verify against signed SCR and LOT/FIT records before execution"
@@ -363,6 +367,7 @@ def compute_kill_sheet(inputs: KillSheetInput) -> EngineResult:
         "MAASP = (fracture MW − OMW) × g × shoe TVD",
         "FCP = KRP × (KMW / OMW) assumes KRP is drillstring/bit friction dominated with negligible annular friction",
         "mud_weight_margin_si is static shoe mud-weight margin (kg/m3), distinct from volumetric_kick_tolerance_si (m3)",
+        "input provenance labels are operator declarations only; this engine does not verify source records or signatures",
     ]
     if inputs.sicp_si is None:
         notes.append("SICP not supplied: annular pressure behaviour is not evaluated")
@@ -396,6 +401,7 @@ def compute_kill_sheet(inputs: KillSheetInput) -> EngineResult:
         volumetric_kick_tolerance_basis=volumetric_basis,
         friction_assumption="drillstring_dominated_krp_annular_friction_neglected",
         input_provenance_verified=input_provenance_verified,
+        input_provenance_status=input_provenance_status,
         time_to_kill_si=time_to_kill,
         notes=notes,
     )

@@ -354,6 +354,7 @@ def compute_tubular_design(inputs: TubularDesignInput) -> EngineResult:
         "collapse uses API TR 5C3 coefficients and D/t domain boundaries",
         "axial load derates burst and collapse through the equivalent yield strength",
         "triaxial check is a von Mises stress check at the inner wall using the Lamé solution",
+        "overall_qualified reflects only the configured pipe-body checks and design factors; it is not field validation, certification, or authorization to operate",
     ]
     if inputs.mud_weight_si:
         notes.append("external pressure taken as mud hydrostatic at segment bottom where not supplied per segment")
