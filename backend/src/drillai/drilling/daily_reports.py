@@ -1277,6 +1277,17 @@ class DailyReportService:
         )
         return record
 
+    @staticmethod
+    def _set_reconciliation_target_id(row: DailyReportReconciliation, target_id: str) -> None:
+        if row.target_kind == "activity":
+            row.activity_target_id = target_id
+            row.measurement_target_id = None
+        elif row.target_kind == "measurement":
+            row.activity_target_id = None
+            row.measurement_target_id = target_id
+        else:
+            raise ValidationFailed("only row reconciliation targets have persisted target IDs")
+
     def _new_reconciliation(
         self,
         *,
@@ -1296,7 +1307,8 @@ class DailyReportService:
             revision_id=revision.id,
             target_key=target_key,
             target_kind=target_kind,
-            target_id=target_id,
+            activity_target_id=target_id if target_kind == "activity" else None,
+            measurement_target_id=target_id if target_kind == "measurement" else None,
             field_key=field_key,
             source_document_id=source_document_id,
             source_record_id=source_record.id,
@@ -1461,10 +1473,10 @@ class DailyReportService:
                         self._activity_proposal_value(previous)
                     ):
                         raise Conflict("a rejected source activity is immutable in this revision")
-                    decision_row.target_id = row.id
+                    self._set_reconciliation_target_id(decision_row, row.id)
                     row.resolution_state = "rejected"
                 else:
-                    decision_row.target_id = row.id
+                    self._set_reconciliation_target_id(decision_row, row.id)
                     if content_hash(self._activity_proposal_value(row)) != decision_row.proposed_value_hash:
                         decision_row.resolution_state = "proposed"
                         decision_row.reason = None
@@ -1502,10 +1514,10 @@ class DailyReportService:
                         self._measurement_proposal_value(previous)
                     ):
                         raise Conflict("a rejected source measurement is immutable in this revision")
-                    decision_row.target_id = row.id
+                    self._set_reconciliation_target_id(decision_row, row.id)
                     row.resolution_state = "rejected"
                 else:
-                    decision_row.target_id = row.id
+                    self._set_reconciliation_target_id(decision_row, row.id)
                     if content_hash(self._measurement_proposal_value(row)) != decision_row.proposed_value_hash:
                         decision_row.resolution_state = "proposed"
                         decision_row.reason = None
@@ -1549,7 +1561,7 @@ class DailyReportService:
             if rejected_clones:
                 await self.session.flush()
                 for item, row in rejected_clones:
-                    item.target_id = row.id
+                    self._set_reconciliation_target_id(item, row.id)
             await self.session.flush()
         revision.content_hash = self._content_hash(report, revision, activities, measurements)
         await self.session.flush()
@@ -1931,7 +1943,7 @@ class DailyReportService:
                         revision_id=revision.id,
                         target_key=target_key,
                         target_kind="activity",
-                        target_id=row.id,
+                        activity_target_id=row.id,
                         field_key=source_decision.field_key,
                         source_document_id=source_decision.source_document_id,
                         source_record_id=source_decision.source_record_id,
@@ -1959,7 +1971,7 @@ class DailyReportService:
                         revision_id=revision.id,
                         target_key=target_key,
                         target_kind="measurement",
-                        target_id=row.id,
+                        measurement_target_id=row.id,
                         field_key=source_decision.field_key,
                         source_document_id=source_decision.source_document_id,
                         source_record_id=source_decision.source_record_id,
@@ -1995,7 +2007,8 @@ class DailyReportService:
                         revision_id=revision.id,
                         target_key=source_decision.target_key,
                         target_kind=source_decision.target_kind,
-                        target_id=None,
+                        activity_target_id=None,
+                        measurement_target_id=None,
                         field_key=source_decision.field_key,
                         source_document_id=source_decision.source_document_id,
                         source_record_id=source_decision.source_record_id,

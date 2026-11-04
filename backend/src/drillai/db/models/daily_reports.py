@@ -215,6 +215,9 @@ class DailyReportActivity(Base, IdMixin, CreatedAtMixin, OrgScopedMixin):
             name="fk_daily_report_activity_revision_tenant",
         ),
         UniqueConstraint("revision_id", "sequence", name="uq_daily_report_activity_sequence"),
+        UniqueConstraint(
+            "org_id", "revision_id", "id", name="uq_daily_report_activity_org_revision_id"
+        ),
         CheckConstraint("sequence >= 0", name="daily_report_activity_sequence_nonnegative"),
         CheckConstraint(
             "activity_kind IN ('operation', 'npt', 'event', 'safety', 'milestone', 'other')",
@@ -356,6 +359,9 @@ class DailyReportMeasurement(Base, IdMixin, CreatedAtMixin, OrgScopedMixin):
             name="fk_daily_report_measurement_revision_tenant",
         ),
         UniqueConstraint("revision_id", "parameter_key", "ordinal", name="uq_daily_report_measurement_identity"),
+        UniqueConstraint(
+            "org_id", "revision_id", "id", name="uq_daily_report_measurement_org_revision_id"
+        ),
         CheckConstraint("ordinal >= 0", name="daily_report_measurement_ordinal_nonnegative"),
         CheckConstraint(
             "parameter_key IN (" + ", ".join(f"'{key}'" for key in DAILY_REPORT_PARAMETER_SPECS) + ")",
@@ -459,6 +465,20 @@ class DailyReportReconciliation(Base, IdMixin, TimestampMixin, OrgScopedMixin):
             ondelete="CASCADE",
             name="fk_daily_report_reconciliation_revision_tenant",
         ),
+        ForeignKeyConstraint(
+            ["org_id", "revision_id", "activity_target_id"],
+            ["daily_report_activities.org_id", "daily_report_activities.revision_id", "daily_report_activities.id"],
+            name="fk_daily_report_reconciliation_activity_target_scope",
+            deferrable=True,
+            initially="DEFERRED",
+        ),
+        ForeignKeyConstraint(
+            ["org_id", "revision_id", "measurement_target_id"],
+            ["daily_report_measurements.org_id", "daily_report_measurements.revision_id", "daily_report_measurements.id"],
+            name="fk_daily_report_reconciliation_measurement_target_scope",
+            deferrable=True,
+            initially="DEFERRED",
+        ),
         UniqueConstraint("revision_id", "target_key", name="uq_daily_report_reconciliation_target"),
         CheckConstraint("length(trim(target_key)) > 0", name="daily_report_reconciliation_target_nonempty"),
         CheckConstraint(
@@ -466,8 +486,10 @@ class DailyReportReconciliation(Base, IdMixin, TimestampMixin, OrgScopedMixin):
             name="daily_report_reconciliation_target_kind_valid",
         ),
         CheckConstraint(
-            "(target_kind IN ('revision_field', 'report_identity') AND target_id IS NULL) OR "
-            "(target_kind IN ('activity', 'measurement') AND target_id IS NOT NULL)",
+            "(target_kind IN ('revision_field', 'report_identity') AND "
+            "activity_target_id IS NULL AND measurement_target_id IS NULL) OR "
+            "(target_kind = 'activity' AND activity_target_id IS NOT NULL AND measurement_target_id IS NULL) OR "
+            "(target_kind = 'measurement' AND activity_target_id IS NULL AND measurement_target_id IS NOT NULL)",
             name="daily_report_reconciliation_target_id_consistent",
         ),
         CheckConstraint(
@@ -502,6 +524,8 @@ class DailyReportReconciliation(Base, IdMixin, TimestampMixin, OrgScopedMixin):
             "AND reason IS NOT NULL AND length(trim(reason)) > 0)",
             name="daily_report_reconciliation_decision_complete",
         ),
+        Index("ix_daily_report_reconciliations_activity_target_id", "activity_target_id"),
+        Index("ix_daily_report_reconciliations_measurement_target_id", "measurement_target_id"),
         Index("ix_daily_report_reconciliation_revision_state", "org_id", "revision_id", "resolution_state"),
         Index("ix_daily_report_reconciliation_source", "org_id", "source_record_id"),
     )
@@ -509,7 +533,8 @@ class DailyReportReconciliation(Base, IdMixin, TimestampMixin, OrgScopedMixin):
     revision_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     target_key: Mapped[str] = mapped_column(String(180), nullable=False)
     target_kind: Mapped[str] = mapped_column(String(24), nullable=False)
-    target_id: Mapped[str | None] = mapped_column(String(64), index=True)
+    activity_target_id: Mapped[str | None] = mapped_column(String(64))
+    measurement_target_id: Mapped[str | None] = mapped_column(String(64))
     field_key: Mapped[str] = mapped_column(String(48), nullable=False)
     source_document_id: Mapped[str] = mapped_column(
         ForeignKey("documents.id", ondelete="RESTRICT"), nullable=False, index=True
@@ -531,6 +556,15 @@ class DailyReportReconciliation(Base, IdMixin, TimestampMixin, OrgScopedMixin):
     decided_by: Mapped[str | None] = mapped_column(String(64))
     decided_at: Mapped[dt.datetime | None] = mapped_column(UtcDateTime)
     created_by: Mapped[str] = mapped_column(String(64), nullable=False)
+
+    @property
+    def target_id(self) -> str | None:
+        """Preserve the public polymorphic target ID while storing type-specific FK columns."""
+        if self.target_kind == "activity":
+            return self.activity_target_id
+        if self.target_kind == "measurement":
+            return self.measurement_target_id
+        return None
 
 
 __all__ = [

@@ -1027,6 +1027,15 @@ async def test_imported_daily_report_reconciliation_measurements_and_correction(
     assert {item["resolution_state"] for item in revision["reconciliation"]} == {"proposed"}
     assert all(item["proposal_matches_current"] for item in revision["reconciliation"])
     assert len(revision["reconciliation"]) == 3
+    activity_proposal = next(item for item in revision["reconciliation"] if item["target_kind"] == "activity")
+    measurement_proposal = next(item for item in revision["reconciliation"] if item["target_kind"] == "measurement")
+    assert activity_proposal["target_id"] == revision["activities"][0]["id"]
+    assert measurement_proposal["target_id"] == revision["measurements"][0]["id"]
+    assert all(
+        item["target_id"] is None
+        for item in revision["reconciliation"]
+        if item["target_kind"] in {"revision_field", "report_identity"}
+    )
     assert revision["measurements"][0]["observed_at"] is None
     assert revision["measurements"][0]["time_basis"] == "unknown"
     replayed_import = await client.post(
@@ -1165,6 +1174,32 @@ async def test_imported_daily_report_reconciliation_measurements_and_correction(
     assert len(corrected_revision["reconciliation"]) == 3
     assert {item["resolution_state"] for item in corrected_revision["reconciliation"]} == {"proposed"}
     assert {item["resolution_state"] for item in corrected_revision["measurements"]} == {"proposed"}
+
+    # A direct database write cannot retarget a revision-one decision to a child owned by revision two,
+    # even within the same tenant. The normal API never accepts target IDs, but the schema also protects
+    # import/revision consistency if an internal caller or maintenance path bypasses the service.
+    from sqlalchemy import select
+    from sqlalchemy.exc import IntegrityError
+
+    from drillai.db.models import DailyReportReconciliation
+
+    for target_kind, target_column, foreign_target_id in (
+        ("activity", "activity_target_id", corrected_revision["activities"][0]["id"]),
+        ("measurement", "measurement_target_id", corrected_revision["measurements"][0]["id"]),
+    ):
+        async with db.session_factory() as session:
+            decision = (
+                await session.execute(
+                    select(DailyReportReconciliation).where(
+                        DailyReportReconciliation.revision_id == revision["id"],
+                        DailyReportReconciliation.target_kind == target_kind,
+                    )
+                )
+            ).scalar_one()
+            setattr(decision, target_column, foreign_target_id)
+            with pytest.raises(IntegrityError):
+                await session.commit()
+            await session.rollback()
 
     blocked_correction = await client.post(
         f"/api/v1/wells/{well_id}/daily-reports/{report_id}/revisions/2/submit",

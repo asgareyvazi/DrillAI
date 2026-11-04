@@ -21,6 +21,7 @@ What is asserted, in the order a deployment would meet it:
 from __future__ import annotations
 
 import asyncio
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -192,6 +193,236 @@ async def _assert_report_wellbore_scope_constraints(url: str) -> None:
         await engine.dispose()
 
 
+async def _assert_reconciliation_targets_are_revision_scoped(url: str) -> None:
+    """A migrated PostgreSQL database rejects missing and cross-revision typed targets."""
+    from sqlalchemy import text
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+    from drillai.db.models import (
+        DailyDrillingReport,
+        DailyDrillingReportRevision,
+        DailyReportActivity,
+        DailyReportMeasurement,
+        DailyReportReconciliation,
+        Document,
+        ExtractedRecord,
+    )
+
+    engine = create_async_engine(url, pool_size=2, max_overflow=0)
+    factory = async_sessionmaker(bind=engine, expire_on_commit=False)
+    try:
+        async with factory() as session:
+            document = Document(
+                id="doc_scope_pg_target_test",
+                org_id="org_scope_pg",
+                doc_type="ddr",
+                title="Synthetic migration target evidence",
+            )
+            record = ExtractedRecord(
+                id="rec_scope_pg_target_test",
+                org_id="org_scope_pg",
+                document_id=document.id,
+                record_type="daily_summary",
+                payload_schema_key="migration-test.v1",
+                payload={"synthetic": True},
+            )
+            report_a = DailyDrillingReport(
+                id="ddr_scope_pg_target_a",
+                org_id="org_scope_pg",
+                well_id="wel_scope_pg_a",
+                wellbore_id="wlb_scope_pg_a",
+                report_date=date(2026, 11, 4),
+                report_timezone="UTC",
+                shift_code="day",
+                identity_key="shift:day:scope-pg-target-a",
+                created_by="usr_scope_pg",
+            )
+            report_b = DailyDrillingReport(
+                id="ddr_scope_pg_target_b",
+                org_id="org_scope_pg",
+                well_id="wel_scope_pg_a",
+                wellbore_id="wlb_scope_pg_a",
+                report_date=date(2026, 11, 5),
+                report_timezone="UTC",
+                shift_code="day",
+                identity_key="shift:day:scope-pg-target-b",
+                created_by="usr_scope_pg",
+            )
+            revision_a = DailyDrillingReportRevision(
+                id="drr_scope_pg_target_a",
+                org_id="org_scope_pg",
+                report_id=report_a.id,
+                revision_number=1,
+                source_kind="import",
+                source_document_id=document.id,
+                source_record_id=record.id,
+                created_by="usr_scope_pg",
+            )
+            revision_b = DailyDrillingReportRevision(
+                id="drr_scope_pg_target_b",
+                org_id="org_scope_pg",
+                report_id=report_b.id,
+                revision_number=1,
+                source_kind="import",
+                source_document_id=document.id,
+                source_record_id=record.id,
+                created_by="usr_scope_pg",
+            )
+            activity_a = DailyReportActivity(
+                id="dra_scope_pg_target_a",
+                org_id="org_scope_pg",
+                revision_id=revision_a.id,
+                sequence=0,
+                activity_kind="operation",
+                title="Synthetic activity A",
+                start_time_basis="unknown",
+                end_time_basis="unknown",
+                duration_basis="unknown",
+                depth_reference="unknown",
+                depth_basis="unknown",
+                cause_basis="unknown",
+                resolution_state="proposed",
+            )
+            activity_b = DailyReportActivity(
+                id="dra_scope_pg_target_b",
+                org_id="org_scope_pg",
+                revision_id=revision_b.id,
+                sequence=0,
+                activity_kind="operation",
+                title="Synthetic activity B",
+                start_time_basis="unknown",
+                end_time_basis="unknown",
+                duration_basis="unknown",
+                depth_reference="unknown",
+                depth_basis="unknown",
+                cause_basis="unknown",
+                resolution_state="proposed",
+            )
+            measurement_a = DailyReportMeasurement(
+                id="drm_scope_pg_target_a",
+                org_id="org_scope_pg",
+                revision_id=revision_a.id,
+                parameter_key="mud_weight",
+                ordinal=0,
+                dimension="mud_weight",
+                canonical_unit="kg/m3",
+                value_si=1101.26,
+                source_value=9.2,
+                source_unit="ppg",
+                accepted_input_value=9.2,
+                accepted_input_unit="ppg",
+                value_basis="reported",
+                time_basis="unknown",
+                depth_reference="unknown",
+                depth_basis="unknown",
+                resolution_state="proposed",
+            )
+            measurement_b = DailyReportMeasurement(
+                id="drm_scope_pg_target_b",
+                org_id="org_scope_pg",
+                revision_id=revision_b.id,
+                parameter_key="mud_weight",
+                ordinal=0,
+                dimension="mud_weight",
+                canonical_unit="kg/m3",
+                value_si=1101.26,
+                source_value=9.2,
+                source_unit="ppg",
+                accepted_input_value=9.2,
+                accepted_input_unit="ppg",
+                value_basis="reported",
+                time_basis="unknown",
+                depth_reference="unknown",
+                depth_basis="unknown",
+                resolution_state="proposed",
+            )
+            reconciliations = [
+                DailyReportReconciliation(
+                    id="drc_scope_pg_activity_target",
+                    org_id="org_scope_pg",
+                    revision_id=revision_a.id,
+                    target_key="activity:synthetic",
+                    target_kind="activity",
+                    activity_target_id=activity_a.id,
+                    field_key="activity",
+                    source_document_id=document.id,
+                    source_record_id=record.id,
+                    source_path="payload.activities[0]",
+                    source_review_version=1,
+                    source_fingerprint="a" * 64,
+                    source_value_hash="b" * 64,
+                    proposed_value_hash="c" * 64,
+                    created_by="usr_scope_pg",
+                ),
+                DailyReportReconciliation(
+                    id="drc_scope_pg_measurement_target",
+                    org_id="org_scope_pg",
+                    revision_id=revision_a.id,
+                    target_key="measurement:mud_weight",
+                    target_kind="measurement",
+                    measurement_target_id=measurement_a.id,
+                    field_key="mud_weight",
+                    source_document_id=document.id,
+                    source_record_id=record.id,
+                    source_path="payload.measurements[0]",
+                    source_review_version=1,
+                    source_fingerprint="a" * 64,
+                    source_value_hash="b" * 64,
+                    proposed_value_hash="c" * 64,
+                    created_by="usr_scope_pg",
+                ),
+            ]
+            session.add_all([document, record])
+            await session.flush()
+            session.add_all([report_a, report_b])
+            await session.flush()
+            session.add_all([revision_a, revision_b])
+            await session.flush()
+            session.add_all([activity_a, activity_b, measurement_a, measurement_b])
+            await session.flush()
+            session.add_all(reconciliations)
+            await session.commit()
+
+        invalid_updates = (
+            (
+                "UPDATE daily_report_reconciliations SET activity_target_id=:target_id WHERE id=:id",
+                {"target_id": activity_b.id, "id": "drc_scope_pg_activity_target"},
+            ),
+            (
+                "UPDATE daily_report_reconciliations SET measurement_target_id=:target_id WHERE id=:id",
+                {"target_id": measurement_b.id, "id": "drc_scope_pg_measurement_target"},
+            ),
+            (
+                "UPDATE daily_report_reconciliations SET measurement_target_id=:target_id WHERE id=:id",
+                {"target_id": "drm_scope_pg_missing", "id": "drc_scope_pg_measurement_target"},
+            ),
+        )
+        for statement, parameters in invalid_updates:
+            with pytest.raises(sa.exc.IntegrityError):
+                async with engine.begin() as connection:
+                    await connection.execute(text(statement), parameters)
+
+        async with engine.connect() as connection:
+            assert (
+                await connection.execute(
+                    text(
+                        "SELECT activity_target_id FROM daily_report_reconciliations "
+                        "WHERE id='drc_scope_pg_activity_target'"
+                    )
+                )
+            ).scalar_one() == activity_a.id
+            assert (
+                await connection.execute(
+                    text(
+                        "SELECT measurement_target_id FROM daily_report_reconciliations "
+                        "WHERE id='drc_scope_pg_measurement_target'"
+                    )
+                )
+            ).scalar_one() == measurement_a.id
+    finally:
+        await engine.dispose()
+
+
 @pytest.mark.postgres
 def test_migration_chain_applies_reverses_and_refuses_duplicates_on_postgres(postgres_url):
     """Synchronous on purpose: Alembic's environment runs the migrations with ``asyncio.run``, so a
@@ -244,6 +475,7 @@ def test_migration_chain_applies_reverses_and_refuses_duplicates_on_postgres(pos
     command.upgrade(config, "head")
     command.check(config)
     asyncio.run(_assert_report_wellbore_scope_constraints(postgres_url))
+    asyncio.run(_assert_reconciliation_targets_are_revision_scoped(postgres_url))
 
 
 def test_the_migration_environment_honours_an_explicit_url(tmp_path):
