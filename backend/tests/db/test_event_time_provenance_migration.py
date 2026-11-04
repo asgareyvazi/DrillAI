@@ -12,7 +12,7 @@ from alembic.config import Config
 
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
 PARENT_REVISION = "c79f2a61d5b3"
-HEAD_REVISION = "d2a4f6c8b109"
+HEAD_REVISION = "e90f1c8a2b64"
 _BACKUP_KEY = "cp84_event_time_provenance_backup"
 
 

@@ -33,7 +33,7 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
-from sqlalchemy import Select, func, select
+from sqlalchemy import Select, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from drillai.core.audit import record_audit
@@ -348,7 +348,13 @@ class AlertRuleService:
         **changes: Any,
     ) -> AlertRule:
         row = await self.get(rule_id)
-        _check_version(row.updated_at, expected_updated_at, resource="alert rule")
+        await _guard_version_write(
+            self.session,
+            row,
+            org_id=self.org_id,
+            expected=expected_updated_at,
+            resource="alert rule",
+        )
         if not (reason or "").strip():
             raise ValidationFailed("a rule change needs a reason", details={"field": "reason"})
         before = _rule_snapshot(row)
@@ -476,6 +482,34 @@ def _check_version(stored: dt.datetime | None, expected: dt.datetime, *, resourc
                 "expected_updated_at": expected_aware.isoformat(),
                 "stored_updated_at": stored_aware.isoformat(),
             },
+        )
+
+
+async def _guard_version_write(
+    session: AsyncSession,
+    row: Alert | AlertRule,
+    *,
+    org_id: str,
+    expected: dt.datetime,
+    resource: str,
+) -> None:
+    """Atomically reserve the version being edited, including on SQLite where FOR UPDATE is inert."""
+    _check_version(row.updated_at, expected, resource=resource)
+    model = type(row)
+    result = await session.execute(
+        update(model)
+        .where(
+            model.id == row.id,
+            model.org_id == org_id,
+            model.updated_at == row.updated_at,
+        )
+        .values(updated_at=model.updated_at)
+        .execution_options(synchronize_session=False)
+    )
+    if result.rowcount != 1:
+        raise Conflict(
+            f"the {resource} changed concurrently; reload before deciding",
+            details={"resource": resource, "expected_updated_at": expected.isoformat()},
         )
 
 
@@ -738,7 +772,13 @@ class AlertService:
         reason: str | None = None,
     ) -> Alert:
         alert = await self.get(alert_id)
-        _check_version(alert.updated_at, expected_updated_at, resource="alert")
+        await _guard_version_write(
+            self.session,
+            alert,
+            org_id=self.org_id,
+            expected=expected_updated_at,
+            resource="alert",
+        )
         self._require_transition(alert, "acknowledged")
         before = _alert_snapshot(alert)
         alert.status = "acknowledged"
@@ -816,7 +856,13 @@ class AlertService:
         observed_value: float | None,
     ) -> Alert:
         alert = await self.get(alert_id)
-        _check_version(alert.updated_at, expected_updated_at, resource="alert")
+        await _guard_version_write(
+            self.session,
+            alert,
+            org_id=self.org_id,
+            expected=expected_updated_at,
+            resource="alert",
+        )
         self._require_transition(alert, target_status)
         if not (reason or "").strip():
             raise ValidationFailed(

@@ -13,6 +13,28 @@ from drillai.workflow.nodes import AiCompleteConfig, NodeContext, _ai_complete
 
 
 @pytest.mark.asyncio
+async def test_ai_node_reports_unavailable_instead_of_synthesizing_when_no_provider_is_registered():
+    from drillai.ai.providers import ProviderRegistry
+    from drillai.ai.router import LlmRouter
+
+    context = NodeContext(
+        session=None,
+        org_id="org_test",
+        principal=Principal(id="usr_test", max_action_level=ActionLevel.OBSERVE),
+        run_id="run_no_provider",
+        node_id="ai_complete",
+        node_name="AI completion",
+        inputs={},
+        variables={"context_prompt": "A report records 12.4 ppg."},
+        node_outputs={},
+        services={"llm_router": LlmRouter(registry=ProviderRegistry())},
+    )
+
+    with pytest.raises(NodeExecutionFailed, match="no LLM provider available"):
+        await _ai_complete(context, AiCompleteConfig(user_prompt="Summarise the report."))
+
+
+@pytest.mark.asyncio
 async def test_ai_node_wraps_retrieved_prompt_injection_and_reports_the_finding():
     class RecordingRouter:
         request = None

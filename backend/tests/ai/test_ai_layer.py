@@ -24,12 +24,14 @@ from drillai.ai.guardrails import (
 from drillai.ai.providers import (
     ChatMessage,
     CompletionRequest,
+    DeterministicEmbeddingProvider,
     EchoProvider,
     LLMCapability,
     ModelSpec,
     OpenAICompatibleProvider,
     PrivacyClass,
     ProviderRegistry,
+    bootstrap_default_providers,
     provider_registry,
 )
 from drillai.ai.router import LlmRouter, RoutingPolicy, TaskProfile
@@ -119,6 +121,135 @@ def test_registry_rejects_duplicate_providers_and_reports_models():
 
 def test_default_registry_ships_the_offline_provider():
     assert "echo" in provider_registry().providers()
+
+
+def test_provider_bootstrap_uses_configured_stub_and_deterministic_embedding_modes():
+    from drillai.core.config import Settings
+
+    settings = Settings(
+        _env_file=None,
+        environment="development",
+        llm_provider="stub",
+        llm_default_model="echo-deterministic-v1",
+        embedding_provider="deterministic",
+        embedding_model="hash-64-v2",
+        embedding_dimensions=64,
+    )
+    registry = ProviderRegistry()
+    bootstrap_default_providers(registry=registry, settings=settings)
+
+    assert set(registry.providers()) == {"echo", "deterministic_embedding"}
+    assert registry.get("echo").models()[0].model == "echo-deterministic-v1"
+    embedding = registry.get("deterministic_embedding")
+    assert isinstance(embedding, DeterministicEmbeddingProvider)
+    assert embedding.model_name == "hash-64-v2"
+    assert embedding.dimensions == 64
+
+
+@pytest.mark.asyncio
+async def test_production_stub_mode_has_no_llm_and_live_registration_has_no_echo_fallback():
+    from drillai.core.config import Settings
+
+    production = Settings(
+        _env_file=None,
+        environment="production",
+        llm_provider="stub",
+        embedding_provider="deterministic",
+    )
+    production_registry = ProviderRegistry()
+    bootstrap_default_providers(registry=production_registry, settings=production)
+    assert "echo" not in production_registry.providers()
+    with pytest.raises(ModelNotConfigured):
+        LlmRouter(registry=production_registry).route(profile=TaskProfile.SUMMARIZE)
+
+    live_settings = Settings(
+        _env_file=None,
+        environment="production",
+        llm_provider="openai_compatible",
+        llm_base_url="https://llm.example.invalid/v1",
+        llm_api_key="",
+        llm_default_model="frontier-model",
+        llm_privacy="private_cloud",
+        llm_max_privacy="private_cloud",
+        embedding_provider="deterministic",
+    )
+    live_registry = ProviderRegistry()
+    bootstrap_default_providers(registry=live_registry, settings=live_settings)
+    assert "echo" not in live_registry.providers()
+    router = LlmRouter(
+        registry=live_registry,
+        policy=RoutingPolicy(max_privacy=PrivacyClass.PRIVATE_CLOUD),
+    )
+    assert router.route(profile=TaskProfile.SUMMARIZE).spec.model == "frontier-model"
+    with pytest.raises(ModelNotConfigured, match="no API key"):
+        await router.complete(_request("Summarise the report."))
+
+
+def test_router_default_privacy_ceiling_uses_bootstrapped_settings():
+    from drillai.core.config import Settings
+
+    settings = Settings(
+        _env_file=None,
+        llm_provider="openai_compatible",
+        llm_privacy="public_cloud",
+        llm_max_privacy="private_cloud",
+        embedding_provider="deterministic",
+    )
+    registry = ProviderRegistry()
+    bootstrap_default_providers(registry=registry, settings=settings)
+
+    with pytest.raises(ModelNotConfigured):
+        LlmRouter(registry=registry).route(profile=TaskProfile.SUMMARIZE)
+    settings.llm_max_privacy = "public_cloud"
+    bootstrap_default_providers(registry=registry, settings=settings)
+    assert LlmRouter(registry=registry).route(profile=TaskProfile.SUMMARIZE).spec.provider == "openai_compatible"
+
+
+@pytest.mark.asyncio
+async def test_ollama_compatible_provider_can_be_called_without_a_bearer_secret(monkeypatch):
+    captured: dict[str, object] = {}
+
+    class FakeResponse:
+        status_code = 200
+
+        def json(self):
+            return {"model": "local-model", "choices": [{"message": {"content": "ok"}}]}
+
+    class FakeAsyncClient:
+        def __init__(self, *, timeout):
+            captured["timeout"] = timeout
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return None
+
+        async def post(self, url, *, json, headers):
+            captured.update(url=url, payload=json, headers=headers)
+            return FakeResponse()
+
+    monkeypatch.setattr("httpx.AsyncClient", FakeAsyncClient)
+    provider = OpenAICompatibleProvider(
+        base_url="http://ollama.local/v1",
+        name="ollama",
+        allow_anonymous=True,
+        models=[
+            ModelSpec(
+                provider="ollama",
+                model="local-model",
+                capabilities=frozenset({LLMCapability.CHAT}),
+                privacy=PrivacyClass.LOCAL,
+            )
+        ],
+        privacy=PrivacyClass.LOCAL,
+    )
+
+    response = await provider.complete(_request("Hello."))
+
+    assert response.text == "ok"
+    assert captured["url"] == "http://ollama.local/v1/chat/completions"
+    assert captured["headers"] == {}
 
 
 # --------------------------------------------------------------------------- routing

@@ -14,7 +14,7 @@ from sqlalchemy import select
 from tests.fixtures.fabric import Fabric
 from tests.telemetry.conftest import statement_counter
 
-from drillai.db.models import TimeSeries, TimeSeriesPoint
+from drillai.db.models import Document, ExtractedRecord, TimeSeries, TimeSeriesPoint
 from drillai.telemetry.service import TelemetryService
 
 PREFIX = "/api/v1"
@@ -234,3 +234,132 @@ async def test_the_kpi_read_does_not_grow_with_the_number_of_channels(fabric: Fa
         f"the state read touched the points table {with_seven} times with 7 channels and "
         f"{with_fourteen} times with 14"
     )
+
+async def test_kpi_dashboard_contract_exposes_scope_freshness_lineage_and_missing_reasons(fabric: Fabric) -> None:
+    channel = await _channel(fabric, fabric.alpha, "spp", "pressure", "psi")
+    observed = dt.datetime.now(tz=dt.UTC) - dt.timedelta(seconds=4)
+    await _append(
+        fabric,
+        fabric.alpha,
+        channel["id"],
+        [{"ts": observed.isoformat(), "value": 3600.0, "unit": "psi"}],
+    )
+
+    response = await fabric.http.get(
+        f"{PREFIX}/wells/{fabric.alpha.well_id}/kpis", headers=fabric.alpha.headers
+    )
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["well_id"] == fabric.alpha.well_id
+    assert payload["generated_at"]
+    assert payload["as_of"] == observed.isoformat()
+    assert payload["contract"]["numerator"] is None
+    assert payload["contract"]["denominator"] is None
+    assert payload["contract"]["imputation"].startswith("none")
+    spp = next(item for item in payload["kpis"] if item["key"] == "spp")
+    assert spp["present"] is True
+    assert spp["value"] == 3600.0 * PSI_IN_PA
+    assert spp["source"] == "time_series:spp"
+    assert spp["source_id"] == channel["id"]
+    assert spp["observed_at"] == observed.isoformat()
+    assert spp["observed_at_basis"] == "source_timestamp"
+    assert spp["freshness"] == "fresh"
+    assert spp["age_seconds"] is not None and spp["age_seconds"] < 60
+    missing = next(item for item in payload["kpis"] if item["key"] == "wob")
+    assert missing["present"] is False
+    assert missing["value"] is None
+    assert missing["missing_reason"]
+    assert payload["present_count"] == 1
+    assert payload["missing_count"] == payload["total"] - 1
+
+    foreign = await fabric.http.get(
+        f"{PREFIX}/wells/{fabric.bravo.well_id}/kpis", headers=fabric.alpha.headers
+    )
+    assert foreign.status_code == 404
+
+
+async def test_report_header_anchor_does_not_advance_telemetry_as_of(fabric: Fabric) -> None:
+    org_id = fabric.org_id(fabric.alpha)
+    anchor = dt.datetime(2026, 3, 15, tzinfo=dt.UTC)
+    async with fabric.session() as session:
+        document = Document(
+            org_id=org_id,
+            well_id=fabric.alpha.well_id,
+            doc_type="ddr",
+            title="Report header date is not a telemetry observation",
+            status="reviewed",
+        )
+        session.add(document)
+        await session.flush()
+        session.add(
+            ExtractedRecord(
+                org_id=org_id,
+                document_id=document.id,
+                well_id=fabric.alpha.well_id,
+                record_type="parameter_set",
+                payload_schema_key="parameter_set.v1",
+                payload={"rop": 15.0},
+                unit_context={"rop": "m/h"},
+                observed_at=anchor,
+                observed_at_basis="report_header_date",
+                validation_state="human_validated",
+                confidence=None,
+            )
+        )
+        await session.commit()
+
+    response = await fabric.http.get(
+        f"{PREFIX}/wells/{fabric.alpha.well_id}/kpis", headers=fabric.alpha.headers
+    )
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    rop = next(item for item in payload["kpis"] if item["key"] == "rop")
+    assert rop["observed_at"] == anchor.isoformat()
+    assert rop["observed_at_basis"] == "report_header_date"
+    assert payload["as_of"] is None
+
+
+async def test_extracted_kpi_does_not_relabel_record_creation_as_observation_time(fabric: Fabric) -> None:
+    org_id = fabric.org_id(fabric.alpha)
+    async with fabric.session() as session:
+        document = Document(
+            org_id=org_id,
+            well_id=fabric.alpha.well_id,
+            doc_type="ddr",
+            title="Reviewed parameter source",
+            status="reviewed",
+        )
+        session.add(document)
+        await session.flush()
+        record = ExtractedRecord(
+            org_id=org_id,
+            document_id=document.id,
+            well_id=fabric.alpha.well_id,
+            record_type="parameter_set",
+            payload_schema_key="parameter_set.v1",
+            payload={"rop": 15.0},
+            unit_context={"rop": "m/h"},
+            observed_at=None,
+            observed_at_basis="unknown",
+            validation_state="human_validated",
+            confidence=None,
+        )
+        session.add(record)
+        await session.flush()
+        record_id = record.id
+        await session.commit()
+
+    response = await fabric.http.get(
+        f"{PREFIX}/wells/{fabric.alpha.well_id}/kpis", headers=fabric.alpha.headers
+    )
+    assert response.status_code == 200, response.text
+    rop = next(item for item in response.json()["kpis"] if item["key"] == "rop")
+    assert rop["present"] is True
+    assert rop["source"] == "extracted_record:parameter_set"
+    assert rop["source_id"] == record_id
+    assert rop["evidence_ref"] == record_id
+    assert rop["observed_at"] is None
+    assert rop["observed_at_basis"] == "unknown"
+    assert rop["freshness"] == "unknown"
+    assert rop["age_seconds"] is None
+    assert rop["note"] and "age is unknown" in rop["note"]

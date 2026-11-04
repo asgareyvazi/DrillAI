@@ -58,7 +58,6 @@ from drillai.rag.retriever import (
 from drillai.security.actions import ActionLevel, Principal
 from drillai.telemetry.connectors import reset_egress_policy
 from drillai.workflow.graph import GraphNode, WorkflowGraph
-from drillai.workflow.notifications import dispatch_outbound_message
 from drillai.workflow.runtime import RunScope, WorkflowRuntime
 from drillai.workflow.service import WorkflowService
 
@@ -401,144 +400,164 @@ class _LocalSmtpServer:
 
 
 async def test_cp20_02_outbound_webhook_and_smtp_notification_adapters_idempotency_and_retries(
-    session,
+    tmp_path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Verify Webhook and SMTP adapters, HMAC signing via secret_ref, idempotency suppression,
-    retryable (503) -> dead_letter vs terminal (400 / egress block) classification, and ledger."""
+    """Verify adapters through committed worker claims, including HMAC, retries, and idempotency."""
+    from drillai.workflow.notification_worker import NotificationWorker
+
     reset_egress_policy()
     monkeypatch.setenv("DRILLAI_CONNECTOR_ALLOW_LOOPBACK", "true")
     monkeypatch.setenv("DRILLAI_NOTIFY_SECRET_RIG_WEBHOOK_KEY", "top-secret-hmac-key-2026")
+    database = Database(f"sqlite+aiosqlite:///{tmp_path / 'cp20-notifications.db'}")
+    await database.create_all()
 
-    org = Organization(slug="cp20-notify-org", name="CP20 Notify Org", kind="operator")
-    session.add(org)
-    await session.flush()
-
-    async with _LocalWebhookServer() as wh_srv, _LocalSmtpServer() as smtp_srv:
-        # 1. Successful webhook delivery + HMAC-SHA256 verification + idempotency suppression
-        msg1 = OutboundMessage(
-            org_id=org.id,
-            channel="webhook",
-            recipient=wh_srv.url,
-            subject="Mud Weight Alert",
-            body="ECD reached 1420 kg/m3 at 2850 m MD",
-            payload={"secret_ref": "rig_webhook_key", "timeout_seconds": 5.0},
-            idempotency_key="idem-cp20-msg-01",
-            evidence_refs=["doc_ddr_01"],
-        )
-        session.add(msg1)
+    async with database.session() as session:
+        org = Organization(slug="cp20-notify-org", name="CP20 Notify Org", kind="operator")
+        session.add(org)
         await session.flush()
+        org_id = org.id
 
-        res1 = await dispatch_outbound_message(session, msg1)
-        assert res1["status"] == "sent"
-        assert res1["duplicate_suppressed"] is False
-        assert res1["external_provider_verified"] is False
-        assert res1["provider_message_id"] == "wh_msg_1"
-        assert len(wh_srv.requests) == 1
+    worker = NotificationWorker(database, poll_seconds=1.0, batch_size=1)
 
-        req0 = wh_srv.requests[0]
-        expected_sig = hmac.new(
-            b"top-secret-hmac-key-2026", req0["body"], hashlib.sha256
-        ).hexdigest()
-        assert req0["headers"]["x-drillai-signature-256"] == f"sha256={expected_sig}"
-        assert req0["headers"]["idempotency-key"] == "idem-cp20-msg-01"
+    async def enqueue(**fields: Any) -> str:
+        async with database.session() as session:
+            message = OutboundMessage(org_id=org_id, **fields)
+            session.add(message)
+            await session.flush()
+            return message.id
 
-        # Re-dispatching duplicate with same idempotency_key must NOT make a network call
-        msg1_dup = OutboundMessage(
-            org_id=org.id,
-            channel="webhook",
-            recipient=wh_srv.url,
-            subject="Mud Weight Alert Duplicate",
-            body="ECD reached 1420 kg/m3 at 2850 m MD",
-            idempotency_key="idem-cp20-msg-01",
-        )
-        session.add(msg1_dup)
-        await session.flush()
-        res_dup = await dispatch_outbound_message(session, msg1_dup)
-        assert res_dup["status"] == "sent"
-        assert res_dup["duplicate_suppressed"] is True
-        assert res_dup["provider_message_id"] == "wh_msg_1"
-        assert len(wh_srv.requests) == 1  # Still 1 request!
+    async def dispatch_one(message_id: str) -> dict[str, Any]:
+        results = await worker.run_once()
+        matches = [result for result in results if result.get("message_id") == message_id]
+        assert len(matches) == 1, results
+        return matches[0]
 
-        # 2. Retryable HTTP 503 -> failed_retryable on attempt 1, dead_letter on attempt 2 (max_attempts=2)
-        wh_srv.response_queue.extend([(503, {"error": "temporarily overloaded"}), (503, {"error": "still overloaded"})])
-        msg_retry = OutboundMessage(
-            org_id=org.id,
-            channel="webhook",
-            recipient=wh_srv.url,
-            subject="Transient Test",
-            body="Testing retry classification",
-            max_attempts=2,
-            idempotency_key="idem-cp20-retry",
-        )
-        session.add(msg_retry)
-        await session.flush()
+    try:
+        async with _LocalWebhookServer() as wh_srv, _LocalSmtpServer() as smtp_srv:
+            # Successful webhook acceptance is performed only after the worker commits its claim.
+            msg1 = await enqueue(
+                channel="webhook",
+                recipient=wh_srv.url,
+                subject="Mud Weight Alert",
+                body="ECD reached 1420 kg/m3 at 2850 m MD",
+                payload={"secret_ref": "rig_webhook_key", "timeout_seconds": 5.0},
+                idempotency_key="idem-cp20-msg-01",
+                evidence_refs=["doc_ddr_01"],
+            )
+            res1 = await dispatch_one(msg1)
+            assert res1["status"] == "accepted"
+            assert res1["duplicate_suppressed"] is False
+            assert res1["external_provider_verified"] is False
+            assert res1["delivery_confirmed"] is False
+            assert res1["acceptance_evidence"] == "http_2xx"
+            assert res1["provider_message_id"] == "wh_msg_1"
+            assert len(wh_srv.requests) == 1
 
-        r_try1 = await dispatch_outbound_message(session, msg_retry)
-        assert r_try1["status"] == "failed_retryable"
-        assert r_try1["attempts"] == 1
-        assert msg_retry.next_attempt_at is not None
+            req0 = wh_srv.requests[0]
+            expected_sig = hmac.new(
+                b"top-secret-hmac-key-2026", req0["body"], hashlib.sha256
+            ).hexdigest()
+            assert req0["headers"]["x-drillai-signature-256"] == f"sha256={expected_sig}"
+            assert req0["headers"]["idempotency-key"] == "idem-cp20-msg-01"
 
-        r_try2 = await dispatch_outbound_message(session, msg_retry)
-        assert r_try2["status"] == "dead_letter"
-        assert r_try2["attempts"] == 2
-        assert msg_retry.next_attempt_at is None
-        assert len(msg_retry.attributes["delivery_ledger"]) == 2
+            # A previously accepted idempotency key suppresses a second transport call.
+            msg1_dup = await enqueue(
+                channel="webhook",
+                recipient=wh_srv.url,
+                subject="Mud Weight Alert Duplicate",
+                body="ECD reached 1420 kg/m3 at 2850 m MD",
+                idempotency_key="idem-cp20-msg-01",
+            )
+            res_dup = await dispatch_one(msg1_dup)
+            assert res_dup["status"] == "accepted"
+            assert res_dup["duplicate_suppressed"] is True
+            assert res_dup["provider_message_id"] == "wh_msg_1"
+            assert len(wh_srv.requests) == 1
 
-        # 3. Terminal HTTP 400 -> failed_terminal immediately on attempt 1
-        wh_srv.response_queue.append((400, {"error": "bad payload schema"}))
-        msg_term = OutboundMessage(
-            org_id=org.id,
-            channel="webhook",
-            recipient=wh_srv.url,
-            subject="Terminal 400 Test",
-            body="Bad request",
-            max_attempts=3,
-            idempotency_key="idem-cp20-term",
-        )
-        session.add(msg_term)
-        await session.flush()
+            # Retryable HTTP 503 becomes failed_retryable, then dead_letter at the attempt limit.
+            wh_srv.response_queue.extend(
+                [(503, {"error": "temporarily overloaded"}), (503, {"error": "still overloaded"})]
+            )
+            msg_retry = await enqueue(
+                channel="webhook",
+                recipient=wh_srv.url,
+                subject="Transient Test",
+                body="Testing retry classification",
+                max_attempts=2,
+                idempotency_key="idem-cp20-retry",
+            )
+            r_try1 = await dispatch_one(msg_retry)
+            assert r_try1["status"] == "failed_retryable"
+            assert r_try1["attempts"] == 1
+            async with database.session() as session:
+                retry_row = (
+                    await session.execute(select(OutboundMessage).where(OutboundMessage.id == msg_retry))
+                ).scalar_one()
+                assert retry_row.next_attempt_at is not None
+                retry_row.next_attempt_at = dt.datetime.now(tz=dt.UTC) - dt.timedelta(seconds=1)
 
-        r_term = await dispatch_outbound_message(session, msg_term)
-        assert r_term["status"] == "failed_terminal"
-        assert r_term["attempts"] == 1
-        assert msg_term.next_attempt_at is None
+            r_try2 = await dispatch_one(msg_retry)
+            assert r_try2["status"] == "dead_letter"
+            assert r_try2["attempts"] == 2
+            async with database.session() as session:
+                retry_row = (
+                    await session.execute(select(OutboundMessage).where(OutboundMessage.id == msg_retry))
+                ).scalar_one()
+                assert retry_row.next_attempt_at is None
+                assert len(retry_row.attributes["delivery_ledger"]) == 2
 
-        # 4. Egress policy block when loopback is disabled -> failed_terminal with zero network requests
-        monkeypatch.setenv("DRILLAI_CONNECTOR_ALLOW_LOOPBACK", "false")
-        req_count_before = len(wh_srv.requests)
-        msg_egress = OutboundMessage(
-            org_id=org.id,
-            channel="webhook",
-            recipient=wh_srv.url,
-            subject="Blocked Loopback",
-            body="Should be blocked by SSRF guard",
-            idempotency_key="idem-cp20-egress",
-        )
-        session.add(msg_egress)
-        await session.flush()
-        r_egress = await dispatch_outbound_message(session, msg_egress)
-        assert r_egress["status"] == "failed_terminal"
-        assert len(wh_srv.requests) == req_count_before
-        monkeypatch.setenv("DRILLAI_CONNECTOR_ALLOW_LOOPBACK", "true")
+            # A permanent HTTP 400 is terminal on its first attempt.
+            wh_srv.response_queue.append((400, {"error": "bad payload schema"}))
+            msg_term = await enqueue(
+                channel="webhook",
+                recipient=wh_srv.url,
+                subject="Terminal 400 Test",
+                body="Bad request",
+                max_attempts=3,
+                idempotency_key="idem-cp20-term",
+            )
+            r_term = await dispatch_one(msg_term)
+            assert r_term["status"] == "failed_terminal"
+            assert r_term["attempts"] == 1
 
-        # 5. SMTP Email adapter delivery against local RFC 5321 server
-        msg_email = OutboundMessage(
-            org_id=org.id,
-            channel="email",
-            recipient="company.man@rig.example.com",
-            subject="Daily Drilling Summary",
-            body="24h footage: 185 m in 8-1/2 in section.",
-            payload={"smtp_url": smtp_srv.url, "from_address": "drillai@rig.example.com"},
-            idempotency_key="idem-cp20-email-01",
-        )
-        session.add(msg_email)
-        await session.flush()
-        r_email = await dispatch_outbound_message(session, msg_email)
-        assert r_email["status"] == "sent"
-        assert len(smtp_srv.messages) == 1
-        assert "X-DrillAI-Idempotency-Key: idem-cp20-email-01" in smtp_srv.messages[0]
-        assert "24h footage: 185 m" in smtp_srv.messages[0]
+            # The egress policy blocks loopback before transport and no request reaches the server.
+            monkeypatch.setenv("DRILLAI_CONNECTOR_ALLOW_LOOPBACK", "false")
+            reset_egress_policy()
+            req_count_before = len(wh_srv.requests)
+            msg_egress = await enqueue(
+                channel="webhook",
+                recipient=wh_srv.url,
+                subject="Blocked Loopback",
+                body="Should be blocked by SSRF guard",
+                idempotency_key="idem-cp20-egress",
+            )
+            r_egress = await dispatch_one(msg_egress)
+            assert r_egress["status"] == "failed_terminal"
+            assert len(wh_srv.requests) == req_count_before
+            monkeypatch.setenv("DRILLAI_CONNECTOR_ALLOW_LOOPBACK", "true")
+            reset_egress_policy()
+
+            # SMTP server acceptance is not an end-recipient delivery receipt.
+            msg_email = await enqueue(
+                channel="email",
+                recipient="company.man@rig.example.com",
+                subject="Daily Drilling Summary",
+                body="24h footage: 185 m in 8-1/2 in section.",
+                payload={"smtp_url": smtp_srv.url, "from_address": "drillai@rig.example.com"},
+                idempotency_key="idem-cp20-email-01",
+            )
+            r_email = await dispatch_one(msg_email)
+            assert r_email["status"] == "accepted"
+            assert r_email["delivery_confirmed"] is False
+            assert r_email["acceptance_evidence"] == "smtp_server_accepted"
+            assert r_email["provider_message_id"] is None
+            assert len(smtp_srv.messages) == 1
+            assert "X-DrillAI-Idempotency-Key: idem-cp20-email-01" in smtp_srv.messages[0]
+            assert "24h footage: 185 m" in smtp_srv.messages[0]
+    finally:
+        reset_egress_policy()
+        await database.dispose()
 
 
 async def test_cp20_03_workflow_output_notify_requires_l4_human_approval_before_dispatch(
@@ -609,7 +628,7 @@ async def test_cp20_03_workflow_output_notify_requires_l4_human_approval_before_
         assert approval.action_level == "L4"
         assert approval.status == "pending"
 
-        # 2. Approve L4 request and resume workflow -> dispatches webhook notification
+        # 2. Approve L4 request and resume workflow -> commits an outbox row; the worker owns transport I/O.
         approval.status = "approved"
         approval.decided_by = supervisor.id
         approval.decided_at = dt.datetime.now(tz=dt.UTC)
@@ -622,15 +641,18 @@ async def test_cp20_03_workflow_output_notify_requires_l4_human_approval_before_
             decided_by=supervisor.id,
         )
         assert run_done.status == "succeeded"
-        assert len(wh_srv.requests) == 1
+        assert len(wh_srv.requests) == 0
 
         obm = (
             await session.execute(
                 select(OutboundMessage).where(OutboundMessage.workflow_run_id == run_done.id)
             )
         ).scalar_one()
-        assert obm.status == "sent"
-        assert obm.provider_message_id == "wh_msg_1"
+        assert obm.status == "queued"
+        assert obm.acceptance_evidence is None
+        assert obm.accepted_at is None
+        assert obm.sent_at is None
+        assert obm.provider_message_id is None
 
 
 def test_cp20_04_external_vendor_interop_commissioning_contract() -> None:

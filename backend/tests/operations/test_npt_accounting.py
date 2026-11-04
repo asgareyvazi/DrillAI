@@ -155,7 +155,11 @@ async def test_the_events_basis_sums_only_what_was_recorded(fabric: Fabric) -> N
     assert npt["event_count"] == 4
     assert npt["hours_from_events"] == 9.5
     assert npt["hours_from_operations"] == 6.5
-    assert npt["percent_of_well_time"] is not None
+    assert npt["productive_hours"] == 0.0
+    assert npt["denominator_hours"] == npt["measured_hours_total"] == 9.5
+    assert npt["percent_of_well_time"] == 100.0
+    assert npt["metric_contract"]["selected_basis"] == "events"
+    assert npt["generated_at"]
     assert any("recorded" in note for note in npt["notes"])
 
 

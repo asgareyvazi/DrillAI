@@ -12,7 +12,8 @@ import datetime as dt
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from drillai.db.models import Base, Event, NptCode, Organization, Project, Well
+from drillai.core.errors import ValidationFailed
+from drillai.db.models import Base, Event, NptCode, Operation, Organization, Project, Well, Wellbore
 from drillai.drilling.classifiers import STANDARD_NPT_CODES
 from drillai.drilling.npt import NptService
 
@@ -156,3 +157,87 @@ async def test_a_well_without_recorded_loss_reports_zero_and_says_why(session, w
     assert payload["cases"] == []
     assert payload["percent_of_well_time"] is None, "no measured time means no percentage"
     assert any("never an assumed zero" in note for note in payload["notes"])
+
+
+async def test_scoped_npt_percentage_uses_the_same_time_window_for_its_denominator(session, well):
+    in_scope = dt.datetime(2026, 3, 15, 8, tzinfo=dt.UTC)
+    out_of_scope = dt.datetime(2026, 3, 14, 8, tzinfo=dt.UTC)
+    wellbore = Wellbore(org_id=well.org_id, well_id=well.id, name="Main bore", sequence=1)
+    session.add(wellbore)
+    await session.flush()
+    outside_event = _event(well, code="WEATHER", category="weather", hours=8.0, hour=1)
+    outside_event.occurred_at = out_of_scope
+    outside_event.ended_at = out_of_scope + dt.timedelta(hours=8)
+    session.add_all(
+        [
+            _event(well, code="STUCK_PIPE", category="stuck_pipe", hours=2.0, hour=8),
+            outside_event,
+            Operation(
+                org_id=well.org_id,
+                project_id=well.project_id,
+                well_id=well.id,
+                wellbore_id=wellbore.id,
+                operation_class="actual",
+                sequence=1,
+                name="In-window productive drilling",
+                kind="drilling",
+                actual_start=in_scope,
+                actual_start_basis="source_record",
+                actual_end=in_scope + dt.timedelta(hours=6),
+                actual_end_basis="source_record",
+                actual_duration_hours=6.0,
+                actual_duration_basis="reported",
+                is_productive=True,
+            ),
+            Operation(
+                org_id=well.org_id,
+                project_id=well.project_id,
+                well_id=well.id,
+                wellbore_id=wellbore.id,
+                operation_class="actual",
+                sequence=2,
+                name="Out-of-window productive drilling",
+                kind="drilling",
+                actual_start=out_of_scope,
+                actual_start_basis="source_record",
+                actual_end=out_of_scope + dt.timedelta(hours=4),
+                actual_end_basis="source_record",
+                actual_duration_hours=20.0,
+                actual_duration_basis="reported",
+                is_productive=True,
+            ),
+        ]
+    )
+    await session.flush()
+
+    payload = (
+        await NptService(session, org_id=well.org_id).summarise(
+            well.id,
+            basis="events",
+            since=dt.datetime(2026, 3, 15, 0, tzinfo=dt.UTC),
+            until=dt.datetime(2026, 3, 16, 0, tzinfo=dt.UTC),
+            include_offsets=False,
+        )
+    ).to_dict()
+    assert payload["total_hours"] == pytest.approx(2.0)
+    assert payload["productive_hours"] == pytest.approx(6.0)
+    assert payload["denominator_hours"] == pytest.approx(8.0)
+    assert payload["percent_of_well_time"] == pytest.approx(25.0)
+    assert payload["scope"]["since"] == "2026-03-15T00:00:00+00:00"
+    assert payload["scope"]["until"] == "2026-03-16T00:00:00+00:00"
+    assert payload["metric_contract"]["selected_basis"] == "events"
+    assert payload["metric_contract"]["denominator"].startswith("matching actual productive")
+    assert payload["metric_contract"]["window_hours_policy"].startswith("recorded interval rows are included on overlap")
+    assert payload["generated_at"]
+
+
+async def test_npt_metric_window_rejects_ambiguous_or_empty_time_bounds(session, well):
+    service = NptService(session, org_id=well.org_id)
+    with pytest.raises(ValidationFailed, match="must include a timezone offset"):
+        await service.summarise(well.id, since=dt.datetime(2026, 3, 15))
+    with pytest.raises(ValidationFailed, match="earlier than until"):
+        await service.summarise(
+            well.id,
+            since=dt.datetime(2026, 3, 16, tzinfo=dt.UTC),
+            until=dt.datetime(2026, 3, 16, tzinfo=dt.UTC),
+        )

@@ -781,6 +781,69 @@ async def test_rejected_approval_cancels_the_run(client):
     assert again.status_code == 409
 
 
+async def test_rejected_approval_cancellation_cas_preserves_concurrent_run_state(client, db, monkeypatch):
+    from types import SimpleNamespace
+
+    from sqlalchemy import select
+    from sqlalchemy.ext.asyncio import AsyncSession
+    from sqlalchemy.sql.dml import Update
+
+    from drillai.db.models import ApprovalRequest, WorkflowRun
+
+    _project, well_id = await _create_project_and_well(client)
+    graph = {
+        "nodes": [
+            {
+                "id": "notify",
+                "type": "output.notify",
+                "name": "Notify",
+                "config": {"channel": "email", "recipient": "ops@example.com", "body": "Review required"},
+            }
+        ],
+        "edges": [],
+    }
+    created = await client.post(
+        "/api/v1/workflows",
+        headers=headers("drilling_supervisor"),
+        json={"key": "reject_cas_flow", "name": "R", "graph": graph},
+    )
+    workflow_id = created.json()["id"]
+    run_response = await client.post(
+        f"/api/v1/workflows/{workflow_id}/runs",
+        headers=headers("drilling_supervisor"),
+        json={"well_id": well_id},
+    )
+    run_id = run_response.json()["id"]
+    approval_id = run_response.json()["pending_approval_id"]
+    original_execute = AsyncSession.execute
+    intercepted = 0
+
+    async def lose_run_cancel_compare_and_set(self, statement, *args, **kwargs):
+        nonlocal intercepted
+        if isinstance(statement, Update) and statement.table.name == "workflow_runs":
+            intercepted += 1
+            return SimpleNamespace(rowcount=0)
+        return await original_execute(self, statement, *args, **kwargs)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(AsyncSession, "execute", lose_run_cancel_compare_and_set)
+        rejected = await client.post(
+            f"/api/v1/approvals/{approval_id}/decide",
+            headers=headers("well_manager"),
+            json={"decision": "rejected", "note": "Concurrent state changed", "resume": True},
+        )
+
+    assert intercepted == 1
+    assert rejected.status_code == 409
+    async with db.session() as session:
+        run = (await session.execute(select(WorkflowRun).where(WorkflowRun.id == run_id))).scalar_one()
+        approval = (
+            await session.execute(select(ApprovalRequest).where(ApprovalRequest.id == approval_id))
+        ).scalar_one()
+    assert run.status == "waiting_approval"
+    assert approval.status == "pending"
+
+
 async def test_well_audit_view_joins_engine_runs_and_workflow_runs(client):
     _project, well_id = await _create_project_and_well(client)
     created = await client.post(

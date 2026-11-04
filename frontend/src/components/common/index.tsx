@@ -326,6 +326,7 @@ export function Value({
   reason,
   evidence,
   onEvidence,
+  meta,
 }: {
   label: ReactNode
   value: unknown
@@ -337,6 +338,8 @@ export function Value({
   reason?: string | null
   evidence?: ReactNode
   onEvidence?: () => void
+  /** Additional dated/freshness/lineage context that must remain attached to a dashboard value. */
+  meta?: ReactNode
 }) {
   const { locale, t } = useI18n()
   const rendered = formatValue(value, { unit, unitSystem, locale })
@@ -362,6 +365,7 @@ export function Value({
           {t('common.detail')}: {reason}
         </p>
       )}
+      {meta && <div className="mt-1 text-[11px] text-graphite-500">{meta}</div>}
       {(source || quality || onEvidence) && (
         <div className="mt-1 flex items-center gap-1.5">
           {source && (

@@ -178,17 +178,28 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.catalogues = catalogues
         app.state.started_at = time.time()
         worker = getattr(app.state, "connector_worker", None)
+        notification_worker = getattr(app.state, "notification_worker", None)
         if settings.connector_worker_enabled and worker is not None:
             worker.start_background()
+        if settings.notification_worker_enabled and notification_worker is not None:
+            notification_worker.start_background()
         try:
             yield
         finally:
+            if notification_worker is not None:
+                await notification_worker.stop()
             if worker is not None:
                 await worker.stop()
             harness = getattr(app.state, "protocol_harness", None)
             if harness is not None:
                 await harness.stop()
             await app.state.database.dispose()
+
+    # The provider registry is process-scoped; rebuild it from this deployment's explicit settings
+    # before any route can plan or execute an LLM call. A live mode never retains Echo as fallback.
+    from drillai.ai.providers import bootstrap_default_providers
+
+    bootstrap_default_providers(settings=settings)
 
     # Registries are warmed in the factory, not only in the lifespan: an ASGI app mounted without
     # a lifespan (test clients, worker entry points) must not present an empty catalogue, which
@@ -216,8 +227,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.blob_store = blob_store_from_settings(settings)
     from drillai.telemetry.protocols.harness import LocalProtocolHarnessManager
     from drillai.telemetry.worker import ConnectorWorker
+    from drillai.workflow.notification_worker import NotificationWorker
 
     app.state.connector_worker = ConnectorWorker(app.state.database)
+    app.state.notification_worker = NotificationWorker(
+        app.state.database,
+        poll_seconds=settings.notification_poll_seconds,
+        batch_size=settings.notification_batch_size,
+    )
     app.state.protocol_harness = (
         LocalProtocolHarnessManager() if not settings.is_production else None
     )

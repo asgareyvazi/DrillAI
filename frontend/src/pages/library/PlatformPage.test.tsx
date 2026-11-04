@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { I18nProvider } from '../../i18n'
@@ -11,6 +11,9 @@ const api = vi.hoisted(() => ({
   providers: vi.fn(),
   version: vi.fn(),
   healthReady: vi.fn(),
+  identity: vi.fn(),
+  notificationOutbox: vi.fn(),
+  retryNotification: vi.fn(),
 }))
 
 vi.mock('../../api/endpoints', () => ({ drillingApi: api }))
@@ -43,6 +46,9 @@ beforeEach(() => {
   api.integrations.mockReset().mockResolvedValue({ items: [] })
   api.providers.mockReset().mockResolvedValue({ items: [], configured_provider: 'stub' })
   api.version.mockReset().mockResolvedValue({ api_version: '1.0.0', environment: 'test' })
+  api.identity.mockReset().mockResolvedValue({ permissions: [], max_action_level: 'L0' })
+  api.notificationOutbox.mockReset().mockResolvedValue({ items: [], limit: 50 })
+  api.retryNotification.mockReset().mockResolvedValue({ requeued: true, item: {} })
   api.healthReady.mockReset().mockResolvedValue({
     status: 'degraded',
     checks: {
@@ -72,6 +78,49 @@ describe('PlatformPage OCR runtime status', () => {
     )).toBeInTheDocument()
     expect(screen.getByText('Runtime availability does not measure OCR accuracy or engineering correctness.')).toBeInTheDocument()
     expect(screen.getByText('Tesseract is missing configured language data: fas')).toBeInTheDocument()
+  })
+
+  it('requires duplicate-risk acknowledgement and records manual retry intent without claiming delivery', async () => {
+    localStorage.removeItem('drillai.locale')
+    const row = {
+      id: 'obm_ambiguous_1',
+      channel: 'webhook',
+      status: 'reconciliation_required',
+      attempts: 2,
+      max_attempts: 3,
+      next_attempt_at: null,
+      accepted_at: null,
+      acceptance_evidence: null,
+      provider_message_id: null,
+      delivery_confirmed: false,
+      external_provider_verified: false,
+      recipient_present: true,
+      workflow_run_id: null,
+      well_id: null,
+      last_error_code: 'stale_sending_ambiguous',
+      last_attempt_at: '2026-11-03T12:00:00Z',
+      created_at: '2026-11-03T11:55:00Z',
+    }
+    api.notificationOutbox.mockResolvedValue({ items: [row], limit: 50 })
+    api.identity.mockResolvedValue({ permissions: ['integration.manage'], max_action_level: 'L4' })
+    api.retryNotification.mockResolvedValue({ requeued: true, item: { ...row, status: 'queued' } })
+    renderPlatformPage()
+
+    expect(await screen.findByText('Manual reconciliation required')).toBeInTheDocument()
+    expect(screen.getByText('Transport acceptance is not recipient delivery.')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Review retry' }))
+    const reason = screen.getByLabelText('Audit reason (10–500 characters)')
+    fireEvent.change(reason, { target: { value: 'Operator reviewed ambiguity' } })
+    const acknowledgement = screen.getByLabelText(
+      'I acknowledge that the earlier attempt may have reached the transport and requeueing could produce a duplicate.',
+    )
+    fireEvent.click(acknowledgement)
+    fireEvent.click(screen.getByRole('button', { name: 'Acknowledge and requeue' }))
+
+    await waitFor(() => expect(api.retryNotification).toHaveBeenCalledWith(
+      'obm_ambiguous_1',
+      { reason: 'Operator reviewed ambiguity', acknowledge_duplicate_risk: true },
+    ))
   })
 
   it('localizes runtime state in Persian and keeps language identifiers LTR within RTL content', async () => {

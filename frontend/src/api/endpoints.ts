@@ -69,6 +69,9 @@ import type {
   ManagedAuthUsersResponse,
   NodeTypeCatalogue,
   NptSummary,
+  NotificationOutboxPage,
+  NotificationRetryPayload,
+  NotificationRetryResponse,
   OperationCreatePayload,
   EventCreatePayload,
   OperationRow,
@@ -1170,4 +1173,11 @@ export const drillingApi = {
   units: (signal?: AbortSignal) => api.get<UnitCatalogue>('/registry/units', { signal }),
   version: (signal?: AbortSignal) => api.get<Record<string, unknown>>('/version', { signal }),
   healthReady: (signal?: AbortSignal) => api.get<Record<string, unknown>>('/health/ready', { signal }),
+  notificationOutbox: (signal?: AbortSignal) =>
+    api.get<NotificationOutboxPage>('/platform/notifications', {
+      signal,
+      validate: expect.object('items'),
+    }),
+  retryNotification: (messageId: string, body: NotificationRetryPayload) =>
+    api.post<NotificationRetryResponse>(`/platform/notifications/${enc(messageId)}/retry`, body),
 }

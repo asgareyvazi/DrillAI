@@ -71,9 +71,14 @@ class Settings(BaseSettings):
 
     # ------------------------------------------------------------------ ai providers
     llm_provider: Literal["stub", "openai_compatible", "ollama"] = "stub"
-    llm_base_url: str = "http://localhost:11434"
-    llm_api_key: str = ""
-    llm_default_model: str = "stub-reasoner-1"
+    # OpenAI-compatible endpoint; Ollama's compatible API is under /v1. Ignored in stub mode.
+    llm_base_url: str = "http://localhost:11434/v1"
+    llm_api_key: str = Field(default="", repr=False)
+    llm_default_model: str = "echo-deterministic-v1"
+    # Operator-declared data classification for the configured endpoint. Public-cloud use is
+    # excluded by the routing ceiling unless the operator explicitly raises llm_max_privacy.
+    llm_privacy: Literal["local", "private_cloud", "public_cloud"] = "public_cloud"
+    llm_max_privacy: Literal["local", "private_cloud", "public_cloud"] = "private_cloud"
     llm_timeout_seconds: float = 60.0
     llm_max_retries: int = 2
     # Record prompt/response content on spans? Privacy default is off (OTel GenAI guidance).
@@ -163,6 +168,9 @@ class Settings(BaseSettings):
     webhook_timeout_seconds: float = 15.0
     scheduler_enabled: bool = True
     scheduler_poll_seconds: float = 5.0
+    notification_worker_enabled: bool = False
+    notification_poll_seconds: float = Field(default=5.0, ge=0.2, le=60.0)
+    notification_batch_size: int = Field(default=50, ge=1, le=100)
 
     # ------------------------------------------------------------------ connectors
     witsml_connector_enabled: bool = True

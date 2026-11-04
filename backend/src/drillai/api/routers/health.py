@@ -48,10 +48,14 @@ async def readiness(
         checks["database"] = await database.healthcheck()
     except Exception as exc:  # readiness must report the failure, not raise it
         healthy = False
-        checks["database"] = {"status": "error", "detail": str(exc)}
+        checks["database"] = {"status": "error", "error_type": type(exc).__name__}
     checks["llm_provider"] = {
         "provider": settings.llm_provider,
-        "configured": settings.llm_provider != "stub",
+        "configured": settings.llm_provider != "stub"
+        and bool(settings.llm_base_url)
+        and (settings.llm_provider == "ollama" or bool(settings.llm_api_key)),
+        "privacy_class": settings.llm_privacy if settings.llm_provider != "stub" else "local",
+        "max_privacy": settings.llm_max_privacy,
     }
     checks["vector_backend"] = settings.vector_backend
     checks["blob_backend"] = settings.blob_backend
@@ -76,6 +80,24 @@ async def readiness(
             else None
         ),
     }
+    notification_worker = getattr(request.app.state, "notification_worker", None)
+    checks["notification_outbox"] = {
+        "worker_enabled": settings.notification_worker_enabled,
+        "worker_running": bool(notification_worker and notification_worker.is_running),
+        "cycles_completed": getattr(notification_worker, "cycles_completed", 0),
+        "last_cycle_at": (
+            notification_worker.last_cycle_at.isoformat()
+            if notification_worker and notification_worker.last_cycle_at
+            else None
+        ),
+        "last_error_type": getattr(notification_worker, "last_error_type", None),
+        "batch_size": settings.notification_batch_size,
+    }
+    if settings.notification_worker_enabled and (
+        not checks["notification_outbox"]["worker_running"]
+        or checks["notification_outbox"]["last_error_type"]
+    ):
+        healthy = False
     return {"status": "ok" if healthy else "degraded", "checks": checks}
 
 

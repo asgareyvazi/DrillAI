@@ -11,9 +11,9 @@ is confined to unit and component tests, where it isolates a boundary rather tha
 | Types | `cd frontend && npm run typecheck` | strict TypeScript with `noUncheckedIndexedAccess` enabled in the app, E2E, and Node-config projects; includes tests and E2E specs |
 | Lint | `cd frontend && npm run lint` | no unused code, no `any` slipping in, React rules |
 | Build | `cd frontend && npm run build` | `tsc -b` plus a production Vite build |
-| Unit + component | `cd frontend && npm test` | 374 passed in 37 files: values, units, the API boundary, cancellation, the request-failure oracle, permissions, identity settings, the shared UI states, document-review guidance and direction, and the pages' contracts |
-| End-to-end | `cd frontend && npm run e2e` | CI-mode Linux real-browser run: 123 passed in 4.9m; Playwright JSON verified 18 exact reviewed spec files, Chromium 116, faults 4, auth 3, with zero skips, flaky results, or retries. Cross-platform run 41457013404 verified the CP83.1 SHA; CP83.2/final-SHA CI is pending. |
-| Backend | `cd backend && DRILLAI_TEST_POSTGRES=1 .venv/bin/python -m pytest` | Current backend run: 1,635 passed, 0 skipped with embedded PostgreSQL enabled. Default SQLite run: 1,622 passed, 13 PostgreSQL-marked skips across 116 files. |
+| Unit + component | `cd frontend && npm test` | 375 passed in 37 files: values, units, the API boundary, cancellation, the request-failure oracle, permissions, identity settings, the shared UI states, document-review guidance and direction, and the pages' contracts |
+| End-to-end | `cd frontend && npm run e2e` | Local Linux real-browser run: 123 passed in 5.0m across 18 reviewed spec files (chromium 116, faults 4, auth 3); inventory shape also verified 123 tests, no skips or retries. The CP83.1 cross-platform run is historical; verify the final CP76–CP96 commit against the matching `ci.yml` Actions run. |
+| Backend | `cd backend && DRILLAI_TEST_POSTGRES=1 .venv/bin/python -m pytest` | Final local full runs: PostgreSQL-enabled 1,657 passed / 0 skipped (1 non-failing XDG warning); default 1,643 passed / 14 PostgreSQL-marked skips. Inventory: 1,657 tests across 119 files; no failures, deselections or xfails. |
 | Backend lint | `cd backend && .venv/bin/python -m ruff check .` | backend style and import hygiene |
 | Migrations | `cd backend && .venv/bin/python -m alembic upgrade head && .venv/bin/python -m alembic check` | no model/migration drift — against a **fresh** database |
 | Supply chain + secrets | `backend/.venv/bin/python scripts/verify_supply_chain_and_secrets.py` | full-SHA Actions pins, tracked/untracked/eligible ignored text scan, `pip-audit`, full frontend `npm audit` at moderate, and production audit at high |
@@ -34,7 +34,7 @@ extras with `pip install -e "backend[dev,ocr]"` (the bootstrap scripts and CI do
 inject deterministic providers and do not require a Tesseract executable. Tesseract and language data
 remain opt-in operating-system dependencies, as described in `CONNECTORS_AND_OPERATIONS.md`.
 
-Thirteen tests across ten files assert against a real PostgreSQL: two in `tests/db/test_persistence.py`
+Fourteen tests across eleven files assert against a real PostgreSQL: two in `tests/db/test_persistence.py`
 (JSON and timestamp behavior SQLite cannot prove, and that the Alembic baseline creates exactly the
 schema the models declare); one in `tests/db/test_migrations_postgres.py` (the whole migration chain,
 drift, downgrade/re-upgrade, and duplicate regulator identifiers); one in
@@ -45,8 +45,9 @@ three in `tests/documents/test_document_identity.py` (operation-aware identity m
 concurrent uploads of one logical document, and concurrent uploads into different scopes); one in
 `tests/test_cp20_integration_completeness.py` (pgvector retrieval); one in
 `tests/telemetry/test_cp15_egress_policy_recovery.py` (separate-worker egress-policy recovery); one in
-`tests/telemetry/test_connector_worker.py` (`test_competing_workers_fencing_on_postgres`); and one in
-`tests/telemetry/test_cp13_witsml_and_worker_races.py` (`test_phase6_postgres_concurrent_sql_cas_races`).
+`tests/telemetry/test_connector_worker.py` (`test_competing_workers_fencing_on_postgres`); one in
+`tests/telemetry/test_cp13_witsml_and_worker_races.py` (`test_phase6_postgres_concurrent_sql_cas_races`); and one in
+`tests/workflow/test_notification_worker.py` (`test_competing_notification_worker_claims_skip_locked_rows_on_postgres`, which holds the first transaction's row lock while an independent second session attempts a claim).
 The migration check exists because a boolean comparison previously failed on PostgreSQL but passed on
 SQLite: the dialect that accepts a comparison cannot certify the dialect that rejects it. These tests
 are enabled by the repository's embedded PostgreSQL, never replaced with SQLite, and skip unless the
@@ -56,9 +57,7 @@ PostgreSQL flag is set:
 cd backend && DRILLAI_TEST_POSTGRES=1 .venv/bin/python -m pytest
 ```
 
-The current enabled-PostgreSQL run reports **1,635 passed, 0 skipped** across 116 test files. With the PostgreSQL flag unset, the same inventory reports **1,622 passed, 13 skipped**; all 13 cases are PostgreSQL-marked and are not represented as passes. CI runs the enabled suite on Linux (the `pgserver`
-dev dependency is in `backend/pyproject.toml`); the Windows job uses `-m "not postgres"` to deselect
-those 13 integration cases. Windows reports one expected skip for the POSIX-only Tesseract CLI subprocess fixture; `-rs` prints its reason and the Windows gate accepts exactly that single skip, no additional skips.
+The current full local PostgreSQL-enabled run reports **1,657 passed, 0 skipped** across 119 test files (one non-failing runtime-directory warning). With the PostgreSQL flag unset, the same 1,657-test inventory reports **1,643 passed, 14 skipped**; all 14 cases are PostgreSQL-marked and are not represented as passes. Neither run had failures, deselections or xfails. CI runs the enabled suite on Linux (the `pgserver` dev dependency is in `backend/pyproject.toml`); native Windows uses `-m "not postgres"` to deselect the 14 PostgreSQL integration cases and permits only the separately identified POSIX-only Tesseract CLI subprocess skip. The reviewed inventory accounts for 1,657 Linux passes, 1,643 default passes plus 14 PostgreSQL skips, and 1,642 Windows passes plus one POSIX-only skip and 14 deselections; the final native-Windows result remains the authority for platform execution.
 
 ## Unit and component tests
 
@@ -227,9 +226,9 @@ A local CI-mode Linux real-browser rerun passed **123 tests in 4.9 minutes**. Pl
 
 The current remediation keeps backend node IDs and platform totals in `ci/test-inventory.json`, adds the exact 18-spec filename set, distinguishes collection from execution, and validates Playwright's exit code, CLI summary, structured JSON outcomes, actual project/file distribution, and zero retries. Exact-head run [`41457013404`](https://github.com/asgareyvazi/DrillAI/actions/runs/41457013404) tested `e75d8c1ce92dd1adb2bc07c5a10d17303a7eb0b` and completed successfully: `gh run view` reported conclusion `success` for Linux job `125316148652` and native Windows job `125316148199`; every required gate step in both jobs was successful. The failure-only Playwright-evidence upload steps were skipped as designed. Attempts to retrieve either job log returned EOF from GitHub's results log archive, so that run's per-test output totals could not be independently recovered; the run is status-verified, but this document does not invent counts from unavailable logs. This run certifies the CP83.1 SHA only; it does not cover the following CP83.2 changes or the final CP76–CP96 SHA.
 
-The CP83.2 exact-head run [`41587153712`](https://github.com/asgareyvazi/DrillAI/actions/runs/41587153712) on `658c4f094f5980aacb9a36274fc42a3980157dac` is verified failed: Linux job `125755218824` and native Windows job `125755219238` both failed their backend test steps; frontend and supply-chain steps passed. Check-run annotations report pytest exit 1, but `gh run view --log-failed` could not retrieve the signed log archive (EOF), so the exact CI failure is not attributed to a particular test. A later local full-suite run, after a provenance fixture was corrected, passed **1,622 tests with 13 PostgreSQL-only skips** by default and **1,635 tests with embedded PostgreSQL enabled**. These local runs are not exact-SHA CI evidence, and the latest full runs preceded final import/export-order-only Ruff edits. The reviewed inventory now accounts for 1,635 collected tests: Windows expects 1,621 passed, one explicitly POSIX-only skip, and 13 PostgreSQL deselections.
+The CP83.2 exact-head run [`41587153712`](https://github.com/asgareyvazi/DrillAI/actions/runs/41587153712) on `658c4f094f5980aacb9a36274fc42a3980157dac` is verified failed: Linux job `125755218824` and native Windows job `125755219238` both failed their backend test steps; frontend and supply-chain steps passed. Check-run annotations report pytest exit 1, but `gh run view --log-failed` could not retrieve the signed log archive (EOF), so the exact CI failure is not attributed to a particular test. The current complete local runs pass **1,643 tests with 14 PostgreSQL-only skips** by default and **1,657 tests with embedded PostgreSQL enabled**; both account for 1,657 collected tests across 119 files. They are local evidence, not exact-SHA CI evidence. `ci/test-inventory.json` now reviews 1,657 collected tests and 14 exact PostgreSQL node IDs; native Windows expects 1,642 passed, one explicitly POSIX-only skip, and 14 PostgreSQL deselections, to be verified by the final Windows job.
 
-The CP84 browser acceptance initially exposed a stale RTL test selector that depended on the incidental `.font-mono` class rather than the semantic `dir="ltr"` property. The assertion now targets the timeline's explicitly LTR timestamp. The targeted case passed, and a full subsequent real-browser run passed **123 tests in 6.3 minutes**; its fault-injection tests intentionally produce server exceptions and reset WebSocket proxy sockets, with no failed E2E cases. The production build still reports Vite's advisory that the main JavaScript chunk exceeds 500 kB.
+The CP84 browser acceptance initially exposed a stale RTL test selector that depended on the incidental `.font-mono` class rather than the semantic `dir="ltr"` property. The assertion now targets the timeline's explicitly LTR timestamp. The latest local real-browser run on the CP76–CP96 worktree passed **123 tests in 4.8 minutes**; fault-injection scenarios intentionally produce server exceptions and reset WebSocket proxy sockets, with no failed E2E cases. The production build still reports Vite's advisory that the main JavaScript chunk exceeds 500 kB.
 
 `.github/workflows/ci.yml` runs the same commands, in the same order, on pushes to `arena/**`, on
 pull requests targeting `arena/01a0dca0-drillai` or `main`, and on manual dispatch:
@@ -253,7 +252,7 @@ failure fails the job and skips what follows.
 The testing gates **certify their own results** rather than trusting their inputs. Backend expectations
 are centralized in `ci/test-inventory.json`. The Linux verifier requires the full PostgreSQL-enabled
 suite to pass with zero skips and compares every PostgreSQL-marked node ID with the reviewed list. The
-Current Windows verifier inventory requires exactly 1,621 passes, one skip, and 13 deselections; it permits only the
+Current Windows verifier inventory requires exactly 1,642 passes, one skip, and 14 deselections; it permits only the
 `tests/ingestion/test_ocr.py` POSIX-only temporary-shebang fixture with its exact reason, and confirms
 the deselections equal the reviewed PostgreSQL node-ID list. Any changed test identity or total must be
 reviewed in the manifest before CI can pass. Frontend unit tests reject skips.
@@ -268,7 +267,7 @@ only after failure. This matters because some networks cannot reach GitHub's raw
 green step's own conclusion and summary must still represent the checked property.
 
 Linux runs the full PostgreSQL-enabled backend suite and Docker Compose deployment gate. Windows runs
-the native SQLite backend suite with `-m "not postgres"` (the thirteen PostgreSQL-marked cases are not
+the native SQLite backend suite with `-m "not postgres"` (the fourteen PostgreSQL-marked cases are not
 run on Windows), the multi-process stack and local vendor-harness checks, and the complete frontend/E2E
 suite; Docker Compose is Linux-only. The external vendor probe makes zero network calls without
 configured endpoints/credentials, so no live interoperability certification is inferred. Both platform
@@ -288,5 +287,7 @@ what makes the repository self-contained rather than dependent on a developer's 
 
 ## Current results
 
-Recorded in `docs/mission-reports/FRONTEND-MISSION.md` with the commit they were produced at. Results
-from a different commit are not evidence for this one.
+This page's CP76–CP96 local test results and evidence limits are recorded in
+[`docs/mission-reports/CP83-CP96-FINAL-ASSURANCE.md`](mission-reports/CP83-CP96-FINAL-ASSURANCE.md).
+The matching exact-final-SHA Linux and native-Windows run must be checked in GitHub Actions against
+the commit that contains that report; the earlier CP83.1/CP83.2 runs cited above are not a substitute.

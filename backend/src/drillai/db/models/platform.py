@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import datetime as dt
 
-from sqlalchemy import Boolean, Float, ForeignKey, String, UniqueConstraint
+from sqlalchemy import Boolean, CheckConstraint, Float, ForeignKey, Index, String, UniqueConstraint, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from drillai.db.base import (
@@ -555,6 +555,29 @@ class OutboundMessage(Base, IdMixin, TimestampMixin, OrgScopedMixin):
 
     __tablename__ = "outbound_messages"
     id_prefix = "obm"
+    __table_args__ = (
+        CheckConstraint(
+            "acceptance_evidence IS NULL OR acceptance_evidence IN "
+            "('http_2xx', 'smtp_server_accepted', 'local_in_app_outbox')",
+            name="valid_notification_acceptance_evidence",
+        ),
+        CheckConstraint(
+            "status != 'accepted' OR (accepted_at IS NOT NULL AND acceptance_evidence IS NOT NULL)",
+            name="accepted_notification_has_evidence",
+        ),
+        Index(
+            "uq_outbound_messages_pending_idempotency_key",
+            "org_id",
+            "idempotency_key",
+            unique=True,
+            sqlite_where=text(
+                "idempotency_key IS NOT NULL AND status IN ('queued', 'sending', 'failed_retryable')"
+            ),
+            postgresql_where=text(
+                "idempotency_key IS NOT NULL AND status IN ('queued', 'sending', 'failed_retryable')"
+            ),
+        ),
+    )
 
     connector_id: Mapped[str | None] = mapped_column(String(64), index=True)
     channel: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
@@ -567,7 +590,11 @@ class OutboundMessage(Base, IdMixin, TimestampMixin, OrgScopedMixin):
     attempts: Mapped[int] = mapped_column(IntType, default=0, nullable=False)
     max_attempts: Mapped[int] = mapped_column(IntType, default=3, nullable=False)
     next_attempt_at: Mapped[dt.datetime | None] = mapped_column(UtcDateTime, index=True)
+    # `sent_at` is retained only for legacy rows. New adapter successes use `accepted_at`:
+    # transport/SMTP acceptance is not evidence that a person received the notification.
     sent_at: Mapped[dt.datetime | None] = mapped_column(UtcDateTime)
+    accepted_at: Mapped[dt.datetime | None] = mapped_column(UtcDateTime)
+    acceptance_evidence: Mapped[str | None] = mapped_column(String(40))
     error: Mapped[str | None] = mapped_column(TextType)
     provider_message_id: Mapped[str | None] = mapped_column(String(200))
     trigger_kind: Mapped[str | None] = mapped_column(String(40), index=True)

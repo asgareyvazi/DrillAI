@@ -20,6 +20,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from drillai.core.audit import record_audit
 from drillai.core.clock import UTC
 from drillai.core.errors import Conflict, NotFound, ValidationFailed, WorkflowDefinitionInvalid
 from drillai.db.models import Workflow, WorkflowRun, WorkflowVersion
@@ -86,6 +87,18 @@ class WorkflowService:
         await self.session.flush()
         if graph is not None:
             await self.save_version(workflow.id, graph, notes="initial version")
+        await record_audit(
+            self.session,
+            org_id=self.org_id,
+            principal=self.principal,
+            action="workflow.draft",
+            permission="workflow.draft",
+            resource_kind="workflow",
+            resource_id=workflow.id,
+            after={"key": workflow.key, "status": workflow.status, "current_version": workflow.current_version},
+            details={"operation": "create", "project_id": project_id},
+            project_id=project_id,
+        )
         return workflow
 
     async def save_version(
@@ -97,7 +110,7 @@ class WorkflowService:
         change_reason: str | None = None,
         publish: bool = False,
     ) -> WorkflowVersion:
-        workflow = await self._workflow(workflow_id)
+        workflow = await self._workflow(workflow_id, for_update=True)
         report = validate_graph(graph, node_types=registered_node_types())
         if publish and not report.is_valid:
             raise WorkflowDefinitionInvalid(
@@ -131,14 +144,41 @@ class WorkflowService:
         )
         self.session.add(version)
         await self.session.flush()
+        previous_version = workflow.current_version
         workflow.current_version = version.version
         if publish:
             self._publish(workflow, version)
         await self.session.flush()
+        await record_audit(
+            self.session,
+            org_id=self.org_id,
+            principal=self.principal,
+            action="workflow.draft",
+            permission="workflow.draft",
+            resource_kind="workflow_version",
+            resource_id=version.id,
+            before={"current_version": previous_version},
+            after={"version": version.version, "graph_hash": graph_hash, "published": publish},
+            details={"operation": "save_version", "change_reason": change_reason},
+            project_id=workflow.project_id,
+        )
+        if publish:
+            await record_audit(
+                self.session,
+                org_id=self.org_id,
+                principal=self.principal,
+                action="workflow.publish",
+                permission="workflow.publish",
+                resource_kind="workflow_version",
+                resource_id=version.id,
+                after={"workflow_id": workflow.id, "version": version.version},
+                details={"graph_hash": graph_hash},
+                project_id=workflow.project_id,
+            )
         return version
 
     async def publish(self, workflow_id: str, version: int | None = None) -> WorkflowVersion:
-        workflow = await self._workflow(workflow_id)
+        workflow = await self._workflow(workflow_id, for_update=True)
         version_row = await self.get_version(workflow_id, version)
         report = validate_graph(
             WorkflowGraph.model_validate(version_row.graph), node_types=registered_node_types()
@@ -148,8 +188,25 @@ class WorkflowService:
                 "cannot publish an invalid workflow",
                 details={"issues": [issue.model_dump() for issue in report.errors]},
             )
+        before = {
+            "status": workflow.status,
+            "published_version_id": workflow.published_version_id,
+        }
         self._publish(workflow, version_row)
         await self.session.flush()
+        await record_audit(
+            self.session,
+            org_id=self.org_id,
+            principal=self.principal,
+            action="workflow.publish",
+            permission="workflow.publish",
+            resource_kind="workflow_version",
+            resource_id=version_row.id,
+            before=before,
+            after={"workflow_id": workflow.id, "version": version_row.version},
+            details={"graph_hash": version_row.graph_hash},
+            project_id=workflow.project_id,
+        )
         return version_row
 
     def _publish(self, workflow: Workflow, version: WorkflowVersion) -> None:
@@ -185,12 +242,11 @@ class WorkflowService:
         return forked
 
     # ------------------------------------------------------------------ reads
-    async def _workflow(self, workflow_id: str) -> Workflow:
-        workflow = (
-            await self.session.execute(
-                select(Workflow).where(Workflow.id == workflow_id, Workflow.org_id == self.org_id)
-            )
-        ).scalar_one_or_none()
+    async def _workflow(self, workflow_id: str, *, for_update: bool = False) -> Workflow:
+        stmt = select(Workflow).where(Workflow.id == workflow_id, Workflow.org_id == self.org_id)
+        if for_update:
+            stmt = stmt.with_for_update()
+        workflow = (await self.session.execute(stmt)).scalar_one_or_none()
         if workflow is None:
             raise NotFound(f"workflow {workflow_id!r} not found")
         return workflow
@@ -274,7 +330,7 @@ class WorkflowService:
             principal=self.principal,
             services=services,
         )
-        return await runtime.start(
+        run = await runtime.start(
             graph,
             workflow_id=workflow.id,
             workflow_version_id=version_row.id,
@@ -286,6 +342,24 @@ class WorkflowService:
             trigger_ref=trigger_ref,
             is_dry_run=is_dry_run,
         )
+        await record_audit(
+            self.session,
+            org_id=self.org_id,
+            principal=self.principal,
+            action="workflow.run",
+            permission="workflow.run",
+            resource_kind="workflow_run",
+            resource_id=run.id,
+            after={"workflow_id": workflow.id, "version": version_row.version, "status": run.status},
+            details={
+                "workflow_key": workflow.key,
+                "trigger_type": trigger_type,
+                "is_dry_run": is_dry_run,
+            },
+            project_id=run.project_id,
+            well_id=run.well_id,
+        )
+        return run
 
     async def list_workflows(self, *, project_id: str | None = None, limit: int = 100) -> list[dict[str, Any]]:
         stmt = select(Workflow).where(Workflow.org_id == self.org_id).order_by(Workflow.name).limit(limit)

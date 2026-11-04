@@ -23,6 +23,7 @@ from typing import Any
 from sqlalchemy import and_, case, extract, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from drillai.core.clock import ensure_utc, utc_now
 from drillai.core.errors import NotFound, ValidationFailed
 from drillai.db.models import (
     NPT_CATEGORY_ALIASES,
@@ -44,6 +45,16 @@ from drillai.operations.time_windows import (
 
 #: Which recorded source a reported total is built from.
 NPT_BASES = ("events", "operations")
+NPT_METRIC_CONTRACT: dict[str, Any] = {
+    "unit": "hours",
+    "numerator": "sum of recorded NPT hours from the explicitly selected events or operations basis",
+    "denominator": "matching actual productive operation hours plus the selected NPT numerator, using the same well/section/operation/time scope",
+    "percentage": "100 * numerator / denominator; null when denominator is zero",
+    "window": "only the caller-supplied since/until interval; no implicit reporting period",
+    "window_hours_policy": "recorded interval rows are included on overlap and their full reported hours are summed without proration",
+    "missing_policy": "missing or unclassified records are not imputed; a zero recorded total is not proof of zero physical downtime",
+    "source_lineage": "event or operation row ids and source evidence in the bounded cases list; aggregate totals include the full matching population",
+}
 
 #: The one category that is a denial rather than a loss, imported by name so the rule reads here too.
 NOT_NPT_CATEGORY = "not_npt"
@@ -161,8 +172,11 @@ class NptSummary:
     hours_operations: float
     event_count: int
     measured_hours_total: float
+    productive_hours: float
     percent_of_well_time: float | None
     by_hours: float
+    scope: dict[str, Any] = field(default_factory=dict)
+    generated_at: dt.datetime = field(default_factory=lambda: dt.datetime.now(tz=dt.UTC))
     cases: list[NptEvent] = field(default_factory=list)
     by_category: list[ParetoRow] = field(default_factory=list)
     by_code: list[ParetoRow] = field(default_factory=list)
@@ -186,6 +200,14 @@ class NptSummary:
             "hours_from_operations": round(self.hours_operations, 3),
             "event_count": self.event_count,
             "measured_hours_total": round(self.measured_hours_total, 3),
+            "productive_hours": round(self.productive_hours, 3),
+            "denominator_hours": round(self.measured_hours_total, 3),
+            "generated_at": self.generated_at.isoformat(),
+            "scope": dict(self.scope),
+            "metric_contract": {
+                **NPT_METRIC_CONTRACT,
+                "selected_basis": self.basis,
+            },
             "percent_of_well_time": (
                 round(self.percent_of_well_time, 2) if self.percent_of_well_time is not None else None
             ),
@@ -663,6 +685,16 @@ class NptService:
                 f"unknown NPT basis {basis!r}",
                 details={"unknown": [basis], "known": list(NPT_BASES)},
             )
+        try:
+            since = ensure_utc(since) if since is not None else None
+            until = ensure_utc(until) if until is not None else None
+        except ValueError as exc:
+            raise ValidationFailed(
+                "NPT window timestamps must include a timezone offset",
+                details={"field": "since/until", "reason": str(exc)},
+            ) from exc
+        if since is not None and until is not None and since >= until:
+            raise ValidationFailed("NPT window requires since to be earlier than until")
         well = (
             await self.session.execute(
                 select(Well).where(Well.id == well_id, Well.org_id == self.org_id)
@@ -683,15 +715,31 @@ class NptService:
         hours_events = event_totals["hours"]
         hours_operations = operation_totals["hours"]
 
+        operation_start, operation_end = operation_time_expressions()
+        productive_clauses: list[Any] = [
+            Operation.org_id == self.org_id,
+            Operation.well_id == well_id,
+            *operational_source_conditions(Operation),
+            Operation.operation_class == "actual",
+            Operation.is_productive.is_(True),
+        ]
+        if section_id is not None:
+            productive_clauses.append(Operation.section_id == section_id)
+        if operation_id is not None:
+            productive_clauses.append(Operation.id == operation_id)
+        if since is not None or until is not None:
+            productive_clauses.extend(
+                interval_overlap_conditions(
+                    operation_start,
+                    operation_end,
+                    since=since,
+                    until=until,
+                )
+            )
         productive_hours = float(
             (
                 await self.session.execute(
-                    select(func.sum(Operation.actual_duration_hours)).where(
-                        Operation.org_id == self.org_id,
-                        Operation.well_id == well_id,
-                        Operation.operation_class == "actual",
-                        Operation.is_productive.is_(True),
-                    )
+                    select(func.sum(Operation.actual_duration_hours)).where(*productive_clauses)
                 )
             ).scalar_one_or_none()
             or 0.0
@@ -761,8 +809,18 @@ class NptService:
             hours_operations=hours_operations,
             event_count=occurrences,
             measured_hours_total=measured,
+            productive_hours=productive_hours,
             percent_of_well_time=(100.0 * total / measured) if measured > 0 else None,
             by_hours=total,
+            scope={
+                "well_id": well_id,
+                "section_id": section_id,
+                "operation_id": operation_id,
+                "since": since.isoformat() if since else None,
+                "until": until.isoformat() if until else None,
+                "time_window_applied": since is not None or until is not None,
+            },
+            generated_at=utc_now(),
             cases=sorted(selected, key=lambda case: -case.hours),
             by_category=_pareto(list(category_rows)),
             by_code=_pareto([tuple(row) for row in totals["by_code"]]),

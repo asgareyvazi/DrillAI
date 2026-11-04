@@ -293,6 +293,10 @@ export interface MeasuredValue {
   source: string
   source_id: string | null
   observed_at: string | null
+  observed_at_basis: string
+  received_at: string | null
+  age_seconds: number | null
+  freshness: string | null
   quality: string | null
   evidence_ref: string | null
   note: string | null
@@ -408,6 +412,18 @@ export interface NptSummary {
   hours_from_operations: number
   event_count: number
   measured_hours_total: number
+  productive_hours: number
+  denominator_hours: number
+  generated_at: string
+  scope: {
+    well_id: string
+    section_id: string | null
+    operation_id: string | null
+    since: string | null
+    until: string | null
+    time_window_applied: boolean
+  }
+  metric_contract: Record<string, string | null>
   percent_of_well_time: number | null
   by_hours: number
   controllable_hours: number
@@ -2069,6 +2085,51 @@ export interface ProviderCatalogue {
   items: Array<{ name: string; privacy_class: string; models: Array<Record<string, unknown>> }>
   total: number
   configured_provider: string | null
+}
+
+export type NotificationDeliveryStatus =
+  | 'queued'
+  | 'sending'
+  | 'accepted'
+  | 'sent'
+  | 'failed_retryable'
+  | 'failed_terminal'
+  | 'dead_letter'
+  | 'reconciliation_required'
+
+export interface NotificationSummary {
+  id: string
+  channel: string
+  status: NotificationDeliveryStatus
+  attempts: number
+  max_attempts: number
+  next_attempt_at: string | null
+  accepted_at: string | null
+  acceptance_evidence: 'http_2xx' | 'smtp_server_accepted' | 'local_in_app_outbox' | null
+  provider_message_id: string | null
+  delivery_confirmed: false
+  external_provider_verified: boolean
+  recipient_present: boolean
+  workflow_run_id: string | null
+  well_id: string | null
+  last_error_code: string | null
+  last_attempt_at: string | null
+  created_at: string | null
+}
+
+export interface NotificationOutboxPage {
+  items: NotificationSummary[]
+  limit: number
+}
+
+export interface NotificationRetryPayload {
+  reason: string
+  acknowledge_duplicate_risk: boolean
+}
+
+export interface NotificationRetryResponse {
+  item: NotificationSummary
+  requeued: boolean
 }
 
 export interface IntegrationState {

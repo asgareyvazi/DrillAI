@@ -16,13 +16,14 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.websockets import WebSocketState
 
 from drillai.api.deps import AuthContext, OptionalFilter, current_auth, get_db, require
 from drillai.api.serializers import approval_out, node_run_out, run_event_out, run_out
-from drillai.core.clock import UTC
+from drillai.core.audit import record_audit
+from drillai.core.clock import UTC, utc_now
 from drillai.core.errors import AuthenticationRequired, Conflict, NotFound, PermissionDenied, ValidationFailed
 from drillai.db.models import ApprovalRequest, NodeRun, RunArtifact, RunEvent, Workflow, WorkflowRun
 from drillai.security.actions import authorize
@@ -220,6 +221,7 @@ async def resume_run(
             )
     service = WorkflowService(session, org_id=auth.org_id or "", principal=auth.principal)
     graph_row = await service.get_version(run.workflow_id, run.version)
+    before_status = run.status
     runtime = WorkflowRuntime(session, org_id=auth.org_id or "", principal=auth.principal)
     resumed = await runtime.resume(
         run_id,
@@ -227,6 +229,20 @@ async def resume_run(
         approval_id=approval.id if approval else None,
         decision=approval.status if approval else "breakpoint_resumed",
         decided_by=approval.decided_by if approval else auth.principal.id,
+    )
+    await record_audit(
+        session,
+        org_id=auth.org_id or "",
+        principal=auth.principal,
+        action="workflow.run",
+        permission="workflow.run",
+        resource_kind="workflow_run",
+        resource_id=resumed.id,
+        before={"status": before_status},
+        after={"status": resumed.status},
+        details={"operation": "resume", "approval_id": approval.id if approval else None},
+        project_id=resumed.project_id,
+        well_id=resumed.well_id,
     )
     return run_out(resumed)
 
@@ -291,7 +307,12 @@ async def get_approval(
     payload: dict[str, Any] = {"approval": approval_out(approval)}
     if approval.run_id:
         run = (
-            await session.execute(select(WorkflowRun).where(WorkflowRun.id == approval.run_id))
+            await session.execute(
+                select(WorkflowRun).where(
+                    WorkflowRun.id == approval.run_id,
+                    WorkflowRun.org_id == auth.org_id,
+                )
+            )
         ).scalar_one_or_none()
         if run is not None:
             payload["run"] = run_out(run)
@@ -323,9 +344,9 @@ async def decide_approval(
     authorize(auth.principal, "approval.decide")
     approval = (
         await session.execute(
-            select(ApprovalRequest).where(
-                ApprovalRequest.id == approval_id, ApprovalRequest.org_id == auth.org_id
-            )
+            select(ApprovalRequest)
+            .where(ApprovalRequest.id == approval_id, ApprovalRequest.org_id == auth.org_id)
+            .with_for_update()
         )
     ).scalar_one_or_none()
     if approval is None:
@@ -340,18 +361,68 @@ async def decide_approval(
             "the requester cannot decide their own approval request (separation of duties)",
             details={"requested_by": approval.requested_by, "principal": auth.principal.id},
         )
+
+    before = {"status": approval.status, "decided_by": approval.decided_by}
+    decided_at = utc_now()
+    decision_update = await session.execute(
+        update(ApprovalRequest)
+        .where(
+            ApprovalRequest.id == approval.id,
+            ApprovalRequest.org_id == auth.org_id,
+            ApprovalRequest.status == "pending",
+        )
+        .values(
+            status=payload.decision,
+            decided_by=auth.principal.id,
+            decided_at=decided_at,
+            decision_note=payload.note,
+            conditions=payload.conditions,
+            notification_state={**(approval.notification_state or {}), "decision": payload.decision},
+        )
+        .execution_options(synchronize_session=False)
+    )
+    if decision_update.rowcount != 1:
+        raise Conflict("another reviewer already decided this approval", details={"status": "changed"})
     approval.status = payload.decision
     approval.decided_by = auth.principal.id
-    approval.decided_at = dt.datetime.now(tz=UTC)
+    approval.decided_at = decided_at
     approval.decision_note = payload.note
     approval.conditions = payload.conditions
     approval.notification_state = {**(approval.notification_state or {}), "decision": payload.decision}
     await session.flush()
+    audit = await record_audit(
+        session,
+        org_id=auth.org_id or "",
+        principal=auth.principal,
+        action="approval.decide",
+        permission="approval.decide",
+        resource_kind="approval_request",
+        resource_id=approval.id,
+        outcome="success",
+        before=before,
+        after={"status": approval.status, "decided_by": approval.decided_by},
+        details={
+            "decision": payload.decision,
+            "decision_note": payload.note,
+            "conditions": payload.conditions,
+            "resume_requested": payload.resume,
+        },
+        project_id=approval.project_id,
+        well_id=approval.well_id,
+        occurred_at=decided_at,
+    )
+    audit.approval_id = approval.id
+    audit.workflow_run_id = approval.run_id
 
     resumed: dict[str, Any] | None = None
     if payload.resume and payload.decision == "approved" and approval.run_id:
         run = (
-            await session.execute(select(WorkflowRun).where(WorkflowRun.id == approval.run_id))
+            await session.execute(
+                select(WorkflowRun).where(
+                    WorkflowRun.id == approval.run_id,
+                    WorkflowRun.org_id == auth.org_id,
+                )
+            )
         ).scalar_one_or_none()
         if run is not None and run.status in {"waiting_approval", "paused"}:
             authorize(auth.principal, "workflow.run")
@@ -368,12 +439,38 @@ async def decide_approval(
             resumed = run_out(resumed_row)
     elif payload.resume and payload.decision == "rejected" and approval.run_id:
         run = (
-            await session.execute(select(WorkflowRun).where(WorkflowRun.id == approval.run_id))
+            await session.execute(
+                select(WorkflowRun).where(
+                    WorkflowRun.id == approval.run_id,
+                    WorkflowRun.org_id == auth.org_id,
+                )
+            )
         ).scalar_one_or_none()
         if run is not None and run.status in {"waiting_approval", "paused"}:
+            cancelled_at = utc_now()
+            cancellation_error = f"approval {approval.id} was rejected by {auth.principal.id}"
+            cancellation_update = await session.execute(
+                update(WorkflowRun)
+                .where(
+                    WorkflowRun.id == run.id,
+                    WorkflowRun.org_id == auth.org_id,
+                    WorkflowRun.status == run.status,
+                    WorkflowRun.updated_at == run.updated_at,
+                )
+                .values(
+                    status="cancelled",
+                    finished_at=cancelled_at,
+                    updated_at=cancelled_at,
+                    error=cancellation_error,
+                )
+                .execution_options(synchronize_session=False)
+            )
+            if cancellation_update.rowcount != 1:
+                raise Conflict("workflow run changed while applying the rejected approval decision")
             run.status = "cancelled"
-            run.finished_at = dt.datetime.now(tz=UTC)
-            run.error = f"approval {approval.id} was rejected by {auth.principal.id}"
+            run.finished_at = cancelled_at
+            run.updated_at = cancelled_at
+            run.error = cancellation_error
             session.add(
                 RunEvent(
                     org_id=auth.org_id or "",
@@ -383,7 +480,7 @@ async def decide_approval(
                     node_id=approval.node_id,
                     message=run.error,
                     level="warning",
-                    occurred_at=dt.datetime.now(tz=UTC),
+                    occurred_at=cancelled_at,
                 )
             )
             await session.flush()

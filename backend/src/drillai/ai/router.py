@@ -112,7 +112,13 @@ class LlmRouter:
         policy: RoutingPolicy | None = None,
     ) -> None:
         self.registry = registry or provider_registry()
-        self.policy = policy or RoutingPolicy()
+        if policy is None:
+            from drillai.core.config import get_settings
+
+            settings = get_settings()
+            configured_ceiling = self.registry.max_privacy or PrivacyClass(settings.llm_max_privacy)
+            policy = RoutingPolicy(max_privacy=configured_ceiling)
+        self.policy = policy
 
     # ------------------------------------------------------------------ selection
     def route(self, *, profile: TaskProfile, prompt_tokens: int = 0) -> RouteDecision:

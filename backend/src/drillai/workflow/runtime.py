@@ -31,12 +31,13 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from pydantic import BaseModel
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from drillai.core.clock import UTC
+from drillai.core.clock import UTC, utc_now
 from drillai.core.errors import (
     ApprovalRequired,
+    Conflict,
     NodeExecutionFailed,
     PermissionDenied,
     ValidationFailed,
@@ -191,13 +192,16 @@ class WorkflowRuntime:
                 select(WorkflowRun).where(
                     WorkflowRun.id == run_id,
                     WorkflowRun.org_id == self.org_id,
-                )
+                ).with_for_update()
             )
         ).scalar_one_or_none()
         if run is None:
             raise NodeExecutionFailed(f"workflow run {run_id!r} not found")
         if run.status not in {"waiting_approval", "paused"}:
-            raise NodeExecutionFailed(f"run {run_id!r} is {run.status}, not waiting or paused")
+            raise Conflict(
+                f"run {run_id!r} is {run.status}, not waiting or paused",
+                details={"status": run.status, "run_id": run_id},
+            )
 
         approvals = dict((run.attributes or {}).get("approvals") or {})
         resumed_breakpoints = list((run.attributes or {}).get("resumed_breakpoints") or [])
@@ -208,13 +212,16 @@ class WorkflowRuntime:
             raise ApprovalRequired(
                 f"run {run_id!r} is waiting for approval and cannot be resumed without a decided approval"
             )
+        approval = None
         if effective_approval_id:
             approval = (
                 await self.session.execute(
-                    select(ApprovalRequest).where(
+                    select(ApprovalRequest)
+                    .where(
                         ApprovalRequest.id == effective_approval_id,
                         ApprovalRequest.org_id == self.org_id,
                     )
+                    .with_for_update()
                 )
             ).scalar_one_or_none()
             if approval is None:
@@ -228,24 +235,52 @@ class WorkflowRuntime:
             if approval.status == "pending":
                 raise ApprovalRequired(f"approval {effective_approval_id!r} has not been decided yet")
             if approval.status != "approved":
+                cancelled_at = utc_now()
+                cancel_result = await self.session.execute(
+                    update(WorkflowRun)
+                    .where(
+                        WorkflowRun.id == run.id,
+                        WorkflowRun.org_id == self.org_id,
+                        WorkflowRun.status == run.status,
+                        WorkflowRun.updated_at == run.updated_at,
+                    )
+                    .values(
+                        status="cancelled",
+                        finished_at=cancelled_at,
+                        updated_at=cancelled_at,
+                        error=f"approval {approval.id} was {approval.status}",
+                    )
+                    .execution_options(synchronize_session=False)
+                )
+                if cancel_result.rowcount != 1:
+                    raise Conflict("workflow run changed while applying the approval decision")
                 run.status = "cancelled"
-                run.finished_at = dt.datetime.now(tz=UTC)
+                run.finished_at = cancelled_at
+                run.updated_at = cancelled_at
                 run.error = f"approval {approval.id} was {approval.status}"
                 await self._event(run, "run_cancelled", message=run.error, node_id=approval.node_id)
                 await self.session.flush()
                 return run
             approvals[approval.node_id or ""] = approval.id
             run.approved_by = approval.decided_by
-            await self._event(
-                run,
-                "approval_decided",
-                message=f"approval {approval.id} {approval.status}",
-                node_id=approval.node_id,
-                payload={"decision_note": approval.decision_note, "decided_by": approval.decided_by},
-            )
         elif run.status == "paused" and run.cursor_node_id:
             if run.cursor_node_id not in resumed_breakpoints:
                 resumed_breakpoints.append(run.cursor_node_id)
+
+        resumed_at = utc_now()
+        resume_result = await self.session.execute(
+            update(WorkflowRun)
+            .where(
+                WorkflowRun.id == run.id,
+                WorkflowRun.org_id == self.org_id,
+                WorkflowRun.status == run.status,
+                WorkflowRun.updated_at == run.updated_at,
+            )
+            .values(status="running", updated_at=resumed_at)
+            .execution_options(synchronize_session=False)
+        )
+        if resume_result.rowcount != 1:
+            raise Conflict("another actor resumed this workflow run", details={"run_id": run.id})
 
         run.attributes = {
             **(run.attributes or {}),
@@ -253,7 +288,16 @@ class WorkflowRuntime:
             "resumed_breakpoints": resumed_breakpoints,
         }
         run.status = "running"
+        run.updated_at = resumed_at
         run.pending_approval_id = None
+        if approval is not None:
+            await self._event(
+                run,
+                "approval_decided",
+                message=f"approval {approval.id} {approval.status}",
+                node_id=approval.node_id,
+                payload={"decision_note": approval.decision_note, "decided_by": approval.decided_by},
+            )
         await self._event(run, "run_resumed", message=f"resumed with decision {decision or 'approved'}")
         await self.session.flush()
         return await self._execute(run, graph, RunScope(**(run.context or {}).get("scope", {})))

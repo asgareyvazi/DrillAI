@@ -532,8 +532,9 @@ async def _ai_complete(context: NodeContext, config: BaseModel) -> NodeOutcome:
         validate_json_schema_definition,
         wrap_untrusted_content,
     )
-    from drillai.ai.providers import ChatMessage, CompletionRequest
+    from drillai.ai.providers import ChatMessage, CompletionRequest, PrivacyClass, provider_registry
     from drillai.ai.router import LlmRouter, RoutingPolicy, TaskProfile
+    from drillai.core.config import get_settings
     from drillai.core.errors import ModelNotConfigured
 
     cfg = AiCompleteConfig.model_validate(config)
@@ -546,7 +547,9 @@ async def _ai_complete(context: NodeContext, config: BaseModel) -> NodeOutcome:
         schema_error = validate_json_schema_definition(cfg.output_schema)
         if schema_error:
             raise NodeExecutionFailed(f"AI node output_schema is invalid: {schema_error}")
+    configured_ceiling = provider_registry().max_privacy or PrivacyClass(get_settings().llm_max_privacy)
     policy = RoutingPolicy(
+        max_privacy=configured_ceiling,
         prefer_provider=cfg.provider,
         prefer_model=cfg.model,
         require_structured_output=cfg.output_schema is not None,
@@ -752,7 +755,10 @@ class NotifyConfig(BaseModel):
     subject: str | None = None
     body: str
     connector_key: str | None = None
-    dispatch_immediately: bool = False
+    dispatch_immediately: bool = Field(
+        default=False,
+        description="legacy request; transport remains deferred until the outbox worker after commit",
+    )
     secret_ref: str | None = None
     auth_scheme: str = "hmac_sha256"
     timeout_seconds: float = 10.0
@@ -767,8 +773,6 @@ class NotifyConfig(BaseModel):
 
 async def _notify(context: NodeContext, config: BaseModel) -> NodeOutcome:
     from drillai.db.models import OutboundMessage
-    from drillai.workflow.notifications import dispatch_outbound_message
-
     cfg = NotifyConfig.model_validate(config)
     if context.dry_run:
         return NodeOutcome(outputs={"queued": False, "dry_run": True, "channel": cfg.channel}, notes=["dry run: nothing queued"])
@@ -794,21 +798,15 @@ async def _notify(context: NodeContext, config: BaseModel) -> NodeOutcome:
     context.session.add(row)
     await context.session.flush()
     if cfg.dispatch_immediately:
-        receipt = await dispatch_outbound_message(context.session, row)
-        return NodeOutcome(
-            outputs={
-                "message_id": row.id,
-                "channel": cfg.channel,
-                "status": receipt["status"],
-                "provider_message_id": receipt.get("provider_message_id"),
-                "attempts": receipt["attempts"],
-                "external_provider_verified": receipt.get("external_provider_verified", False),
-            },
-            notes=[f"notification dispatched via {cfg.channel} adapter (status={receipt['status']})"],
+        note = (
+            "immediate transport was requested but is deferred until after the workflow transaction; "
+            "the durable outbox worker must be enabled to dispatch"
         )
+    else:
+        note = "message queued through the durable outbox; delivery is an integration concern"
     return NodeOutcome(
         outputs={"message_id": row.id, "channel": cfg.channel, "status": row.status},
-        notes=["message queued through the connector outbox (delivery is an integration concern)"],
+        notes=[note],
     )
 
 

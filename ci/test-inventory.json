@@ -1,8 +1,8 @@
 {
   "version": 1,
   "backend": {
-    "collected": 1635,
-    "postgres_files": 10,
+    "collected": 1657,
+    "postgres_files": 11,
     "postgres": [
       "tests/db/test_cp18_postgres_backup_restore.py::test_cp18_01_postgres_logical_backup_restore_and_migration_recovery_drill",
       "tests/db/test_migrations_postgres.py::test_migration_chain_applies_reverses_and_refuses_duplicates_on_postgres",
@@ -16,22 +16,23 @@
       "tests/telemetry/test_connector_worker.py::test_competing_workers_fencing_on_postgres",
       "tests/telemetry/test_cp13_witsml_and_worker_races.py::test_phase6_postgres_concurrent_sql_cas_races",
       "tests/telemetry/test_cp15_egress_policy_recovery.py::test_postgres_separate_worker_process_fails_closed_then_recovers_without_restart",
+      "tests/workflow/test_notification_worker.py::test_competing_notification_worker_claims_skip_locked_rows_on_postgres",
       "tests/test_cp20_integration_completeness.py::test_cp20_01_pgvector_nearest_neighbor_and_hybrid_retrieval_on_postgres"
     ],
     "default": {
-      "passed": 1622,
-      "skipped": 13,
+      "passed": 1643,
+      "skipped": 14,
       "deselected": 0
     },
     "linux": {
-      "passed": 1635,
+      "passed": 1657,
       "skipped": 0,
       "deselected": 0
     },
     "windows": {
-      "passed": 1621,
+      "passed": 1642,
       "skipped": 1,
-      "deselected": 13,
+      "deselected": 14,
       "expected_skip_path": "tests/ingestion/test_ocr.py",
       "expected_skip_reason": "temporary shebang executables are POSIX-only"
     }

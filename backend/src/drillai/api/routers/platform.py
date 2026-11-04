@@ -11,22 +11,25 @@ from __future__ import annotations
 
 from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, Depends, status
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, Depends, Query, status
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from drillai.api.deps import AuthContext, get_db, require
 from drillai.core.clock import utc_now
 from drillai.core.config import get_settings
-from drillai.core.errors import NotFound, ValidationFailed
-from drillai.db.models import AuditLog, SecretRef
+from drillai.core.errors import Conflict, NotFound, PermissionDenied, ValidationFailed
+from drillai.db.models import AuditLog, OutboundMessage, SecretRef
+from drillai.security.actions import ActionLevel
 from drillai.security.secrets import (
     encrypt_secret_value,
     is_valid_env_secret_name,
     mask_secret_ref_row,
     rotate_secret_envelope,
 )
+from drillai.workflow.notifications import safe_notification_error_code
 
 router = APIRouter(tags=["platform"])
 
@@ -198,10 +201,10 @@ async def provider_routing(
     the policy nobody runs.
     """
     from drillai.ai.providers import provider_registry
-    from drillai.ai.router import LlmRouter, RoutingPolicy, TaskProfile
+    from drillai.ai.router import LlmRouter, TaskProfile
 
     registry = provider_registry()
-    router_ = LlmRouter(registry=registry, policy=RoutingPolicy())
+    router_ = LlmRouter(registry=registry)
     items = []
     for profile in TaskProfile:
         try:
@@ -299,15 +302,26 @@ async def integrations(
                 "integration": "llm",
                 "provider": settings.llm_provider,
                 "enabled": settings.llm_provider != "stub",
-                "configured": settings.llm_provider != "stub" and bool(settings.llm_base_url),
-                "note": "the stub provider answers deterministically from supplied context; it does not call a model",
+                "configured": settings.llm_provider != "stub"
+                and bool(settings.llm_base_url)
+                and (settings.llm_provider == "ollama" or bool(settings.llm_api_key)),
+                "note": (
+                    "stub mode is deterministic and is not live language-model quality evidence"
+                    if settings.llm_provider == "stub"
+                    else "configuration status only; reachability and answer quality are not implied"
+                ),
             },
             {
                 "integration": "embeddings",
                 "provider": settings.embedding_provider,
                 "enabled": settings.embedding_provider != "deterministic",
-                "configured": True,
-                "note": "deterministic embeddings are reproducible but not semantic",
+                "configured": settings.embedding_provider == "deterministic"
+                or (bool(settings.llm_base_url) and (settings.embedding_provider == "ollama" or bool(settings.llm_api_key))),
+                "note": (
+                    "deterministic embeddings are reproducible but not semantic"
+                    if settings.embedding_provider == "deterministic"
+                    else "configuration status only; reachability and embedding quality are not implied"
+                ),
             },
             {
                 "integration": "vector_store",
@@ -354,6 +368,163 @@ class SecretRefUpsertRequest(BaseModel):
 
 class SecretRefRotateRequest(BaseModel):
     secret_value: str | None = Field(default=None, min_length=1, max_length=300)
+
+
+class NotificationRetryRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", hide_input_in_errors=True)
+
+    reason: str = Field(min_length=10, max_length=500)
+    acknowledge_duplicate_risk: bool = False
+
+
+def _notification_summary(row: OutboundMessage) -> dict[str, Any]:
+    """Return operational state without message body, recipient, secret refs, or raw errors."""
+    attrs = dict(row.attributes or {})
+    ledger = list(attrs.get("delivery_ledger") or [])
+    last = ledger[-1] if ledger and isinstance(ledger[-1], dict) else {}
+    return {
+        "id": row.id,
+        "channel": row.channel,
+        "status": row.status,
+        "attempts": row.attempts,
+        "max_attempts": row.max_attempts,
+        "next_attempt_at": row.next_attempt_at.isoformat() if row.next_attempt_at else None,
+        "accepted_at": row.accepted_at.isoformat() if row.accepted_at else None,
+        "acceptance_evidence": row.acceptance_evidence,
+        "provider_message_id": row.provider_message_id if row.acceptance_evidence == "http_2xx" else None,
+        "delivery_confirmed": False,
+        "external_provider_verified": False,
+        "recipient_present": bool(row.recipient),
+        "workflow_run_id": row.workflow_run_id,
+        "well_id": row.well_id,
+        "last_error_code": safe_notification_error_code(last.get("error_code")),
+        "last_attempt_at": last.get("attempted_at"),
+        "created_at": row.created_at.isoformat() if row.created_at else None,
+    }
+
+
+@router.get("/platform/notifications", summary="Tenant-scoped notification outbox state (no content or secrets)")
+async def notification_outbox(
+    auth: Annotated[AuthContext, Depends(require("integration.read"))],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    status_filter: str | None = Query(default=None, alias="status"),
+    limit: int = Query(default=50, ge=1, le=100),
+) -> dict[str, Any]:
+    from drillai.workflow.notifications import DELIVERY_STATUSES
+
+    if not auth.org_id:
+        raise PermissionDenied("notification outbox access requires a tenant organization")
+    if status_filter is not None and status_filter not in DELIVERY_STATUSES:
+        raise ValidationFailed(
+            "unknown notification status",
+            details={"status": status_filter, "allowed": list(DELIVERY_STATUSES)},
+        )
+    stmt = select(OutboundMessage).where(OutboundMessage.org_id == auth.org_id)
+    if status_filter is not None:
+        stmt = stmt.where(OutboundMessage.status == status_filter)
+    rows = list(
+        (
+            await session.execute(
+                stmt.order_by(OutboundMessage.created_at.desc(), OutboundMessage.id.desc()).limit(limit)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return {"items": [_notification_summary(row) for row in rows], "limit": limit}
+
+
+@router.post(
+    "/platform/notifications/{message_id}/retry",
+    summary="Audited manual notification requeue with explicit duplicate-risk acknowledgement",
+)
+async def retry_notification(
+    message_id: str,
+    body: NotificationRetryRequest,
+    auth: Annotated[
+        AuthContext,
+        Depends(require("integration.manage", level=ActionLevel.EXECUTE_WITH_APPROVAL)),
+    ],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, Any]:
+    if not auth.org_id:
+        raise PermissionDenied("notification requeue requires a tenant organization")
+    row = (
+        await session.execute(
+            select(OutboundMessage)
+            .where(OutboundMessage.org_id == auth.org_id, OutboundMessage.id == message_id)
+            .with_for_update()
+        )
+    ).scalar_one_or_none()
+    if row is None:
+        raise NotFound("notification not found")
+    if row.status not in {"dead_letter", "failed_terminal", "reconciliation_required"}:
+        raise Conflict(
+            "only dead-letter, terminal-failure, or ambiguous stale sends may be manually requeued",
+            details={"status": row.status},
+        )
+    if not body.acknowledge_duplicate_risk:
+        raise ValidationFailed(
+            "manual requeue requires explicit acknowledgement that the prior transport may have accepted the message",
+            details={"required_field": "acknowledge_duplicate_risk"},
+        )
+
+    now = utc_now()
+    before = {"status": row.status, "attempts": row.attempts}
+    attrs = dict(row.attributes or {})
+    requeues = list(attrs.get("manual_requeues") or [])
+    requeues.append(
+        {
+            "requested_at": now.isoformat(),
+            "actor_id": auth.principal.id,
+            "reason": body.reason,
+            "duplicate_risk_acknowledged": True,
+        }
+    )
+    attrs["manual_requeues"] = requeues[-20:]
+    row.attributes = attrs
+    row.status = "queued"
+    row.attempts = 0
+    row.next_attempt_at = None
+    row.accepted_at = None
+    row.acceptance_evidence = None
+    row.provider_message_id = None
+    row.error = None
+    try:
+        await session.flush()
+    except IntegrityError as exc:
+        await session.rollback()
+        raise Conflict(
+            "another pending notification already owns this idempotency key",
+            details={"reason": "duplicate_pending_idempotency_key"},
+        ) from exc
+    session.add(
+        AuditLog(
+            org_id=auth.org_id,
+            actor_id=auth.principal.id,
+            actor_kind=auth.principal.kind,
+            action="integration.notification.retry",
+            action_level="L4",
+            resource_kind="outbound_message",
+            resource_id=row.id,
+            outcome="success",
+            permission_decision={
+                "permission": "integration.manage",
+                "required_level": "L4",
+                "decision": "allowed",
+            },
+            details={
+                "reason": body.reason,
+                "duplicate_risk_acknowledged": True,
+                "delivery_confirmed_before_retry": False,
+            },
+            before=before,
+            after={"status": row.status, "attempts": row.attempts},
+            workflow_run_id=row.workflow_run_id,
+            occurred_at=now,
+        )
+    )
+    return {"item": _notification_summary(row), "requeued": True}
 
 
 @router.get("/platform/secrets", summary="List tenant secret references (masked metadata only)")

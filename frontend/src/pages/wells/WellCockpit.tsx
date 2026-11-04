@@ -237,12 +237,26 @@ function MeasuredCard({
   measured: DrillingState['measured']
   onEvidence: (subjectKind: string, subjectId: string) => void
 }) {
-  const { t } = useI18n()
+  const { t, locale } = useI18n()
   const { unitSystem } = useSession()
   if (measured.length === 0) return <EmptyState message={t('empty.noEngineRuns')} />
   return (
     <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-      {measured.map((item) => (
+      {measured.map((item) => {
+        const freshness = item.freshness ?? 'unknown'
+        const freshnessLabel =
+          freshness === 'fresh'
+            ? t('liveMonitor.freshnessLive')
+            : freshness === 'stale'
+              ? t('liveMonitor.freshnessStale')
+              : freshness === 'missing'
+                ? t('liveMonitor.freshnessMissing')
+                : t('common.unknown')
+        const freshnessTone = freshness === 'fresh' ? 'ok' : freshness === 'stale' || freshness === 'missing' ? 'warning' : 'neutral'
+        const timeBasis = item.observed_at_basis === 'source_timestamp'
+          ? t('liveMonitor.sourceTimestamp')
+          : t(`operations.timeBasis.${item.observed_at_basis || 'unknown'}`)
+        return (
         <Value
           key={item.key}
           label={item.label}
@@ -251,6 +265,23 @@ function MeasuredCard({
           unitSystem={unitSystem}
           source={item.source}
           quality={item.quality}
+          meta={
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <Badge tone={freshnessTone}>{freshnessLabel}</Badge>
+              <span>{timeBasis}</span>
+              <span>
+                {t('common.observedAt')}: <bdi dir="ltr">{item.observed_at ? formatDateTime(item.observed_at, locale) : t('common.unknown')}</bdi>
+              </span>
+              {item.received_at && (
+                <span>
+                  {t('common.receivedAt')}: <bdi dir="ltr">{formatDateTime(item.received_at, locale)}</bdi>
+                </span>
+              )}
+              {item.age_seconds !== null && item.age_seconds !== undefined && (
+                <span dir="ltr">{t('liveMonitor.ageSeconds', { seconds: Math.round(item.age_seconds) })}</span>
+              )}
+            </div>
+          }
           evidence={
             item.evidence_ref ? (
               <WhyButton
@@ -260,7 +291,8 @@ function MeasuredCard({
             ) : undefined
           }
         />
-      ))}
+        )
+      })}
     </div>
   )
 }
@@ -283,16 +315,21 @@ function controllabilitySuffix(controllable: boolean | null): string {
 
 function NptCard({ npt, onSelectCause }: { npt: NptSummary; onSelectCause: (key: string) => void }) {
   const { t, locale } = useI18n()
-  if (npt.total_hours <= 0) return <EmptyState message={t('empty.noNpt')} />
   return (
     <div className="space-y-3">
       <dl className="grid grid-cols-2 gap-2 lg:grid-cols-4">
-        <Value label={t('cockpit.npt')} value={npt.total_hours} unit="h" source={npt.basis} />
         <Value
-          label="% of well time"
+          label={t('cockpit.npt')}
+          value={npt.total_hours}
+          unit="h"
+          source={npt.basis}
+          reason={npt.total_hours === 0 ? t('cockpit.nptZeroRecordedCaveat') : undefined}
+        />
+        <Value
+          label={t('cockpit.nptPercentage')}
           value={npt.percent_of_well_time}
-          source="NPT hours / recorded operation hours"
-          reason="no operation hours are recorded, so no share can be computed"
+          source={t('cockpit.nptPercentFormula')}
+          reason={npt.percent_of_well_time === null ? t('cockpit.nptNoRecordedDenominator') : undefined}
         />
         <Value
           label="operator-controllable"
@@ -311,30 +348,35 @@ function NptCard({ npt, onSelectCause }: { npt: NptSummary; onSelectCause: (key:
           source="events recorded without a code"
           reason="every recorded NPT event carries a controllability classification"
         />
-        <Value label="from operations" value={npt.hours_from_operations} unit="h" source="operation.npt_hours" />
-        <Value label="recorded well time" value={npt.measured_hours_total} unit="h" source="measured operations" />
+        <Value label={t('cockpit.nptFromOperations')} value={npt.hours_from_operations} unit="h" source="operation.npt_hours" />
+        <Value label={t('cockpit.nptProductiveHours')} value={npt.productive_hours} unit="h" source="recorded actual productive operations" />
+        <Value label={t('cockpit.nptDenominatorHours')} value={npt.denominator_hours} unit="h" source={t('cockpit.nptDenominatorDefinition')} />
       </dl>
       <div>
         <p className="mb-1 text-xs font-medium text-graphite-600 dark:text-graphite-300">
-          {t('cockpit.nptPareto')} · {formatPercent(npt.percent_of_well_time, locale)} of well time
+          {t('cockpit.nptPareto')} · {formatPercent(npt.percent_of_well_time, locale)} {t('cockpit.nptOfRecordedBasis')}
         </p>
-        <BarList
-          rows={npt.by_category
-            .filter((row) => row.occurrences > 0 || row.hours > 0)
-            .map((row) => ({
-              key: row.key,
-              label: `${row.label}${controllabilitySuffix(row.operator_controllable)}`,
-              value: row.hours,
-              display: `${formatDuration(row.hours)} · ${row.occurrences}× · ${formatPercent(row.percent_of_total, locale)}`,
-              tone:
-                row.operator_controllable === true
-                  ? 'bg-danger/70'
-                  : row.operator_controllable === false
-                    ? 'bg-warning/70'
-                    : 'bg-graphite-400/70',
-            }))}
-          onSelect={onSelectCause}
-        />
+        {npt.total_hours > 0 ? (
+          <BarList
+            rows={npt.by_category
+              .filter((row) => row.occurrences > 0 || row.hours > 0)
+              .map((row) => ({
+                key: row.key,
+                label: `${row.label}${controllabilitySuffix(row.operator_controllable)}`,
+                value: row.hours,
+                display: `${formatDuration(row.hours)} · ${row.occurrences}× · ${formatPercent(row.percent_of_total, locale)}`,
+                tone:
+                  row.operator_controllable === true
+                    ? 'bg-danger/70'
+                    : row.operator_controllable === false
+                      ? 'bg-warning/70'
+                      : 'bg-graphite-400/70',
+              }))}
+            onSelect={onSelectCause}
+          />
+        ) : (
+          <p className="text-xs text-graphite-500">{t('cockpit.nptNoRecordedEvents')}</p>
+        )}
       </div>
       {npt.offset_comparison && (
         <div>
@@ -350,6 +392,18 @@ function NptCard({ npt, onSelectCause }: { npt: NptSummary; onSelectCause: (key:
         </ul>
       )}
       <p className="text-[11px] text-graphite-500">{npt.basis}</p>
+      {npt.generated_at && (
+        <p className="text-[11px] text-graphite-500">
+          {t('cockpit.nptSummaryGenerated')}: <bdi dir="ltr">{formatDateTime(npt.generated_at, locale)}</bdi>
+          {npt.scope?.time_window_applied ? (
+            <> · {t('cockpit.nptTimeWindow')}: <bdi dir="ltr">{npt.scope.since ?? '—'} – {npt.scope.until ?? '—'}</bdi></>
+          ) : (
+            <> · {t('cockpit.nptAllRecordedHistory')}</>
+          )}
+          {npt.scope?.section_id && <> · {t('cockpit.nptSection')}: <bdi dir="ltr">{npt.scope.section_id}</bdi></>}
+          {npt.scope?.operation_id && <> · {t('cockpit.nptOperation')}: <bdi dir="ltr">{npt.scope.operation_id}</bdi></>}
+        </p>
+      )}
     </div>
   )
 }

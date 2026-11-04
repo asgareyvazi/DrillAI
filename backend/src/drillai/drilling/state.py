@@ -75,6 +75,20 @@ KPI_CHANNELS: dict[str, str] = {
     "pore_pressure_gradient": "Pore pressure gradient",
 }
 
+KPI_SNAPSHOT_CONTRACT: dict[str, Any] = {
+    "population": "one authenticated-tenant well",
+    "window": "latest available source-timestamped value; no fixed historic window",
+    "aggregation": "latest time-series point per channel; extracted parameter record only fills an absent channel",
+    "numerator": None,
+    "denominator": None,
+    "imputation": "none; absent values remain null and present=false",
+    "source_precedence": ["time_series", "eligible_extracted_record_parameter_set"],
+    "telemetry_freshness": "computed against configured freshness thresholds",
+    "extracted_record_freshness": "unknown; document ingestion time is not substituted for observation time",
+    "lineage": "source table, source row id, explicit observation-time basis, quality and evidence reference",
+    "as_of": "latest time-series source timestamp only; document header/record dates do not advance telemetry as_of",
+}
+
 
 @dataclass(frozen=True)
 class TelemetrySnapshot:
@@ -107,6 +121,7 @@ class Measured:
     source: str
     source_id: str | None = None
     observed_at: dt.datetime | None = None
+    observed_at_basis: str = "unknown"
     quality: str = "unverified"
     evidence_ref: str | None = None
     note: str | None = None
@@ -128,6 +143,7 @@ class Measured:
             "source": self.source,
             "source_id": self.source_id,
             "observed_at": self.observed_at.isoformat() if self.observed_at else None,
+            "observed_at_basis": self.observed_at_basis,
             "received_at": self.received_at.isoformat() if self.received_at else None,
             "age_seconds": self.age_seconds,
             "freshness": self.freshness,
@@ -547,6 +563,7 @@ class WellStateService:
                 source=f"time_series:{reading.channel_key}",
                 source_id=reading.channel_id,
                 observed_at=reading.observed_at,
+                observed_at_basis="source_timestamp" if reading.observed_at is not None else "unknown",
                 received_at=reading.received_at,
                 age_seconds=reading.age_seconds,
                 freshness=reading.freshness,
@@ -595,7 +612,8 @@ class WellStateService:
                     unit=unit_context.get(key),
                     source="extracted_record:parameter_set",
                     source_id=record.id,
-                    observed_at=record.observed_at or record.created_at,
+                    observed_at=record.observed_at,
+                    observed_at_basis=record.observed_at_basis or "unknown",
                     quality="validated" if record.validation_state in VALIDATED_STATES else "extracted",
                     evidence_ref=record.id,
                     # A number read out of a document has an extraction provenance, not a measurement

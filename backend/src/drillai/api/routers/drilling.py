@@ -17,7 +17,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from drillai.ai.providers import ProviderRegistry, provider_registry
-from drillai.ai.router import LlmRouter, RoutingPolicy
+from drillai.ai.router import LlmRouter
 from drillai.api.deps import AuthContext, OptionalFilter, get_db, require
 from drillai.core.audit import record_audit
 from drillai.core.clock import ensure_utc
@@ -28,7 +28,7 @@ from drillai.drilling.dependencies import DependencyGraphService
 from drillai.drilling.npt import NptService
 from drillai.drilling.optimisation import COMPUTED_OBJECTIVES, NOT_EVALUATED, DrillingOptimisationService
 from drillai.drilling.reporting import REPORT_KINDS, ReportingService
-from drillai.drilling.state import KPI_CHANNELS, WellStateService
+from drillai.drilling.state import KPI_CHANNELS, KPI_SNAPSHOT_CONTRACT, WellStateService
 from drillai.drilling.timeline import (
     TIMELINE_KINDS,
     TimelineService,
@@ -180,24 +180,56 @@ async def well_kpis(
     session: Annotated[AsyncSession, Depends(get_db)],
     auth: Annotated[AuthContext, Depends(require("well.read"))],
 ) -> dict[str, Any]:
-    """Which KPIs the platform tracks, which have values, and where each value came from."""
-    measured = await WellStateService(session, auth.org_id).measured_values(well_id)
-    present = {item.key: item.to_dict() for item in measured}
+    """Permissioned one-well snapshot with metric definitions, missing policy and row lineage."""
+    authorize(auth.principal, "context.read", context={"well_id": well_id})
+    service = WellStateService(session, auth.org_id)
+    await service._well(well_id)
+    snapshot = await service.telemetry_snapshot(well_id)
+    present = {item.key: item for item in snapshot.measured}
+    generated_at = dt.datetime.now(tz=dt.UTC)
+    observed_instants = [
+        item.observed_at
+        for item in present.values()
+        if item.observed_at is not None and item.observed_at_basis == "source_timestamp"
+    ]
     return {
+        "well_id": well_id,
+        "generated_at": generated_at.isoformat(),
+        "as_of": max(observed_instants).isoformat() if observed_instants else None,
+        "contract": dict(KPI_SNAPSHOT_CONTRACT),
         "kpis": [
             {
                 "key": key,
                 "label": label,
+                "definition": f"Newest recorded {label.lower()} value available for this well.",
+                "aggregation": KPI_SNAPSHOT_CONTRACT["aggregation"],
+                "numerator": None,
+                "denominator": None,
                 "present": key in present,
-                "value": present.get(key, {}).get("value"),
-                "unit": present.get(key, {}).get("unit"),
-                "source": present.get(key, {}).get("source"),
-                "quality": present.get(key, {}).get("quality"),
-                "evidence_ref": present.get(key, {}).get("evidence_ref"),
+                "value": present[key].value if key in present else None,
+                "unit": present[key].unit if key in present else None,
+                "source": present[key].source if key in present else None,
+                "source_id": present[key].source_id if key in present else None,
+                "observed_at": present[key].observed_at.isoformat() if key in present and present[key].observed_at else None,
+                "observed_at_basis": present[key].observed_at_basis if key in present else "unknown",
+                "received_at": present[key].received_at.isoformat() if key in present and present[key].received_at else None,
+                "age_seconds": present[key].age_seconds if key in present else None,
+                "freshness": present[key].freshness if key in present else "missing",
+                "quality": present[key].quality if key in present else None,
+                "evidence_ref": present[key].evidence_ref if key in present else None,
+                "note": present[key].note if key in present else None,
+                "missing_reason": (
+                    None
+                    if key in present
+                    else "channel exists without a recorded point"
+                    if key in snapshot.silent_channels
+                    else "no eligible telemetry or extracted parameter value is recorded"
+                ),
             }
             for key, label in sorted(KPI_CHANNELS.items())
         ],
         "present_count": len(present),
+        "missing_count": len(KPI_CHANNELS) - len(present),
         "total": len(KPI_CHANNELS),
     }
 
@@ -256,7 +288,7 @@ async def ask_advisor(
     if payload.use_llm:
         authorize(auth.principal, "rag.search", context={"well_id": well_id})
         registry: ProviderRegistry = provider_registry()
-        router_instance = LlmRouter(registry=registry, policy=RoutingPolicy())
+        router_instance = LlmRouter(registry=registry)
     # The question is validated against the catalogue here, at the boundary, so a client typo is a
     # 422 naming the valid questions instead of an unhandled domain error surfacing as a 500.
     if payload.question not in ADVISOR_QUESTIONS:

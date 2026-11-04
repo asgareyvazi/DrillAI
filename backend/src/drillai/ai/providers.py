@@ -22,7 +22,6 @@ import abc
 import datetime as dt
 import enum
 import json
-import os
 import time
 from dataclasses import dataclass, field
 from typing import Any
@@ -402,14 +401,16 @@ class OpenAICompatibleProvider(LLMProvider):
         base_url: str,
         api_key: str | None = None,
         models: list[ModelSpec] | None = None,
-        privacy: PrivacyClass = PrivacyClass.PRIVATE_CLOUD,
+        privacy: PrivacyClass = PrivacyClass.PUBLIC_CLOUD,
         timeout_seconds: float = 60.0,
         name: str | None = None,
+        allow_anonymous: bool = False,
     ) -> None:
         if not base_url:
             raise ModelNotConfigured("base_url is required for an OpenAI-compatible provider")
         self.base_url = base_url.rstrip("/")
         self._api_key = api_key
+        self._allow_anonymous = allow_anonymous
         self.privacy = privacy
         self.timeout_seconds = timeout_seconds
         self.name = name or self.name
@@ -423,7 +424,7 @@ class OpenAICompatibleProvider(LLMProvider):
     async def complete(self, request: CompletionRequest) -> CompletionResponse:
         import httpx
 
-        if not self._api_key:
+        if not self._api_key and not self._allow_anonymous:
             raise ModelNotConfigured(
                 f"provider {self.name!r} has no API key configured; store one as a secret reference"
             )
@@ -455,10 +456,11 @@ class OpenAICompatibleProvider(LLMProvider):
             started = time.perf_counter()
             try:
                 async with httpx.AsyncClient(timeout=request.timeout_seconds or self.timeout_seconds) as client:
+                    headers = {"Authorization": f"Bearer {self._api_key}"} if self._api_key else {}
                     response = await client.post(
                         f"{self.base_url}/chat/completions",
                         json=payload,
-                        headers={"Authorization": f"Bearer {self._api_key}"},
+                        headers=headers,
                     )
             except httpx.HTTPError as exc:
                 span.record_error(exc)
@@ -508,7 +510,7 @@ class OpenAICompatibleProvider(LLMProvider):
     async def embed(self, texts: list[str], *, model: str | None = None) -> list[list[float]]:
         import httpx
 
-        if not self._api_key:
+        if not self._api_key and not self._allow_anonymous:
             raise ModelNotConfigured(
                 f"provider {self.name!r} has no API key configured; store one as a secret reference"
             )
@@ -516,11 +518,12 @@ class OpenAICompatibleProvider(LLMProvider):
             (m.model for m in self._models if LLMCapability.EMBEDDING in m.capabilities),
             self._models[0].model,
         )
+        headers = {"Authorization": f"Bearer {self._api_key}"} if self._api_key else {}
         async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
             response = await client.post(
                 f"{self.base_url}/embeddings",
                 json={"model": emb_model, "input": texts},
-                headers={"Authorization": f"Bearer {self._api_key}"},
+                headers=headers,
             )
         if response.status_code >= 400:
             raise ProviderError(
@@ -549,11 +552,17 @@ class ProviderRegistry:
 
     def __init__(self) -> None:
         self._providers: dict[str, LLMProvider] = {}
+        self.max_privacy: PrivacyClass | None = None
 
     def register(self, provider: LLMProvider, *, replace: bool = False) -> None:
         if provider.name in self._providers and not replace:
             raise ProviderError(f"provider {provider.name!r} is already registered")
         self._providers[provider.name] = provider
+
+    def clear(self) -> None:
+        """Remove registrations and routing policy before rebuilding a deployment configuration."""
+        self._providers.clear()
+        self.max_privacy = None
 
     def get(self, name: str) -> LLMProvider:
         provider = self._providers.get(name)
@@ -594,20 +603,80 @@ def provider_registry() -> ProviderRegistry:
     return _REGISTRY
 
 
-def bootstrap_default_providers() -> None:
-    """Register the offline provider always; HTTP providers come from configuration."""
-    _REGISTRY.register(EchoProvider(), replace=True)
-    if os.environ.get("DRILLAI_ENABLE_DETERMINISTIC_EMBEDDINGS", "").strip().lower() in {"1", "true", "yes"}:
-        _REGISTRY.register(DeterministicEmbeddingProvider(), replace=True)
-    base_url = os.environ.get("DRILLAI_LLM_BASE_URL")
-    if base_url:
-        _REGISTRY.register(
+def bootstrap_default_providers(
+    *,
+    registry: ProviderRegistry | None = None,
+    settings: Any | None = None,
+) -> None:
+    """Register only the provider modes explicitly selected by deployment settings.
+
+    Development/test ``stub`` mode exposes the clearly named deterministic Echo provider. A live
+    provider replaces it rather than competing with (or silently falling back to) the stub. In
+    production, ``stub`` means no LLM provider is registered. Embedding configuration is separate:
+    deterministic feature hashing is reproducible but is not semantic-quality evidence.
+    """
+    if settings is None:
+        from drillai.core.config import get_settings
+
+        settings = get_settings()
+    target = registry or _REGISTRY
+    target.clear()
+    target.max_privacy = PrivacyClass(settings.llm_max_privacy)
+
+    if settings.llm_provider == "stub":
+        if settings.environment != "production":
+            target.register(EchoProvider(model=settings.llm_default_model))
+    else:
+        llm_name = settings.llm_provider
+        llm_privacy = PrivacyClass(settings.llm_privacy)
+        target.register(
             OpenAICompatibleProvider(
-                base_url=base_url,
-                api_key=os.environ.get("DRILLAI_LLM_API_KEY"),
-                name=os.environ.get("DRILLAI_LLM_PROVIDER_NAME", "openai_compatible"),
-            ),
-            replace=True,
+                base_url=settings.llm_base_url,
+                api_key=settings.llm_api_key or None,
+                name=llm_name,
+                privacy=llm_privacy,
+                timeout_seconds=settings.llm_timeout_seconds,
+                allow_anonymous=settings.llm_provider == "ollama",
+                models=[
+                    ModelSpec(
+                        provider=llm_name,
+                        model=settings.llm_default_model,
+                        capabilities=frozenset({LLMCapability.CHAT}),
+                        privacy=llm_privacy,
+                        notes="operator-configured OpenAI-compatible chat endpoint; capabilities are conservative",
+                    )
+                ],
+            )
+        )
+
+    if settings.embedding_provider == "deterministic":
+        target.register(
+            DeterministicEmbeddingProvider(
+                model=settings.embedding_model,
+                dimensions=settings.embedding_dimensions,
+            )
+        )
+    else:
+        embedding_name = f"{settings.embedding_provider}_embeddings"
+        embedding_privacy = PrivacyClass(settings.llm_privacy)
+        target.register(
+            OpenAICompatibleProvider(
+                base_url=settings.llm_base_url,
+                api_key=settings.llm_api_key or None,
+                name=embedding_name,
+                privacy=embedding_privacy,
+                timeout_seconds=settings.llm_timeout_seconds,
+                allow_anonymous=settings.embedding_provider == "ollama",
+                models=[
+                    ModelSpec(
+                        provider=embedding_name,
+                        model=settings.embedding_model,
+                        capabilities=frozenset({LLMCapability.EMBEDDING}),
+                        privacy=embedding_privacy,
+                        notes="operator-configured OpenAI-compatible embedding endpoint",
+                    )
+                ],
+            )
         )
 
 

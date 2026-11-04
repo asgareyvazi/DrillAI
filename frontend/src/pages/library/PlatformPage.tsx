@@ -13,6 +13,7 @@ import { PageHeader } from '../../components/layout/AppShell'
 import { Async, Badge, Card, EmptyState, ErrorState, Json, Table, Value } from '../../components/common'
 import { useI18n } from '../../i18n'
 import { humanise } from '../../lib/format'
+import NotificationOutboxPanel from './NotificationOutboxPanel'
 
 export default function PlatformPage() {
   const { t } = useI18n()
@@ -189,6 +190,8 @@ export default function PlatformPage() {
           )}
         </Async>
       </Card>
+
+      <NotificationOutboxPanel />
     </div>
   )
 }

@@ -1,7 +1,7 @@
-"""Outbound notification adapter boundary, dispatcher, idempotency guard, and delivery ledger.
+"""Outbound notification adapter boundary, dispatch state machine, and bounded attempt ledger.
 
-Implements production-grade delivery for `OutboundMessage` rows queued by the `output.notify`
-workflow node (or alerts):
+The dispatcher records *acceptance* by the immediate transport, not receipt by a human. No built-in
+adapter receives a delivery callback or independently verified provider receipt:
 
 * **Webhook / HTTP adapter (`channel="webhook"`)**:
   - Enforces the authoritative database-backed egress policy, resolves and pins the destination IP,
@@ -10,21 +10,23 @@ workflow node (or alerts):
     storing raw secrets in database JSON columns.
   - Signs payloads with `X-DrillAI-Signature-256: sha256=<hmac>` when a signing secret reference is
     provided, and attaches `Idempotency-Key` and `X-DrillAI-Message-Id` headers.
-  - Enforces explicit request timeouts and classifies outcomes into `sent` (`2xx`),
+  - Enforces explicit request timeouts and classifies outcomes into `accepted` (`2xx` HTTP response),
     `failed_retryable` (`408`, `429`, `5xx`, network/timeout errors), `failed_terminal` (`4xx`
     client errors or egress policy blocks), and `dead_letter` (retry ceiling exhausted).
 
 * **SMTP Email adapter (`channel="email"`)**:
-  - Delivers RFC 5322 email messages over SMTP with explicit timeout, `Idempotency-Key` header,
-    and transient (`4xx`) vs permanent (`5xx`) SMTP error classification.
+  - Submits RFC 5322 email messages to an SMTP server with explicit timeout and transient (`4xx`)
+    vs permanent (`5xx`) response classification. SMTP acceptance is not mailbox delivery.
 
 * **In-App adapter (`channel="in_app"`)**:
-  - Deterministic internal inbox delivery without external network I/O.
+  - Records acceptance by the local outbox only; there is no recipient inbox UI or read receipt.
 
 * **Evidence Boundary**:
-  - Every delivery receipt records `external_provider_verified: False` unless a live third-party
-    provider certification flag is explicitly configured, ensuring local test receivers are never
-    conflated with live SaaS provider certification.
+  - `accepted` means HTTP 2xx, SMTP server acceptance, or local outbox acceptance. It never means
+    recipient delivery. A provider message id is stored only when the remote endpoint actually
+    supplies one; generated local identifiers are not presented as provider receipts.
+  - Every adapter keeps `external_provider_verified=false`. No delivery callback, read receipt, or
+    live SaaS certification is implemented.
 """
 
 from __future__ import annotations
@@ -35,9 +37,10 @@ import datetime as dt
 import hashlib
 import hmac
 import json
+import math
 import os
-import re
 import smtplib
+import ssl
 import time
 from dataclasses import dataclass, field
 from email.message import EmailMessage
@@ -48,7 +51,7 @@ import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from drillai.core.clock import UTC, utc_now
+from drillai.core.clock import utc_now
 from drillai.core.errors import ValidationFailed
 from drillai.db.models import OutboundMessage, SecretRef
 from drillai.security.secrets import is_credential_header_name, is_valid_env_secret_name
@@ -60,35 +63,44 @@ from drillai.telemetry.connectors import (
 __all__ = [
     "DELIVERY_STATUSES",
     "MAX_DELIVERY_LEDGER_ENTRIES",
+    "STALE_SENDING_AFTER",
     "DeliveryAttemptOutcome",
     "EmailSmtpNotificationAdapter",
     "InAppNotificationAdapter",
     "NotificationAdapter",
     "NotificationDispatcher",
     "WebhookNotificationAdapter",
+    "claim_pending_notifications",
     "dispatch_outbound_message",
     "dispatch_pending_notifications",
     "resolve_notification_secret",
     "resolve_notification_secret_async",
+    "safe_notification_error_code",
 ]
 
 DELIVERY_STATUSES = (
     "queued",
     "sending",
-    "sent",
+    "accepted",
+    "sent",  # legacy rows; not a recipient-delivery receipt
     "failed_retryable",
     "failed_terminal",
     "dead_letter",
+    "reconciliation_required",  # stale send with an ambiguous remote outcome
 )
 MAX_DELIVERY_LEDGER_ENTRIES = 20
+MAX_PENDING_DELIVERY_BATCH = 100
+STALE_SENDING_AFTER = dt.timedelta(minutes=5)
 
-_SECRET_REDACT_RE = re.compile(r"(Bearer\s+[A-Za-z0-9._\-+/=]+|password=[^\s&]+|secret=[^\s&]+)", re.IGNORECASE)
 
-
-def _redact_error(text: str | None) -> str | None:
-    if not text:
+def _bounded_timeout(value: Any, *, default: float = 10.0) -> float | None:
+    if value is None:
+        return default
+    try:
+        seconds = float(value)
+    except (TypeError, ValueError):
         return None
-    return _SECRET_REDACT_RE.sub("[REDACTED]", str(text))[:500]
+    return seconds if math.isfinite(seconds) and 0.1 <= seconds <= 120.0 else None
 
 
 def resolve_notification_secret(secret_ref: str | None) -> str | None:
@@ -146,15 +158,79 @@ async def resolve_notification_secret_async(
 
 @dataclass(frozen=True)
 class DeliveryAttemptOutcome:
-    status: str  # "sent" | "failed_retryable" | "failed_terminal"
+    status: str  # "accepted" | "failed_retryable" | "failed_terminal"
     retryable: bool
-    provider_message_id: str | None = None
+    acceptance_evidence: str | None = None
+    provider_message_id: str | None = None  # only an identifier returned by the remote endpoint
     status_code: int | None = None
     latency_ms: float = 0.0
     error_code: str | None = None
     error: str | None = None
     external_provider_verified: bool = False
     details: dict[str, Any] = field(default_factory=dict)
+
+
+_SAFE_NOTIFICATION_ERROR_CODES = frozenset(
+    {
+        "adapter_error",
+        "missing_recipient_url",
+        "egress_policy_blocked",
+        "ssrf_blocked",
+        "dns_lookup_timeout",
+        "dns_failure",
+        "timeout",
+        "transient_store_error",
+        "invalid_timeout",
+        "secret_ref_unresolved",
+        "plaintext_secret_header_forbidden",
+        "invalid_email_recipient",
+        "smtp_not_configured",
+        "invalid_smtp_url",
+        "smtp_tls_required",
+        "smtp_recipients_refused",
+        "smtp_transport_error",
+        "unsupported_channel",
+        "stale_sending_ambiguous",
+        "invalid_endpoint",
+        "invalid_scheme",
+        "invalid_hostname",
+        "invalid_port",
+        "endpoint_required",
+        "endpoint_too_long",
+        "profile_not_production_approved",
+    }
+)
+
+
+def safe_notification_error_code(value: str | None) -> str | None:
+    """Return an allowlisted error identifier, never adapter-supplied free text or secret refs."""
+    if not value:
+        return None
+    normalized = "".join(
+        char for char in str(value) if char.isascii() and (char.isalnum() or char in "_.-")
+    )[:80]
+    if normalized in _SAFE_NOTIFICATION_ERROR_CODES:
+        return normalized
+    prefix, separator, suffix = normalized.partition("_")
+    if separator and prefix in {"http", "smtp", "provider"} and len(suffix) == 3 and suffix.isdigit():
+        status_code = int(suffix)
+        if 400 <= status_code <= 599:
+            return normalized
+    return "adapter_error"
+
+
+def _safe_outcome_error(outcome: DeliveryAttemptOutcome) -> str:
+    code = safe_notification_error_code(outcome.error_code)
+    return f"notification attempt failed ({code})" if code else "notification attempt failed"
+
+
+def _safe_provider_message_id(value: str | None) -> str | None:
+    if not value:
+        return None
+    candidate = str(value).strip()
+    if len(candidate) > 200 or any(ord(char) < 32 or ord(char) == 127 for char in candidate):
+        return None
+    return candidate or None
 
 
 class NotificationAdapter(abc.ABC):
@@ -211,13 +287,20 @@ class WebhookNotificationAdapter(NotificationAdapter):
                 status="failed_retryable" if is_retryable else "failed_terminal",
                 retryable=is_retryable,
                 error_code=reason,
-                error=_redact_error(exc.message),
+                error="webhook destination was rejected by the egress policy",
                 latency_ms=(time.perf_counter() - started) * 1000.0,
             )
 
         # 2. Construct canonical JSON body & headers (resolving secret_ref if present)
         cfg_payload = dict(message.payload or {})
-        timeout_seconds = float(cfg_payload.get("timeout_seconds") or 10.0)
+        timeout_seconds = _bounded_timeout(cfg_payload.get("timeout_seconds"))
+        if timeout_seconds is None:
+            return DeliveryAttemptOutcome(
+                status="failed_terminal",
+                retryable=False,
+                error_code="invalid_timeout",
+                error="webhook timeout must be between 0.1 and 120 seconds",
+            )
         secret_ref = cfg_payload.get("secret_ref")
         secret_val = (
             await resolve_notification_secret_async(session, message.org_id, secret_ref)
@@ -229,7 +312,7 @@ class WebhookNotificationAdapter(NotificationAdapter):
                 status="failed_terminal",
                 retryable=False,
                 error_code="secret_ref_unresolved",
-                error=f"secret_ref {secret_ref!r} could not be resolved",
+                error="configured webhook secret reference could not be resolved",
                 latency_ms=(time.perf_counter() - started) * 1000.0,
             )
 
@@ -281,19 +364,21 @@ class WebhookNotificationAdapter(NotificationAdapter):
                 timeout=timeout_seconds,
                 follow_redirects=False,
                 trust_env=False,
-            ) as client:
-                response = await client.post(
-                    pinned.connect_url,
-                    content=encoded_body,
-                    headers=headers,
-                    extensions=extensions,
-                )
-        except httpx.TimeoutException as exc:
+            ) as client, client.stream(
+                "POST",
+                pinned.connect_url,
+                content=encoded_body,
+                headers=headers,
+                extensions=extensions,
+            ) as response:
+                code = response.status_code
+                provider_msg_id = response.headers.get("X-Provider-Message-Id")
+        except httpx.TimeoutException:
             return DeliveryAttemptOutcome(
                 status="failed_retryable",
                 retryable=True,
                 error_code="webhook_timeout",
-                error=_redact_error(f"webhook timed out after {timeout_seconds}s: {exc}"),
+                error=f"webhook transport timed out after {timeout_seconds}s",
                 latency_ms=(time.perf_counter() - started) * 1000.0,
             )
         except httpx.HTTPError as exc:
@@ -301,25 +386,17 @@ class WebhookNotificationAdapter(NotificationAdapter):
                 status="failed_retryable",
                 retryable=True,
                 error_code="webhook_network_error",
-                error=_redact_error(f"webhook transport error: {exc}"),
+                error=f"webhook transport failed ({type(exc).__name__})",
                 latency_ms=(time.perf_counter() - started) * 1000.0,
             )
 
         latency_ms = (time.perf_counter() - started) * 1000.0
-        code = response.status_code
         if 200 <= code < 300:
-            provider_msg_id = response.headers.get("X-Provider-Message-Id")
-            if not provider_msg_id:
-                try:
-                    resp_json = response.json()
-                    if isinstance(resp_json, dict) and resp_json.get("id"):
-                        provider_msg_id = str(resp_json["id"])
-                except Exception:
-                    provider_msg_id = None
             return DeliveryAttemptOutcome(
-                status="sent",
+                status="accepted",
                 retryable=False,
-                provider_message_id=provider_msg_id or f"webhook:{message.id}:{code}",
+                acceptance_evidence="http_2xx",
+                provider_message_id=provider_msg_id,
                 status_code=code,
                 latency_ms=latency_ms,
                 external_provider_verified=False,
@@ -331,7 +408,7 @@ class WebhookNotificationAdapter(NotificationAdapter):
                 retryable=True,
                 status_code=code,
                 error_code=f"http_{code}",
-                error=_redact_error(f"webhook returned transient HTTP {code}: {response.text[:200]}"),
+                error=f"webhook returned transient HTTP {code}",
                 latency_ms=latency_ms,
             )
 
@@ -340,7 +417,7 @@ class WebhookNotificationAdapter(NotificationAdapter):
             retryable=False,
             status_code=code,
             error_code=f"http_{code}",
-            error=_redact_error(f"webhook returned permanent HTTP {code}: {response.text[:200]}"),
+            error=f"webhook returned permanent HTTP {code}",
             latency_ms=latency_ms,
         )
 
@@ -362,7 +439,7 @@ class EmailSmtpNotificationAdapter(NotificationAdapter):
                 status="failed_terminal",
                 retryable=False,
                 error_code="invalid_email_recipient",
-                error=f"invalid email recipient {recipient!r}",
+                error="invalid email recipient",
             )
         cfg = dict(message.payload or {})
         smtp_url = str(cfg.get("smtp_url") or os.environ.get("DRILLAI_SMTP_URL") or "").strip()
@@ -373,10 +450,42 @@ class EmailSmtpNotificationAdapter(NotificationAdapter):
                 error_code="smtp_not_configured",
                 error="no smtp_url or DRILLAI_SMTP_URL configured for email delivery",
             )
-        parsed = urlparse(smtp_url)
-        host = parsed.hostname or "127.0.0.1"
-        port = parsed.port or 25
-        timeout_seconds = float(cfg.get("timeout_seconds") or 10.0)
+        try:
+            parsed = urlparse(smtp_url)
+            port = parsed.port
+        except ValueError:
+            return DeliveryAttemptOutcome(
+                status="failed_terminal",
+                retryable=False,
+                error_code="invalid_smtp_url",
+                error="configured SMTP URL is invalid",
+            )
+        if parsed.scheme not in {"smtp", "smtps"} or not parsed.hostname or parsed.password:
+            return DeliveryAttemptOutcome(
+                status="failed_terminal",
+                retryable=False,
+                error_code="invalid_smtp_url",
+                error="SMTP URL must include a valid smtp/smtps host and no embedded password",
+            )
+        host = parsed.hostname
+        port = port or (465 if parsed.scheme == "smtps" else 25)
+        from drillai.core.config import get_settings
+
+        if get_settings().is_production and parsed.scheme != "smtps":
+            return DeliveryAttemptOutcome(
+                status="failed_terminal",
+                retryable=False,
+                error_code="smtp_tls_required",
+                error="production email transport requires an smtps URL",
+            )
+        timeout_seconds = _bounded_timeout(cfg.get("timeout_seconds"))
+        if timeout_seconds is None:
+            return DeliveryAttemptOutcome(
+                status="failed_terminal",
+                retryable=False,
+                error_code="invalid_timeout",
+                error="email timeout must be between 0.1 and 120 seconds",
+            )
         sender = str(cfg.get("from_address") or os.environ.get("DRILLAI_SMTP_FROM") or "noreply@drillai.local")
         secret_ref = cfg.get("secret_ref")
         password = (
@@ -389,7 +498,7 @@ class EmailSmtpNotificationAdapter(NotificationAdapter):
                 status="failed_terminal",
                 retryable=False,
                 error_code="secret_ref_unresolved",
-                error=f"secret_ref {secret_ref!r} could not be resolved",
+                error="configured email secret reference could not be resolved",
             )
 
         msg = EmailMessage()
@@ -402,21 +511,43 @@ class EmailSmtpNotificationAdapter(NotificationAdapter):
         msg.set_content(message.body or "")
 
         def _send_sync() -> str:
-            with smtplib.SMTP(host=host, port=port, timeout=timeout_seconds) as client:
+            client = (
+                smtplib.SMTP_SSL(
+                    host=host,
+                    port=port,
+                    timeout=timeout_seconds,
+                    context=ssl.create_default_context(),
+                )
+                if parsed.scheme == "smtps"
+                else smtplib.SMTP(host=host, port=port, timeout=timeout_seconds)
+            )
+            with client as smtp_client:
                 if parsed.username and password:
-                    client.login(parsed.username, password)
-                client.send_message(msg)
+                    smtp_client.login(parsed.username, password)
+                smtp_client.send_message(msg)
             return str(msg["Message-ID"])
 
         try:
-            msg_id = await asyncio.to_thread(_send_sync)
+            await asyncio.to_thread(_send_sync)
             return DeliveryAttemptOutcome(
-                status="sent",
+                status="accepted",
                 retryable=False,
-                provider_message_id=msg_id,
+                acceptance_evidence="smtp_server_accepted",
                 status_code=250,
                 latency_ms=(time.perf_counter() - started) * 1000.0,
                 external_provider_verified=False,
+            )
+        except smtplib.SMTPRecipientsRefused as exc:
+            codes = [int(response[0]) for response in exc.recipients.values() if response]
+            retryable = bool(codes) and all(400 <= code < 500 for code in codes)
+            status_code = max(codes) if codes else None
+            return DeliveryAttemptOutcome(
+                status="failed_retryable" if retryable else "failed_terminal",
+                retryable=retryable,
+                status_code=status_code,
+                error_code="smtp_recipients_refused",
+                error="SMTP server refused the notification recipient",
+                latency_ms=(time.perf_counter() - started) * 1000.0,
             )
         except smtplib.SMTPResponseException as exc:
             code = int(exc.smtp_code)
@@ -426,7 +557,7 @@ class EmailSmtpNotificationAdapter(NotificationAdapter):
                 retryable=retryable,
                 status_code=code,
                 error_code=f"smtp_{code}",
-                error=_redact_error(f"SMTP {code}: {exc.smtp_error}"),
+                error=f"SMTP server returned status {code}",
                 latency_ms=(time.perf_counter() - started) * 1000.0,
             )
         except (TimeoutError, OSError, smtplib.SMTPException) as exc:
@@ -434,7 +565,7 @@ class EmailSmtpNotificationAdapter(NotificationAdapter):
                 status="failed_retryable",
                 retryable=True,
                 error_code="smtp_transport_error",
-                error=_redact_error(f"SMTP transport error: {exc}"),
+                error=f"SMTP transport failed ({type(exc).__name__})",
                 latency_ms=(time.perf_counter() - started) * 1000.0,
             )
 
@@ -450,9 +581,9 @@ class InAppNotificationAdapter(NotificationAdapter):
         message: OutboundMessage,
     ) -> DeliveryAttemptOutcome:
         return DeliveryAttemptOutcome(
-            status="sent",
+            status="accepted",
             retryable=False,
-            provider_message_id=f"inapp:{message.id}",
+            acceptance_evidence="local_in_app_outbox",
             status_code=200,
             latency_ms=0.1,
             external_provider_verified=False,
@@ -482,107 +613,118 @@ class NotificationDispatcher:
         *,
         now: dt.datetime | None = None,
     ) -> dict[str, Any]:
-        now = now or dt.datetime.now(tz=UTC)
+        """Deprecated inline API: caller-owned transactions may never perform notification I/O."""
+        raise RuntimeError("inline notification dispatch is disabled; use NotificationWorker.run_once()")
 
-        # 1. Idempotency check: if this message or a sibling with the same (org_id, idempotency_key)
-        # has already been delivered (`status == "sent"`), never re-send over the wire.
-        if message.status == "sent":
-            return {
-                "message_id": message.id,
-                "status": "sent",
-                "duplicate_suppressed": True,
-                "provider_message_id": message.provider_message_id,
-                "attempts": message.attempts,
-            }
-        if message.idempotency_key:
-            existing_sent = (
-                await session.execute(
-                    select(OutboundMessage)
-                    .where(
-                        OutboundMessage.org_id == message.org_id,
-                        OutboundMessage.idempotency_key == message.idempotency_key,
-                        OutboundMessage.status == "sent",
-                    )
-                    .limit(1)
-                )
-            ).scalars().first()
-            if existing_sent is not None:
-                message.status = "sent"
-                message.provider_message_id = existing_sent.provider_message_id
-                message.sent_at = existing_sent.sent_at or now
-                await session.flush()
-                return {
-                    "message_id": message.id,
-                    "status": "sent",
-                    "duplicate_suppressed": True,
-                    "provider_message_id": message.provider_message_id,
-                    "attempts": message.attempts,
-                }
+    async def _dispatch_claimed_message(
+        self,
+        session: AsyncSession,
+        message: OutboundMessage,
+        *,
+        now: dt.datetime | None = None,
+        refresh: bool = True,
+    ) -> dict[str, Any]:
+        """Finish a durably claimed `sending` row. The worker commits the claim before calling this."""
+        now = now or utc_now()
+        if refresh and message.id is not None:
+            await session.refresh(message, with_for_update=True)
+        if message.status != "sending":
+            return self._dispatch_result(message, duplicate_suppressed=True)
+
+        suppressed = await self._suppress_accepted_sibling(session, message)
+        if suppressed is not None:
+            return suppressed
 
         adapter = self._adapters.get(message.channel)
         if adapter is None:
-            message.attempts = int(message.attempts or 0) + 1
-            message.status = "failed_terminal"
-            message.error = f"no notification adapter registered for channel {message.channel!r}"
-            self._append_ledger(
-                message,
-                now=now,
-                outcome=DeliveryAttemptOutcome(
-                    status="failed_terminal",
-                    retryable=False,
-                    error_code="unsupported_channel",
-                    error=message.error,
-                ),
+            outcome = DeliveryAttemptOutcome(
+                status="failed_terminal",
+                retryable=False,
+                error_code="unsupported_channel",
+                error=f"no notification adapter registered for channel {message.channel!r}",
             )
-            await session.flush()
-            return {
-                "message_id": message.id,
-                "status": message.status,
-                "duplicate_suppressed": False,
-                "provider_message_id": None,
-                "attempts": message.attempts,
-                "error": message.error,
-            }
+        else:
+            outcome = await adapter.send(session, message)
 
-        message.status = "sending"
-        message.attempts = int(message.attempts or 0) + 1
-        await session.flush()
-
-        outcome = await adapter.send(session, message)
         max_attempts = max(1, int(message.max_attempts or 3))
-
-        if outcome.status == "sent":
-            message.status = "sent"
-            message.sent_at = now
+        if outcome.status == "accepted":
+            if outcome.acceptance_evidence not in {"http_2xx", "smtp_server_accepted", "local_in_app_outbox"}:
+                raise ValueError("notification adapter acceptance must include a recognized evidence kind")
+            message.status = "accepted"
+            message.accepted_at = now
+            message.acceptance_evidence = outcome.acceptance_evidence
             message.next_attempt_at = None
             message.error = None
-            message.provider_message_id = outcome.provider_message_id
+            message.provider_message_id = _safe_provider_message_id(outcome.provider_message_id)
         elif outcome.retryable and message.attempts < max_attempts:
             message.status = "failed_retryable"
             backoff_seconds = min(300, (2 ** message.attempts) * 5)
             message.next_attempt_at = now + dt.timedelta(seconds=backoff_seconds)
-            message.error = outcome.error
+            message.error = _safe_outcome_error(outcome)
         elif outcome.retryable and message.attempts >= max_attempts:
             message.status = "dead_letter"
             message.next_attempt_at = None
-            message.error = outcome.error
+            message.error = _safe_outcome_error(outcome)
         else:
             message.status = "failed_terminal"
             message.next_attempt_at = None
-            message.error = outcome.error
+            message.error = _safe_outcome_error(outcome)
 
         self._append_ledger(message, now=now, outcome=outcome)
         await session.flush()
+        result = self._dispatch_result(message, duplicate_suppressed=False)
+        result.update(
+            {
+                "max_attempts": max_attempts,
+                "next_attempt_at": message.next_attempt_at.isoformat() if message.next_attempt_at else None,
+                "error": message.error,
+                "external_provider_verified": False,
+            }
+        )
+        return result
+
+    async def _suppress_accepted_sibling(
+        self,
+        session: AsyncSession,
+        message: OutboundMessage,
+    ) -> dict[str, Any] | None:
+        if not message.idempotency_key:
+            return None
+        existing = (
+            await session.execute(
+                select(OutboundMessage)
+                .where(
+                    OutboundMessage.org_id == message.org_id,
+                    OutboundMessage.idempotency_key == message.idempotency_key,
+                    OutboundMessage.id != message.id,
+                    OutboundMessage.status.in_(("accepted", "sent")),
+                )
+                .order_by(OutboundMessage.created_at.asc(), OutboundMessage.id.asc())
+                .limit(1)
+            )
+        ).scalars().first()
+        if existing is None:
+            return None
+        message.status = existing.status
+        message.provider_message_id = existing.provider_message_id
+        message.accepted_at = existing.accepted_at
+        message.acceptance_evidence = existing.acceptance_evidence
+        message.sent_at = existing.sent_at
+        await session.flush()
+        return self._dispatch_result(message, duplicate_suppressed=True)
+
+    @staticmethod
+    def _dispatch_result(message: OutboundMessage, *, duplicate_suppressed: bool) -> dict[str, Any]:
         return {
             "message_id": message.id,
             "status": message.status,
-            "duplicate_suppressed": False,
+            "duplicate_suppressed": duplicate_suppressed,
             "provider_message_id": message.provider_message_id,
+            "accepted_at": message.accepted_at.isoformat() if message.accepted_at else None,
+            "acceptance_evidence": message.acceptance_evidence,
+            "delivery_confirmed": False,
+            "external_provider_verified": False,
             "attempts": message.attempts,
-            "max_attempts": max_attempts,
-            "next_attempt_at": message.next_attempt_at.isoformat() if message.next_attempt_at else None,
-            "error": message.error,
-            "external_provider_verified": outcome.external_provider_verified,
         }
 
     def _append_ledger(
@@ -603,16 +745,20 @@ class NotificationDispatcher:
                 "retryable": outcome.retryable,
                 "status_code": outcome.status_code,
                 "latency_ms": round(outcome.latency_ms, 3),
-                "provider_message_id": outcome.provider_message_id,
-                "error_code": outcome.error_code,
-                "error": outcome.error,
-                "external_provider_verified": outcome.external_provider_verified,
+                "provider_message_id": _safe_provider_message_id(outcome.provider_message_id),
+                "acceptance_evidence": outcome.acceptance_evidence,
+                "delivery_confirmed": False,
+                "error_code": safe_notification_error_code(outcome.error_code),
+                "error": None if outcome.status == "accepted" else _safe_outcome_error(outcome),
+                "external_provider_verified": False,
             }
         )
         if len(ledger) > MAX_DELIVERY_LEDGER_ENTRIES:
             ledger = ledger[-MAX_DELIVERY_LEDGER_ENTRIES:]
         attrs["delivery_ledger"] = ledger
-        attrs["external_provider_verified"] = outcome.external_provider_verified
+        attrs["external_provider_verified"] = False
+        attrs["delivery_confirmed"] = False
+        attrs["acceptance_evidence"] = outcome.acceptance_evidence
         message.attributes = attrs
 
 
@@ -625,7 +771,116 @@ async def dispatch_outbound_message(
     *,
     now: dt.datetime | None = None,
 ) -> dict[str, Any]:
-    return await _DEFAULT_DISPATCHER.dispatch_message(session, message, now=now)
+    """Deprecated compatibility guard: outbound messages dispatch only in the process worker."""
+    raise RuntimeError("inline notification dispatch is disabled; use NotificationWorker.run_once()")
+
+
+async def claim_pending_notifications(
+    session: AsyncSession,
+    *,
+    org_id: str | None = None,
+    limit: int = 50,
+    now: dt.datetime | None = None,
+) -> dict[str, Any]:
+    """Durably transition a bounded batch to `sending` before any worker performs network I/O."""
+    from sqlalchemy import or_
+
+    if not 1 <= limit <= MAX_PENDING_DELIVERY_BATCH:
+        raise ValueError(f"limit must be between 1 and {MAX_PENDING_DELIVERY_BATCH}")
+    now = now or utc_now()
+    stale_before = now - STALE_SENDING_AFTER
+    stale_stmt = select(OutboundMessage).where(
+        OutboundMessage.status == "sending",
+        OutboundMessage.updated_at <= stale_before,
+    )
+    if org_id:
+        stale_stmt = stale_stmt.where(OutboundMessage.org_id == org_id)
+    stale_rows = list(
+        (
+            await session.execute(
+                stale_stmt.order_by(OutboundMessage.updated_at.asc(), OutboundMessage.id.asc())
+                .with_for_update(skip_locked=True)
+                .limit(limit)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    reconciled: list[dict[str, Any]] = []
+    for row in stale_rows:
+        row.status = "reconciliation_required"
+        row.next_attempt_at = None
+        row.error = "dispatch outcome is unknown after an interrupted send; reconcile before retrying"
+        attrs = dict(row.attributes or {})
+        attrs["reconciliation_required_at"] = now.isoformat()
+        attrs["reconciliation_reason"] = "stale_sending_status"
+        row.attributes = attrs
+        outcome = DeliveryAttemptOutcome(
+            status="reconciliation_required",
+            retryable=False,
+            error_code="stale_sending_ambiguous",
+            error=row.error,
+            external_provider_verified=False,
+        )
+        _DEFAULT_DISPATCHER._append_ledger(row, now=now, outcome=outcome)
+        reconciled.append(
+            {
+                "message_id": row.id,
+                "status": row.status,
+                "delivery_confirmed": False,
+                "manual_reconciliation_required": True,
+                "attempts": row.attempts,
+            }
+        )
+
+    stmt = select(OutboundMessage).where(
+        OutboundMessage.status.in_(("queued", "failed_retryable")),
+        or_(OutboundMessage.next_attempt_at.is_(None), OutboundMessage.next_attempt_at <= now),
+    )
+    if org_id:
+        stmt = stmt.where(OutboundMessage.org_id == org_id)
+    candidates = list(
+        (
+            await session.execute(
+                stmt.order_by(OutboundMessage.created_at.asc(), OutboundMessage.id.asc())
+                .with_for_update(skip_locked=True)
+                .limit(max(0, limit - len(stale_rows)))
+            )
+        )
+        .scalars()
+        .all()
+    )
+    claimed_ids: list[str] = []
+    suppressed: list[dict[str, Any]] = []
+    for row in candidates:
+        duplicate = await _DEFAULT_DISPATCHER._suppress_accepted_sibling(session, row)
+        if duplicate is not None:
+            suppressed.append(duplicate)
+            continue
+        row.status = "sending"
+        row.attempts = int(row.attempts or 0) + 1
+        row.updated_at = now
+        claimed_ids.append(row.id)
+    await session.flush()
+    return {"claimed_ids": claimed_ids, "reconciled": reconciled, "suppressed": suppressed}
+
+
+async def _dispatch_claimed_notification(
+    session: AsyncSession,
+    message_id: str,
+    *,
+    now: dt.datetime | None = None,
+    dispatcher: NotificationDispatcher | None = None,
+) -> dict[str, Any]:
+    """Perform transport I/O for a committed claim and persist its bounded outcome ledger."""
+    row = (
+        await session.execute(
+            select(OutboundMessage).where(OutboundMessage.id == message_id).with_for_update()
+        )
+    ).scalar_one_or_none()
+    if row is None:
+        return {"message_id": message_id, "status": "missing", "delivery_confirmed": False}
+    return await (dispatcher or _DEFAULT_DISPATCHER)._dispatch_claimed_message(session, row, now=now)
 
 
 async def dispatch_pending_notifications(
@@ -635,17 +890,11 @@ async def dispatch_pending_notifications(
     limit: int = 50,
     now: dt.datetime | None = None,
 ) -> list[dict[str, Any]]:
-    now = now or dt.datetime.now(tz=UTC)
-    stmt = select(OutboundMessage).where(
-        OutboundMessage.status.in_(("queued", "failed_retryable")),
+    """Deprecated guard: dispatching inside a caller-owned transaction is unsafe.
+
+    Use :class:`NotificationWorker` so the claim commits before transport I/O and each outcome is
+    committed independently. This compatibility entry point deliberately performs no network I/O.
+    """
+    raise RuntimeError(
+        "inline pending-notification dispatch is disabled; use NotificationWorker.run_once()"
     )
-    if org_id:
-        stmt = stmt.where(OutboundMessage.org_id == org_id)
-    stmt = stmt.order_by(OutboundMessage.created_at.asc()).limit(limit)
-    rows = list((await session.execute(stmt)).scalars().all())
-    results: list[dict[str, Any]] = []
-    for row in rows:
-        if row.status == "failed_retryable" and row.next_attempt_at and row.next_attempt_at > now:
-            continue
-        results.append(await _DEFAULT_DISPATCHER.dispatch_message(session, row, now=now))
-    return results

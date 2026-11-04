@@ -32,7 +32,7 @@ from tests.api.conftest import headers
 from tests.api.ws import WebSocketRefused, WebSocketSession
 
 from drillai.core.clock import UTC
-from drillai.db.models import RunEvent, WorkflowRun
+from drillai.db.models import AuditLog, RunEvent, WorkflowRun
 
 GATE_GRAPH = {
     "nodes": [
@@ -126,7 +126,7 @@ async def read_until_closed(socket, *, limit: int = 200) -> list[dict]:
     raise AssertionError(f"the stream did not end after {limit} frames")
 
 
-async def test_the_socket_tails_the_durable_log_and_closes_when_the_run_ends(client, websocket):
+async def test_the_socket_tails_the_durable_log_and_closes_when_the_run_ends(client, websocket, db):
     run_id, approval_id = await seed_gate_run(client, key="ws_gate")
     logged = await events(client, run_id)
     assert logged["total"] > 0
@@ -150,7 +150,7 @@ async def test_the_socket_tails_the_durable_log_and_closes_when_the_run_ends(cli
 
         # A decision by another identity produces more durable events, which arrive on the same
         # socket — no reconnect needed, and no client-side replay.
-        await decide(client, approval_id)
+        decision = await decide(client, approval_id, note="Reviewed and authorized")
         frames = await read_until_closed(socket)
 
     assert frames[-1]["type"] == "stream_closed", frames[-1]
@@ -165,6 +165,54 @@ async def test_the_socket_tails_the_durable_log_and_closes_when_the_run_ends(cli
     # reading REST with a cursor, which is what makes the stream a transport rather than a source.
     final = await events(client, run_id)
     assert seen + streamed == [row["seq"] for row in final["items"]]
+    assert decision["approval"]["status"] == "approved"
+
+    duplicate_resume = await client.post(
+        f"/api/v1/runs/{run_id}/resume",
+        headers=headers("well_manager"),
+    )
+    assert duplicate_resume.status_code == 409
+
+    duplicate = await client.post(
+        f"/api/v1/approvals/{approval_id}/decide",
+        headers=headers("well_manager"),
+        json={"decision": "approved", "note": "second decision attempt", "resume": True},
+    )
+    assert duplicate.status_code == 409
+    async with db.session() as session:
+        audit_rows = list(
+            (
+                await session.execute(
+                    select(AuditLog).where(
+                        AuditLog.resource_id == approval_id,
+                        AuditLog.action == "approval.decide",
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+    assert len(audit_rows) == 1
+    assert audit_rows[0].action_level == "L4"
+    assert audit_rows[0].details["decision"] == "approved"
+    assert audit_rows[0].details["decision_note"] == "Reviewed and authorized"
+    assert audit_rows[0].actor_id
+    async with db.session() as session:
+        run_audits = list(
+            (
+                await session.execute(
+                    select(AuditLog).where(
+                        AuditLog.resource_id == run_id,
+                        AuditLog.action == "workflow.run",
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+    assert len(run_audits) == 1
+    assert run_audits[0].after["status"] == "waiting_approval"
+    assert run_audits[0].after["version"] == 1
 
 
 async def test_reconnecting_with_after_seq_loses_no_event_and_duplicates_none(client, websocket):
