@@ -17,10 +17,22 @@ const manifestPath = path.join(repositoryRoot, 'ci', 'test-inventory.json')
 const [logPath, exitCodeText, reportPath] = process.argv.slice(2)
 let failureContext = ''
 
+function escapeWorkflowCommandData(value) {
+  return value
+    .replaceAll('%', '%25')
+    .replaceAll('\r', '%0D')
+    .replaceAll('\n', '%0A')
+    .replaceAll(':', '%3A')
+    .replaceAll(',', '%2C')
+}
+
 function fail(message) {
-  process.stderr.write(
-    `::error::Playwright execution verification failed: ${message}${failureContext ? `\nPlaywright failure context:\n${failureContext}` : ''}\n`,
-  )
+  const details = `Playwright execution verification failed: ${message}${failureContext ? `\nPlaywright failure context:\n${failureContext}` : ''}`
+  const boundedDetails = details.length > 6000 ? `${details.slice(0, 6000)}…` : details
+  process.stderr.write(`${details}\n`)
+  // GitHub workflow-command data must escape newlines and punctuation. Keep the actionable Playwright
+  // failure context in the check annotation, not only in a runner log archive that may be unavailable.
+  process.stderr.write(`::error::${escapeWorkflowCommandData(boundedDetails)}\n`)
   process.exit(1)
 }
 
