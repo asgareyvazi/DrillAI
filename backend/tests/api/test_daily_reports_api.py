@@ -1267,10 +1267,17 @@ async def test_duplicate_import_identity_returns_existing_report_without_mutatin
     assert conflict.json()["error"]["details"]["report_id"] == original["report"]["id"]
     assert "no duplicate draft was created" in conflict.json()["error"]["message"]
 
+    other_wellbore = await client.post(
+        f"/api/v1/wells/{well_id}/wellbores",
+        json={"name": "Sidetrack bore", "purpose": "sidetrack", "parent_wellbore_id": wellbore_id},
+        headers=headers("well_manager"),
+    )
+    assert other_wellbore.status_code == 201, other_wellbore.text
+    sidetrack_wellbore_id = other_wellbore.json()["id"]
     nonmatching_report_id, _ = await _create_approved_period(
         client,
         well_id,
-        wellbore_id,
+        sidetrack_wellbore_id,
         report_date="2026-11-05",
         report_number="DDR-ANOTHER-REPORT",
         period_start_at="2026-11-05T00:00:00Z",
@@ -1297,12 +1304,30 @@ async def test_duplicate_import_identity_returns_existing_report_without_mutatin
     )
     exact_number = await client.get(
         f"/api/v1/wells/{well_id}/daily-reports",
-        params={"report_number": "DDR-IMPORT-IDEMPOTENT-CONFLICT", "limit": 20},
+        params={
+            "report_number": "DDR-IMPORT-IDEMPOTENT-CONFLICT",
+            "wellbore_id": wellbore_id,
+            "limit": 20,
+        },
         headers=headers("engineer"),
     )
     assert exact_number.status_code == 200, exact_number.text
     assert exact_number.json()["total"] == 1
     assert exact_number.json()["items"][0]["id"] == original["report"]["id"]
+    other_wellbore_filter = await client.get(
+        f"/api/v1/wells/{well_id}/daily-reports",
+        params={"wellbore_id": sidetrack_wellbore_id},
+        headers=headers("engineer"),
+    )
+    assert other_wellbore_filter.status_code == 200, other_wellbore_filter.text
+    assert other_wellbore_filter.json()["total"] == 1
+    assert other_wellbore_filter.json()["items"][0]["id"] == nonmatching_report_id
+    blank_wellbore = await client.get(
+        f"/api/v1/wells/{well_id}/daily-reports",
+        params={"wellbore_id": " "},
+        headers=headers("engineer"),
+    )
+    assert blank_wellbore.status_code == 422, blank_wellbore.text
     other_well_filter = await client.get(
         f"/api/v1/wells/{other_well_id}/daily-reports",
         params={"report_number": "DDR-IMPORT-IDEMPOTENT-CONFLICT"},
@@ -1311,6 +1336,14 @@ async def test_duplicate_import_identity_returns_existing_report_without_mutatin
     assert other_well_filter.status_code == 200, other_well_filter.text
     assert other_well_filter.json()["total"] == 1
     assert other_well_filter.json()["items"][0]["id"] == other_scoped_report_id
+    foreign_wellbore_filter = await client.get(
+        f"/api/v1/wells/{well_id}/daily-reports",
+        params={"wellbore_id": other_wellbore_id},
+        headers=headers("engineer"),
+    )
+    assert foreign_wellbore_filter.status_code == 200, foreign_wellbore_filter.text
+    assert foreign_wellbore_filter.json()["items"] == []
+    assert foreign_wellbore_filter.json()["total"] == 0
     case_mismatch = await client.get(
         f"/api/v1/wells/{well_id}/daily-reports",
         params={"report_number": "ddr-import-idempotent-conflict"},

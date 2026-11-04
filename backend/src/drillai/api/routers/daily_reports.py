@@ -271,6 +271,7 @@ async def list_daily_reports(
     shift_code: str | None = Query(default=None),
     status: str | None = Query(default=None),
     report_number: str | None = Query(default=None, min_length=1, max_length=120),
+    wellbore_id: str | None = Query(default=None, min_length=1, max_length=128),
     limit: int = Query(default=50, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
 ) -> dict[str, Any]:
@@ -281,6 +282,7 @@ async def list_daily_reports(
         shift_code=shift_code,
         status=status,
         report_number=report_number,
+        wellbore_id=wellbore_id,
         limit=limit,
         offset=offset,
     )

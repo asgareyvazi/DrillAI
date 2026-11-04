@@ -2436,6 +2436,8 @@ export default function DailyReportsWorkspace() {
   const [statusFilter, setStatusFilter] = useState('')
   const [shiftFilter, setShiftFilter] = useState('')
   const [reportNumberFilter, setReportNumberFilter] = useState('')
+  const [wellboreFilters, setWellboreFilters] = useState<Record<string, string>>({})
+  const wellboreFilter = wellboreFilters[wellId] ?? ''
   const [reportDateFrom, setReportDateFrom] = useState('')
   const [reportDateTo, setReportDateTo] = useState('')
   const [listOffset, setListOffset] = useState(0)
@@ -2469,13 +2471,14 @@ export default function DailyReportsWorkspace() {
   })
   const dateRangeInvalid = Boolean(reportDateFrom && reportDateTo && reportDateFrom > reportDateTo)
   const reportListQuery = useQuery({
-    queryKey: ['daily-reports', wellId, statusFilter, shiftFilter, reportNumberFilter.trim(), reportDateFrom, reportDateTo, listOffset],
+    queryKey: ['daily-reports', wellId, statusFilter, shiftFilter, reportNumberFilter.trim(), wellboreFilter, reportDateFrom, reportDateTo, listOffset],
     queryFn: ({ signal }) => drillingApi.listDailyReports(
       wellId,
       {
         status: statusFilter || undefined,
         shift_code: shiftFilter || undefined,
         report_number: reportNumberFilter.trim() || undefined,
+        wellbore_id: wellboreFilter || undefined,
         report_date_from: reportDateFrom || undefined,
         report_date_to: reportDateTo || undefined,
         limit: 50,
@@ -2966,7 +2969,7 @@ export default function DailyReportsWorkspace() {
           )}
           data-testid="daily-report-list-card"
         >
-          <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <label htmlFor="daily-report-filter-date-from" className="block space-y-1.5">
               <span className="block text-xs font-medium text-graphite-700 dark:text-graphite-200">{t('dailyReports.reportDateFrom')}</span>
               <input id="daily-report-filter-date-from" type="date" value={reportDateFrom} onChange={(event) => { setReportDateFrom(event.target.value); setListOffset(0) }} className="w-full rounded-md border border-graphite-300 bg-white px-2.5 py-2 text-sm dark:border-graphite-700 dark:bg-graphite-950" />
@@ -2984,6 +2987,29 @@ export default function DailyReportsWorkspace() {
               autoComplete="off"
               testId="daily-report-report-number-filter"
             />
+            <label htmlFor="daily-report-filter-wellbore" className="block space-y-1.5">
+              <span className="block text-xs font-medium text-graphite-700 dark:text-graphite-200">{t('dailyReports.wellboreFilter')}</span>
+              <select
+                id="daily-report-filter-wellbore"
+                aria-label={t('dailyReports.wellboreFilter')}
+                data-testid="daily-report-wellbore-filter"
+                value={wellboreFilter}
+                onChange={(event) => {
+                  setWellboreFilters((current) => ({ ...current, [wellId]: event.target.value }))
+                  setListOffset(0)
+                }}
+                disabled={wellboresQuery.isPending || Boolean(wellboresQuery.error)}
+                dir={locale === 'fa' ? 'rtl' : 'ltr'}
+                className="w-full rounded-md border border-graphite-300 bg-white px-2.5 py-2 text-sm dark:border-graphite-700 dark:bg-graphite-950"
+              >
+                <option value="">{t('dailyReports.allWellbores')}</option>
+                {wellbores.map((wellbore) => (
+                  <option key={wellbore.id} value={wellbore.id}>
+                    {wellbore.name} · {formatNumber(wellbore.sequence, locale, 0)}
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
           {listContent()}
           {!dateRangeInvalid && reportListQuery.data && reportListQuery.data.total > 0 && (

@@ -297,6 +297,7 @@ class DailyReportService:
         shift_code: str | None = None,
         status: str | None = None,
         report_number: str | None = None,
+        wellbore_id: str | None = None,
         limit: int = 50,
         offset: int = 0,
     ) -> dict[str, Any]:
@@ -305,6 +306,8 @@ class DailyReportService:
         self._validate_list_filters(report_date_from, report_date_to, shift_code, status, limit, offset)
         if report_number is not None:
             report_number = _nonempty_text(report_number, "report_number", 120)
+        if wellbore_id is not None:
+            wellbore_id = _nonempty_text(wellbore_id, "wellbore_id", 128)
 
         stmt = (
             select(DailyDrillingReport)
@@ -332,6 +335,8 @@ class DailyReportService:
             stmt = stmt.where(DailyDrillingReport.shift_code == shift_code)
         if report_number is not None:
             stmt = stmt.where(DailyDrillingReport.report_number == report_number)
+        if wellbore_id is not None:
+            stmt = stmt.where(DailyDrillingReport.wellbore_id == wellbore_id)
         if status is not None:
             stmt = stmt.where(latest_match)
         total = int(

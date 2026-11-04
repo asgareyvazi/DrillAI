@@ -726,6 +726,8 @@ export const en = {
     statusFilter: 'Filter by latest revision status',
     shiftFilter: 'Filter by shift',
     reportNumberFilter: 'Exact report number',
+    wellboreFilter: 'Filter by wellbore',
+    allWellbores: 'All wellbores',
     reportDateFrom: 'Report date from',
     reportDateTo: 'Report date to',
     allStatuses: 'All statuses',

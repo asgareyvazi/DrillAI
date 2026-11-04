@@ -722,6 +722,8 @@ export const fa = {
     statusFilter: 'پالایش بر پایه وضعیت آخرین نسخه',
     shiftFilter: 'پالایش بر پایه شیفت',
     reportNumberFilter: 'شماره دقیق گزارش',
+    wellboreFilter: 'پالایش بر پایه چاهک',
+    allWellbores: 'همه چاهک‌ها',
     reportDateFrom: 'تاریخ گزارش از',
     reportDateTo: 'تاریخ گزارش تا',
     allStatuses: 'همه وضعیت‌ها',
