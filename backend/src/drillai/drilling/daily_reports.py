@@ -57,6 +57,7 @@ from drillai.documents.scope import (
     validate_source_record,
     validate_source_scope,
 )
+from drillai.drilling.classifiers import classify_npt, classify_operation_kind
 from drillai.security.actions import Principal, authorize
 from drillai.telemetry.outbox import emit
 from drillai.twin.service import ChangeEvent, TwinService
@@ -79,6 +80,7 @@ _REVISION_HISTORY_SOURCES = frozenset({"approved", "rejected", "withdrawn"})
 _MAX_ACTIVITIES = 500
 _MAX_MEASUREMENTS = 500
 _MAX_REASON = 2000
+_MAX_CLASSIFICATION_SOURCE_CHARS = 20_000
 
 
 @dataclass(frozen=True)
@@ -192,6 +194,85 @@ class DailyReportService:
         return row
 
     # ------------------------------------------------------------------ reads
+
+    async def preview_activity_classification(
+        self,
+        well_id: str,
+        *,
+        wellbore_id: str,
+        source_record_id: str,
+        source_document_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Suggest rule-based activity labels from one current, in-scope extracted record.
+
+        This is a read-only aid: it does not alter the source record or create an activity. The
+        extracted text remains attributed to its document and validation state, and every label is
+        accompanied by the exact matched text and deterministic rule that produced it.
+        """
+        self._authorize("daily_report.read", well_id=well_id)
+        self._authorize("document.read", well_id=well_id)
+        await self._require_well(well_id)
+        scope = await self._resolve_well(well_id, wellbore_id)
+        evidence = await self._validate_evidence(
+            scope,
+            source_document_id=source_document_id,
+            source_record_id=source_record_id,
+            allow_unvalidated_record=True,
+        )
+        record = (
+            await self.session.execute(
+                select(ExtractedRecord).where(
+                    ExtractedRecord.id == evidence["source_record_id"],
+                    ExtractedRecord.org_id == self.org_id,
+                )
+            )
+        ).scalar_one_or_none()
+        if record is None:
+            raise NotFound(f"source record {source_record_id!r} not found")
+
+        payload = record.payload if isinstance(record.payload, dict) else {}
+        text_parts = [value for value in payload.values() if isinstance(value, str)]
+        source_text = " | ".join(text_parts) if text_parts else str(payload)
+        source_text_truncated = len(source_text) > _MAX_CLASSIFICATION_SOURCE_CHARS
+        if source_text_truncated:
+            source_text = source_text[:_MAX_CLASSIFICATION_SOURCE_CHARS]
+        operation = classify_operation_kind(source_text)
+        npt, npt_code, npt_controllable = classify_npt(source_text)
+        operation_kind = operation.label if operation.label in OPERATION_KINDS else None
+        npt_category = npt.label if npt.label in NPT_CATEGORIES else None
+
+        return {
+            "source_document_id": evidence["source_document_id"],
+            "source_record_id": record.id,
+            "source_region_id": evidence["source_region_id"],
+            "source_page_number": evidence["source_page_number"],
+            "source_record_type": record.record_type,
+            "source_validation_state": record.validation_state,
+            "source_review_version": record.review_version,
+            "source_fingerprint": record.fingerprint,
+            "source_extraction_method": record.method,
+            "source_extraction_method_version": record.method_version,
+            "method": "deterministic_content_rules",
+            "source_text_truncated": source_text_truncated,
+            "notice": (
+                "Rule matches are review aids, not calibrated accuracy estimates or verified field facts. "
+                "Check the cited source and select a label manually."
+            ),
+            "operation": {
+                "kind": operation_kind,
+                "matched_text": operation.matched_text if operation_kind else None,
+                "matched_pattern": operation.matched_pattern if operation_kind else None,
+                "heuristic_score": operation.confidence if operation_kind else 0.0,
+            },
+            "npt": {
+                "category": npt_category,
+                "code": npt_code if npt_category else None,
+                "matched_text": npt.matched_text if npt_category else None,
+                "matched_pattern": npt.matched_pattern if npt_category else None,
+                "heuristic_score": npt.confidence if npt_category else 0.0,
+                "is_operator_controllable": npt_controllable if npt_category else None,
+            },
+        }
 
     async def list_reports(
         self,

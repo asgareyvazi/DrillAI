@@ -32,6 +32,7 @@ import type {
   ApprovalRow,
   AuditTrail,
   ContextBundle,
+  DailyReportActivityClassificationPreview,
   DailyReportCatalogue,
   DailyReportCreatePayload,
   DailyReportDecisionPayload,
@@ -656,6 +657,16 @@ export const drillingApi = {
   // ------------------------------------------------------------------ governed daily drilling reports
   dailyReportCatalogue: (signal?: AbortSignal) =>
     api.get<DailyReportCatalogue>('/daily-report-parameters', { signal, validate: expect.object('parameters') }),
+  previewDailyReportActivityClassification: (
+    wellId: string,
+    body: { wellbore_id: string; source_record_id: string; source_document_id?: string | null },
+    signal?: AbortSignal,
+  ) =>
+    api.post<DailyReportActivityClassificationPreview>(
+      `/wells/${enc(wellId)}/daily-reports/activity-classification-preview`,
+      body,
+      { signal },
+    ),
   listDailyReports: (
     wellId: string,
     params: { report_date_from?: string; report_date_to?: string; shift_code?: string; status?: string; limit?: number; offset?: number } = {},

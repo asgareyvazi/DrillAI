@@ -58,6 +58,7 @@ interface DailyReportRead {
     }>
     activities: Array<{
       title: string
+      operation_kind: string | null
       source_document_id: string | null
       source_record_id: string | null
       source_region_id: string | null
@@ -196,12 +197,15 @@ test.describe('daily-report lifecycle in a real browser', () => {
 
     await page.getByTestId('daily-report-import-add-activity').click()
     await page.locator('#import-activity-0-kind').selectOption('operation')
-    await page.locator('#import-activity-0-operation').selectOption('drilling')
     await page.locator('#import-activity-0-title').fill(String(sourceRecord.payload.operation))
     await page.locator('#import-activity-0-duration').fill(String(sourceRecord.payload.duration_hours))
     await page.locator('#import-activity-0-duration-unit').selectOption('h')
     await page.locator('#import-activity-0-duration-basis').selectOption('reported')
     await page.locator('#import-activity-0-source').selectOption(sourceRecord.id)
+    await page.getByTestId('daily-report-classification-preview-0').click()
+    await expect(page.getByTestId('daily-report-classification-result-0')).toContainText(/drilling/i)
+    await page.getByTestId('daily-report-apply-operation-classification-0').click()
+    await expect(page.locator('#import-activity-0-operation')).toHaveValue('drilling')
 
     await page.getByTestId('daily-report-import-add-measurement').click()
     await page.getByTestId('daily-report-import-measurement-0-parameter').selectOption('mud_weight')
@@ -227,6 +231,7 @@ test.describe('daily-report lifecycle in a real browser', () => {
     expect(importedRead.latest_revision.summary).toBe(summary)
     expect(importedRead.latest_revision.activities[0]).toEqual(expect.objectContaining({
       title: 'Drilling ahead',
+      operation_kind: 'drilling',
       duration_source_value: 8,
       duration_source_unit: 'h',
       source_document_id: uploaded.document.id,

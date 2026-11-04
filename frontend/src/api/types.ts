@@ -1379,6 +1379,36 @@ export interface DailyReportCatalogue {
   reconciliation_states: DailyReportResolutionState[]
 }
 
+export interface DailyReportActivityClassificationPreview {
+  source_document_id: string | null
+  source_record_id: string
+  source_region_id: string | null
+  source_page_number: number | null
+  source_record_type: string
+  source_validation_state: string
+  source_review_version: number
+  source_fingerprint: string | null
+  source_extraction_method: string
+  source_extraction_method_version: string | null
+  method: 'deterministic_content_rules'
+  source_text_truncated: boolean
+  notice: string
+  operation: {
+    kind: string | null
+    matched_text: string | null
+    matched_pattern: string | null
+    heuristic_score: number
+  }
+  npt: {
+    category: string | null
+    code: string | null
+    matched_text: string | null
+    matched_pattern: string | null
+    heuristic_score: number
+    is_operator_controllable: boolean | null
+  }
+}
+
 export interface DailyReportActivityInput {
   activity_kind: string
   operation_kind?: string | null

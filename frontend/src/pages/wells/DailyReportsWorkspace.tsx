@@ -17,6 +17,8 @@ import {
   type DailyReportRevision,
   type DailyReportStatus,
   type DailyReportTimeBasis,
+  type EventRow,
+  type OperationRow,
   type Wellbore,
 } from '../../api/types'
 import { ApiError } from '../../api/client'
@@ -59,6 +61,8 @@ type ActivityDraft = {
   source_record_id: string
   source_region_id: string
   source_page_number: string
+  operation_id: string
+  event_id: string
 }
 
 type MeasurementDraft = {
@@ -183,6 +187,8 @@ function emptyActivity(): ActivityDraft {
     source_record_id: '',
     source_region_id: '',
     source_page_number: '',
+    operation_id: '',
+    event_id: '',
   }
 }
 
@@ -276,6 +282,8 @@ function revisionForm(report: DailyReport, revision: DailyReportRevision): Repor
       source_record_id: activity.source_record_id ?? '',
       source_region_id: activity.source_region_id ?? '',
       source_page_number: activity.source_page_number === null ? '' : String(activity.source_page_number),
+      operation_id: activity.operation_id ?? '',
+      event_id: activity.event_id ?? '',
     })),
     measurements: revision.measurements.map((measurement) => ({
       key: localRowKey(),
@@ -485,6 +493,8 @@ function toContent(form: ReportFormState): DailyReportContentInput {
       source_record_id: nonEmpty(activity.source_record_id),
       source_region_id: nonEmpty(activity.source_region_id),
       source_page_number: positiveInteger(activity.source_page_number),
+      operation_id: nonEmpty(activity.operation_id),
+      event_id: nonEmpty(activity.event_id),
     }
   })
   const measurements: DailyReportMeasurementInput[] = form.measurements
@@ -529,6 +539,69 @@ function labelEnum(t: (key: string) => string, group: string, value: string | nu
   if (!value) return '—'
   const translated = t(`dailyReports.enums.${group}.${value}`)
   return translated.startsWith('⟦') ? value.replaceAll('_', ' ') : translated
+}
+
+function useDailyReportActivityLinks(wellId: string, wellboreId: string) {
+  const operationsQuery = useQuery({
+    queryKey: ['daily-report-activity-operations', wellId, wellboreId],
+    queryFn: ({ signal }) => drillingApi.listOperations({
+      well_id: wellId,
+      wellbore_id: wellboreId,
+      operation_class: 'actual',
+      limit: 500,
+    }, signal),
+    enabled: Boolean(wellId && wellboreId),
+    retry: false,
+  })
+  const eventsQuery = useQuery({
+    queryKey: ['daily-report-activity-events', wellId, wellboreId],
+    queryFn: ({ signal }) => drillingApi.listEvents({
+      well_id: wellId,
+      wellbore_id: wellboreId,
+      limit: 500,
+    }, signal),
+    enabled: Boolean(wellId && wellboreId),
+    retry: false,
+  })
+  const operations = (operationsQuery.data?.items ?? []).filter(
+    (operation) => operation.operation_class === 'actual' && operation.status !== 'cancelled',
+  )
+  const events = (eventsQuery.data?.items ?? []).filter((event) => event.status !== 'cancelled')
+  return { operationsQuery, eventsQuery, operations, events }
+}
+
+function dailyReportOperationOptions(
+  operations: OperationRow[],
+  selectedId: string,
+  t: (key: string) => string,
+): Array<{ value: string; label: string }> {
+  const options = operations.map((operation) => ({
+    value: operation.id,
+    label: `${operation.sequence}. ${operation.name} · ${operation.status} · ${operation.id}`,
+  }))
+  if (selectedId && !operations.some((operation) => operation.id === selectedId)) {
+    options.unshift({ value: selectedId, label: `${t('dailyReports.existingLink')} · ${selectedId}` })
+  }
+  return options
+}
+
+function dailyReportEventOptions(
+  events: EventRow[],
+  selectedOperationId: string,
+  selectedEventId: string,
+  t: (key: string) => string,
+): Array<{ value: string; label: string }> {
+  const eligible = events.filter((event) =>
+    !selectedOperationId || !event.operation_id || event.operation_id === selectedOperationId,
+  )
+  const options = eligible.map((event) => ({
+    value: event.id,
+    label: `${event.title} · ${event.kind} · ${event.id}`,
+  }))
+  if (selectedEventId && !eligible.some((event) => event.id === selectedEventId)) {
+    options.unshift({ value: selectedEventId, label: `${t('dailyReports.existingLink')} · ${selectedEventId}` })
+  }
+  return options
 }
 
 function statusTone(status: DailyReportStatus | null | undefined): 'neutral' | 'ok' | 'warning' | 'danger' | 'info' {
@@ -708,6 +781,7 @@ function formErrorText(error: string | null, t: (key: string) => string): string
 }
 
 function DailyReportEditor({
+  wellId,
   mode,
   form,
   setForm,
@@ -724,6 +798,7 @@ function DailyReportEditor({
   error,
   onRetry,
 }: {
+  wellId: string
   mode: FormMode
   form: ReportFormState
   setForm: Dispatch<SetStateAction<ReportFormState>>
@@ -743,6 +818,7 @@ function DailyReportEditor({
   const { t } = useI18n()
   const [validationError, setValidationError] = useState<string | null>(null)
   const isCreate = mode === 'create'
+  const { operationsQuery, eventsQuery, operations, events } = useDailyReportActivityLinks(wellId, form.wellbore_id)
   const timeOptions = catalogue.time_bases.map((value) => ({ value, label: labelEnum(t, 'timeBases', value) }))
   const depthOptions = catalogue.depth_references.map((value) => ({ value, label: labelEnum(t, 'depthReferences', value) }))
   const causeOptions = catalogue.cause_bases.map((value) => ({ value, label: labelEnum(t, 'causeBases', value) }))
@@ -757,6 +833,11 @@ function DailyReportEditor({
   const lengthUnitOptions = catalogue.parameters.find((parameter) => parameter.key === 'depth_md')?.accepted_units ?? []
 
   const patchForm = (patch: Partial<ReportFormState>) => setForm((current) => ({ ...current, ...patch }))
+  const chooseWellbore = (wellbore_id: string) => setForm((current) => current.wellbore_id === wellbore_id ? current : ({
+    ...current,
+    wellbore_id,
+    activities: current.activities.map((activity) => ({ ...activity, operation_id: '', event_id: '' })),
+  }))
   const patchActivity = (index: number, patch: Partial<ActivityDraft>) => {
     setForm((current) => ({
       ...current,
@@ -804,7 +885,7 @@ function DailyReportEditor({
                 label={t('dailyReports.wellbore')}
                 value={form.wellbore_id}
                 options={wellboreOptions}
-                onChange={(wellbore_id) => patchForm({ wellbore_id })}
+                onChange={chooseWellbore}
                 placeholder={t('dailyReports.selectWellbore')}
                 required
                 disabled={wellboresLoading || Boolean(wellboresError) || wellbores.length === 0}
@@ -906,6 +987,13 @@ function DailyReportEditor({
 
         <fieldset className="mb-6 space-y-4">
           <legend className="mb-3 text-sm font-semibold">{t('dailyReports.activities')}</legend>
+          {form.wellbore_id && (operationsQuery.error || eventsQuery.error) && (
+            <div className="grid gap-2 sm:grid-cols-2" role="status">
+              {operationsQuery.error && <ErrorState error={operationsQuery.error} onRetry={() => { void operationsQuery.refetch() }} />}
+              {eventsQuery.error && <ErrorState error={eventsQuery.error} onRetry={() => { void eventsQuery.refetch() }} />}
+              <p className="text-xs text-graphite-500 sm:col-span-2">{t('dailyReports.linksOptional')}</p>
+            </div>
+          )}
           <div className="flex justify-end">
             <Button size="sm" onClick={() => patchForm({ activities: [...form.activities, emptyActivity()] })} data-testid="daily-report-add-activity">
               {t('dailyReports.addActivity')}
@@ -942,7 +1030,46 @@ function DailyReportEditor({
                 <SelectField id={`activity-${index}-depth-reference`} label={t('dailyReports.depthReference')} value={activity.depth_reference} options={depthOptions} onChange={(depth_reference) => patchActivity(index, { depth_reference })} placeholder={t('dailyReports.chooseOption')} />
                 <SelectField id={`activity-${index}-depth-basis`} label={t('dailyReports.depthBasis')} value={activity.depth_basis} options={timeOptions} onChange={(depth_basis) => patchActivity(index, { depth_basis })} placeholder={t('dailyReports.chooseOption')} />
                 <SelectField id={`activity-${index}-cause-basis`} label={t('dailyReports.causeBasis')} value={activity.cause_basis} options={causeOptions} onChange={(cause_basis) => patchActivity(index, { cause_basis })} placeholder={t('dailyReports.chooseOption')} />
+                <SelectField
+                  id={`activity-${index}-linked-operation`}
+                  label={t('dailyReports.linkedOperation')}
+                  value={activity.operation_id}
+                  options={dailyReportOperationOptions(operations, activity.operation_id, t)}
+                  onChange={(operation_id) => patchActivity(index, { operation_id, event_id: '' })}
+                  placeholder={t('dailyReports.noOperationalLink')}
+                  disabled={!form.wellbore_id || operationsQuery.isPending || Boolean(operationsQuery.error)}
+                  help={t('dailyReports.operationLinkHelp')}
+                  testId={`daily-report-activity-operation-link-${index}`}
+                />
+                <SelectField
+                  id={`activity-${index}-linked-event`}
+                  label={t('dailyReports.linkedEvent')}
+                  value={activity.event_id}
+                  options={dailyReportEventOptions(events, activity.operation_id, activity.event_id, t)}
+                  onChange={(event_id) => patchActivity(index, { event_id })}
+                  placeholder={t('dailyReports.noOperationalLink')}
+                  disabled={!form.wellbore_id || eventsQuery.isPending || Boolean(eventsQuery.error)}
+                  help={t('dailyReports.eventLinkHelp')}
+                  testId={`daily-report-activity-event-link-${index}`}
+                />
               </div>
+              <ActivityClassificationSuggestion
+                wellId={wellId}
+                wellboreId={form.wellbore_id}
+                sourceDocumentId={activity.source_document_id}
+                sourceRecordId={activity.source_record_id}
+                rowIndex={index}
+                onApplyOperation={(operation_kind) => patchActivity(index, {
+                  activity_kind: 'operation',
+                  operation_kind,
+                  npt_category: '',
+                })}
+                onApplyNptCategory={(npt_category) => patchActivity(index, {
+                  activity_kind: 'npt',
+                  operation_kind: '',
+                  npt_category,
+                })}
+              />
               <div className="mt-3 flex justify-end">
                 <Button size="sm" variant="ghost" onClick={() => patchForm({ activities: form.activities.filter((_, row) => row !== index) })} aria-label={`${t('dailyReports.removeActivity')} ${index + 1}`}>
                   {t('dailyReports.removeActivity')}
@@ -1086,6 +1213,7 @@ function DailyReportImportForm({
   const [selectedRecordId, setSelectedRecordId] = useState('')
   const [sourceFieldPaths, setSourceFieldPaths] = useState<Record<string, string>>({})
   const [validationError, setValidationError] = useState<string | null>(null)
+  const { operationsQuery, eventsQuery, operations, events } = useDailyReportActivityLinks(wellId, form.wellbore_id)
   const conflictReportId = error instanceof ApiError && error.kind === 'conflict' && typeof error.details.report_id === 'string'
     ? error.details.report_id
     : null
@@ -1135,6 +1263,11 @@ function DailyReportImportForm({
   const durationUnitOptions = activityUnitOptions.filter((unit) => ['s', 'min', 'h', 'day'].includes(unit))
   const lengthUnitOptions = catalogue.parameters.find((parameter) => parameter.key === 'depth_md')?.accepted_units ?? []
   const patchForm = (patch: Partial<ReportFormState>) => setForm((current) => ({ ...current, ...patch }))
+  const chooseWellbore = (wellbore_id: string) => setForm((current) => current.wellbore_id === wellbore_id ? current : ({
+    ...current,
+    wellbore_id,
+    activities: current.activities.map((activity) => ({ ...activity, operation_id: '', event_id: '' })),
+  }))
   const patchActivity = (index: number, patch: Partial<ActivityDraft>) => {
     setForm((current) => ({
       ...current,
@@ -1350,7 +1483,7 @@ function DailyReportImportForm({
                 label={t('dailyReports.wellbore')}
                 value={form.wellbore_id}
                 options={wellboreOptions}
-                onChange={(wellbore_id) => patchForm({ wellbore_id })}
+                onChange={chooseWellbore}
                 placeholder={t('dailyReports.selectWellbore')}
                 required
                 testId="daily-report-import-wellbore"
@@ -1396,6 +1529,13 @@ function DailyReportImportForm({
 
         <fieldset className="mb-6 space-y-4">
           <legend className="mb-3 text-sm font-semibold">{t('dailyReports.activities')}</legend>
+          {form.wellbore_id && (operationsQuery.error || eventsQuery.error) && (
+            <div className="grid gap-2 sm:grid-cols-2" role="status">
+              {operationsQuery.error && <ErrorState error={operationsQuery.error} onRetry={() => { void operationsQuery.refetch() }} />}
+              {eventsQuery.error && <ErrorState error={eventsQuery.error} onRetry={() => { void eventsQuery.refetch() }} />}
+              <p className="text-xs text-graphite-500 sm:col-span-2">{t('dailyReports.linksOptional')}</p>
+            </div>
+          )}
           <p className="text-xs text-graphite-500">{t('dailyReports.importRowsHint')}</p>
           <div className="flex justify-end">
             <Button size="sm" onClick={() => patchForm({ activities: [...form.activities, emptyActivity()] })} data-testid="daily-report-import-add-activity">{t('dailyReports.addActivity')}</Button>
@@ -1408,7 +1548,7 @@ function DailyReportImportForm({
                 {activity.activity_kind === 'operation' && <SelectField id={`import-activity-${index}-operation`} label={t('dailyReports.operationKind')} value={activity.operation_kind} options={catalogue.operation_kinds.map((value) => ({ value, label: labelEnum(t, 'operationKinds', value) }))} onChange={(operation_kind) => patchActivity(index, { operation_kind })} placeholder={t('dailyReports.chooseOption')} required />}
                 {activity.activity_kind === 'npt' && <SelectField id={`import-activity-${index}-npt`} label={t('dailyReports.nptCategory')} value={activity.npt_category} options={catalogue.npt_categories.map((value) => ({ value, label: labelEnum(t, 'nptCategories', value) }))} onChange={(npt_category) => patchActivity(index, { npt_category })} placeholder={t('dailyReports.chooseOption')} required />}
                 <TextField id={`import-activity-${index}-title`} label={t('dailyReports.activityTitle')} value={activity.title} onChange={(title) => patchActivity(index, { title })} required />
-                <SelectField id={`import-activity-${index}-source`} label={t('dailyReports.sourceRecord')} value={activity.source_record_id} options={sourceRowOptions} onChange={(source_record_id) => chooseActivitySource(index, source_record_id)} placeholder={t('dailyReports.noSourceMapping')} help={t('dailyReports.rowSourceHint')} />
+                <SelectField id={`import-activity-${index}-source`} label={t('dailyReports.sourceRecord')} value={activity.source_record_id} options={sourceRowOptions} onChange={(source_record_id) => chooseActivitySource(index, source_record_id)} placeholder={t('dailyReports.noSourceMapping')} help={t('dailyReports.rowSourceHint')} testId={`daily-report-import-activity-source-${index}`} />
                 <TextAreaField id={`import-activity-${index}-description`} label={t('dailyReports.activityDescription')} value={activity.description} onChange={(description) => patchActivity(index, { description })} rows={2} />
                 <TextField id={`import-activity-${index}-start`} label={t('dailyReports.startAt')} value={activity.start_at} onChange={(start_at) => patchActivity(index, { start_at })} placeholder="2026-03-15T08:00:00+01:00" dir="ltr" />
                 <SelectField id={`import-activity-${index}-start-basis`} label={t('dailyReports.startTimeBasis')} value={activity.start_time_basis} options={timeOptions} onChange={(start_time_basis) => patchActivity(index, { start_time_basis })} placeholder={t('dailyReports.chooseOption')} />
@@ -1424,7 +1564,46 @@ function DailyReportImportForm({
                 <SelectField id={`import-activity-${index}-depth-reference`} label={t('dailyReports.depthReference')} value={activity.depth_reference} options={depthOptions} onChange={(depth_reference) => patchActivity(index, { depth_reference })} placeholder={t('dailyReports.chooseOption')} />
                 <SelectField id={`import-activity-${index}-depth-basis`} label={t('dailyReports.depthBasis')} value={activity.depth_basis} options={timeOptions} onChange={(depth_basis) => patchActivity(index, { depth_basis })} placeholder={t('dailyReports.chooseOption')} />
                 <SelectField id={`import-activity-${index}-cause-basis`} label={t('dailyReports.causeBasis')} value={activity.cause_basis} options={causeOptions} onChange={(cause_basis) => patchActivity(index, { cause_basis })} placeholder={t('dailyReports.chooseOption')} />
+                <SelectField
+                  id={`import-activity-${index}-linked-operation`}
+                  label={t('dailyReports.linkedOperation')}
+                  value={activity.operation_id}
+                  options={dailyReportOperationOptions(operations, activity.operation_id, t)}
+                  onChange={(operation_id) => patchActivity(index, { operation_id, event_id: '' })}
+                  placeholder={t('dailyReports.noOperationalLink')}
+                  disabled={!form.wellbore_id || operationsQuery.isPending || Boolean(operationsQuery.error)}
+                  help={t('dailyReports.operationLinkHelp')}
+                  testId={`daily-report-import-activity-operation-link-${index}`}
+                />
+                <SelectField
+                  id={`import-activity-${index}-linked-event`}
+                  label={t('dailyReports.linkedEvent')}
+                  value={activity.event_id}
+                  options={dailyReportEventOptions(events, activity.operation_id, activity.event_id, t)}
+                  onChange={(event_id) => patchActivity(index, { event_id })}
+                  placeholder={t('dailyReports.noOperationalLink')}
+                  disabled={!form.wellbore_id || eventsQuery.isPending || Boolean(eventsQuery.error)}
+                  help={t('dailyReports.eventLinkHelp')}
+                  testId={`daily-report-import-activity-event-link-${index}`}
+                />
               </div>
+              <ActivityClassificationSuggestion
+                wellId={wellId}
+                wellboreId={form.wellbore_id}
+                sourceDocumentId={activity.source_document_id}
+                sourceRecordId={activity.source_record_id}
+                rowIndex={index}
+                onApplyOperation={(operation_kind) => patchActivity(index, {
+                  activity_kind: 'operation',
+                  operation_kind,
+                  npt_category: '',
+                })}
+                onApplyNptCategory={(npt_category) => patchActivity(index, {
+                  activity_kind: 'npt',
+                  operation_kind: '',
+                  npt_category,
+                })}
+              />
               <div className="mt-3 flex justify-end">
                 <Button size="sm" variant="ghost" onClick={() => patchForm({ activities: form.activities.filter((_, row) => row !== index) })} aria-label={`${t('dailyReports.removeActivity')} ${index + 1}`}>
                   {t('dailyReports.removeActivity')}
@@ -1664,6 +1843,117 @@ function DailyReportReconciliationPanel({
         </form>
       )}
     </Card>
+  )
+}
+
+function ActivityClassificationSuggestion({
+  wellId,
+  wellboreId,
+  sourceDocumentId,
+  sourceRecordId,
+  rowIndex,
+  onApplyOperation,
+  onApplyNptCategory,
+}: {
+  wellId: string
+  wellboreId: string
+  sourceDocumentId: string
+  sourceRecordId: string
+  rowIndex: number
+  onApplyOperation: (kind: string) => void
+  onApplyNptCategory: (category: string) => void
+}) {
+  const { t, locale } = useI18n()
+  const query = useQuery({
+    queryKey: ['daily-report-activity-classification-preview', wellId, wellboreId, sourceDocumentId, sourceRecordId],
+    queryFn: ({ signal }) => drillingApi.previewDailyReportActivityClassification(
+      wellId,
+      {
+        wellbore_id: wellboreId,
+        source_record_id: sourceRecordId,
+        source_document_id: sourceDocumentId || null,
+      },
+      signal,
+    ),
+    enabled: false,
+    retry: false,
+  })
+  if (!wellboreId || !sourceRecordId) return null
+
+  const suggestion = query.data
+  return (
+    <section className="mt-3 space-y-2 rounded-md border border-signal/30 bg-sky-50/60 p-3 dark:bg-sky-950/20" data-testid={`daily-report-activity-classification-${rowIndex}`}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-xs font-semibold">{t('dailyReports.classificationTitle')}</p>
+        <Button
+          size="sm"
+          variant="default"
+          disabled={query.isFetching}
+          onClick={() => { void query.refetch() }}
+          data-testid={`daily-report-classification-preview-${rowIndex}`}
+        >
+          {query.isFetching ? t('dailyReports.loadingClassification') : t('dailyReports.suggestClassification')}
+        </Button>
+      </div>
+      <p className="text-[11px] text-graphite-500">{t('dailyReports.classificationHint')}</p>
+      {query.error && <ErrorState error={query.error} onRetry={() => { void query.refetch() }} />}
+      {suggestion && (
+        <div className="space-y-3" data-testid={`daily-report-classification-result-${rowIndex}`}>
+          <p className="text-[11px] text-warning">{t('dailyReports.classificationNotice')}</p>
+          {suggestion.source_text_truncated && <p className="text-[11px] text-warning">{t('dailyReports.classificationSourceTruncated')}</p>}
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-2 rounded border border-graphite-200 bg-white p-2 dark:border-graphite-700 dark:bg-graphite-900">
+              <h4 className="text-xs font-semibold">{t('dailyReports.operationSuggestion')}</h4>
+              {suggestion.operation.kind ? (
+                <>
+                  <Badge tone="info">{labelEnum(t, 'operationKinds', suggestion.operation.kind)}</Badge>
+                  <p className="text-xs">{t('dailyReports.ruleMatchedText')}: <span dir="auto">{suggestion.operation.matched_text}</span></p>
+                  <p className="break-words text-[11px] text-graphite-500">{t('dailyReports.rulePattern')}: <code dir="ltr" className="break-all">{suggestion.operation.matched_pattern}</code></p>
+                  <p className="text-[11px] text-graphite-500">{t('dailyReports.ruleScore')}: <bdi dir="ltr">{formatNumber(suggestion.operation.heuristic_score, locale, 2)}</bdi></p>
+                  <Button
+                    size="sm"
+                    onClick={() => onApplyOperation(suggestion.operation.kind!)}
+                    data-testid={`daily-report-apply-operation-classification-${rowIndex}`}
+                  >
+                    {t('dailyReports.applyOperationSuggestion')}
+                  </Button>
+                </>
+              ) : <p className="text-xs text-graphite-500">{t('dailyReports.noOperationMatch')}</p>}
+            </div>
+            <div className="space-y-2 rounded border border-graphite-200 bg-white p-2 dark:border-graphite-700 dark:bg-graphite-900">
+              <h4 className="text-xs font-semibold">{t('dailyReports.nptSuggestion')}</h4>
+              {suggestion.npt.category ? (
+                <>
+                  <Badge tone="warning">{labelEnum(t, 'nptCategories', suggestion.npt.category)}</Badge>
+                  <p className="text-xs">{t('dailyReports.ruleMatchedText')}: <span dir="auto">{suggestion.npt.matched_text}</span></p>
+                  <p className="break-words text-[11px] text-graphite-500">{t('dailyReports.rulePattern')}: <code dir="ltr" className="break-all">{suggestion.npt.matched_pattern}</code></p>
+                  <p className="text-[11px] text-graphite-500">{t('dailyReports.ruleScore')}: <bdi dir="ltr">{formatNumber(suggestion.npt.heuristic_score, locale, 2)}</bdi> · <bdi dir="ltr">{suggestion.npt.code}</bdi></p>
+                  <Button
+                    size="sm"
+                    onClick={() => onApplyNptCategory(suggestion.npt.category!)}
+                    data-testid={`daily-report-apply-npt-classification-${rowIndex}`}
+                  >
+                    {t('dailyReports.applyNptSuggestion')}
+                  </Button>
+                </>
+              ) : <p className="text-xs text-graphite-500">{t('dailyReports.noNptMatch')}</p>}
+            </div>
+          </div>
+          <dl className="grid gap-2 text-[10px] sm:grid-cols-2">
+            {suggestion.source_document_id && <ProvenanceItem label={t('dailyReports.sourceDocument')} value={suggestion.source_document_id} />}
+            <ProvenanceItem label={t('dailyReports.sourceRecord')} value={`${suggestion.source_record_type} · ${suggestion.source_record_id}`} />
+            {suggestion.source_region_id && <ProvenanceItem label={t('dailyReports.sourceRegion')} value={suggestion.source_region_id} />}
+            {suggestion.source_page_number !== null && <ProvenanceItem label={t('dailyReports.sourcePage')} value={String(suggestion.source_page_number)} />}
+            <ProvenanceItem label={t('dailyReports.sourceValidationState')} value={`${suggestion.source_validation_state} · ${t('dailyReports.sourceReviewVersion')} ${suggestion.source_review_version}`} />
+            <ProvenanceItem
+              label={t('dailyReports.sourceExtractionMethod')}
+              value={`${suggestion.source_extraction_method}${suggestion.source_extraction_method_version ? ` · ${suggestion.source_extraction_method_version}` : ''}`}
+            />
+            {suggestion.source_fingerprint && <ProvenanceItem label={t('dailyReports.sourceFingerprint')} value={suggestion.source_fingerprint} />}
+          </dl>
+        </div>
+      )}
+    </section>
   )
 }
 
@@ -2311,6 +2601,7 @@ export default function DailyReportsWorkspace() {
 
       {formMode && catalogue && (
         <DailyReportEditor
+          wellId={wellId}
           mode={formMode}
           form={form}
           setForm={setForm}

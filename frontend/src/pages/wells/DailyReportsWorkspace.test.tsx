@@ -25,6 +25,9 @@ const mocks = vi.hoisted(() => ({
   gateDisabled: false,
   dailyReportCatalogue: vi.fn(),
   listWellbores: vi.fn(),
+  listOperations: vi.fn(),
+  listEvents: vi.fn(),
+  previewDailyReportActivityClassification: vi.fn(),
   listDailyReports: vi.fn(),
   getDailyReport: vi.fn(),
   getDailyReportHistory: vi.fn(),
@@ -48,6 +51,9 @@ vi.mock('../../api/endpoints', () => ({
   drillingApi: {
     dailyReportCatalogue: mocks.dailyReportCatalogue,
     listWellbores: mocks.listWellbores,
+    listOperations: mocks.listOperations,
+    listEvents: mocks.listEvents,
+    previewDailyReportActivityClassification: mocks.previewDailyReportActivityClassification,
     listDailyReports: mocks.listDailyReports,
     getDailyReport: mocks.getDailyReport,
     getDailyReportHistory: mocks.getDailyReportHistory,
@@ -238,6 +244,37 @@ beforeEach(() => {
   mocks.gateDisabled = false
   mocks.dailyReportCatalogue.mockReset().mockResolvedValue(catalogue)
   mocks.listWellbores.mockReset().mockResolvedValue({ items: [wellbore], total: 1, limit: 50, offset: 0 })
+  mocks.listOperations.mockReset().mockResolvedValue({ items: [], total: 0, limit: 500, offset: 0 })
+  mocks.listEvents.mockReset().mockResolvedValue({ items: [], total: 0, limit: 500, offset: 0 })
+  mocks.previewDailyReportActivityClassification.mockReset().mockResolvedValue({
+    source_document_id: 'doc_ddr_1',
+    source_record_id: 'record_1',
+    source_region_id: 'region_1',
+    source_page_number: 1,
+    source_record_type: 'operation_row',
+    source_validation_state: 'extracted',
+    source_review_version: 1,
+    source_fingerprint: 'sha256:source',
+    source_extraction_method: 'rule',
+    source_extraction_method_version: '1.2.0',
+    method: 'deterministic_content_rules',
+    source_text_truncated: false,
+    notice: 'Rule matches are review aids, not calibrated accuracy estimates.',
+    operation: {
+      kind: 'drilling',
+      matched_text: 'Drilled ahead',
+      matched_pattern: '\\bdrill(ing|ed)?\\s+ahead\\b',
+      heuristic_score: 0.8,
+    },
+    npt: {
+      category: null,
+      code: null,
+      matched_text: null,
+      matched_pattern: null,
+      heuristic_score: 0,
+      is_operator_controllable: null,
+    },
+  })
   mocks.listDailyReports.mockReset().mockResolvedValue({ items: [report], total: 1, limit: 50, offset: 0 })
   mocks.getDailyReport.mockReset().mockResolvedValue(detail)
   mocks.getDailyReportHistory.mockReset().mockResolvedValue(history)
@@ -431,10 +468,38 @@ describe('DailyReportsWorkspace', () => {
     await user.selectOptions(await screen.findByTestId('daily-report-import-safety_notes-source'), 'payload.safety_notes')
     await user.selectOptions(await screen.findByTestId('daily-report-import-next_period_plan-source'), 'payload.next_period_plan')
     await user.selectOptions(await screen.findByTestId('daily-report-import-environmental_notes-source'), 'payload.environmental_notes')
+    mocks.listOperations.mockResolvedValue({
+      items: [{ id: 'op_1', sequence: 1, name: 'Drilling phase', status: 'in_progress', operation_class: 'actual' }],
+      total: 1,
+      limit: 500,
+      offset: 0,
+    })
+    mocks.listEvents.mockResolvedValue({
+      items: [{ id: 'event_1', title: 'Drilling observation', kind: 'observation', status: 'open', operation_id: 'op_1' }],
+      total: 1,
+      limit: 500,
+      offset: 0,
+    })
     await user.selectOptions(await screen.findByTestId('daily-report-import-wellbore'), 'wb_1')
     await user.type(screen.getByTestId('daily-report-import-date'), '2026-03-15')
     await user.type(screen.getByTestId('daily-report-import-timezone'), 'Europe/Amsterdam')
     await user.selectOptions(screen.getByTestId('daily-report-import-shift'), 'day')
+    await user.click(screen.getByTestId('daily-report-import-add-activity'))
+    await user.selectOptions(await screen.findByRole('combobox', { name: 'Activity kind' }), 'operation')
+    await user.type(screen.getByLabelText(/title/i), 'Drilled ahead from source')
+    await user.selectOptions(await screen.findByTestId('daily-report-import-activity-source-0'), 'record_1')
+    await user.click(screen.getByTestId('daily-report-classification-preview-0'))
+    expect(await screen.findByTestId('daily-report-classification-result-0')).toHaveTextContent('Drilling')
+    expect(mocks.previewDailyReportActivityClassification).toHaveBeenCalledWith(
+      'well_1',
+      { wellbore_id: 'wb_1', source_record_id: 'record_1', source_document_id: 'doc_ddr_1' },
+      expect.anything(),
+    )
+    await user.click(screen.getByTestId('daily-report-apply-operation-classification-0'))
+    await screen.findByRole('option', { name: /Drilling phase/ })
+    await user.selectOptions(await screen.findByTestId('daily-report-import-activity-operation-link-0'), 'op_1')
+    await screen.findByRole('option', { name: /Drilling observation/ })
+    await user.selectOptions(await screen.findByTestId('daily-report-import-activity-event-link-0'), 'event_1')
     await user.click(screen.getByTestId('daily-report-import-add-measurement'))
     await screen.findByTestId('daily-report-import-measurement-row')
     await user.selectOptions(screen.getByTestId('daily-report-import-measurement-0-parameter'), 'mud_weight')
@@ -472,6 +537,15 @@ describe('DailyReportsWorkspace', () => {
         environmental_notes: 'No environmental issue reported in the source.',
         source_document_id: 'doc_ddr_1',
         source_record_id: 'record_1',
+        activities: [expect.objectContaining({
+          activity_kind: 'operation',
+          operation_kind: 'drilling',
+          title: 'Drilled ahead from source',
+          source_document_id: 'doc_ddr_1',
+          source_record_id: 'record_1',
+          operation_id: 'op_1',
+          event_id: 'event_1',
+        })],
         measurements: [expect.objectContaining({
           parameter_key: 'mud_weight',
           value: 9.2,

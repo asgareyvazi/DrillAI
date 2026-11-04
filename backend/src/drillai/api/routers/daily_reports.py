@@ -161,6 +161,12 @@ class DailyReportImport(DailyReportCreate):
     field_sources: list[DailyReportFieldSource] = Field(default_factory=list, max_length=32)
 
 
+class DailyReportActivityClassificationPreview(_StrictModel):
+    wellbore_id: str = Field(min_length=1, max_length=64)
+    source_record_id: str = Field(min_length=1, max_length=64)
+    source_document_id: str | None = Field(default=None, max_length=64)
+
+
 class DailyReportReconciliationChange(_StrictModel):
     target_key: str = Field(min_length=1, max_length=180)
     decision: Literal["accepted", "corrected", "rejected", "unresolved"]
@@ -324,6 +330,26 @@ async def import_daily_report(
         payload.model_dump(mode="python"),
     )
     return await _remember(session, org_id=org_id, key=idempotency_key, scope=scope, response=response)
+
+
+@router.post(
+    "/wells/{well_id}/daily-reports/activity-classification-preview",
+    summary="Preview deterministic activity labels from one extracted source record",
+)
+async def preview_daily_report_activity_classification(
+    well_id: str,
+    payload: DailyReportActivityClassificationPreview,
+    request: Request,
+    session: Annotated[AsyncSession, Depends(get_db)],
+    auth: Annotated[AuthContext, Depends(require("document.read"))],
+) -> dict[str, Any]:
+    """Return evidence-linked rule suggestions without changing source or report state."""
+    return await _service(session, auth, request).preview_activity_classification(
+        well_id,
+        wellbore_id=payload.wellbore_id,
+        source_record_id=payload.source_record_id,
+        source_document_id=payload.source_document_id,
+    )
 
 
 @router.get("/wells/{well_id}/daily-reports/{report_id}", summary="Read the current report revision")

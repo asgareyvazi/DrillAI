@@ -83,7 +83,14 @@ def _report_payload(wellbore_id: str) -> dict:
     }
 
 
-async def _create_import_evidence(client, db, well_id: str, wellbore_id: str) -> tuple[str, str]:
+async def _create_import_evidence(
+    client,
+    db,
+    well_id: str,
+    wellbore_id: str,
+    *,
+    record_payload: dict | None = None,
+) -> tuple[str, str]:
     from sqlalchemy import select
 
     from drillai.core.serialization import content_hash
@@ -101,7 +108,7 @@ async def _create_import_evidence(client, db, well_id: str, wellbore_id: str) ->
         document = (
             await session.execute(select(Document).where(Document.id == document_id))
         ).scalar_one()
-        record_payload = {
+        record_payload = record_payload if record_payload is not None else {
             "summary": "Extracted summary awaiting human review.",
             "operations_summary": "Extracted operations narrative awaiting human review.",
             "safety_notes": "Extracted safety narrative awaiting human review.",
@@ -127,6 +134,144 @@ async def _create_import_evidence(client, db, well_id: str, wellbore_id: str) ->
         record_id = record.id
         await session.commit()
     return document_id, record_id
+
+
+@pytest.mark.asyncio
+async def test_daily_report_activity_classification_preview_is_read_only_and_scope_checked(client, db):
+    well_id, wellbore_id = await _create_well(client)
+    source_text = "Lost circulation was reported while the crew prepared LCM for the source report."
+    document_id, record_id = await _create_import_evidence(
+        client,
+        db,
+        well_id,
+        wellbore_id,
+        record_payload={"activity": source_text},
+    )
+
+    preview = await client.post(
+        f"/api/v1/wells/{well_id}/daily-reports/activity-classification-preview",
+        json={
+            "wellbore_id": wellbore_id,
+            "source_document_id": document_id,
+            "source_record_id": record_id,
+        },
+        headers=headers("viewer"),
+    )
+    assert preview.status_code == 200, preview.text
+    suggestion = preview.json()
+    assert suggestion["method"] == "deterministic_content_rules"
+    assert suggestion["source_document_id"] == document_id
+    assert suggestion["source_record_id"] == record_id
+    assert suggestion["source_region_id"] is None
+    assert suggestion["source_page_number"] is None
+    assert suggestion["source_validation_state"] == "extracted"
+    assert suggestion["source_review_version"] == 1
+    assert suggestion["source_fingerprint"]
+    assert suggestion["source_extraction_method"] == "rule"
+    assert suggestion["source_text_truncated"] is False
+    assert suggestion["operation"]["kind"] == "circulating"
+    assert suggestion["operation"]["matched_text"] == "Lost circulation"
+    assert suggestion["npt"]["category"] == "lost_circulation"
+    assert suggestion["npt"]["code"] == "LOST_CIRC"
+    assert suggestion["npt"]["matched_text"] == "Lost circulation"
+    assert "not calibrated accuracy estimates" in suggestion["notice"]
+
+    source_detail = await client.get(f"/api/v1/documents/{document_id}", headers=headers("viewer"))
+    assert source_detail.status_code == 200, source_detail.text
+    unchanged = next(row for row in source_detail.json()["records"] if row["id"] == record_id)
+    assert unchanged["validation_state"] == "extracted"
+    assert unchanged["payload"] == {"activity": source_text}
+
+    long_document_id, long_record_id = await _create_import_evidence(
+        client,
+        db,
+        well_id,
+        wellbore_id,
+        record_payload={"activity": "Drilling ahead. " * 2500},
+    )
+    bounded_preview = await client.post(
+        f"/api/v1/wells/{well_id}/daily-reports/activity-classification-preview",
+        json={
+            "wellbore_id": wellbore_id,
+            "source_document_id": long_document_id,
+            "source_record_id": long_record_id,
+        },
+        headers=headers("engineer"),
+    )
+    assert bounded_preview.status_code == 200, bounded_preview.text
+    assert bounded_preview.json()["source_text_truncated"] is True
+    assert bounded_preview.json()["operation"]["kind"] == "drilling"
+
+    operation_response = await client.post(
+        "/api/v1/operations",
+        json={
+            "well_id": well_id,
+            "wellbore_id": wellbore_id,
+            "name": "Circulation response",
+            "operation_class": "actual",
+            "kind": "circulating",
+            "status": "in_progress",
+        },
+        headers=headers("engineer"),
+    )
+    assert operation_response.status_code == 201, operation_response.text
+    operation = operation_response.json()
+    event_response = await client.post(
+        "/api/v1/events",
+        json={
+            "well_id": well_id,
+            "wellbore_id": wellbore_id,
+            "operation_id": operation["id"],
+            "title": "Circulation activity recorded",
+            "kind": "observation",
+        },
+        headers=headers("engineer"),
+    )
+    assert event_response.status_code == 201, event_response.text
+    event = event_response.json()
+    linked_import = await client.post(
+        f"/api/v1/wells/{well_id}/daily-reports/imports",
+        json={
+            "wellbore_id": wellbore_id,
+            "report_date": "2026-11-04",
+            "report_timezone": "UTC",
+            "shift_code": "day",
+            "report_number": "DDR-LINKED-ACTIVITY-001",
+            "source_document_id": document_id,
+            "source_record_id": record_id,
+            "content": {
+                "source_document_id": document_id,
+                "source_record_id": record_id,
+                "activities": [{
+                    "activity_kind": "operation",
+                    "operation_kind": "circulating",
+                    "title": "Circulation response from source report",
+                    "source_document_id": document_id,
+                    "source_record_id": record_id,
+                    "operation_id": operation["id"],
+                    "event_id": event["id"],
+                }],
+            },
+        },
+        headers=headers("engineer"),
+    )
+    assert linked_import.status_code == 201, linked_import.text
+    linked_activity = linked_import.json()["revision"]["activities"][0]
+    assert linked_activity["operation_id"] == operation["id"]
+    assert linked_activity["event_id"] == event["id"]
+    assert linked_activity["resolution_state"] == "proposed"
+
+    other_well_id, other_wellbore_id = await _create_well(client)
+    cross_scope = await client.post(
+        f"/api/v1/wells/{other_well_id}/daily-reports/activity-classification-preview",
+        json={
+            "wellbore_id": other_wellbore_id,
+            "source_document_id": document_id,
+            "source_record_id": record_id,
+        },
+        headers=headers("engineer"),
+    )
+    assert cross_scope.status_code == 422, cross_scope.text
 
 
 @pytest.mark.asyncio
