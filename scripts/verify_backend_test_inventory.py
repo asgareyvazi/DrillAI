@@ -158,11 +158,46 @@ def verify_windows_skip(log_text: str, manifest: dict[str, Any]) -> None:
         )
 
 
+def failed_node_summaries(log_text: str, *, limit: int = 12) -> list[str]:
+    """Return failed pytest node IDs and exception classes, without copying assertion values."""
+    plain = ANSI_RE.sub("", log_text)
+    summaries: list[str] = []
+    seen: set[str] = set()
+    for line in plain.splitlines():
+        match = re.match(r"^\s*(?:FAILED|ERROR)\s+(\S+)", line)
+        if not match:
+            continue
+        # Pytest parameter IDs can contain arbitrary values; keep only the stable test location.
+        node_id = match.group(1).split("[", 1)[0]
+        tail = line[match.end() :].strip()
+        exception = re.match(r"-\s*([A-Za-z_][A-Za-z0-9_.]*)", tail)
+        summary = f"{node_id} [{exception.group(1)}]" if exception else node_id
+        if summary not in seen:
+            summaries.append(summary)
+            seen.add(summary)
+        if len(summaries) >= limit:
+            break
+    return summaries
+
+
 def verify_platform_result(manifest: dict[str, Any], platform: str, log_text: str, pytest_exit_code: int) -> str:
     backend = manifest["backend"]
     expected = backend[platform]
     if pytest_exit_code != 0:
-        raise InventoryError(f"pytest exited {pytest_exit_code}; a zero process exit is required")
+        details = [f"pytest exited {pytest_exit_code}; a zero process exit is required"]
+        failed_nodes = failed_node_summaries(log_text)
+        details.append(
+            "failed node IDs and exception classes: " + ", ".join(failed_nodes)
+            if failed_nodes
+            else "no FAILED/ERROR node summary was found"
+        )
+        try:
+            summary, _counts = parse_summary(log_text)
+        except InventoryError:
+            pass
+        else:
+            details.append("pytest summary: " + summary.split(" in ", 1)[0])
+        raise InventoryError("; ".join(details))
 
     summary, counts = parse_summary(log_text)
     expected_counts = {

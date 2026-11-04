@@ -318,6 +318,9 @@ def test_cp32_the_certification_jobs_reject_skips() -> None:
         "Windows CI must accept only the specifically reviewed POSIX-only OCR subprocess skip"
     )
     assert "pytest_exit_code != 0" in verifier, "pytest's real process failure must remain fatal"
+    assert "failed_node_summaries" in verifier and "exception classes" in verifier, (
+        "backend CI must expose failed pytest node IDs without copying assertion values into annotations"
+    )
 
 
 def _step_text(job: dict, step_name_prefix: str) -> str:
