@@ -31,6 +31,7 @@ from drillai.db.models import (
     DAILY_REPORT_PARAMETER_SPECS,
     REPORT_ACTIVITY_KINDS,
     REPORT_DEPTH_REFERENCES,
+    REPORT_RECONCILIATION_IDENTITY_FIELDS,
     REPORT_RECONCILIATION_REVISION_FIELDS,
     REPORT_REVISION_STATUSES,
     REPORT_SHIFT_CODES,
@@ -1014,32 +1015,58 @@ class DailyReportService:
             if not isinstance(item, dict):
                 raise ValidationFailed("each field source must be an object")
             field_key = _nonempty_text(item.get("field_key"), "field_key", 48)
-            if field_key not in REPORT_RECONCILIATION_REVISION_FIELDS:
+            is_identity_field = field_key in REPORT_RECONCILIATION_IDENTITY_FIELDS
+            if field_key not in REPORT_RECONCILIATION_REVISION_FIELDS and not is_identity_field:
                 raise ValidationFailed(
-                    "field source target is not a reconcilable revision field",
-                    details={"field_key": field_key, "allowed": list(REPORT_RECONCILIATION_REVISION_FIELDS)},
+                    "field source target is not a reconcilable report or revision field",
+                    details={
+                        "field_key": field_key,
+                        "allowed": [*REPORT_RECONCILIATION_REVISION_FIELDS, *REPORT_RECONCILIATION_IDENTITY_FIELDS],
+                    },
                 )
             if field_key in seen_fields:
-                raise ValidationFailed("only one source proposal may be mapped to a revision field", details={"field_key": field_key})
+                raise ValidationFailed("only one source proposal may be mapped to each report field", details={"field_key": field_key})
             seen_fields.add(field_key)
+            source_path = _nonempty_text(item.get("source_path"), "source_path", 256)
+            if is_identity_field and source_path != f"payload.{field_key}":
+                raise ValidationFailed(
+                    "report identity sources must map to their matching extracted header field",
+                    details={"field_key": field_key, "source_path": source_path},
+                )
             record = await self._import_source_record(
                 scope,
                 source_document_id=source_document_id,
                 source_record_id=item.get("source_record_id"),
+                expected_record_type="report_header" if is_identity_field else None,
             )
-            source_path = _nonempty_text(item.get("source_path"), "source_path", 256)
             source_value = _record_payload_path(record.payload or {}, source_path)
             if source_value is _MISSING:
                 raise ValidationFailed(
                     "source_path does not identify a value in the extracted record payload",
                     details={"source_record_id": record.id, "source_path": source_path},
                 )
-            target_value = prepared.revision_fields[field_key]
+            if is_identity_field:
+                target_value = (
+                    report.report_date.isoformat()
+                    if field_key == "report_date"
+                    else report.report_number
+                )
+                if not isinstance(source_value, str) or source_value != target_value:
+                    raise ValidationFailed(
+                        "a mapped report identity must exactly match its selected report-header evidence",
+                        details={"field_key": field_key, "source_record_id": record.id},
+                    )
+                target_kind = "report_identity"
+                target_key = f"identity:{field_key}"
+            else:
+                target_value = prepared.revision_fields[field_key]
+                target_kind = "revision_field"
+                target_key = f"field:{field_key}"
             decisions.append(
                 self._new_reconciliation(
                     revision=revision,
-                    target_key=f"field:{field_key}",
-                    target_kind="revision_field",
+                    target_key=target_key,
+                    target_kind=target_kind,
                     target_id=None,
                     field_key=field_key,
                     source_document_id=source_document_id,
@@ -1137,6 +1164,7 @@ class DailyReportService:
         *,
         source_document_id: str,
         source_record_id: Any,
+        expected_record_type: str | None = None,
     ) -> ExtractedRecord:
         record_id = _nonempty_text(source_record_id, "source_record_id", 64)
         record = (
@@ -1155,6 +1183,11 @@ class DailyReportService:
             raise ValidationFailed(
                 "source record does not belong to the selected import document",
                 details={"source_record_id": record.id, "source_document_id": source_document_id},
+            )
+        if expected_record_type is not None and record.record_type != expected_record_type:
+            raise ValidationFailed(
+                "the selected extracted record is not a compatible source for this report field",
+                details={"source_record_id": record.id, "expected_record_type": expected_record_type},
             )
         if record.validation_state in {"rejected", "superseded"}:
             raise ValidationFailed(
@@ -1567,6 +1600,14 @@ class DailyReportService:
                 if decision_row.field_key not in REPORT_RECONCILIATION_REVISION_FIELDS:
                     raise ValidationFailed("stored reconciliation field is outside the supported revision contract")
                 current_value = getattr(revision, decision_row.field_key)
+            elif decision_row.target_kind == "report_identity":
+                if decision_row.field_key not in REPORT_RECONCILIATION_IDENTITY_FIELDS:
+                    raise ValidationFailed("stored reconciliation field is outside the supported report identity contract")
+                if requested_state == "corrected":
+                    raise ValidationFailed("report identity is immutable; create a separate report for a corrected identity")
+                current_value = getattr(report, decision_row.field_key)
+                if isinstance(current_value, dt.date):
+                    current_value = current_value.isoformat()
             elif decision_row.target_kind == "activity":
                 target_row = (
                     await self.session.execute(
@@ -1861,16 +1902,26 @@ class DailyReportService:
                     )
                 )
             for source_decision in source_reconciliation:
-                if source_decision.target_kind != "revision_field" or source_decision.resolution_state == "rejected":
+                if source_decision.resolution_state == "rejected":
                     continue
-                if source_decision.field_key not in REPORT_RECONCILIATION_REVISION_FIELDS:
-                    raise Conflict("the correction source contains an unsupported revision field mapping")
+                if source_decision.target_kind == "revision_field":
+                    if source_decision.field_key not in REPORT_RECONCILIATION_REVISION_FIELDS:
+                        raise Conflict("the correction source contains an unsupported revision field mapping")
+                    target_value = getattr(revision, source_decision.field_key)
+                elif source_decision.target_kind == "report_identity":
+                    if source_decision.field_key not in REPORT_RECONCILIATION_IDENTITY_FIELDS:
+                        raise Conflict("the correction source contains an unsupported report identity mapping")
+                    target_value = getattr(report, source_decision.field_key)
+                    if isinstance(target_value, dt.date):
+                        target_value = target_value.isoformat()
+                else:
+                    continue
                 correction_decisions.append(
                     DailyReportReconciliation(
                         org_id=self.org_id,
                         revision_id=revision.id,
                         target_key=source_decision.target_key,
-                        target_kind="revision_field",
+                        target_kind=source_decision.target_kind,
                         target_id=None,
                         field_key=source_decision.field_key,
                         source_document_id=source_decision.source_document_id,
@@ -1881,7 +1932,7 @@ class DailyReportService:
                         source_review_version=source_decision.source_review_version,
                         source_fingerprint=source_decision.source_fingerprint,
                         source_value_hash=source_decision.source_value_hash,
-                        proposed_value_hash=content_hash(getattr(revision, source_decision.field_key)),
+                        proposed_value_hash=content_hash(target_value),
                         resolution_state="proposed",
                         created_by=self.principal.id if self.principal else "",
                     )
@@ -3169,6 +3220,11 @@ class DailyReportService:
             target_exists = False
             if row.target_kind == "revision_field" and row.field_key in REPORT_RECONCILIATION_REVISION_FIELDS:
                 current_value = getattr(revision, row.field_key)
+                target_exists = True
+            elif row.target_kind == "report_identity" and row.field_key in REPORT_RECONCILIATION_IDENTITY_FIELDS:
+                current_value = getattr(report, row.field_key)
+                if isinstance(current_value, dt.date):
+                    current_value = current_value.isoformat()
                 target_exists = True
             elif row.target_kind == "activity":
                 activity = activity_by_id.get(row.target_id or "")

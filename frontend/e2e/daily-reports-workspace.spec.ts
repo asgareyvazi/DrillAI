@@ -46,7 +46,7 @@ interface DailyReportRead {
     source_record_id: string | null
     summary: string | null
     reconciliation: Array<{
-      target_kind: 'revision_field' | 'activity' | 'measurement'
+      target_kind: 'revision_field' | 'report_identity' | 'activity' | 'measurement'
       field_key: string
       source_document_id: string
       source_record_id: string
@@ -144,7 +144,13 @@ test.describe('daily-report lifecycle in a real browser', () => {
       { name: 'Main bore', purpose: 'original' },
       'engineer',
     )
+    const reportDate = '2026-11-02'
+    const reportNumber = '42'
+    const sourceWellName = `E2E-DDR-IMPORT-${tag}`
     const csv = [
+      `Report No: ${reportNumber}`,
+      `Date: ${reportDate}`,
+      `Well: ${sourceWellName}`,
       'summary,operation,duration (h),depth md (m),mud weight (ppg)',
       `${summary},Drilling ahead,8,2450,12.5`,
       '',
@@ -174,26 +180,46 @@ test.describe('daily-report lifecycle in a real browser', () => {
         record.payload.operation === 'Drilling ahead' &&
         record.payload.duration_hours === 8 &&
         record.payload.depth_md_si === 2450,
+      ) && detail.records.some((record) =>
+        record.record_type === 'report_header' &&
+        record.validation_state === 'extracted' &&
+        record.payload.well_name_text === sourceWellName &&
+        record.payload.report_date === reportDate &&
+        record.payload.report_number === reportNumber,
       )
-    }, { timeout: 60_000, message: 'the CSV extractor must preserve the source row values and provenance' }).toBe(true)
+    }, { timeout: 60_000, message: 'the CSV extractor must preserve row values and source-backed report identity' }).toBe(true)
     const document = await apiGet<ImportedDocumentDetail>(request, `/documents/${uploaded.document.id}`, 'engineer')
     const sourceRecord = document.records.find((record) =>
       record.record_type === 'operation_row' && record.payload.summary === summary,
     )
+    const headerRecord = document.records.find((record) =>
+      record.record_type === 'report_header' &&
+      record.validation_state === 'extracted' &&
+      record.payload.well_name_text === sourceWellName &&
+      record.payload.report_date === reportDate &&
+      record.payload.report_number === reportNumber,
+    )
     expect(sourceRecord, 'the uploaded CSV must produce the row used by the import').toBeTruthy()
+    expect(headerRecord, 'the same document must produce exact report-header identity evidence').toBeTruthy()
     if (!sourceRecord) throw new Error('extracted operation source record is missing')
+    if (!headerRecord) throw new Error('extracted report-header identity source record is missing')
 
     await page.goto(`/wells/${well.id}/daily-reports`)
     await expect(page.getByTestId('daily-report-import-open')).toBeEnabled()
     await page.getByTestId('daily-report-import-open').click()
     await page.getByTestId('daily-report-import-document').selectOption(uploaded.document.id)
+    await page.getByTestId('daily-report-import-identity-record').selectOption(headerRecord.id)
+    await expect(page.getByTestId('daily-report-import-header-sources')).toContainText(sourceWellName)
+    await expect(page.getByTestId('daily-report-import-wellbore')).toHaveValue('')
+    await page.getByTestId('daily-report-import-identity-source-report-date').selectOption('payload.report_date')
+    await page.getByTestId('daily-report-import-identity-source-report-number').selectOption('payload.report_number')
     await page.getByTestId('daily-report-import-record').selectOption(sourceRecord.id)
     await page.getByTestId('daily-report-import-summary-source').selectOption('payload.summary')
     await page.getByTestId('daily-report-import-wellbore').selectOption(wellbore.id)
-    await page.getByTestId('daily-report-import-date').fill('2026-11-02')
+    await expect(page.getByTestId('daily-report-import-date')).toHaveValue(reportDate)
     await page.getByTestId('daily-report-import-timezone').fill('Europe/Amsterdam')
     await page.getByTestId('daily-report-import-shift').selectOption('day')
-    await page.getByLabel('Operator report number').fill(`DDR-IMPORT-${tag}`)
+    await expect(page.getByTestId('daily-report-import-number')).toHaveValue(reportNumber)
 
     await page.getByTestId('daily-report-import-add-activity').click()
     await page.locator('#import-activity-0-kind').selectOption('operation')
@@ -231,12 +257,14 @@ test.describe('daily-report lifecycle in a real browser', () => {
       `/wells/${well.id}/daily-reports?limit=20`,
       'engineer',
     )
-    const importedRow = listed.items.find((item) => item.report_number === `DDR-IMPORT-${tag}`)
+    const importedRow = listed.items.find((item) => item.report_number === reportNumber)
     expect(importedRow, 'the imported report must be persisted by the backend').toBeTruthy()
     if (!importedRow) throw new Error('imported daily report is missing from the API')
     const importedRead = await apiGet<DailyReportRead>(request, reportPath(well.id, importedRow.id), 'engineer')
     expect(importedRead.latest_revision.source_kind).toBe('import')
     expect(importedRead.latest_revision.source_document_id).toBe(uploaded.document.id)
+    expect(importedRead.report.report_date).toBe(reportDate)
+    expect(importedRead.report.report_number).toBe(reportNumber)
     expect(importedRead.latest_revision.summary).toBe(summary)
     expect(importedRead.latest_revision.activities[0]).toEqual(expect.objectContaining({
       title: 'Drilling ahead',
@@ -257,18 +285,25 @@ test.describe('daily-report lifecycle in a real browser', () => {
       source_region_id: sourceRecord.region_id,
       source_page_number: sourceRecord.page_number,
     }))
-    expect(importedRead.latest_revision.reconciliation).toHaveLength(3)
-    expect(importedRead.latest_revision.reconciliation.map((item) => item.resolution_state)).toEqual([
-      'proposed', 'proposed', 'proposed',
-    ])
-    expect(importedRead.latest_revision.reconciliation.every((item) => item.proposal_matches_current)).toBe(true)
-    expect(importedRead.latest_revision.reconciliation.every((item) =>
+    const proposals = importedRead.latest_revision.reconciliation
+    expect(proposals).toHaveLength(5)
+    expect(proposals.every((item) => item.resolution_state === 'proposed')).toBe(true)
+    expect(proposals.every((item) => item.proposal_matches_current)).toBe(true)
+    const identityProposals = proposals.filter((item) => item.target_kind === 'report_identity')
+    expect(identityProposals.map((item) => item.field_key).sort()).toEqual(['report_date', 'report_number'])
+    expect(identityProposals.every((item) =>
+      item.source_document_id === uploaded.document.id && item.source_record_id === headerRecord.id &&
+      item.source_region_id === headerRecord.region_id && item.source_page_number === headerRecord.page_number &&
+      ['payload.report_date', 'payload.report_number'].includes(item.source_path),
+    )).toBe(true)
+    const contentProposals = proposals.filter((item) => item.target_kind !== 'report_identity')
+    expect(contentProposals.every((item) =>
       item.source_document_id === uploaded.document.id && item.source_record_id === sourceRecord.id &&
       item.source_region_id === sourceRecord.region_id && item.source_page_number === sourceRecord.page_number,
     )).toBe(true)
 
     const decisionSelects = page.getByTestId('daily-report-reconciliation').locator('select')
-    await expect(decisionSelects).toHaveCount(3)
+    await expect(decisionSelects).toHaveCount(5)
     for (const decision of await decisionSelects.all()) await decision.selectOption('accepted')
     await page.getByTestId('daily-report-reconciliation-reason').fill('Compared every proposed value with the extracted CSV row.')
     await page.getByTestId('daily-report-reconciliation-submit').click()
@@ -277,9 +312,7 @@ test.describe('daily-report lifecycle in a real browser', () => {
 
     const reconciled = await apiGet<DailyReportRead>(request, reportPath(well.id, importedRow.id), 'engineer')
     expect(reconciled.latest_revision.edit_version).toBe(2)
-    expect(reconciled.latest_revision.reconciliation.map((item) => item.resolution_state)).toEqual([
-      'accepted', 'accepted', 'accepted',
-    ])
+    expect(reconciled.latest_revision.reconciliation.every((item) => item.resolution_state === 'accepted')).toBe(true)
     expectNoFailures(consoleErrors, failedResponses)
   })
 

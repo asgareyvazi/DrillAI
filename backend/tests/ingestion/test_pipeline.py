@@ -844,17 +844,20 @@ def test_csv_header_fields_keep_original_cell_locators():
 
     from drillai.ingestion.extractors import extract
 
-    parsed = parse_bytes(SYNTHETIC_DDR_CSV, filename="header.csv")
+    parsed = parse_bytes(b"Report No: 42\n" + SYNTHETIC_DDR_CSV, filename="header.csv")
     drafts, _warnings = extract(parsed, doc_type="ddr")
     header = next(draft for draft in drafts if draft.record_type == "report_header")
 
     assert header.payload["well_name_text"] == "NF-12"
     assert header.payload["report_date"] == "2026-03-15"
+    assert header.payload["report_number"] == "42"
     assert header.region_index == 0
     well_locator = header.field_locations["well_name_text"]
     date_locator = header.field_locations["report_date"]
-    assert (well_locator["format"], well_locator["row"], well_locator["column"]) == ("csv", 4, 2)
-    assert (date_locator["format"], date_locator["row"], date_locator["column"]) == ("csv", 3, 2)
+    report_number_locator = header.field_locations["report_number"]
+    assert (well_locator["format"], well_locator["row"], well_locator["column"]) == ("csv", 5, 2)
+    assert (date_locator["format"], date_locator["row"], date_locator["column"]) == ("csv", 4, 2)
+    assert (report_number_locator["format"], report_number_locator["row"], report_number_locator["column"]) == ("csv", 1, 1)
 
 
 def test_xlsx_preserves_formula_cache_types_hidden_rows_and_source_cells():

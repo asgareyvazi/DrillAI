@@ -137,6 +137,7 @@ async def _create_import_evidence(
     wellbore_id: str,
     *,
     record_payload: dict | None = None,
+    record_type: str = "daily_summary",
 ) -> tuple[str, str]:
     from sqlalchemy import select
 
@@ -168,7 +169,7 @@ async def _create_import_evidence(
             project_id=document.project_id,
             well_id=document.well_id,
             wellbore_id=document.wellbore_id,
-            record_type="daily_summary",
+            record_type=record_type,
             payload_schema_key="test.daily_report_import",
             payload_schema_version=1,
             payload=record_payload,
@@ -181,6 +182,183 @@ async def _create_import_evidence(
         record_id = record.id
         await session.commit()
     return document_id, record_id
+
+
+@pytest.mark.asyncio
+async def test_report_header_identity_sources_require_human_reconciliation_and_fresh_evidence(client, db):
+    from sqlalchemy import select
+
+    from drillai.db.models import ExtractedRecord
+
+    well_id, wellbore_id = await _create_well(client)
+
+    async def create_header_import(
+        report_date: str,
+        report_number: str,
+        *,
+        source_report_date: str | None = None,
+        source_report_number: str | None = None,
+        record_type: str = "report_header",
+        report_date_source_path: str = "payload.report_date",
+        expected_status: int = 201,
+    ) -> tuple[dict, str]:
+        document_id, record_id = await _create_import_evidence(
+            client,
+            db,
+            well_id,
+            wellbore_id,
+            record_type=record_type,
+            record_payload={
+                "well_name_text": "Synthetic report-header identity",
+                "report_date": source_report_date or report_date,
+                "report_number": source_report_number or report_number,
+            },
+        )
+        imported = await client.post(
+            f"/api/v1/wells/{well_id}/daily-reports/imports",
+            json={
+                "wellbore_id": wellbore_id,
+                "report_date": report_date,
+                "report_timezone": "UTC",
+                "shift_code": "day",
+                "report_number": report_number,
+                "source_document_id": document_id,
+                "source_record_id": record_id,
+                "field_sources": [
+                    {"field_key": "report_date", "source_record_id": record_id, "source_path": report_date_source_path},
+                    {"field_key": "report_number", "source_record_id": record_id, "source_path": "payload.report_number"},
+                ],
+                "content": {
+                    "source_document_id": document_id,
+                    "source_record_id": record_id,
+                    "summary": "Synthetic API-test report-header mapping.",
+                },
+            },
+            headers=headers("engineer"),
+        )
+        assert imported.status_code == expected_status, imported.text
+        return imported.json(), record_id
+
+    wrong_path, _ = await create_header_import(
+        "2026-11-04", "DDR-HEADER-PATH", report_date_source_path="payload.report_number", expected_status=422
+    )
+    assert "matching extracted header field" in wrong_path["error"]["message"]
+    mismatched_identity, _ = await create_header_import(
+        "2026-11-05", "DDR-HEADER-MISMATCH", source_report_date="2026-11-04", expected_status=422
+    )
+    assert "exactly match" in mismatched_identity["error"]["message"]
+    incompatible_record, _ = await create_header_import(
+        "2026-11-05", "DDR-HEADER-TYPE", record_type="daily_summary", expected_status=422
+    )
+    assert "not a compatible source" in incompatible_record["error"]["message"]
+
+    imported, record_id = await create_header_import("2026-11-04", "DDR-HEADER-004")
+    report_id = imported["report"]["id"]
+    revision = imported["revision"]
+    assert revision["status"] == "draft"
+    assert revision["source_record_id"] == record_id
+    assert revision["content_hash_verified"] is True
+    identity_sources = [item for item in revision["reconciliation"] if item["target_kind"] == "report_identity"]
+    assert {item["field_key"] for item in identity_sources} == {"report_date", "report_number"}
+    assert all(item["source_record_id"] == record_id for item in identity_sources)
+    assert all(item["proposal_matches_current"] is True for item in identity_sources)
+    assert all(item["source_value_hash"] and item["proposed_value_hash"] for item in identity_sources)
+
+    blocked_submit = await client.post(
+        f"/api/v1/wells/{well_id}/daily-reports/{report_id}/revisions/1/submit",
+        json={"expected_edit_version": 1, "reason": "Synthetic pre-reconciliation submission attempt."},
+        headers=headers("engineer"),
+    )
+    assert blocked_submit.status_code == 422, blocked_submit.text
+    assert blocked_submit.json()["error"]["details"]["target_count"] == 2
+
+    accepted = await client.post(
+        f"/api/v1/wells/{well_id}/daily-reports/{report_id}/revisions/1/reconcile",
+        json={
+            "expected_edit_version": 1,
+            "reason": "Compared both immutable identity values with the cited report-header fields.",
+            "decisions": [
+                {"target_key": item["target_key"], "decision": "accepted"} for item in identity_sources
+            ],
+        },
+        headers=headers("engineer"),
+    )
+    assert accepted.status_code == 200, accepted.text
+    accepted_identity = [
+        item for item in accepted.json()["revision"]["reconciliation"] if item["target_kind"] == "report_identity"
+    ]
+    assert {item["resolution_state"] for item in accepted_identity} == {"accepted"}
+    assert accepted.json()["revision"]["content_hash_verified"] is True
+
+    immutable_identity_correction = await client.post(
+        f"/api/v1/wells/{well_id}/daily-reports/{report_id}/revisions/1/reconcile",
+        json={
+            "expected_edit_version": 2,
+            "reason": "Synthetic attempt to change immutable report identity in place.",
+            "decisions": [{"target_key": identity_sources[0]["target_key"], "decision": "corrected"}],
+        },
+        headers=headers("engineer"),
+    )
+    assert immutable_identity_correction.status_code == 422, immutable_identity_correction.text
+    assert "identity is immutable" in immutable_identity_correction.json()["error"]["message"]
+
+    submitted = await client.post(
+        f"/api/v1/wells/{well_id}/daily-reports/{report_id}/revisions/1/submit",
+        json={"expected_edit_version": 2, "reason": "Submit after source identity reconciliation."},
+        headers=headers("engineer"),
+    )
+    assert submitted.status_code == 200, submitted.text
+
+    rejected_import, _ = await create_header_import("2026-11-05", "DDR-HEADER-005")
+    rejected_rows = [
+        item for item in rejected_import["revision"]["reconciliation"] if item["target_kind"] == "report_identity"
+    ]
+    rejected_decision = await client.post(
+        f"/api/v1/wells/{well_id}/daily-reports/{rejected_import['report']['id']}/revisions/1/reconcile",
+        json={
+            "expected_edit_version": 1,
+            "reason": "The synthetic identity proposals were reviewed and rejected.",
+            "decisions": [{"target_key": item["target_key"], "decision": "rejected"} for item in rejected_rows],
+        },
+        headers=headers("engineer"),
+    )
+    assert rejected_decision.status_code == 200, rejected_decision.text
+    assert {
+        item["resolution_state"]
+        for item in rejected_decision.json()["revision"]["reconciliation"]
+        if item["target_kind"] == "report_identity"
+    } == {"rejected"}
+    rejected_submission = await client.post(
+        f"/api/v1/wells/{well_id}/daily-reports/{rejected_import['report']['id']}/revisions/1/submit",
+        json={"expected_edit_version": 2, "reason": "Submit after explicit rejection of source identity proposals."},
+        headers=headers("engineer"),
+    )
+    assert rejected_submission.status_code == 200, rejected_submission.text
+
+    stale_import, stale_record_id = await create_header_import("2026-11-06", "DDR-HEADER-006")
+    stale_report_id = stale_import["report"]["id"]
+    async with db.session_factory() as session:
+        source = (
+            await session.execute(select(ExtractedRecord).where(ExtractedRecord.id == stale_record_id))
+        ).scalar_one()
+        source.review_version += 1
+        await session.commit()
+
+    stale_decision = await client.post(
+        f"/api/v1/wells/{well_id}/daily-reports/{stale_report_id}/revisions/1/reconcile",
+        json={
+            "expected_edit_version": 1,
+            "reason": "Attempt to reconcile a header after its source review version changed.",
+            "decisions": [
+                {"target_key": item["target_key"], "decision": "accepted"}
+                for item in stale_import["revision"]["reconciliation"]
+                if item["target_kind"] == "report_identity"
+            ],
+        },
+        headers=headers("engineer"),
+    )
+    assert stale_decision.status_code == 409, stale_decision.text
+    assert "source evidence changed after import" in stale_decision.json()["error"]["message"]
 
 
 @pytest.mark.asyncio

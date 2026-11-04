@@ -4,7 +4,7 @@
  */
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
@@ -245,6 +245,9 @@ const extractedRecord = {
   record_type: 'report_header',
   validation_state: 'extracted',
   payload: {
+    well_name_text: 'Synthetic West Well',
+    report_date: '2026-03-15',
+    report_number: 'DDR-007',
     summary: 'Mud check recorded from source.',
     operations_summary: 'Drilled ahead from source.',
     safety_notes: 'No safety incident reported in the source.',
@@ -703,6 +706,13 @@ describe('DailyReportsWorkspace', () => {
     expect(sourceEvidence).toHaveTextContent('Source locator')
     expect(sourceEvidence).toHaveTextContent('field_locations')
     expect(sourceEvidence).toHaveTextContent('table_row')
+    await user.selectOptions(await screen.findByTestId('daily-report-import-identity-record'), 'record_1')
+    expect(screen.getByTestId('daily-report-import-header-sources')).toHaveTextContent('Synthetic West Well')
+    await user.selectOptions(await screen.findByTestId('daily-report-import-identity-source-report-date'), 'payload.report_date')
+    await user.selectOptions(await screen.findByTestId('daily-report-import-identity-source-report-number'), 'payload.report_number')
+    expect(screen.getByTestId('daily-report-import-date')).toHaveValue('2026-03-15')
+    expect(screen.getByTestId('daily-report-import-number')).toHaveValue('DDR-007')
+    expect(screen.getByTestId('daily-report-import-wellbore')).toHaveValue('')
     await user.selectOptions(await screen.findByTestId('daily-report-import-summary-source'), 'payload.summary')
     await user.selectOptions(await screen.findByTestId('daily-report-import-operations_summary-source'), 'payload.operations_summary')
     await user.selectOptions(await screen.findByTestId('daily-report-import-safety_notes-source'), 'payload.safety_notes')
@@ -721,7 +731,6 @@ describe('DailyReportsWorkspace', () => {
       offset: 0,
     })
     await user.selectOptions(await screen.findByTestId('daily-report-import-wellbore'), 'wb_1')
-    await user.type(screen.getByTestId('daily-report-import-date'), '2026-03-15')
     await user.type(screen.getByTestId('daily-report-import-timezone'), 'Europe/Amsterdam')
     await user.selectOptions(screen.getByTestId('daily-report-import-shift'), 'day')
     await user.click(screen.getByTestId('daily-report-import-add-activity'))
@@ -760,15 +769,18 @@ describe('DailyReportsWorkspace', () => {
       report_date: '2026-03-15',
       report_timezone: 'Europe/Amsterdam',
       shift_code: 'day',
+      report_number: 'DDR-007',
       source_document_id: 'doc_ddr_1',
       source_record_id: 'record_1',
-      field_sources: [
+      field_sources: expect.arrayContaining([
+        { field_key: 'report_date', source_record_id: 'record_1', source_path: 'payload.report_date' },
+        { field_key: 'report_number', source_record_id: 'record_1', source_path: 'payload.report_number' },
         { field_key: 'summary', source_record_id: 'record_1', source_path: 'payload.summary' },
         { field_key: 'operations_summary', source_record_id: 'record_1', source_path: 'payload.operations_summary' },
         { field_key: 'safety_notes', source_record_id: 'record_1', source_path: 'payload.safety_notes' },
         { field_key: 'next_period_plan', source_record_id: 'record_1', source_path: 'payload.next_period_plan' },
         { field_key: 'environmental_notes', source_record_id: 'record_1', source_path: 'payload.environmental_notes' },
-      ],
+      ]),
       content: expect.objectContaining({
         summary: 'Mud check recorded from source.',
         operations_summary: 'Drilled ahead from source.',
@@ -814,10 +826,12 @@ describe('DailyReportsWorkspace', () => {
 
     await user.click(await screen.findByTestId('daily-report-import-open'))
     await user.selectOptions(await screen.findByTestId('daily-report-import-document'), 'doc_ddr_1')
+    await user.selectOptions(await screen.findByTestId('daily-report-import-identity-record'), 'record_1')
+    await user.selectOptions(await screen.findByTestId('daily-report-import-identity-source-report-date'), 'payload.report_date')
+    await user.selectOptions(await screen.findByTestId('daily-report-import-identity-source-report-number'), 'payload.report_number')
     await user.selectOptions(await screen.findByTestId('daily-report-import-record'), 'record_1')
     await user.selectOptions(await screen.findByTestId('daily-report-import-summary-source'), 'payload.summary')
     await user.selectOptions(await screen.findByTestId('daily-report-import-wellbore'), 'wb_1')
-    await user.type(screen.getByTestId('daily-report-import-date'), '2026-03-15')
     await user.type(screen.getByTestId('daily-report-import-timezone'), 'Europe/Amsterdam')
     await user.selectOptions(screen.getByTestId('daily-report-import-shift'), 'day')
     await user.click(screen.getByTestId('daily-report-import-submit'))
@@ -854,12 +868,20 @@ describe('DailyReportsWorkspace', () => {
       decided_by: null,
       decided_at: null,
     } as const
+    const identityProposal = {
+      ...proposal,
+      id: 'reconciliation_identity_date',
+      target_key: 'identity:report_date',
+      target_kind: 'report_identity',
+      field_key: 'report_date',
+      source_path: 'payload.report_date',
+    } as const
     const importedRevision = {
       ...revision,
       source_kind: 'import',
       source_document_id: 'doc_ddr_1',
       source_record_id: 'record_1',
-      reconciliation: [proposal],
+      reconciliation: [proposal, identityProposal],
     } satisfies DailyReportRevision
     const importedReport = { ...report, latest_revision: importedRevision } satisfies DailyReport
     const importedDetail = {
@@ -883,13 +905,17 @@ describe('DailyReportsWorkspace', () => {
     await screen.findByTestId('daily-report-reconciliation')
     expect(screen.getByTestId('daily-report-submit')).toBeDisabled()
     expect(screen.getByText('Resolve every imported or unresolved source proposal before submitting this report for review.')).toBeInTheDocument()
-    await user.click(await screen.findByText('Inspect cited extraction record and payload'))
+    await user.click((await screen.findAllByText('Inspect cited extraction record and payload'))[0]!)
     expect(await screen.findByText('Mud check recorded from source.')).toBeInTheDocument()
     const decision = screen.getByRole('combobox', { name: 'Decision for summary' })
-    expect(screen.getByRole('option', { name: 'Mark corrected' })).toBeDisabled()
-    expect(screen.getByRole('option', { name: 'Reject proposal' })).toBeDisabled()
+    expect(within(decision).getByRole('option', { name: 'Mark corrected' })).toBeDisabled()
+    expect(within(decision).getByRole('option', { name: 'Reject proposal' })).toBeDisabled()
     await user.selectOptions(decision, 'accepted')
-    await user.type(screen.getByTestId('daily-report-reconciliation-reason'), 'Compared with the cited source record.')
+    const identityDecision = screen.getByRole('combobox', { name: 'Decision for report_date' })
+    expect(within(identityDecision).getByRole('option', { name: 'Mark corrected' })).toBeDisabled()
+    expect(screen.getByText('Report date and number are fixed when the report is created. Reject a conflicting source proposal; a different identity requires a separate report.')).toBeInTheDocument()
+    await user.selectOptions(identityDecision, 'accepted')
+    await user.type(screen.getByTestId('daily-report-reconciliation-reason'), 'Compared the proposal and immutable report identity with cited evidence.')
     await user.click(screen.getByTestId('daily-report-reconciliation-submit'))
 
     await waitFor(() => expect(mocks.reconcileDailyReport).toHaveBeenCalledTimes(1))
@@ -897,8 +923,11 @@ describe('DailyReportsWorkspace', () => {
     expect([wellId, reportId, revisionNumber]).toEqual(['well_1', 'report_1', 1])
     expect(payload).toEqual({
       expected_edit_version: 1,
-      reason: 'Compared with the cited source record.',
-      decisions: [{ target_key: 'field:summary', decision: 'accepted' }],
+      reason: 'Compared the proposal and immutable report identity with cited evidence.',
+      decisions: [
+        { target_key: 'field:summary', decision: 'accepted' },
+        { target_key: 'identity:report_date', decision: 'accepted' },
+      ],
     })
     expect(idempotencyKey).toBeTruthy()
   })

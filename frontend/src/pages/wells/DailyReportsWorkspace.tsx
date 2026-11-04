@@ -1213,6 +1213,8 @@ function DailyReportImportForm({
   const [form, setForm] = useState<ReportFormState>(emptyForm)
   const [selectedRecordId, setSelectedRecordId] = useState('')
   const [sourceFieldPaths, setSourceFieldPaths] = useState<Record<string, string>>({})
+  const [identitySourceRecordId, setIdentitySourceRecordId] = useState('')
+  const [identitySourcePaths, setIdentitySourcePaths] = useState<Record<string, string>>({})
   const [validationError, setValidationError] = useState<string | null>(null)
   const { operationsQuery, eventsQuery, operations, events } = useDailyReportActivityLinks(wellId, form.wellbore_id)
   const conflictReportId = error instanceof ApiError && error.kind === 'conflict' && typeof error.details.report_id === 'string'
@@ -1240,9 +1242,25 @@ function DailyReportImportForm({
     enabled: Boolean(documentId && selectedRecordId),
     retry: false,
   })
+  const headerEvidenceQuery = useQuery({
+    queryKey: ['daily-report-import-header-evidence', documentId, identitySourceRecordId],
+    queryFn: ({ signal }) =>
+      drillingApi.listEvidence(
+        { subject_id: identitySourceRecordId, document_id: documentId, limit: 50 },
+        signal,
+      ),
+    enabled: Boolean(documentId && identitySourceRecordId),
+    retry: false,
+  })
   const records = documentQuery.data?.records ?? []
   const importableRecords = records.filter((record) => !['rejected', 'superseded'].includes(record.validation_state))
   const selectedRecord = importableRecords.find((record) => record.id === selectedRecordId)
+  const headerRecords = importableRecords.filter((record) => record.record_type === 'report_header')
+  const identitySourceRecord = headerRecords.find((record) => record.id === identitySourceRecordId)
+  const headerSources = useMemo(
+    () => identitySourceRecord ? sourceTextFields(identitySourceRecord.payload) : [],
+    [identitySourceRecord],
+  )
   const summarySources = useMemo(
     () => selectedRecord ? sourceTextFields(selectedRecord.payload) : [],
     [selectedRecord],
@@ -1254,6 +1272,10 @@ function DailyReportImportForm({
   const recordOptions = importableRecords.map((record) => ({
     value: record.id,
     label: `${record.record_type} · ${record.validation_state} · ${record.id}`,
+  }))
+  const headerRecordOptions = headerRecords.map((record) => ({
+    value: record.id,
+    label: `${record.validation_state} · ${record.id}`,
   }))
   const shiftOptions = catalogue.shift_codes.map((value) => ({ value, label: labelEnum(t, 'shifts', value) }))
   const timeOptions = catalogue.time_bases.map((value) => ({ value, label: labelEnum(t, 'timeBases', value) }))
@@ -1296,6 +1318,8 @@ function DailyReportImportForm({
       source_record_id: '',
       source_region_id: '',
       source_page_number: '',
+      report_date: identitySourcePaths.report_date ? '' : current.report_date,
+      report_number: identitySourcePaths.report_number ? '' : current.report_number,
       activities: current.activities.map((item) => ({
         ...item,
         source_document_id: '',
@@ -1313,11 +1337,22 @@ function DailyReportImportForm({
     }))
     setSelectedRecordId('')
     setSourceFieldPaths({})
+    setIdentitySourceRecordId('')
+    setIdentitySourcePaths({})
   }
   const chooseRecord = (id: string) => {
     setSelectedRecordId(id)
     patchForm({ source_record_id: id, ...sourceRecordMetadata(id) })
     setSourceFieldPaths({})
+  }
+  const chooseIdentitySourceRecord = (id: string) => {
+    setIdentitySourceRecordId(id)
+    setIdentitySourcePaths({})
+    setForm((current) => ({
+      ...current,
+      report_date: identitySourcePaths.report_date ? '' : current.report_date,
+      report_number: identitySourcePaths.report_number ? '' : current.report_number,
+    }))
   }
   const chooseActivitySource = (index: number, id: string) => {
     patchActivity(index, { source_record_id: id, ...sourceRecordMetadata(id) })
@@ -1332,6 +1367,20 @@ function DailyReportImportForm({
     setSourceFieldPaths((current) => ({ ...current, [fieldKey]: path }))
     const source = summarySources.find((item) => item.path === path)
     if (source) setForm((current) => ({ ...current, [fieldKey]: source.value }))
+  }
+  const chooseIdentityFieldSource = (fieldKey: 'report_date' | 'report_number', path: string) => {
+    setIdentitySourcePaths((current) => ({ ...current, [fieldKey]: path }))
+    const source = headerSources.find((item) => item.path === path)
+    if (source) setForm((current) => ({ ...current, [fieldKey]: source.value }))
+    else if (!path && identitySourcePaths[fieldKey]) setForm((current) => ({ ...current, [fieldKey]: '' }))
+  }
+  const editIdentityField = (fieldKey: 'report_date' | 'report_number', value: string) => {
+    setIdentitySourcePaths((current) => {
+      const next = { ...current }
+      delete next[fieldKey]
+      return next
+    })
+    setForm((current) => ({ ...current, [fieldKey]: value }))
   }
   const sourceRowOptions = [
     { value: '', label: t('dailyReports.noSource') },
@@ -1359,6 +1408,11 @@ function DailyReportImportForm({
       setValidationError(t('dailyReports.validationSourceRecord'))
       return
     }
+    const hasIdentitySource = Boolean(identitySourcePaths.report_date || identitySourcePaths.report_number)
+    if (hasIdentitySource && (!identitySourceRecordId || !identitySourceRecord)) {
+      setValidationError(t('dailyReports.validationHeaderSourceRecord'))
+      return
+    }
     if (mappedRowRecordIds.some((id) => !importableRecords.some((record) => record.id === id))) {
       setValidationError(t('dailyReports.validationSourceRecord'))
       return
@@ -1373,9 +1427,14 @@ function DailyReportImportForm({
       report_number: nonEmpty(form.report_number),
       source_document_id: documentId,
       source_record_id: selectedRecordId || undefined,
-      field_sources: Object.entries(sourceFieldPaths)
-        .filter(([, source_path]) => Boolean(source_path))
-        .map(([field_key, source_path]) => ({ field_key, source_record_id: selectedRecordId, source_path })),
+      field_sources: [
+        ...Object.entries(sourceFieldPaths)
+          .filter(([, source_path]) => Boolean(source_path))
+          .map(([field_key, source_path]) => ({ field_key, source_record_id: selectedRecordId, source_path })),
+        ...Object.entries(identitySourcePaths)
+          .filter(([, source_path]) => Boolean(source_path))
+          .map(([field_key, source_path]) => ({ field_key, source_record_id: identitySourceRecordId, source_path })),
+      ],
       content: {
         ...content,
         source_document_id: documentId,
@@ -1387,6 +1446,12 @@ function DailyReportImportForm({
   const sourcePathOptions = [
     { value: '', label: t('dailyReports.noSourceMapping') },
     ...summarySources.map((source) => ({ value: source.path, label: source.path })),
+  ]
+  const identitySourcePathOptions = (fieldKey: 'report_date' | 'report_number') => [
+    { value: '', label: t('dailyReports.noSourceMapping') },
+    ...headerSources
+      .filter((source) => source.path === `payload.${fieldKey}`)
+      .map((source) => ({ value: source.path, label: source.path })),
   ]
   const sourceableFields = [
     { fieldKey: 'summary', label: t('dailyReports.summary') },
@@ -1489,13 +1554,72 @@ function DailyReportImportForm({
                 required
                 testId="daily-report-import-wellbore"
               />
-              <TextField id="daily-report-import-date" label={t('dailyReports.reportDate')} value={form.report_date} onChange={(report_date) => patchForm({ report_date })} placeholder="2026-03-15" required dir="ltr" testId="daily-report-import-date" />
+              <TextField id="daily-report-import-date" label={t('dailyReports.reportDate')} value={form.report_date} onChange={(report_date) => editIdentityField('report_date', report_date)} placeholder="2026-03-15" required dir="ltr" testId="daily-report-import-date" />
               <TextField id="daily-report-import-timezone" label={t('dailyReports.reportTimezone')} value={form.report_timezone} onChange={(report_timezone) => patchForm({ report_timezone })} required dir="ltr" help={t('dailyReports.timezoneHint')} testId="daily-report-import-timezone" />
               <SelectField id="daily-report-import-shift" label={t('dailyReports.shift')} value={form.shift_code} options={shiftOptions} onChange={(shift_code) => patchForm({ shift_code })} placeholder={t('dailyReports.chooseOption')} required testId="daily-report-import-shift" />
               {form.shift_code === 'custom' && <TextField id="daily-report-import-shift-label" label={t('dailyReports.shiftLabel')} value={form.shift_label} onChange={(shift_label) => patchForm({ shift_label })} required />}
-              <TextField id="daily-report-import-number" label={t('dailyReports.reportNumber')} value={form.report_number} onChange={(report_number) => patchForm({ report_number })} dir="auto" />
+              <TextField id="daily-report-import-number" label={t('dailyReports.reportNumber')} value={form.report_number} onChange={(report_number) => editIdentityField('report_number', report_number)} dir="auto" testId="daily-report-import-number" />
             </div>
           )}
+          <section className="space-y-3 rounded-md border border-graphite-200 p-3 dark:border-graphite-700" aria-label={t('dailyReports.headerIdentitySources')} data-testid="daily-report-import-header-sources">
+            <h3 className="text-xs font-semibold">{t('dailyReports.headerIdentitySources')}</h3>
+            <p className="text-xs text-graphite-500">{t('dailyReports.headerIdentitySourceHint')}</p>
+            {!documentId ? (
+              <p className="text-xs text-graphite-500">{t('dailyReports.selectDocumentForIdentity')}</p>
+            ) : documentQuery.isFetching ? <Loading /> : documentQuery.error ? (
+              <ErrorState error={documentQuery.error} onRetry={() => { void documentQuery.refetch() }} />
+            ) : headerRecords.length > 0 ? (
+              <>
+                <SelectField
+                  id="daily-report-import-identity-record"
+                  label={t('dailyReports.selectReportHeaderRecord')}
+                  value={identitySourceRecordId}
+                  options={headerRecordOptions}
+                  onChange={chooseIdentitySourceRecord}
+                  placeholder={t('dailyReports.chooseOption')}
+                  testId="daily-report-import-identity-record"
+                />
+                {!identitySourceRecord && <p className="text-xs text-graphite-500">{t('dailyReports.selectHeaderRecordForIdentity')}</p>}
+                {identitySourceRecord && (
+                  <div className="space-y-3 rounded bg-graphite-50 p-3 dark:bg-graphite-950" data-testid="daily-report-import-identity-record-detail">
+                    {typeof identitySourceRecord.payload.well_name_text === 'string' && (
+                      <p className="text-xs">{t('dailyReports.extractedWellName')}: <bdi dir="auto">{identitySourceRecord.payload.well_name_text}</bdi></p>
+                    )}
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <SelectField
+                        id="daily-report-import-identity-source-report-date"
+                        label={t('dailyReports.mapIdentitySource', { field: t('dailyReports.reportDate') })}
+                        value={identitySourcePaths.report_date ?? ''}
+                        options={identitySourcePathOptions('report_date')}
+                        onChange={(path) => chooseIdentityFieldSource('report_date', path)}
+                        placeholder={t('dailyReports.noSourceMapping')}
+                        testId="daily-report-import-identity-source-report-date"
+                      />
+                      <SelectField
+                        id="daily-report-import-identity-source-report-number"
+                        label={t('dailyReports.mapIdentitySource', { field: t('dailyReports.reportNumber') })}
+                        value={identitySourcePaths.report_number ?? ''}
+                        options={identitySourcePathOptions('report_number')}
+                        onChange={(path) => chooseIdentityFieldSource('report_number', path)}
+                        placeholder={t('dailyReports.noSourceMapping')}
+                        testId="daily-report-import-identity-source-report-number"
+                      />
+                    </div>
+                    {headerEvidenceQuery.isPending ? <Loading /> : headerEvidenceQuery.error ? (
+                      <ErrorState error={headerEvidenceQuery.error} onRetry={() => { void headerEvidenceQuery.refetch() }} />
+                    ) : (
+                      <EvidenceList
+                        citations={(headerEvidenceQuery.data?.items ?? []).map(evidenceItemToCitation)}
+                        emptyMessage={t('empty.noEvidence')}
+                      />
+                    )}
+                  </div>
+                )}
+              </>
+            ) : (
+              <p className="text-xs text-graphite-500">{t('dailyReports.noReportHeaderRecords')}</p>
+            )}
+          </section>
         </fieldset>
 
         <fieldset className="mb-6 space-y-4">
@@ -1674,6 +1798,7 @@ function DailyReportImportForm({
 
 type DailyReportReconciliationPanelProps = {
   wellId: string
+  report: DailyReport
   revision: DailyReportRevision
   gateDisabled: boolean
   gateReason: string
@@ -1685,6 +1810,7 @@ type DailyReportReconciliationPanelProps = {
 
 function DailyReportReconciliationPanel({
   wellId,
+  report,
   revision,
   gateDisabled,
   gateReason,
@@ -1748,7 +1874,9 @@ function DailyReportReconciliationPanel({
               const isRejected = proposal.resolution_state === 'rejected'
               const currentFieldValue = proposal.target_kind === 'revision_field'
                 ? (revision as unknown as Record<string, unknown>)[proposal.field_key]
-                : null
+                : proposal.target_kind === 'report_identity'
+                  ? proposal.field_key === 'report_date' ? report.report_date : report.report_number
+                  : null
               const fieldHasValue = typeof currentFieldValue === 'string' && currentFieldValue.trim() !== ''
               const targetSummary = proposal.target_kind === 'activity'
                 ? revision.activities.find((item) => item.id === proposal.target_id)?.title
@@ -1764,7 +1892,7 @@ function DailyReportReconciliationPanel({
                     <Badge tone={proposal.resolution_state === 'accepted' || proposal.resolution_state === 'corrected' ? 'ok' : proposal.resolution_state === 'rejected' ? 'danger' : 'warning'}>
                       {labelEnum(t, 'resolutions', proposal.resolution_state)}
                     </Badge>
-                    <span className="text-xs font-semibold">{proposal.target_kind === 'revision_field' ? t('dailyReports.reportField') : proposal.target_kind === 'activity' ? t('dailyReports.activityRow') : t('dailyReports.measurementRow')}</span>
+                    <span className="text-xs font-semibold">{proposal.target_kind === 'revision_field' ? t('dailyReports.reportField') : proposal.target_kind === 'report_identity' ? t('dailyReports.reportIdentityField') : proposal.target_kind === 'activity' ? t('dailyReports.activityRow') : t('dailyReports.measurementRow')}</span>
                     <bdi dir="ltr" className="break-all font-mono text-[11px]">{proposal.field_key}</bdi>
                   </div>
                   {targetSummary && <p className="mt-2 break-words text-sm">{targetSummary}</p>}
@@ -1810,13 +1938,16 @@ function DailyReportReconciliationPanel({
                     >
                       <option value="">{t('dailyReports.chooseOption')}</option>
                       <option value="accepted" disabled={!proposal.proposal_matches_current || isRejected}>{t('dailyReports.acceptProposal')}</option>
-                      <option value="corrected" disabled={proposal.proposal_matches_current || isRejected}>{t('dailyReports.markCorrected')}</option>
+                      <option value="corrected" disabled={proposal.target_kind === 'report_identity' || proposal.proposal_matches_current || isRejected}>{t('dailyReports.markCorrected')}</option>
                       <option value="rejected" disabled={isRejected ? false : proposal.target_kind === 'revision_field' && fieldHasValue}>{t('dailyReports.rejectProposal')}</option>
                       <option value="unresolved" disabled={isRejected}>{t('dailyReports.leaveUnresolved')}</option>
                     </select>
                   </label>
                   {proposal.target_kind === 'revision_field' && fieldHasValue && (
                     <p className="mt-1 text-[11px] text-graphite-500">{t('dailyReports.clearFieldBeforeReject')}</p>
+                  )}
+                  {proposal.target_kind === 'report_identity' && (
+                    <p className="mt-1 text-[11px] text-graphite-500">{t('dailyReports.reportIdentityCorrectionHint')}</p>
                   )}
                 </article>
               )
@@ -3020,6 +3151,7 @@ export default function DailyReportsWorkspace() {
                 <DailyReportReconciliationPanel
                   key={`${activeRevision.id}:${activeRevision.edit_version}`}
                   wellId={wellId}
+                  report={report}
                   revision={activeRevision}
                   gateDisabled={reconciliationGateDisabled}
                   gateReason={reconciliationGateReason}

@@ -1572,7 +1572,7 @@ export interface DailyReportEditPayload {
   content: DailyReportContentInput
 }
 
-export type DailyReportReconciliationTargetKind = 'revision_field' | 'activity' | 'measurement'
+export type DailyReportReconciliationTargetKind = 'revision_field' | 'report_identity' | 'activity' | 'measurement'
 export type DailyReportReconciliationDecision = 'accepted' | 'corrected' | 'rejected' | 'unresolved'
 
 export interface DailyReportFieldSource {

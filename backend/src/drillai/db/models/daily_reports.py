@@ -40,7 +40,8 @@ REPORT_ACTIVITY_KINDS = ("operation", "npt", "event", "safety", "milestone", "ot
 REPORT_TIME_BASES = ("observed", "reported", "calculated", "planned", "inferred", "unknown")
 REPORT_DEPTH_REFERENCES = ("md", "tvd", "tvdss", "unknown")
 REPORT_RECONCILIATION_STATES = ("manual", "proposed", "accepted", "corrected", "rejected", "unresolved")
-REPORT_RECONCILIATION_TARGET_KINDS = ("revision_field", "activity", "measurement")
+REPORT_RECONCILIATION_TARGET_KINDS = ("revision_field", "report_identity", "activity", "measurement")
+REPORT_RECONCILIATION_IDENTITY_FIELDS = ("report_date", "report_number")
 REPORT_RECONCILIATION_REVISION_FIELDS = (
     "period_start_at",
     "period_end_at",
@@ -455,17 +456,19 @@ class DailyReportReconciliation(Base, IdMixin, TimestampMixin, OrgScopedMixin):
         UniqueConstraint("revision_id", "target_key", name="uq_daily_report_reconciliation_target"),
         CheckConstraint("length(trim(target_key)) > 0", name="daily_report_reconciliation_target_nonempty"),
         CheckConstraint(
-            "target_kind IN ('revision_field', 'activity', 'measurement')",
+            "target_kind IN ('revision_field', 'report_identity', 'activity', 'measurement')",
             name="daily_report_reconciliation_target_kind_valid",
         ),
         CheckConstraint(
-            "(target_kind = 'revision_field' AND target_id IS NULL) OR "
+            "(target_kind IN ('revision_field', 'report_identity') AND target_id IS NULL) OR "
             "(target_kind IN ('activity', 'measurement') AND target_id IS NOT NULL)",
             name="daily_report_reconciliation_target_id_consistent",
         ),
         CheckConstraint(
             "(target_kind = 'revision_field' AND field_key IN ("
             + ", ".join(f"'{field}'" for field in REPORT_RECONCILIATION_REVISION_FIELDS)
+            + ")) OR (target_kind = 'report_identity' AND field_key IN ("
+            + ", ".join(f"'{field}'" for field in REPORT_RECONCILIATION_IDENTITY_FIELDS)
             + ")) OR (target_kind = 'activity' AND field_key = 'activity') OR "
             "(target_kind = 'measurement' AND field_key IN ("
             + ", ".join(f"'{key}'" for key in DAILY_REPORT_PARAMETER_SPECS)
@@ -528,6 +531,7 @@ __all__ = [
     "DAILY_REPORT_PARAMETER_SPECS",
     "REPORT_ACTIVITY_KINDS",
     "REPORT_DEPTH_REFERENCES",
+    "REPORT_RECONCILIATION_IDENTITY_FIELDS",
     "REPORT_RECONCILIATION_REVISION_FIELDS",
     "REPORT_RECONCILIATION_STATES",
     "REPORT_RECONCILIATION_TARGET_KINDS",
