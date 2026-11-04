@@ -56,17 +56,23 @@ function Citation({ citation }: { citation: EvidenceCitation }) {
             {t('common.confidence')} {formatNumber(citation.confidence, 'en', 2)}
           </Badge>
         )}
-        {citation.quote_verified === false && <Badge tone="warning">quote not verified in source</Badge>}
-        {citation.quote_verified === true && <Badge tone="ok">quote verified</Badge>}
+        {citation.quote_verified === false && <Badge tone="warning">{t('common.quoteNotVerified')}</Badge>}
+        {citation.quote_verified === true && <Badge tone="ok">{t('common.quoteVerified')}</Badge>}
       </div>
       {citation.excerpt ? (
         <blockquote className="mt-2 border-s-2 border-signal/50 ps-2 text-sm text-graphite-700 italic dark:text-graphite-200">
           {citation.excerpt}
         </blockquote>
       ) : (
-        <p className="mt-2 text-xs text-graphite-500 italic">
-          The platform holds a link to this location but no stored excerpt.
-        </p>
+        <p className="mt-2 text-xs text-graphite-500 italic">{t('common.noStoredExcerpt')}</p>
+      )}
+      {Object.keys(locator).length > 0 && (
+        <details className="mt-2 text-xs">
+          <summary className="cursor-pointer text-graphite-600 dark:text-graphite-300">{t('common.sourceLocator')}</summary>
+          <pre dir="ltr" className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap break-words rounded bg-graphite-50 p-2 text-[10px] dark:bg-graphite-950">
+            {JSON.stringify(locator, null, 2)}
+          </pre>
+        </details>
       )}
     </li>
   )
@@ -84,7 +90,7 @@ export function EvidenceList({ citations, emptyMessage }: { citations: EvidenceC
   )
 }
 
-function itemToCitation(item: EvidenceItem): EvidenceCitation {
+export function evidenceItemToCitation(item: EvidenceItem): EvidenceCitation {
   return {
     evidence_id: item.id,
     document_id: item.document_id,
@@ -136,7 +142,7 @@ export function EvidencePanel({
   })
 
   const inline = items ?? []
-  const fetched = (linked.data?.items ?? []).map(itemToCitation)
+  const fetched = (linked.data?.items ?? []).map(evidenceItemToCitation)
   const merged = [...inline, ...fetched].filter(
     (citation) => (citation.confidence ?? 1) >= minConfidence,
   )

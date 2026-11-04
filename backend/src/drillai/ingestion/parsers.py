@@ -12,7 +12,7 @@ Parsers are deliberately honest about what they can and cannot see:
   :class:`ExtractionFailed` and the ingestion job records the failure.
 
 Supported today: PDF (``pypdf``), DOCX (``python-docx``), XLSX/XLSM (``openpyxl``), CSV/TSV,
-and plain text/markdown. Scanned/image PDF pages are flagged ``ocr_required``; an operator may enable
+and plain text/Markdown/LOG. Scanned/image PDF pages are flagged ``ocr_required``; an operator may enable
 the optional PDFium + Tesseract path. Missing OCR dependencies, runtime failures, page limits, and
 truncation remain visible instead of being treated as complete extraction.
 """

@@ -544,8 +544,17 @@ export const drillingApi = {
     api.post<EventRow>(`/events/${enc(eventId)}/document`, body, idempotencyHeader(idempotencyKey)),
 
   // ------------------------------------------------------------------ documents & evidence
-  listDocuments: (params: { well_id?: string; doc_type?: string } = {}, signal?: AbortSignal) =>
-    api.get<Page<DocumentRow>>('/documents', { query: params, signal, validate: expect.paged() }),
+  listDocuments: (
+    params: {
+      well_id?: string
+      doc_type?: string
+      doc_types?: string[]
+      status?: string
+      limit?: number
+      offset?: number
+    } = {},
+    signal?: AbortSignal,
+  ) => api.get<Page<DocumentRow>>('/documents', { query: params, signal, validate: expect.paged() }),
   getDocument: (documentId: string, signal?: AbortSignal) => api.get<DocumentDetail>(`/documents/${enc(documentId)}`, { signal }),
   getExtractedRecord: (documentId: string, recordId: string, signal?: AbortSignal) =>
     api.get<ExtractionRecord>(`/documents/${enc(documentId)}/records/${enc(recordId)}`, { signal }),
@@ -590,8 +599,19 @@ export const drillingApi = {
   },
   processDocument: (documentId: string, body: { document_id?: string; dry_run?: boolean } = {}) =>
     api.post<{ processing: DdrProcessingReport }>(`/documents/${enc(documentId)}/process`, body),
-  listEvidence: (params: { well_id?: string; document_id?: string; limit?: number } = {}, signal?: AbortSignal) =>
-    api.get<Page<EvidenceItem>>('/evidence', { query: params, signal, validate: expect.paged() }),
+  listEvidence: (
+    params: {
+      subject_kind?: string
+      subject_id?: string
+      well_id?: string
+      document_id?: string
+      evidence_kind?: string
+      min_confidence?: number
+      limit?: number
+      offset?: number
+    } = {},
+    signal?: AbortSignal,
+  ) => api.get<Page<EvidenceItem>>('/evidence', { query: params, signal, validate: expect.paged() }),
   evidenceSummary: (params: { well_id?: string } = {}, signal?: AbortSignal) =>
     api.get<EvidenceSummary>('/evidence/summary', { query: params, signal }),
   documentFileUrl: (documentId: string) => `/api/v1/documents/${enc(documentId)}/file`,

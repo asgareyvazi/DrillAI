@@ -18,7 +18,7 @@ import type {
   ExtractedRecordReviewRequest,
 } from '../../api/types'
 import { ExtractedRecordReviewForm } from '../../components/documents/ExtractedRecordReviewForm'
-import { EvidenceList, EvidencePanel } from '../../components/evidence/EvidencePanel'
+import { EvidenceList, EvidencePanel, evidenceItemToCitation } from '../../components/evidence/EvidencePanel'
 import { PageHeader } from '../../components/layout/AppShell'
 import {
   Async,
@@ -162,6 +162,13 @@ export default function DocumentWorkspace() {
     retry: false,
   })
   const reviewRecord = reviewRecordQuery.data ?? null
+  const reviewEvidenceQuery = useQuery({
+    queryKey: ['document-record-evidence', selectedId, reviewRecordId],
+    queryFn: ({ signal }) =>
+      drillingApi.listEvidence({ subject_id: reviewRecordId as string, document_id: selectedId as string, limit: 50 }, signal),
+    enabled: Boolean(selectedId && reviewRecordId),
+    retry: false,
+  })
 
   /*
    * Two ways a URL can name a document that must not be presented as this well's:
@@ -275,16 +282,18 @@ export default function DocumentWorkspace() {
       />
 
       <div className="grid gap-3 lg:grid-cols-[320px_1fr]">
-        <Card title={t('documents.upload')} subtitle="PDF, DOCX, XLSX, CSV or text">
+        <Card title={t('documents.upload')} subtitle={t('documents.uploadFormats')}>
           <div className="space-y-2">
             <Field label={t('documents.docType')} hint="The type selects the extractor set; it does not guarantee success.">
               <select
+                data-testid="document-upload-type"
                 value={docType}
                 onChange={(event) => setDocType(event.target.value)}
                 className="w-full rounded border border-graphite-300 bg-white px-2 py-1.5 text-sm dark:border-graphite-700 dark:bg-graphite-900"
               >
                 {[
                   'ddr',
+                  'drilling_document',
                   'daily_log',
                   'drilling_program',
                   'well_program',
@@ -321,6 +330,8 @@ export default function DocumentWorkspace() {
             <input
               ref={fileInput}
               type="file"
+              data-testid="document-upload-file"
+              accept=".pdf,.docx,.xlsx,.xlsm,.csv,.tsv,.txt,.md,.log"
               className="w-full rounded border border-graphite-300 p-1.5 text-xs dark:border-graphite-700"
               onChange={(event) => {
                 const file = event.target.files?.[0]
@@ -639,6 +650,15 @@ export default function DocumentWorkspace() {
                 <Badge tone="neutral">{t('common.page')} {formatNumber(reviewRecord.page_number, locale, 0)}</Badge>
               ) : null}
             </div>
+            <section className="space-y-2 rounded-md border border-graphite-200 p-3 dark:border-graphite-700" aria-label={t('common.evidence')} data-testid="extracted-record-review-evidence">
+              <h3 className="text-xs font-semibold">{t('common.evidence')}</h3>
+              <Async
+                query={reviewEvidenceQuery}
+                empty={(data) => data.items.length === 0 ? <EmptyState message={t('empty.noEvidence')} /> : false}
+              >
+                {(data) => <EvidenceList citations={data.items.map(evidenceItemToCitation)} />}
+              </Async>
+            </section>
             <ExtractedRecordReviewForm
               key={`${reviewRecord.id}-v${reviewRecord.review_version}`}
               record={reviewRecord}

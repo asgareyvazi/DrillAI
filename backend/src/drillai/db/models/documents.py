@@ -38,6 +38,7 @@ from drillai.db.base import (
 
 DOC_TYPES = (
     "ddr",                  # daily drilling report
+    "drilling_document",    # drilling-report alias supported by extraction and import workflows
     "well_program",
     "drilling_program",
     "end_of_well_report",

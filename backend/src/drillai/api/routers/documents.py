@@ -259,6 +259,7 @@ async def list_documents(
     well_id: OptionalFilter = None,
     project_id: OptionalFilter = None,
     doc_type: OptionalFilter = None,
+    doc_types: Annotated[list[str] | None, Query(description="Repeat to match any of these document types.")] = None,
     status: OptionalFilter = None,
     limit: int = Query(default=50, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
@@ -272,7 +273,20 @@ async def list_documents(
         stmt = stmt.where(Document.well_id == well_id)
     if project_id:
         stmt = stmt.where(Document.project_id == project_id)
-    if doc_type:
+    if doc_types is not None:
+        if doc_type is not None:
+            raise ValidationFailed("use either doc_type or repeated doc_types filters, not both")
+        if not doc_types or len(doc_types) > 32 or any(not value.strip() for value in doc_types):
+            raise ValidationFailed("doc_types must contain between 1 and 32 non-empty document types")
+        requested_types = set(doc_types)
+        invalid_types = sorted(requested_types.difference(DOC_TYPES))
+        if invalid_types:
+            raise ValidationFailed(
+                "doc_types contains an unrecognised document type",
+                details={"invalid": invalid_types, "allowed": sorted(DOC_TYPES)},
+            )
+        stmt = stmt.where(Document.doc_type.in_(requested_types))
+    elif doc_type:
         stmt = stmt.where(Document.doc_type == doc_type)
     if status:
         stmt = stmt.where(Document.status == status)
@@ -288,7 +302,10 @@ async def upload_document(
     request: Request,
     session: Annotated[AsyncSession, Depends(get_db)],
     auth: Annotated[AuthContext, Depends(require("document.read"))],
-    file: Annotated[UploadFile, File(description="PDF, DOCX, XLSX, CSV or text report")],
+    file: Annotated[
+        UploadFile,
+        File(description="PDF, DOCX, XLSX/XLSM, CSV/TSV, TXT, Markdown or LOG report"),
+    ],
     well_id: Annotated[str | None, Form()] = None,
     wellbore_id: Annotated[str | None, Form()] = None,
     section_id: Annotated[str | None, Form()] = None,

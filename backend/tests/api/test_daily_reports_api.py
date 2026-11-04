@@ -130,6 +130,110 @@ async def _create_import_evidence(client, db, well_id: str, wellbore_id: str) ->
 
 
 @pytest.mark.asyncio
+async def test_drilling_document_csv_extraction_flows_into_daily_report_reconciliation(client, db):
+    well_id, wellbore_id = await _create_well(client)
+    csv_bytes = (
+        b"Activity Description,Start Time,End Time,Duration (h),Depth MD (ft)\n"
+        b"Drill ahead,00:00,06:00,6.0,1500\n"
+    )
+    uploaded = await client.post(
+        "/api/v1/documents",
+        files={"file": ("shift-operations.csv", csv_bytes, "text/csv")},
+        data={
+            "well_id": well_id,
+            "wellbore_id": wellbore_id,
+            "doc_type": "drilling_document",
+        },
+        headers=headers("engineer"),
+    )
+    assert uploaded.status_code == 201, uploaded.text
+    document = uploaded.json()["document"]
+    assert document["doc_type"] == "drilling_document"
+
+    listed = await client.get(
+        "/api/v1/documents",
+        params={"well_id": well_id, "doc_types": ["ddr", "drilling_document"], "limit": 500},
+        headers=headers("engineer"),
+    )
+    assert listed.status_code == 200, listed.text
+    assert [item["id"] for item in listed.json()["items"]] == [document["id"]]
+    conflicting_filters = await client.get(
+        "/api/v1/documents",
+        params={"well_id": well_id, "doc_type": "ddr", "doc_types": ["ddr"]},
+        headers=headers("engineer"),
+    )
+    assert conflicting_filters.status_code == 422, conflicting_filters.text
+
+    detail = await client.get(f"/api/v1/documents/{document['id']}", headers=headers("engineer"))
+    assert detail.status_code == 200, detail.text
+    operation_record = next(
+        item for item in detail.json()["records"] if item["record_type"] == "operation_row"
+    )
+    assert operation_record["payload"]["activity description"] == "Drill ahead"
+    assert operation_record["payload"]["duration_hours"] == 6.0
+    assert operation_record["method_version"] == "1.2.0"
+
+    evidence = await client.get(
+        "/api/v1/evidence",
+        params={"document_id": document["id"], "subject_id": operation_record["id"]},
+        headers=headers("engineer"),
+    )
+    assert evidence.status_code == 200, evidence.text
+    operation_evidence = next(item for item in evidence.json()["items"] if item["subject_id"] == operation_record["id"])
+    assert operation_evidence["locator"]["source"]["format"] == "csv"
+    assert operation_evidence["locator"]["source"]["kind"] == "table_row"
+    assert operation_evidence["locator"]["field_locations"]["duration_hours"]["row"] == 2
+    assert operation_evidence["locator"]["field_locations"]["duration_hours"]["column"] == 4
+
+    imported = await client.post(
+        f"/api/v1/wells/{well_id}/daily-reports/imports",
+        json={
+            "wellbore_id": wellbore_id,
+            "report_date": "2026-11-04",
+            "report_timezone": "UTC",
+            "shift_code": "day",
+            "report_number": "DDR-MULTIFORMAT-001",
+            "source_document_id": document["id"],
+            "source_record_id": operation_record["id"],
+            "content": {
+                "source_document_id": document["id"],
+                "source_record_id": operation_record["id"],
+                "operations_summary": "Extracted activity remains a proposal until reconciliation.",
+                "activities": [{
+                    "activity_kind": "operation",
+                    "operation_kind": "drilling",
+                    "title": "Drill ahead",
+                    "duration_value": 6.0,
+                    "duration_unit": "h",
+                    "duration_basis": "reported",
+                    "source_document_id": document["id"],
+                    "source_record_id": operation_record["id"],
+                }],
+            },
+        },
+        headers=headers("engineer"),
+    )
+    assert imported.status_code == 201, imported.text
+    imported_body = imported.json()
+    assert imported_body["revision"]["status"] == "draft"
+    assert imported_body["revision"]["activities"][0]["resolution_state"] == "proposed"
+    proposal = next(row for row in imported_body["revision"]["reconciliation"] if row["target_kind"] == "activity")
+
+    reviewed = await client.post(
+        f"/api/v1/wells/{well_id}/daily-reports/{imported_body['report']['id']}/revisions/1/reconcile",
+        json={
+            "expected_edit_version": 1,
+            "reason": "Compared the extracted activity with its cited CSV row.",
+            "decisions": [{"target_key": proposal["target_key"], "decision": "accepted"}],
+        },
+        headers=headers("engineer"),
+    )
+    assert reviewed.status_code == 200, reviewed.text
+    assert reviewed.json()["revision"]["activities"][0]["resolution_state"] == "accepted"
+    assert reviewed.json()["revision"]["content_hash_verified"] is True
+
+
+@pytest.mark.asyncio
 async def test_imported_daily_report_reconciliation_measurements_and_correction(client, db):
     well_id, wellbore_id = await _create_well(client)
     document_id, record_id = await _create_import_evidence(client, db, well_id, wellbore_id)

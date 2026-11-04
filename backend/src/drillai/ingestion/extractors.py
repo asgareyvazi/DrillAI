@@ -591,12 +591,135 @@ def _contains_table_header_hint(label: str, hint: str) -> bool:
     return f" {hint} " in f" {normalised} "
 
 
+def _delimited_text_table_regions(page) -> Iterable[ParsedRegion]:
+    """Expose explicitly delimited PDF/text activity tables to the normal table extractor.
+
+    Word-processed reports and spreadsheets already carry cell regions, but many PDF reports expose
+    selectable or OCR'd text only. We parse only pipe/tab-delimited lines with a recognizable activity
+    header and preserve each original line/cell offset; visually aligned prose is never guessed into a
+    table. The output remains an unvalidated extraction proposal.
+    """
+    for source_region in page.regions:
+        if source_region.kind != "text" or not source_region.text:
+            continue
+        text = source_region.text
+        if len(text) > 1_000_000:
+            continue
+        lines = text.splitlines(keepends=True)
+        if len(lines) > 5_000:
+            continue
+        line_offsets: list[int] = []
+        cursor = 0
+        for raw_line in lines:
+            line_offsets.append(cursor)
+            cursor += len(raw_line)
+
+        def split_row(line: str) -> tuple[str, list[str]] | None:
+            if line.count("|") >= 2:
+                separator = "|"
+            elif line.count("\t") >= 2:
+                separator = "\t"
+            else:
+                return None
+            cells = [cell.strip() for cell in line.split(separator)]
+            if not 3 <= len(cells) <= 40:
+                return None
+            return separator, cells
+
+        index = 0
+        while index < len(lines):
+            raw_line = lines[index].splitlines()[0]
+            candidate = split_row(raw_line)
+            if candidate is None:
+                index += 1
+                continue
+            _separator, header = candidate
+            has_activity = any(
+                _contains_table_header_hint(label, hint)
+                for label in header
+                for hint in ("operation", "operations", "activity", "activities", "description")
+            )
+            has_measure = any(
+                _contains_table_header_hint(label, hint)
+                for label in header
+                for hint in ("start", "end", "duration", "depth", "md", "time")
+            )
+            if not (has_activity and has_measure):
+                index += 1
+                continue
+
+            parsed_rows: list[list[dict[str, Any]]] = []
+            end = index
+            while end < len(lines) and len(parsed_rows) < _MAX_RECORDS_PER_DOCUMENT:
+                row_text = lines[end].splitlines()[0]
+                split = split_row(row_text)
+                if split is None or split[0] != _separator or len(split[1]) != len(header):
+                    break
+                values = split[1]
+                if end > index and (is_section_heading(values) or values == header):
+                    break
+                if not any(values):
+                    end += 1
+                    continue
+                cells: list[dict[str, Any]] = []
+                search_from = 0
+                raw_cells = row_text.split(_separator)
+                for column, (raw_cell, value) in enumerate(zip(raw_cells, values, strict=True)):
+                    raw_start = row_text.find(raw_cell, search_from)
+                    if raw_start < 0:
+                        raw_start = search_from
+                    search_from = raw_start + len(raw_cell) + len(_separator)
+                    leading = len(raw_cell) - len(raw_cell.lstrip())
+                    value_start = raw_start + leading
+                    cells.append(
+                        {
+                            "text": value,
+                            "source_row": end + 1,
+                            "source_locator": {
+                                "format": page.layout.get("source", "text"),
+                                "kind": "text_table_cell",
+                                "page": page.page_number,
+                                "line": end + 1,
+                                "column": column + 1,
+                                "char_start": line_offsets[end] + value_start,
+                                "char_end": line_offsets[end] + value_start + len(value),
+                            },
+                        }
+                    )
+                parsed_rows.append(cells)
+                end += 1
+
+            if len(parsed_rows) > 1:
+                table = {
+                    "rows": len(parsed_rows),
+                    "cols": len(header),
+                    "cells": parsed_rows,
+                    "header": header,
+                    "header_row": 0,
+                    "header_confidence": 0.9,
+                    "source_format": page.layout.get("source", "text"),
+                }
+                yield ParsedRegion(
+                    kind="table",
+                    order_index=source_region.order_index,
+                    table=table,
+                    confidence=0.7,
+                    source_locator={
+                        "format": page.layout.get("source", "text"),
+                        "kind": "delimited_text_table",
+                        "page": page.page_number,
+                        "header_line": index + 1,
+                    },
+                )
+            index = max(end, index + 1)
+
+
 class OperationTableExtractor(Extractor):
     """Operations rows: sequence, start/end time, operation code, duration, depth."""
 
     key = "operations_table"
     name = "Operations / activities table"
-    version = "1.1.0"
+    version = "1.2.0"
     doc_types = ("ddr", "drilling_document")
     priority = 20
 
@@ -617,7 +740,8 @@ class OperationTableExtractor(Extractor):
 
     def run(self, document: ParsedDocument, *, doc_type: str) -> Iterable[ExtractedRecordDraft]:
         for page in document.pages:
-            for region in page.regions:
+            regions = [*page.regions, *_delimited_text_table_regions(page)]
+            for region in regions:
                 if region.kind != "table" or not region.table or region.table.get("hidden"):
                     continue
                 header = [str(cell).lower().strip() for cell in (region.table.get("header") or [])]

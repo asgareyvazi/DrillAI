@@ -22,6 +22,7 @@ import {
 import { ApiError } from '../../api/client'
 import { drillingApi } from '../../api/endpoints'
 import { Badge, Button, Card, EmptyState, ErrorState, Loading } from '../../components/common'
+import { EvidenceList, evidenceItemToCitation } from '../../components/evidence/EvidencePanel'
 import { PageHeader } from '../../components/layout/AppShell'
 import { useI18n } from '../../i18n'
 import { formatDateTime, formatNumber } from '../../lib/format'
@@ -1090,7 +1091,8 @@ function DailyReportImportForm({
     : null
   const documentsQuery = useQuery({
     queryKey: ['daily-report-import-documents', wellId],
-    queryFn: ({ signal }) => drillingApi.listDocuments({ well_id: wellId, doc_type: 'ddr' }, signal),
+    queryFn: ({ signal }) =>
+      drillingApi.listDocuments({ well_id: wellId, doc_types: ['ddr', 'drilling_document'], limit: 500 }, signal),
     enabled: Boolean(wellId),
   })
   const documentId = form.source_document_id
@@ -1098,6 +1100,16 @@ function DailyReportImportForm({
     queryKey: ['daily-report-import-document', documentId],
     queryFn: ({ signal }) => drillingApi.getDocument(documentId, signal),
     enabled: Boolean(documentId),
+  })
+  const selectedRecordEvidenceQuery = useQuery({
+    queryKey: ['daily-report-import-record-evidence', documentId, selectedRecordId],
+    queryFn: ({ signal }) =>
+      drillingApi.listEvidence(
+        { subject_id: selectedRecordId, document_id: documentId, limit: 50 },
+        signal,
+      ),
+    enabled: Boolean(documentId && selectedRecordId),
+    retry: false,
   })
   const records = documentQuery.data?.records ?? []
   const importableRecords = records.filter((record) => !['rejected', 'superseded'].includes(record.validation_state))
@@ -1313,6 +1325,14 @@ function DailyReportImportForm({
                     {JSON.stringify(selectedRecord.payload, null, 2)}
                   </pre>
                   {selectedRecord.payload_truncated && <p className="text-xs text-warning">{t('dailyReports.sourcePayloadTruncated')}</p>}
+                  <section className="space-y-2 border-t border-graphite-200 pt-2 dark:border-graphite-700" aria-label={t('common.evidence')} data-testid="daily-report-import-record-evidence">
+                    <h4 className="text-xs font-semibold">{t('common.evidence')}</h4>
+                    {selectedRecordEvidenceQuery.isPending ? <Loading /> : selectedRecordEvidenceQuery.error ? (
+                      <ErrorState error={selectedRecordEvidenceQuery.error} onRetry={() => { void selectedRecordEvidenceQuery.refetch() }} />
+                    ) : (
+                      <EvidenceList citations={(selectedRecordEvidenceQuery.data?.items ?? []).map(evidenceItemToCitation)} emptyMessage={t('empty.noEvidence')} />
+                    )}
+                  </section>
                 </div>
               )}
             </div>

@@ -31,6 +31,7 @@ const mocks = vi.hoisted(() => ({
   getDailyReportRevision: vi.fn(),
   exportDailyReportRevision: vi.fn(),
   listDocuments: vi.fn(),
+  listEvidence: vi.fn(),
   getDocument: vi.fn(),
   createDailyReport: vi.fn(),
   importDailyReport: vi.fn(),
@@ -53,6 +54,7 @@ vi.mock('../../api/endpoints', () => ({
     getDailyReportRevision: mocks.getDailyReportRevision,
     exportDailyReportRevision: mocks.exportDailyReportRevision,
     listDocuments: mocks.listDocuments,
+    listEvidence: mocks.listEvidence,
     getDocument: mocks.getDocument,
     createDailyReport: mocks.createDailyReport,
     importDailyReport: mocks.importDailyReport,
@@ -242,6 +244,7 @@ beforeEach(() => {
   mocks.getDailyReportRevision.mockReset().mockResolvedValue({ report, revision })
   mocks.exportDailyReportRevision.mockReset()
   mocks.listDocuments.mockReset().mockResolvedValue({ items: [sourceDocumentRow], total: 1, limit: 50, offset: 0 })
+  mocks.listEvidence.mockReset().mockResolvedValue({ items: [], total: 0, limit: 50, offset: 0 })
   mocks.getDocument.mockReset().mockResolvedValue(extractedDocument)
   mocks.createDailyReport.mockReset().mockResolvedValue({ report, revision })
   mocks.importDailyReport.mockReset().mockResolvedValue({ report, revision })
@@ -382,11 +385,47 @@ describe('DailyReportsWorkspace', () => {
 
   it('imports a source-linked draft without treating extraction as approval and maps each supported narrative field', async () => {
     const user = userEvent.setup()
+    mocks.listEvidence.mockResolvedValue({
+      items: [{
+        id: 'evidence_record_1',
+        subject_kind: 'extracted_record.report_header',
+        subject_id: 'record_1',
+        evidence_kind: 'document_region',
+        evidence_id: 'region_1',
+        document_id: 'doc_ddr_1',
+        region_id: 'region_1',
+        page_number: 1,
+        well_id: 'well_1',
+        locator: {
+          source: { format: 'csv', kind: 'table_row', row: 2 },
+          field_locations: { duration_hours: { format: 'csv', row: 2, column: 4 } },
+        },
+        excerpt: 'Drill ahead, 6.0 h',
+        confidence: 0.83,
+        relevance: 1,
+        weight: 1,
+        method: 'table_row',
+        quote_verified: true,
+        quote_check: 'region_text',
+        created_at: '2026-11-01T10:00:00Z',
+      }],
+      total: 1,
+      limit: 50,
+      offset: 0,
+    })
     renderWorkspace()
 
     await user.click(await screen.findByTestId('daily-report-import-open'))
     await user.selectOptions(await screen.findByTestId('daily-report-import-document'), 'doc_ddr_1')
     await user.selectOptions(await screen.findByTestId('daily-report-import-record'), 'record_1')
+    expect(mocks.listDocuments).toHaveBeenCalledWith(
+      { well_id: 'well_1', doc_types: ['ddr', 'drilling_document'], limit: 500 },
+      expect.anything(),
+    )
+    const sourceEvidence = await screen.findByTestId('daily-report-import-record-evidence')
+    expect(sourceEvidence).toHaveTextContent('Source locator')
+    expect(sourceEvidence).toHaveTextContent('field_locations')
+    expect(sourceEvidence).toHaveTextContent('table_row')
     await user.selectOptions(await screen.findByTestId('daily-report-import-summary-source'), 'payload.summary')
     await user.selectOptions(await screen.findByTestId('daily-report-import-operations_summary-source'), 'payload.operations_summary')
     await user.selectOptions(await screen.findByTestId('daily-report-import-safety_notes-source'), 'payload.safety_notes')

@@ -81,6 +81,41 @@ def test_pdf_parser_extracts_pages_and_text():
     assert parsed.pages[0].width_pt == pytest.approx(612)
 
 
+def test_pdf_delimited_operation_rows_keep_field_level_line_provenance():
+    from drillai.ingestion.extractors import extract
+
+    parsed = parse_bytes(
+        minimal_pdf(
+            [
+                "Daily Drilling Report",
+                "Well: NF-12",
+                "Start Time | End Time | Activity Description | Duration (h) | Depth MD (ft)",
+                "00:00 | 06:00 | Drill ahead | 6.0 | 1500",
+                "06:00 | 07:30 | Circulate and condition | 1.5 | 1500",
+            ]
+        ),
+        filename="report-layout.pdf",
+    )
+
+    drafts, warnings = extract(parsed, doc_type="ddr")
+    operations = [draft for draft in drafts if draft.record_type == "operation_row"]
+
+    assert warnings == []
+    assert len(operations) == 2
+    assert operations[0].payload["activity description"] == "Drill ahead"
+    assert operations[0].payload["duration_hours"] == 6.0
+    assert operations[0].payload["depth_md_si"] == pytest.approx(457.2)
+    assert operations[0].unit_context == {"duration_hours": "h", "depth_md_si": "ft"}
+    assert operations[0].method_version == "1.2.0"
+    assert operations[0].source_locator["format"] == "pdf"
+    assert operations[0].source_locator["kind"] == "table_row"
+    depth_locator = operations[0].field_locations["depth_md_si"]
+    assert depth_locator["kind"] == "text_table_cell"
+    assert depth_locator["line"] == 4
+    assert depth_locator["column"] == 5
+    assert depth_locator["char_start"] < depth_locator["char_end"]
+
+
 @pytest.mark.parametrize(
     ("raw", "expected"),
     [
@@ -156,6 +191,79 @@ def test_docx_and_xlsx_and_csv_parsers():
 
     csv_doc = parse_bytes(b"md,incl,azi\n0,0,0\n500,1.5,45\n", filename="survey.csv")
     assert csv_doc.pages[0].regions[0].table["header"] == ["md", "incl", "azi"]
+
+
+@pytest.mark.parametrize("source_format", ["csv", "docx", "xlsx"])
+def test_operation_table_extraction_supports_multiple_container_layouts(source_format):
+    from drillai.ingestion.extractors import extract
+
+    if source_format == "csv":
+        data = (
+            b"Daily report: NF-12\n\n"
+            b"Start,End,Activity,Duration (min),Bit Depth (ft)\n"
+            b"00:00,06:00,Drill ahead,360,1500\n"
+        )
+        filename = "operations.csv"
+    elif source_format == "docx":
+        from docx import Document as DocxDocument
+
+        document = DocxDocument()
+        document.add_paragraph("Daily report: NF-12")
+        table = document.add_table(rows=2, cols=6)
+        rows = [
+            ["Sequence", "Start", "End", "Operation", "Duration (min)", "MD (m)"],
+            ["1", "00:00", "06:00", "Drill ahead", "360", "1500"],
+        ]
+        for row_index, values in enumerate(rows):
+            for column, value in enumerate(values):
+                table.rows[row_index].cells[column].text = value
+        buffer = io.BytesIO()
+        document.save(buffer)
+        data = buffer.getvalue()
+        filename = "operations.docx"
+    else:
+        import openpyxl
+
+        workbook = openpyxl.Workbook()
+        sheet = workbook.active
+        sheet.title = "Shift report"
+        for row in (
+            ["Daily report: NF-12"],
+            [],
+            ["Activity Description", "Start Time", "End Time", "Duration (h)", "Measured Depth (ft)"],
+            ["Drill ahead", "00:00", "06:00", 6, 1500],
+            ["Survey data"],
+            ["MD (m)", "Inclination (deg)", "Azimuth (deg)"],
+            [1500, 0, 0],
+        ):
+            sheet.append(row)
+        buffer = io.BytesIO()
+        workbook.save(buffer)
+        data = buffer.getvalue()
+        filename = "operations.xlsx"
+
+    parsed = parse_bytes(data, filename=filename)
+    drafts, warnings = extract(parsed, doc_type="ddr")
+    operations = [draft for draft in drafts if draft.record_type == "operation_row"]
+
+    assert warnings == []
+    assert len(operations) == 1
+    operation = operations[0]
+    assert operation.payload["duration_hours"] == pytest.approx(6.0)
+    expected_depth = 1500.0 if source_format == "docx" else 457.2
+    assert operation.payload["depth_md_si"] == pytest.approx(expected_depth)
+    if source_format == "csv":
+        assert operation.payload["activity"] == "Drill ahead"
+    elif source_format == "docx":
+        assert operation.payload["operation"] == "Drill ahead"
+    else:
+        assert operation.payload["activity description"] == "Drill ahead"
+    assert operation.source_locator["format"] == source_format
+    assert operation.source_locator["kind"] == "table_row"
+    assert operation.field_locations
+    assert operations[0].source_locator["format"] == source_format
+    assert operations[0].source_locator["kind"] == "table_row"
+    assert operations[0].field_locations
 
 
 def test_csv_sniffs_semicolon_bom_quotes_and_preserves_physical_line_locators():

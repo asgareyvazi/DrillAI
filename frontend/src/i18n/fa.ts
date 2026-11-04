@@ -55,6 +55,10 @@ export const fa = {
     status: 'وضعیت',
     detail: 'جزئیات',
     source: 'منبع',
+    sourceLocator: 'جایگاه منبع',
+    quoteVerified: 'نقل‌قول در منبع راستی‌آزمایی شد',
+    quoteNotVerified: 'نقل‌قول در منبع راستی‌آزمایی نشده است',
+    noStoredExcerpt: 'جایگاه منبع پیوند دارد، اما گزیده‌ای ذخیره نشده است.',
     confidence: 'اطمینان',
     page: 'صفحه',
     total: 'مجموع',
@@ -490,6 +494,7 @@ export const fa = {
   documents: {
     title: 'کارگاه اسناد',
     upload: 'بارگذاری سند',
+    uploadFormats: 'PDF، DOCX، XLSX/XLSM، CSV/TSV، TXT، Markdown یا LOG. OCR سند اسکن‌شده به‌صورت اختیاری فعال می‌شود.',
     docType: 'نوع سند',
     operationScope: 'دامنهٔ عملیات',
     operationScopeHint: 'اختیاری است. یک عملیات را انتخاب کنید تا گزارش به چاه، چاه‌مجرا و بخش معتبرِ آن پیوند بخورد.',

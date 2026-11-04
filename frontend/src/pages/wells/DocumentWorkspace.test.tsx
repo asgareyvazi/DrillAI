@@ -140,16 +140,69 @@ beforeEach(() => {
   apiMock.documentProvenance.mockReset().mockResolvedValue({ document_id: documentRow.id, record_count: 0, chain: [] })
   apiMock.listEvidence.mockReset().mockResolvedValue({ items: [], total: 0 })
   apiMock.reviewExtractedRecord.mockReset().mockResolvedValue(record)
+  apiMock.uploadDocument.mockReset().mockResolvedValue({
+    document: { ...documentRow, id: 'doc_uploaded_xlsx', title: 'operations.xlsx' },
+    job: { id: 'job_upload_xlsx', status: 'queued' },
+  })
   apiMock.documentFileUrl.mockClear()
 })
 
 describe('DocumentWorkspace extracted-record review', () => {
+  it('offers supported multi-format uploads and starts the scoped ingestion pipeline', async () => {
+    const file = new File(['synthetic operations table'], 'operations.xlsx', {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    })
+    renderWorkspace()
+
+    const upload = await screen.findByTestId('document-upload-file')
+    expect(upload).toHaveAttribute('accept', '.pdf,.docx,.xlsx,.xlsm,.csv,.tsv,.txt,.md,.log')
+    expect(screen.getByText('PDF, DOCX, XLSX/XLSM, CSV/TSV, TXT, Markdown or LOG. Scanned PDF OCR is opt-in.')).toBeInTheDocument()
+    expect(screen.getByTestId('document-upload-type')).toContainElement(screen.getByRole('option', { name: 'Drilling document' }))
+    fireEvent.change(upload, { target: { files: [file] } })
+
+    await waitFor(() => expect(apiMock.uploadDocument).toHaveBeenCalledOnce())
+    expect(apiMock.uploadDocument).toHaveBeenCalledWith(file, {
+      well_id: documentRow.well_id,
+      doc_type: 'ddr',
+    })
+  })
+
   it('opens a bilingual review surface and submits an optimistic, audited correction through the API wrapper', async () => {
     const user = userEvent.setup()
+    apiMock.listEvidence.mockResolvedValue({
+      items: [{
+        id: 'evidence_record_review_1',
+        subject_kind: 'extracted_record.depth_reading',
+        subject_id: record.id,
+        evidence_kind: 'document_region',
+        evidence_id: 'reg_review_1',
+        document_id: documentRow.id,
+        region_id: 'reg_review_1',
+        page_number: 1,
+        well_id: documentRow.well_id,
+        locator: {
+          source: { format: 'xlsx', kind: 'table_row', sheet: 'Shift report', row: 12 },
+          field_locations: { bit_depth_si: { format: 'xlsx', sheet: 'Shift report', cell: 'D12' } },
+        },
+        excerpt: 'Bit depth: 1000 m',
+        confidence: 0.7,
+        relevance: 1,
+        weight: 1,
+        method: 'label_value',
+        quote_verified: true,
+        quote_check: 'region_text',
+        created_at: '2026-11-01T10:00:00Z',
+      }],
+      total: 1,
+    })
     renderWorkspace()
 
     await user.click(await screen.findByTestId(`extracted-record-review-open-${record.id}`))
     expect(await screen.findByRole('heading', { name: 'Review extracted record' })).toBeInTheDocument()
+    const sourceEvidence = await screen.findByTestId('extracted-record-review-evidence')
+    expect(sourceEvidence).toHaveTextContent('Source locator')
+    expect(sourceEvidence).toHaveTextContent('field_locations')
+    expect(sourceEvidence).toHaveTextContent('D12')
     fireEvent.change(screen.getByTestId('extracted-record-review-payload'), {
       target: { value: '{\n  "bit_depth_si": 1001.5\n}' },
     })

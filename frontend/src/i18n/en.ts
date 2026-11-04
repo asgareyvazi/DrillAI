@@ -56,6 +56,10 @@ export const en = {
     status: 'Status',
     detail: 'Detail',
     source: 'Source',
+    sourceLocator: 'Source locator',
+    quoteVerified: 'Quote verified in source',
+    quoteNotVerified: 'Quote not verified in source',
+    noStoredExcerpt: 'A source location is linked, but no excerpt is stored.',
     confidence: 'Confidence',
     page: 'Page',
     total: 'Total',
@@ -492,6 +496,7 @@ export const en = {
   documents: {
     title: 'Document Workspace',
     upload: 'Upload document',
+    uploadFormats: 'PDF, DOCX, XLSX/XLSM, CSV/TSV, TXT, Markdown or LOG. Scanned PDF OCR is opt-in.',
     docType: 'Document type',
     operationScope: 'Operation scope',
     operationScopeHint: 'Optional. Choose an operation to attach the report to its validated well, wellbore and section.',
