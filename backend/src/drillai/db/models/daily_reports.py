@@ -87,6 +87,12 @@ class DailyDrillingReport(Base, IdMixin, TimestampMixin, OrgScopedMixin):
             "org_id", "wellbore_id", "report_date", "identity_key", name="uq_daily_drilling_report_identity"
         ),
         UniqueConstraint("id", "org_id", name="uq_daily_drilling_report_id_org"),
+        ForeignKeyConstraint(
+            ["org_id", "well_id", "wellbore_id"],
+            ["wellbores.org_id", "wellbores.well_id", "wellbores.id"],
+            ondelete="RESTRICT",
+            name="fk_daily_drilling_reports_wellbore_scope",
+        ),
         CheckConstraint("length(trim(identity_key)) > 0", name="daily_report_identity_key_nonempty"),
         CheckConstraint("length(trim(report_timezone)) > 0", name="daily_report_timezone_nonempty"),
         CheckConstraint("shift_code IN ('day', 'night', '24h', 'custom')", name="daily_report_shift_valid"),

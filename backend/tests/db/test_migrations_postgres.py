@@ -13,7 +13,9 @@ What is asserted, in the order a deployment would meet it:
 3. the last revision reverses and re-applies cleanly (a downgrade that hands back a database the
    application cannot use is not a downgrade);
 4. a database that already contains two wells sharing a regulator identifier is **refused**, with the
-   offenders named, rather than silently repaired by guessing which well owns the identifier.
+   offenders named, rather than silently repaired by guessing which well owns the identifier;
+5. database composite keys reject wellbore/report rows whose organization or well tuple disagrees with
+   the referenced parent asset.
 """
 
 from __future__ import annotations
@@ -22,6 +24,7 @@ import asyncio
 from pathlib import Path
 
 import pytest
+import sqlalchemy as sa
 from alembic import command
 from alembic.config import Config
 
@@ -98,6 +101,97 @@ async def _well_ids(url: str) -> list[str]:
         await engine.dispose()
 
 
+async def _assert_report_wellbore_scope_constraints(url: str) -> None:
+    """PostgreSQL rejects cross-organization wellbores and cross-well daily reports."""
+    from sqlalchemy.ext.asyncio import create_async_engine
+
+    engine = create_async_engine(url, pool_size=2, max_overflow=0)
+    try:
+        async with engine.begin() as connection:
+            await connection.execute(
+                sa.text(
+                    "INSERT INTO organizations "
+                    "(id, slug, name, kind, timezone, default_unit_system, default_locale, settings, is_active) "
+                    "VALUES (:id, :slug, :name, 'operator', 'UTC', 'SI', 'en', '{}', TRUE)"
+                ),
+                [
+                    {
+                        "id": "org_scope_pg",
+                        "slug": "scope-postgres",
+                        "name": "Scope PostgreSQL",
+                    },
+                    {
+                        "id": "org_scope_pg_other",
+                        "slug": "scope-postgres-other",
+                        "name": "Other scope PostgreSQL",
+                    },
+                ],
+            )
+            await connection.execute(
+                sa.text(
+                    "INSERT INTO projects (id, org_id, name, status, settings, datum_policy) "
+                    "VALUES ('prj_scope_pg', 'org_scope_pg', 'Scope PostgreSQL project', 'active', '{}', 'rkb')"
+                )
+            )
+            await connection.execute(
+                sa.text(
+                    "INSERT INTO wells "
+                    "(id, org_id, project_id, name, well_type, status, elevation_datum, is_offshore, twin_state, "
+                    "target_formations, tags, attributes, is_demo_fixture) "
+                    "VALUES (:id, 'org_scope_pg', 'prj_scope_pg', :name, 'development_producer', 'planned', 'msl', "
+                    "FALSE, 'planned', '[]', '[]', '{}', FALSE)"
+                ),
+                [
+                    {"id": "wel_scope_pg_a", "name": "Scope PostgreSQL well A"},
+                    {"id": "wel_scope_pg_b", "name": "Scope PostgreSQL well B"},
+                ],
+            )
+            await connection.execute(
+                sa.text(
+                    "INSERT INTO wellbores "
+                    "(id, org_id, well_id, name, purpose, sequence, status, is_active, datum, attributes) "
+                    "VALUES (:id, 'org_scope_pg', :well_id, :name, 'original', 1, 'planned', TRUE, 'rkb', '{}')"
+                ),
+                [
+                    {
+                        "id": "wlb_scope_pg_a",
+                        "well_id": "wel_scope_pg_a",
+                        "name": "Scope PostgreSQL main bore A",
+                    },
+                    {
+                        "id": "wlb_scope_pg_b",
+                        "well_id": "wel_scope_pg_b",
+                        "name": "Scope PostgreSQL main bore B",
+                    },
+                ],
+            )
+
+        with pytest.raises(sa.exc.IntegrityError):
+            async with engine.begin() as connection:
+                await connection.execute(
+                    sa.text(
+                        "INSERT INTO wellbores "
+                        "(id, org_id, well_id, name, purpose, sequence, status, is_active, datum, attributes) "
+                        "VALUES ('wlb_scope_pg_wrong_org', 'org_scope_pg_other', 'wel_scope_pg_a', "
+                        "'Wrong organization bore', 'sidetrack', 2, 'planned', FALSE, 'rkb', '{}')"
+                    )
+                )
+
+        with pytest.raises(sa.exc.IntegrityError):
+            async with engine.begin() as connection:
+                await connection.execute(
+                    sa.text(
+                        "INSERT INTO daily_drilling_reports "
+                        "(id, org_id, well_id, wellbore_id, report_date, report_timezone, shift_code, "
+                        "identity_key, created_by) VALUES ('ddr_scope_pg_wrong_well', 'org_scope_pg', "
+                        "'wel_scope_pg_a', 'wlb_scope_pg_b', '2026-11-02', 'UTC', 'day', "
+                        "'shift:day:scope-postgres', 'usr_scope_pg')"
+                    )
+                )
+    finally:
+        await engine.dispose()
+
+
 @pytest.mark.postgres
 def test_migration_chain_applies_reverses_and_refuses_duplicates_on_postgres(postgres_url):
     """Synchronous on purpose: Alembic's environment runs the migrations with ``asyncio.run``, so a
@@ -149,6 +243,7 @@ def test_migration_chain_applies_reverses_and_refuses_duplicates_on_postgres(pos
     asyncio.run(_clear())
     command.upgrade(config, "head")
     command.check(config)
+    asyncio.run(_assert_report_wellbore_scope_constraints(postgres_url))
 
 
 def test_the_migration_environment_honours_an_explicit_url(tmp_path):

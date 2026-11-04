@@ -18,7 +18,17 @@ from __future__ import annotations
 import datetime as dt
 from decimal import Decimal
 
-from sqlalchemy import Boolean, CheckConstraint, Float, ForeignKey, Index, String, UniqueConstraint, text
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    Float,
+    ForeignKey,
+    ForeignKeyConstraint,
+    Index,
+    String,
+    UniqueConstraint,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from drillai.db.base import (
@@ -147,6 +157,7 @@ class Well(Base, IdMixin, TimestampMixin, OrgScopedMixin):
     id_prefix = "wel"
     __table_args__ = (
         UniqueConstraint("project_id", "name"),
+        UniqueConstraint("org_id", "id", name="uq_wells_org_id"),
         # A UWI identifies one well, and an API number identifies one well. Both columns were indexed
         # but not constrained, so the same regulator identifier could be attached to two wells. Partial
         # indexes because both are genuinely optional: many wells have neither recorded yet, and
@@ -208,7 +219,10 @@ class Well(Base, IdMixin, TimestampMixin, OrgScopedMixin):
     project: Mapped[Project] = relationship()
     field: Mapped[Field | None] = relationship(back_populates="wells")
     wellbores: Mapped[list[Wellbore]] = relationship(
-        back_populates="well", cascade="all, delete-orphan", order_by="Wellbore.sequence"
+        back_populates="well",
+        cascade="all, delete-orphan",
+        order_by="Wellbore.sequence",
+        foreign_keys=lambda: [Wellbore.org_id, Wellbore.well_id],
     )
 
 
@@ -220,6 +234,15 @@ class Wellbore(Base, IdMixin, TimestampMixin, OrgScopedMixin):
         # could hold two rows both claiming to be number one and the ordering the API returns was
         # whatever the database happened to give back.
         UniqueConstraint("well_id", "sequence"),
+        UniqueConstraint(
+            "org_id", "well_id", "id", name="uq_wellbores_org_wellbore_scope"
+        ),
+        ForeignKeyConstraint(
+            ["org_id", "well_id"],
+            ["wells.org_id", "wells.id"],
+            ondelete="CASCADE",
+            name="fk_wellbores_org_well_scope",
+        ),
         # Exactly one hole per well is the one being drilled. A partial index is what makes that a
         # database fact rather than a convention the create path tried to remember: `is_active` was
         # derived from `sequence == 1`, so a well with a second wellbore could silently report two
@@ -252,7 +275,10 @@ class Wellbore(Base, IdMixin, TimestampMixin, OrgScopedMixin):
     datum: Mapped[str] = mapped_column(String(24), default="rkb", nullable=False)
     attributes: Mapped[dict] = mapped_column(JsonType, default=dict, nullable=False)
 
-    well: Mapped[Well] = relationship(back_populates="wellbores")
+    well: Mapped[Well] = relationship(
+        back_populates="wellbores",
+        foreign_keys=lambda: [Wellbore.org_id, Wellbore.well_id],
+    )
     sections: Mapped[list[WellSection]] = relationship(
         back_populates="wellbore", cascade="all, delete-orphan", order_by="WellSection.sequence"
     )

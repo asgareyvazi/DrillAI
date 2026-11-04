@@ -1,4 +1,4 @@
-"""Report identity reconciliation constraints preserve data and immutable-identity history."""
+"""Report identity and asset-scope migrations preserve data and reject ambiguous legacy rows."""
 
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ from alembic.config import Config
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
 PARENT_REVISION = "e90f1c8a2b64"
 IDENTITY_REVISION = "f0a4b8c1d2e3"
+SCOPE_REVISION = "a6f4c2d8e901"
 
 
 def _alembic_config(database_url: str) -> Config:
@@ -43,6 +44,67 @@ def _insert_reconciliation(connection: sa.Connection, *, target_kind: str, field
     )
 
 
+def _insert_scope_fixture(connection: sa.Connection) -> None:
+    connection.execute(
+        sa.text(
+            "INSERT INTO organizations "
+            "(id, slug, name, kind, timezone, default_unit_system, default_locale, settings, is_active) "
+            "VALUES ('org_scope', 'org-scope', 'Scope test organization', 'tenant', 'UTC', 'SI', 'en', '{}', 1)"
+        )
+    )
+    connection.execute(
+        sa.text(
+            "INSERT INTO organizations "
+            "(id, slug, name, kind, timezone, default_unit_system, default_locale, settings, is_active) "
+            "VALUES ('org_scope_other', 'org-scope-other', 'Other scope organization', 'tenant', 'UTC', 'SI', 'en', '{}', 1)"
+        )
+    )
+    connection.execute(
+        sa.text(
+            "INSERT INTO projects (id, org_id, name, status, settings, datum_policy) "
+            "VALUES ('prj_scope', 'org_scope', 'Scope test project', 'active', '{}', 'rkb')"
+        )
+    )
+    for well_id, name in (("wel_scope_a", "Scope well A"), ("wel_scope_b", "Scope well B")):
+        connection.execute(
+            sa.text(
+                "INSERT INTO wells "
+                "(id, org_id, project_id, name, well_type, status, elevation_datum, is_offshore, twin_state, "
+                "target_formations, tags, attributes, is_demo_fixture) "
+                "VALUES (:id, 'org_scope', 'prj_scope', :name, 'development_producer', 'planned', 'msl', 0, "
+                "'planned', '[]', '[]', '{}', 0)"
+            ),
+            {"id": well_id, "name": name},
+        )
+        connection.execute(
+            sa.text(
+                "INSERT INTO wellbores "
+                "(id, org_id, well_id, name, purpose, sequence, status, is_active, datum, attributes) "
+                "VALUES (:id, 'org_scope', :well_id, :name, 'original', 1, 'planned', 1, 'rkb', '{}')"
+            ),
+            {"id": f"wlb_{well_id[-1]}", "well_id": well_id, "name": f"{name} main bore"},
+        )
+
+
+def _insert_scope_report(
+    connection: sa.Connection, *, report_id: str, well_id: str, wellbore_id: str, report_date: str
+) -> None:
+    connection.execute(
+        sa.text(
+            "INSERT INTO daily_drilling_reports "
+            "(id, org_id, well_id, wellbore_id, report_date, report_timezone, shift_code, identity_key, created_by) "
+            "VALUES (:report_id, 'org_scope', :well_id, :wellbore_id, :report_date, 'UTC', 'day', :identity_key, 'usr_scope')"
+        ),
+        {
+            "report_id": report_id,
+            "well_id": well_id,
+            "wellbore_id": wellbore_id,
+            "report_date": report_date,
+            "identity_key": f"shift:day:{report_id}",
+        },
+    )
+
+
 def test_identity_reconciliation_migration_constraints_and_loss_protection(tmp_path) -> None:
     database_url = f"sqlite+aiosqlite:///{tmp_path / 'daily-report-identity-reconciliation.db'}"
     config = _alembic_config(database_url)
@@ -51,8 +113,41 @@ def test_identity_reconciliation_migration_constraints_and_loss_protection(tmp_p
         command.upgrade(config, PARENT_REVISION)
         command.upgrade(config, IDENTITY_REVISION)
         with engine.begin() as connection:
+            _insert_scope_fixture(connection)
+            connection.execute(
+                sa.text(
+                    "INSERT INTO wellbores "
+                    "(id, org_id, well_id, name, purpose, sequence, status, is_active, datum, attributes) "
+                    "VALUES ('wlb_wrong_org', 'org_scope_other', 'wel_scope_a', 'Wrong organization bore', "
+                    "'sidetrack', 2, 'planned', 0, 'rkb', '{}')"
+                )
+            )
+            _insert_scope_report(
+                connection,
+                report_id="ddr_wrong_bore",
+                well_id="wel_scope_a",
+                wellbore_id="wlb_b",
+                report_date="2026-11-01",
+            )
+
+        with pytest.raises(RuntimeError, match="Refusing to add organization/well scope constraints"):
+            command.upgrade(config, SCOPE_REVISION)
+        with engine.begin() as connection:
             version = connection.execute(sa.text("SELECT version_num FROM alembic_version")).scalar_one()
             assert version == IDENTITY_REVISION
+            assert connection.execute(
+                sa.text("SELECT COUNT(*) FROM wellbores WHERE id='wlb_wrong_org'")
+            ).scalar_one() == 1
+            assert connection.execute(
+                sa.text("SELECT COUNT(*) FROM daily_drilling_reports WHERE id='ddr_wrong_bore'")
+            ).scalar_one() == 1
+            connection.execute(sa.text("DELETE FROM daily_drilling_reports WHERE id='ddr_wrong_bore'"))
+            connection.execute(sa.text("DELETE FROM wellbores WHERE id='wlb_wrong_org'"))
+
+        command.upgrade(config, SCOPE_REVISION)
+        with engine.begin() as connection:
+            version = connection.execute(sa.text("SELECT version_num FROM alembic_version")).scalar_one()
+            assert version == SCOPE_REVISION
             _insert_reconciliation(connection, target_kind="report_identity", field_key="report_date")
             with pytest.raises(sa.exc.IntegrityError):
                 _insert_reconciliation(connection, target_kind="report_identity", field_key="wellbore_id")
@@ -69,9 +164,40 @@ def test_identity_reconciliation_migration_constraints_and_loss_protection(tmp_p
             with pytest.raises(sa.exc.IntegrityError):
                 _insert_reconciliation(connection, target_kind="report_identity", field_key="report_date")
 
-        command.upgrade(config, IDENTITY_REVISION)
+        command.upgrade(config, SCOPE_REVISION)
         with engine.begin() as connection:
             version = connection.execute(sa.text("SELECT version_num FROM alembic_version")).scalar_one()
-            assert version == IDENTITY_REVISION
+            assert version == SCOPE_REVISION
+
+        with engine.connect() as connection:
+            connection.exec_driver_sql("PRAGMA foreign_keys=ON")
+            connection.commit()
+            assert connection.exec_driver_sql("PRAGMA foreign_keys").scalar_one() == 1
+            connection.commit()
+            with connection.begin():
+                _insert_scope_report(
+                    connection,
+                    report_id="ddr_valid_scope",
+                    well_id="wel_scope_a",
+                    wellbore_id="wlb_a",
+                    report_date="2026-11-02",
+                )
+            with pytest.raises(sa.exc.IntegrityError), connection.begin():
+                _insert_scope_report(
+                    connection,
+                    report_id="ddr_wrong_scope",
+                    well_id="wel_scope_a",
+                    wellbore_id="wlb_b",
+                    report_date="2026-11-03",
+                )
+            with pytest.raises(sa.exc.IntegrityError), connection.begin():
+                connection.execute(
+                    sa.text(
+                        "INSERT INTO wellbores "
+                        "(id, org_id, well_id, name, purpose, sequence, status, is_active, datum, attributes) "
+                        "VALUES ('wlb_post_migration_wrong_org', 'org_scope_other', 'wel_scope_a', "
+                        "'Wrong organization bore after migration', 'sidetrack', 2, 'planned', 0, 'rkb', '{}')"
+                    )
+                )
     finally:
         engine.dispose()
