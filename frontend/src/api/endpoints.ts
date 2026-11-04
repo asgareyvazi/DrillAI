@@ -34,6 +34,7 @@ import type {
   ContextBundle,
   DailyReportActivityClassificationPreview,
   DailyReportActivityMetrics,
+  DailyReportPeriodIntegrity,
   DailyReportCatalogue,
   DailyReportCreatePayload,
   DailyReportDecisionPayload,
@@ -677,6 +678,16 @@ export const drillingApi = {
       query: params,
       signal,
       validate: expect.paged(),
+    }),
+  getDailyReportPeriodIntegrity: (
+    wellId: string,
+    params: { report_date_from?: string; report_date_to?: string; limit?: number } = {},
+    signal?: AbortSignal,
+  ) =>
+    api.get<DailyReportPeriodIntegrity>(`/wells/${enc(wellId)}/daily-reports/period-integrity`, {
+      query: params,
+      signal,
+      validate: expect.object('items'),
     }),
   getDailyReport: (wellId: string, reportId: string, signal?: AbortSignal) =>
     api.get<DailyReportDetail>(`/wells/${enc(wellId)}/daily-reports/${enc(reportId)}`, {

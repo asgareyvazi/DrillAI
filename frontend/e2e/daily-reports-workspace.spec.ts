@@ -283,6 +283,90 @@ test.describe('daily-report lifecycle in a real browser', () => {
     expectNoFailures(consoleErrors, failedResponses)
   })
 
+  test('reviews only consecutive fingerprint-verified approved periods without bridging incomplete reports', async ({
+    page,
+    request,
+    consoleErrors,
+    failedResponses,
+  }) => {
+    const tag = Date.now().toString(36)
+    const project = await apiPost<{ id: string }>(
+      request,
+      '/projects',
+      { name: `E2E DDR period project ${tag}` },
+      'wellManager',
+    )
+    const well = await apiPost<{ id: string }>(
+      request,
+      '/wells',
+      { project_id: project.id, name: `E2E-DDR-PERIOD-${tag}`, well_type: 'development_producer' },
+      'engineer',
+    )
+    const wellbore = await apiPost<{ id: string }>(
+      request,
+      `/wells/${well.id}/wellbores`,
+      { name: 'Main bore', purpose: 'original' },
+      'engineer',
+    )
+
+    const periods = [
+      { date: '2026-03-01', number: 'DDR-PERIOD-01', start: '2026-03-01T06:00:00Z', end: '2026-03-02T06:00:00Z', approve: true },
+      { date: '2026-03-02', number: 'DDR-PERIOD-02', start: '2026-03-02T06:00:00Z', end: null, approve: true },
+      { date: '2026-03-03', number: 'DDR-PERIOD-03', start: '2026-03-03T06:00:00Z', end: '2026-03-04T06:00:00Z', approve: true },
+      { date: '2026-03-04', number: 'DDR-PERIOD-04', start: '2026-03-04T07:00:00Z', end: '2026-03-05T06:00:00Z', approve: true },
+      { date: '2026-03-05', number: 'DDR-PERIOD-05', start: '2026-03-05T06:00:00Z', end: '2026-03-06T06:00:00Z', approve: false },
+    ]
+    for (const period of periods) {
+      const content: Record<string, string> = { summary: 'Synthetic E2E period-boundary test record.' }
+      if (period.start) content.period_start_at = period.start
+      if (period.end) content.period_end_at = period.end
+      const created = await apiPost<{ report: { id: string }; revision: { edit_version: number } }>(
+        request,
+        `/wells/${well.id}/daily-reports`,
+        {
+          wellbore_id: wellbore.id,
+          report_date: period.date,
+          report_timezone: 'UTC',
+          shift_code: 'day',
+          report_number: `${period.number}-${tag}`,
+          content,
+        },
+        'engineer',
+      )
+      if (!period.approve) continue
+      const reportPathForPeriod = reportPath(well.id, created.report.id)
+      const submitted = await apiPost<{ revision: { edit_version: number } }>(
+        request,
+        `${reportPathForPeriod}/revisions/1/submit`,
+        { expected_edit_version: created.revision.edit_version, reason: 'Synthetic E2E submission for period-review test.' },
+        'engineer',
+      )
+      await apiPost(
+        request,
+        `${reportPathForPeriod}/revisions/1/approve`,
+        { expected_edit_version: submitted.revision.edit_version, reason: 'Synthetic E2E independent period-test approval.' },
+        'supervisor',
+      )
+    }
+
+    await page.goto(`/wells/${well.id}/daily-reports`)
+    const periodPanel = page.getByTestId('daily-report-period-integrity')
+    await expect(periodPanel).toContainText('Reported-period boundary review')
+    await expect(periodPanel).toContainText('Reported period gap')
+    await expect(periodPanel).toContainText('1 h')
+    const comparisons = periodPanel.getByTestId('daily-report-period-comparisons').locator('li')
+    await expect(comparisons).toHaveCount(1)
+    await expect(comparisons).toContainText(`DDR-PERIOD-03-${tag}`)
+    await expect(comparisons).toContainText(`DDR-PERIOD-04-${tag}`)
+    await expect(comparisons).toContainText('2026-03-04T06:00:00Z → 2026-03-04T07:00:00Z')
+    await expect(periodPanel).toContainText('Adjacent identity pairs not compared')
+    await periodPanel.getByText('Report revisions and period-assessment states').click()
+    await expect(periodPanel).toContainText('Period end missing')
+    await expect(periodPanel).toContainText('No approved revision')
+    await expect(periodPanel).toContainText('incomplete rows are never skipped to bridge intervals')
+    expectNoFailures(consoleErrors, failedResponses)
+  })
+
   test('preserves explicit provenance, reviewer separation, history, corrections and withdrawal', async ({
     page,
     request,

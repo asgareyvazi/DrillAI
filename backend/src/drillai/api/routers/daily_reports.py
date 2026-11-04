@@ -352,6 +352,30 @@ async def preview_daily_report_activity_classification(
     )
 
 
+@router.get(
+    "/wells/{well_id}/daily-reports/period-integrity",
+    summary="Compare explicit approved daily-report period boundaries",
+)
+async def daily_report_period_integrity(
+    well_id: str,
+    request: Request,
+    session: Annotated[AsyncSession, Depends(get_db)],
+    auth: Annotated[AuthContext, Depends(require("daily_report.read"))],
+    wellbore_id: str | None = Query(default=None, min_length=1, max_length=64),
+    report_date_from: dt.date | None = Query(default=None),
+    report_date_to: dt.date | None = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=500),
+) -> dict[str, Any]:
+    """Return revision-provenance-bound period comparisons without inferring absent boundaries."""
+    return await _service(session, auth, request).period_integrity(
+        well_id,
+        wellbore_id=wellbore_id,
+        report_date_from=report_date_from,
+        report_date_to=report_date_to,
+        limit=limit,
+    )
+
+
 @router.get("/wells/{well_id}/daily-reports/{report_id}", summary="Read the current report revision")
 async def get_daily_report(
     well_id: str,

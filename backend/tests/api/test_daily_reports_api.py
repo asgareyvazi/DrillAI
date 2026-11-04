@@ -83,6 +83,53 @@ def _report_payload(wellbore_id: str) -> dict:
     }
 
 
+async def _create_approved_period(
+    client,
+    well_id: str,
+    wellbore_id: str,
+    *,
+    report_date: str,
+    report_number: str,
+    period_start_at: str | None,
+    period_end_at: str | None,
+    approve: bool = True,
+) -> tuple[str, str]:
+    content = {"summary": "Synthetic API-test period record."}
+    if period_start_at is not None:
+        content["period_start_at"] = period_start_at
+    if period_end_at is not None:
+        content["period_end_at"] = period_end_at
+    created = await client.post(
+        f"/api/v1/wells/{well_id}/daily-reports",
+        json={
+            "wellbore_id": wellbore_id,
+            "report_date": report_date,
+            "report_timezone": "UTC",
+            "shift_code": "day",
+            "report_number": report_number,
+            "content": content,
+        },
+        headers=headers("engineer"),
+    )
+    assert created.status_code == 201, created.text
+    report_id = created.json()["report"]["id"]
+    revision_id = created.json()["revision"]["id"]
+    if approve:
+        submitted = await client.post(
+            f"/api/v1/wells/{well_id}/daily-reports/{report_id}/revisions/1/submit",
+            json={"expected_edit_version": 1, "reason": "Synthetic API-test submission."},
+            headers=headers("engineer"),
+        )
+        assert submitted.status_code == 200, submitted.text
+        approved = await client.post(
+            f"/api/v1/wells/{well_id}/daily-reports/{report_id}/revisions/1/approve",
+            json={"expected_edit_version": 2, "reason": "Synthetic API-test independent approval."},
+            headers=headers("drilling_supervisor"),
+        )
+        assert approved.status_code == 200, approved.text
+    return report_id, revision_id
+
+
 async def _create_import_evidence(
     client,
     db,
@@ -240,6 +287,134 @@ async def test_daily_report_activity_metrics_exclude_unknown_and_planned_duratio
     )
     assert tampered.status_code == 409, tampered.text
     assert "verified revision fingerprint" in tampered.json()["error"]["message"]
+
+
+@pytest.mark.asyncio
+async def test_daily_report_period_integrity_is_revision_bound_and_does_not_bridge_incomplete_periods(client, db):
+    from sqlalchemy import select
+
+    from drillai.db.models import DailyDrillingReportRevision
+
+    well_id, wellbore_id = await _create_well(client)
+    identities = [
+        ("2026-04-01", "DDR-PERIOD-01", "2026-04-01T06:00:00Z", "2026-04-01T12:00:00Z", True),
+        ("2026-04-02", "DDR-PERIOD-02", "2026-04-02T12:00:00Z", None, True),
+        ("2026-04-03", "DDR-PERIOD-03", "2026-04-03T12:00:00Z", "2026-04-04T18:00:00Z", True),
+        ("2026-04-04", "DDR-PERIOD-04", "2026-04-04T19:00:00Z", "2026-04-05T22:00:00Z", True),
+        ("2026-04-05", "DDR-PERIOD-05", "2026-04-05T22:00:00Z", "2026-04-06T23:00:00Z", True),
+        ("2026-04-06", "DDR-PERIOD-06", "2026-04-06T22:00:00Z", "2026-04-07T01:00:00Z", True),
+        ("2026-04-07", "DDR-PERIOD-07", "2026-04-07T01:00:00Z", "2026-04-07T03:00:00Z", False),
+    ]
+    report_ids: dict[str, tuple[str, str]] = {}
+    for report_date, report_number, start_at, end_at, approve in identities:
+        report_ids[report_number] = await _create_approved_period(
+            client,
+            well_id,
+            wellbore_id,
+            report_date=report_date,
+            report_number=report_number,
+            period_start_at=start_at,
+            period_end_at=end_at,
+            approve=approve,
+        )
+
+    response = await client.get(
+        f"/api/v1/wells/{well_id}/daily-reports/period-integrity?wellbore_id={wellbore_id}&limit=20",
+        headers=headers("viewer"),
+    )
+    assert response.status_code == 200, response.text
+    result = response.json()
+    assert result["total"] == 7
+    assert result["truncated"] is False
+    assert result["bounded_period_count"] == 5, [
+        (item["report_number"], item["revision_status"], item["period_state"], item["revision_fingerprint_verified"])
+        for item in result["items"]
+    ]
+    assert result["unassessed_period_count"] == 2
+    assert result["unassessed_comparison_count"] == 3
+    assert result["comparison_method"] == "approved_explicit_periods_by_report_date_v1"
+    assert "are never skipped to bridge intervals" in result["note"]
+    states = {item["report_number"]: item for item in result["items"]}
+    assert states["DDR-PERIOD-02"]["period_state"] == "missing_end_bound"
+    assert states["DDR-PERIOD-02"]["period_end_at"] is None
+    assert states["DDR-PERIOD-06"]["revision_status"] == "approved"
+    assert states["DDR-PERIOD-07"]["period_state"] == "no_approved_revision"
+    assert all(
+        item["revision_fingerprint_verified"] is True
+        for item in result["items"]
+        if item["revision_status"] == "approved"
+    )
+    relationships = {
+        (item["previous_report_number"], item["next_report_number"]): item
+        for item in result["comparisons"]
+    }
+    assert set(relationships) == {
+        ("DDR-PERIOD-03", "DDR-PERIOD-04"),
+        ("DDR-PERIOD-04", "DDR-PERIOD-05"),
+        ("DDR-PERIOD-05", "DDR-PERIOD-06"),
+    }
+    assert relationships[("DDR-PERIOD-03", "DDR-PERIOD-04")]["relationship"] == "gap"
+    assert relationships[("DDR-PERIOD-03", "DDR-PERIOD-04")]["gap_seconds"] == 3600.0
+    assert relationships[("DDR-PERIOD-04", "DDR-PERIOD-05")]["relationship"] == "contiguous"
+    assert relationships[("DDR-PERIOD-04", "DDR-PERIOD-05")]["gap_seconds"] is None
+    assert relationships[("DDR-PERIOD-05", "DDR-PERIOD-06")]["relationship"] == "overlap"
+    assert relationships[("DDR-PERIOD-05", "DDR-PERIOD-06")]["overlap_seconds"] == 3600.0
+    assert {item["unit"] for item in result["comparisons"]} == {"s"}
+
+    bounded_window = await client.get(
+        f"/api/v1/wells/{well_id}/daily-reports/period-integrity"
+        f"?report_date_from=2026-04-01&report_date_to=2026-04-03&limit=20",
+        headers=headers("viewer"),
+    )
+    assert bounded_window.status_code == 200, bounded_window.text
+    assert bounded_window.json()["total"] == 3
+    assert bounded_window.json()["comparisons"] == []
+    assert bounded_window.json()["unassessed_comparison_count"] == 2
+
+    recent = await client.get(
+        f"/api/v1/wells/{well_id}/daily-reports/period-integrity?wellbore_id={wellbore_id}&limit=3",
+        headers=headers("viewer"),
+    )
+    assert recent.status_code == 200, recent.text
+    assert recent.json()["truncated"] is True
+    assert len(recent.json()["items"]) == 3
+    assert recent.json()["comparisons"] == []
+
+    async with db.session_factory() as session:
+        tampered_revision = (
+            await session.execute(
+                select(DailyDrillingReportRevision).where(
+                    DailyDrillingReportRevision.id == report_ids["DDR-PERIOD-04"][1]
+                )
+            )
+        ).scalar_one()
+        tampered_revision.content_hash = "0" * 64
+        await session.commit()
+    tampered_response = await client.get(
+        f"/api/v1/wells/{well_id}/daily-reports/period-integrity?limit=20",
+        headers=headers("viewer"),
+    )
+    assert tampered_response.status_code == 200, tampered_response.text
+    tampered_result = tampered_response.json()
+    tampered_item = next(
+        item for item in tampered_result["items"] if item["report_number"] == "DDR-PERIOD-04"
+    )
+    assert tampered_item["period_state"] == "fingerprint_mismatch"
+    assert tampered_item["revision_fingerprint_verified"] is False
+    assert tampered_item["period_start_at"] is None
+    assert tampered_item["period_end_at"] is None
+    assert {
+        (item["previous_report_number"], item["next_report_number"])
+        for item in tampered_result["comparisons"]
+    } == {("DDR-PERIOD-05", "DDR-PERIOD-06")}
+    assert tampered_result["unassessed_comparison_count"] == 5
+
+    other_well_id, _ = await _create_well(client)
+    out_of_scope = await client.get(
+        f"/api/v1/wells/{other_well_id}/daily-reports/period-integrity?wellbore_id={wellbore_id}",
+        headers=headers("viewer"),
+    )
+    assert out_of_scope.status_code == 422, out_of_scope.text
 
 
 @pytest.mark.asyncio

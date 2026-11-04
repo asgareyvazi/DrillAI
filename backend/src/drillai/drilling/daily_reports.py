@@ -15,10 +15,11 @@ from __future__ import annotations
 import datetime as dt
 import math
 from dataclasses import dataclass
+from itertools import pairwise
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from sqlalchemy import delete, exists, func, select, update
+from sqlalchemy import and_, delete, exists, func, select, tuple_, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -83,6 +84,15 @@ _MAX_REASON = 2000
 _MAX_CLASSIFICATION_SOURCE_CHARS = 20_000
 _NPT_DURATION_METRIC_BASES = frozenset({"observed", "reported", "calculated"})
 _NPT_DURATION_EXCLUDED_BASES = ("planned", "inferred", "unknown")
+_PERIOD_INTEGRITY_NOTE = (
+    "Only consecutive report identities for each wellbore in local report-date order are considered. A pair "
+    "is compared only when its dates are distinct and both latest-approved revisions have verified fingerprints "
+    "and explicit start/end bounds; same-date shifts and pairs containing unassessed reports are not compared, "
+    "so incomplete rows are never skipped to bridge intervals. A gap or overlap is only a difference between "
+    "reported boundary instants; it does not prove activity coverage, actual operations, physical downtime, or "
+    "report reconciliation. Results select at most the requested number of report identities by local report "
+    "date, with truncation reported."
+)
 
 
 @dataclass(frozen=True)
@@ -354,6 +364,260 @@ class DailyReportService:
             "total": total,
             "limit": limit,
             "offset": offset,
+        }
+
+    async def period_integrity(
+        self,
+        well_id: str,
+        *,
+        wellbore_id: str | None = None,
+        report_date_from: dt.date | None = None,
+        report_date_to: dt.date | None = None,
+        limit: int = 100,
+    ) -> dict[str, Any]:
+        """Compare explicit reporting-period bounds from fingerprint-verified approved revisions.
+
+        This is a bounded data-quality diagnostic, not a claim that all activity or physical downtime
+        is covered. Revisions with absent/unknown boundaries remain unassessed and are never placed at
+        a guessed time or bridged into an asserted full-coverage interval.
+        """
+        self._authorize("daily_report.read", well_id=well_id)
+        await self._require_well(well_id)
+        if wellbore_id is not None:
+            await self._resolve_well(well_id, wellbore_id)
+        self._validate_list_filters(report_date_from, report_date_to, None, None, limit, 0)
+
+        stmt = (
+            select(DailyDrillingReport)
+            .join(
+                Wellbore,
+                and_(
+                    Wellbore.id == DailyDrillingReport.wellbore_id,
+                    Wellbore.org_id == self.org_id,
+                    Wellbore.well_id == well_id,
+                ),
+            )
+            .where(
+                DailyDrillingReport.org_id == self.org_id,
+                DailyDrillingReport.well_id == well_id,
+            )
+        )
+        if wellbore_id is not None:
+            stmt = stmt.where(DailyDrillingReport.wellbore_id == wellbore_id)
+        if report_date_from is not None:
+            stmt = stmt.where(DailyDrillingReport.report_date >= report_date_from)
+        if report_date_to is not None:
+            stmt = stmt.where(DailyDrillingReport.report_date <= report_date_to)
+        total = int(
+            (
+                await self.session.execute(
+                    select(func.count()).select_from(stmt.order_by(None).subquery())
+                )
+            ).scalar_one()
+        )
+        reports = (
+            await self.session.execute(
+                stmt.order_by(DailyDrillingReport.report_date.desc(), DailyDrillingReport.id.desc()).limit(limit)
+            )
+        ).scalars().all()
+        if not reports:
+            return {
+                "well_id": well_id,
+                "wellbore_id": wellbore_id,
+                "items": [],
+                "comparisons": [],
+                "total": total,
+                "limit": limit,
+                "truncated": total > 0,
+                "bounded_period_count": 0,
+                "unassessed_period_count": 0,
+                "unassessed_comparison_count": 0,
+                "comparison_method": "approved_explicit_periods_by_report_date_v1",
+                "note": _PERIOD_INTEGRITY_NOTE,
+            }
+
+        approved_numbers = {row.id: row.latest_approved_revision_number for row in reports}
+        approved_revision_keys = [
+            (report.id, revision_number)
+            for report in reports
+            if (revision_number := approved_numbers[report.id]) is not None
+        ]
+        revisions: list[DailyDrillingReportRevision] = []
+        if approved_revision_keys:
+            revisions = (
+                await self.session.execute(
+                    select(DailyDrillingReportRevision).where(
+                        DailyDrillingReportRevision.org_id == self.org_id,
+                        tuple_(
+                            DailyDrillingReportRevision.report_id,
+                            DailyDrillingReportRevision.revision_number,
+                        ).in_(approved_revision_keys),
+                    )
+                )
+            ).scalars().all()
+        revision_by_key = {(row.report_id, row.revision_number): row for row in revisions}
+        approved_pairs = [
+            (report, revision_by_key.get((report.id, revision_number)))
+            for report in reports
+            if (revision_number := approved_numbers[report.id]) is not None
+        ]
+        approved_revisions = [revision for _report, revision in approved_pairs if revision is not None]
+        revision_ids = [revision.id for revision in approved_revisions]
+        activities_by_revision: dict[str, list[DailyReportActivity]] = {}
+        measurements_by_revision: dict[str, list[DailyReportMeasurement]] = {}
+        if revision_ids:
+            activity_rows = (
+                await self.session.execute(
+                    select(DailyReportActivity)
+                    .where(
+                        DailyReportActivity.org_id == self.org_id,
+                        DailyReportActivity.revision_id.in_(revision_ids),
+                    )
+                    .order_by(
+                        DailyReportActivity.revision_id.asc(),
+                        DailyReportActivity.sequence.asc(),
+                        DailyReportActivity.id.asc(),
+                    )
+                )
+            ).scalars().all()
+            measurement_rows = (
+                await self.session.execute(
+                    select(DailyReportMeasurement)
+                    .where(
+                        DailyReportMeasurement.org_id == self.org_id,
+                        DailyReportMeasurement.revision_id.in_(revision_ids),
+                    )
+                    .order_by(
+                        DailyReportMeasurement.revision_id.asc(),
+                        DailyReportMeasurement.parameter_key.asc(),
+                        DailyReportMeasurement.ordinal.asc(),
+                    )
+                )
+            ).scalars().all()
+            for row in activity_rows:
+                activities_by_revision.setdefault(row.revision_id, []).append(row)
+            for row in measurement_rows:
+                measurements_by_revision.setdefault(row.revision_id, []).append(row)
+
+        items: list[dict[str, Any]] = []
+        report_by_wellbore: dict[str, list[DailyDrillingReport]] = {}
+        revision_by_report: dict[str, DailyDrillingReportRevision | None] = {}
+        state_by_report: dict[str, str] = {}
+        for report in reports:
+            report_by_wellbore.setdefault(report.wellbore_id, []).append(report)
+            revision_number = approved_numbers[report.id]
+            revision = revision_by_key.get((report.id, revision_number)) if revision_number is not None else None
+            item: dict[str, Any] = {
+                "report_id": report.id,
+                "wellbore_id": report.wellbore_id,
+                "report_date": report.report_date.isoformat(),
+                "report_timezone": report.report_timezone,
+                "shift_code": report.shift_code,
+                "shift_label": report.shift_label,
+                "report_number": report.report_number,
+                "approved_revision_number": revision_number,
+                "revision_status": revision.status if revision is not None else None,
+                "revision_content_hash": revision.content_hash if revision is not None else None,
+                "revision_fingerprint_verified": False,
+                "period_start_at": None,
+                "period_end_at": None,
+                "period_state": "no_approved_revision" if revision_number is None else "approved_revision_unavailable",
+            }
+            if revision is not None:
+                if revision.status != "approved":
+                    item["period_state"] = "approved_revision_status_mismatch"
+                else:
+                    revision_activities = activities_by_revision.get(revision.id, [])
+                    revision_measurements = measurements_by_revision.get(revision.id, [])
+                    fingerprint_verified = bool(
+                        revision.content_hash
+                        and revision.content_hash
+                        == self._content_hash(report, revision, revision_activities, revision_measurements)
+                    )
+                    item["revision_fingerprint_verified"] = fingerprint_verified
+                    if not fingerprint_verified:
+                        item["period_state"] = "fingerprint_mismatch"
+                    else:
+                        item["period_start_at"] = _iso(revision.period_start_at)
+                        item["period_end_at"] = _iso(revision.period_end_at)
+                        if revision.period_start_at is None and revision.period_end_at is None:
+                            item["period_state"] = "missing_both_bounds"
+                        elif revision.period_start_at is None:
+                            item["period_state"] = "missing_start_bound"
+                        elif revision.period_end_at is None:
+                            item["period_state"] = "missing_end_bound"
+                        else:
+                            item["period_state"] = "bounded"
+            revision_by_report[report.id] = revision
+            state_by_report[report.id] = item["period_state"]
+            items.append(item)
+
+        comparisons: list[dict[str, Any]] = []
+        unassessed_comparison_count = 0
+        truncated = total > len(reports)
+        for scoped_wellbore_id, identities in report_by_wellbore.items():
+            ordered = sorted(identities, key=lambda report: (report.report_date, report.id))
+            selected_date_counts: dict[dt.date, int] = {}
+            for report in ordered:
+                selected_date_counts[report.report_date] = selected_date_counts.get(report.report_date, 0) + 1
+            oldest_selected_date = min(selected_date_counts)
+            for previous_report, next_report in pairwise(ordered):
+                previous_revision = revision_by_report[previous_report.id]
+                next_revision = revision_by_report[next_report.id]
+                pair_is_ambiguous = (
+                    selected_date_counts[previous_report.report_date] != 1
+                    or selected_date_counts[next_report.report_date] != 1
+                    or (truncated and previous_report.report_date == oldest_selected_date)
+                    or (truncated and next_report.report_date == oldest_selected_date)
+                )
+                if (
+                    pair_is_ambiguous
+                    or state_by_report[previous_report.id] != "bounded"
+                    or state_by_report[next_report.id] != "bounded"
+                    or previous_revision is None
+                    or next_revision is None
+                ):
+                    unassessed_comparison_count += 1
+                    continue
+                assert previous_revision.period_end_at is not None
+                assert next_revision.period_start_at is not None
+                delta_seconds = (next_revision.period_start_at - previous_revision.period_end_at).total_seconds()
+                relationship = "gap" if delta_seconds > 0 else "overlap" if delta_seconds < 0 else "contiguous"
+                comparisons.append(
+                    {
+                        "wellbore_id": scoped_wellbore_id,
+                        "ordering_basis": "consecutive_distinct_report_dates",
+                        "previous_report_id": previous_report.id,
+                        "previous_report_date": previous_report.report_date.isoformat(),
+                        "previous_report_number": previous_report.report_number,
+                        "previous_revision_number": previous_revision.revision_number,
+                        "previous_period_end_at": _iso(previous_revision.period_end_at),
+                        "next_report_id": next_report.id,
+                        "next_report_date": next_report.report_date.isoformat(),
+                        "next_report_number": next_report.report_number,
+                        "next_revision_number": next_revision.revision_number,
+                        "next_period_start_at": _iso(next_revision.period_start_at),
+                        "relationship": relationship,
+                        "gap_seconds": delta_seconds if delta_seconds > 0 else None,
+                        "overlap_seconds": -delta_seconds if delta_seconds < 0 else None,
+                        "unit": "s",
+                    }
+                )
+
+        bounded_count = sum(item["period_state"] == "bounded" for item in items)
+        return {
+            "well_id": well_id,
+            "wellbore_id": wellbore_id,
+            "items": items,
+            "comparisons": comparisons,
+            "total": total,
+            "limit": limit,
+            "truncated": truncated,
+            "bounded_period_count": bounded_count,
+            "unassessed_period_count": len(items) - bounded_count,
+            "unassessed_comparison_count": unassessed_comparison_count,
+            "comparison_method": "approved_explicit_periods_by_report_date_v1",
+            "note": _PERIOD_INTEGRITY_NOTE,
         }
 
     async def get_report(self, well_id: str, report_id: str) -> dict[str, Any]:

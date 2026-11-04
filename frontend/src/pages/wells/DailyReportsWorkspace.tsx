@@ -12,6 +12,7 @@ import {
   type DailyReportExportFormat,
   type DailyReportImportPayload,
   type DailyReportMeasurementInput,
+  type DailyReportPeriodIntegrityItem,
   type DailyReportReconciliationDecision,
   type DailyReportReconciliationPayload,
   type DailyReportRevision,
@@ -2046,6 +2047,129 @@ function DailyReportActivityMetricsPanel({
   )
 }
 
+function DailyReportPeriodIntegrityPanel({
+  wellId,
+  reportDateFrom,
+  reportDateTo,
+  invalidDateRange,
+}: {
+  wellId: string
+  reportDateFrom: string
+  reportDateTo: string
+  invalidDateRange: boolean
+}) {
+  const { t, locale } = useI18n()
+  const query = useQuery({
+    queryKey: ['daily-report-period-integrity', wellId, reportDateFrom, reportDateTo],
+    queryFn: ({ signal }) => drillingApi.getDailyReportPeriodIntegrity(
+      wellId,
+      {
+        report_date_from: reportDateFrom || undefined,
+        report_date_to: reportDateTo || undefined,
+        limit: 50,
+      },
+      signal,
+    ),
+    enabled: Boolean(wellId && !invalidDateRange),
+    retry: false,
+  })
+  const result = query.data
+
+  return (
+    <Card
+      title={t('dailyReports.periodIntegrityTitle')}
+      subtitle={t('dailyReports.periodIntegritySubtitle')}
+      data-testid="daily-report-period-integrity"
+    >
+      {invalidDateRange ? (
+        <p role="status" className="text-xs text-graphite-500">{t('dailyReports.periodIntegrityInvalidDateRange')}</p>
+      ) : query.isPending ? <Loading /> : query.error ? (
+        <ErrorState error={query.error} onRetry={() => { void query.refetch() }} />
+      ) : result ? (
+        <div className="space-y-3">
+          <p className="text-xs text-graphite-600 dark:text-graphite-300">{t('dailyReports.periodIntegrityNote')}</p>
+          {result.truncated && (
+            <p role="status" className="rounded-md bg-amber-50 p-2 text-xs text-warning dark:bg-amber-950/30">
+              {t('dailyReports.periodIntegrityTruncated', { limit: formatNumber(result.limit, locale, 0), total: formatNumber(result.total, locale, 0) })}
+            </p>
+          )}
+          <dl className="grid gap-3 text-xs sm:grid-cols-2">
+            <ProvenanceItem label={t('dailyReports.periodIdentityCount')} value={formatNumber(result.items.length, locale, 0)} />
+            <ProvenanceItem label={t('dailyReports.periodBoundedCount')} value={formatNumber(result.bounded_period_count, locale, 0)} />
+            <ProvenanceItem label={t('dailyReports.periodUnassessedCount')} value={formatNumber(result.unassessed_period_count, locale, 0)} />
+            <ProvenanceItem label={t('dailyReports.periodUnassessedPairCount')} value={formatNumber(result.unassessed_comparison_count, locale, 0)} />
+          </dl>
+          {result.comparisons.length ? (
+            <ol className="space-y-2" data-testid="daily-report-period-comparisons">
+              {result.comparisons.map((comparison) => {
+                const gapHours = comparison.gap_seconds === null ? null : comparison.gap_seconds / 3600
+                const overlapHours = comparison.overlap_seconds === null ? null : comparison.overlap_seconds / 3600
+                const relationshipTone = comparison.relationship === 'contiguous' ? 'neutral' : 'warning'
+                return (
+                  <li
+                    key={`${comparison.previous_report_id}:${comparison.next_report_id}`}
+                    className="rounded-md border border-graphite-200 p-3 dark:border-graphite-700"
+                  >
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge tone={relationshipTone}>{t(`dailyReports.periodRelationships.${comparison.relationship}`)}</Badge>
+                      {gapHours !== null && <bdi dir="ltr" className="text-xs font-medium">{formatNumber(gapHours, locale, 2)} {t('dailyReports.durationHoursAbbrev')}</bdi>}
+                      {overlapHours !== null && <bdi dir="ltr" className="text-xs font-medium">{formatNumber(overlapHours, locale, 2)} {t('dailyReports.durationHoursAbbrev')}</bdi>}
+                    </div>
+                    <p className="mt-2 break-words text-xs text-graphite-700 dark:text-graphite-200">
+                      <bdi dir="ltr">{comparison.previous_report_date} · {comparison.previous_report_number ?? comparison.previous_report_id} · v{comparison.previous_revision_number}</bdi>
+                      <span aria-hidden="true"> → </span>
+                      <bdi dir="ltr">{comparison.next_report_date} · {comparison.next_report_number ?? comparison.next_report_id} · v{comparison.next_revision_number}</bdi>
+                    </p>
+                    <p className="mt-1 text-[10px] text-graphite-500">
+                      {t('dailyReports.wellbore')}: <bdi dir="ltr">{comparison.wellbore_id}</bdi>
+                    </p>
+                    <p className="mt-1 break-all text-[11px] text-graphite-500">
+                      <bdi dir="ltr">{comparison.previous_period_end_at} → {comparison.next_period_start_at}</bdi>
+                    </p>
+                  </li>
+                )
+              })}
+            </ol>
+          ) : (
+            <p role="status" className="text-xs text-graphite-500">{t('dailyReports.periodIntegrityNoComparisons')}</p>
+          )}
+          {result.items.length > 0 && (
+            <details className="rounded-md border border-graphite-200 p-3 dark:border-graphite-700">
+              <summary className="cursor-pointer text-xs font-medium">{t('dailyReports.periodIntegrityReportRows')}</summary>
+              <ol className="mt-3 space-y-2" data-testid="daily-report-period-items">
+                {result.items.map((item: DailyReportPeriodIntegrityItem) => (
+                  <li key={item.report_id} className="flex flex-wrap items-center justify-between gap-2 border-t border-graphite-100 pt-2 text-xs dark:border-graphite-800">
+                    <span className="min-w-0 break-words">
+                      <bdi dir="ltr">{item.report_date} · {item.report_number ?? item.report_id}</bdi>
+                      {item.approved_revision_number !== null && <span> · {t('dailyReports.revision', { number: item.approved_revision_number })}</span>}
+                      <span className="ms-2 text-[10px] text-graphite-500">
+                        {t('dailyReports.wellbore')}: <bdi dir="ltr">{item.wellbore_id}</bdi> · <bdi dir="ltr">{item.report_timezone}</bdi> · {labelEnum(t, 'shifts', item.shift_code)}{item.shift_label ? ` · ${item.shift_label}` : ''}
+                      </span>
+                      {item.revision_fingerprint_verified && item.revision_content_hash && (
+                        <span className="ms-2 text-[10px] text-graphite-500">
+                          {t('dailyReports.periodFingerprint')}: <bdi dir="ltr" title={item.revision_content_hash}>{item.revision_content_hash.slice(0, 12)}…</bdi>
+                        </span>
+                      )}
+                      {(item.period_start_at !== null || item.period_end_at !== null) && (
+                        <span className="ms-2 text-[10px] text-graphite-500">
+                          {t('dailyReports.periodStart')}: <bdi dir="ltr">{item.period_start_at ?? t('dailyReports.noValue')}</bdi> · {t('dailyReports.periodEnd')}: <bdi dir="ltr">{item.period_end_at ?? t('dailyReports.noValue')}</bdi>
+                        </span>
+                      )}
+                    </span>
+                    <Badge tone={item.period_state === 'fingerprint_mismatch' ? 'danger' : item.period_state === 'bounded' ? 'neutral' : 'warning'}>
+                      {t(`dailyReports.periodStates.${item.period_state}`)}
+                    </Badge>
+                  </li>
+                ))}
+              </ol>
+            </details>
+          )}
+        </div>
+      ) : null}
+    </Card>
+  )
+}
+
 function RevisionContent({ revision }: { revision: DailyReportRevision }) {
   const { t, locale } = useI18n()
   const verified = revision.content_hash_verified
@@ -2685,7 +2809,8 @@ export default function DailyReportsWorkspace() {
       )}
 
       <div className="grid items-start gap-4 xl:grid-cols-[minmax(24rem,0.85fr)_minmax(0,1.6fr)]">
-        <Card
+        <div className="space-y-4">
+          <Card
           title={t('dailyReports.reportList')}
           actions={(
             <div className="flex flex-wrap gap-2">
@@ -2735,7 +2860,14 @@ export default function DailyReportsWorkspace() {
               </div>
             </div>
           )}
-        </Card>
+          </Card>
+          <DailyReportPeriodIntegrityPanel
+            wellId={wellId}
+            reportDateFrom={reportDateFrom}
+            reportDateTo={reportDateTo}
+            invalidDateRange={dateRangeInvalid}
+          />
+        </div>
 
         <div className="space-y-4">
           {!selectedReportId ? (

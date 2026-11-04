@@ -1434,6 +1434,67 @@ export interface DailyReportActivityMetrics {
   note: string
 }
 
+export type DailyReportPeriodState =
+  | 'no_approved_revision'
+  | 'approved_revision_unavailable'
+  | 'approved_revision_status_mismatch'
+  | 'fingerprint_mismatch'
+  | 'missing_both_bounds'
+  | 'missing_start_bound'
+  | 'missing_end_bound'
+  | 'bounded'
+
+export interface DailyReportPeriodIntegrityItem {
+  report_id: string
+  wellbore_id: string
+  report_date: string
+  report_timezone: string
+  shift_code: string
+  shift_label: string | null
+  report_number: string | null
+  approved_revision_number: number | null
+  revision_status: DailyReportStatus | null
+  revision_content_hash: string | null
+  revision_fingerprint_verified: boolean
+  period_start_at: string | null
+  period_end_at: string | null
+  period_state: DailyReportPeriodState
+}
+
+export interface DailyReportPeriodComparison {
+  wellbore_id: string
+  ordering_basis: 'consecutive_distinct_report_dates'
+  previous_report_id: string
+  previous_report_date: string
+  previous_report_number: string | null
+  previous_revision_number: number
+  previous_period_end_at: string
+  next_report_id: string
+  next_report_date: string
+  next_report_number: string | null
+  next_revision_number: number
+  next_period_start_at: string
+  relationship: 'gap' | 'overlap' | 'contiguous'
+  gap_seconds: number | null
+  overlap_seconds: number | null
+  unit: 's'
+}
+
+export interface DailyReportPeriodIntegrity {
+  well_id: string
+  wellbore_id: string | null
+  items: DailyReportPeriodIntegrityItem[]
+  comparisons: DailyReportPeriodComparison[]
+  total: number
+  limit: number
+  truncated: boolean
+  bounded_period_count: number
+  unassessed_period_count: number
+  unassessed_comparison_count: number
+  comparison_method: 'approved_explicit_periods_by_report_date_v1'
+  note: string
+}
+
 export interface DailyReportActivityInput {
   activity_kind: string
   operation_kind?: string | null

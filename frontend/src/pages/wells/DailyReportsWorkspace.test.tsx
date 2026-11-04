@@ -13,6 +13,7 @@ import { ApiError } from '../../api/client'
 import type {
   DailyReport,
   DailyReportActivityMetrics,
+  DailyReportPeriodIntegrity,
   DailyReportCatalogue,
   DailyReportDetail,
   DailyReportHistory,
@@ -32,6 +33,7 @@ const mocks = vi.hoisted(() => ({
   listDailyReports: vi.fn(),
   getDailyReport: vi.fn(),
   getDailyReportActivityMetrics: vi.fn(),
+  getDailyReportPeriodIntegrity: vi.fn(),
   getDailyReportHistory: vi.fn(),
   getDailyReportRevision: vi.fn(),
   exportDailyReportRevision: vi.fn(),
@@ -59,6 +61,7 @@ vi.mock('../../api/endpoints', () => ({
     listDailyReports: mocks.listDailyReports,
     getDailyReport: mocks.getDailyReport,
     getDailyReportActivityMetrics: mocks.getDailyReportActivityMetrics,
+    getDailyReportPeriodIntegrity: mocks.getDailyReportPeriodIntegrity,
     getDailyReportHistory: mocks.getDailyReportHistory,
     getDailyReportRevision: mocks.getDailyReportRevision,
     exportDailyReportRevision: mocks.exportDailyReportRevision,
@@ -216,6 +219,21 @@ const activityMetrics = {
   note: 'Synthetic test fixture only.',
 } satisfies DailyReportActivityMetrics
 
+const periodIntegrity = {
+  well_id: 'well_1',
+  wellbore_id: null,
+  items: [],
+  comparisons: [],
+  total: 0,
+  limit: 50,
+  truncated: false,
+  bounded_period_count: 0,
+  unassessed_period_count: 0,
+  unassessed_comparison_count: 0,
+  comparison_method: 'approved_explicit_periods_by_report_date_v1',
+  note: 'Synthetic test fixture only.',
+} satisfies DailyReportPeriodIntegrity
+
 const sourceDocumentRow = {
   id: 'doc_ddr_1',
   title: 'Field DDR 15',
@@ -306,6 +324,7 @@ beforeEach(() => {
   mocks.listDailyReports.mockReset().mockResolvedValue({ items: [report], total: 1, limit: 50, offset: 0 })
   mocks.getDailyReport.mockReset().mockResolvedValue(detail)
   mocks.getDailyReportActivityMetrics.mockReset().mockResolvedValue(activityMetrics)
+  mocks.getDailyReportPeriodIntegrity.mockReset().mockResolvedValue(periodIntegrity)
   mocks.getDailyReportHistory.mockReset().mockResolvedValue(history)
   mocks.getDailyReportRevision.mockReset().mockResolvedValue({ report, revision })
   mocks.exportDailyReportRevision.mockReset()
@@ -394,6 +413,159 @@ describe('DailyReportsWorkspace', () => {
     expect(metrics).toHaveTextContent('It does not approve or reconcile any row')
     await waitFor(() => expect(mocks.getDailyReportActivityMetrics).toHaveBeenCalledWith('well_1', 'report_1', 1, expect.any(AbortSignal)))
 
+  })
+
+  it('renders boundary comparisons with provenance and keeps unassessed periods explicit', async () => {
+    mocks.getDailyReportPeriodIntegrity.mockResolvedValue({
+      ...periodIntegrity,
+      items: [
+        {
+          report_id: 'period_report_1',
+          wellbore_id: 'wb_1',
+          report_date: '2026-04-01',
+          report_timezone: 'UTC',
+          shift_code: 'day',
+          shift_label: null,
+          report_number: 'DDR-1',
+          approved_revision_number: 2,
+          revision_status: 'approved',
+          revision_content_hash: 'sha256:period-one',
+          revision_fingerprint_verified: true,
+          period_start_at: '2026-04-01T06:00:00Z',
+          period_end_at: '2026-04-02T12:00:00Z',
+          period_state: 'bounded',
+        },
+        {
+          report_id: 'period_report_2',
+          wellbore_id: 'wb_1',
+          report_date: '2026-04-02',
+          report_timezone: 'UTC',
+          shift_code: 'day',
+          shift_label: null,
+          report_number: 'DDR-2',
+          approved_revision_number: 1,
+          revision_status: 'approved',
+          revision_content_hash: 'sha256:period-two',
+          revision_fingerprint_verified: true,
+          period_start_at: '2026-04-02T13:00:00Z',
+          period_end_at: '2026-04-03T12:00:00Z',
+          period_state: 'bounded',
+        },
+        {
+          report_id: 'period_report_3',
+          wellbore_id: 'wb_1',
+          report_date: '2026-04-03',
+          report_timezone: 'UTC',
+          shift_code: 'day',
+          shift_label: null,
+          report_number: 'DDR-3',
+          approved_revision_number: 1,
+          revision_status: 'approved',
+          revision_content_hash: 'sha256:period-three',
+          revision_fingerprint_verified: true,
+          period_start_at: '2026-04-03T11:30:00Z',
+          period_end_at: '2026-04-04T12:00:00Z',
+          period_state: 'bounded',
+        },
+        {
+          report_id: 'period_report_4',
+          wellbore_id: 'wb_1',
+          report_date: '2026-04-04',
+          report_timezone: 'UTC',
+          shift_code: 'day',
+          shift_label: null,
+          report_number: 'DDR-4',
+          approved_revision_number: null,
+          revision_status: null,
+          revision_content_hash: null,
+          revision_fingerprint_verified: false,
+          period_start_at: null,
+          period_end_at: null,
+          period_state: 'no_approved_revision',
+        },
+        {
+          report_id: 'period_report_5',
+          wellbore_id: 'wb_1',
+          report_date: '2026-04-05',
+          report_timezone: 'UTC',
+          shift_code: 'day',
+          shift_label: null,
+          report_number: 'DDR-5',
+          approved_revision_number: 1,
+          revision_status: 'approved',
+          revision_content_hash: 'sha256:period-five',
+          revision_fingerprint_verified: true,
+          period_start_at: '2026-04-05T06:00:00Z',
+          period_end_at: null,
+          period_state: 'missing_end_bound',
+        },
+      ],
+      comparisons: [
+        {
+          wellbore_id: 'wb_1',
+          ordering_basis: 'consecutive_distinct_report_dates',
+          previous_report_id: 'period_report_1',
+          previous_report_date: '2026-04-01',
+          previous_report_number: 'DDR-1',
+          previous_revision_number: 2,
+          previous_period_end_at: '2026-04-01T12:00:00Z',
+          next_report_id: 'period_report_2',
+          next_report_date: '2026-04-02',
+          next_report_number: 'DDR-2',
+          next_revision_number: 1,
+          next_period_start_at: '2026-04-02T13:00:00Z',
+          relationship: 'gap',
+          gap_seconds: 3600,
+          overlap_seconds: null,
+          unit: 's',
+        },
+        {
+          wellbore_id: 'wb_1',
+          ordering_basis: 'consecutive_distinct_report_dates',
+          previous_report_id: 'period_report_2',
+          previous_report_date: '2026-04-02',
+          previous_report_number: 'DDR-2',
+          previous_revision_number: 1,
+          previous_period_end_at: '2026-04-03T12:00:00Z',
+          next_report_id: 'period_report_3',
+          next_report_date: '2026-04-03',
+          next_report_number: 'DDR-3',
+          next_revision_number: 1,
+          next_period_start_at: '2026-04-03T11:30:00Z',
+          relationship: 'overlap',
+          gap_seconds: null,
+          overlap_seconds: 1800,
+          unit: 's',
+        },
+      ],
+      total: 5,
+      bounded_period_count: 3,
+      unassessed_period_count: 2,
+      unassessed_comparison_count: 2,
+      note: 'API note is not used as a UI translation.',
+    })
+    renderWorkspace()
+
+    const panel = await screen.findByTestId('daily-report-period-integrity')
+    await screen.findByText('Reported period gap')
+    expect(panel).toHaveTextContent('Reported-period boundary review')
+    expect(panel).toHaveTextContent('1 h')
+    expect(panel).toHaveTextContent('0.5 h')
+    expect(panel).toHaveTextContent('Reported period gap')
+    expect(panel).toHaveTextContent('Reported period overlap')
+    expect(panel).toHaveTextContent('Adjacent identity pairs not compared')
+    expect(panel).not.toHaveTextContent('API note is not used as a UI translation')
+    expect(screen.getByTestId('daily-report-period-comparisons').children).toHaveLength(2)
+    await userEvent.setup().click(screen.getByText('Report revisions and period-assessment states'))
+    expect(screen.getByTestId('daily-report-period-items')).toHaveTextContent('No approved revision')
+    expect(screen.getByTestId('daily-report-period-items')).toHaveTextContent('Period end missing')
+    expect(screen.getByTestId('daily-report-period-items')).toHaveTextContent('2026-04-05T06:00:00Z')
+    expect(screen.getByTestId('daily-report-period-items')).toHaveTextContent('Verified revision hash')
+    await waitFor(() => expect(mocks.getDailyReportPeriodIntegrity).toHaveBeenCalledWith(
+      'well_1',
+      { report_date_from: undefined, report_date_to: undefined, limit: 50 },
+      expect.any(AbortSignal),
+    ))
   })
 
   it('does not render unavailable NPT duration as zero hours', async () => {
