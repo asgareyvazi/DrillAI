@@ -688,6 +688,8 @@ def approval_out(row: Any) -> dict[str, Any]:
 
 
 def recommendation_out(row: Any) -> dict[str, Any]:
+    from drillai.engines.unit_contract import declared_unit_fields
+
     return {
         "id": row.id,
         "domain": row.domain,
@@ -695,6 +697,12 @@ def recommendation_out(row: Any) -> dict[str, Any]:
         "title": row.title,
         "statement": row.statement,
         "parameters": row.parameters or {},
+        "units": {
+            "parameter_fields": declared_unit_fields(
+                {"result": row.parameters or {}},
+                source="recommendation_parameter",
+            )
+        },
         "rationale": row.rationale,
         "why_not": row.why_not or [],
         "assumptions": row.assumptions or [],
@@ -719,6 +727,8 @@ def recommendation_out(row: Any) -> dict[str, Any]:
 
 
 def engine_run_out(row: Any) -> dict[str, Any]:
+    from drillai.engines.unit_contract import stored_unit_contract
+
     return {
         "id": row.id,
         "engine_key": row.engine_key,
@@ -731,6 +741,12 @@ def engine_run_out(row: Any) -> dict[str, Any]:
         "section_id": row.section_id,
         "inputs": row.inputs or {},
         "outputs": row.outputs or {},
+        "units": stored_unit_contract(
+            row.units,
+            row.inputs or {},
+            row.outputs or {},
+            row.constraint_violations or [],
+        ),
         "inputs_hash": row.inputs_hash,
         "outputs_hash": row.outputs_hash,
         "assumptions": list(row.assumptions or []),

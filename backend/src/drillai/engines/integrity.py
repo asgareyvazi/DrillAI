@@ -64,12 +64,13 @@ class IntegrityInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
     elements: list[BarrierElement] = Field(min_length=1)
     well_depth_si: float = quantity_field(..., "m", gt=0.0, description="deepest depth that must be protected")
-    required_barriers: int = Field(default=2, ge=1, le=5, description="barriers required across the envelope")
+    required_barriers: int = Field(default=2, ge=1, le=5, description="barriers required across the envelope", json_schema_extra={"unit": "1"})
     minimum_independent_kinds: int = Field(
         default=2,
         ge=1,
         le=5,
         description="minimum number of distinct barrier kinds that must make up the envelope",
+        json_schema_extra={"unit": "1"},
     )
     phase: str = Field(default="drilling", description="drilling|completion|production|intervention|abandonment")
     require_evidence: bool = Field(default=True, description="count a verified element without evidence as unverified")

@@ -12,8 +12,10 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { drillingApi } from '../../api/endpoints'
-import type { EngineListItem, EngineRunEnvelope, ImpactReport } from '../../api/types'
+import type { EngineListItem, EngineRunEnvelope, EngineRunListItem, ImpactReport } from '../../api/types'
 import { EvidencePanel } from '../../components/evidence/EvidencePanel'
+import { UnitAwareResult } from '../../components/engineering/UnitAwareResult'
+import { UnitContractSummary } from '../../components/engineering/UnitContractSummary'
 import { PageHeader } from '../../components/layout/AppShell'
 import {
   Async,
@@ -27,53 +29,37 @@ import {
   Loading,
   Table,
   Tabs,
-  Value,
 } from '../../components/common'
 import { useI18n } from '../../i18n'
 import { useActionGate } from '../../hooks/useActionGate'
 import { formatDateTime, formatValidationStatus } from '../../lib/format'
-import { useSession } from '../../stores/session'
 
-const OILFIELD_SUFFIX: Record<string, string> = {
-  _si: '',
-  _m_s: 'm/s',
-  _kpa: 'kPa',
-}
-
-export function inferOutputUnit(key: string): string | null {
-  const lower = key.toLowerCase()
-  if (lower.endsWith('_kpa')) return 'kPa'
-  if (lower.endsWith('_ppg')) return 'ppg'
-  if (lower.endsWith('_psi')) return 'psi'
-  if (lower.endsWith('_lpm')) return 'L/min'
-  if (lower.endsWith('_deg')) return 'deg'
-  if (lower.includes('dls') || lower.includes('dogleg')) return 'deg/m'
-  if (lower.includes('mud_weight') || lower.includes('ecd') || lower.includes('density') || lower.includes('equivalent_si')) {
-    return 'kg/m3'
-  }
-  if (
-    lower.includes('pressure') ||
-    lower.includes('sidpp') ||
-    lower.includes('sicp') ||
-    lower.includes('maasp') ||
-    lower.includes('mse') ||
-    lower.includes('stress') ||
-    lower.includes('margin_si')
-  ) {
-    return 'Pa'
-  }
-  if (lower.includes('capacity_at_shoe')) return 'm2'
-  if (lower.includes('volume') || lower.includes('pit_gain') || lower.includes('kick_tolerance_si')) return 'm3'
-  if (lower.includes('flow_rate') || lower.includes('kill_rate')) return 'm3/s'
-  if (lower.includes('velocity')) return 'm/s'
-  if (lower.includes('rop')) return 'm/h'
-  if (lower.includes('wob') || lower.includes('hookload') || lower.includes('tension') || lower.includes('drag') || lower.includes('force')) {
-    return 'N'
-  }
-  if (lower.includes('torque')) return 'N.m'
-  if (lower.includes('time') && lower.endsWith('_si')) return 's'
-  if (lower.endsWith('_si')) return 'm'
-  return null
+function EngineRunHistoryDetails({ run }: { run: EngineRunListItem }) {
+  const { t } = useI18n()
+  return (
+    <details>
+      <summary className="cursor-pointer text-[11px]">{t('common.view')}</summary>
+      <div className="mt-2 space-y-3">
+        <div>
+          <h4 className="mb-1 text-xs font-medium">{t('engineering.inputs')}</h4>
+          <UnitAwareResult value={run.inputs} unitFields={run.units.input_fields} />
+        </div>
+        <div>
+          <h4 className="mb-1 text-xs font-medium">{t('engineering.outputs')}</h4>
+          <UnitAwareResult value={run.outputs} unitFields={run.units.output_fields} />
+        </div>
+        {run.constraint_violations.length > 0 && (
+          <div>
+            <h4 className="mb-1 text-xs font-medium text-danger">{t('engineering.violations')}</h4>
+            <UnitAwareResult
+              value={{ violations: run.constraint_violations }}
+              unitFields={run.units.violation_fields ?? {}}
+            />
+          </div>
+        )}
+      </div>
+    </details>
+  )
 }
 
 function statusTone(status: string): 'ok' | 'warning' | 'danger' | 'neutral' {
@@ -83,45 +69,17 @@ function statusTone(status: string): 'ok' | 'warning' | 'danger' | 'neutral' {
   return 'neutral'
 }
 
-/** Renders the outputs of an engine run without assuming which keys an engine produces. */
-function OutputTable({ outputs, onEvidence }: { outputs: Record<string, unknown>; onEvidence: () => void }) {
-  const { unitSystem } = useSession()
-  const { t } = useI18n()
-  const rows = Object.entries(outputs).filter(([, value]) => typeof value === 'number' || typeof value === 'string')
-  const structural = Object.entries(outputs).filter(([, value]) => typeof value !== 'number' && typeof value !== 'string')
-
-  return (
-    <div className="space-y-3">
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-        {rows.map(([key, value]) => (
-          <Value
-            key={key}
-            label={key}
-            value={value}
-            unit={typeof value === 'number' ? inferOutputUnit(key) : null}
-            unitSystem={unitSystem}
-            source={`engine output · ${key}`}
-            onEvidence={onEvidence}
-          />
-        ))}
-      </div>
-      {rows.length === 0 && <EmptyState message="This engine returned no scalar output." />}
-      {structural.length > 0 && (
-        <div className="space-y-2">
-          {structural.map(([key, value]) => (
-            <details key={key} className="rounded border border-graphite-100 p-2 dark:border-graphite-800">
-              <summary className="cursor-pointer text-xs font-medium">{key}</summary>
-              <Json value={value} max={120} />
-            </details>
-          ))}
-        </div>
-      )}
-      <p className="text-[11px] text-graphite-500">
-        {t('common.units') ?? 'Values are canonical SI as stored; the display unit switch only changes presentation.'}{' '}
-        {Object.keys(OILFIELD_SUFFIX).length > 0 ? '' : ''}
-      </p>
-    </div>
-  )
+/** Renders every scalar using the exact runtime path in the engine's authoritative unit contract. */
+function OutputTable({
+  outputs,
+  unitFields,
+  onEvidence,
+}: {
+  outputs: Record<string, unknown>
+  unitFields: EngineRunEnvelope['units']['output_fields']
+  onEvidence: () => void
+}) {
+  return <UnitAwareResult value={outputs} unitFields={unitFields} onEvidence={onEvidence} />
 }
 
 /**
@@ -244,6 +202,7 @@ function EngineRunner({ engine, wellId, wellboreId, sectionId, scope }: {
               </Badge>
             ))}
           </div>
+          <UnitContractSummary contract={engine.unit_contract} />
           {engine.assumptions.length > 0 && (
             <>
               <p className="text-xs font-medium">{t('common.assumptions')}</p>
@@ -319,12 +278,19 @@ function EngineRunner({ engine, wellId, wellboreId, sectionId, scope }: {
           }
         >
           <div className="space-y-3">
-            <OutputTable outputs={result.outputs} onEvidence={() => setShowEvidence(true)} />
+            <OutputTable
+              outputs={result.outputs}
+              unitFields={result.units.output_fields}
+              onEvidence={() => setShowEvidence(true)}
+            />
 
             {result.constraint_violations.length > 0 && (
               <div className="rounded border border-danger/40 bg-red-50/60 p-2 dark:bg-red-950/20">
                 <p className="text-xs font-medium text-danger">{t('engineering.violations')}</p>
-                <Json value={result.constraint_violations} max={80} />
+                <UnitAwareResult
+                  value={{ violations: result.constraint_violations }}
+                  unitFields={result.units.violation_fields ?? {}}
+                />
               </div>
             )}
             {result.warnings.length > 0 && (
@@ -670,7 +636,8 @@ export default function EngineeringWorkspace() {
                         </Badge>
                       ),
                   },
-                  { key: 'violations', header: 'Violations', render: (row) => row.constraint_violations.length, align: 'end' },
+                  { key: 'violations', header: t('engineering.violations'), render: (row) => row.constraint_violations.length, align: 'end' },
+                  { key: 'results', header: t('engineering.result'), render: (row) => <EngineRunHistoryDetails run={row} /> },
                   { key: 'trigger', header: t('audit.triggeredBy'), render: (row) => row.triggered_by },
                   { key: 'at', header: 'When', render: (row) => formatDateTime(row.created_at) },
                   {

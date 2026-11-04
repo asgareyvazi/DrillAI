@@ -12,7 +12,13 @@ import { useMutation, useQuery } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { drillingApi, type OptimisePayload } from '../../api/endpoints'
-import type { CandidateView, OptimisationExplanation, WhyNotEntry } from '../../api/types'
+import type {
+  CandidateView,
+  EngineValueUnitContract,
+  OptimisationExplanation,
+  WhyNotEntry,
+} from '../../api/types'
+import { UnitAwareResult } from '../../components/engineering/UnitAwareResult'
 import { PageHeader } from '../../components/layout/AppShell'
 import {
   Async,
@@ -29,7 +35,7 @@ import {
   Value,
 } from '../../components/common'
 import { useI18n } from '../../i18n'
-import { formatDateTime, formatNumber, humanise } from '../../lib/format'
+import { formatDateTime, formatUnitContractValue, humanise } from '../../lib/format'
 import { useSession } from '../../stores/session'
 
 const DEFAULT_PARAMETERS = `[
@@ -71,8 +77,23 @@ function toneFor(kind: string): 'ok' | 'danger' | 'warning' | 'info' | 'neutral'
   }
 }
 
+function candidateUnitFields(candidate: CandidateView): Record<string, EngineValueUnitContract> {
+  const fields: Record<string, EngineValueUnitContract> = {}
+  for (const [key, descriptor] of Object.entries(candidate.value_units ?? {})) {
+    fields[`values.${key}`] = descriptor
+  }
+  for (const [key, descriptor] of Object.entries(candidate.objective_units ?? {})) {
+    fields[`objectives.${key}`] = descriptor
+  }
+  for (const [path, descriptor] of Object.entries(candidate.constraint_units ?? {})) {
+    fields[path] = descriptor
+  }
+  return fields
+}
+
 function WhyNotList({ entries }: { entries: WhyNotEntry[] }) {
   const { t, locale } = useI18n()
+  const { unitSystem } = useSession()
   if (entries.length === 0) return <EmptyState message="There were no alternative candidates to explain." />
   return (
     <ul className="space-y-2">
@@ -83,22 +104,33 @@ function WhyNotList({ entries }: { entries: WhyNotEntry[] }) {
             <span className="font-mono text-xs">{entry.candidate}</span>
             <span className="text-xs text-graphite-600 dark:text-graphite-300">{entry.reason}</span>
           </div>
-          {Object.keys(entry.comparison).length > 0 && (
+          {Object.keys(entry.comparison ?? {}).length > 0 && (
             <table className="mt-2 w-full text-[11px]">
               <thead>
                 <tr className="text-graphite-500">
                   <th className="text-start font-medium">{t('optimisation.objectives')}</th>
                   <th className="text-end font-medium">{t('optimisation.candidate')}</th>
                   <th className="text-end font-medium">{t('optimisation.recommended')}</th>
-                  <th className="text-end font-medium">{entry.comparison[Object.keys(entry.comparison)[0] as string]?.sense}</th>
+                  <th className="text-end font-medium">{Object.values(entry.comparison ?? {})[0]?.sense ?? '—'}</th>
                 </tr>
               </thead>
               <tbody>
-                {Object.entries(entry.comparison).map(([objective, comparison]) => (
+                {Object.entries(entry.comparison ?? {}).map(([objective, comparison]) => {
+                  const candidate = formatUnitContractValue(comparison.candidate, comparison.unit_contract, {
+                    unitSystem,
+                    locale,
+                    unknownUnitLabel: t('common.unknownUnit'),
+                  })
+                  const recommendedValue = formatUnitContractValue(comparison.recommended, comparison.unit_contract, {
+                    unitSystem,
+                    locale,
+                    unknownUnitLabel: t('common.unknownUnit'),
+                  })
+                  return (
                   <tr key={objective}>
                     <td className="py-0.5">{objective}</td>
-                    <td className="py-0.5 text-end font-mono">{formatNumber(comparison.candidate, locale, 4)}</td>
-                    <td className="py-0.5 text-end font-mono">{formatNumber(comparison.recommended, locale, 4)}</td>
+                    <td className="py-0.5 text-end font-mono" title={candidate.title}>{candidate.text}{candidate.unit ? ` ${candidate.unit}` : ''}</td>
+                    <td className="py-0.5 text-end font-mono" title={recommendedValue.title}>{recommendedValue.text}{recommendedValue.unit ? ` ${recommendedValue.unit}` : ''}</td>
                     <td className="py-0.5 text-end">
                       {comparison.candidate !== null && comparison.recommended !== null && (
                         <Badge
@@ -121,11 +153,19 @@ function WhyNotList({ entries }: { entries: WhyNotEntry[] }) {
                       )}
                     </td>
                   </tr>
-                ))}
+                  )
+                })}
               </tbody>
             </table>
           )}
-          {entry.violations && entry.violations.length > 0 && <Json value={entry.violations} max={60} />}
+          {entry.constraints && entry.constraints.length > 0 && (
+            <div className="mt-2">
+              <UnitAwareResult
+                value={{ constraint_results: entry.constraints }}
+                unitFields={entry.constraint_units ?? {}}
+              />
+            </div>
+          )}
         </li>
       ))}
     </ul>
@@ -142,37 +182,45 @@ function CandidateTable({
   selected: CandidateView | null
 }) {
   const { t, locale } = useI18n()
+  const { unitSystem } = useSession()
   if (rows.length === 0) return <EmptyState message="No candidate reached a rankable state." />
   const objectiveKeys = Array.from(new Set(rows.flatMap((row) => Object.keys(row.objectives ?? {}))))
   return (
     <Table
       rows={rows}
-      rowKey={(row) => row.candidate_id}
+      rowKey={(row) => row.id}
       onRowClick={onSelect}
       columns={[
-        { key: 'candidate', header: t('optimisation.candidate'), render: (row) => <span className="font-mono text-xs">{row.candidate_id}</span> },
+        { key: 'candidate', header: t('optimisation.candidate'), render: (row) => <span className="font-mono text-xs">{row.label || row.id}</span> },
         { key: 'rank', header: t('optimisation.rank'), render: (row) => row.rank ?? '—', align: 'end' },
         {
           key: 'frontier',
           header: t('optimisation.frontier'),
-          render: (row) => (row.on_frontier ? <Badge tone="ok">on frontier</Badge> : <Badge tone="neutral">dominated</Badge>),
+          render: (row) => (row.is_pareto ? <Badge tone="ok">on frontier</Badge> : <Badge tone="neutral">dominated</Badge>),
         },
         ...objectiveKeys.map((key) => ({
           key,
           header: key,
           align: 'end' as const,
-          render: (row: CandidateView) => formatNumber(row.objectives?.[key] ?? null, locale, 4),
+          render: (row: CandidateView) => {
+            const rendered = formatUnitContractValue(row.objectives?.[key] ?? null, row.objective_units?.[key], {
+              unitSystem,
+              locale,
+              unknownUnitLabel: t('common.unknownUnit'),
+            })
+            return <span title={rendered.title}>{rendered.text}{rendered.unit ? ` ${rendered.unit}` : ''}</span>
+          },
         })),
         {
           key: 'state',
           header: t('common.status'),
           render: (row) =>
-            row.feasible ? <Badge tone="warning">feasible</Badge> : <Badge tone="danger">{row.rejected_because ?? 'infeasible'}</Badge>,
+            row.is_feasible ? <Badge tone="warning">feasible</Badge> : <Badge tone="danger">{row.rejected_because.join('; ') || 'infeasible'}</Badge>,
         },
         {
           key: 'selected',
           header: '',
-          render: (row) => (selected?.candidate_id === row.candidate_id ? <Badge tone="info">selected</Badge> : null),
+          render: (row) => (selected?.id === row.id ? <Badge tone="info">selected</Badge> : null),
         },
       ]}
     />
@@ -231,6 +279,34 @@ export default function OptimisationWorkspace() {
 
   const recommended = useMemo(() => explanation?.recommended ?? null, [explanation])
   const activeCandidate = selectedCandidate ?? recommended
+  const tradeOffUnitFields = useMemo(() => {
+    const fields: Record<string, EngineValueUnitContract> = {}
+    explanation?.trade_offs.forEach((tradeOff, index) => {
+      for (const field of ['best_value', 'worst_value', 'spread']) {
+        fields[`trade_offs[${index}].${field}`] = tradeOff.unit_contract
+      }
+    })
+    return fields
+  }, [explanation])
+  const sensitivityUnitFields = useMemo(() => {
+    const fields: Record<string, EngineValueUnitContract> = {}
+    explanation?.sensitivities.forEach((sensitivity, index) => {
+      for (const field of ['spearman_rho', 'samples']) {
+        const descriptor = sensitivity.unit_contracts[field]
+        if (descriptor) fields[`sensitivities[${index}].${field}`] = descriptor
+      }
+    })
+    return fields
+  }, [explanation])
+  const feasibleRangeUnitFields = useMemo(() => {
+    const fields: Record<string, EngineValueUnitContract> = {}
+    for (const [parameter, units] of Object.entries(explanation?.feasible_range_units ?? {})) {
+      for (const [field, descriptor] of Object.entries(units)) {
+        fields[`feasible_ranges.${parameter}.${field}`] = descriptor
+      }
+    }
+    return fields
+  }, [explanation])
 
   function submit() {
     try {
@@ -431,9 +507,18 @@ export default function OptimisationWorkspace() {
                 ) : (
                   <div className="space-y-3">
                     <dl className="grid grid-cols-2 gap-2 lg:grid-cols-4">
-                      {Object.entries(recommended.values).map(([key, value]) => (
-                        <Value key={key} label={key} value={value} unit={key.endsWith('_si') ? 'Pa' : null} unitSystem={unitSystem} source={`candidate ${recommended.candidate_id}`} />
-                      ))}
+                      {Object.entries(recommended.values)
+                        .filter(([, value]) => typeof value === 'number')
+                        .map(([key, value]) => (
+                          <Value
+                            key={key}
+                            label={key}
+                            value={value}
+                            unitContract={recommended.value_units?.[key] ?? explanation.value_units?.[key] ?? null}
+                            unitSystem={unitSystem}
+                            source={`candidate ${recommended.id}`}
+                          />
+                        ))}
                     </dl>
                     <div>
                       <p className="mb-1 text-xs font-medium">Computed objectives</p>
@@ -441,18 +526,40 @@ export default function OptimisationWorkspace() {
                         rows={Object.entries(recommended.objectives).map(([key, value]) => ({
                           key,
                           value,
-                          source: explanation.objective_sources?.[key]?.source ?? 'engine output',
-                          sense: explanation.objective_sources?.[key]?.sense ?? '—',
+                          unitContract: recommended.objective_units?.[key] ?? explanation.objective_units?.[key] ?? null,
+                          source: explanation.objective_contracts[key]?.source ?? explanation.objective_sources?.[key] ?? 'engine output',
+                          sense: explanation.objective_contracts[key]?.sense ?? '—',
                         }))}
                         rowKey={(row) => row.key}
                         columns={[
                           { key: 'objective', header: t('optimisation.objectives'), render: (row) => humanise(row.key) },
-                          { key: 'value', header: 'Value', render: (row) => formatNumber(row.value, locale, 4), align: 'end' },
+                          {
+                            key: 'value',
+                            header: 'Value',
+                            render: (row) => {
+                              const rendered = formatUnitContractValue(row.value, row.unitContract, {
+                                unitSystem,
+                                locale,
+                                unknownUnitLabel: t('common.unknownUnit'),
+                              })
+                              return <span title={rendered.title}>{rendered.text}{rendered.unit ? ` ${rendered.unit}` : ''}</span>
+                            },
+                            align: 'end',
+                          },
                           { key: 'sense', header: 'Direction', render: (row) => String(row.sense) },
                           { key: 'source', header: t('common.source'), render: (row) => <span className="font-mono text-[10px]">{String(row.source)}</span> },
                         ]}
                       />
                     </div>
+                    {recommended.constraint_results.length > 0 && (
+                      <div>
+                        <p className="mb-1 text-xs font-medium">{t('optimisation.constraintChecks')}</p>
+                        <UnitAwareResult
+                          value={{ constraint_results: recommended.constraint_results }}
+                          unitFields={candidateUnitFields(recommended)}
+                        />
+                      </div>
+                    )}
                     {explanation.recommendation_id && (
                       <p className="text-[11px] text-graphite-500">
                         persisted as recommendation <span className="font-mono">{explanation.recommendation_id}</span>{' '}
@@ -499,7 +606,19 @@ export default function OptimisationWorkspace() {
                   {explanation.trade_offs.length === 0 ? (
                     <EmptyState message="No trade-off was computed for this run." />
                   ) : (
-                    <Json value={explanation.trade_offs} max={200} />
+                    <UnitAwareResult
+                      value={{
+                        trade_offs: explanation.trade_offs.map((row) => ({
+                          objective: row.objective,
+                          sense: row.sense,
+                          best_candidate_id: row.best_candidate_id,
+                          best_value: row.best_value,
+                          worst_value: row.worst_value,
+                          spread: row.spread,
+                        })),
+                      }}
+                      unitFields={tradeOffUnitFields}
+                    />
                   )}
                 </Card>
                 <Card title={t('optimisation.sensitivities')}>
@@ -509,14 +628,57 @@ export default function OptimisationWorkspace() {
                       hint="The optimiser skips sensitivity analysis below three feasible candidates."
                     />
                   ) : (
-                    <Json value={explanation.sensitivities} max={200} />
+                    <UnitAwareResult
+                      value={{
+                        sensitivities: explanation.sensitivities.map((row) => ({
+                          parameter: row.parameter,
+                          objective: row.objective,
+                          spearman_rho: row.spearman_rho,
+                          samples: row.samples,
+                          interpretation: row.interpretation,
+                        })),
+                      }}
+                      unitFields={sensitivityUnitFields}
+                    />
                   )}
                 </Card>
               </div>
 
+              <Card title="Feasible parameter ranges" subtitle="ranges among candidates satisfying the declared constraints">
+                {Object.keys(explanation.feasible_ranges).length === 0 ? (
+                  <EmptyState message="No feasible parameter ranges were produced." />
+                ) : (
+                  <UnitAwareResult
+                    value={{ feasible_ranges: explanation.feasible_ranges }}
+                    unitFields={feasibleRangeUnitFields}
+                  />
+                )}
+              </Card>
+
               {explanation.infeasible.length > 0 && (
-                <Card title="Infeasible candidates" subtitle="rejected by a declared constraint, with the violation">
-                  <Json value={explanation.infeasible} max={200} />
+                <Card
+                  title={t('optimisation.infeasibleCandidates')}
+                  subtitle={t('optimisation.infeasible')}
+                >
+                  <div className="space-y-2">
+                    {explanation.infeasible.map((candidate) => (
+                      <details key={candidate.id} className="rounded border border-graphite-100 p-3 dark:border-graphite-800">
+                        <summary className="cursor-pointer text-xs font-medium">
+                          {candidate.label || candidate.id} · {candidate.rejected_because.join('; ')}
+                        </summary>
+                        <div className="mt-2">
+                          <UnitAwareResult
+                            value={{
+                              values: candidate.values,
+                              objectives: candidate.objectives,
+                              constraint_results: candidate.constraint_results,
+                            }}
+                            unitFields={candidateUnitFields(candidate)}
+                          />
+                        </div>
+                      </details>
+                    ))}
+                  </div>
                 </Card>
               )}
 

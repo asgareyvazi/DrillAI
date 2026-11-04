@@ -45,42 +45,54 @@ from drillai.db.models import (
     WellSection,
 )
 from drillai.engines.registry import EngineRegistry, load_default_engines
+from drillai.engines.unit_contract import (
+    UNIT_CONTRACT_VERSION,
+    build_engine_unit_contract,
+    unit_descriptor_from_declared_unit,
+)
 
 #: Objectives this module can actually compute from engine output. Each entry names the engine
 #: output field it reads, so the mapping is auditable rather than implicit.
 COMPUTED_OBJECTIVES: dict[str, dict[str, str]] = {
     "ecd_margin_si": {
         "sense": "maximize",
+        "unit": "kg/m3",
         "source": "hydraulics.laminar:ecd_margin_si",
-        "description": "Distance between the computed ECD and the fracture gradient (kg/m3 equivalent)",
+        "description": "Distance between the computed ECD and fracture gradient, in kg/m3.",
     },
     "spp_utilisation": {
         "sense": "minimize",
+        "unit": "1",
         "source": "hydraulics.laminar:standpipe_pressure_expected_si",
         "description": "Standpipe pressure as a fraction of the declared pump pressure limit",
     },
     "annular_velocity_m_s": {
         "sense": "maximize",
+        "unit": "m/s",
         "source": "hydraulics.laminar:annular_velocity_min_si",
         "description": "Annular velocity in the tightest annulus (worst-case hole cleaning)",
     },
     "cutting_transport_ratio": {
         "sense": "maximize",
+        "unit": "1",
         "source": "hydraulics.laminar:cutting_transport_ratio",
         "description": "Computed cuttings transport ratio where the engine can evaluate it",
     },
     "torque_utilisation": {
         "sense": "minimize",
+        "unit": "1",
         "source": "torque_drag.soft_string:surface_torque_si",
         "description": "Surface torque as a fraction of the declared torque limit",
     },
     "hookload_utilisation": {
         "sense": "minimize",
+        "unit": "1",
         "source": "torque_drag.soft_string:pickup_hookload_si",
         "description": "Pick-up hookload as a fraction of the rig hookload limit",
     },
     "torque_margin_n_m": {
         "sense": "maximize",
+        "unit": "N.m",
         "source": "torque_drag.soft_string:surface_torque_si",
         "description": "Head-room between the computed surface torque and the declared limit",
     },
@@ -112,6 +124,7 @@ class ConstraintOutcome:
     unit: str | None
     margin: float | None
     note: str | None = None
+    margin_unit: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -121,6 +134,7 @@ class ConstraintOutcome:
             "actual": self.actual,
             "unit": self.unit,
             "margin": self.margin,
+            "margin_unit": self.margin_unit,
             "note": self.note,
         }
 
@@ -368,9 +382,10 @@ class DrillingOptimisationService:
                         satisfied=float(margin) > 0,
                         limit=round(float(fracture), 3) if fracture is not None else None,
                         actual=result.hydraulics.get("ecd_bottom_si"),
-                        unit="kg/m3 equivalent",
+                        unit="kg/m3",
                         margin=round(float(margin), 3),
                         note="computed ECD exceeds the fracture gradient" if float(margin) <= 0 else None,
+                        margin_unit="kg/m3",
                     )
                 )
             elif key == "spp_utilisation":
@@ -389,6 +404,7 @@ class DrillingOptimisationService:
                         unit="Pa",
                         margin=round(1.0 - utilisation, 4),
                         note="computed SPP exceeds the declared pump limit" if utilisation > 1 else None,
+                        margin_unit="1",
                     )
                 )
             elif key == "annular_velocity_m_s":
@@ -425,6 +441,7 @@ class DrillingOptimisationService:
                         note="computed surface torque exceeds the declared limit"
                         if utilisation > 1
                         else None,
+                        margin_unit="1",
                     )
                 )
             elif key == "hookload_utilisation":
@@ -443,6 +460,7 @@ class DrillingOptimisationService:
                         unit="N",
                         margin=round(1.0 - utilisation, 4),
                         note="pick-up hookload exceeds the rig limit" if utilisation > 1 else None,
+                        margin_unit="1",
                     )
                 )
 
@@ -488,15 +506,26 @@ class DrillingOptimisationService:
                 details={"unsupported": unknown, "supported": sorted(COMPUTED_OBJECTIVES)},
             )
         objective_specs = [
-            {"key": key, "sense": COMPUTED_OBJECTIVES[key]["sense"]} for key in requested_objectives
+            {
+                "key": key,
+                "sense": COMPUTED_OBJECTIVES[key]["sense"],
+                "unit": COMPUTED_OBJECTIVES[key]["unit"],
+            }
+            for key in requested_objectives
         ]
 
         # 1. candidates
-        _sweep_spec, sweep = self.registry.execute(
-            "optimization.sweep",
-            {"parameters": parameters, "method": "grid", "samples": samples},
+        sweep_inputs = {"parameters": parameters, "method": "grid", "samples": samples}
+        _sweep_spec, sweep = self.registry.execute("optimization.sweep", sweep_inputs)
+        sweep_output = sweep.outputs.model_dump(mode="json")
+        sweep_unit_contract = build_engine_unit_contract(
+            _sweep_spec.key,
+            _sweep_spec.inputs_model,
+            _sweep_spec.outputs_model,
+            sweep_inputs,
+            sweep_output,
+            [violation.model_dump(mode="json") for violation in sweep.violations],
         )
-        sweep_output = sweep.outputs.model_dump()
         candidates = sweep_output.get("candidates") or []
 
         # 2. evaluate every candidate deterministically
@@ -531,11 +560,25 @@ class DrillingOptimisationService:
                 if item.objectives
             ],
             "objectives": objective_specs,
+            "parameter_units": {
+                item["name"]: item.get("unit", "")
+                for item in parameters
+                if isinstance(item, dict) and isinstance(item.get("name"), str)
+            },
         }
         pareto_output: dict[str, Any] = {}
+        pareto_unit_contract: dict[str, Any] = {}
         if pareto_inputs["candidates"]:
             _pareto_spec, pareto_result = self.registry.execute("optimization.pareto", pareto_inputs)
-            pareto_output = pareto_result.outputs.model_dump()
+            pareto_output = pareto_result.outputs.model_dump(mode="json")
+            pareto_unit_contract = build_engine_unit_contract(
+                _pareto_spec.key,
+                _pareto_spec.inputs_model,
+                _pareto_spec.outputs_model,
+                pareto_inputs,
+                pareto_output,
+                [violation.model_dump(mode="json") for violation in pareto_result.violations],
+            )
 
         # 3b. persist the calculations behind the candidates this result will cite.
         #
@@ -590,6 +633,31 @@ class DrillingOptimisationService:
             persisted_candidates.append(item.candidate_id)
 
         # 4. persist the optimisation run and every candidate
+        value_unit_contracts = {
+            str(item["name"]): unit_descriptor_from_declared_unit(
+                item.get("unit") if isinstance(item.get("unit"), str) else None,
+                canonical_value=True,
+            )
+            for item in parameters
+            if isinstance(item, dict) and isinstance(item.get("name"), str)
+        }
+        objective_unit_contracts = {
+            str(item["key"]): unit_descriptor_from_declared_unit(
+                item.get("unit") if isinstance(item.get("unit"), str) else None,
+            )
+            for item in objective_specs
+            if isinstance(item, dict) and isinstance(item.get("key"), str)
+        }
+        persisted_unit_contract = {
+            "contract_version": UNIT_CONTRACT_VERSION,
+            "unit_system": "SI",
+            "unit_system_basis": "canonical parameter values; objective output units are explicit",
+            "input_fields": sweep_unit_contract["input_fields"],
+            "output_fields": pareto_unit_contract.get("output_fields", {}),
+            "value_units": value_unit_contracts,
+            "objective_units": objective_unit_contracts,
+            "unknown_unit_policy": "unknown values remain unconverted; no units are inferred",
+        }
         run = OptimizationRun(
             org_id=self.org_id,
             problem_key="drilling.parameters",
@@ -628,6 +696,12 @@ class DrillingOptimisationService:
             attributes={
                 "candidate_generation": sweep_output.get("notes"),
                 "not_evaluated": NOT_EVALUATED,
+                "unit_contract": persisted_unit_contract,
+                "pareto_outputs": {
+                    "trade_offs": pareto_output.get("trade_offs") or [],
+                    "sensitivities": pareto_output.get("sensitivities") or [],
+                    "feasible_ranges": pareto_output.get("feasible_ranges") or {},
+                },
                 "provenance": {
                     "persisted_candidates": sorted(persisted_candidates),
                     "evaluated_in_memory": sorted(in_memory_candidates),
@@ -755,7 +829,102 @@ class DrillingOptimisationService:
             .scalars()
             .all()
         )
+        engine_versions: dict[str, str] = {}
+        if run.engine_run_ids:
+            engine_rows = (
+                await self.session.execute(
+                    select(EngineRun).where(
+                        EngineRun.org_id == self.org_id,
+                        EngineRun.id.in_(run.engine_run_ids),
+                    )
+                )
+            ).scalars().all()
+            engine_versions = {row.engine_key: row.engine_version for row in engine_rows}
         views = [_candidate_view(row) for row in candidates]
+        stored_contract = (run.attributes or {}).get("unit_contract")
+        contract_is_current = (
+            isinstance(stored_contract, dict)
+            and stored_contract.get("contract_version") == UNIT_CONTRACT_VERSION
+        )
+        stored_values = stored_contract.get("value_units", {}) if contract_is_current else {}
+        stored_objectives = stored_contract.get("objective_units", {}) if contract_is_current else {}
+        value_names = [
+            str(item["name"])
+            for item in (run.decision_variables or [])
+            if isinstance(item, dict) and isinstance(item.get("name"), str)
+        ]
+        objective_names = [
+            str(item["key"])
+            for item in (run.objectives or [])
+            if isinstance(item, dict) and isinstance(item.get("key"), str)
+        ]
+        value_units = {
+            name: stored_values.get(name)
+            if isinstance(stored_values, dict) and isinstance(stored_values.get(name), dict)
+            else unit_descriptor_from_declared_unit(
+                None,
+                source="historical_run_without_authoritative_unit_contract",
+            )
+            for name in value_names
+        }
+        objective_units = {
+            name: stored_objectives.get(name)
+            if isinstance(stored_objectives, dict) and isinstance(stored_objectives.get(name), dict)
+            else unit_descriptor_from_declared_unit(
+                None,
+                source="historical_run_without_authoritative_unit_contract",
+            )
+            for name in objective_names
+        }
+        pareto_unit_fields = (
+            stored_contract.get("output_fields", {})
+            if contract_is_current and isinstance(stored_contract.get("output_fields"), dict)
+            else {}
+        )
+        pareto_outputs = (run.attributes or {}).get("pareto_outputs", {})
+        if not isinstance(pareto_outputs, dict):
+            pareto_outputs = {}
+        raw_trade_offs = pareto_outputs.get("trade_offs") or list((run.sensitivity or {}).values())
+        trade_offs = [dict(item) for item in raw_trade_offs if isinstance(item, dict)]
+        for item in trade_offs:
+            item["unit_contract"] = objective_units.get(
+                str(item.get("objective")),
+                unit_descriptor_from_declared_unit(
+                    None,
+                    source="historical_run_without_authoritative_unit_contract",
+                ),
+            )
+        sensitivities = [
+            dict(item) for item in (pareto_outputs.get("sensitivities") or []) if isinstance(item, dict)
+        ]
+        for index, item in enumerate(sensitivities):
+            item["unit_contracts"] = {
+                field: pareto_unit_fields.get(f"sensitivities[{index}].{field}")
+                or unit_descriptor_from_declared_unit(
+                    None,
+                    source="historical_run_without_authoritative_unit_contract",
+                )
+                for field in ("spearman_rho", "samples")
+            }
+        feasible_ranges = pareto_outputs.get("feasible_ranges") or {}
+        if not isinstance(feasible_ranges, dict):
+            feasible_ranges = {}
+        feasible_range_units: dict[str, dict[str, Any]] = {}
+        for parameter, values in feasible_ranges.items():
+            if not isinstance(values, dict):
+                continue
+            feasible_range_units[str(parameter)] = {
+                field: pareto_unit_fields.get(f"feasible_ranges.{parameter}.{field}")
+                or unit_descriptor_from_declared_unit(
+                    None,
+                    source="historical_run_without_authoritative_unit_contract",
+                )
+                for field in ("min", "max", "count")
+                if field in values
+            }
+        for view in views:
+            view["value_units"] = value_units
+            view["objective_units"] = objective_units
         recommended = next((view for view in views if view["id"] == run.best_candidate_id), None)
         why_not: list[dict[str, Any]] = []
         for view in views:
@@ -769,6 +938,7 @@ class DrillingOptimisationService:
                         "kind": "infeasible",
                         "reason": "; ".join(view["rejected_because"]) or "a constraint returned infeasible",
                         "constraints": view["constraint_results"],
+                        "constraint_units": view["constraint_units"],
                     }
                 )
             elif recommended is not None:
@@ -784,6 +954,8 @@ class DrillingOptimisationService:
                             ),
                             None,
                         ),
+                        "unit": (objective_units.get(key) or {}).get("value_unit"),
+                        "unit_contract": objective_units.get(key),
                     }
                     for key in sorted(set(view["objectives"]) | set(recommended["objectives"] or {}))
                 }
@@ -801,18 +973,42 @@ class DrillingOptimisationService:
                         "comparison": comparison,
                     }
                 )
+        objective_contracts = {
+            str(item["key"]): {
+                "source": COMPUTED_OBJECTIVES.get(str(item["key"]), {}).get("source"),
+                "sense": item.get("sense"),
+                "unit": item.get("unit"),
+                "description": COMPUTED_OBJECTIVES.get(str(item["key"]), {}).get("description"),
+                "unit_contract": objective_units.get(str(item["key"])),
+            }
+            for item in (run.objectives or [])
+            if isinstance(item, dict) and isinstance(item.get("key"), str)
+        }
         return {
             "optimization_run_id": run.id,
             "title": run.title,
             "status": run.status,
             "problem_key": run.problem_key,
+            "created_at": run.created_at.isoformat() if run.created_at else None,
             "objectives": run.objectives,
             "constraints": run.constraints,
             "decision_variables": run.decision_variables,
+            "value_units": value_units,
+            "objective_units": objective_units,
             "engine_keys": run.engine_keys,
             "candidates_evaluated": run.candidates_evaluated,
             "feasible_count": run.feasible_count,
             "pareto_count": run.pareto_count,
+            "available_options": [view for view in views if view["is_feasible"]],
+            "infeasible": [view for view in views if not view["is_feasible"]],
+            "trade_offs": trade_offs,
+            "sensitivities": sensitivities,
+            "feasible_ranges": feasible_ranges,
+            "feasible_range_units": feasible_range_units,
+            "pareto_unit_fields": pareto_unit_fields,
+            "unit_contract": stored_contract if contract_is_current else None,
+            "engine_versions": engine_versions,
+            "objective_contracts": objective_contracts,
             "sensitivity": run.sensitivity,
             "uncertainty": run.uncertainty,
             "assumptions": run.assumption_set,
@@ -868,12 +1064,31 @@ class DrillingOptimisationService:
         if well is None:
             raise ValidationFailed("well not found", details={"well_id": well_id})
 
-        parameters = [
-            {"name": key, "value": value, "unit": None, "source": "optimisation candidate"}
-            for key, value in (recommended["values"] or {}).items()
-            if key != "candidate_id"
+        value_units = explanation.get("value_units") or {}
+        parameters = []
+        for key, value in (recommended["values"] or {}).items():
+            if key == "candidate_id" or not isinstance(value, (int, float)) or isinstance(value, bool):
+                continue
+            unit_contract = value_units.get(key)
+            if not isinstance(unit_contract, dict):
+                unit_contract = unit_descriptor_from_declared_unit(
+                    None,
+                    source="historical_run_without_authoritative_unit_contract",
+                )
+            parameters.append(
+                {
+                    "name": key,
+                    "value": value,
+                    "unit": unit_contract.get("value_unit") if unit_contract.get("status") == "declared" else None,
+                    "unit_contract": unit_contract,
+                    "source": "optimisation candidate",
+                }
+            )
+        statement_parts = [
+            f"{item['name']} = {item['value']}"
+            + (f" {item['unit']}" if item.get("unit") else " (unit unknown)")
+            for item in parameters
         ]
-        statement_parts = [f"{item['name']} = {item['value']}" for item in parameters]
         row = Recommendation(
             org_id=self.org_id,
             project_id=well.project_id,
@@ -921,6 +1136,7 @@ class DrillingOptimisationService:
                 "candidate_id": recommended["id"],
                 "pareto_count": explanation["pareto_count"],
                 "not_evaluated": list((explanation.get("not_evaluated") or {}).keys()),
+                "unit_contract": explanation.get("unit_contract"),
             },
         )
         self.session.add(row)
@@ -949,7 +1165,27 @@ class DrillingOptimisationService:
         )
 
 
+def _candidate_constraint_units(
+    constraints: list[Any],
+) -> dict[str, dict[str, Any]]:
+    units: dict[str, dict[str, Any]] = {}
+    for index, item in enumerate(constraints):
+        if not isinstance(item, dict):
+            continue
+        for field_name, unit_key in (("limit", "unit"), ("actual", "unit"), ("margin", "margin_unit")):
+            value = item.get(field_name)
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                continue
+            declared_unit = item.get(unit_key)
+            units[f"constraint_results[{index}].{field_name}"] = unit_descriptor_from_declared_unit(
+                declared_unit if isinstance(declared_unit, str) else None,
+                source="candidate_constraint",
+            )
+    return units
+
+
 def _candidate_view(row: CandidateSolution) -> dict[str, Any]:
+    constraints = row.constraint_results or []
     return {
         "id": row.id,
         "label": row.label or row.id,
@@ -960,7 +1196,8 @@ def _candidate_view(row: CandidateSolution) -> dict[str, Any]:
         "score": row.score,
         "values": row.decisions or {},
         "objectives": row.objectives or {},
-        "constraint_results": row.constraint_results or [],
+        "constraint_results": constraints,
+        "constraint_units": _candidate_constraint_units(constraints),
         "rejected_because": list(row.rejected_because or []),
         "explanation": row.explanation,
         "feasibility_margin": row.feasibility_margin,

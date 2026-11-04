@@ -10,8 +10,9 @@
 import clsx from 'clsx'
 import { useEffect, useId, useRef, type ReactNode } from 'react'
 import { ApiError, canRetry, isAbortError } from '../../api/client'
+import type { EngineValueUnitContract } from '../../api/types'
 import { useI18n } from '../../i18n'
-import { formatValue } from '../../lib/format'
+import { formatUnitContractValue, formatValue } from '../../lib/format'
 
 // --------------------------------------------------------------------------- layout blocks
 
@@ -320,6 +321,7 @@ export function Value({
   label,
   value,
   unit,
+  unitContract,
   source,
   quality,
   unitSystem,
@@ -331,6 +333,8 @@ export function Value({
   label: ReactNode
   value: unknown
   unit?: string | null
+  /** When supplied (including null), this authoritative descriptor replaces legacy unit formatting. */
+  unitContract?: EngineValueUnitContract | null
   source?: string | null
   quality?: string | null
   unitSystem?: 'si' | 'oilfield'
@@ -342,7 +346,14 @@ export function Value({
   meta?: ReactNode
 }) {
   const { locale, t } = useI18n()
-  const rendered = formatValue(value, { unit, unitSystem, locale })
+  const rendered =
+    unitContract !== undefined
+      ? formatUnitContractValue(value, unitContract, {
+          unitSystem,
+          locale,
+          unknownUnitLabel: t('common.unknownUnit'),
+        })
+      : formatValue(value, { unit, unitSystem, locale })
   return (
     <div className="rounded-md border border-graphite-100 bg-graphite-50/40 p-2.5 dark:border-graphite-800 dark:bg-graphite-900/60">
       <dt className="text-[11px] font-medium tracking-wide text-graphite-500 uppercase dark:text-graphite-400">

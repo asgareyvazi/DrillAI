@@ -41,6 +41,27 @@ vi.mock('../../api/endpoints', () => ({
 
 const api = vi.mocked(drillingApi)
 
+const unknownUnit = {
+  status: 'unknown',
+  value_unit: null,
+  registry_unit: null,
+  dimension: null,
+  canonical_unit: null,
+  unit_system_basis: 'unknown',
+  semantic: null,
+  source: 'unknown',
+  description: null,
+  description_status: 'not_declared',
+  unknown_reason: 'No authoritative unit is declared for this test value.',
+  requested_display_unit: null,
+  precision: 3,
+  display_units: {
+    si: { unit_symbol: null, registry_symbol: null, factor: null, offset: null, supported: false, behavior: 'unknown' },
+    metric_engineering: { unit_symbol: null, registry_symbol: null, factor: null, offset: null, supported: false, behavior: 'unknown' },
+    field_us: { unit_symbol: null, registry_symbol: null, factor: null, offset: null, supported: false, behavior: 'unknown' },
+  },
+}
+
 const engine = {
   key: 'hydraulics',
   name: 'Hydraulics',
@@ -181,6 +202,14 @@ describe('the engine run gate', () => {
       engine_key: 'hydraulics',
       engine_version: '1.0.0',
       result: { ecd_kg_m3: 1250, flow_rate_l_s: 32 },
+      units: {
+        contract_version: 'drillai.engine-units.v1',
+        unit_system: 'SI',
+        unit_system_basis: 'per_numeric_field',
+        input_fields: {},
+        output_fields: { ecd_kg_m3: unknownUnit, flow_rate_l_s: unknownUnit },
+        violation_fields: {},
+      },
       is_feasible: true,
       warnings: ['annular velocity below the recommended range'],
       violations: [{ code: 'ecd_below_pore_pressure' }],

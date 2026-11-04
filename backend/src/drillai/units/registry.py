@@ -42,6 +42,7 @@ class Dimension(StrEnum):
     PRESSURE = "pressure"
     FORCE = "force"
     TORQUE = "torque"
+    FORCE_PER_LENGTH = "force_per_length"
     LINEAR_DENSITY = "linear_density"  # mass per length (pipe/string weight)
     DENSITY = "density"
     VELOCITY = "velocity"
@@ -315,6 +316,8 @@ register(Unit(symbol="lbf", dimension=Dimension.FORCE, factor=4.4482216152605, n
 register(Unit(symbol="klbf", dimension=Dimension.FORCE, factor=4448.2216152605, name="thousand pound force", aliases=("klb", "kips")))
 register(Unit(symbol="kgf", dimension=Dimension.FORCE, factor=9.80665, name="kilogram force", aliases=("kgf/cm2 basis",)))
 register(Unit(symbol="tonf", dimension=Dimension.FORCE, factor=9964.01641818352, name="US short ton force", aliases=("ton-force",)))
+register(Unit(symbol="N/m", dimension=Dimension.FORCE_PER_LENGTH, name="newton per metre"))
+register(Unit(symbol="klbf/ft", dimension=Dimension.FORCE_PER_LENGTH, factor=4448.2216152605 / 0.3048, name="thousand pound force per foot"))
 register(Unit(symbol="N.m", dimension=Dimension.TORQUE, name="newton metre", aliases=("Nm", "N*m")))
 register(Unit(symbol="kN.m", dimension=Dimension.TORQUE, factor=1000.0, name="kilonewton metre", aliases=("kNm",)))
 register(Unit(symbol="lbf.ft", dimension=Dimension.TORQUE, factor=1.3558179483314004, name="pound force foot", aliases=("ft.lbf", "ft-lbf", "ftlbf")))
@@ -367,6 +370,9 @@ register(Unit(symbol="kJ", dimension=Dimension.ENERGY, factor=1000.0, name="kilo
 register(Unit(symbol="btu", dimension=Dimension.ENERGY, factor=1055.05585262, name="British thermal unit"))
 register(Unit(symbol="J/m3", dimension=Dimension.SPECIFIC_ENERGY, name="joule per cubic metre (MSE)", aliases=("J/m^3",)))
 register(Unit(symbol="kPa-mse", dimension=Dimension.SPECIFIC_ENERGY, factor=1000.0, name="kilopascal (as MSE)", aliases=("kPa(MSE)",)))
+# MSE is energy per volume and is dimensionally pressure; give its field-US display unit a
+# distinct registry symbol so the pressure unit ``psi`` cannot be mistaken for MSE.
+register(Unit(symbol="psi-mse", dimension=Dimension.SPECIFIC_ENERGY, factor=6894.757293168361, name="psi as mechanical specific energy"))
 
 # --- fluid / rock ---------------------------------------------------------------------
 register(Unit(symbol="Pa.s", dimension=Dimension.DYNAMIC_VISCOSITY, name="pascal second", aliases=("Pa*s",)))
@@ -496,55 +502,78 @@ def q(value: float, unit: str) -> Quantity:
 _PREFERRED: dict[UnitSystem, dict[Dimension, str]] = {
     UnitSystem.SI: {
         Dimension.LENGTH: "m",
+        Dimension.AREA: "m2",
         Dimension.VOLUME: "m3",
+        Dimension.MASS: "t",
+        Dimension.TIME: "s",
         Dimension.DENSITY: "kg/m3",
         Dimension.PRESSURE: "kPa",
         Dimension.FORCE: "kN",
         Dimension.TORQUE: "kN.m",
+        Dimension.FORCE_PER_LENGTH: "N/m",
         Dimension.VELOCITY: "m/h",
+        Dimension.ROTATIONAL_SPEED: "rpm",
+        Dimension.ANGLE: "deg",
         Dimension.VOLUME_FLOW: "L/min",
+        Dimension.POWER: "W",
+        Dimension.POWER_PER_AREA: "W/m2",
+        Dimension.DYNAMIC_VISCOSITY: "Pa.s",
         Dimension.TEMPERATURE: "degC",
         Dimension.LINEAR_DENSITY: "kg/m",
         Dimension.ANGLE_PER_LENGTH: "deg/30m",
         Dimension.PERMEABILITY: "mD",
         Dimension.PRESSURE_GRADIENT: "kPa/m",
-        Dimension.MASS: "t",
         Dimension.SPECIFIC_ENERGY: "kPa-mse",
     },
     UnitSystem.METRIC_ENGINEERING: {
         Dimension.LENGTH: "m",
+        Dimension.AREA: "m2",
         Dimension.VOLUME: "m3",
+        Dimension.MASS: "t",
+        Dimension.TIME: "h",
         Dimension.DENSITY: "g/cm3",
         Dimension.PRESSURE: "bar",
         Dimension.FORCE: "daN",
         Dimension.TORQUE: "kN.m",
+        Dimension.FORCE_PER_LENGTH: "N/m",
         Dimension.VELOCITY: "m/h",
+        Dimension.ROTATIONAL_SPEED: "rpm",
+        Dimension.ANGLE: "deg",
         Dimension.VOLUME_FLOW: "L/min",
+        Dimension.POWER: "kW",
+        Dimension.POWER_PER_AREA: "kW/m2",
+        Dimension.DYNAMIC_VISCOSITY: "cP",
         Dimension.TEMPERATURE: "degC",
         Dimension.LINEAR_DENSITY: "kg/m",
         Dimension.ANGLE_PER_LENGTH: "deg/30m",
         Dimension.PERMEABILITY: "mD",
         Dimension.PRESSURE_GRADIENT: "kPa/m",
-        Dimension.MASS: "t",
         Dimension.SPECIFIC_ENERGY: "kPa-mse",
     },
     UnitSystem.FIELD_US: {
         Dimension.LENGTH: "ft",
+        Dimension.AREA: "in2",
         Dimension.VOLUME: "bbl",
+        Dimension.MASS: "lbm",
+        Dimension.TIME: "h",
         Dimension.DENSITY: "ppg",
         Dimension.PRESSURE: "psi",
         Dimension.FORCE: "klbf",
         Dimension.TORQUE: "lbf.ft",
+        Dimension.FORCE_PER_LENGTH: "klbf/ft",
         Dimension.VELOCITY: "ft/h",
+        Dimension.ROTATIONAL_SPEED: "rpm",
+        Dimension.ANGLE: "deg",
         Dimension.VOLUME_FLOW: "gpm",
+        Dimension.POWER: "hp",
+        Dimension.POWER_PER_AREA: "hp/in2",
+        Dimension.DYNAMIC_VISCOSITY: "cP",
         Dimension.TEMPERATURE: "degF",
         Dimension.LINEAR_DENSITY: "lbm/ft",
         Dimension.ANGLE_PER_LENGTH: "deg/100ft",
         Dimension.PERMEABILITY: "mD",
         Dimension.PRESSURE_GRADIENT: "psi/ft",
-        Dimension.MASS: "lbm",
-        Dimension.SPECIFIC_ENERGY: "psi",
-        Dimension.AREA: "in2",
+        Dimension.SPECIFIC_ENERGY: "psi-mse",
     },
 }
 

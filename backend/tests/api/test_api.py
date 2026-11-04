@@ -235,6 +235,10 @@ async def test_registry_endpoints_expose_schemas_and_metadata(client):
     detail = await client.get("/api/v1/registry/engines/trajectory.minimum_curvature", headers=headers())
     assert detail.json()["input_schema"]["properties"]
     assert detail.json()["limitations"]
+    unit_contract = detail.json()["unit_contract"]
+    assert unit_contract["contract_version"] == "drillai.engine-units.v1"
+    assert unit_contract["input_fields"]["stations[].md_si"]["value_unit"] == "m"
+    assert unit_contract["output_fields"]["stations[].tvd_si"]["value_unit"] == "m"
     node_types = await client.get("/api/v1/registry/node-types", headers=headers())
     assert node_types.json()["families"]
     assert all(item["config_schema"] for item in node_types.json()["items"])
@@ -269,9 +273,15 @@ async def test_engine_run_is_audited_with_hashes(client):
     assert body["result"]["stations"]
     assert body["inputs_hash"] and body["outputs_hash"]
     assert body["engine_run_id"]
+    assert body["units"]["contract_version"] == "drillai.engine-units.v1"
+    assert body["units"]["input_fields"]["stations[0].md_si"]["value_unit"] == "m"
+    assert body["units"]["output_fields"]["stations[0].tvd_si"]["value_unit"] == "m"
     audited = await client.get(f"/api/v1/wells/{well_id}/engine-runs", headers=headers())
-    assert audited.json()["items"][0]["id"] == body["engine_run_id"]
-    assert audited.json()["items"][0]["outputs_hash"] == body["outputs_hash"]
+    stored_run = audited.json()["items"][0]
+    assert stored_run["id"] == body["engine_run_id"]
+    assert stored_run["outputs_hash"] == body["outputs_hash"]
+    assert stored_run["inputs_hash"] == body["inputs_hash"]
+    assert stored_run["units"] == body["units"]
 
 
 async def test_engine_run_rejects_invalid_inputs_with_a_readable_error(client):

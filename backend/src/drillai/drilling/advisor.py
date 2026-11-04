@@ -47,6 +47,7 @@ from drillai.documents.access import (
 from drillai.drilling.npt import NptService
 from drillai.drilling.state import WellStateService
 from drillai.drilling.timeline import TimelineService
+from drillai.engines.unit_contract import stored_unit_contract
 
 _NARRATION_WHITESPACE_RE = re.compile(r"\s+")
 _FIELD_VALIDATION_REQUIRED_ENGINE_KEYS = frozenset({"well_control.kill_sheet", "tubulars.api_5c3"})
@@ -108,6 +109,7 @@ class Calculation:
     engine_version: str
     statement: str
     outputs: dict[str, Any]
+    units: dict[str, Any] = field(default_factory=dict)
     is_feasible: bool | None = None
     warnings: list[str] = field(default_factory=list)
     violations: list[dict[str, Any]] = field(default_factory=list)
@@ -123,6 +125,7 @@ class Calculation:
             "engine_version": self.engine_version,
             "statement": self.statement,
             "outputs": self.outputs,
+            "units": self.units,
             "is_feasible": self.is_feasible,
             "warnings": self.warnings,
             "violations": self.violations,
@@ -637,6 +640,12 @@ class OperationsAdvisor:
                     engine_version=run.engine_version,
                     statement=f"{run.engine_key} v{run.engine_version} ran with {result_description}",
                     outputs=run.outputs or {},
+                    units=stored_unit_contract(
+                        run.units,
+                        run.inputs,
+                        run.outputs,
+                        run.constraint_violations,
+                    ),
                     is_feasible=run.is_feasible,
                     warnings=list(run.warnings or []),
                     violations=list(run.constraint_violations or []),

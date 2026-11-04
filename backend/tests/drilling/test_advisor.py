@@ -187,6 +187,7 @@ async def test_advisor_surfaces_safety_engine_feasibility_as_not_field_validatio
     assert calculation["is_feasible"] is False
     assert calculation["validation_status"] == "needs_field_validation"
     assert calculation["field_validation_required"] is True
+    assert calculation["units"]["output_fields"]["kill_rate_si"]["status"] == "unknown"
     assert any("not field validation" in item for item in calculation["limitations"])
     assert any("is_feasible flag" in item for item in answer.limitations)
     assert not any(item["key"] == "calculations.none" for item in answer.unknown)

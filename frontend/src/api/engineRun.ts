@@ -21,13 +21,14 @@
  */
 
 import { ApiError } from './client'
-import type { EngineRunEnvelope } from './types'
+import type { EngineRunEnvelope, EngineUnitContract, EngineValueUnitContract } from './types'
 
 /** The body of `/registry/engines/{key}/run`, as the server writes it. */
 export interface EngineRunResponse {
   engine_key: string
   engine_version: string
   result: Record<string, unknown>
+  units: EngineUnitContract
   is_feasible: boolean
   warnings: string[]
   violations: Array<Record<string, unknown>>
@@ -49,6 +50,59 @@ function strings(value: unknown): string[] | null {
 
 function records(value: unknown): Array<Record<string, unknown>> | null {
   return Array.isArray(value) && value.every(isRecord) ? (value as Array<Record<string, unknown>>) : null
+}
+
+function isDisplayConversion(value: unknown): boolean {
+  if (!isRecord(value)) return false
+  return (
+    (value.unit_symbol === null || typeof value.unit_symbol === 'string') &&
+    (value.registry_symbol === null || typeof value.registry_symbol === 'string') &&
+    (value.factor === null || typeof value.factor === 'number') &&
+    (value.offset === null || typeof value.offset === 'number') &&
+    typeof value.supported === 'boolean' &&
+    typeof value.behavior === 'string'
+  )
+}
+
+function isValueUnitContract(value: unknown): value is EngineValueUnitContract {
+  if (!isRecord(value) || !isRecord(value.display_units)) return false
+  return (
+    (value.status === 'declared' || value.status === 'unknown') &&
+    (value.value_unit === null || typeof value.value_unit === 'string') &&
+    (value.registry_unit === null || typeof value.registry_unit === 'string') &&
+    (value.dimension === null || typeof value.dimension === 'string') &&
+    (value.canonical_unit === null || typeof value.canonical_unit === 'string') &&
+    typeof value.unit_system_basis === 'string' &&
+    (value.semantic === null || typeof value.semantic === 'string') &&
+    typeof value.source === 'string' &&
+    (value.description === null || typeof value.description === 'string') &&
+    (value.description_status === 'declared' || value.description_status === 'not_declared') &&
+    (value.unknown_reason === null || typeof value.unknown_reason === 'string') &&
+    (value.requested_display_unit === null || typeof value.requested_display_unit === 'string') &&
+    typeof value.precision === 'number' &&
+    isDisplayConversion(value.display_units.si) &&
+    isDisplayConversion(value.display_units.metric_engineering) &&
+    isDisplayConversion(value.display_units.field_us)
+  )
+}
+
+function isUnitFieldMap(value: unknown): boolean {
+  return isRecord(value) && Object.values(value).every(isValueUnitContract)
+}
+
+function isEngineUnitContract(value: unknown): value is EngineUnitContract {
+  if (!isRecord(value)) return false
+  return (
+    typeof value.contract_version === 'string' &&
+    typeof value.unit_system === 'string' &&
+    typeof value.unit_system_basis === 'string' &&
+    isUnitFieldMap(value.input_fields) &&
+    isUnitFieldMap(value.output_fields) &&
+    (value.violation_fields === undefined || isUnitFieldMap(value.violation_fields)) &&
+    (value.input_schema_fields === undefined || isUnitFieldMap(value.input_schema_fields)) &&
+    (value.output_schema_fields === undefined || isUnitFieldMap(value.output_schema_fields)) &&
+    (value.unknown_unit_policy === undefined || typeof value.unknown_unit_policy === 'string')
+  )
 }
 
 /**
@@ -79,6 +133,8 @@ export function engineRunEnvelope(payload: unknown): EngineRunEnvelope {
     malformed('the "engine" block carries no key/version')
   }
   if (!isRecord(body.result)) malformed('the engine-run body carries no "result" object')
+  const units = body.units
+  if (!isEngineUnitContract(units)) malformed('the engine-run body carries no authoritative "units" contract')
   const violations = records(body.violations)
   if (violations === null) malformed('"violations" is not a list of objects')
   const warnings = strings(body.warnings)
@@ -101,6 +157,7 @@ export function engineRunEnvelope(payload: unknown): EngineRunEnvelope {
     },
     // The live run calls it `result`; the recorded run calls it `outputs`. One concept, one name here.
     outputs: body.result as Record<string, unknown>,
+    units: units as EngineUnitContract,
     warnings: warnings as string[],
     constraint_violations: violations as Array<Record<string, unknown>>,
     is_feasible: body.is_feasible === true,

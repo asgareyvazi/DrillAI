@@ -36,7 +36,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from drillai.engines.contract import ConstraintViolation, EngineResult, EngineSpec, FunctionEngine
 from drillai.engines.registry import register_engine
@@ -77,7 +77,11 @@ class KillSheetInput(BaseModel):
         None, "m2", gt=0.0, description="annular cross-sectional capacity opposite casing shoe (m2 = m3/m) for volumetric kick tolerance"
     )
     input_provenance: dict[str, str] | None = None
-    schedule_points: int = 5
+    schedule_points: int = Field(
+        default=5,
+        description="number of interpolated pressure-schedule points",
+        json_schema_extra={"unit": "1"},
+    )
 
 
 class KillSheetRow(BaseModel):

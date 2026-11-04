@@ -31,6 +31,7 @@ from drillai.documents.access import operational_source_conditions
 from drillai.drilling.npt import NptService
 from drillai.drilling.state import WellStateService
 from drillai.drilling.timeline import TimelineService
+from drillai.engines.unit_contract import declared_unit_fields, stored_unit_contract
 
 #: Report kinds the platform can assemble today. Each is a different composition of the same
 #: building blocks; adding a kind means writing a builder, not a template.
@@ -297,6 +298,12 @@ class ReportingService:
                             "is_feasible": run.is_feasible,
                             "inputs": run.inputs,
                             "outputs": run.outputs,
+                            "units": stored_unit_contract(
+                                run.units,
+                                run.inputs,
+                                run.outputs,
+                                run.constraint_violations,
+                            ),
                             "assumptions": run.assumptions,
                             "limitations": run.limitations,
                             "warnings": run.warnings,
@@ -336,6 +343,12 @@ class ReportingService:
                         "title": row.title,
                         "statement": row.statement,
                         "parameters": row.parameters,
+                        "units": {
+                            "parameter_fields": declared_unit_fields(
+                                {"result": row.parameters or {}},
+                                source="recommendation_parameter",
+                            )
+                        },
                         "why_not": row.why_not,
                         "alternatives": row.alternatives,
                         "assumptions": row.assumptions,

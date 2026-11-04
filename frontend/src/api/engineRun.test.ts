@@ -13,10 +13,38 @@ import { ApiError } from './client'
 import { engineRunEnvelope } from './engineRun'
 
 /** The body `POST /registry/engines/{key}/run` produces, key for key. */
+const declaredCountUnit = {
+  status: 'declared',
+  value_unit: '1',
+  registry_unit: '1',
+  dimension: 'dimensionless',
+  canonical_unit: '1',
+  unit_system_basis: 'engine_contract',
+  semantic: 'count',
+  source: 'engine_contract',
+  description: null,
+  description_status: 'not_declared',
+  unknown_reason: null,
+  requested_display_unit: null,
+  precision: 3,
+  display_units: {
+    si: { unit_symbol: '1', registry_symbol: '1', factor: 1, offset: 0, supported: true, behavior: 'linear' },
+    metric_engineering: { unit_symbol: '1', registry_symbol: '1', factor: 1, offset: 0, supported: true, behavior: 'linear' },
+    field_us: { unit_symbol: '1', registry_symbol: '1', factor: 1, offset: 0, supported: true, behavior: 'linear' },
+  },
+}
+
 const serverBody = {
   engine_key: 'readiness.assessment',
   engine_version: '1.1.0',
   result: { overall_state: 'ready', ready_count: 1, as_of: '2026-01-01' },
+  units: {
+    contract_version: 'drillai.engine-units.v1',
+    unit_system: 'SI',
+    unit_system_basis: 'per_numeric_field',
+    input_fields: {},
+    output_fields: { ready_count: declaredCountUnit },
+  },
   is_feasible: true,
   warnings: ['lead time assumed from the supplied date'],
   violations: [{ code: 'shortfall', item_id: 'RIG-01' }],
@@ -33,6 +61,7 @@ describe('the engine run response', () => {
     const envelope = engineRunEnvelope(serverBody)
 
     expect(envelope.outputs).toEqual(serverBody.result)
+    expect(envelope.units).toEqual(serverBody.units)
     expect(envelope.constraint_violations).toEqual(serverBody.violations)
     // The rendering path that used to throw: `constraint_violations.length` on an undefined field.
     expect(envelope.constraint_violations).toHaveLength(1)
@@ -65,5 +94,6 @@ describe('the engine run response', () => {
     expect(() => engineRunEnvelope({ ...serverBody, violations: 'none' })).toThrowError(ApiError)
     expect(() => engineRunEnvelope({ ...serverBody, warnings: [1, 2] })).toThrowError(ApiError)
     expect(() => engineRunEnvelope({ ...serverBody, engine: undefined })).toThrowError(ApiError)
+    expect(() => engineRunEnvelope({ ...serverBody, units: undefined })).toThrowError(ApiError)
   })
 })

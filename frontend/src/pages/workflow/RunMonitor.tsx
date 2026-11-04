@@ -16,7 +16,15 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { drillingApi } from '../../api/endpoints'
-import type { ApprovalRow, NodeRunState, RunDetail, RunEvent, RunSummary } from '../../api/types'
+import type {
+  ApprovalRow,
+  EngineValueUnitContract,
+  NodeRunState,
+  RunDetail,
+  RunEvent,
+  RunSummary,
+} from '../../api/types'
+import { UnitAwareResult } from '../../components/engineering/UnitAwareResult'
 import { PageHeader } from '../../components/layout/AppShell'
 import {
   Async,
@@ -30,6 +38,7 @@ import {
   Loading,
   Table,
   Tabs,
+  Value,
 } from '../../components/common'
 import { useI18n } from '../../i18n'
 import { formatActionLevel, formatDateTime, formatDuration, formatStatus } from '../../lib/format'
@@ -355,6 +364,81 @@ function RunScope({ run }: { run: RunSummary }) {
   )
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function EngineNodeOutputs({ outputs }: { outputs: Record<string, unknown> }) {
+  if (typeof outputs.engine_key !== 'string' || outputs.result === undefined) {
+    return <Json value={outputs} max={60} />
+  }
+  const rawContract = outputs.units
+  const unitFields =
+    isRecord(rawContract) && isRecord(rawContract.output_fields)
+      ? (rawContract.output_fields as Record<string, EngineValueUnitContract>)
+      : {}
+  const violationFields =
+    isRecord(rawContract) && isRecord(rawContract.violation_fields)
+      ? (rawContract.violation_fields as Record<string, EngineValueUnitContract>)
+      : {}
+  return (
+    <div className="space-y-2">
+      <Badge tone="neutral">{outputs.engine_key}</Badge>
+      <UnitAwareResult value={outputs.result} unitFields={unitFields} />
+      {Array.isArray(outputs.violations) && outputs.violations.length > 0 && (
+        <UnitAwareResult value={{ violations: outputs.violations }} unitFields={violationFields} />
+      )}
+    </div>
+  )
+}
+
+function WorkflowOutputNode({ label, value }: { label: string; value: unknown }) {
+  if (isRecord(value) && typeof value.engine_key === 'string' && value.result !== undefined) {
+    return <EngineNodeOutputs outputs={value} />
+  }
+  if (Array.isArray(value)) {
+    return (
+      <details className="rounded border border-graphite-100 p-2 dark:border-graphite-800">
+        <summary className="cursor-pointer text-xs font-medium">{label} ({value.length})</summary>
+        <div className="mt-2 space-y-2 ps-2">
+          {value.map((item, index) => (
+            <WorkflowOutputNode key={`${label}[${index}]`} label={`${label} ${index + 1}`} value={item} />
+          ))}
+        </div>
+      </details>
+    )
+  }
+  if (isRecord(value)) {
+    return (
+      <details className="rounded border border-graphite-100 p-2 dark:border-graphite-800">
+        <summary className="cursor-pointer text-xs font-medium">{label}</summary>
+        <div className="mt-2 grid gap-2 sm:grid-cols-2">
+          {Object.entries(value).map(([key, child]) => (
+            <WorkflowOutputNode key={`${label}.${key}`} label={key} value={child} />
+          ))}
+        </div>
+      </details>
+    )
+  }
+  return <Value label={label} value={value} unitContract={typeof value === 'number' ? null : undefined} />
+}
+
+function WorkflowOutputTree({ value }: { value: unknown }) {
+  if (isRecord(value) && typeof value.engine_key === 'string' && value.result !== undefined) {
+    return <EngineNodeOutputs outputs={value} />
+  }
+  if (isRecord(value)) {
+    return (
+      <div className="grid gap-2 sm:grid-cols-2">
+        {Object.entries(value).map(([key, child]) => (
+          <WorkflowOutputNode key={key} label={key} value={child} />
+        ))}
+      </div>
+    )
+  }
+  return <WorkflowOutputNode label="output" value={value} />
+}
+
 function NodeRunsTable({ nodeRuns }: { nodeRuns: NodeRunState[] }) {
   const { t } = useI18n()
   if (nodeRuns.length === 0) return <EmptyState message={t('workflow.noNodeRuns')} />
@@ -418,7 +502,7 @@ function NodeRunsTable({ nodeRuns }: { nodeRuns: NodeRunState[] }) {
             row.outputs && Object.keys(row.outputs).length > 0 ? (
               <details>
                 <summary className="cursor-pointer text-[11px]">{t('common.view')}</summary>
-                <Json value={row.outputs} max={60} />
+                <EngineNodeOutputs outputs={row.outputs} />
               </details>
             ) : (
               <span className="text-graphite-500">{row.status === 'skipped' ? t('workflow.notRun') : '—'}</span>
@@ -845,7 +929,11 @@ function RunDetailView({ runId }: { runId: string }) {
             {tab === 'outputs' && (
               <div className="grid gap-3 xl:grid-cols-2">
                 <Card title={t('workflow.runOutputs')}>
-                  <JsonOrNone value={data.run.outputs} max={200} />
+                  {data.run.outputs === null || data.run.outputs === undefined ? (
+                    <JsonOrNone value={data.run.outputs} max={200} />
+                  ) : (
+                    <WorkflowOutputTree value={data.run.outputs} />
+                  )}
                 </Card>
                 <Card title={t('workflow.variables')}>
                   <JsonOrNone value={data.run.variables} max={200} />

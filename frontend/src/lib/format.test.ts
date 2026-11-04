@@ -17,6 +17,7 @@ import {
   formatPercent,
   formatStatus,
   formatValidationStatus,
+  formatUnitContractValue,
   formatValue,
   humanise,
 } from './format'
@@ -113,6 +114,83 @@ describe('formatValue: unit systems', () => {
     const rendered = formatValue(5, { unit: null, unitSystem: 'oilfield' })
     expect(rendered.unit).toBeNull()
     expect(rendered.text).toBe('5')
+  })
+})
+
+describe('formatUnitContractValue: conversion is driven only by the API descriptor', () => {
+  const density = {
+    status: 'declared' as const,
+    value_unit: 'kg/m3',
+    registry_unit: 'kg/m3',
+    dimension: 'density',
+    canonical_unit: 'kg/m3',
+    unit_system_basis: 'engine_contract',
+    semantic: null,
+    source: 'engine_contract',
+    description: null,
+    description_status: 'not_declared' as const,
+    unknown_reason: null,
+    requested_display_unit: null,
+    precision: 3,
+    display_units: {
+      si: { unit_symbol: 'kg/m³', registry_symbol: 'kg/m3', factor: 1, offset: 0, supported: true, behavior: 'linear' },
+      metric_engineering: { unit_symbol: 'kg/m³', registry_symbol: 'kg/m3', factor: 1, offset: 0, supported: true, behavior: 'linear' },
+      field_us: { unit_symbol: 'ppg', registry_symbol: 'ppg', factor: 1 / 119.8264273, offset: 0, supported: true, behavior: 'linear' },
+    },
+  }
+
+  it('uses the supplied affine conversion and selected display system', () => {
+    const rendered = formatUnitContractValue(1198.264273, density, { unitSystem: 'oilfield' })
+    expect(rendered.text).toBe('10')
+    expect(rendered.unit).toBe('ppg')
+    expect(rendered.title).toContain('1198.264273 kg/m3 =')
+  })
+
+  it('keeps canonical display values unchanged when the contract says SI', () => {
+    const rendered = formatUnitContractValue(1198.264273, density, { unitSystem: 'si' })
+    expect(rendered.text).toBe('1,198.264')
+    expect(rendered.unit).toBe('kg/m³')
+  })
+
+  it('does not convert or invent a unit for absent/unknown contracts', () => {
+    const unknown = formatUnitContractValue(5, undefined, {
+      unitSystem: 'oilfield',
+      unknownUnitLabel: 'unit unknown',
+    })
+    expect(unknown.text).toBe('5')
+    expect(unknown.unit).toBe('unit unknown')
+    expect(unknown.title).toContain('No authoritative unit metadata')
+
+    const explicitUnknown = formatUnitContractValue(5, {
+      ...density,
+      status: 'unknown',
+      value_unit: null,
+      registry_unit: null,
+      dimension: null,
+      canonical_unit: null,
+      unknown_reason: 'the historical run predates unit contracts',
+      display_units: {
+        si: { unit_symbol: null, registry_symbol: null, factor: null, offset: null, supported: false, behavior: 'unknown' },
+        metric_engineering: { unit_symbol: null, registry_symbol: null, factor: null, offset: null, supported: false, behavior: 'unknown' },
+        field_us: { unit_symbol: null, registry_symbol: null, factor: null, offset: null, supported: false, behavior: 'unknown' },
+      },
+    }, { unitSystem: 'oilfield', unknownUnitLabel: 'unit unknown' })
+    expect(explicitUnknown.text).toBe('5')
+    expect(explicitUnknown.unit).toBe('unit unknown')
+    expect(explicitUnknown.title).toContain('predates unit contracts')
+  })
+
+  it('falls back to the stored unit without conversion when a display conversion is unsupported', () => {
+    const unsupported = formatUnitContractValue(12, {
+      ...density,
+      display_units: {
+        ...density.display_units,
+        field_us: { unit_symbol: 'ppg', registry_symbol: 'ppg', factor: null, offset: null, supported: false, behavior: 'nonlinear' },
+      },
+    }, { unitSystem: 'oilfield' })
+    expect(unsupported.text).toBe('12')
+    expect(unsupported.unit).toBe('kg/m3')
+    expect(unsupported.title).toContain('No supported conversion')
   })
 })
 

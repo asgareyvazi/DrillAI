@@ -85,7 +85,7 @@ class PumpSpec(BaseModel):
     output_per_stroke_si: float = quantity_field(0.0, "m3", ge=0.0, description="theoretical volume per stroke")
     strokes_per_minute: float | None = quantity_field(None, "1/min", gt=0.0)
     max_pressure_si: float | None = quantity_field(None, "Pa")
-    count: int = Field(default=1, ge=1, le=6, description="number of active pumps")
+    count: int = Field(default=1, ge=1, le=6, description="number of active pumps", json_schema_extra={"unit": "1"})
 
 
 class CapacityEngineInput(BaseModel):
@@ -141,7 +141,7 @@ class HydraulicsEngineInput(BaseModel):
     bit_tvd_si: float | None = quantity_field(None, "m", gt=0.0, description="true vertical depth of the bit (ECD)")
     bit_diameter_si: float | None = quantity_field(None, "m")
     tfa_si: float | None = quantity_field(None, "m2", gt=0.0, description="total flow area")
-    nozzle_count: int | None = Field(default=None, ge=1, le=24)
+    nozzle_count: int | None = Field(default=None, ge=1, le=24, description="total number of bit nozzles", json_schema_extra={"unit": "1"})
     discharge_coefficient: float = quantity_field(DEFAULT_DISCHARGE_COEFFICIENT, "1", gt=0.0, le=1.0)
     rop_si: float | None = quantity_field(None, "m/h", gt=0.0)
     cutting_diameter_si: float | None = quantity_field(None, "m", gt=0.0)

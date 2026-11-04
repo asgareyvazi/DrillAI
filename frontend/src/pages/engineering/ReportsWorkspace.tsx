@@ -11,7 +11,8 @@ import { useMutation, useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { drillingApi } from '../../api/endpoints'
-import type { Report, ReportSection } from '../../api/types'
+import type { EngineValueUnitContract, Report, ReportSection } from '../../api/types'
+import { UnitAwareResult } from '../../components/engineering/UnitAwareResult'
 import { PageHeader } from '../../components/layout/AppShell'
 import {
   Async,
@@ -35,6 +36,25 @@ const SECTION_TONE: Record<ReportSection['kind'], 'ok' | 'info' | 'neutral' | 'w
   assumptions: 'warning',
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function unitFields(contract: unknown, key: string): Record<string, EngineValueUnitContract> {
+  if (!isRecord(contract) || !isRecord(contract[key])) return {}
+  return contract[key] as Record<string, EngineValueUnitContract>
+}
+
+function stripUnitContractMetadata(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(stripUnitContractMetadata)
+  if (!isRecord(value)) return value
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter(([key]) => key !== 'unit_contract')
+      .map(([key, child]) => [key, stripUnitContractMetadata(child)]),
+  )
+}
+
 function SectionBody({ section }: { section: ReportSection }) {
   const { t } = useI18n()
   if (section.items.length === 0) {
@@ -43,6 +63,46 @@ function SectionBody({ section }: { section: ReportSection }) {
         message={section.note ?? t('reports.emptySection')}
         hint={section.note ? undefined : t('reports.emptySectionHint')}
       />
+    )
+  }
+  if (section.kind === 'calculations') {
+    return (
+      <div className="space-y-3">
+        {section.note ? <p className="text-xs text-graphite-500">{section.note}</p> : null}
+        {section.items.map((item, index) => {
+          const contract = item.units
+          const violations = Array.isArray(item.constraint_violations) ? item.constraint_violations : []
+          return (
+            <details key={`${section.key}-${index}`} className="rounded border border-graphite-100 p-3 dark:border-graphite-800">
+              <summary className="cursor-pointer text-xs font-medium">
+                {String(item.engine_key ?? t('common.engine'))}@{String(item.engine_version ?? '—')} · {String(item.status ?? '—')}
+              </summary>
+              <div className="mt-3 space-y-3">
+                <div>
+                  <h4 className="mb-1 text-xs font-medium">{t('engineering.inputs')}</h4>
+                  <UnitAwareResult value={item.inputs ?? {}} unitFields={unitFields(contract, 'input_fields')} />
+                </div>
+                <div>
+                  <h4 className="mb-1 text-xs font-medium">{t('engineering.outputs')}</h4>
+                  <UnitAwareResult value={item.outputs ?? {}} unitFields={unitFields(contract, 'output_fields')} />
+                </div>
+                {violations.length > 0 && (
+                  <div>
+                    <h4 className="mb-1 text-xs font-medium text-danger">{t('engineering.violations')}</h4>
+                    <UnitAwareResult
+                      value={{ violations }}
+                      unitFields={unitFields(contract, 'violation_fields')}
+                    />
+                  </div>
+                )}
+                <p className="break-all font-mono text-[10px] text-graphite-500">
+                  inputs {String(item.inputs_hash ?? '—')} · outputs {String(item.outputs_hash ?? '—')}
+                </p>
+              </div>
+            </details>
+          )
+        })}
+      </div>
     )
   }
   const keys = Array.from(new Set(section.items.flatMap((item) => Object.keys(item)))).slice(0, 8)
@@ -58,6 +118,14 @@ function SectionBody({ section }: { section: ReportSection }) {
           render: (row: Record<string, unknown>) => {
             const value = row[key]
             if (value === null || value === undefined) return '—'
+            if (key === 'parameters' && (Array.isArray(value) || isRecord(value))) {
+              return (
+                <UnitAwareResult
+                  value={stripUnitContractMetadata(value)}
+                  unitFields={unitFields(row.units, 'parameter_fields')}
+                />
+              )
+            }
             if (typeof value === 'object') return <Json value={value} max={30} />
             return String(value)
           },

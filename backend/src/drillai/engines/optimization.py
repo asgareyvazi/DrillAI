@@ -40,20 +40,29 @@ _PRIMES = (2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 6
 class SweepParameter(BaseModel):
     model_config = ConfigDict(extra="forbid")
     name: str = Field(min_length=1, max_length=80)
-    min_si: float = quantity_field(0.0, "1", description="lower bound in canonical SI units")
-    max_si: float = quantity_field(1.0, "1", description="upper bound in canonical SI units")
-    unit: str = Field(default="", description="display unit for the parameter")
-    steps: int = Field(default=5, ge=2, le=50, description="levels per parameter (grid method)")
+    min_si: float = Field(
+        default=0.0,
+        description="lower bound in canonical SI units; physical dimension is declared by the sibling unit field",
+    )
+    max_si: float = Field(
+        default=1.0,
+        description="upper bound in canonical SI units; physical dimension is declared by the sibling unit field",
+    )
+    unit: str = Field(default="", description="explicit display unit for the canonical-SI parameter values")
+    steps: int = Field(default=5, ge=2, le=50, description="levels per parameter (grid method)", json_schema_extra={"unit": "1"})
     scale: str = Field(default="linear", pattern="^(linear|log)$")
-    fixed: float | None = quantity_field(None, "1", description="pin the parameter to a single value")
+    fixed: float | None = Field(
+        default=None,
+        description="pin the parameter to a canonical-SI value; physical dimension is declared by the sibling unit field",
+    )
 
 
 class SweepInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
     parameters: list[SweepParameter] = Field(min_length=1, max_length=8)
     method: str = Field(default="grid", description="grid|halton")
-    samples: int = Field(default=64, ge=2, le=2000, description="sample count for the Halton design")
-    max_candidates: int = Field(default=500, ge=2, le=5000, description="hard cap on generated candidates")
+    samples: int = Field(default=64, ge=2, le=2000, description="sample count for the Halton design", json_schema_extra={"unit": "1"})
+    max_candidates: int = Field(default=500, ge=2, le=5000, description="hard cap on generated candidates", json_schema_extra={"unit": "1"})
 
 
 class SweepCandidate(BaseModel):
@@ -262,8 +271,12 @@ class ParetoInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
     candidates: list[CandidateSpec] = Field(min_length=1)
     objectives: list[ObjectiveSpec] = Field(min_length=1)
+    parameter_units: dict[str, str] = Field(
+        default_factory=dict,
+        description="explicit display unit per numeric candidate.values key; candidate values are canonical SI",
+    )
     robust: bool = Field(default=False, description="penalise ranking by the declared uncertainty bands")
-    top_n: int = Field(default=10, ge=1, le=100)
+    top_n: int = Field(default=10, ge=1, le=100, description="maximum number of ranked candidates returned", json_schema_extra={"unit": "1"})
     parameter_names: list[str] = Field(default_factory=list, description="restrict sensitivity analysis to these parameters")
 
 

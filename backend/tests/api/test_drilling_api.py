@@ -488,6 +488,21 @@ async def test_npt_pareto_is_ordered_and_self_consistent(client):
 
 async def test_advisor_separates_facts_calculations_and_unknowns(client):
     ids = await _well_with_report(client)
+    engine_response = await client.post(
+        "/api/v1/registry/engines/drilling.mse/run",
+        headers=headers("engineer"),
+        json={
+            "well_id": ids["well_id"],
+            "inputs": {
+                "wob_si": 50_000.0,
+                "torque_si": 3_000.0,
+                "rpm_si": 120.0,
+                "rop_si": 20.0,
+                "bit_diameter_si": 0.2159,
+            },
+        },
+    )
+    assert engine_response.status_code == 200, engine_response.text
     catalogue = (await client.get("/api/v1/advisor/questions", headers=headers())).json()
     assert any(item["key"] == "where_are_we" for item in catalogue["questions"])
 
@@ -499,6 +514,11 @@ async def test_advisor_separates_facts_calculations_and_unknowns(client):
         )
     ).json()["answer"]
     assert answer["facts"], "the advisor must ground its answer in recorded facts"
+    calculation = next(
+        item for item in answer["calculations"] if item["engine_key"] == "drilling.mse"
+    )
+    assert calculation["units"]["output_fields"]["mse_si"]["value_unit"] == "J/m3"
+    assert calculation["units"]["output_fields"]["mse_psi"]["value_unit"] == "psi"
     assert answer["question_text"] == next(
         item["description"] for item in catalogue["questions"] if item["key"] == "where_are_we"
     )
@@ -607,6 +627,69 @@ async def test_report_json_export_is_scoped_audited_and_attachment_safe(client):
     assert denied.status_code == 403, denied.text
 
 
+async def test_engine_unit_contract_survives_report_payload_and_json_export(client):
+    ids = await _well_with_report(client)
+    run_response = await client.post(
+        "/api/v1/registry/engines/trajectory.minimum_curvature/run",
+        headers=headers("engineer"),
+        json={
+            "well_id": ids["well_id"],
+            "inputs": {
+                "stations": [
+                    {
+                        "md_si": 0.0,
+                        "inclination_deg": 0.0,
+                        "azimuth_deg": 0.0,
+                        "azimuth_reference": "grid",
+                        "azimuth_reference_id": "test-grid",
+                    },
+                    {
+                        "md_si": 500.0,
+                        "inclination_deg": 1.5,
+                        "azimuth_deg": 45.0,
+                        "azimuth_reference": "grid",
+                        "azimuth_reference_id": "test-grid",
+                    },
+                    {
+                        "md_si": 1000.0,
+                        "inclination_deg": 3.0,
+                        "azimuth_deg": 45.0,
+                        "azimuth_reference": "grid",
+                        "azimuth_reference_id": "test-grid",
+                    },
+                ],
+            },
+        },
+    )
+    assert run_response.status_code == 200, run_response.text
+    run_units = run_response.json()["units"]
+
+    report_response = await client.get(
+        f"/api/v1/wells/{ids['well_id']}/reports/engineering_calculation",
+        headers=headers("engineer"),
+    )
+    assert report_response.status_code == 200, report_response.text
+    calculations = next(
+        section["items"]
+        for section in report_response.json()["report"]["sections"]
+        if section["key"] == "calculations"
+    )
+    assert calculations[0]["units"] == run_units
+    assert calculations[0]["units"]["output_fields"]["stations[0].tvd_si"]["value_unit"] == "m"
+
+    export_response = await client.get(
+        f"/api/v1/wells/{ids['well_id']}/reports/engineering_calculation/export",
+        headers=headers("engineer"),
+    )
+    assert export_response.status_code == 200, export_response.text
+    exported_calculations = next(
+        section["items"]
+        for section in export_response.json()["report"]["sections"]
+        if section["key"] == "calculations"
+    )
+    assert exported_calculations[0]["units"] == run_units
+
+
 async def test_optimisation_returns_constrained_candidates_and_a_reasoned_recommendation(client):
     ids = await _well_with_report(client)
     objectives = (
@@ -653,6 +736,14 @@ async def test_optimisation_returns_constrained_candidates_and_a_reasoned_recomm
     recommended = explanation["recommended"]
     assert recommended["rank"] == 1
     assert recommended["objectives"], "the recommendation must carry computed objectives"
+    assert recommended["value_units"]["flow_rate_si"]["status"] == "declared"
+    assert recommended["value_units"]["flow_rate_si"]["value_unit"] == "m3/s"
+    assert explanation["objective_units"]["ecd_margin_si"]["value_unit"] == "kg/m3"
+    assert explanation["trade_offs"] and explanation["trade_offs"][0]["unit_contract"]["status"] == "declared"
+    assert explanation["feasible_range_units"]["flow_rate_si"]["min"]["status"] == "declared"
+    assert recommended["constraint_units"]["constraint_results[0].limit"]["value_unit"] == "kg/m3"
+    assert recommended["constraint_units"]["constraint_results[0].margin"]["value_unit"] == "kg/m3"
+    assert recommended["constraint_units"]["constraint_results[1].margin"]["value_unit"] == "1"
     assert recommended["engine_run_ids"], "a candidate must cite the engine runs behind it"
     assert explanation["engine_run_ids"] == recommended["engine_run_ids"]
     assert explanation["provenance"]["persisted_candidates"] == [recommended["label"]]
@@ -675,6 +766,35 @@ async def test_optimisation_returns_constrained_candidates_and_a_reasoned_recomm
     assert stored["engine_run_ids"] == recommended["engine_run_ids"], (
         "a recommendation must cite exactly the engine runs its candidate rests on"
     )
+    assert stored["units"]["parameter_fields"]["result[0].value"]["value_unit"] == "m3/s"
+    recommendation_report = (
+        await client.get(
+            f"/api/v1/wells/{ids['well_id']}/reports/recommendation",
+            headers=headers("engineer"),
+        )
+    ).json()["report"]
+    recommendation_item = next(
+        item
+        for section in recommendation_report["sections"]
+        if section["key"] == "recommendations"
+        for item in section["items"]
+        if item["id"] == stored["id"]
+    )
+    assert recommendation_item["units"]["parameter_fields"] == stored["units"]["parameter_fields"]
+    exported_recommendation = (
+        await client.get(
+            f"/api/v1/wells/{ids['well_id']}/reports/recommendation/export",
+            headers=headers("engineer"),
+        )
+    ).json()["report"]
+    exported_item = next(
+        item
+        for section in exported_recommendation["sections"]
+        if section["key"] == "recommendations"
+        for item in section["items"]
+        if item["id"] == stored["id"]
+    )
+    assert exported_item["units"]["parameter_fields"] == stored["units"]["parameter_fields"]
     engine_runs = (
         await client.get(f"/api/v1/wells/{ids['well_id']}/engine-runs", headers=headers())
     ).json()["items"]

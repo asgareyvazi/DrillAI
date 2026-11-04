@@ -24,6 +24,7 @@ from typing import Any, Literal, Protocol, runtime_checkable
 from pydantic import BaseModel, ConfigDict, Field
 
 from drillai.core.errors import EngineInputInvalid
+from drillai.engines.unit_contract import schema_unit_contract as _schema_unit_contract
 from drillai.units.registry import Dimension
 
 ActionLevel = Literal["L0", "L1", "L2", "L3", "L4", "L5"]
@@ -151,6 +152,7 @@ class EngineSpec(BaseModel):
             "validation_status": self.validation_status,
             "input_schema": self.inputs_model.model_json_schema(),
             "output_schema": self.outputs_model.model_json_schema(),
+            "unit_contract": _schema_unit_contract(self.key, self.inputs_model, self.outputs_model),
         }
 
 

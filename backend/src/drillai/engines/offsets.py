@@ -104,6 +104,7 @@ class FactorScore(BaseModel):
     contribution: float | None
     reference_value: float | str | None = None
     candidate_value: float | str | None = None
+    unit: str | None = Field(default=None, description="declared unit for numeric reference/candidate values")
     detail: str | None = None
 
 
@@ -186,6 +187,7 @@ class _FactorCollector:
         reference_value: float | str | None,
         candidate_value: float | str | None,
         detail: str | None = None,
+        unit: str | None = None,
     ) -> None:
         weight = self.normalized_weights.get(factor, 0.0)
         if weight <= 0:
@@ -202,6 +204,7 @@ class _FactorCollector:
                 contribution=contribution,
                 reference_value=reference_value,
                 candidate_value=candidate_value,
+                unit=unit,
                 detail=detail,
             )
         )
@@ -265,6 +268,7 @@ def compute_offsets(inputs: OffsetInput) -> EngineResult:
             else None,
             inputs.reference.tvd_si,
             candidate.tvd_si,
+            unit="m",
         )
         collector.add(
             "hole_size",
@@ -274,6 +278,7 @@ def compute_offsets(inputs: OffsetInput) -> EngineResult:
             inputs.reference.hole_size_si,
             candidate.hole_size_si,
             "hole size mismatch changes hydraulics, bit selection and casing programme",
+            unit="m",
         )
         collector.add(
             "mud_weight",
@@ -282,6 +287,7 @@ def compute_offsets(inputs: OffsetInput) -> EngineResult:
             else None,
             inputs.reference.mud_weight_si,
             candidate.mud_weight_si,
+            unit="kg/m3",
         )
         collector.add(
             "inclination",
@@ -293,6 +299,7 @@ def compute_offsets(inputs: OffsetInput) -> EngineResult:
             else None,
             inputs.reference.max_inclination_deg,
             candidate.max_inclination_deg,
+            unit="deg",
         )
         formation_score, formation_detail = _formation_similarity(
             inputs.reference.formations, candidate.formations

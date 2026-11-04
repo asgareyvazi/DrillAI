@@ -27,88 +27,9 @@ from drillai.core.ids import new_id
 from drillai.core.serialization import content_hash
 from drillai.db.models import EngineRun
 from drillai.engines.registry import EngineRegistry, load_default_engines
+from drillai.engines.unit_contract import build_engine_unit_contract
 
 __all__ = ["EngineExecution", "engine_catalogue", "execute_engine"]
-
-
-def _infer_si_unit_for_field_name(name: str) -> str | None:
-    if name.endswith("_deg_per_30m"):
-        return "deg/30m"
-    if name.endswith("_deg"):
-        return "deg"
-    if name.endswith("_psi"):
-        return "psi"
-    if name.endswith("_ppg"):
-        return "ppg"
-    if name.endswith("_kpa"):
-        return "kPa"
-    if name.endswith("_lpm"):
-        return "L/min"
-    if name.endswith("_m3_per_m") or name.endswith("_capacity_si"):
-        return "m3/m"
-    if not name.endswith("_si"):
-        return None
-    if any(
-        tok in name
-        for tok in (
-            "pressure",
-            "sidpp",
-            "sicp",
-            "maasp",
-            "mse",
-            "strength",
-            "modulus",
-            "yield_point",
-            "stress",
-            "integrity",
-            "shoe_margin",
-        )
-    ):
-        return "Pa"
-    if any(tok in name for tok in ("mud_weight", "ecd", "density")):
-        return "kg/m3"
-    if any(tok in name for tok in ("flow_rate", "kill_rate")):
-        return "m3/s"
-    if "rop" in name:
-        return "m/h"
-    if "velocity" in name:
-        return "m/s"
-    if any(tok in name for tok in ("wob", "hookload", "tension", "drag", "force", "weight_air", "weight_buoyed")):
-        return "N"
-    if "torque" in name:
-        return "N.m"
-    if "horsepower_per_area" in name:
-        return "W/m2"
-    if "horsepower" in name:
-        return "W"
-    if "plastic_viscosity" in name:
-        return "Pa.s"
-    if "area" in name or name == "tfa_si" or "capacity_at_shoe" in name:
-        return "m2"
-    if any(tok in name for tok in ("volume", "volumetric", "pit_gain", "output_per_stroke")):
-        return "m3"
-    if "time" in name:
-        return "s"
-    if "gradient" in name:
-        return "Pa/m"
-    if "linear_mass" in name:
-        return "kg/m"
-    if "rpm" in name:
-        return "rpm"
-    return "m"
-
-
-def _extract_model_units(model_cls: type[BaseModel]) -> dict[str, str]:
-    units: dict[str, str] = {}
-    for fname, finfo in model_cls.model_fields.items():
-        extra = finfo.json_schema_extra
-        if isinstance(extra, dict) and isinstance(extra.get("unit"), str):
-            units[fname] = extra["unit"]
-        else:
-            inferred = _infer_si_unit_for_field_name(fname)
-            if inferred is not None:
-                units[fname] = inferred
-    return units
 
 
 @dataclass
@@ -184,11 +105,14 @@ async def execute_engine(
     output_payload = result.outputs.model_dump(mode="json")
     inputs_hash = content_hash(input_payload)
     outputs_hash = content_hash(output_payload)
-    units_map: dict[str, Any] = {
-        "unit_system": "SI",
-        "input_units": _extract_model_units(spec.inputs_model),
-        "output_units": _extract_model_units(spec.outputs_model),
-    }
+    units_map = build_engine_unit_contract(
+        spec.key,
+        spec.inputs_model,
+        spec.outputs_model,
+        input_payload,
+        output_payload,
+        [violation.model_dump(mode="json") for violation in result.violations],
+    )
 
     engine_run_id: str | None = None
     if persist:

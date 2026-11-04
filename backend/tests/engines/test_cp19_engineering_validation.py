@@ -1,4 +1,4 @@
-"""CP19 deterministic analytical test-vector suite across all 14 engines & 122 unit definitions.
+"""CP19 deterministic analytical test-vector suite across all 14 engines & 125 unit definitions.
 
 These tests measure numerical behavior against hand-calculated equations and unit references. They
 are not a field trial, domain-owner sign-off, third-party certification, or production approval.
@@ -9,8 +9,8 @@ Verifies:
    `torque_drag.soft_string`, `drilling.mse`, `well_control.kill_sheet`, `tubulars.api_5c3`,
    `integrity.barrier_envelope`, `schematic.well_model`, `offsets.similarity`,
    `readiness.assessment`, `twin.reconciliation`, `optimization.sweep`, `optimization.pareto`).
-2. Complete unit registry round-trip & affine reference accuracy across all 122 registered unit definitions and
-   33 dimensions (`drillai.units.registry`).
+2. Complete unit registry round-trip & affine reference accuracy across all 125 registered unit definitions and
+   34 dimensions (`drillai.units.registry`).
 3. Metamorphic monotonicity invariants, boundary/invalid input rejection (`EngineInputInvalid`),
    and strict `json.dumps(..., allow_nan=False)` numerical safety across all 14 engines.
 4. Full provenance, units (`input_units`, `output_units`), assumptions, limitations, validation
@@ -31,6 +31,7 @@ from drillai.core.errors import EngineInputInvalid
 from drillai.db.models import EngineRun, Organization
 from drillai.engines.registry import load_default_engines
 from drillai.engines.service import execute_engine
+from drillai.engines.unit_contract import build_engine_unit_contract
 from drillai.security.actions import ActionLevel
 from drillai.units.registry import (
     Dimension,
@@ -45,8 +46,8 @@ def test_cp19_01_all_units_and_dimensions_round_trip_and_reference_accuracy() ->
     """Every unit in known_units() across all dimensions must round-trip accurately
     through canonical SI and reject cross-dimension conversions."""
     all_units = known_units()
-    assert len(all_units) == 122, "unit count changes require updating the exact registry contract"
-    assert len(Dimension) == 33, "dimension count changes require updating the exact registry contract"
+    assert len(all_units) == 125, "unit count changes require updating the exact registry contract"
+    assert len(Dimension) == 34, "dimension count changes require updating the exact registry contract"
 
     for dim in Dimension:
         dim_units = [u for u in all_units if u.dimension == dim]
@@ -85,6 +86,25 @@ def test_cp19_02_independent_analytical_benchmarks_for_all_14_engines() -> None:
     assert len(reg.keys()) == 14
     field_validation_required = {"tubulars.api_5c3", "well_control.kill_sheet"}
 
+    def numeric_paths(value: Any, path: str = "") -> list[str]:
+        if isinstance(value, bool):
+            return []
+        if isinstance(value, (int, float)):
+            return [path]
+        if isinstance(value, dict):
+            return [
+                child_path
+                for key, item in value.items()
+                for child_path in numeric_paths(item, f"{path}.{key}" if path else str(key))
+            ]
+        if isinstance(value, list):
+            return [
+                child_path
+                for index, item in enumerate(value)
+                for child_path in numeric_paths(item, f"{path}[{index}]")
+            ]
+        return []
+
     def run_and_check_json(key: str, payload: dict[str, Any]) -> dict[str, Any]:
         spec, res = reg.execute(key, payload)
         expected_status = "needs_field_validation" if key in field_validation_required else "formula_derived"
@@ -93,6 +113,45 @@ def test_cp19_02_independent_analytical_benchmarks_for_all_14_engines() -> None:
         # Strict IEEE-754 finite check: raises ValueError if any NaN/Inf exists anywhere in output
         encoded = json.dumps(out_dict, allow_nan=False)
         assert len(encoded) > 2
+
+        unit_contract = build_engine_unit_contract(
+            spec.key,
+            spec.inputs_model,
+            spec.outputs_model,
+            payload,
+            out_dict,
+            [violation.model_dump(mode="json") for violation in res.violations],
+        )
+        for side, values in (("input_fields", payload), ("output_fields", out_dict)):
+            descriptors = unit_contract[side]
+            for path in numeric_paths(values):
+                assert path in descriptors, f"{key} {side} misses runtime numeric path {path}"
+                descriptor = descriptors[path]
+                assert descriptor["status"] in {"declared", "unknown"}, (key, side, path)
+                if descriptor["status"] == "unknown":
+                    assert descriptor["value_unit"] is None, (key, side, path)
+                    assert descriptor["unknown_reason"], (key, side, path)
+                    assert not any(
+                        display["supported"] for display in descriptor["display_units"].values()
+                    ), (key, side, path)
+                    continue
+
+                source_unit = get_unit(descriptor["registry_unit"])
+                assert descriptor["dimension"] == source_unit.dimension.value, (key, side, path)
+                assert descriptor["canonical_unit"]
+                for display in descriptor["display_units"].values():
+                    if not display["supported"]:
+                        continue
+                    target_unit = get_unit(display["registry_symbol"])
+                    assert source_unit.dimension is target_unit.dimension, (key, side, path, display)
+                    assert math.isclose(
+                        display["factor"], source_unit.factor / target_unit.factor, rel_tol=1e-12
+                    ), (key, side, path, display)
+                    assert math.isclose(
+                        display["offset"],
+                        (source_unit.offset - target_unit.offset) / target_unit.factor,
+                        abs_tol=1e-12,
+                    ), (key, side, path, display)
         return out_dict
 
     # 1. trajectory.minimum_curvature — SPE Book Vol. 2 / Bourgoyne et al. Minimum Curvature

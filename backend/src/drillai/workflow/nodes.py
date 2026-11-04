@@ -365,11 +365,22 @@ async def _run_engine(context: NodeContext, config: BaseModel) -> NodeOutcome:
         )
 
     spec, result = load_default_engines().execute(cfg.engine_key, merged_inputs)
+    from drillai.engines.unit_contract import build_engine_unit_contract
+
+    result_payload = result.outputs.model_dump(mode="json")
     return NodeOutcome(
         outputs={
             "engine_key": spec.key,
             "engine_version": spec.version,
-            "result": result.outputs.model_dump(mode="json"),
+            "result": result_payload,
+            "units": build_engine_unit_contract(
+                spec.key,
+                spec.inputs_model,
+                spec.outputs_model,
+                merged_inputs,
+                result_payload,
+                [violation.model_dump(mode="json") for violation in result.violations],
+            ),
             "is_feasible": result.is_feasible,
             "warnings": result.warnings,
             "violations": [violation.model_dump(mode="json") for violation in result.violations],

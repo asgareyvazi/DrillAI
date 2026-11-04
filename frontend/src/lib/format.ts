@@ -7,6 +7,8 @@
  * reading SI are looking at the same stored number.
  */
 
+import type { EngineValueUnitContract } from '../api/types'
+
 export type UnitSystem = 'si' | 'oilfield'
 
 export interface UnitDescriptor {
@@ -102,6 +104,77 @@ export function formatValue(value: unknown, options: FormatValueOptions = {}): R
     unit: displayUnit,
     missing: false,
     title,
+  }
+}
+
+export interface FormatUnitContractOptions {
+  /** The local preference maps to an explicitly supplied conversion in the API contract. */
+  unitSystem?: UnitSystem | 'metric_engineering' | 'field_us'
+  locale?: string
+  missingLabel?: string
+  unknownUnitLabel?: string
+}
+
+/**
+ * Render a numeric value only from its API-provided unit descriptor. A missing/unknown descriptor
+ * is visibly unknown; this function never consults a field name or the legacy unit-name table.
+ */
+export function formatUnitContractValue(
+  value: unknown,
+  contract: EngineValueUnitContract | null | undefined,
+  options: FormatUnitContractOptions = {},
+): RenderedValue {
+  const {
+    unitSystem = 'si',
+    locale = 'en',
+    missingLabel = '—',
+    unknownUnitLabel = 'unit unknown',
+  } = options
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    const rendered = formatValue(value, { locale, missingLabel })
+    if (typeof value === 'number' && contract?.status !== 'declared') {
+      return {
+        ...rendered,
+        unit: unknownUnitLabel,
+        title: contract?.unknown_reason ?? 'No authoritative unit metadata was provided.',
+      }
+    }
+    return rendered
+  }
+
+  if (!contract || contract.status !== 'declared') {
+    return {
+      ...formatValue(value, { locale, precision: contract?.precision }),
+      unit: unknownUnitLabel,
+      title: contract?.unknown_reason ?? 'No authoritative unit metadata was provided; no conversion was applied.',
+    }
+  }
+
+  const displayKey =
+    unitSystem === 'oilfield' || unitSystem === 'field_us'
+      ? 'field_us'
+      : unitSystem === 'metric_engineering'
+        ? 'metric_engineering'
+        : 'si'
+  const conversion = contract.display_units[displayKey]
+  if (!conversion?.supported || conversion.factor === null || conversion.offset === null) {
+    const rendered = formatValue(value, { locale, precision: contract.precision })
+    return {
+      ...rendered,
+      unit: contract.value_unit,
+      title: `Stored as ${value} ${contract.value_unit ?? ''}. No supported conversion to the selected display system was declared.`,
+    }
+  }
+
+  const displayValue = value * conversion.factor + conversion.offset
+  const rendered = formatValue(displayValue, { locale, precision: contract.precision })
+  return {
+    ...rendered,
+    unit: conversion.unit_symbol,
+    title:
+      displayKey === 'si' && conversion.unit_symbol === contract.value_unit
+        ? `${value} ${contract.value_unit ?? ''}`.trim()
+        : `${value} ${contract.value_unit ?? ''} = ${displayValue} ${conversion.unit_symbol ?? ''}`.trim(),
   }
 }
 

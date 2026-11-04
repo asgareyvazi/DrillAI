@@ -6,13 +6,14 @@
  */
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Report } from '../../api/types'
 import { I18nProvider } from '../../i18n'
+import { useSession } from '../../stores/session'
 import ReportsWorkspace from './ReportsWorkspace'
 
 const apiMock = vi.hoisted(() => ({
@@ -28,6 +29,27 @@ vi.mock('../../api/endpoints', () => ({
     exportReport: apiMock.exportReport,
   },
 }))
+
+const densityUnit = {
+  status: 'declared' as const,
+  value_unit: 'kg/m3',
+  registry_unit: 'kg/m3',
+  dimension: 'density',
+  canonical_unit: 'kg/m3',
+  unit_system_basis: 'engine_contract',
+  semantic: null,
+  source: 'engine_contract',
+  description: null,
+  description_status: 'not_declared' as const,
+  unknown_reason: null,
+  requested_display_unit: null,
+  precision: 3,
+  display_units: {
+    si: { unit_symbol: 'kg/m³', registry_symbol: 'kg/m3', factor: 1, offset: 0, supported: true, behavior: 'linear' },
+    metric_engineering: { unit_symbol: 'g/cm³', registry_symbol: 'g/cm3', factor: 0.001, offset: 0, supported: true, behavior: 'linear' },
+    field_us: { unit_symbol: 'ppg', registry_symbol: 'ppg', factor: 1 / 119.8264273, offset: 0, supported: true, behavior: 'linear' },
+  },
+}
 
 const report = {
   kind: 'daily_drilling',
@@ -47,6 +69,33 @@ const report = {
       count: 1,
     },
     {
+      key: 'calculations',
+      title: 'Engineering calculations',
+      kind: 'calculations',
+      items: [
+        {
+          engine_key: 'hydraulics.laminar',
+          engine_version: '1.0.0',
+          status: 'succeeded',
+          inputs: {},
+          outputs: { mud_weight_si: 1198.264273 },
+          units: {
+            contract_version: 'drillai.engine-units.v1',
+            unit_system: 'SI',
+            unit_system_basis: 'per_numeric_field',
+            input_fields: {},
+            output_fields: { mud_weight_si: densityUnit },
+            violation_fields: {},
+          },
+          constraint_violations: [],
+          inputs_hash: 'input-hash',
+          outputs_hash: 'output-hash',
+        },
+      ],
+      note: 'Only persisted calculations are included.',
+      count: 1,
+    },
+    {
       key: 'assumptions',
       title: 'Assumptions and caveats',
       kind: 'assumptions',
@@ -55,7 +104,7 @@ const report = {
       count: 0,
     },
   ],
-  section_kinds: ['assumptions', 'facts'],
+  section_kinds: ['assumptions', 'calculations', 'facts'],
   is_renderable: true,
   rendering_note: 'This is a structured payload; Word/PDF rendering is a separate presentation layer.',
 } satisfies Report
@@ -89,6 +138,8 @@ beforeEach(() => {
   )
 })
 
+afterEach(() => act(() => useSession.setState({ unitSystem: 'si' })))
+
 describe('ReportsWorkspace', () => {
   it('renders the backend report contract and exports the exact authorized JSON response bytes', async () => {
     const user = userEvent.setup()
@@ -106,12 +157,16 @@ describe('ReportsWorkspace', () => {
     })
 
     try {
+      act(() => useSession.setState({ unitSystem: 'oilfield' }))
       renderWorkspace()
       await user.click(await screen.findByRole('button', { name: 'Build' }))
       expect(await screen.findByText('Recorded drilling state')).toBeInTheDocument()
       expect(screen.getByText('Current measured depth')).toBeInTheDocument()
       expect(screen.getByText('This is a structured payload; Word/PDF rendering is a separate presentation layer.')).toBeInTheDocument()
       expect(screen.getByText('Report metadata')).toBeInTheDocument()
+      await user.click(screen.getByText(/hydraulics.laminar@1.0.0/))
+      expect(await screen.findByText('ppg')).toBeInTheDocument()
+      expect(screen.getByText('10')).toBeInTheDocument()
 
       await user.click(screen.getByTestId('report-export-json'))
       await waitFor(() => expect(apiMock.exportReport).toHaveBeenCalledWith('wel_capture', 'daily_drilling'))

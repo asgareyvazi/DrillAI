@@ -981,6 +981,51 @@ export interface DdrProcessingReport {
 
 // --------------------------------------------------------------------------- engines
 
+export interface UnitDisplayConversion {
+  unit_symbol: string | null
+  registry_symbol: string | null
+  factor: number | null
+  offset: number | null
+  supported: boolean
+  behavior: string
+}
+
+/** Authoritative per-numeric-value unit metadata; unknown means no conversion is permitted. */
+export interface EngineValueUnitContract {
+  status: 'declared' | 'unknown'
+  value_unit: string | null
+  registry_unit: string | null
+  dimension: string | null
+  canonical_unit: string | null
+  unit_system_basis: string
+  semantic: string | null
+  source: string
+  description: string | null
+  description_status: 'declared' | 'not_declared'
+  unknown_reason: string | null
+  requested_display_unit: string | null
+  precision: number
+  display_units: {
+    si: UnitDisplayConversion
+    metric_engineering: UnitDisplayConversion
+    field_us: UnitDisplayConversion
+  }
+}
+
+export interface EngineUnitContract {
+  contract_version: string
+  unit_system: string
+  unit_system_basis: string
+  input_units?: Record<string, string>
+  output_units?: Record<string, string>
+  input_fields: Record<string, EngineValueUnitContract>
+  output_fields: Record<string, EngineValueUnitContract>
+  violation_fields?: Record<string, EngineValueUnitContract>
+  input_schema_fields?: Record<string, EngineValueUnitContract>
+  output_schema_fields?: Record<string, EngineValueUnitContract>
+  unknown_unit_policy?: string
+}
+
 export interface EngineListItem {
   key: string
   name: string
@@ -1001,6 +1046,7 @@ export interface EngineListItem {
   validation_status: string
   input_schema: Record<string, unknown>
   output_schema: Record<string, unknown>
+  unit_contract: EngineUnitContract
 }
 
 export interface EngineRunListItem {
@@ -1015,6 +1061,7 @@ export interface EngineRunListItem {
   section_id: string | null
   inputs: Record<string, unknown>
   outputs: Record<string, unknown>
+  units: EngineUnitContract
   inputs_hash: string
   outputs_hash: string
   assumptions: string[]
@@ -1035,6 +1082,7 @@ export interface EngineRunEnvelope {
   engine_run_id: string
   engine: { key: string; version: string; validation_status: string }
   outputs: Record<string, unknown>
+  units: EngineUnitContract
   warnings: string[]
   constraint_violations: Array<Record<string, unknown>>
   is_feasible: boolean
@@ -1046,23 +1094,59 @@ export interface EngineRunEnvelope {
 
 // --------------------------------------------------------------------------- optimisation
 
+export interface OptimisationUnitContract extends EngineUnitContract {
+  value_units: Record<string, EngineValueUnitContract>
+  objective_units: Record<string, EngineValueUnitContract>
+}
+
+export interface OptimisationTradeOff {
+  objective: string
+  sense: string
+  best_candidate_id: string
+  best_value: number
+  worst_value: number
+  spread: number
+  unit_contract: EngineValueUnitContract
+}
+
+export interface OptimisationSensitivity {
+  parameter: string
+  objective: string
+  spearman_rho: number
+  samples: number
+  interpretation: string
+  unit_contracts: Record<string, EngineValueUnitContract>
+}
+
 export interface CandidateView {
-  candidate_id: string
-  values: Record<string, number>
+  id: string
+  label: string
+  values: Record<string, unknown>
+  value_units?: Record<string, EngineValueUnitContract>
   objectives: Record<string, number>
-  rank: number | null
-  on_frontier: boolean
+  objective_units?: Record<string, EngineValueUnitContract>
+  rank: number
+  is_pareto: boolean
+  is_baseline: boolean
   score: number | null
-  feasible: boolean
-  violations: Array<Record<string, unknown>>
-  rejected_because: string | null
+  is_feasible: boolean
+  constraint_results: Array<Record<string, unknown>>
+  constraint_units: Record<string, EngineValueUnitContract>
+  rejected_because: string[]
+  explanation: string | null
+  feasibility_margin: number | null
+  predicted_metrics: Record<string, number>
+  engine_run_ids: string[]
+  evidence: Record<string, unknown>
+  warnings: string[]
 }
 
 export interface ObjectiveComparison {
   candidate: number | null
   recommended: number | null
-  sense: string
+  sense: string | null
   unit?: string | null
+  unit_contract?: EngineValueUnitContract | null
   delta?: number | null
 }
 
@@ -1071,8 +1155,9 @@ export interface WhyNotEntry {
   candidate_id: string
   kind: string
   reason: string
-  comparison: Record<string, ObjectiveComparison>
-  violations?: Array<Record<string, unknown>>
+  comparison?: Record<string, ObjectiveComparison>
+  constraints?: Array<Record<string, unknown>>
+  constraint_units?: Record<string, EngineValueUnitContract>
 }
 
 export interface ObjectiveDefinition {
@@ -1088,23 +1173,48 @@ export interface OptimisationExplanation {
   optimization_run_id: string
   recommendation_id: string | null
   title: string | null
+  status: string
   problem_key: string
-  created_at: string
+  created_at: string | null
+  objectives: Array<{ key: string; sense: string; unit?: string }>
+  constraints: Array<Record<string, unknown>>
+  decision_variables: Array<Record<string, unknown>>
+  engine_keys: string[]
   candidates_evaluated: number
   feasible_count: number
   pareto_count: number
+  value_units: Record<string, EngineValueUnitContract>
+  objective_units: Record<string, EngineValueUnitContract>
+  objective_contracts: Record<
+    string,
+    {
+      source: string | null
+      sense: string | null
+      unit: string | null
+      description: string | null
+      unit_contract: EngineValueUnitContract | null
+    }
+  >
   recommended: CandidateView | null
+  baseline: CandidateView | null
+  candidates: CandidateView[]
   pareto_frontier: CandidateView[]
   available_options: CandidateView[]
+  feasible_candidates: CandidateView[]
   why_not: WhyNotEntry[]
-  objective_sources: Record<string, Record<string, unknown>>
-  trade_offs: Array<Record<string, unknown>>
-  sensitivities: Array<Record<string, unknown>>
-  infeasible: Array<Record<string, unknown>>
+  objective_sources: Record<string, string>
+  trade_offs: OptimisationTradeOff[]
+  sensitivities: OptimisationSensitivity[]
+  feasible_ranges: Record<string, { min: number; max: number; count: number }>
+  feasible_range_units: Record<string, Record<string, EngineValueUnitContract>>
+  pareto_unit_fields: Record<string, EngineValueUnitContract>
+  unit_contract: OptimisationUnitContract | null
+  infeasible: CandidateView[]
   engine_run_ids: string[]
   engine_versions: Record<string, string>
   not_evaluated: Record<string, string>
   notes: string[]
+  provenance: Record<string, unknown>
 }
 
 export interface OptimisationObjectives {
@@ -1167,13 +1277,29 @@ export interface AdvisorNarrative {
   prompt_confined_to?: string[]
 }
 
+export interface AdvisorCalculation extends Record<string, unknown> {
+  engine_key: string
+  engine_version: string
+  statement: string
+  outputs: Record<string, unknown>
+  units: EngineUnitContract
+  is_feasible: boolean | null
+  warnings: string[]
+  violations: Array<Record<string, unknown>>
+  engine_run_id: string | null
+  ran_at: string | null
+  validation_status: string
+  field_validation_required: boolean
+  limitations: string[]
+}
+
 export interface AdvisorAnswer {
   well_id: string
   question: string
   question_text: string
   generated_at: string
   facts: Array<Record<string, unknown>>
-  calculations: Array<Record<string, unknown>>
+  calculations: AdvisorCalculation[]
   evidence: Array<Record<string, unknown>>
   inference: Array<Record<string, unknown>>
   recommendation: Array<Record<string, unknown>>

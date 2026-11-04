@@ -245,20 +245,26 @@ def test_cp23_hydraulics_turbulent_regime_validity_and_tubulars_scope(engines: E
     assert any("not field validation" in note for note in tub_res.outputs.notes)
 
 
-def test_cp23_output_unit_inference_consistency() -> None:
-    """Verifies that output unit metadata maps kill-sheet outputs to their true SI units."""
-    from drillai.engines.service import _extract_model_units
-    from drillai.engines.wellcontrol import KillSheetOutput
+def test_cp23_output_unit_contract_consistency() -> None:
+    """Verifies the authoritative per-field contract for well-control engine outputs."""
+    from drillai.engines.registry import load_default_engines
+    from drillai.engines.unit_contract import schema_unit_contract
 
-    units = _extract_model_units(KillSheetOutput)
-    assert units["kill_mud_weight_si"] == "kg/m3"
-    assert units["mud_weight_margin_si"] == "kg/m3"
-    assert units["kick_tolerance_mud_weight_si"] == "kg/m3"
-    assert units["volumetric_kick_tolerance_si"] == "m3"
-    assert units["max_allowable_influx_height_at_shoe_si"] == "m"
-    assert units["shoe_margin_si"] == "Pa"
-    assert units["maasp_si"] == "Pa"
-    assert units["initial_circulating_pressure_si"] == "Pa"
-    assert units["final_circulating_pressure_si"] == "Pa"
-    assert units["time_to_kill_si"] == "s"
+    spec = load_default_engines().get("well_control.kill_sheet").spec
+    units = schema_unit_contract(spec.key, spec.inputs_model, spec.outputs_model)["output_fields"]
+    expected = {
+        "kill_mud_weight_si": "kg/m3",
+        "mud_weight_margin_si": "kg/m3",
+        "kick_tolerance_mud_weight_si": "kg/m3",
+        "volumetric_kick_tolerance_si": "m3",
+        "max_allowable_influx_height_at_shoe_si": "m",
+        "shoe_margin_si": "Pa",
+        "maasp_si": "Pa",
+        "initial_circulating_pressure_si": "Pa",
+        "final_circulating_pressure_si": "Pa",
+        "time_to_kill_si": "s",
+    }
+    for path, unit in expected.items():
+        assert units[path]["status"] == "declared"
+        assert units[path]["value_unit"] == unit
 

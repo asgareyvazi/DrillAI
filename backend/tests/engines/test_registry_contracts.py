@@ -56,6 +56,38 @@ def test_every_engine_is_self_describing(engines):
         assert description["action_level"] in {"L0", "L1", "L2", "L3", "L4", "L5"}
 
 
+def test_every_engine_publishes_explicit_numeric_output_unit_status(engines):
+    """All 14 output schemas enumerate every numeric leaf as declared or explicitly unknown."""
+    for engine in engines:
+        description = engine.spec.describe()
+        contract = description["unit_contract"]
+        assert contract["contract_version"] == "drillai.engine-units.v1"
+        assert contract["unknown_unit_policy"]
+
+        schema = engine.spec.outputs_model.model_json_schema()
+        definitions = schema.get("$defs", {})
+        schema_paths: set[str] = set()
+        for name, definition in schema.get("properties", {}).items():
+            schema_paths.update(path for path, _unit in _numeric_leaves(definition, definitions, name))
+        output_fields = contract["output_fields"]
+        assert schema_paths <= set(output_fields), (
+            f"{engine.spec.key} is missing numeric schema paths from its output unit contract: "
+            f"{sorted(schema_paths - set(output_fields))}"
+        )
+        for path, descriptor in output_fields.items():
+            assert descriptor["status"] in {"declared", "unknown"}, (engine.spec.key, path)
+            if descriptor["status"] == "unknown":
+                assert descriptor["value_unit"] is None, (engine.spec.key, path)
+                assert descriptor["unknown_reason"], (engine.spec.key, path)
+                assert not any(
+                    conversion["supported"]
+                    for conversion in descriptor["display_units"].values()
+                ), (engine.spec.key, path)
+            else:
+                assert descriptor["value_unit"], (engine.spec.key, path)
+                assert descriptor["canonical_unit"], (engine.spec.key, path)
+
+
 def _numeric_leaves(schema: dict, defs: dict, path: str = "", inherited_unit: str | None = None):
     """Yield (json-path, unit) for every numeric leaf of a JSON schema.
 
@@ -76,7 +108,7 @@ def _numeric_leaves(schema: dict, defs: dict, path: str = "", inherited_unit: st
             yield from _numeric_leaves(definition, defs, f"{path}.{name}" if path else name, unit)
     elif "items" in schema:
         yield from _numeric_leaves(schema["items"], defs, f"{path}[]", unit)
-    elif schema.get("type") == "number":
+    elif schema.get("type") in {"number", "integer"}:
         yield path, unit
 
 
@@ -97,7 +129,25 @@ def test_every_numeric_input_declares_its_unit(engines):
                 if not unit:
                     missing.append(f"{engine.spec.key}: {path}")
     assert checked > 60, f"unit coverage regressed (only {checked} numeric fields seen)"
-    assert not missing, "numeric inputs without a declared unit:\n" + "\n".join(missing)
+    dynamic_sibling_units = {
+        "optimization.sweep: parameters[].min_si",
+        "optimization.sweep: parameters[].max_si",
+        "optimization.sweep: parameters[].fixed",
+    }
+    assert set(missing) == dynamic_sibling_units, (
+        "only the sweep bounds/fixed value may use their explicit sibling `unit`; all other numeric "
+        "inputs must declare their unit in the schema:\n" + "\n".join(missing)
+    )
+    sweep_schema = next(
+        engine.spec.inputs_model.model_json_schema()
+        for engine in engines
+        if engine.spec.key == "optimization.sweep"
+    )
+    parameter_schema = sweep_schema["$defs"]["SweepParameter"]["properties"]
+    assert "display unit" in parameter_schema["unit"]["description"]
+    for field in ("min_si", "max_si", "fixed"):
+        assert "canonical" in parameter_schema[field]["description"]
+        assert "sibling unit" in parameter_schema[field]["description"]
 
 
 def test_consumes_and_produces_use_known_ports(engines):

@@ -67,6 +67,31 @@ describe('Advisor copy-only response contract', () => {
 })
 
 describe('Advisor calculation safety status', () => {
+  it('renders stored outputs and violations with explicit unknown units when historical metadata is absent', () => {
+    render(
+      <I18nProvider>
+        <ul>
+          <AdvisorItemCard
+            item={{
+              engine_key: 'well_control.kill_sheet',
+              engine_version: 'historical-version',
+              statement: 'The engine ran with a result',
+              outputs: { kill_rate_si: 0.02 },
+              violations: [{ limit: 1_000_000, actual: 1_200_000, unit: 'Pa' }],
+              units: {},
+              validation_status: 'unknown',
+              field_validation_required: true,
+            }}
+          />
+        </ul>
+      </I18nProvider>,
+    )
+
+    expect(screen.getByText('خروجی‌ها')).toBeInTheDocument()
+    expect(screen.getByText('نقض محدودیت‌ها')).toBeInTheDocument()
+    expect(screen.getAllByText('یکا نامعلوم')).toHaveLength(3)
+  })
+
   it('keeps the field-validation warning in Persian when a historical safety run has unknown status', () => {
     render(
       <I18nProvider>

@@ -12,7 +12,8 @@ import { useMutation, useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { drillingApi } from '../../api/endpoints'
-import type { AdvisorAnswer } from '../../api/types'
+import type { AdvisorAnswer, EngineValueUnitContract } from '../../api/types'
+import { UnitAwareResult } from '../../components/engineering/UnitAwareResult'
 import { EvidencePanel } from '../../components/evidence/EvidencePanel'
 import { PageHeader } from '../../components/layout/AppShell'
 import {
@@ -40,6 +41,15 @@ const SECTION_TONE: Record<SectionKey, 'ok' | 'info' | 'neutral' | 'warning' | '
   unknown: 'danger',
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function unitFields(units: unknown, key: string): Record<string, EngineValueUnitContract> {
+  if (!isRecord(units) || !isRecord(units[key])) return {}
+  return units[key] as Record<string, EngineValueUnitContract>
+}
+
 export function AdvisorItemCard({ item }: { item: Record<string, unknown> }) {
   const { t } = useI18n()
   const label = String(item.label ?? item.key ?? item.title ?? item.kind ?? 'item')
@@ -54,6 +64,8 @@ export function AdvisorItemCard({ item }: { item: Record<string, unknown> }) {
   const basis = typeof item.basis === 'string' ? item.basis : null
   const how = typeof item.how_to_obtain === 'string' ? item.how_to_obtain : null
   const evidenceCount = Array.isArray(item.evidence) ? (item.evidence as unknown[]).length : 0
+  const outputs = isRecord(item.outputs) ? item.outputs : null
+  const violations = Array.isArray(item.violations) ? item.violations : []
 
   return (
     <li className="rounded-md border border-graphite-100 p-2.5 dark:border-graphite-800">
@@ -67,6 +79,21 @@ export function AdvisorItemCard({ item }: { item: Record<string, unknown> }) {
         )}
       </div>
       {value !== null && typeof value === 'object' && <Json value={value} max={60} />}
+      {outputs && Object.keys(outputs).length > 0 && (
+        <div className="mt-2 space-y-1">
+          <h4 className="text-[11px] font-medium">{t('engineering.outputs')}</h4>
+          <UnitAwareResult value={outputs} unitFields={unitFields(item.units, 'output_fields')} />
+        </div>
+      )}
+      {violations.length > 0 && (
+        <div className="mt-2 space-y-1">
+          <h4 className="text-[11px] font-medium text-danger">{t('engineering.violations')}</h4>
+          <UnitAwareResult
+            value={{ violations }}
+            unitFields={unitFields(item.units, 'violation_fields')}
+          />
+        </div>
+      )}
       <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-graphite-500">
         {engine && (
           <Badge tone="info">
