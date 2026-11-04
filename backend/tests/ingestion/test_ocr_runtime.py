@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from drillai.core.config import Settings
@@ -122,3 +124,85 @@ def test_runtime_cli_nonzero_exit_is_reserved_for_required_but_missing_dependenc
     assert ocr_runtime.main([]) == 0
     assert '"quality_evaluated": false' in capsys.readouterr().out
     assert ocr_runtime.main(["--require-runtime"]) == 1
+
+
+def test_synthetic_runtime_canary_checks_a_generated_image_without_emitting_ocr_text(monkeypatch) -> None:
+    expected_text = "SYNTHETIC OCR CANARY MUST NOT LEAK"
+
+    class CanaryProvider:
+        def __init__(self, **kwargs):
+            self.kwargs = kwargs
+
+        def availability(self):
+            return True, None
+
+        def recognize(self, image_png):
+            assert image_png.startswith(b"\x89PNG\r\n\x1a\n")
+            assert len(image_png) <= 2 * 1024 * 1024
+            return [type("Line", (), {"text": expected_text})()]
+
+    monkeypatch.setattr(ocr_runtime, "TesseractOcrProvider", CanaryProvider)
+    report = ocr_runtime.run_synthetic_runtime_canary(
+        Settings(_env_file=None, ocr_enabled=False, ocr_languages="eng+fas")
+    )
+
+    assert report["case_id"] == "drillai-ocr-runtime-canary-v1"
+    assert report["source"] == "generated_in_memory"
+    assert report["status"] == "passed"
+    assert report["line_count"] == 1
+    assert report["recognized_text_emitted"] is False
+    assert report["quality_evaluated"] is False
+    assert expected_text not in json.dumps(report)
+    assert "does not score transcription accuracy" in report["note"]
+
+
+def test_cli_self_test_runs_only_after_full_runtime_preflight_and_fails_closed(monkeypatch, capsys) -> None:
+    settings = Settings(_env_file=None, ocr_enabled=False)
+    monkeypatch.setattr(ocr_runtime, "get_settings", lambda: settings)
+    monkeypatch.setattr(
+        ocr_runtime,
+        "inspect_ocr_runtime",
+        lambda **_kwargs: {
+            "enabled": False,
+            "runtime_ready": False,
+            "required_ready": True,
+            "status": "disabled",
+            "reason": "PDFium renderer is not installed or could not be loaded",
+            "quality_evaluated": False,
+        },
+    )
+
+    assert ocr_runtime.main(["--self-test"]) == 1
+    report = json.loads(capsys.readouterr().out)
+    assert report["synthetic_canary"]["status"] == "blocked"
+    assert report["synthetic_canary"]["quality_evaluated"] is False
+
+    monkeypatch.setattr(
+        ocr_runtime,
+        "inspect_ocr_runtime",
+        lambda **_kwargs: {
+            "enabled": False,
+            "runtime_ready": True,
+            "required_ready": True,
+            "status": "disabled",
+            "reason": None,
+            "quality_evaluated": False,
+        },
+    )
+    monkeypatch.setattr(
+        ocr_runtime,
+        "run_synthetic_runtime_canary",
+        lambda _settings: {
+            "case_id": "drillai-ocr-runtime-canary-v1",
+            "source": "generated_in_memory",
+            "status": "passed",
+            "recognized_text_emitted": False,
+            "quality_evaluated": False,
+            "reason": None,
+            "note": "synthetic runtime canary only",
+        },
+    )
+    assert ocr_runtime.main(["--self-test"]) == 0
+    report = json.loads(capsys.readouterr().out)
+    assert report["synthetic_canary"]["status"] == "passed"
+    assert report["quality_evaluated"] is False

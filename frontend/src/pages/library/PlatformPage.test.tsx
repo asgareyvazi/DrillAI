@@ -77,6 +77,8 @@ describe('PlatformPage OCR runtime status', () => {
       element?.tagName === 'P' && element.textContent?.includes('Configured languages: eng, fas') === true,
     )).toBeInTheDocument()
     expect(screen.getByText('Runtime availability does not measure OCR accuracy or engineering correctness.')).toBeInTheDocument()
+    expect(screen.getByText('Run the local synthetic canary in this backend environment to check that Tesseract returns text. It is not an accuracy benchmark.')).toBeInTheDocument()
+    expect(screen.getByText('python -m drillai.ingestion.ocr_runtime --self-test')).toHaveAttribute('dir', 'ltr')
     expect(screen.getByText('Tesseract is missing configured language data: fas')).toBeInTheDocument()
   })
 
@@ -131,6 +133,8 @@ describe('PlatformPage OCR runtime status', () => {
     expect(screen.getByText('زمان‌اجرای OCR')).toBeInTheDocument()
     expect(screen.getByText('زمان‌اجرا در دسترس نیست')).toBeInTheDocument()
     expect(screen.getByText('eng, fas')).toHaveAttribute('dir', 'ltr')
+    expect(screen.getByText('python -m drillai.ingestion.ocr_runtime --self-test')).toHaveAttribute('dir', 'ltr')
+    expect(screen.getByText('برای بررسی اینکه Tesseract متنی برمی‌گرداند، آزمون مصنوعی محلی را در همین محیط backend اجرا کنید. این آزمون معیار سنجش دقت نیست.')).toBeInTheDocument()
     expect(document.documentElement.dir).toBe('rtl')
   })
 })

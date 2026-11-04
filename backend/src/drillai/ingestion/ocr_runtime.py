@@ -10,14 +10,16 @@ from __future__ import annotations
 
 import argparse
 import importlib.metadata
+import io
 import json
 import sys
 import threading
 from functools import lru_cache
+from pathlib import Path
 from typing import Any
 
 from drillai.core.config import Settings, get_settings
-from drillai.ingestion.ocr import TESSERACT_ADAPTER_VERSION, TesseractOcrProvider
+from drillai.ingestion.ocr import TESSERACT_ADAPTER_VERSION, OcrUnavailable, TesseractOcrProvider
 
 _RUNTIME_PROBE_LOCK = threading.Lock()
 
@@ -135,6 +137,86 @@ def inspect_ocr_runtime(
     return base
 
 
+_SYNTHETIC_CANARY_ID = "drillai-ocr-runtime-canary-v1"
+_SYNTHETIC_CANARY_TEXT = "DRILLAI OCR RUNTIME TEST 1234"
+_SYNTHETIC_CANARY_NOTE = (
+    "This in-memory synthetic canary checks that Tesseract can process a generated image and return "
+    "non-empty text. It does not score transcription accuracy, evaluate a corpus, or validate engineering content."
+)
+
+
+def _synthetic_canary_png() -> bytes:
+    """Render a fixed, non-sensitive canary in memory using the bundled font."""
+    try:
+        from PIL import Image, ImageDraw, ImageFont
+    except Exception as exc:
+        raise OcrUnavailable("Pillow image support is not installed for the synthetic canary") from exc
+
+    font_path = Path(__file__).resolve().parents[1] / "assets" / "fonts" / "DejaVuSans.ttf"
+    try:
+        image = Image.new("RGB", (1280, 220), color="white")
+        font = ImageFont.truetype(str(font_path), 64)
+        ImageDraw.Draw(image).text((48, 64), _SYNTHETIC_CANARY_TEXT, font=font, fill="black")
+        output = io.BytesIO()
+        image.save(output, format="PNG", optimize=False)
+        encoded = output.getvalue()
+    except Exception as exc:
+        raise OcrUnavailable("The synthetic OCR canary image could not be rendered") from exc
+    if not encoded.startswith(b"\x89PNG\r\n\x1a\n") or len(encoded) > 2 * 1024 * 1024:
+        raise OcrUnavailable("The synthetic OCR canary image is invalid or exceeded its size bound")
+    return encoded
+
+
+def _synthetic_canary_result(
+    status: str,
+    *,
+    reason: str | None = None,
+    line_count: int = 0,
+) -> dict[str, Any]:
+    return {
+        "case_id": _SYNTHETIC_CANARY_ID,
+        "source": "generated_in_memory",
+        "status": status,
+        "line_count": line_count,
+        "recognized_text_emitted": False,
+        "quality_evaluated": False,
+        "reason": reason,
+        "note": _SYNTHETIC_CANARY_NOTE,
+    }
+
+
+def run_synthetic_runtime_canary(settings: Settings | None = None) -> dict[str, Any]:
+    """Exercise the installed OCR process on a fixed in-memory image without returning its text."""
+    resolved = settings or get_settings()
+    provider = TesseractOcrProvider(
+        languages=resolved.ocr_languages,
+        executable=resolved.ocr_executable,
+        timeout_seconds=resolved.ocr_timeout_seconds,
+        max_concurrency=resolved.ocr_max_concurrency,
+    )
+    available, reason = provider.availability()
+    if not available:
+        return _synthetic_canary_result(
+            "blocked", reason=reason or "The configured Tesseract runtime is unavailable"
+        )
+    try:
+        image_png = _synthetic_canary_png()
+        lines = provider.recognize(image_png)
+    except OcrUnavailable as exc:
+        return _synthetic_canary_result("failed", reason=str(exc))
+    except Exception:
+        return _synthetic_canary_result("failed", reason="The synthetic OCR canary failed safely")
+
+    line_count = len(lines)
+    if line_count > 0 and any(isinstance(line.text, str) and line.text.strip() for line in lines):
+        return _synthetic_canary_result("passed", line_count=min(line_count, 1000))
+    return _synthetic_canary_result(
+        "failed",
+        reason="Tesseract returned no non-empty lines for the synthetic canary image",
+        line_count=min(line_count, 1000),
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Check local OCR runtime dependencies; no corpus or OCR quality is evaluated."
@@ -144,10 +226,33 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="exit non-zero unless Tesseract, configured languages and PDFium are available",
     )
+    parser.add_argument(
+        "--self-test",
+        action="store_true",
+        help="also run a fixed in-memory Tesseract canary; this does not score OCR quality",
+    )
     args = parser.parse_args(argv)
-    report = inspect_ocr_runtime(probe_when_disabled=True)
+    settings = get_settings()
+    report = inspect_ocr_runtime(settings=settings, probe_when_disabled=True)
+    if args.self_test:
+        report["synthetic_canary"] = (
+            run_synthetic_runtime_canary(settings)
+            if report.get("runtime_ready") is True
+            else _synthetic_canary_result(
+                "blocked",
+                reason=(
+                    report.get("reason")
+                    if isinstance(report.get("reason"), str)
+                    else "The required Tesseract and PDFium runtime is not ready"
+                ),
+            )
+        )
     sys.stdout.write(json.dumps(report, ensure_ascii=False, sort_keys=True, indent=2, allow_nan=False) + "\n")
-    if (report["enabled"] and not report["required_ready"]) or (args.require_runtime and not report["runtime_ready"]):
+    if (
+        (report["enabled"] and not report["required_ready"])
+        or (args.require_runtime and not report["runtime_ready"])
+        or (args.self_test and report["synthetic_canary"]["status"] != "passed")
+    ):
         return 1
     return 0
 

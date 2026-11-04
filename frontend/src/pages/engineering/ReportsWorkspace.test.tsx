@@ -11,7 +11,7 @@ import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Report } from '../../api/types'
+import type { EngineUnitContract, EngineValueUnitContract, Report } from '../../api/types'
 import { I18nProvider } from '../../i18n'
 import { useSession } from '../../stores/session'
 import ReportsWorkspace from './ReportsWorkspace'
@@ -48,6 +48,23 @@ const densityUnit = {
     si: { unit_symbol: 'kg/m³', registry_symbol: 'kg/m3', factor: 1, offset: 0, supported: true, behavior: 'linear' },
     metric_engineering: { unit_symbol: 'g/cm³', registry_symbol: 'g/cm3', factor: 0.001, offset: 0, supported: true, behavior: 'linear' },
     field_us: { unit_symbol: 'ppg', registry_symbol: 'ppg', factor: 1 / 119.8264273, offset: 0, supported: true, behavior: 'linear' },
+  },
+}
+
+const unknownUnit: EngineValueUnitContract = {
+  ...densityUnit,
+  status: 'unknown',
+  value_unit: null,
+  registry_unit: null,
+  dimension: null,
+  canonical_unit: null,
+  unit_system_basis: 'unknown',
+  source: 'unknown',
+  unknown_reason: 'No authoritative unit declaration for this report field.',
+  display_units: {
+    si: { unit_symbol: null, registry_symbol: null, factor: null, offset: null, supported: false, behavior: 'unknown' },
+    metric_engineering: { unit_symbol: null, registry_symbol: null, factor: null, offset: null, supported: false, behavior: 'unknown' },
+    field_us: { unit_symbol: null, registry_symbol: null, factor: null, offset: null, supported: false, behavior: 'unknown' },
   },
 }
 
@@ -179,5 +196,44 @@ describe('ReportsWorkspace', () => {
       if (originalRevokeObjectURL) Object.defineProperty(URL, 'revokeObjectURL', originalRevokeObjectURL)
       else Reflect.deleteProperty(URL, 'revokeObjectURL')
     }
+  })
+
+  it('keeps undeclared report units explicit and never guesses from a field name', async () => {
+    const user = userEvent.setup()
+    const reportWithUnknownUnit: Report = {
+      ...report,
+      sections: report.sections.map((section) => {
+        if (section.kind !== 'calculations') return section
+        return {
+          ...section,
+          items: section.items.map((item) => {
+            const units = item.units as EngineUnitContract
+            const outputs = item.outputs as Record<string, unknown>
+            return {
+              ...item,
+              outputs: { ...outputs, actual_depth_m: 100 },
+              units: {
+                ...units,
+                output_fields: { ...units.output_fields, actual_depth_m: unknownUnit },
+              },
+            }
+          }),
+        }
+      }),
+    }
+    apiMock.buildReport.mockResolvedValue({ report: reportWithUnknownUnit })
+    act(() => useSession.setState({ unitSystem: 'oilfield' }))
+    renderWorkspace()
+
+    await user.click(await screen.findByRole('button', { name: 'Build' }))
+    await user.click(await screen.findByText(/hydraulics.laminar@1.0.0/))
+
+    expect(await screen.findByText('Actual depth m')).toBeInTheDocument()
+    expect(screen.getByText('100')).toBeVisible()
+    expect(screen.getByText('unit unknown')).toBeVisible()
+    expect(screen.getByText('No authoritative unit declaration for this report field.')).toBeInTheDocument()
+    expect(screen.getByText(/outputs output-hash/)).toBeInTheDocument()
+    expect(screen.getByText('10')).toBeVisible()
+    expect(screen.getByText('ppg')).toBeVisible()
   })
 })

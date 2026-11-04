@@ -1083,6 +1083,7 @@ export const en = {
     ocrRuntimeDisabled: 'Disabled',
     ocrConfiguredLanguages: 'Configured languages',
     ocrQualityNotEvaluated: 'Runtime availability does not measure OCR accuracy or engineering correctness.',
+    ocrSyntheticCanaryHint: 'Run the local synthetic canary in this backend environment to check that Tesseract returns text. It is not an accuracy benchmark.',
     notificationOutbox: 'Notification outbox',
     notificationOutboxSubtitle: 'Tenant-scoped dispatch state; message content and recipient addresses are not shown.',
     notificationAcceptanceBoundary: 'Transport acceptance is not recipient delivery.',

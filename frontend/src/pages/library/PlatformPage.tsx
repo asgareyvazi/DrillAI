@@ -127,6 +127,10 @@ export default function PlatformPage() {
                   </p>
                 )}
                 <p className="text-graphite-600 dark:text-graphite-300">{t('platform.ocrQualityNotEvaluated')}</p>
+                <p className="text-graphite-600 dark:text-graphite-300">{t('platform.ocrSyntheticCanaryHint')}</p>
+                <code dir="ltr" className="block overflow-x-auto rounded bg-graphite-50 p-2 text-[11px] dark:bg-graphite-900">
+                  python -m drillai.ingestion.ocr_runtime --self-test
+                </code>
                 {typeof ocrCheck.reason === 'string' && (
                   <p className="text-warning-700 dark:text-warning-300" role="status">{ocrCheck.reason}</p>
                 )}

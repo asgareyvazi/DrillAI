@@ -1079,6 +1079,7 @@ export const fa = {
     ocrRuntimeDisabled: 'غیرفعال',
     ocrConfiguredLanguages: 'زبان‌های پیکربندی‌شده',
     ocrQualityNotEvaluated: 'در دسترس بودن زمان‌اجرا، دقت OCR یا درستی مهندسی را اندازه‌گیری نمی‌کند.',
+    ocrSyntheticCanaryHint: 'برای بررسی اینکه Tesseract متنی برمی‌گرداند، آزمون مصنوعی محلی را در همین محیط backend اجرا کنید. این آزمون معیار سنجش دقت نیست.',
     notificationOutbox: 'صف خروجی اعلان‌ها',
     notificationOutboxSubtitle: 'وضعیت ارسال در محدودهٔ مستأجر؛ محتوای پیام و نشانی گیرنده نمایش داده نمی‌شود.',
     notificationAcceptanceBoundary: 'پذیرش انتقال‌دهنده به معنی تحویل به گیرنده نیست.',
