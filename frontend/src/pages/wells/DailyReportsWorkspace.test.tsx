@@ -12,6 +12,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../../api/client'
 import type {
   DailyReport,
+  DailyReportActivityMetrics,
   DailyReportCatalogue,
   DailyReportDetail,
   DailyReportHistory,
@@ -30,6 +31,7 @@ const mocks = vi.hoisted(() => ({
   previewDailyReportActivityClassification: vi.fn(),
   listDailyReports: vi.fn(),
   getDailyReport: vi.fn(),
+  getDailyReportActivityMetrics: vi.fn(),
   getDailyReportHistory: vi.fn(),
   getDailyReportRevision: vi.fn(),
   exportDailyReportRevision: vi.fn(),
@@ -56,6 +58,7 @@ vi.mock('../../api/endpoints', () => ({
     previewDailyReportActivityClassification: mocks.previewDailyReportActivityClassification,
     listDailyReports: mocks.listDailyReports,
     getDailyReport: mocks.getDailyReport,
+    getDailyReportActivityMetrics: mocks.getDailyReportActivityMetrics,
     getDailyReportHistory: mocks.getDailyReportHistory,
     getDailyReportRevision: mocks.getDailyReportRevision,
     exportDailyReportRevision: mocks.exportDailyReportRevision,
@@ -188,6 +191,31 @@ const history = {
   offset: 0,
 } satisfies DailyReportHistory
 
+const activityMetrics = {
+  well_id: 'well_1',
+  wellbore_id: 'wb_1',
+  report_id: 'report_1',
+  report_date: '2026-03-15',
+  report_timezone: 'Europe/Amsterdam',
+  revision_id: 'rev_1',
+  revision_number: 1,
+  revision_edit_version: 1,
+  revision_status: 'draft',
+  revision_source_kind: 'manual',
+  revision_content_hash: 'sha256:daily-report-content',
+  period_start_at: null,
+  period_end_at: null,
+  activity_count: 0,
+  npt_activity_count: 0,
+  npt_duration_included_count: 0,
+  npt_duration_excluded_count: 0,
+  npt_duration_excluded_by_basis: { planned: 0, inferred: 0, unknown: 0 },
+  npt_duration_total: { value: null, unit: 's' },
+  npt_duration_coverage: 'not_applicable',
+  calculation_method: 'sum_explicit_npt_durations_v1',
+  note: 'Synthetic test fixture only.',
+} satisfies DailyReportActivityMetrics
+
 const sourceDocumentRow = {
   id: 'doc_ddr_1',
   title: 'Field DDR 15',
@@ -277,6 +305,7 @@ beforeEach(() => {
   })
   mocks.listDailyReports.mockReset().mockResolvedValue({ items: [report], total: 1, limit: 50, offset: 0 })
   mocks.getDailyReport.mockReset().mockResolvedValue(detail)
+  mocks.getDailyReportActivityMetrics.mockReset().mockResolvedValue(activityMetrics)
   mocks.getDailyReportHistory.mockReset().mockResolvedValue(history)
   mocks.getDailyReportRevision.mockReset().mockResolvedValue({ report, revision })
   mocks.exportDailyReportRevision.mockReset()
@@ -341,6 +370,45 @@ describe('DailyReportsWorkspace', () => {
     }))
     expect(await screen.findByText('Current revision')).toBeInTheDocument()
     expect(screen.queryByText('Content differs from its stored fingerprint; do not approve it.')).not.toBeInTheDocument()
+  })
+
+  it('renders revision-linked NPT duration coverage and keeps missing duration distinct from zero', async () => {
+    mocks.getDailyReportActivityMetrics.mockResolvedValue({
+      ...activityMetrics,
+      activity_count: 3,
+      npt_activity_count: 2,
+      npt_duration_included_count: 1,
+      npt_duration_excluded_count: 1,
+      npt_duration_excluded_by_basis: { planned: 1, inferred: 0, unknown: 0 },
+      npt_duration_total: { value: 7200, unit: 's' },
+      npt_duration_coverage: 'partial',
+    })
+    renderWorkspace('/wells/well_1/daily-reports?report=report_1')
+
+    const metrics = await screen.findByTestId('daily-report-activity-metrics')
+    await screen.findByText('Some NPT durations are excluded')
+    expect(metrics).toHaveTextContent('Some NPT durations are excluded')
+    expect(screen.getByTestId('daily-report-reported-npt-duration')).toHaveTextContent('2 h')
+    expect(metrics).toHaveTextContent('Planned-duration rows excluded')
+    expect(metrics).toHaveTextContent('Revision content fingerprint')
+    expect(metrics).toHaveTextContent('It does not approve or reconcile any row')
+    await waitFor(() => expect(mocks.getDailyReportActivityMetrics).toHaveBeenCalledWith('well_1', 'report_1', 1, expect.any(AbortSignal)))
+
+  })
+
+  it('does not render unavailable NPT duration as zero hours', async () => {
+    mocks.getDailyReportActivityMetrics.mockResolvedValue({
+      ...activityMetrics,
+      npt_activity_count: 1,
+      npt_duration_excluded_count: 1,
+      npt_duration_excluded_by_basis: { planned: 0, inferred: 0, unknown: 1 },
+      npt_duration_coverage: 'unavailable',
+    })
+    renderWorkspace('/wells/well_1/daily-reports?report=report_1')
+
+    const duration = await screen.findByTestId('daily-report-reported-npt-duration')
+    expect(duration).toHaveTextContent('No eligible NPT duration; this is not zero hours.')
+    expect(duration).not.toHaveTextContent(/0(?:\.00)?\s*h/)
   })
 
   it('downloads an exact approved revision in the selected locale and shows export failures', async () => {

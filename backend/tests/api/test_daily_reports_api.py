@@ -137,6 +137,112 @@ async def _create_import_evidence(
 
 
 @pytest.mark.asyncio
+async def test_daily_report_activity_metrics_exclude_unknown_and_planned_duration(client, db):
+    well_id, wellbore_id = await _create_well(client)
+    payload = _report_payload(wellbore_id)
+    payload["report_number"] = "DDR-METRICS-001"
+    payload["content"]["activities"] = [
+        {
+            "activity_kind": "npt",
+            "npt_category": "stuck_pipe",
+            "title": "Reported stuck pipe",
+            "duration_value": 2.0,
+            "duration_unit": "h",
+            "duration_basis": "reported",
+        },
+        {
+            "activity_kind": "npt",
+            "npt_category": "unclassified",
+            "title": "Planned NPT allowance",
+            "duration_value": 3.0,
+            "duration_unit": "h",
+            "duration_basis": "planned",
+        },
+        {
+            "activity_kind": "npt",
+            "npt_category": "unclassified",
+            "title": "NPT duration not provided",
+        },
+        {
+            "activity_kind": "operation",
+            "operation_kind": "drilling",
+            "title": "Drilling ahead",
+            "duration_value": 8.5,
+            "duration_unit": "h",
+            "duration_basis": "reported",
+        },
+    ]
+    created = await client.post(
+        f"/api/v1/wells/{well_id}/daily-reports",
+        json=payload,
+        headers=headers("engineer"),
+    )
+    assert created.status_code == 201, created.text
+    report_id = created.json()["report"]["id"]
+    metrics = await client.get(
+        f"/api/v1/wells/{well_id}/daily-reports/{report_id}/revisions/1/activity-metrics",
+        headers=headers("viewer"),
+    )
+    assert metrics.status_code == 200, metrics.text
+    result = metrics.json()
+    assert result["revision_content_hash"] == created.json()["revision"]["content_hash"]
+    assert result["revision_status"] == "draft"
+    assert result["activity_count"] == 4
+    assert result["npt_activity_count"] == 3
+    assert result["npt_duration_included_count"] == 1
+    assert result["npt_duration_excluded_count"] == 2
+    assert result["npt_duration_excluded_by_basis"] == {"planned": 1, "inferred": 0, "unknown": 1}
+    assert result["npt_duration_total"] == {"value": 7200.0, "unit": "s"}
+    assert result["npt_duration_coverage"] == "partial"
+    assert "not a measurement of physical downtime" in result["note"]
+
+    no_known_duration = _report_payload(wellbore_id)
+    no_known_duration["report_number"] = "DDR-METRICS-002"
+    no_known_duration["content"]["activities"] = [payload["content"]["activities"][1]]
+    second = await client.post(
+        f"/api/v1/wells/{well_id}/daily-reports",
+        json=no_known_duration,
+        headers=headers("engineer"),
+    )
+    assert second.status_code == 201, second.text
+    unavailable = await client.get(
+        f"/api/v1/wells/{well_id}/daily-reports/{second.json()['report']['id']}/revisions/1/activity-metrics",
+        headers=headers("viewer"),
+    )
+    assert unavailable.status_code == 200, unavailable.text
+    assert unavailable.json()["npt_duration_total"] == {"value": None, "unit": "s"}
+    assert unavailable.json()["npt_duration_coverage"] == "unavailable"
+
+    other_well_id, _ = await _create_well(client)
+    out_of_scope = await client.get(
+        f"/api/v1/wells/{other_well_id}/daily-reports/{report_id}/revisions/1/activity-metrics",
+        headers=headers("viewer"),
+    )
+    assert out_of_scope.status_code == 404, out_of_scope.text
+
+    from sqlalchemy import select
+
+    from drillai.db.models import DailyDrillingReportRevision
+
+    async with db.session_factory() as session:
+        stored_revision = (
+            await session.execute(
+                select(DailyDrillingReportRevision).where(
+                    DailyDrillingReportRevision.id == created.json()["revision"]["id"]
+                )
+            )
+        ).scalar_one()
+        stored_revision.content_hash = "0" * 64
+        await session.commit()
+    tampered = await client.get(
+        f"/api/v1/wells/{well_id}/daily-reports/{report_id}/revisions/1/activity-metrics",
+        headers=headers("viewer"),
+    )
+    assert tampered.status_code == 409, tampered.text
+    assert "verified revision fingerprint" in tampered.json()["error"]["message"]
+
+
+@pytest.mark.asyncio
 async def test_daily_report_activity_classification_preview_is_read_only_and_scope_checked(client, db):
     well_id, wellbore_id = await _create_well(client)
     source_text = "Lost circulation was reported while the crew prepared LCM for the source report."

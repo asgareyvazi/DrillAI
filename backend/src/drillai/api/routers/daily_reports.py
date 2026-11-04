@@ -392,6 +392,21 @@ async def get_daily_report_revision(
 
 
 @router.get(
+    "/wells/{well_id}/daily-reports/{report_id}/revisions/{revision_number}/activity-metrics",
+    summary="Read transparent duration coverage for one fingerprint-verified report revision",
+)
+async def daily_report_activity_metrics(
+    well_id: str,
+    report_id: str,
+    revision_number: int,
+    request: Request,
+    session: Annotated[AsyncSession, Depends(get_db)],
+    auth: Annotated[AuthContext, Depends(require("daily_report.read"))],
+) -> dict[str, Any]:
+    return await _service(session, auth, request).activity_metrics(well_id, report_id, revision_number)
+
+
+@router.get(
     "/wells/{well_id}/daily-reports/{report_id}/revisions/{revision_number}/exports/{export_format}",
     summary="Export one fingerprint-verified immutable daily-report revision",
     response_class=Response,

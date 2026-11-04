@@ -33,6 +33,7 @@ import type {
   AuditTrail,
   ContextBundle,
   DailyReportActivityClassificationPreview,
+  DailyReportActivityMetrics,
   DailyReportCatalogue,
   DailyReportCreatePayload,
   DailyReportDecisionPayload,
@@ -697,6 +698,16 @@ export const drillingApi = {
     api.get<DailyReportRevisionDetail>(
       `/wells/${enc(wellId)}/daily-reports/${enc(reportId)}/revisions/${revisionNumber}`,
       { signal, validate: expect.object('revision') },
+    ),
+  getDailyReportActivityMetrics: (
+    wellId: string,
+    reportId: string,
+    revisionNumber: number,
+    signal?: AbortSignal,
+  ) =>
+    api.get<DailyReportActivityMetrics>(
+      `/wells/${enc(wellId)}/daily-reports/${enc(reportId)}/revisions/${revisionNumber}/activity-metrics`,
+      { signal, validate: expect.object('npt_duration_total') },
     ),
   exportDailyReportRevision: (
     wellId: string,

@@ -1983,6 +1983,69 @@ function ProvenanceItem({ label, value }: { label: string; value: string }) {
   )
 }
 
+function DailyReportActivityMetricsPanel({
+  wellId,
+  reportId,
+  revision,
+}: {
+  wellId: string
+  reportId: string
+  revision: DailyReportRevision
+}) {
+  const { t, locale } = useI18n()
+  const query = useQuery({
+    queryKey: ['daily-report-activity-metrics', wellId, reportId, revision.id, revision.edit_version],
+    queryFn: ({ signal }) => drillingApi.getDailyReportActivityMetrics(
+      wellId,
+      reportId,
+      revision.revision_number,
+      signal,
+    ),
+    enabled: Boolean(wellId && reportId && revision.id),
+    retry: false,
+  })
+  const result = query.data
+  const durationHours = result?.npt_duration_total.value === null || result?.npt_duration_total.value === undefined
+    ? null
+    : result.npt_duration_total.value / 3600
+
+  return (
+    <Card
+      title={t('dailyReports.activityMetricsTitle')}
+      subtitle={t('dailyReports.activityMetricsSubtitle', { number: revision.revision_number })}
+      data-testid="daily-report-activity-metrics"
+    >
+      {query.isPending ? <Loading /> : query.error ? (
+        <ErrorState error={query.error} onRetry={() => { void query.refetch() }} />
+      ) : result ? (
+        <div className="space-y-3">
+          <p className="text-xs text-graphite-600 dark:text-graphite-300">{t('dailyReports.activityMetricsNote')}</p>
+          <dl className="grid gap-3 text-xs sm:grid-cols-2 lg:grid-cols-3">
+            <div className="min-w-0">
+              <dt className="text-graphite-500">{t('dailyReports.reportedNptDuration')}</dt>
+              <dd className="mt-1 break-words font-semibold text-graphite-800 dark:text-graphite-200" data-testid="daily-report-reported-npt-duration">
+                {durationHours === null
+                  ? t(result.npt_activity_count === 0 ? 'dailyReports.noNptActivities' : 'dailyReports.noKnownNptDuration')
+                  : <bdi dir="ltr">{formatNumber(durationHours, locale, 2)} {t('dailyReports.durationHoursAbbrev')}</bdi>}
+              </dd>
+            </div>
+            <ProvenanceItem label={t('dailyReports.activityMetricsCoverage')} value={t(`dailyReports.activityMetricsCoverageStates.${result.npt_duration_coverage}`)} />
+            <ProvenanceItem label={t('dailyReports.nptActivityRows')} value={formatNumber(result.npt_activity_count, locale, 0)} />
+            <ProvenanceItem label={t('dailyReports.includedNptRows')} value={formatNumber(result.npt_duration_included_count, locale, 0)} />
+            <ProvenanceItem label={t('dailyReports.excludedNptRows')} value={formatNumber(result.npt_duration_excluded_count, locale, 0)} />
+            <ProvenanceItem label={t('dailyReports.plannedDurationExclusions')} value={formatNumber(result.npt_duration_excluded_by_basis.planned, locale, 0)} />
+            <ProvenanceItem label={t('dailyReports.inferredDurationExclusions')} value={formatNumber(result.npt_duration_excluded_by_basis.inferred, locale, 0)} />
+            <ProvenanceItem label={t('dailyReports.unknownDurationExclusions')} value={formatNumber(result.npt_duration_excluded_by_basis.unknown, locale, 0)} />
+            <ProvenanceItem label={t('dailyReports.periodStart')} value={result.period_start_at ?? t('dailyReports.noValue')} />
+            <ProvenanceItem label={t('dailyReports.periodEnd')} value={result.period_end_at ?? t('dailyReports.noValue')} />
+            <ProvenanceItem label={t('dailyReports.revisionFingerprint')} value={result.revision_content_hash} />
+          </dl>
+        </div>
+      ) : null}
+    </Card>
+  )
+}
+
 function RevisionContent({ revision }: { revision: DailyReportRevision }) {
   const { t, locale } = useI18n()
   const verified = revision.content_hash_verified
@@ -2198,6 +2261,7 @@ export default function DailyReportsWorkspace() {
     if (selectedReportId) {
       void queryClient.invalidateQueries({ queryKey: ['daily-report-detail', wellId, selectedReportId] })
       void queryClient.invalidateQueries({ queryKey: ['daily-report-history', wellId, selectedReportId] })
+      void queryClient.invalidateQueries({ queryKey: ['daily-report-activity-metrics', wellId, selectedReportId] })
     }
   }
   const selectReport = (reportId: string, revisionNumber?: number) => {
@@ -2769,6 +2833,14 @@ export default function DailyReportsWorkspace() {
                 )}
                 {localActionError && <p role="alert" className="mt-3 text-xs text-danger">{t(localActionError)}</p>}
               </Card>
+
+              {activeRevision && (
+                <DailyReportActivityMetricsPanel
+                  wellId={wellId}
+                  reportId={report.id}
+                  revision={activeRevision}
+                />
+              )}
 
               {activeRevision && (
                 <Card

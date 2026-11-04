@@ -207,6 +207,14 @@ test.describe('daily-report lifecycle in a real browser', () => {
     await page.getByTestId('daily-report-apply-operation-classification-0').click()
     await expect(page.locator('#import-activity-0-operation')).toHaveValue('drilling')
 
+    await page.getByTestId('daily-report-import-add-activity').click()
+    await page.locator('#import-activity-1-kind').selectOption('npt')
+    await page.locator('#import-activity-1-npt').selectOption('stuck_pipe')
+    await page.locator('#import-activity-1-title').fill('Reported stuck pipe response')
+    await page.locator('#import-activity-1-duration').fill('2')
+    await page.locator('#import-activity-1-duration-unit').selectOption('h')
+    await page.locator('#import-activity-1-duration-basis').selectOption('reported')
+
     await page.getByTestId('daily-report-import-add-measurement').click()
     await page.getByTestId('daily-report-import-measurement-0-parameter').selectOption('mud_weight')
     await page.getByTestId('daily-report-import-measurement-0-value').fill('12.5')
@@ -216,6 +224,7 @@ test.describe('daily-report lifecycle in a real browser', () => {
     await page.getByTestId('daily-report-import-submit').click()
     await expect(page.getByTestId('daily-report-import-form')).toHaveCount(0)
     await expect(page.getByTestId('daily-report-reconciliation')).toBeVisible()
+    await expect(page.getByTestId('daily-report-reported-npt-duration')).toContainText('2 h')
 
     const listed = await apiGet<{ items: DailyReportRecord[]; total: number }>(
       request,

@@ -38,6 +38,13 @@ async def test_daily_report_reads_writes_and_sources_are_organization_scoped(fab
     )
     assert foreign_report.status_code == 404
 
+    foreign_metrics = await fabric.http.get(
+        f"/api/v1/wells/{fabric.alpha.well_id}/daily-reports/{report_id}/revisions/1/activity-metrics",
+        headers=fabric.bravo.headers,
+    )
+    assert foreign_metrics.status_code == 404
+    assert report_id not in foreign_metrics.text
+
     foreign_write = await fabric.http.post(
         f"/api/v1/wells/{fabric.alpha.well_id}/daily-reports",
         json=payload,

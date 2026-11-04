@@ -1409,6 +1409,31 @@ export interface DailyReportActivityClassificationPreview {
   }
 }
 
+export interface DailyReportActivityMetrics {
+  well_id: string
+  wellbore_id: string
+  report_id: string
+  report_date: string
+  report_timezone: string
+  revision_id: string
+  revision_number: number
+  revision_edit_version: number
+  revision_status: DailyReportStatus
+  revision_source_kind: 'manual' | 'import' | 'connector'
+  revision_content_hash: string
+  period_start_at: string | null
+  period_end_at: string | null
+  activity_count: number
+  npt_activity_count: number
+  npt_duration_included_count: number
+  npt_duration_excluded_count: number
+  npt_duration_excluded_by_basis: Record<'planned' | 'inferred' | 'unknown', number>
+  npt_duration_total: { value: number | null; unit: 's' }
+  npt_duration_coverage: 'not_applicable' | 'complete' | 'partial' | 'unavailable'
+  calculation_method: 'sum_explicit_npt_durations_v1'
+  note: string
+}
+
 export interface DailyReportActivityInput {
   activity_kind: string
   operation_kind?: string | null

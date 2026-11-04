@@ -81,6 +81,8 @@ _MAX_ACTIVITIES = 500
 _MAX_MEASUREMENTS = 500
 _MAX_REASON = 2000
 _MAX_CLASSIFICATION_SOURCE_CHARS = 20_000
+_NPT_DURATION_METRIC_BASES = frozenset({"observed", "reported", "calculated"})
+_NPT_DURATION_EXCLUDED_BASES = ("planned", "inferred", "unknown")
 
 
 @dataclass(frozen=True)
@@ -382,6 +384,74 @@ class DailyReportService:
         revision = await self._revision(report.id, revision_number)
         latest = await self._revision(report.id, report.latest_revision_number)
         return {"report": self._report_out(report, latest), "revision": await self._revision_detail(report, revision)}
+
+    async def activity_metrics(self, well_id: str, report_id: str, revision_number: int) -> dict[str, Any]:
+        """Summarize only explicit, fingerprint-verified NPT durations for one revision.
+
+        Planned, inferred, and unknown durations are counted as exclusions. Missing evidence is never
+        presented as zero hours, and the result is an accounting summary—not measured physical downtime.
+        """
+        self._authorize("daily_report.read", well_id=well_id, report_id=report_id)
+        await self._require_well(well_id)
+        report = await self._report(well_id, report_id)
+        revision = await self._revision(report.id, revision_number)
+        detail = await self._revision_detail(report, revision)
+        if detail["content_hash_verified"] is not True:
+            raise Conflict("daily-report activity metrics require a verified revision fingerprint")
+
+        npt_rows = [row for row in detail["activities"] if row["activity_kind"] == "npt"]
+        included = [
+            row for row in npt_rows
+            if row["duration_seconds"] is not None and row["duration_basis"] in _NPT_DURATION_METRIC_BASES
+        ]
+        excluded_by_basis = dict.fromkeys(_NPT_DURATION_EXCLUDED_BASES, 0)
+        for row in npt_rows:
+            eligible = row["duration_seconds"] is not None and row["duration_basis"] in _NPT_DURATION_METRIC_BASES
+            if not eligible:
+                basis = row["duration_basis"]
+                excluded_by_basis[basis if basis in excluded_by_basis else "unknown"] += 1
+
+        if not npt_rows:
+            coverage = "not_applicable"
+        elif not included:
+            coverage = "unavailable"
+        elif len(included) < len(npt_rows):
+            coverage = "partial"
+        else:
+            coverage = "complete"
+
+        return {
+            "well_id": report.well_id,
+            "wellbore_id": report.wellbore_id,
+            "report_id": report.id,
+            "report_date": report.report_date.isoformat(),
+            "report_timezone": report.report_timezone,
+            "revision_id": revision.id,
+            "revision_number": revision.revision_number,
+            "revision_edit_version": revision.edit_version,
+            "revision_status": revision.status,
+            "revision_source_kind": revision.source_kind,
+            "revision_content_hash": revision.content_hash,
+            "period_start_at": _iso(revision.period_start_at),
+            "period_end_at": _iso(revision.period_end_at),
+            "activity_count": len(detail["activities"]),
+            "npt_activity_count": len(npt_rows),
+            "npt_duration_included_count": len(included),
+            "npt_duration_excluded_count": len(npt_rows) - len(included),
+            "npt_duration_excluded_by_basis": excluded_by_basis,
+            "npt_duration_total": {
+                "value": math.fsum(row["duration_seconds"] for row in included) if included else None,
+                "unit": "s",
+            },
+            "npt_duration_coverage": coverage,
+            "calculation_method": "sum_explicit_npt_durations_v1",
+            "note": (
+                "Only stored durations with observed, reported, or calculated basis are summed. "
+                "Planned, inferred, and unknown durations are excluded; no time is derived from activity "
+                "endpoints or report-period bounds. This is not a measurement of physical downtime and does "
+                "not approve or reconcile any report row."
+            ),
+        }
 
     async def history(
         self,

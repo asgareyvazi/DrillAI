@@ -1041,15 +1041,15 @@ def test_cp16_10_documentation_and_contract_consistency_guard():
         tuple(int(value.replace(",", "")) if value else 0 for value in (passed, skipped, deselected))
         for passed, skipped, deselected in backend_totals
     }
-    assert parsed_totals == {(1672, 0, 0), (1658, 14, 0)}, (
-        f"README.md backend totals do not match the 1,672-test inventory: {parsed_totals}"
+    assert parsed_totals == {(1674, 0, 0), (1660, 14, 0)}, (
+        f"README.md backend totals do not match the 1,674-test inventory: {parsed_totals}"
     )
-    assert {sum(counts) for counts in parsed_totals} == {1672}, (
+    assert {sum(counts) for counts in parsed_totals} == {1674}, (
         "The PostgreSQL-enabled and SQLite-only totals must describe the same collected inventory."
     )
 
     assert "123 passed" in readme_text
-    assert "385 passed" in readme_text
+    assert "387 passed" in readme_text
     assert "123 passed" in fe_testing_text
     assert "42" in fe_testing_text
 
