@@ -86,10 +86,11 @@ _MAX_CLASSIFICATION_SOURCE_CHARS = 20_000
 _NPT_DURATION_METRIC_BASES = frozenset({"observed", "reported", "calculated"})
 _NPT_DURATION_EXCLUDED_BASES = ("planned", "inferred", "unknown")
 _PERIOD_INTEGRITY_NOTE = (
-    "Only consecutive report identities for each wellbore in local report-date order are considered. A pair "
-    "is compared only when its dates are distinct and both latest-approved revisions have verified fingerprints "
-    "and explicit start/end bounds; same-date shifts and pairs containing unassessed reports are not compared, "
-    "so incomplete rows are never skipped to bridge intervals. A gap or overlap is only a difference between "
+    "Reports are grouped by wellbore and local report date. Within one date, reports are ordered only by distinct "
+    "explicit period-start instants; every report in that date group must have a latest-approved revision with a "
+    "verified fingerprint and both bounds. Consecutive date groups are compared only when their explicit period "
+    "starts preserve date order. Unapproved, unverified, incomplete, ambiguous, and truncated-boundary reports "
+    "remain unassessed and are never skipped to bridge intervals. A gap or overlap is only a difference between "
     "reported boundary instants; it does not prove activity coverage, actual operations, physical downtime, or "
     "report reconciliation. Results select at most the requested number of report identities by local report "
     "date, with truncation reported."
@@ -433,7 +434,7 @@ class DailyReportService:
                 "bounded_period_count": 0,
                 "unassessed_period_count": 0,
                 "unassessed_comparison_count": 0,
-                "comparison_method": "approved_explicit_periods_by_report_date_v1",
+                "comparison_method": "approved_explicit_periods_by_report_date_and_start_v2",
                 "note": _PERIOD_INTEGRITY_NOTE,
             }
 
@@ -556,38 +557,59 @@ class DailyReportService:
         comparisons: list[dict[str, Any]] = []
         unassessed_comparison_count = 0
         truncated = total > len(reports)
-        for scoped_wellbore_id, identities in report_by_wellbore.items():
-            ordered = sorted(identities, key=lambda report: (report.report_date, report.id))
-            selected_date_counts: dict[dt.date, int] = {}
-            for report in ordered:
-                selected_date_counts[report.report_date] = selected_date_counts.get(report.report_date, 0) + 1
-            oldest_selected_date = min(selected_date_counts)
-            for previous_report, next_report in pairwise(ordered):
+        for scoped_wellbore_id, identities in sorted(report_by_wellbore.items()):
+            identities_by_date: dict[dt.date, list[DailyDrillingReport]] = {}
+            for report in identities:
+                identities_by_date.setdefault(report.report_date, []).append(report)
+            ordered_dates = sorted(identities_by_date)
+            if not ordered_dates:
+                continue
+            oldest_selected_date = ordered_dates[0]
+            groups: dict[dt.date, tuple[list[DailyDrillingReport], bool, bool]] = {}
+            for report_date in ordered_dates:
+                date_identities = identities_by_date[report_date]
+                date_revisions = [revision_by_report[report.id] for report in date_identities]
+                orderable = all(
+                    state_by_report[report.id] == "bounded"
+                    and revision is not None
+                    and revision.period_start_at is not None
+                    and revision.period_end_at is not None
+                    for report, revision in zip(date_identities, date_revisions, strict=True)
+                )
+                if orderable:
+                    start_instants = [revision.period_start_at for revision in date_revisions if revision is not None]
+                    orderable = len(set(start_instants)) == len(start_instants)
+                if orderable:
+                    date_identities = sorted(
+                        date_identities,
+                        key=lambda report: (revision_by_report[report.id].period_start_at, report.id),
+                    )
+                else:
+                    # Stable but non-authoritative ordering is used only to count unassessed candidate pairs.
+                    date_identities = sorted(date_identities, key=lambda report: report.id)
+                groups[report_date] = (
+                    date_identities,
+                    orderable,
+                    truncated and report_date == oldest_selected_date,
+                )
+
+            def add_comparison(
+                previous_report: DailyDrillingReport,
+                next_report: DailyDrillingReport,
+                *,
+                ordering_basis: str,
+                wellbore_id: str = scoped_wellbore_id,
+            ) -> None:
                 previous_revision = revision_by_report[previous_report.id]
                 next_revision = revision_by_report[next_report.id]
-                pair_is_ambiguous = (
-                    selected_date_counts[previous_report.report_date] != 1
-                    or selected_date_counts[next_report.report_date] != 1
-                    or (truncated and previous_report.report_date == oldest_selected_date)
-                    or (truncated and next_report.report_date == oldest_selected_date)
-                )
-                if (
-                    pair_is_ambiguous
-                    or state_by_report[previous_report.id] != "bounded"
-                    or state_by_report[next_report.id] != "bounded"
-                    or previous_revision is None
-                    or next_revision is None
-                ):
-                    unassessed_comparison_count += 1
-                    continue
-                assert previous_revision.period_end_at is not None
-                assert next_revision.period_start_at is not None
+                assert previous_revision is not None and previous_revision.period_end_at is not None
+                assert next_revision is not None and next_revision.period_start_at is not None
                 delta_seconds = (next_revision.period_start_at - previous_revision.period_end_at).total_seconds()
                 relationship = "gap" if delta_seconds > 0 else "overlap" if delta_seconds < 0 else "contiguous"
                 comparisons.append(
                     {
-                        "wellbore_id": scoped_wellbore_id,
-                        "ordering_basis": "consecutive_distinct_report_dates",
+                        "wellbore_id": wellbore_id,
+                        "ordering_basis": ordering_basis,
                         "previous_report_id": previous_report.id,
                         "previous_report_date": previous_report.report_date.isoformat(),
                         "previous_report_number": previous_report.report_number,
@@ -605,6 +627,47 @@ class DailyReportService:
                     }
                 )
 
+            for date_index, report_date in enumerate(ordered_dates):
+                date_identities, orderable, truncated_boundary = groups[report_date]
+                if not orderable or truncated_boundary:
+                    unassessed_comparison_count += max(0, len(date_identities) - 1)
+                else:
+                    for previous_report, next_report in pairwise(date_identities):
+                        add_comparison(
+                            previous_report,
+                            next_report,
+                            ordering_basis="explicit_period_start_at_within_report_date_v1",
+                        )
+
+                if date_index + 1 == len(ordered_dates):
+                    continue
+                next_date = ordered_dates[date_index + 1]
+                previous_group, previous_orderable, previous_truncated = groups[report_date]
+                next_group, next_orderable, next_truncated = groups[next_date]
+                if (
+                    not previous_orderable
+                    or not next_orderable
+                    or previous_truncated
+                    or next_truncated
+                ):
+                    unassessed_comparison_count += 1
+                    continue
+                previous_report = previous_group[-1]
+                next_report = next_group[0]
+                previous_revision = revision_by_report[previous_report.id]
+                next_revision = revision_by_report[next_report.id]
+                assert previous_revision is not None and previous_revision.period_start_at is not None
+                assert next_revision is not None and next_revision.period_start_at is not None
+                if previous_revision.period_start_at >= next_revision.period_start_at:
+                    # Conflicting date and explicit-start order is ambiguous, so neither report is moved or skipped.
+                    unassessed_comparison_count += 1
+                    continue
+                add_comparison(
+                    previous_report,
+                    next_report,
+                    ordering_basis="consecutive_report_dates_with_explicit_start_order_v1",
+                )
+
         bounded_count = sum(item["period_state"] == "bounded" for item in items)
         return {
             "well_id": well_id,
@@ -617,7 +680,7 @@ class DailyReportService:
             "bounded_period_count": bounded_count,
             "unassessed_period_count": len(items) - bounded_count,
             "unassessed_comparison_count": unassessed_comparison_count,
-            "comparison_method": "approved_explicit_periods_by_report_date_v1",
+            "comparison_method": "approved_explicit_periods_by_report_date_and_start_v2",
             "note": _PERIOD_INTEGRITY_NOTE,
         }
 

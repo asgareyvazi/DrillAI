@@ -230,7 +230,7 @@ const periodIntegrity = {
   bounded_period_count: 0,
   unassessed_period_count: 0,
   unassessed_comparison_count: 0,
-  comparison_method: 'approved_explicit_periods_by_report_date_v1',
+  comparison_method: 'approved_explicit_periods_by_report_date_and_start_v2',
   note: 'Synthetic test fixture only.',
 } satisfies DailyReportPeriodIntegrity
 
@@ -451,23 +451,23 @@ describe('DailyReportsWorkspace', () => {
           revision_content_hash: 'sha256:period-two',
           revision_fingerprint_verified: true,
           period_start_at: '2026-04-02T13:00:00Z',
-          period_end_at: '2026-04-03T12:00:00Z',
+          period_end_at: '2026-04-02T18:00:00Z',
           period_state: 'bounded',
         },
         {
           report_id: 'period_report_3',
           wellbore_id: 'wb_1',
-          report_date: '2026-04-03',
+          report_date: '2026-04-02',
           report_timezone: 'UTC',
-          shift_code: 'day',
+          shift_code: 'night',
           shift_label: null,
           report_number: 'DDR-3',
           approved_revision_number: 1,
           revision_status: 'approved',
           revision_content_hash: 'sha256:period-three',
           revision_fingerprint_verified: true,
-          period_start_at: '2026-04-03T11:30:00Z',
-          period_end_at: '2026-04-04T12:00:00Z',
+          period_start_at: '2026-04-02T17:30:00Z',
+          period_end_at: '2026-04-03T12:00:00Z',
           period_state: 'bounded',
         },
         {
@@ -506,12 +506,12 @@ describe('DailyReportsWorkspace', () => {
       comparisons: [
         {
           wellbore_id: 'wb_1',
-          ordering_basis: 'consecutive_distinct_report_dates',
+          ordering_basis: 'consecutive_report_dates_with_explicit_start_order_v1',
           previous_report_id: 'period_report_1',
           previous_report_date: '2026-04-01',
           previous_report_number: 'DDR-1',
           previous_revision_number: 2,
-          previous_period_end_at: '2026-04-01T12:00:00Z',
+          previous_period_end_at: '2026-04-02T12:00:00Z',
           next_report_id: 'period_report_2',
           next_report_date: '2026-04-02',
           next_report_number: 'DDR-2',
@@ -524,17 +524,17 @@ describe('DailyReportsWorkspace', () => {
         },
         {
           wellbore_id: 'wb_1',
-          ordering_basis: 'consecutive_distinct_report_dates',
+          ordering_basis: 'explicit_period_start_at_within_report_date_v1',
           previous_report_id: 'period_report_2',
           previous_report_date: '2026-04-02',
           previous_report_number: 'DDR-2',
           previous_revision_number: 1,
-          previous_period_end_at: '2026-04-03T12:00:00Z',
+          previous_period_end_at: '2026-04-02T18:00:00Z',
           next_report_id: 'period_report_3',
-          next_report_date: '2026-04-03',
+          next_report_date: '2026-04-02',
           next_report_number: 'DDR-3',
           next_revision_number: 1,
-          next_period_start_at: '2026-04-03T11:30:00Z',
+          next_period_start_at: '2026-04-02T17:30:00Z',
           relationship: 'overlap',
           gap_seconds: null,
           overlap_seconds: 1800,
@@ -556,6 +556,9 @@ describe('DailyReportsWorkspace', () => {
     expect(panel).toHaveTextContent('0.5 h')
     expect(panel).toHaveTextContent('Reported period gap')
     expect(panel).toHaveTextContent('Reported period overlap')
+    expect(panel).toHaveTextContent('Ordering basis')
+    expect(panel).toHaveTextContent('Consecutive local report dates with increasing explicit period-start instants')
+    expect(panel).toHaveTextContent('Distinct explicit period-start instants within one local report date')
     expect(panel).toHaveTextContent('Adjacent identity pairs not compared')
     expect(panel).not.toHaveTextContent('API note is not used as a UI translation')
     expect(screen.getByTestId('daily-report-period-comparisons').children).toHaveLength(2)

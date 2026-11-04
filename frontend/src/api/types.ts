@@ -1463,7 +1463,9 @@ export interface DailyReportPeriodIntegrityItem {
 
 export interface DailyReportPeriodComparison {
   wellbore_id: string
-  ordering_basis: 'consecutive_distinct_report_dates'
+  ordering_basis:
+    | 'explicit_period_start_at_within_report_date_v1'
+    | 'consecutive_report_dates_with_explicit_start_order_v1'
   previous_report_id: string
   previous_report_date: string
   previous_report_number: string | null
@@ -1491,7 +1493,7 @@ export interface DailyReportPeriodIntegrity {
   bounded_period_count: number
   unassessed_period_count: number
   unassessed_comparison_count: number
-  comparison_method: 'approved_explicit_periods_by_report_date_v1'
+  comparison_method: 'approved_explicit_periods_by_report_date_and_start_v2'
   note: string
 }
 

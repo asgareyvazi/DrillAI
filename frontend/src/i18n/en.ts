@@ -841,7 +841,12 @@ export const en = {
     noKnownNptDuration: 'No eligible NPT duration; this is not zero hours.',
     periodIntegrityTitle: 'Reported-period boundary review',
     periodIntegritySubtitle: 'Latest approved revisions · at most 50 report identities by local report date',
-    periodIntegrityNote: 'Only consecutive report identities per wellbore with distinct local report dates are compared. Each side must use its latest approved revision, have a verified content fingerprint, and provide both explicit period bounds. Same-date shifts and pairs containing an unassessed report are not compared; incomplete rows are never skipped to bridge intervals. A gap or overlap is only a difference between reported boundary instants—not proof of activity coverage, actual operations, physical downtime, or reconciliation.',
+    periodIntegrityNote: 'Reports are grouped by wellbore and local report date. Within a same-date group, reports are ordered only by distinct explicit period-start instants, and every report in the group must have a latest approved revision, a verified content fingerprint, and both explicit bounds. Across report dates, only consecutive groups with increasing explicit start instants are compared. Unapproved, unverified, incomplete, ambiguous, and truncated-boundary reports remain unassessed; none are skipped to bridge intervals. A gap or overlap is only a difference between reported boundary instants—not proof of activity coverage, actual operations, physical downtime, or reconciliation.',
+    periodOrderingBasis: 'Ordering basis',
+    periodOrdering: {
+      withinDate: 'Distinct explicit period-start instants within one local report date',
+      acrossDates: 'Consecutive local report dates with increasing explicit period-start instants',
+    },
     periodIntegrityInvalidDateRange: 'Choose a valid report-date range to review period boundaries.',
     periodIntegrityTruncated: 'Showing {limit} of {total} report identities. The selected window is truncated; no comparison is made across its oldest boundary.',
     periodIdentityCount: 'Report identities in this window',

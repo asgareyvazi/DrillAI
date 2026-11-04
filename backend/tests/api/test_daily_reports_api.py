@@ -92,6 +92,7 @@ async def _create_approved_period(
     report_number: str,
     period_start_at: str | None,
     period_end_at: str | None,
+    shift_code: str = "day",
     approve: bool = True,
 ) -> tuple[str, str]:
     content = {"summary": "Synthetic API-test period record."}
@@ -105,7 +106,7 @@ async def _create_approved_period(
             "wellbore_id": wellbore_id,
             "report_date": report_date,
             "report_timezone": "UTC",
-            "shift_code": "day",
+            "shift_code": shift_code,
             "report_number": report_number,
             "content": content,
         },
@@ -510,7 +511,7 @@ async def test_daily_report_period_integrity_is_revision_bound_and_does_not_brid
     ]
     assert result["unassessed_period_count"] == 2
     assert result["unassessed_comparison_count"] == 3
-    assert result["comparison_method"] == "approved_explicit_periods_by_report_date_v1"
+    assert result["comparison_method"] == "approved_explicit_periods_by_report_date_and_start_v2"
     assert "are never skipped to bridge intervals" in result["note"]
     states = {item["report_number"]: item for item in result["items"]}
     assert states["DDR-PERIOD-02"]["period_state"] == "missing_end_bound"
@@ -593,6 +594,133 @@ async def test_daily_report_period_integrity_is_revision_bound_and_does_not_brid
         headers=headers("viewer"),
     )
     assert out_of_scope.status_code == 422, out_of_scope.text
+
+    shift_well_id, shift_wellbore_id = await _create_well(client)
+    await _create_approved_period(
+        client,
+        shift_well_id,
+        shift_wellbore_id,
+        report_date="2026-05-01",
+        report_number="DDR-SHIFT-EARLY",
+        period_start_at="2026-05-01T06:00:00Z",
+        period_end_at="2026-05-01T12:00:00Z",
+        shift_code="day",
+    )
+    await _create_approved_period(
+        client,
+        shift_well_id,
+        shift_wellbore_id,
+        report_date="2026-05-01",
+        report_number="DDR-SHIFT-LATE",
+        period_start_at="2026-05-01T12:30:00Z",
+        period_end_at="2026-05-01T20:00:00Z",
+        shift_code="night",
+    )
+    await _create_approved_period(
+        client,
+        shift_well_id,
+        shift_wellbore_id,
+        report_date="2026-05-02",
+        report_number="DDR-SHIFT-NEXT-DATE",
+        period_start_at="2026-05-02T00:00:00Z",
+        period_end_at="2026-05-02T06:00:00Z",
+    )
+    await _create_approved_period(
+        client,
+        shift_well_id,
+        shift_wellbore_id,
+        report_date="2026-05-03",
+        report_number="DDR-SHIFT-UNAPPROVED",
+        period_start_at="2026-05-03T06:00:00Z",
+        period_end_at="2026-05-03T18:00:00Z",
+        approve=False,
+    )
+    await _create_approved_period(
+        client,
+        shift_well_id,
+        shift_wellbore_id,
+        report_date="2026-05-04",
+        report_number="DDR-SHIFT-AFTER-UNAPPROVED",
+        period_start_at="2026-05-04T06:00:00Z",
+        period_end_at="2026-05-04T18:00:00Z",
+    )
+    for shift_code, report_number, end_at in (
+        ("day", "DDR-SHIFT-AMBIGUOUS-A", "2026-05-05T12:00:00Z"),
+        ("night", "DDR-SHIFT-AMBIGUOUS-B", "2026-05-05T18:00:00Z"),
+    ):
+        await _create_approved_period(
+            client,
+            shift_well_id,
+            shift_wellbore_id,
+            report_date="2026-05-05",
+            report_number=report_number,
+            period_start_at="2026-05-05T06:00:00Z",
+            period_end_at=end_at,
+            shift_code=shift_code,
+        )
+    await _create_approved_period(
+        client,
+        shift_well_id,
+        shift_wellbore_id,
+        report_date="2026-05-06",
+        report_number="DDR-SHIFT-ORDER-CONFLICT-A",
+        period_start_at="2026-05-06T18:00:00Z",
+        period_end_at="2026-05-07T01:00:00Z",
+    )
+    await _create_approved_period(
+        client,
+        shift_well_id,
+        shift_wellbore_id,
+        report_date="2026-05-07",
+        report_number="DDR-SHIFT-ORDER-CONFLICT-B",
+        period_start_at="2026-05-06T12:00:00Z",
+        period_end_at="2026-05-07T00:00:00Z",
+    )
+
+    same_date_response = await client.get(
+        f"/api/v1/wells/{shift_well_id}/daily-reports/period-integrity"
+        f"?wellbore_id={shift_wellbore_id}&limit=20",
+        headers=headers("viewer"),
+    )
+    assert same_date_response.status_code == 200, same_date_response.text
+    same_date_result = same_date_response.json()
+    assert same_date_result["total"] == 9
+    assert same_date_result["bounded_period_count"] == 8
+    assert same_date_result["unassessed_period_count"] == 1
+    assert same_date_result["unassessed_comparison_count"] == 6
+    same_date_comparisons = {
+        (item["previous_report_number"], item["next_report_number"]): item
+        for item in same_date_result["comparisons"]
+    }
+    assert [
+        (item["previous_report_number"], item["next_report_number"])
+        for item in same_date_result["comparisons"]
+    ] == [
+        ("DDR-SHIFT-EARLY", "DDR-SHIFT-LATE"),
+        ("DDR-SHIFT-LATE", "DDR-SHIFT-NEXT-DATE"),
+    ]
+    assert set(same_date_comparisons) == {
+        ("DDR-SHIFT-EARLY", "DDR-SHIFT-LATE"),
+        ("DDR-SHIFT-LATE", "DDR-SHIFT-NEXT-DATE"),
+    }
+    assert not any("ORDER-CONFLICT" in item["previous_report_number"] or "ORDER-CONFLICT" in item["next_report_number"] for item in same_date_result["comparisons"])
+    same_day_pair = same_date_comparisons[("DDR-SHIFT-EARLY", "DDR-SHIFT-LATE")]
+    assert same_day_pair["previous_report_date"] == same_day_pair["next_report_date"] == "2026-05-01"
+    assert same_day_pair["ordering_basis"] == "explicit_period_start_at_within_report_date_v1"
+    assert same_day_pair["relationship"] == "gap"
+    assert same_day_pair["gap_seconds"] == 1800.0
+    cross_date_pair = same_date_comparisons[("DDR-SHIFT-LATE", "DDR-SHIFT-NEXT-DATE")]
+    assert cross_date_pair["ordering_basis"] == "consecutive_report_dates_with_explicit_start_order_v1"
+    assert cross_date_pair["gap_seconds"] == 14400.0
+    truncated_same_date = await client.get(
+        f"/api/v1/wells/{shift_well_id}/daily-reports/period-integrity"
+        "?report_date_from=2026-05-04&report_date_to=2026-05-05&limit=2",
+        headers=headers("viewer"),
+    )
+    assert truncated_same_date.status_code == 200, truncated_same_date.text
+    assert truncated_same_date.json()["truncated"] is True
+    assert truncated_same_date.json()["comparisons"] == []
+    assert truncated_same_date.json()["unassessed_comparison_count"] == 1
 
 
 @pytest.mark.asyncio

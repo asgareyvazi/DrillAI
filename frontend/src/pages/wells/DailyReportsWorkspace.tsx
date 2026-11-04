@@ -2254,6 +2254,9 @@ function DailyReportPeriodIntegrityPanel({
                     <p className="mt-1 text-[10px] text-graphite-500">
                       {t('dailyReports.wellbore')}: <bdi dir="ltr">{comparison.wellbore_id}</bdi>
                     </p>
+                    <p className="mt-1 text-[10px] text-graphite-500">
+                      {t('dailyReports.periodOrderingBasis')}: {t(comparison.ordering_basis === 'explicit_period_start_at_within_report_date_v1' ? 'dailyReports.periodOrdering.withinDate' : 'dailyReports.periodOrdering.acrossDates')}
+                    </p>
                     <p className="mt-1 break-all text-[11px] text-graphite-500">
                       <bdi dir="ltr">{comparison.previous_period_end_at} → {comparison.next_period_start_at}</bdi>
                     </p>

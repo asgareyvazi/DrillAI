@@ -316,7 +316,7 @@ test.describe('daily-report lifecycle in a real browser', () => {
     expectNoFailures(consoleErrors, failedResponses)
   })
 
-  test('reviews only consecutive fingerprint-verified approved periods without bridging incomplete reports', async ({
+  test('orders same-date reports by explicit periods and never bridges incomplete reports', async ({
     page,
     request,
     consoleErrors,
@@ -342,10 +342,18 @@ test.describe('daily-report lifecycle in a real browser', () => {
       'engineer',
     )
 
-    const periods = [
+    const periods: Array<{
+      date: string
+      number: string
+      start: string
+      end: string | null
+      approve: boolean
+      shift?: 'day' | 'night'
+    }> = [
       { date: '2026-03-01', number: 'DDR-PERIOD-01', start: '2026-03-01T06:00:00Z', end: '2026-03-02T06:00:00Z', approve: true },
       { date: '2026-03-02', number: 'DDR-PERIOD-02', start: '2026-03-02T06:00:00Z', end: null, approve: true },
-      { date: '2026-03-03', number: 'DDR-PERIOD-03', start: '2026-03-03T06:00:00Z', end: '2026-03-04T06:00:00Z', approve: true },
+      { date: '2026-03-03', number: 'DDR-PERIOD-03-A', start: '2026-03-03T06:00:00Z', end: '2026-03-03T18:00:00Z', approve: true, shift: 'day' },
+      { date: '2026-03-03', number: 'DDR-PERIOD-03-B', start: '2026-03-03T18:00:00Z', end: '2026-03-04T06:00:00Z', approve: true, shift: 'night' },
       { date: '2026-03-04', number: 'DDR-PERIOD-04', start: '2026-03-04T07:00:00Z', end: '2026-03-05T06:00:00Z', approve: true },
       { date: '2026-03-05', number: 'DDR-PERIOD-05', start: '2026-03-05T06:00:00Z', end: '2026-03-06T06:00:00Z', approve: false },
     ]
@@ -360,7 +368,7 @@ test.describe('daily-report lifecycle in a real browser', () => {
           wellbore_id: wellbore.id,
           report_date: period.date,
           report_timezone: 'UTC',
-          shift_code: 'day',
+          shift_code: period.shift ?? 'day',
           report_number: `${period.number}-${tag}`,
           content,
         },
@@ -387,16 +395,20 @@ test.describe('daily-report lifecycle in a real browser', () => {
     await expect(periodPanel).toContainText('Reported-period boundary review')
     await expect(periodPanel).toContainText('Reported period gap')
     await expect(periodPanel).toContainText('1 h')
+    await expect(periodPanel).toContainText('Reported boundaries meet')
     const comparisons = periodPanel.getByTestId('daily-report-period-comparisons').locator('li')
-    await expect(comparisons).toHaveCount(1)
-    await expect(comparisons).toContainText(`DDR-PERIOD-03-${tag}`)
+    await expect(comparisons).toHaveCount(2)
+    await expect(comparisons).toContainText(`DDR-PERIOD-03-A-${tag}`)
+    await expect(comparisons).toContainText(`DDR-PERIOD-03-B-${tag}`)
     await expect(comparisons).toContainText(`DDR-PERIOD-04-${tag}`)
+    await expect(comparisons).toContainText('Distinct explicit period-start instants within one local report date')
+    await expect(comparisons).toContainText('Consecutive local report dates with increasing explicit period-start instants')
     await expect(comparisons).toContainText('2026-03-04T06:00:00Z → 2026-03-04T07:00:00Z')
     await expect(periodPanel).toContainText('Adjacent identity pairs not compared')
     await periodPanel.getByText('Report revisions and period-assessment states').click()
     await expect(periodPanel).toContainText('Period end missing')
     await expect(periodPanel).toContainText('No approved revision')
-    await expect(periodPanel).toContainText('incomplete rows are never skipped to bridge intervals')
+    await expect(periodPanel).toContainText('none are skipped to bridge intervals')
     expectNoFailures(consoleErrors, failedResponses)
   })
 
