@@ -2435,6 +2435,7 @@ export default function DailyReportsWorkspace() {
   const selectedRevisionNumber = rawRevision && /^\d+$/.test(rawRevision) ? Number(rawRevision) : null
   const [statusFilter, setStatusFilter] = useState('')
   const [shiftFilter, setShiftFilter] = useState('')
+  const [reportNumberFilter, setReportNumberFilter] = useState('')
   const [reportDateFrom, setReportDateFrom] = useState('')
   const [reportDateTo, setReportDateTo] = useState('')
   const [listOffset, setListOffset] = useState(0)
@@ -2468,12 +2469,13 @@ export default function DailyReportsWorkspace() {
   })
   const dateRangeInvalid = Boolean(reportDateFrom && reportDateTo && reportDateFrom > reportDateTo)
   const reportListQuery = useQuery({
-    queryKey: ['daily-reports', wellId, statusFilter, shiftFilter, reportDateFrom, reportDateTo, listOffset],
+    queryKey: ['daily-reports', wellId, statusFilter, shiftFilter, reportNumberFilter.trim(), reportDateFrom, reportDateTo, listOffset],
     queryFn: ({ signal }) => drillingApi.listDailyReports(
       wellId,
       {
         status: statusFilter || undefined,
         shift_code: shiftFilter || undefined,
+        report_number: reportNumberFilter.trim() || undefined,
         report_date_from: reportDateFrom || undefined,
         report_date_to: reportDateTo || undefined,
         limit: 50,
@@ -2964,7 +2966,7 @@ export default function DailyReportsWorkspace() {
           )}
           data-testid="daily-report-list-card"
         >
-          <div className="mb-4 grid gap-3 sm:grid-cols-2">
+          <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <label htmlFor="daily-report-filter-date-from" className="block space-y-1.5">
               <span className="block text-xs font-medium text-graphite-700 dark:text-graphite-200">{t('dailyReports.reportDateFrom')}</span>
               <input id="daily-report-filter-date-from" type="date" value={reportDateFrom} onChange={(event) => { setReportDateFrom(event.target.value); setListOffset(0) }} className="w-full rounded-md border border-graphite-300 bg-white px-2.5 py-2 text-sm dark:border-graphite-700 dark:bg-graphite-950" />
@@ -2973,6 +2975,15 @@ export default function DailyReportsWorkspace() {
               <span className="block text-xs font-medium text-graphite-700 dark:text-graphite-200">{t('dailyReports.reportDateTo')}</span>
               <input id="daily-report-filter-date-to" type="date" value={reportDateTo} onChange={(event) => { setReportDateTo(event.target.value); setListOffset(0) }} className="w-full rounded-md border border-graphite-300 bg-white px-2.5 py-2 text-sm dark:border-graphite-700 dark:bg-graphite-950" />
             </label>
+            <TextField
+              id="daily-report-filter-number"
+              label={t('dailyReports.reportNumberFilter')}
+              value={reportNumberFilter}
+              onChange={(value) => { setReportNumberFilter(value); setListOffset(0) }}
+              dir="ltr"
+              autoComplete="off"
+              testId="daily-report-report-number-filter"
+            />
           </div>
           {listContent()}
           {!dateRangeInvalid && reportListQuery.data && reportListQuery.data.total > 0 && (

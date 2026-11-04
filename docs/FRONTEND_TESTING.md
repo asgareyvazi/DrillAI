@@ -11,9 +11,9 @@ is confined to unit and component tests, where it isolates a boundary rather tha
 | Types | `cd frontend && npm run typecheck` | strict TypeScript with `noUncheckedIndexedAccess` enabled in the app, E2E, and Node-config projects; includes tests and E2E specs |
 | Lint | `cd frontend && npm run lint` | no unused code, no `any` slipping in, React rules |
 | Build | `cd frontend && npm run build` | `tsc -b` plus a production Vite build |
-| Unit + component | `cd frontend && npm test` | 388 passed in 38 files on the CP105 worktree, including same-date ordering-basis labels; the inventory count is unchanged. |
-| End-to-end | `cd frontend && npm run e2e` | Reviewed shape is 124 tests / 18 files (chromium 117, faults 4, auth 3). CP103 run `41822291067` and CP104 run `41829810555` passed Linux/native-Windows real-browser E2E; the CP105 same-date period journey is collected and awaits exact-final-SHA execution. Do not run locally against existing `.e2e` data. |
-| Backend | `cd backend && DRILLAI_TEST_POSTGRES=1 .venv/bin/python -m pytest` | CP105 leaves the reviewed inventory at 1,677 tests across 121 files; default backend passed 1,663 / 14 skipped and PostgreSQL-enabled backend passed 1,677 / 0 skipped locally. |
+| Unit + component | `cd frontend && npm test` | 388 passed in 38 files on the CP106 worktree, including the exact report-number search assertions in the existing 11-test Daily Reports suite. |
+| End-to-end | `cd frontend && npm run e2e` | Reviewed shape is 124 tests / 18 files (chromium 117, faults 4, auth 3). CP103 and CP104 exact-SHA gates passed; CP105 same-date period and CP106 exact report-number browser journeys await exact-final-SHA execution. Do not run locally against existing `.e2e` data. |
+| Backend | `cd backend && DRILLAI_TEST_POSTGRES=1 .venv/bin/python -m pytest` | CP106 retains 1,677 tests across 121 files; CP105 full suites passed locally at 1,663 / 14 skipped by default and 1,677 / 0 with PostgreSQL; CP106's daily-report API module passed 21/21, including the filter and well-scope cases. |
 | Backend lint | `cd backend && .venv/bin/python -m ruff check .` | backend style and import hygiene |
 | Migrations | `cd backend && .venv/bin/python -m alembic upgrade head && .venv/bin/python -m alembic check` | no model/migration drift — against a **fresh** database |
 | Supply chain + secrets | `backend/.venv/bin/python scripts/verify_supply_chain_and_secrets.py` | full-SHA Actions pins, tracked/untracked/eligible ignored text scan, `pip-audit`, full frontend `npm audit` at moderate, and production audit at high |

@@ -671,7 +671,7 @@ export const drillingApi = {
     ),
   listDailyReports: (
     wellId: string,
-    params: { report_date_from?: string; report_date_to?: string; shift_code?: string; status?: string; limit?: number; offset?: number } = {},
+    params: { report_date_from?: string; report_date_to?: string; shift_code?: string; status?: string; report_number?: string; limit?: number; offset?: number } = {},
     signal?: AbortSignal,
   ) =>
     api.get<DailyReportList>(`/wells/${enc(wellId)}/daily-reports`, {

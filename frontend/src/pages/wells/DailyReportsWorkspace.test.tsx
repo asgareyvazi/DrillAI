@@ -935,7 +935,7 @@ describe('DailyReportsWorkspace', () => {
     expect(idempotencyKey).toBeTruthy()
   })
 
-  it('sends status, shift, date and page filters to the server and rejects a reversed date range locally', async () => {
+  it('sends exact report-number, status, shift, date and page filters and rejects reversed dates locally', async () => {
     const user = userEvent.setup()
     mocks.listDailyReports.mockResolvedValue({ items: [report], total: 60, limit: 50, offset: 0 })
     renderWorkspace()
@@ -946,6 +946,7 @@ describe('DailyReportsWorkspace', () => {
     await user.selectOptions(screen.getByLabelText('Filter by shift'), 'day')
     await user.type(screen.getByLabelText('Report date from'), '2026-03-01')
     await user.type(screen.getByLabelText('Report date to'), '2026-03-31')
+    await user.type(screen.getByLabelText('Exact report number'), ' DDR-15 ')
 
     await waitFor(() => {
       expect(mocks.listDailyReports).toHaveBeenLastCalledWith(
@@ -955,6 +956,7 @@ describe('DailyReportsWorkspace', () => {
           shift_code: 'day',
           report_date_from: '2026-03-01',
           report_date_to: '2026-03-31',
+          report_number: 'DDR-15',
           limit: 50,
           offset: 0,
         }),
@@ -964,7 +966,15 @@ describe('DailyReportsWorkspace', () => {
     await user.click(screen.getByRole('button', { name: 'Next reports page' }))
     await waitFor(() => expect(mocks.listDailyReports).toHaveBeenLastCalledWith(
       'well_1',
-      expect.objectContaining({ offset: 50, status: 'draft', shift_code: 'day' }),
+      expect.objectContaining({ offset: 50, status: 'draft', shift_code: 'day', report_number: 'DDR-15' }),
+      expect.any(AbortSignal),
+    ))
+
+    await user.clear(screen.getByLabelText('Exact report number'))
+    await user.type(screen.getByLabelText('Exact report number'), ' DDR-16 ')
+    await waitFor(() => expect(mocks.listDailyReports).toHaveBeenLastCalledWith(
+      'well_1',
+      expect.objectContaining({ offset: 0, report_number: 'DDR-16' }),
       expect.any(AbortSignal),
     ))
 

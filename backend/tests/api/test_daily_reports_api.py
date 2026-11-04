@@ -1267,10 +1267,63 @@ async def test_duplicate_import_identity_returns_existing_report_without_mutatin
     assert conflict.json()["error"]["details"]["report_id"] == original["report"]["id"]
     assert "no duplicate draft was created" in conflict.json()["error"]["message"]
 
+    nonmatching_report_id, _ = await _create_approved_period(
+        client,
+        well_id,
+        wellbore_id,
+        report_date="2026-11-05",
+        report_number="DDR-ANOTHER-REPORT",
+        period_start_at="2026-11-05T00:00:00Z",
+        period_end_at="2026-11-05T12:00:00Z",
+        approve=False,
+    )
     listing = await client.get(f"/api/v1/wells/{well_id}/daily-reports?limit=20", headers=headers("engineer"))
     assert listing.status_code == 200, listing.text
-    assert listing.json()["total"] == 1
-    assert [item["id"] for item in listing.json()["items"]] == [original["report"]["id"]]
+    assert listing.json()["total"] == 2
+    assert {item["id"] for item in listing.json()["items"]} == {
+        original["report"]["id"],
+        nonmatching_report_id,
+    }
+    other_well_id, other_wellbore_id = await _create_well(client)
+    other_scoped_report_id, _ = await _create_approved_period(
+        client,
+        other_well_id,
+        other_wellbore_id,
+        report_date="2026-11-04",
+        report_number="DDR-IMPORT-IDEMPOTENT-CONFLICT",
+        period_start_at="2026-11-04T00:00:00Z",
+        period_end_at="2026-11-04T12:00:00Z",
+        approve=False,
+    )
+    exact_number = await client.get(
+        f"/api/v1/wells/{well_id}/daily-reports",
+        params={"report_number": "DDR-IMPORT-IDEMPOTENT-CONFLICT", "limit": 20},
+        headers=headers("engineer"),
+    )
+    assert exact_number.status_code == 200, exact_number.text
+    assert exact_number.json()["total"] == 1
+    assert exact_number.json()["items"][0]["id"] == original["report"]["id"]
+    other_well_filter = await client.get(
+        f"/api/v1/wells/{other_well_id}/daily-reports",
+        params={"report_number": "DDR-IMPORT-IDEMPOTENT-CONFLICT"},
+        headers=headers("engineer"),
+    )
+    assert other_well_filter.status_code == 200, other_well_filter.text
+    assert other_well_filter.json()["total"] == 1
+    assert other_well_filter.json()["items"][0]["id"] == other_scoped_report_id
+    case_mismatch = await client.get(
+        f"/api/v1/wells/{well_id}/daily-reports",
+        params={"report_number": "ddr-import-idempotent-conflict"},
+        headers=headers("engineer"),
+    )
+    assert case_mismatch.status_code == 200, case_mismatch.text
+    assert case_mismatch.json()["items"] == []
+    blank_number = await client.get(
+        f"/api/v1/wells/{well_id}/daily-reports",
+        params={"report_number": " "},
+        headers=headers("engineer"),
+    )
+    assert blank_number.status_code == 422, blank_number.text
     current = await client.get(
         f"/api/v1/wells/{well_id}/daily-reports/{original['report']['id']}", headers=headers("engineer")
     )

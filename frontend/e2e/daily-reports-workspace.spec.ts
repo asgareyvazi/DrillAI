@@ -251,6 +251,8 @@ test.describe('daily-report lifecycle in a real browser', () => {
     await expect(page.getByTestId('daily-report-import-form')).toHaveCount(0)
     await expect(page.getByTestId('daily-report-reconciliation')).toBeVisible()
     await expect(page.getByTestId('daily-report-reported-npt-duration')).toContainText('2 h')
+    await page.getByTestId('daily-report-report-number-filter').fill(reportNumber)
+    await expect(page.getByTestId('daily-report-list').getByText(reportNumber, { exact: true })).toBeVisible()
 
     const listed = await apiGet<{ items: DailyReportRecord[]; total: number }>(
       request,

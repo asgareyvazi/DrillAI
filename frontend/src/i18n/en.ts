@@ -725,6 +725,7 @@ export const en = {
     noReportsHint: 'Create a manual draft, or clear the status filter to see other report states.',
     statusFilter: 'Filter by latest revision status',
     shiftFilter: 'Filter by shift',
+    reportNumberFilter: 'Exact report number',
     reportDateFrom: 'Report date from',
     reportDateTo: 'Report date to',
     allStatuses: 'All statuses',

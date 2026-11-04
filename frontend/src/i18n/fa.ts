@@ -721,6 +721,7 @@ export const fa = {
     noReportsHint: 'یک پیش‌نویس دستی بسازید یا پالایه وضعیت را پاک کنید تا وضعیت‌های دیگر دیده شوند.',
     statusFilter: 'پالایش بر پایه وضعیت آخرین نسخه',
     shiftFilter: 'پالایش بر پایه شیفت',
+    reportNumberFilter: 'شماره دقیق گزارش',
     reportDateFrom: 'تاریخ گزارش از',
     reportDateTo: 'تاریخ گزارش تا',
     allStatuses: 'همه وضعیت‌ها',
