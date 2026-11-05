@@ -77,6 +77,50 @@ DAILY_REPORT_PARAMETER_SPECS: dict[str, tuple[str, str, str | None]] = {
 }
 
 
+def _source_evidence_scope_constraints(prefix: str) -> tuple:
+    """Scope each declared source link to the owning tenant and, when supplied, document."""
+    return (
+        ForeignKeyConstraint(
+            ["org_id", "source_document_id"],
+            ["documents.org_id", "documents.id"],
+            ondelete="RESTRICT",
+            name=f"fk_{prefix}_source_document_tenant",
+        ),
+        ForeignKeyConstraint(
+            ["org_id", "source_record_id"],
+            ["extracted_records.org_id", "extracted_records.id"],
+            ondelete="RESTRICT",
+            name=f"fk_{prefix}_source_record_tenant",
+        ),
+        ForeignKeyConstraint(
+            ["source_document_id", "source_record_id"],
+            ["extracted_records.document_id", "extracted_records.id"],
+            ondelete="RESTRICT",
+            name=f"fk_{prefix}_source_record_document",
+        ),
+        ForeignKeyConstraint(
+            ["org_id", "source_region_id"],
+            ["document_regions.org_id", "document_regions.id"],
+            ondelete="RESTRICT",
+            name=f"fk_{prefix}_source_region_tenant",
+        ),
+        ForeignKeyConstraint(
+            ["source_document_id", "source_region_id"],
+            ["document_regions.document_id", "document_regions.id"],
+            ondelete="RESTRICT",
+            name=f"fk_{prefix}_source_region_document",
+        ),
+        CheckConstraint(
+            "source_region_id IS NULL OR source_document_id IS NOT NULL",
+            name=f"{prefix}_source_region_requires_document",
+        ),
+        CheckConstraint(
+            "source_page_number IS NULL OR source_document_id IS NOT NULL",
+            name=f"{prefix}_source_page_requires_document",
+        ),
+    )
+
+
 class DailyDrillingReport(Base, IdMixin, TimestampMixin, OrgScopedMixin):
     """Stable identity for one report date/shift or operator report number on a wellbore."""
 
@@ -92,6 +136,32 @@ class DailyDrillingReport(Base, IdMixin, TimestampMixin, OrgScopedMixin):
             ["wellbores.org_id", "wellbores.well_id", "wellbores.id"],
             ondelete="RESTRICT",
             name="fk_daily_drilling_reports_wellbore_scope",
+        ),
+        ForeignKeyConstraint(
+            ["org_id", "id", "latest_revision_number"],
+            [
+                "daily_drilling_report_revisions.org_id",
+                "daily_drilling_report_revisions.report_id",
+                "daily_drilling_report_revisions.revision_number",
+            ],
+            ondelete="RESTRICT",
+            deferrable=True,
+            initially="DEFERRED",
+            use_alter=True,
+            name="fk_daily_drilling_reports_latest_revision_scope",
+        ),
+        ForeignKeyConstraint(
+            ["org_id", "id", "latest_approved_revision_number"],
+            [
+                "daily_drilling_report_revisions.org_id",
+                "daily_drilling_report_revisions.report_id",
+                "daily_drilling_report_revisions.revision_number",
+            ],
+            ondelete="RESTRICT",
+            deferrable=True,
+            initially="DEFERRED",
+            use_alter=True,
+            name="fk_daily_drilling_reports_latest_approved_revision_scope",
         ),
         CheckConstraint("length(trim(identity_key)) > 0", name="daily_report_identity_key_nonempty"),
         CheckConstraint("length(trim(report_timezone)) > 0", name="daily_report_timezone_nonempty"),
@@ -135,14 +205,29 @@ class DailyDrillingReportRevision(Base, IdMixin, TimestampMixin, OrgScopedMixin)
     __tablename__ = "daily_drilling_report_revisions"
     id_prefix = "drr"
     __table_args__ = (
+        *_source_evidence_scope_constraints("daily_report_revision"),
         ForeignKeyConstraint(
             ["report_id", "org_id"],
             ["daily_drilling_reports.id", "daily_drilling_reports.org_id"],
             ondelete="RESTRICT",
             name="fk_daily_report_revision_report_tenant",
         ),
+        ForeignKeyConstraint(
+            ["org_id", "report_id", "supersedes_revision_id"],
+            [
+                "daily_drilling_report_revisions.org_id",
+                "daily_drilling_report_revisions.report_id",
+                "daily_drilling_report_revisions.id",
+            ],
+            ondelete="RESTRICT",
+            name="fk_daily_report_revision_supersedes_scope",
+        ),
         UniqueConstraint("report_id", "revision_number", name="uq_daily_report_revision_number"),
         UniqueConstraint("id", "org_id", name="uq_daily_report_revision_id_org"),
+        UniqueConstraint(
+            "org_id", "report_id", "revision_number", name="uq_daily_report_revision_org_report_number"
+        ),
+        UniqueConstraint("org_id", "report_id", "id", name="uq_daily_report_revision_org_report_id"),
         CheckConstraint("revision_number >= 1", name="daily_report_revision_number_positive"),
         CheckConstraint("edit_version >= 1", name="daily_report_edit_version_positive"),
         CheckConstraint(
@@ -208,6 +293,7 @@ class DailyReportActivity(Base, IdMixin, CreatedAtMixin, OrgScopedMixin):
     __tablename__ = "daily_report_activities"
     id_prefix = "dra"
     __table_args__ = (
+        *_source_evidence_scope_constraints("daily_report_activity"),
         ForeignKeyConstraint(
             ["revision_id", "org_id"],
             ["daily_drilling_report_revisions.id", "daily_drilling_report_revisions.org_id"],
@@ -352,6 +438,7 @@ class DailyReportMeasurement(Base, IdMixin, CreatedAtMixin, OrgScopedMixin):
     __tablename__ = "daily_report_measurements"
     id_prefix = "drm"
     __table_args__ = (
+        *_source_evidence_scope_constraints("daily_report_measurement"),
         ForeignKeyConstraint(
             ["revision_id", "org_id"],
             ["daily_drilling_report_revisions.id", "daily_drilling_report_revisions.org_id"],
@@ -459,6 +546,7 @@ class DailyReportReconciliation(Base, IdMixin, TimestampMixin, OrgScopedMixin):
     __tablename__ = "daily_report_reconciliations"
     id_prefix = "drc"
     __table_args__ = (
+        *_source_evidence_scope_constraints("daily_report_reconciliation"),
         ForeignKeyConstraint(
             ["revision_id", "org_id"],
             ["daily_drilling_report_revisions.id", "daily_drilling_report_revisions.org_id"],

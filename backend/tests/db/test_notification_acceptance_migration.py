@@ -11,7 +11,7 @@ from alembic.config import Config
 
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
 PARENT_REVISION = "d2a4f6c8b109"
-HEAD_REVISION = "c2e7a1b9d608"
+HEAD_REVISION = "e2b4c6d8f013"
 
 
 def _config(database_url: str) -> Config:

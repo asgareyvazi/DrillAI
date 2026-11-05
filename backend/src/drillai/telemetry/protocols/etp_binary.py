@@ -2377,8 +2377,7 @@ class LocalEtpBinaryWebSocketServer:
                             message_flags=MSG_FLAG_FINALPART,
                         )
                     )
-                elif mtype in {"StopStreaming", "CloseSession"}:
-                    if mtype == "CloseSession":
-                        break
+                elif mtype == "CloseSession":
+                    break
         except ConnectionClosed:
             pass

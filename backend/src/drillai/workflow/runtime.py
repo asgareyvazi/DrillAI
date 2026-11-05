@@ -263,9 +263,12 @@ class WorkflowRuntime:
                 return run
             approvals[approval.node_id or ""] = approval.id
             run.approved_by = approval.decided_by
-        elif run.status == "paused" and run.cursor_node_id:
-            if run.cursor_node_id not in resumed_breakpoints:
-                resumed_breakpoints.append(run.cursor_node_id)
+        elif (
+            run.status == "paused"
+            and run.cursor_node_id
+            and run.cursor_node_id not in resumed_breakpoints
+        ):
+            resumed_breakpoints.append(run.cursor_node_id)
 
         resumed_at = utc_now()
         resume_result = await self.session.execute(

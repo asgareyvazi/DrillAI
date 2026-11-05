@@ -21,7 +21,16 @@ from __future__ import annotations
 
 import datetime as dt
 
-from sqlalchemy import Boolean, CheckConstraint, Float, ForeignKey, Index, String, text
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    Float,
+    ForeignKey,
+    Index,
+    String,
+    UniqueConstraint,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from drillai.db.base import (
@@ -179,6 +188,7 @@ class Document(Base, IdMixin, TimestampMixin, OrgScopedMixin):
     __tablename__ = "documents"
     id_prefix = "doc"
     __table_args__ = (
+        UniqueConstraint("org_id", "id", name="uq_documents_org_id_id"),
         Index(
             "uq_documents_org_logical_key",
             "org_id",
@@ -270,6 +280,10 @@ class DocumentRegion(Base, IdMixin, CreatedAtMixin, OrgScopedMixin):
 
     __tablename__ = "document_regions"
     id_prefix = "rgn"
+    __table_args__ = (
+        UniqueConstraint("org_id", "id", name="uq_document_regions_org_id_id"),
+        UniqueConstraint("document_id", "id", name="uq_document_regions_document_id_id"),
+    )
 
     document_id: Mapped[str] = mapped_column(
         ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True
@@ -366,6 +380,8 @@ class ExtractedRecord(Base, IdMixin, CreatedAtMixin, OrgScopedMixin):
             "(depth_tvd_si IS NOT NULL AND depth_tvd_basis <> 'unknown'))",
             name="extracted_record_provenance_consistent",
         ),
+        UniqueConstraint("org_id", "id", name="uq_extracted_records_org_id_id"),
+        UniqueConstraint("document_id", "id", name="uq_extracted_records_document_id_id"),
     )
 
     document_id: Mapped[str | None] = mapped_column(

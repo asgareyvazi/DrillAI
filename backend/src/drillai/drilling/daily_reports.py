@@ -863,10 +863,22 @@ class DailyReportService:
             **identity,
         )
         try:
-            # Isolate the natural-key race to a savepoint so the request's idempotency reservation
-            # and any authentication/session state in the outer transaction remain intact.
+            # Keep the initial revision in the same savepoint as the report: the report's latest-revision
+            # pointer is a deferred FK and must not be released before its target exists.
             async with self.session.begin_nested():
                 self.session.add(report)
+                await self.session.flush()
+                revision = DailyDrillingReportRevision(
+                    org_id=self.org_id,
+                    report_id=report.id,
+                    revision_number=1,
+                    edit_version=1,
+                    status="draft",
+                    source_kind="manual",
+                    created_by=self.principal.id if self.principal else "",
+                    **content.revision_fields,
+                )
+                self.session.add(revision)
                 await self.session.flush()
         except IntegrityError as exc:
             if not _is_named_constraint(exc, "uq_daily_drilling_report_identity"):
@@ -885,19 +897,6 @@ class DailyReportService:
                 "a daily report was created concurrently for this wellbore, local date and report identity",
                 details={"report_id": existing.id if existing else None},
             ) from exc
-
-        revision = DailyDrillingReportRevision(
-            org_id=self.org_id,
-            report_id=report.id,
-            revision_number=1,
-            edit_version=1,
-            status="draft",
-            source_kind="manual",
-            created_by=self.principal.id if self.principal else "",
-            **content.revision_fields,
-        )
-        self.session.add(revision)
-        await self.session.flush()
         activities = self._activity_rows(revision.id, content.activities, resolution_state="manual")
         measurements = self._measurement_rows(revision.id, content.measurements, resolution_state="manual")
         self.session.add_all([*activities, *measurements])
@@ -1036,6 +1035,18 @@ class DailyReportService:
             async with self.session.begin_nested():
                 self.session.add(report)
                 await self.session.flush()
+                revision = DailyDrillingReportRevision(
+                    org_id=self.org_id,
+                    report_id=report.id,
+                    revision_number=1,
+                    edit_version=1,
+                    status="draft",
+                    source_kind="import",
+                    created_by=self.principal.id if self.principal else "",
+                    **prepared.revision_fields,
+                )
+                self.session.add(revision)
+                await self.session.flush()
         except IntegrityError as exc:
             if not _is_named_constraint(exc, "uq_daily_drilling_report_identity"):
                 raise
@@ -1053,19 +1064,6 @@ class DailyReportService:
                 "another report was created concurrently for this import identity; no duplicate draft was created. Open the existing report and review or correct it through the normal revision lifecycle",
                 details={"report_id": existing.id if existing else None, "source_document_id": source_document_id},
             ) from exc
-
-        revision = DailyDrillingReportRevision(
-            org_id=self.org_id,
-            report_id=report.id,
-            revision_number=1,
-            edit_version=1,
-            status="draft",
-            source_kind="import",
-            created_by=self.principal.id if self.principal else "",
-            **prepared.revision_fields,
-        )
-        self.session.add(revision)
-        await self.session.flush()
         activities = self._activity_rows(revision.id, prepared.activities, resolution_state="proposed")
         measurements = self._measurement_rows(revision.id, prepared.measurements, resolution_state="proposed")
         # Rows that the operator entered directly in the import editor are manual facts, not extracted
@@ -2710,10 +2708,9 @@ class DailyReportService:
                     section_id=None,
                     operation_id=operation_id,
                 )
-            if record.document_id is not None:
-                if document_id is not None and document_id != record.document_id:
-                    raise ValidationFailed("source_record_id does not belong to source_document_id")
-                document_id = document_id or record.document_id
+            if document_id is not None and document_id != record.document_id:
+                raise ValidationFailed("source_record_id does not belong to source_document_id")
+            document_id = document_id or record.document_id
             if record.region_id is not None:
                 if region_id is not None and region_id != record.region_id:
                     raise ValidationFailed("source_record_id and source_region_id identify different regions")

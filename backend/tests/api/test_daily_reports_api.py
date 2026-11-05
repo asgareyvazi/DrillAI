@@ -186,6 +186,38 @@ async def _create_import_evidence(
 
 
 @pytest.mark.asyncio
+async def test_documentless_source_record_cannot_claim_a_document_for_report_evidence(client, db):
+    from sqlalchemy import select
+
+    from drillai.db.models import ExtractedRecord
+
+    well_id, wellbore_id = await _create_well(client)
+    document_id, record_id = await _create_import_evidence(client, db, well_id, wellbore_id)
+    async with db.session_factory() as session:
+        record = (
+            await session.execute(select(ExtractedRecord).where(ExtractedRecord.id == record_id))
+        ).scalar_one()
+        record.document_id = None
+        record.validation_state = "rule_validated"
+        record.confidence = 0.99
+        record.validation_rule = "synthetic-link-scope-test"
+        await session.commit()
+
+    payload = _report_payload(wellbore_id)
+    payload["report_number"] = "DDR-DOCUMENTLESS-RECORD"
+    payload["content"]["measurements"][0].update(
+        {"source_document_id": document_id, "source_record_id": record_id}
+    )
+    response = await client.post(
+        f"/api/v1/wells/{well_id}/daily-reports",
+        json=payload,
+        headers=headers("engineer"),
+    )
+    assert response.status_code == 422, response.text
+    assert "source_record_id does not belong to source_document_id" in response.json()["error"]["message"]
+
+
+@pytest.mark.asyncio
 async def test_report_header_identity_sources_require_human_reconciliation_and_fresh_evidence(client, db):
     from sqlalchemy import select
 

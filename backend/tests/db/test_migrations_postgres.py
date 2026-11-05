@@ -268,6 +268,18 @@ async def _assert_reconciliation_targets_are_revision_scoped(url: str) -> None:
                 source_record_id=record.id,
                 created_by="usr_scope_pg",
             )
+            revision_correction = DailyDrillingReportRevision(
+                id="drr_scope_pg_target_a2",
+                org_id="org_scope_pg",
+                report_id=report_a.id,
+                revision_number=2,
+                source_kind="import",
+                source_document_id=document.id,
+                source_record_id=record.id,
+                supersedes_revision_id=revision_a.id,
+                created_by="usr_scope_pg",
+            )
+            report_a.latest_revision_number = 2
             activity_a = DailyReportActivity(
                 id="dra_scope_pg_target_a",
                 org_id="org_scope_pg",
@@ -376,7 +388,7 @@ async def _assert_reconciliation_targets_are_revision_scoped(url: str) -> None:
             await session.flush()
             session.add_all([report_a, report_b])
             await session.flush()
-            session.add_all([revision_a, revision_b])
+            session.add_all([revision_a, revision_b, revision_correction])
             await session.flush()
             session.add_all([activity_a, activity_b, measurement_a, measurement_b])
             await session.flush()
@@ -395,6 +407,18 @@ async def _assert_reconciliation_targets_are_revision_scoped(url: str) -> None:
             (
                 "UPDATE daily_report_reconciliations SET measurement_target_id=:target_id WHERE id=:id",
                 {"target_id": "drm_scope_pg_missing", "id": "drc_scope_pg_measurement_target"},
+            ),
+            (
+                "UPDATE daily_drilling_reports SET latest_revision_number=99 WHERE id=:id",
+                {"id": report_a.id},
+            ),
+            (
+                "UPDATE daily_drilling_reports SET latest_approved_revision_number=99 WHERE id=:id",
+                {"id": report_a.id},
+            ),
+            (
+                "UPDATE daily_drilling_report_revisions SET supersedes_revision_id=:target_id WHERE id=:id",
+                {"target_id": revision_b.id, "id": revision_correction.id},
             ),
         )
         for statement, parameters in invalid_updates:
@@ -419,6 +443,306 @@ async def _assert_reconciliation_targets_are_revision_scoped(url: str) -> None:
                     )
                 )
             ).scalar_one() == measurement_a.id
+            assert (
+                await connection.execute(
+                    text(
+                        "SELECT latest_revision_number, latest_approved_revision_number "
+                        "FROM daily_drilling_reports WHERE id=:id"
+                    ),
+                    {"id": report_a.id},
+                )
+            ).one() == (2, None)
+            assert (
+                await connection.execute(
+                    text(
+                        "SELECT supersedes_revision_id FROM daily_drilling_report_revisions WHERE id=:id"
+                    ),
+                    {"id": revision_correction.id},
+                )
+            ).scalar_one() == revision_a.id
+    finally:
+        await engine.dispose()
+
+
+async def _assert_daily_report_evidence_scope_constraints(url: str) -> None:
+    """PostgreSQL rejects cross-tenant and cross-document report evidence links."""
+    from sqlalchemy import text
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+    from drillai.db.models import (
+        DailyDrillingReport,
+        DailyDrillingReportRevision,
+        DailyReportActivity,
+        DailyReportMeasurement,
+        DailyReportReconciliation,
+        Document,
+        DocumentRegion,
+        ExtractedRecord,
+    )
+
+    engine = create_async_engine(url, pool_size=2, max_overflow=0)
+    factory = async_sessionmaker(bind=engine, expire_on_commit=False)
+    try:
+        async with factory() as session:
+            document_a = Document(
+                id="doc_scope_pg_evidence_a",
+                org_id="org_scope_pg",
+                doc_type="ddr",
+                title="Synthetic evidence document A",
+            )
+            document_b = Document(
+                id="doc_scope_pg_evidence_b",
+                org_id="org_scope_pg",
+                doc_type="ddr",
+                title="Synthetic evidence document B",
+            )
+            foreign_document = Document(
+                id="doc_scope_pg_evidence_foreign",
+                org_id="org_scope_pg_other",
+                doc_type="ddr",
+                title="Synthetic foreign evidence document",
+            )
+            record_a = ExtractedRecord(
+                id="rec_scope_pg_evidence_a",
+                org_id="org_scope_pg",
+                document_id=document_a.id,
+                record_type="daily_summary",
+                payload_schema_key="migration-evidence.v1",
+                payload={"synthetic": True},
+            )
+            record_b = ExtractedRecord(
+                id="rec_scope_pg_evidence_b",
+                org_id="org_scope_pg",
+                document_id=document_b.id,
+                record_type="daily_summary",
+                payload_schema_key="migration-evidence.v1",
+                payload={"synthetic": True},
+            )
+            foreign_record = ExtractedRecord(
+                id="rec_scope_pg_evidence_foreign",
+                org_id="org_scope_pg_other",
+                document_id=foreign_document.id,
+                record_type="daily_summary",
+                payload_schema_key="migration-evidence.v1",
+                payload={"synthetic": True},
+            )
+            region_a = DocumentRegion(
+                id="rgn_scope_pg_evidence_a",
+                org_id="org_scope_pg",
+                document_id=document_a.id,
+                kind="paragraph",
+                order_index=0,
+                bbox={},
+                attributes={},
+            )
+            region_b = DocumentRegion(
+                id="rgn_scope_pg_evidence_b",
+                org_id="org_scope_pg",
+                document_id=document_b.id,
+                kind="paragraph",
+                order_index=0,
+                bbox={},
+                attributes={},
+            )
+            foreign_region = DocumentRegion(
+                id="rgn_scope_pg_evidence_foreign",
+                org_id="org_scope_pg_other",
+                document_id=foreign_document.id,
+                kind="paragraph",
+                order_index=0,
+                bbox={},
+                attributes={},
+            )
+            report = DailyDrillingReport(
+                id="ddr_scope_pg_evidence",
+                org_id="org_scope_pg",
+                well_id="wel_scope_pg_a",
+                wellbore_id="wlb_scope_pg_a",
+                report_date=date(2026, 11, 6),
+                report_timezone="UTC",
+                shift_code="day",
+                identity_key="shift:day:scope-pg-evidence",
+                created_by="usr_scope_pg",
+            )
+            revision = DailyDrillingReportRevision(
+                id="drr_scope_pg_evidence",
+                org_id="org_scope_pg",
+                report_id=report.id,
+                revision_number=1,
+                source_kind="import",
+                source_document_id=document_a.id,
+                source_record_id=record_a.id,
+                source_region_id=region_a.id,
+                created_by="usr_scope_pg",
+            )
+            activity = DailyReportActivity(
+                id="dra_scope_pg_evidence",
+                org_id="org_scope_pg",
+                revision_id=revision.id,
+                sequence=0,
+                activity_kind="operation",
+                title="Synthetic evidence activity",
+                start_time_basis="unknown",
+                end_time_basis="unknown",
+                duration_basis="unknown",
+                depth_reference="unknown",
+                depth_basis="unknown",
+                cause_basis="unknown",
+                resolution_state="proposed",
+                source_document_id=document_a.id,
+                source_record_id=record_a.id,
+                source_region_id=region_a.id,
+                source_page_number=1,
+            )
+            measurement = DailyReportMeasurement(
+                id="drm_scope_pg_evidence",
+                org_id="org_scope_pg",
+                revision_id=revision.id,
+                parameter_key="mud_weight",
+                ordinal=0,
+                dimension="mud_weight",
+                canonical_unit="kg/m3",
+                value_si=1101.26,
+                source_value=9.2,
+                source_unit="ppg",
+                accepted_input_value=9.2,
+                accepted_input_unit="ppg",
+                value_basis="reported",
+                time_basis="unknown",
+                depth_reference="unknown",
+                depth_basis="unknown",
+                resolution_state="proposed",
+                source_document_id=document_a.id,
+                source_record_id=record_a.id,
+                source_region_id=region_a.id,
+                source_page_number=1,
+            )
+            reconciliation = DailyReportReconciliation(
+                id="drc_scope_pg_evidence",
+                org_id="org_scope_pg",
+                revision_id=revision.id,
+                target_key="report_identity:report_date",
+                target_kind="report_identity",
+                field_key="report_date",
+                source_document_id=document_a.id,
+                source_record_id=record_a.id,
+                source_region_id=region_a.id,
+                source_page_number=1,
+                source_path="payload.report_date",
+                source_review_version=1,
+                source_fingerprint="a" * 64,
+                source_value_hash="b" * 64,
+                proposed_value_hash="c" * 64,
+                created_by="usr_scope_pg",
+            )
+            session.add_all(
+                [
+                    document_a,
+                    document_b,
+                    foreign_document,
+                    record_a,
+                    record_b,
+                    foreign_record,
+                    region_a,
+                    region_b,
+                    foreign_region,
+                ]
+            )
+            await session.flush()
+            session.add(report)
+            await session.flush()
+            session.add(revision)
+            await session.flush()
+            session.add_all([activity, measurement, reconciliation])
+            await session.commit()
+
+        invalid_updates = (
+            (
+                "UPDATE daily_drilling_report_revisions SET source_document_id=:document_id, "
+                "source_record_id=NULL, source_region_id=NULL WHERE id=:id",
+                {"document_id": foreign_document.id, "id": revision.id},
+            ),
+            (
+                "UPDATE daily_drilling_report_revisions SET source_document_id=NULL, "
+                "source_record_id=:record_id, source_region_id=NULL WHERE id=:id",
+                {"record_id": foreign_record.id, "id": revision.id},
+            ),
+            (
+                "UPDATE daily_drilling_report_revisions SET source_document_id=:document_id, "
+                "source_record_id=:record_id, source_region_id=NULL WHERE id=:id",
+                {"document_id": document_b.id, "record_id": record_a.id, "id": revision.id},
+            ),
+            (
+                "UPDATE daily_drilling_report_revisions SET source_document_id=NULL, "
+                "source_record_id=NULL, source_region_id=NULL, source_page_number=1 WHERE id=:id",
+                {"id": revision.id},
+            ),
+            (
+                "UPDATE daily_report_activities SET source_region_id=:region_id WHERE id=:id",
+                {"region_id": foreign_region.id, "id": activity.id},
+            ),
+            (
+                "UPDATE daily_report_activities SET source_region_id=:region_id WHERE id=:id",
+                {"region_id": region_b.id, "id": activity.id},
+            ),
+            (
+                "UPDATE daily_report_activities SET source_document_id=NULL, source_region_id=:region_id, "
+                "source_record_id=NULL WHERE id=:id",
+                {"region_id": region_a.id, "id": activity.id},
+            ),
+            (
+                "UPDATE daily_report_measurements SET source_document_id=NULL, source_record_id=:record_id, "
+                "source_region_id=NULL WHERE id=:id",
+                {"record_id": foreign_record.id, "id": measurement.id},
+            ),
+            (
+                "UPDATE daily_report_reconciliations SET source_document_id=:document_id, "
+                "source_region_id=NULL WHERE id=:id",
+                {"document_id": document_b.id, "id": reconciliation.id},
+            ),
+            (
+                "UPDATE daily_report_reconciliations SET source_region_id=:region_id WHERE id=:id",
+                {"region_id": foreign_region.id, "id": reconciliation.id},
+            ),
+        )
+        for statement, parameters in invalid_updates:
+            with pytest.raises(sa.exc.IntegrityError):
+                async with engine.begin() as connection:
+                    await connection.execute(text(statement), parameters)
+
+        async with engine.connect() as connection:
+            assert (
+                await connection.execute(
+                    text(
+                        "SELECT source_document_id, source_record_id FROM daily_drilling_report_revisions WHERE id=:id"
+                    ),
+                    {"id": revision.id},
+                )
+            ).one() == (document_a.id, record_a.id)
+            assert (
+                await connection.execute(
+                    text(
+                        "SELECT source_document_id, source_region_id FROM daily_report_activities WHERE id=:id"
+                    ),
+                    {"id": activity.id},
+                )
+            ).one() == (document_a.id, region_a.id)
+            assert (
+                await connection.execute(
+                    text(
+                        "SELECT source_document_id, source_record_id FROM daily_report_measurements WHERE id=:id"
+                    ),
+                    {"id": measurement.id},
+                )
+            ).one() == (document_a.id, record_a.id)
+            assert (
+                await connection.execute(
+                    text(
+                        "SELECT source_document_id, source_region_id FROM daily_report_reconciliations WHERE id=:id"
+                    ),
+                    {"id": reconciliation.id},
+                )
+            ).one() == (document_a.id, region_a.id)
     finally:
         await engine.dispose()
 
@@ -476,6 +800,7 @@ def test_migration_chain_applies_reverses_and_refuses_duplicates_on_postgres(pos
     command.check(config)
     asyncio.run(_assert_report_wellbore_scope_constraints(postgres_url))
     asyncio.run(_assert_reconciliation_targets_are_revision_scoped(postgres_url))
+    asyncio.run(_assert_daily_report_evidence_scope_constraints(postgres_url))
 
 
 def test_the_migration_environment_honours_an_explicit_url(tmp_path):
