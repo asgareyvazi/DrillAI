@@ -14,6 +14,7 @@ import json
 import os
 import re
 import sys
+import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any
 
@@ -158,8 +159,50 @@ def verify_windows_skip(log_text: str, manifest: dict[str, Any]) -> None:
         )
 
 
-def failed_node_summaries(log_text: str, *, limit: int = 12) -> list[str]:
-    """Return failed pytest node IDs and exception classes, without copying assertion values."""
+def _junit_failure_summaries(xml_path: Path, *, limit: int = 12) -> list[str]:
+    """Extract stable test locations and exception classes, never assertion messages or values."""
+    try:
+        root = ET.parse(xml_path).getroot()
+    except (OSError, ET.ParseError):
+        return []
+
+    summaries: list[str] = []
+    seen: set[str] = set()
+    for case in root.iter("testcase"):
+        failure = next((child for child in case if child.tag in {"failure", "error"}), None)
+        if failure is None:
+            continue
+        location = case.get("file", "").replace("\\", "/")
+        if "tests/" in location:
+            location = location[location.index("tests/") :]
+        else:
+            location = location.rsplit("/", 1)[-1]
+        test_name = case.get("name", "").split("[", 1)[0]
+        if (
+            not re.fullmatch(r"tests/[A-Za-z0-9_./-]+\.py", location)
+            or ".." in location.split("/")
+            or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", test_name)
+        ):
+            continue
+        node_id = f"{location}::{test_name}"
+        raw_exception = (failure.get("type") or "").rsplit(".", 1)[-1]
+        exception = raw_exception if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", raw_exception) else "failure"
+        summary = f"{node_id} [{exception}]"
+        if summary not in seen:
+            summaries.append(summary)
+            seen.add(summary)
+        if len(summaries) >= limit:
+            break
+    return summaries
+
+
+def failed_node_summaries(
+    log_text: str,
+    *,
+    junit_xml_file: Path | None = None,
+    limit: int = 12,
+) -> list[str]:
+    """Return failed pytest node IDs and exception classes without copying assertion values."""
     plain = ANSI_RE.sub("", log_text)
     summaries: list[str] = []
     seen: set[str] = set()
@@ -176,16 +219,31 @@ def failed_node_summaries(log_text: str, *, limit: int = 12) -> list[str]:
             summaries.append(summary)
             seen.add(summary)
         if len(summaries) >= limit:
-            break
+            return summaries
+
+    if junit_xml_file is not None:
+        for summary in _junit_failure_summaries(junit_xml_file, limit=limit):
+            if summary not in seen:
+                summaries.append(summary)
+                seen.add(summary)
+            if len(summaries) >= limit:
+                break
     return summaries
 
 
-def verify_platform_result(manifest: dict[str, Any], platform: str, log_text: str, pytest_exit_code: int) -> str:
+def verify_platform_result(
+    manifest: dict[str, Any],
+    platform: str,
+    log_text: str,
+    pytest_exit_code: int,
+    *,
+    junit_xml_file: Path | None = None,
+) -> str:
     backend = manifest["backend"]
     expected = backend[platform]
     if pytest_exit_code != 0:
         details = [f"pytest exited {pytest_exit_code}; a zero process exit is required"]
-        failed_nodes = failed_node_summaries(log_text)
+        failed_nodes = failed_node_summaries(log_text, junit_xml_file=junit_xml_file)
         details.append(
             "failed node IDs and exception classes: " + ", ".join(failed_nodes)
             if failed_nodes
@@ -236,13 +294,24 @@ def main() -> int:
     parser.add_argument("--platform", required=True, choices=("default", "linux", "windows"))
     parser.add_argument("--log-file", required=True, type=Path)
     parser.add_argument("--pytest-exit-code", required=True, type=int)
+    parser.add_argument(
+        "--junit-xml-file",
+        type=Path,
+        help="optional pytest JUnit XML used only to expose sanitized failure node IDs",
+    )
     args = parser.parse_args()
 
     try:
         manifest = load_inventory()
         file_count = verify_postgres_inventory(manifest)
         log_text = args.log_file.read_text(encoding="utf-8", errors="replace")
-        summary = verify_platform_result(manifest, args.platform, log_text, args.pytest_exit_code)
+        summary = verify_platform_result(
+            manifest,
+            args.platform,
+            log_text,
+            args.pytest_exit_code,
+            junit_xml_file=args.junit_xml_file,
+        )
     except (InventoryError, OSError, json.JSONDecodeError) as exc:
         print(f"::error::Backend CI test-inventory verification failed: {exc}", file=sys.stderr)
         return 1

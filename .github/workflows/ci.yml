@@ -412,12 +412,14 @@ jobs:
         run: |
           $ErrorActionPreference = "Continue"
           $logFile = Join-Path $env:RUNNER_TEMP "win-backend-tests.log"
-          .\.venv\Scripts\python.exe -m pytest -rs -m "not postgres" 2>&1 | Tee-Object -FilePath $logFile
+          $junitFile = Join-Path $env:RUNNER_TEMP "win-backend-tests.xml"
+          .\.venv\Scripts\python.exe -m pytest -rs -m "not postgres" "--junitxml=$junitFile" 2>&1 | Tee-Object -FilePath $logFile
           $pytestExit = $LASTEXITCODE
           & .\.venv\Scripts\python.exe ..\scripts\verify_backend_test_inventory.py `
             --platform windows `
             --log-file $logFile `
-            --pytest-exit-code $pytestExit
+            --pytest-exit-code $pytestExit `
+            --junit-xml-file $junitFile
           if ($LASTEXITCODE -ne 0) { throw "Backend test totals or the reviewed PostgreSQL/skip inventory failed verification" }
 
       - name: Upload Windows backend test log on failure

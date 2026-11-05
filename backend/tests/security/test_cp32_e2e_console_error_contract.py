@@ -37,6 +37,7 @@ before the commit reaches CI rather than after it.
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import re
 from pathlib import Path
@@ -298,7 +299,7 @@ def test_cp32_no_guard_in_this_suite_reports_a_skip() -> None:
     )
 
 
-def test_cp32_the_certification_jobs_reject_skips() -> None:
+def test_cp32_the_certification_jobs_reject_skips(tmp_path: Path) -> None:
     """The rule above is enforced by CI; this asserts CI still enforces it."""
     workflow = yaml.safe_load(_read(WORKFLOW_PATH))
     jobs = workflow["jobs"]
@@ -321,6 +322,29 @@ def test_cp32_the_certification_jobs_reject_skips() -> None:
     assert "failed_node_summaries" in verifier and "exception classes" in verifier, (
         "backend CI must expose failed pytest node IDs without copying assertion values into annotations"
     )
+    assert "--junitxml=$junitFile" in windows_step and "--junit-xml-file" in windows_step, (
+        "the Windows backend gate must preserve machine-readable failure locations for the sanitized summary"
+    )
+    assert "_junit_failure_summaries" in verifier, "the verifier must read JUnit locations on platforms with sparse logs"
+
+    spec = importlib.util.spec_from_file_location(
+        "verify_backend_test_inventory_diagnostics",
+        REPO_ROOT / "scripts" / "verify_backend_test_inventory.py",
+    )
+    assert spec is not None and spec.loader is not None
+    diagnostics = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(diagnostics)
+    junit_path = tmp_path / "pytest.xml"
+    junit_path.write_text(
+        "<testsuites><testsuite><testcase file='tests/db/test_scope.py' "
+        "name='test_rejects_scope[private-param]' classname='tests.db.test_scope'>"
+        "<failure type='sqlalchemy.exc.IntegrityError' message='private-value'>assertion details</failure>"
+        "</testcase></testsuite></testsuites>",
+        encoding="utf-8",
+    )
+    summaries = diagnostics.failed_node_summaries("", junit_xml_file=junit_path)
+    assert summaries == ["tests/db/test_scope.py::test_rejects_scope [IntegrityError]"]
+    assert "private-param" not in " ".join(summaries) and "assertion details" not in " ".join(summaries)
 
 
 def _step_text(job: dict, step_name_prefix: str) -> str:
