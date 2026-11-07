@@ -415,7 +415,7 @@ const localizationCases = [
       sourceDocument: 'Survey source document',
       sourceRecordSummary: 'Measured depth 0 m · inclination 1 deg · azimuth 90 deg',
       import: 'Import reviewed records',
-      reviewRequired: 'Only records explicitly marked “Human validated” and carrying a reviewer and review version are eligible.',
+      reviewRequired: 'Only records explicitly reviewed by a person, with a recorded reviewer and review version, are eligible.',
       reviewValidated: 'Human validated',
       inputAzimuthHeader: 'Input azimuth (deg)',
     },
@@ -463,7 +463,7 @@ const localizationCases = [
       sourceDocument: 'سند منبع مسیر',
       sourceRecordSummary: 'عمق اندازه‌گیری ۰ متر · انحراف ۱ درجه · آزیموت ۹۰ درجه',
       import: 'ورود رکوردهای بازبینی‌شده',
-      reviewRequired: 'فقط رکوردهایی مجازند که صریحاً «بازبینی و تأیید انسانی» باشند و بازبین و نسخهٔ بازبینی داشته باشند.',
+      reviewRequired: 'فقط رکوردهایی مجازند که بازبینی انسانی، بازبین ثبت‌شده و نسخهٔ بازبینی داشته باشند.',
       reviewValidated: 'بازبینی و تأیید انسانی',
       inputAzimuthHeader: 'آزیموت ورودی (deg)',
     },
@@ -587,7 +587,7 @@ describe('SurveysWorkspace localization', () => {
     await user.selectOptions(documentSelector, sourceDocument.id)
 
     expect(await screen.findByText(labels.sourceRecordSummary)).toBeInTheDocument()
-    expect(await screen.findAllByText(labels.reviewValidated)).not.toHaveLength(0)
+    expect(await screen.findAllByText(labels.reviewValidated)).toHaveLength(2)
     expect(screen.getByText(labels.reviewRequired)).toBeInTheDocument()
     expect(screen.queryByText('human_validated', { exact: true })).not.toBeInTheDocument()
   })

@@ -200,7 +200,7 @@ export const fa = {
     removeStation: 'حذف ایستگاه',
     surveyReport: 'سند منبع مسیر',
     selectDocument: 'گزارش جهت‌یابی، گزارش روزانه یا سند حفاری را انتخاب کنید',
-    reviewRequired: 'فقط رکوردهایی مجازند که صریحاً «{humanValidated}» باشند و بازبین و نسخهٔ بازبینی داشته باشند.',
+    reviewRequired: 'فقط رکوردهایی مجازند که بازبینی انسانی، بازبین ثبت‌شده و نسخهٔ بازبینی داشته باشند.',
     openSourceReview: 'بازبینی رکوردهای منبع در اسناد',
     selectedRecords: 'رکوردهای مجاز انتخاب‌شده',
     eligible: 'مجاز',

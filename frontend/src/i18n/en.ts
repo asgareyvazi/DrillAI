@@ -201,7 +201,7 @@ export const en = {
     removeStation: 'Remove station',
     surveyReport: 'Survey source document',
     selectDocument: 'Select a survey report, DDR or drilling document',
-    reviewRequired: 'Only records explicitly marked “{humanValidated}” and carrying a reviewer and review version are eligible.',
+    reviewRequired: 'Only records explicitly reviewed by a person, with a recorded reviewer and review version, are eligible.',
     openSourceReview: 'Review source records in Documents',
     selectedRecords: 'Selected eligible records',
     eligible: 'Eligible',

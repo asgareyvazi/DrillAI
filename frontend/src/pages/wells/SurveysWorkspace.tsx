@@ -1148,7 +1148,7 @@ export default function SurveysWorkspace() {
       {mode && (
         <Card
           title={mode === 'manual' ? (formBase ? t('surveys.reviseSelected') : t('surveys.newManual')) : t('surveys.import')}
-          subtitle={mode === 'import' ? t('surveys.reviewRequired', { humanValidated: t('surveys.reviewStateHumanValidated') }) : undefined}
+          subtitle={mode === 'import' ? t('surveys.reviewRequired') : undefined}
           actions={<Button size="sm" variant="ghost" onClick={() => { setMode(null); setFormError(null) }}>{t('common.cancel')}</Button>}
         >
           <form onSubmit={mode === 'manual' ? submitManual : submitImport} className="space-y-4" noValidate>

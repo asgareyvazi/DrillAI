@@ -1,6 +1,6 @@
 # CP129 — Survey workspace bilingual localization
 
-**Status:** `DONE` for the repository implementation and local verification. Exact-SHA GitHub Actions certification is pending the pushed CP129 commit. This report does not claim field validation or engineering acceptance.
+**Status:** `PARTIAL`. The bilingual implementation and local verification pass, but CP129 commit `9eab3bf1bd3e022516b708b2762a0b20ead38516` failed exact-SHA CI run `42364712075`. The descendant correction addresses the diagnosed Linux E2E regression; two native-Windows backend failures remain without identified causes. This report does not claim field validation or engineering acceptance.
 
 ## Scope delivered
 
@@ -18,7 +18,13 @@ The existing survey calculation, exact measured-depth comparison, source-ID matc
 - Frontend lint: `cd frontend && npm run lint` — passed.
 - Production build: `cd frontend && npm run build` — passed (`tsc -b` and Vite). Vite emitted the existing advisory that the minified main chunk exceeds 500 kB; build exit status was zero.
 - CP16 maintained-count guard now requires **398 passed** in both maintained summaries; `cd backend && ./.venv/bin/python -m pytest -o addopts= tests/test_cp16_adversarial_audit.py::test_cp16_10_documentation_and_contract_consistency_guard -q` — **1 passed**. Backend test inventory remains **1,718 tests across 128 files**; CP129 adds frontend tests only.
-- Exact-SHA Actions for the pushed CP129 commit: pending.
+- Exact-SHA Actions for CP129 commit `9eab3bf1bd3e022516b708b2762a0b20ead38516`: **failed**, with the Linux E2E count assertion diagnosed below and two native-Windows backend failures still unknown.
+
+## Exact-SHA CI outcome and follow-up
+
+Actions run [42364712075](https://github.com/asgareyvazi/DrillAI/actions/runs/42364712075) tested the pushed CP129 SHA `9eab3bf1bd3e022516b708b2762a0b20ead38516` and **failed**. Linux passed frontend typecheck/lint/unit tests/build, supply-chain, backend tests/lint, migrations, stack, Compose and inventory gates. Playwright failed with `expect(locator).toHaveCount(expected)`: expected 2, received 3. The assertion is the two-record `Human validated` count in `frontend/e2e/surveys-workspace.spec.ts:235`; CP129's explanatory import subtitle also included “Human validated,” so the text locator counted that extra match. The descendant removes the repeated status label from the explanatory sentence and tightens the bilingual regression test to require exactly two status labels. This is an evidenced diagnosis and correction for the Linux E2E assertion; it does not retroactively change the failed `9eab3bf` result.
+
+Native Windows passed typecheck, lint, frontend tests/build, supply-chain, backend lint and migration checks, but its SQLite suite reported **2 failed, 1,701 passed, 1 skipped, 14 deselected**. The workflow annotation reported no `FAILED`/`ERROR` node summary. Windows artifact `windows-backend-tests-42364712075-1` (ID `13570713990`) and Playwright artifact `playwright-evidence-42364712075` (ID `13571632522`) both failed to download because the sandbox received EOF from the redirected GitHub artifact-storage host. The Windows test causes therefore remain **unknown**, and downstream Windows stack/browser gates were skipped. Do not treat the Linux text fix as a Windows diagnosis or as full-SHA certification; CP132 must certify the final integrated SHA.
 
 ## Limits
 
