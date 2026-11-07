@@ -682,6 +682,31 @@ class DdrProcessor:
 
     # ------------------------------------------------------------------ promotion steps
 
+    @staticmethod
+    def _source_ordered_operation_rows(rows: list[ExtractedRecord]) -> list[ExtractedRecord]:
+        """Use unique source coordinates when available; never infer order from missing coordinates.
+
+        Creation timestamps and record IDs order ingestion artifacts, not rows in the source report.
+        When every operation row has a unique (page, source-row) coordinate, that evidence defines the
+        operation sequence. Ambiguous or missing coordinates retain the existing query order.
+        """
+        coordinates: list[tuple[int, int]] = []
+        for row in rows:
+            payload = row.payload if isinstance(row.payload, dict) else {}
+            page_number = row.page_number
+            row_index = payload.get("row_index")
+            if (
+                type(page_number) is not int
+                or page_number < 1
+                or type(row_index) is not int
+                or row_index < 0
+            ):
+                return rows
+            coordinates.append((page_number, row_index))
+        if len(set(coordinates)) != len(rows):
+            return rows
+        return [row for _, row in sorted(zip(coordinates, rows, strict=True), key=lambda item: item[0])]
+
     async def _promote_operations(
         self,
         document: Document,
@@ -690,7 +715,9 @@ class DdrProcessor:
         *,
         dry_run: bool,
     ) -> dict[str, Operation]:
-        rows = [record for record in records if record.record_type == "operation_row"]
+        rows = self._source_ordered_operation_rows(
+            [record for record in records if record.record_type == "operation_row"]
+        )
         if not rows:
             return {}
         if not document.wellbore_id:

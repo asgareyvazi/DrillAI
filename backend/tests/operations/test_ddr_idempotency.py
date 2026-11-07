@@ -83,6 +83,38 @@ async def _counts(fabric: Fabric) -> tuple[int, int]:
     return int(operations), int(events)
 
 
+def test_operation_rows_use_unique_source_coordinates_not_ingestion_order() -> None:
+    rows = [
+        ExtractedRecord(id="rec_later", page_number=1, payload={"row_index": 10}),
+        ExtractedRecord(id="rec_next_page", page_number=2, payload={"row_index": 1}),
+        ExtractedRecord(id="rec_earlier", page_number=1, payload={"row_index": 4}),
+    ]
+
+    ordered = DdrProcessor._source_ordered_operation_rows(rows)
+
+    assert [row.id for row in ordered] == ["rec_earlier", "rec_later", "rec_next_page"]
+
+
+def test_operation_rows_do_not_guess_order_when_source_coordinates_are_ambiguous() -> None:
+    duplicate_coordinates = [
+        ExtractedRecord(id="rec_first", page_number=1, payload={"row_index": 4}),
+        ExtractedRecord(id="rec_second", page_number=1, payload={"row_index": 4}),
+    ]
+    missing_page = [
+        ExtractedRecord(id="rec_unknown_later", page_number=None, payload={"row_index": 10}),
+        ExtractedRecord(id="rec_unknown_earlier", page_number=None, payload={"row_index": 1}),
+    ]
+
+    assert [row.id for row in DdrProcessor._source_ordered_operation_rows(duplicate_coordinates)] == [
+        "rec_first",
+        "rec_second",
+    ]
+    assert [row.id for row in DdrProcessor._source_ordered_operation_rows(missing_page)] == [
+        "rec_unknown_later",
+        "rec_unknown_earlier",
+    ]
+
+
 async def test_a_report_promotes_into_traceable_operations(fabric: Fabric) -> None:
     document = await _upload_report(fabric)
     report = await _process(fabric, document["id"])
