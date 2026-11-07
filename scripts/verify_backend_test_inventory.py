@@ -159,6 +159,67 @@ def verify_windows_skip(log_text: str, manifest: dict[str, Any]) -> None:
         )
 
 
+def _junit_test_location(case: ET.Element) -> tuple[str, list[str]] | None:
+    """Resolve a test path/class from JUnit fields without trusting arbitrary XML values."""
+    raw_location = case.get("file", "").replace("\\", "/")
+    if "tests/" in raw_location:
+        location = raw_location[raw_location.index("tests/") :]
+    else:
+        location = raw_location.rsplit("/", 1)[-1]
+    valid_location = (
+        re.fullmatch(r"tests/[A-Za-z0-9_./-]+\.py", location)
+        and ".." not in location.split("/")
+    )
+
+    classname = case.get("classname", "")
+    class_segments = classname.split(".") if classname else []
+    safe_classname = bool(class_segments) and all(
+        re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", segment) for segment in class_segments
+    )
+    if valid_location:
+        # Pytest's JUnit family does not always include ``file``. When it does, retain
+        # class names only if they follow the module path derived from that trusted file.
+        module_name = location.removesuffix(".py").replace("/", ".")
+        module_segments = module_name.split(".")
+        class_names: list[str] = []
+        if safe_classname and class_segments[: len(module_segments)] == module_segments:
+            class_names = class_segments[len(module_segments) :]
+        elif (
+            safe_classname
+            and module_segments[:1] == ["tests"]
+            and class_segments[: len(module_segments) - 1] == module_segments[1:]
+        ):
+            class_names = class_segments[len(module_segments) - 1 :]
+        elif safe_classname and class_segments[:1] == module_segments[-1:]:
+            class_names = class_segments[1:]
+        return location, class_names
+
+    # Some pytest/xunit2 versions omit the optional ``file`` attribute. Resolve the
+    # longest module prefix against the checked-out tests tree; remaining safe segments
+    # are class names. Do not echo the raw JUnit classname into CI annotations.
+    if not safe_classname:
+        return None
+    module_segments = class_segments[1:] if class_segments[0] == "tests" else class_segments
+    tests_root = BACKEND / "tests"
+    test_files = sorted(tests_root.rglob("test_*.py"))
+    for module_end in range(len(module_segments), 0, -1):
+        module_prefix = tuple(module_segments[:module_end])
+        candidate = tests_root.joinpath(*module_prefix).with_suffix(".py")
+        if candidate.is_file():
+            return candidate.relative_to(BACKEND).as_posix(), module_segments[module_end:]
+
+        # Some reporters use only the test module basename in `classname`. Accept a
+        # suffix match only when it identifies exactly one checked-out test file.
+        matching_files = []
+        for test_file in test_files:
+            file_module = test_file.relative_to(tests_root).with_suffix("").parts
+            if len(file_module) >= module_end and file_module[-module_end:] == module_prefix:
+                matching_files.append(test_file)
+        if len(matching_files) == 1:
+            return matching_files[0].relative_to(BACKEND).as_posix(), module_segments[module_end:]
+    return None
+
+
 def _junit_failure_summaries(xml_path: Path, *, limit: int = 12) -> list[str]:
     """Extract stable test locations and exception classes, never assertion messages or values."""
     try:
@@ -172,19 +233,12 @@ def _junit_failure_summaries(xml_path: Path, *, limit: int = 12) -> list[str]:
         failure = next((child for child in case if child.tag in {"failure", "error"}), None)
         if failure is None:
             continue
-        location = case.get("file", "").replace("\\", "/")
-        if "tests/" in location:
-            location = location[location.index("tests/") :]
-        else:
-            location = location.rsplit("/", 1)[-1]
+        resolved = _junit_test_location(case)
         test_name = case.get("name", "").split("[", 1)[0]
-        if (
-            not re.fullmatch(r"tests/[A-Za-z0-9_./-]+\.py", location)
-            or ".." in location.split("/")
-            or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", test_name)
-        ):
+        if resolved is None or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", test_name):
             continue
-        node_id = f"{location}::{test_name}"
+        location, class_names = resolved
+        node_id = "::".join([location, *class_names, test_name])
         raw_exception = (failure.get("type") or "").rsplit(".", 1)[-1]
         exception = raw_exception if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", raw_exception) else "failure"
         summary = f"{node_id} [{exception}]"

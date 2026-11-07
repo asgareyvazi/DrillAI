@@ -352,6 +352,42 @@ def test_cp32_the_certification_jobs_reject_skips(tmp_path: Path) -> None:
     assert summaries == ["tests/db/test_scope.py::test_rejects_scope [IntegrityError]"]
     assert "private-param" not in " ".join(summaries) and "assertion details" not in " ".join(summaries)
 
+    # JUnit XML may omit the optional `file` attribute. Resolve a safe module/class
+    # location from `classname` instead of silently losing all Windows diagnostics.
+    junit_path.write_text(
+        "<testsuites><testsuite><testcase "
+        "name='test_cp32_the_certification_jobs_reject_skips[private-param]' "
+        "classname='test_cp32_e2e_console_error_contract'>"
+        "<failure type='sqlalchemy.exc.IntegrityError' message='private-value'>assertion details</failure>"
+        "</testcase></testsuite></testsuites>",
+        encoding="utf-8",
+    )
+    summaries = diagnostics.failed_node_summaries("", junit_xml_file=junit_path)
+    assert summaries == [
+        "tests/security/test_cp32_e2e_console_error_contract.py::"
+        "test_cp32_the_certification_jobs_reject_skips [IntegrityError]"
+    ]
+    assert "private-param" not in " ".join(summaries)
+    assert "private-value" not in " ".join(summaries)
+    assert "assertion details" not in " ".join(summaries)
+
+    junit_path.write_text(
+        "<testsuites><testsuite><testcase "
+        "name='test_cp32_the_certification_jobs_reject_skips[private-param]' "
+        "classname='tests.security.test_cp32_e2e_console_error_contract.TestDiagnostics'>"
+        "<failure type='sqlalchemy.exc.IntegrityError' message='private-value'>assertion details</failure>"
+        "</testcase></testsuite></testsuites>",
+        encoding="utf-8",
+    )
+    summaries = diagnostics.failed_node_summaries("", junit_xml_file=junit_path)
+    assert summaries == [
+        "tests/security/test_cp32_e2e_console_error_contract.py::TestDiagnostics::"
+        "test_cp32_the_certification_jobs_reject_skips [IntegrityError]"
+    ]
+    assert "private-param" not in " ".join(summaries)
+    assert "private-value" not in " ".join(summaries)
+    assert "assertion details" not in " ".join(summaries)
+
 
 def _step_text(job: dict, step_name_prefix: str) -> str:
     for step in job.get("steps", []):
