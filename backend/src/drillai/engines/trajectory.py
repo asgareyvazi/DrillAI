@@ -32,8 +32,9 @@ from drillai.engines.registry import register_engine
 from drillai.units.registry import quantity_field
 
 METHOD = "minimum_curvature"
-ENGINE_VERSION = "1.2.0"
+ENGINE_VERSION = "1.3.0"
 _DEG = math.pi / 180.0
+_ANTIPODAL_DOGLEG_TOLERANCE_RAD = 1e-8
 _30M_IN_M = 30.0
 
 # Survey-QC thresholds (configurable per project in a later iteration; defaults chosen to
@@ -451,6 +452,11 @@ def minimum_curvature(inputs: TrajectoryEngineInput) -> EngineResult:
         prev_azimuth_corrected = prev_azimuth_deg * _DEG
 
         dogleg_angle = _dogleg_angle(prev_inc, prev_azimuth_corrected, inclination, azimuth)
+        if math.pi - dogleg_angle <= _ANTIPODAL_DOGLEG_TOLERANCE_RAD:
+            raise ValueError(
+                f"minimum curvature is undefined for antipodal survey directions at station {index}; "
+                "an intermediate station is required to define the arc"
+            )
         ratio_factor = 1.0 if dogleg_angle < 1e-9 else (2.0 / dogleg_angle) * math.tan(dogleg_angle / 2.0)
 
         delta_tvd = (delta_md / 2.0) * (math.cos(prev_inc) + math.cos(inclination)) * ratio_factor

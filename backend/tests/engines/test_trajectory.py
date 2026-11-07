@@ -7,6 +7,7 @@ exact and can be written down by hand.
 
 from __future__ import annotations
 
+import itertools
 import math
 
 import pytest
@@ -23,6 +24,50 @@ def _build_and_hold_well() -> list[dict]:
         {"md_si": HOLD_MD_M, "inclination_deg": 0.0, "azimuth_deg": 0.0, "azimuth_reference": "grid", "azimuth_reference_id": "test-grid"},
         {"md_si": HOLD_MD_M + BUILD_LENGTH_M, "inclination_deg": BUILD_ANGLE_DEG, "azimuth_deg": 0.0, "azimuth_reference": "grid", "azimuth_reference_id": "test-grid"},
     ]
+
+
+def _unit_tangent(inclination_deg: float, azimuth_deg: float) -> tuple[float, float, float]:
+    """Return the unit tangent in positive-down TVD, north, east axes for an independent reference."""
+    inclination = math.radians(inclination_deg)
+    azimuth = math.radians(azimuth_deg)
+    return (
+        math.cos(inclination),
+        math.sin(inclination) * math.cos(azimuth),
+        math.sin(inclination) * math.sin(azimuth),
+    )
+
+
+def _spherical_simpson_displacement(
+    start: tuple[float, float, float],
+    end: tuple[float, float, float],
+    length_m: float,
+    *,
+    steps: int = 512,
+) -> tuple[float, float, float]:
+    """Numerically integrate the great-circle unit tangent, independent of the engine ratio factor.
+
+    This is a deterministic mathematical reference, not a field survey or vendor acceptance vector.
+    """
+    assert steps > 0 and steps % 2 == 0
+    dot = max(-1.0, min(1.0, sum(left * right for left, right in zip(start, end, strict=True))))
+    dogleg = math.acos(dot)
+    sine = math.sin(dogleg)
+    assert abs(sine) > 1e-12, "the reference arc must not be parallel or antipodal"
+
+    weighted = [0.0, 0.0, 0.0]
+    for step in range(steps + 1):
+        t = step / steps
+        coefficient_start = math.sin((1.0 - t) * dogleg) / sine
+        coefficient_end = math.sin(t * dogleg) / sine
+        tangent = tuple(
+            coefficient_start * first + coefficient_end * last
+            for first, last in zip(start, end, strict=True)
+        )
+        weight = 1 if step in {0, steps} else (4 if step % 2 else 2)
+        for axis, component in enumerate(tangent):
+            weighted[axis] += weight * component
+    scale = length_m / (3.0 * steps)
+    return (scale * weighted[0], scale * weighted[1], scale * weighted[2])
 
 
 def test_build_and_hold_matches_analytical_ratio_factor(engines):
@@ -106,6 +151,73 @@ def test_multi_interval_constant_build_matches_independent_closed_form(engines):
     assert result.outputs.max_dls_deg_per_30m == pytest.approx(3.0, rel=1e-10)
     assert result.outputs.azimuth_reference == "grid"
     assert result.outputs.azimuth_reference_id == "test-grid"
+
+
+def test_multiaxis_survey_matches_independent_spherical_simpson_reference(engines):
+    """A synthetic 3D benchmark agrees with numerical great-circle integration, not ratio-factor code."""
+    surveys = [
+        (0.0, 12.0, 37.0),
+        (120.0, 25.0, 61.0),
+        (350.0, 41.0, 82.0),
+        (610.0, 63.0, 114.0),
+        (900.0, 74.0, 137.0),
+    ]
+    stations = [
+        {
+            "md_si": md,
+            "inclination_deg": inclination,
+            "azimuth_deg": azimuth,
+            "azimuth_reference": "grid",
+            "azimuth_reference_id": "synthetic-grid-reference",
+        }
+        for md, inclination, azimuth in surveys
+    ]
+    reference_positions = [(100.0, 25.0, -10.0)]
+    expected_dogleg_severity = [3.702794220885, 2.538894855707, 3.811461276121, 2.482833047567]
+    for start, end in itertools.pairwise(surveys):
+        displacement = _spherical_simpson_displacement(
+            _unit_tangent(start[1], start[2]),
+            _unit_tangent(end[1], end[2]),
+            end[0] - start[0],
+        )
+        reference_positions.append(
+            tuple(previous + delta for previous, delta in zip(reference_positions[-1], displacement, strict=True))
+        )
+
+    expected_positions = [
+        (100.0, 25.0, -10.0),
+        (213.701195675664, 47.380874554993, 19.851698492806),
+        (406.576811585098, 81.774750665150, 138.212288944673),
+        (568.209860473161, 45.522088546263, 333.938340443314),
+        (675.580539478880, -111.264212843623, 550.195155362530),
+    ]
+    for calculated_reference, golden in zip(reference_positions, expected_positions, strict=True):
+        assert calculated_reference == pytest.approx(golden, abs=1e-8)
+
+    _, result = engines.execute(
+        "trajectory.minimum_curvature",
+        {
+            "stations": stations,
+            "tie_in": {
+                "tvd_si": 100.0,
+                "ns_si": 25.0,
+                "ew_si": -10.0,
+                "azimuth_reference": "grid",
+                "azimuth_reference_id": "synthetic-grid-reference",
+            },
+        },
+    )
+    for station, (tvd, north, east), expected_dls in zip(
+        result.outputs.stations, expected_positions, [0.0, *expected_dogleg_severity], strict=True
+    ):
+        assert station.tvd_si == pytest.approx(tvd, abs=1e-8)
+        assert station.ns_si == pytest.approx(north, abs=1e-8)
+        assert station.ew_si == pytest.approx(east, abs=1e-8)
+        assert (station.dls_deg_per_30m or 0.0) == pytest.approx(expected_dls, abs=1e-9)
+    assert result.outputs.total_displacement_si == pytest.approx(math.hypot(expected_positions[-1][1], expected_positions[-1][2]))
+    assert result.outputs.closure_azimuth_deg == pytest.approx(
+        math.degrees(math.atan2(expected_positions[-1][2], expected_positions[-1][1])) % 360.0
+    )
 
 
 def test_reference_conversion_is_explicit_and_preserves_input_provenance(engines):
@@ -348,6 +460,55 @@ def test_dls_is_constant_through_the_build(engines):
     # length-weighted: the 300 m build dominates the 1000 m vertical section
     expected_average = expected_dls * BUILD_LENGTH_M / (HOLD_MD_M + BUILD_LENGTH_M)
     assert output.average_dls_deg_per_30m == pytest.approx(expected_average, rel=1e-9)
+
+
+def test_quality_control_flags_high_dls_and_inclination_jump_without_hiding_values(engines):
+    stations = [
+        {"md_si": 0.0, "inclination_deg": 20.0, "azimuth_deg": 45.0, "azimuth_reference": "grid", "azimuth_reference_id": "qc-grid"},
+        {"md_si": 30.0, "inclination_deg": 40.0, "azimuth_deg": 45.0, "azimuth_reference": "grid", "azimuth_reference_id": "qc-grid"},
+    ]
+    _, result = engines.execute(
+        "trajectory.minimum_curvature",
+        {"stations": stations, "max_dls_limit": 18.0, "max_inc_limit": 35.0},
+    )
+
+    station = result.outputs.stations[-1]
+    assert station.dogleg_angle_deg == pytest.approx(20.0)
+    assert station.dls_deg_per_30m == pytest.approx(20.0)
+    assert {"high_dls", "large_inclination_change"} <= set(station.quality_flags)
+    assert any("exceeds 15.0 deg/30m" in warning for warning in result.warnings)
+    violations = {violation.name: violation for violation in result.violations}
+    assert {"max_dls_limit", "max_inclination_limit"} <= set(violations)
+    assert violations["max_dls_limit"].actual == pytest.approx(20.0)
+    assert violations["max_dls_limit"].limit == pytest.approx(18.0)
+    assert violations["max_dls_limit"].unit == "deg/30m"
+    assert violations["max_inclination_limit"].actual == pytest.approx(40.0)
+    assert violations["max_inclination_limit"].limit == pytest.approx(35.0)
+    assert result.outputs.stations[-1].tvd_si is not None
+    assert result.is_feasible is False
+
+
+def test_qc_thresholds_are_strict_at_ten_degree_jump_and_fifteen_dls(engines):
+    for end_inclination, expected_jump_flag in ((10.0, False), (15.0, True)):
+        stations = [
+            {"md_si": 0.0, "inclination_deg": 0.0, "azimuth_deg": 0.0, "azimuth_reference": "grid", "azimuth_reference_id": "qc-grid"},
+            {"md_si": 30.0, "inclination_deg": end_inclination, "azimuth_deg": 0.0, "azimuth_reference": "grid", "azimuth_reference_id": "qc-grid"},
+        ]
+        _, result = engines.execute("trajectory.minimum_curvature", {"stations": stations})
+        flags = set(result.outputs.stations[-1].quality_flags)
+        assert ("large_inclination_change" in flags) is expected_jump_flag
+        assert "high_dls" not in flags
+        assert not any("dogleg severity" in warning for warning in result.warnings)
+
+
+def test_antipodal_survey_directions_are_rejected_as_undefined(engines):
+    for end_inclination in (180.0, 179.999999999):
+        stations = [
+            {"md_si": 0.0, "inclination_deg": 0.0, "azimuth_deg": 0.0, "azimuth_reference": "grid", "azimuth_reference_id": "singular-grid"},
+            {"md_si": 30.0, "inclination_deg": end_inclination, "azimuth_deg": 180.0, "azimuth_reference": "grid", "azimuth_reference_id": "singular-grid"},
+        ]
+        with pytest.raises(ValueError, match="undefined for antipodal survey directions"):
+            engines.execute("trajectory.minimum_curvature", {"stations": stations})
 
 
 def test_max_inclination_and_closure_azimuth_reported(engines):
