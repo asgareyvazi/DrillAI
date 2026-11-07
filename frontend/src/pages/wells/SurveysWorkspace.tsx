@@ -16,7 +16,7 @@ import type {
 import { Badge, Button, Card, EmptyState, ErrorState, Field, Loading, Table } from '../../components/common'
 import { PageHeader } from '../../components/layout/AppShell'
 import { useI18n } from '../../i18n'
-import { formatDateTime, formatNumber, humanise } from '../../lib/format'
+import { formatDateTime, formatNumber } from '../../lib/format'
 
 type Datum = SurveyCreatePayload['datum']
 type AzimuthReference = SurveyInputStationPayload['azimuth_reference']
@@ -33,7 +33,7 @@ type StationDraft = {
   inclinationUnit: 'deg' | 'rad'
   azimuth: string
   azimuthUnit: 'deg' | 'rad'
-  azimuthReference: AzimuthReference
+  azimuthReference: string
   azimuthReferenceId: string
   gridCorrection: string
   gridCorrectionUnit: 'deg' | 'rad'
@@ -46,11 +46,11 @@ type StationDraft = {
 type CalculationDraft = {
   kbElevation: string
   kbElevationUnit: 'm' | 'ft'
-  targetReference: '' | TargetReference
+  targetReference: string
   targetReferenceId: string
   verticalSectionAzimuth: string
   verticalSectionUnit: 'deg' | 'rad'
-  verticalSectionReference: AzimuthReference
+  verticalSectionReference: string
   verticalSectionReferenceId: string
   maxDls: string
   maxInclination: string
@@ -61,6 +61,15 @@ const inputClass =
 const kindOptions: SurveyTrajectoryKind[] = ['actual', 'plan', 'design', 'revised', 'proposed', 'interpolated', 'anti_collision']
 const datumOptions: Datum[] = ['unknown', 'rkb', 'msl', 'gl', 'cf', 'derrick_floor']
 const referenceOptions: AzimuthReference[] = ['unknown', 'grid', 'true', 'magnetic']
+const targetReferenceOptions: TargetReference[] = ['grid', 'true', 'magnetic']
+
+function isAzimuthReference(value: string): value is AzimuthReference {
+  return (referenceOptions as readonly string[]).includes(value)
+}
+
+function isTargetReference(value: string): value is TargetReference {
+  return (targetReferenceOptions as readonly string[]).includes(value)
+}
 
 function newKey(): string {
   return typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
@@ -87,7 +96,7 @@ function emptyStation(): StationDraft {
     gridCorrectionUnit: 'deg',
     toolface: '',
     toolfaceUnit: 'deg',
-    source: 'manual',
+    source: '',
     sourceStationId: '',
   }
 }
@@ -135,17 +144,22 @@ function optionalCalculationFields(calc: CalculationDraft, t: Translate): Pick<
   const result: ReturnType<typeof optionalCalculationFields> = {
     kb_elevation_unit: calc.kbElevationUnit,
     vertical_section_azimuth_unit: calc.verticalSectionUnit,
-    vertical_section_azimuth_reference: calc.verticalSectionReference,
   }
   const kb = finiteInput(calc.kbElevation, t('surveys.kbElevation'), t, true)
   if (kb !== undefined) result.kb_elevation_value = kb
   if (calc.targetReference) {
+    if (!isTargetReference(calc.targetReference)) {
+      throw new Error(t('surveys.errorUnknownTargetFrame', { value: calc.targetReference }))
+    }
     if (!calc.targetReferenceId.trim()) throw new Error(t('surveys.errorTargetFrame'))
     result.target_azimuth_reference = calc.targetReference
     result.target_azimuth_reference_id = calc.targetReferenceId.trim()
   }
   const vertical = finiteInput(calc.verticalSectionAzimuth, t('surveys.verticalSectionAzimuth'), t, true)
   if (vertical !== undefined) {
+    if (!isAzimuthReference(calc.verticalSectionReference)) {
+      throw new Error(t('surveys.errorUnknownAzimuthFrame', { value: calc.verticalSectionReference }))
+    }
     if (calc.verticalSectionReference === 'unknown' || !calc.verticalSectionReferenceId.trim()) {
       throw new Error(t('surveys.errorVerticalSectionFrame'))
     }
@@ -193,9 +207,7 @@ function stationDraftFromResult(station: SurveyTrajectoryStation): StationDraft 
     azimuth: numericText(acceptedAzimuth, station.input_azimuth_deg ?? station.azimuth_deg),
     azimuthUnit: 'deg',
     azimuthReference:
-      reference === 'grid' || reference === 'true' || reference === 'magnetic' || reference === 'unknown'
-        ? reference
-        : (station.input_azimuth_reference as AzimuthReference | null) ?? 'unknown',
+      typeof reference === 'string' ? reference : station.input_azimuth_reference ?? 'unknown',
     azimuthReferenceId:
       typeof referenceId === 'string' ? referenceId : station.input_azimuth_reference_id ?? '',
     gridCorrection: typeof correction === 'number' && Number.isFinite(correction) ? String(correction) : '',
@@ -217,19 +229,13 @@ function calculationDraftFromTrajectory(trajectory: SurveyTrajectoryDetail): Cal
   return {
     kbElevation: typeof kbElevation === 'number' && Number.isFinite(kbElevation) ? String(kbElevation) : '',
     kbElevationUnit: 'm',
-    targetReference:
-      targetReference === 'grid' || targetReference === 'true' || targetReference === 'magnetic'
-        ? targetReference
-        : '',
+    targetReference: typeof targetReference === 'string' ? targetReference : '',
     targetReferenceId:
       typeof parameters.target_azimuth_reference_id === 'string' ? parameters.target_azimuth_reference_id : '',
     verticalSectionAzimuth:
       typeof verticalAzimuth === 'number' && Number.isFinite(verticalAzimuth) ? String(verticalAzimuth) : '',
     verticalSectionUnit: 'deg',
-    verticalSectionReference:
-      verticalReference === 'grid' || verticalReference === 'true' || verticalReference === 'magnetic'
-        ? verticalReference
-        : 'unknown',
+    verticalSectionReference: typeof verticalReference === 'string' ? verticalReference : 'unknown',
     verticalSectionReferenceId:
       typeof parameters.vertical_section_azimuth_reference_id === 'string'
         ? parameters.vertical_section_azimuth_reference_id
@@ -260,21 +266,29 @@ function fmt(value: number | null | undefined, locale: string, digits = 2): stri
   return value !== null && value !== undefined && Number.isFinite(value) ? formatNumber(value, locale, digits) : '—'
 }
 
+function extractedNumber(value: unknown, locale: string, t: Translate): string {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? formatNumber(value, locale, 2)
+    : t('common.unknown')
+}
+
 function referenceLabel(value: string, t: Translate): string {
   if (value === 'grid') return t('surveys.referenceGrid')
   if (value === 'true') return t('surveys.referenceTrue')
   if (value === 'magnetic') return t('surveys.referenceMagnetic')
-  return t('surveys.referenceUnknown')
+  if (value === 'unknown') return t('surveys.referenceUnknown')
+  return t('surveys.unknownEnumValue', { value })
 }
 
-function kindLabel(value: SurveyTrajectoryKind, t: Translate): string {
+function kindLabel(value: string, t: Translate): string {
   if (value === 'actual') return t('surveys.kindActual')
   if (value === 'plan') return t('surveys.kindPlan')
   if (value === 'design') return t('surveys.kindDesign')
   if (value === 'revised') return t('surveys.kindRevised')
   if (value === 'proposed') return t('surveys.kindProposed')
   if (value === 'interpolated') return t('surveys.kindInterpolated')
-  return t('surveys.kindAntiCollision')
+  if (value === 'anti_collision') return t('surveys.kindAntiCollision')
+  return t('surveys.unknownEnumValue', { value })
 }
 
 function datumLabel(value: string, t: Translate): string {
@@ -283,20 +297,39 @@ function datumLabel(value: string, t: Translate): string {
   if (value === 'gl') return t('surveys.datumGl')
   if (value === 'cf') return t('surveys.datumCf')
   if (value === 'derrick_floor') return t('surveys.datumDerrick')
-  return t('surveys.datumUnknown')
+  if (value === 'unknown') return t('surveys.datumUnknown')
+  return t('surveys.unknownEnumValue', { value })
 }
 
 function datumProvenanceLabel(value: string, t: Translate): string {
   if (value === 'source_document') return t('surveys.datumSourceDocument')
   if (value === 'engine_input') return t('surveys.datumEngineInput')
   if (value === 'legacy_unverified') return t('surveys.datumLegacyUnverified')
-  return referenceLabel('unknown', t)
+  if (value === 'unknown') return t('common.unknown')
+  return t('surveys.unknownEnumValue', { value })
+}
+
+function wellborePurposeLabel(value: string, t: Translate): string {
+  if (value === 'original') return t('surveys.wellborePurposeOriginal')
+  if (value === 'sidetrack') return t('surveys.wellborePurposeSidetrack')
+  if (value === 'bypass') return t('surveys.wellborePurposeBypass')
+  if (value === 'reentry') return t('surveys.wellborePurposeReentry')
+  if (value === 'reamed') return t('surveys.wellborePurposeReamed')
+  if (value === 'pilot') return t('surveys.wellborePurposePilot')
+  if (value === 'contingency') return t('surveys.wellborePurposeContingency')
+  if (value === 'unknown') return t('surveys.wellborePurposeUnknown')
+  return t('surveys.unknownEnumValue', { value })
 }
 
 function calculationStateLabel(value: string, t: Translate): string {
   if (value === 'formula_derived') return t('surveys.calculationFormulaDerived')
   if (value === 'legacy_unclassified') return t('surveys.calculationLegacyUnclassified')
-  return humanise(value)
+  return t('surveys.unknownEnumValue', { value })
+}
+
+function engineeringAcceptanceLabel(value: string, t: Translate): string {
+  if (value === 'not_established') return t('surveys.acceptanceNotEstablished')
+  return t('surveys.unknownEnumValue', { value })
 }
 
 function reviewStateLabel(value: string, t: Translate): string {
@@ -305,7 +338,69 @@ function reviewStateLabel(value: string, t: Translate): string {
   if (value === 'rule_validated') return t('surveys.reviewStateRuleValidated')
   if (value === 'rejected') return t('surveys.reviewStateRejected')
   if (value === 'superseded') return t('surveys.reviewStateSuperseded')
-  return humanise(value)
+  return t('surveys.unknownEnumValue', { value })
+}
+
+function comparisonStateLabel(value: string, t: Translate): string {
+  if (value === 'matched_exact_md') return t('surveys.comparisonMatchedExact')
+  if (value === 'added') return t('surveys.comparisonAdded')
+  if (value === 'removed') return t('surveys.comparisonRemoved')
+  return t('surveys.unknownEnumValue', { value })
+}
+
+function unitOptionLabel(value: 'm' | 'ft' | 'deg' | 'rad', t: Translate): string {
+  if (value === 'm') return t('surveys.unitMetre')
+  if (value === 'ft') return t('surveys.unitFoot')
+  if (value === 'deg') return t('surveys.unitDegree')
+  return t('surveys.unitRadian')
+}
+
+function stationSourceLabel(value: string, t: Translate): string {
+  if (value === 'manual') return t('surveys.sourceManual')
+  if (value === 'plan') return t('surveys.sourcePlan')
+  if (value === 'mwd') return t('surveys.sourceMwd')
+  if (value === 'gyro') return t('surveys.sourceGyro')
+  if (value === 'tie_in') return t('surveys.sourceTieIn')
+  if (value === 'interpolated') return t('surveys.sourceInterpolated')
+  if (value === 'unknown') return t('surveys.sourceUnknown')
+  return value
+}
+
+function surveyWarningLabel(value: unknown, t: Translate, locale: string): string {
+  if (typeof value !== 'string') return JSON.stringify(value) ?? String(value)
+  if (value === 'TVDSS was not calculated because the vertical datum is unknown') {
+    return t('surveys.warningTvdssUnknownDatum')
+  }
+  if (value === 'TVDSS was not calculated because an RKB-referenced TVD requires KB elevation above MSL') {
+    return t('surveys.warningTvdssMissingKb')
+  }
+  if (value === 'trajectory coordinates are referenced to magnetic north; they have not been converted to grid or true north') {
+    return t('surveys.warningMagneticNorth')
+  }
+  const unsupportedDatum = value.match(/^TVDSS was not calculated because no MSL conversion is defined for the (.+) datum$/)
+  if (unsupportedDatum) {
+    return t('surveys.warningTvdssUnsupportedDatum', { datum: datumLabel(unsupportedDatum[1] ?? 'unknown', t) })
+  }
+  const gap = value.match(/^station gap of (-?\d+(?:\.\d+)?) m before MD (-?\d+(?:\.\d+)?) m reduces accuracy$/)
+  if (gap) {
+    return t('surveys.warningStationGap', {
+      gap: formatNumber(Number(gap[1]), locale, 1),
+      md: formatNumber(Number(gap[2]), locale, 1),
+    })
+  }
+  const highDls = value.match(/^dogleg severity (-?\d+(?:\.\d+)?) deg\/30m at MD (-?\d+(?:\.\d+)?) m exceeds (-?\d+(?:\.\d+)?) deg\/30m$/)
+  if (highDls) {
+    return t('surveys.warningHighDls', {
+      value: formatNumber(Number(highDls[1]), locale, 2),
+      md: formatNumber(Number(highDls[2]), locale, 1),
+      limit: formatNumber(Number(highDls[3]), locale, 2),
+    })
+  }
+  return value
+}
+
+function UnitHeading({ label, unit }: { label: string; unit: string }) {
+  return <span dir="auto">{label} (<bdi dir="ltr">{unit}</bdi>)</span>
 }
 
 function PlanView({ stations, locale, title, eastLabel, northLabel, emptyLabel, t }: { stations: SurveyTrajectoryStation[]; locale: string; title: string; eastLabel: string; northLabel: string; emptyLabel: string; t: Translate }) {
@@ -346,8 +441,8 @@ function PlanView({ stations, locale, title, eastLabel, northLabel, emptyLabel, 
           <title>{t('surveys.stationTooltip', { md: fmt(station.md_si, locale), east: fmt(station.ew_si, locale), north: fmt(station.ns_si, locale) })}</title>
         </circle>
       ))}
-      <text x={width / 2} y={height - 6} textAnchor="middle" className="fill-current text-[10px]">{eastLabel} (m)</text>
-      <text x="10" y={height / 2} textAnchor="middle" transform={`rotate(-90 10 ${height / 2})`} className="fill-current text-[10px]">{northLabel} (m)</text>
+      <text x={width / 2} y={height - 6} textAnchor="middle" className="fill-current text-[10px]">{eastLabel} (<tspan direction="ltr" unicodeBidi="isolate">m</tspan>)</text>
+      <text x="10" y={height / 2} textAnchor="middle" transform={`rotate(-90 10 ${height / 2})`} className="fill-current text-[10px]">{northLabel} (<tspan direction="ltr" unicodeBidi="isolate">m</tspan>)</text>
     </svg>
   )
 }
@@ -383,8 +478,8 @@ function DepthView({ stations, locale, title, mdLabel, tvdLabel, emptyLabel, pos
           <title>{t('surveys.depthTooltip', { md: fmt(station.md_si, locale), tvd: fmt(station.tvd_si, locale) })}</title>
         </circle>
       ))}
-      <text x={width / 2} y={height - 6} textAnchor="middle" className="fill-current text-[10px]">{mdLabel} (m)</text>
-      <text x="10" y={height / 2} textAnchor="middle" transform={`rotate(-90 10 ${height / 2})`} className="fill-current text-[10px]">{tvdLabel} (m, {positiveDownLabel})</text>
+      <text x={width / 2} y={height - 6} textAnchor="middle" className="fill-current text-[10px]">{mdLabel} (<tspan direction="ltr" unicodeBidi="isolate">m</tspan>)</text>
+      <text x="10" y={height / 2} textAnchor="middle" transform={`rotate(-90 10 ${height / 2})`} className="fill-current text-[10px]">{tvdLabel} (<tspan direction="ltr" unicodeBidi="isolate">m</tspan>, {positiveDownLabel})</text>
     </svg>
   )
 }
@@ -579,12 +674,16 @@ export default function SurveysWorkspace() {
   function buildStationInputs(): SurveyInputStationPayload[] {
     if (stations.length < 2) throw new Error(t('surveys.errorStationCount'))
     return stations.map((station, index) => {
-      const stationLabel = (field: string) => t('surveys.stationField', { station: index + 1, field })
+      const stationNumber = formatNumber(index + 1, locale, 0)
+      const stationLabel = (field: string) => t('surveys.stationField', { station: stationNumber, field })
       const md = finiteInput(station.md, stationLabel(t('surveys.md')), t)
       const inclination = finiteInput(station.inclination, stationLabel(t('surveys.inclination')), t)
       const azimuth = finiteInput(station.azimuth, stationLabel(t('surveys.inputAzimuth')), t)
+      if (!isAzimuthReference(station.azimuthReference)) {
+        throw new Error(t('surveys.errorUnknownAzimuthFrame', { value: station.azimuthReference }))
+      }
       if (station.azimuthReference !== 'unknown' && !station.azimuthReferenceId.trim()) {
-        throw new Error(t('surveys.errorAzimuthFrame', { station: index + 1 }))
+        throw new Error(t('surveys.errorAzimuthFrame', { station: stationNumber }))
       }
       return {
         md_value: md,
@@ -595,9 +694,9 @@ export default function SurveysWorkspace() {
         azimuth_unit: station.azimuthUnit,
         azimuth_reference: station.azimuthReference,
         azimuth_reference_id: station.azimuthReferenceId.trim() || null,
-        grid_correction_value: numberOrUndefined(station.gridCorrection, `Station ${index + 1} grid correction`) ?? null,
+        grid_correction_value: numberOrUndefined(station.gridCorrection, stationLabel(t('surveys.gridCorrection'))) ?? null,
         grid_correction_unit: station.gridCorrectionUnit,
-        toolface_value: numberOrUndefined(station.toolface, `Station ${index + 1} toolface`) ?? null,
+        toolface_value: numberOrUndefined(station.toolface, stationLabel(t('surveys.toolface'))) ?? null,
         toolface_unit: station.toolfaceUnit,
         source: station.source.trim() || 'manual',
         ...(formBase && station.sourceStationId ? { source_station_id: station.sourceStationId } : {}),
@@ -678,6 +777,7 @@ export default function SurveysWorkspace() {
       <div className="grid gap-3 md:grid-cols-2">
         <Field label={t('surveys.datum')}>
           <select value={datum} disabled={datumLocked} onChange={(event) => setDatum(event.target.value as Datum)} className={inputClass}>
+            {!(datumOptions as readonly string[]).includes(datum) && <option value={datum} dir="auto">{datumLabel(datum, t)}</option>}
             {datumOptions.map((value) => (
               <option key={value} value={value}>
                 {datumLabel(value, t)}
@@ -691,13 +791,16 @@ export default function SurveysWorkspace() {
           </Field>
           <Field label={t('surveys.unit')}>
             <select value={calculation.kbElevationUnit} onChange={(event) => setCalculation((old) => ({ ...old, kbElevationUnit: event.target.value as 'm' | 'ft' }))} className={inputClass}>
-              <option value="m">m</option><option value="ft">ft</option>
+              <option value="m">{unitOptionLabel('m', t)}</option><option value="ft">{unitOptionLabel('ft', t)}</option>
             </select>
           </Field>
         </div>
         <Field label={t('surveys.targetFrame')}>
-          <select value={calculation.targetReference} onChange={(event) => setCalculation((old) => ({ ...old, targetReference: event.target.value as CalculationDraft['targetReference'] }))} className={inputClass}>
+          <select value={calculation.targetReference} onChange={(event) => setCalculation((old) => ({ ...old, targetReference: event.target.value }))} className={inputClass}>
             <option value="">{t('surveys.noTargetConversion')}</option>
+            {calculation.targetReference && !isTargetReference(calculation.targetReference) && (
+              <option value={calculation.targetReference} dir="auto">{t('surveys.unknownEnumValue', { value: calculation.targetReference })}</option>
+            )}
             <option value="grid">{t('surveys.referenceGrid')}</option>
             <option value="true">{t('surveys.referenceTrue')}</option>
             <option value="magnetic">{t('surveys.referenceMagnetic')}</option>
@@ -714,14 +817,17 @@ export default function SurveysWorkspace() {
           </Field>
           <Field label={t('surveys.angleUnit')}>
             <select value={calculation.verticalSectionUnit} onChange={(event) => setCalculation((old) => ({ ...old, verticalSectionUnit: event.target.value as 'deg' | 'rad' }))} className={inputClass}>
-              <option value="deg">deg</option><option value="rad">rad</option>
+              <option value="deg">{unitOptionLabel('deg', t)}</option><option value="rad">{unitOptionLabel('rad', t)}</option>
             </select>
           </Field>
         </div>
         {calculation.verticalSectionAzimuth.trim() && (
           <>
             <Field label={t('surveys.azimuthFrame')}>
-              <select value={calculation.verticalSectionReference} onChange={(event) => setCalculation((old) => ({ ...old, verticalSectionReference: event.target.value as AzimuthReference }))} className={inputClass}>
+              <select value={calculation.verticalSectionReference} onChange={(event) => setCalculation((old) => ({ ...old, verticalSectionReference: event.target.value }))} className={inputClass}>
+                {!isAzimuthReference(calculation.verticalSectionReference) && (
+                  <option value={calculation.verticalSectionReference} dir="auto">{referenceLabel(calculation.verticalSectionReference, t)}</option>
+                )}
                 {referenceOptions.map((value) => <option key={value} value={value}>{referenceLabel(value, t)}</option>)}
               </select>
             </Field>
@@ -733,7 +839,7 @@ export default function SurveysWorkspace() {
         <Field label={`${t('surveys.maximumDlsLimit')} · ${t('surveys.dlsLimitUnit')}`}>
           <input type="number" step="any" min="0" value={calculation.maxDls} onChange={(event) => setCalculation((old) => ({ ...old, maxDls: event.target.value }))} className={inputClass} />
         </Field>
-        <Field label={`${t('surveys.maximumInclinationLimit')} · deg`}>
+        <Field label={<UnitHeading label={t('surveys.maximumInclinationLimit')} unit="deg" />}>
           <input type="number" step="any" min="0" max="180" value={calculation.maxInclination} onChange={(event) => setCalculation((old) => ({ ...old, maxInclination: event.target.value }))} className={inputClass} />
         </Field>
       </div>
@@ -743,42 +849,47 @@ export default function SurveysWorkspace() {
   function renderStations() {
     return (
       <div className="space-y-2">
-        {stations.map((station, index) => (
+        {stations.map((station, index) => {
+          const stationNumber = formatNumber(index + 1, locale, 0)
+          return (
           <fieldset key={station.key} className="rounded-md border border-graphite-200 p-3 dark:border-graphite-800">
-            <legend className="px-1 text-xs font-semibold">{t('surveys.station')} {index + 1}</legend>
+            <legend className="px-1 text-xs font-semibold">{t('surveys.station')} {stationNumber}</legend>
             <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
               <div className="grid grid-cols-[1fr_5rem] gap-1">
-                <Field label={`${t('surveys.md')} (${index + 1})`}>
-                  <input aria-label={`${t('surveys.md')} ${index + 1}`} type="number" step="any" min="0" value={station.md} onChange={(event) => updateStation(index, { md: event.target.value })} className={inputClass} />
+                <Field label={`${t('surveys.md')} (${stationNumber})`}>
+                  <input aria-label={`${t('surveys.md')} ${stationNumber}`} type="number" step="any" min="0" value={station.md} onChange={(event) => updateStation(index, { md: event.target.value })} className={inputClass} />
                 </Field>
                 <Field label={t('surveys.unit')}>
                   <select value={station.mdUnit} onChange={(event) => updateStation(index, { mdUnit: event.target.value as 'm' | 'ft' })} className={inputClass}>
-                    <option value="m">m</option><option value="ft">ft</option>
+                    <option value="m">{unitOptionLabel('m', t)}</option><option value="ft">{unitOptionLabel('ft', t)}</option>
                   </select>
                 </Field>
               </div>
               <div className="grid grid-cols-[1fr_5rem] gap-1">
-                <Field label={`${t('surveys.inclination')} (${index + 1})`}>
-                  <input aria-label={`${t('surveys.inclination')} ${index + 1}`} type="number" step="any" value={station.inclination} onChange={(event) => updateStation(index, { inclination: event.target.value })} className={inputClass} />
+                <Field label={`${t('surveys.inclination')} (${stationNumber})`}>
+                  <input aria-label={`${t('surveys.inclination')} ${stationNumber}`} type="number" step="any" value={station.inclination} onChange={(event) => updateStation(index, { inclination: event.target.value })} className={inputClass} />
                 </Field>
                 <Field label={t('surveys.angleUnit')}>
                   <select value={station.inclinationUnit} onChange={(event) => updateStation(index, { inclinationUnit: event.target.value as 'deg' | 'rad' })} className={inputClass}>
-                    <option value="deg">deg</option><option value="rad">rad</option>
+                    <option value="deg">{unitOptionLabel('deg', t)}</option><option value="rad">{unitOptionLabel('rad', t)}</option>
                   </select>
                 </Field>
               </div>
               <div className="grid grid-cols-[1fr_5rem] gap-1">
-                <Field label={`${t('surveys.inputAzimuth')} (${index + 1})`}>
-                  <input aria-label={`${t('surveys.inputAzimuth')} ${index + 1}`} type="number" step="any" value={station.azimuth} onChange={(event) => updateStation(index, { azimuth: event.target.value })} className={inputClass} />
+                <Field label={`${t('surveys.inputAzimuth')} (${stationNumber})`}>
+                  <input aria-label={`${t('surveys.inputAzimuth')} ${stationNumber}`} type="number" step="any" value={station.azimuth} onChange={(event) => updateStation(index, { azimuth: event.target.value })} className={inputClass} />
                 </Field>
                 <Field label={t('surveys.angleUnit')}>
                   <select value={station.azimuthUnit} onChange={(event) => updateStation(index, { azimuthUnit: event.target.value as 'deg' | 'rad' })} className={inputClass}>
-                    <option value="deg">deg</option><option value="rad">rad</option>
+                    <option value="deg">{unitOptionLabel('deg', t)}</option><option value="rad">{unitOptionLabel('rad', t)}</option>
                   </select>
                 </Field>
               </div>
               <Field label={t('surveys.azimuthFrame')}>
-                <select value={station.azimuthReference} onChange={(event) => updateStation(index, { azimuthReference: event.target.value as AzimuthReference })} className={inputClass}>
+                <select value={station.azimuthReference} onChange={(event) => updateStation(index, { azimuthReference: event.target.value })} className={inputClass}>
+                  {!isAzimuthReference(station.azimuthReference) && (
+                    <option value={station.azimuthReference} dir="auto">{referenceLabel(station.azimuthReference, t)}</option>
+                  )}
                   {referenceOptions.map((value) => <option key={value} value={value}>{referenceLabel(value, t)}</option>)}
                 </select>
               </Field>
@@ -793,7 +904,7 @@ export default function SurveysWorkspace() {
                 </Field>
                 <Field label={t('surveys.angleUnit')}>
                   <select value={station.gridCorrectionUnit} onChange={(event) => updateStation(index, { gridCorrectionUnit: event.target.value as 'deg' | 'rad' })} className={inputClass}>
-                    <option value="deg">deg</option><option value="rad">rad</option>
+                    <option value="deg">{unitOptionLabel('deg', t)}</option><option value="rad">{unitOptionLabel('rad', t)}</option>
                   </select>
                 </Field>
               </div>
@@ -803,12 +914,17 @@ export default function SurveysWorkspace() {
                 </Field>
                 <Field label={t('surveys.angleUnit')}>
                   <select value={station.toolfaceUnit} onChange={(event) => updateStation(index, { toolfaceUnit: event.target.value as 'deg' | 'rad' })} className={inputClass}>
-                    <option value="deg">deg</option><option value="rad">rad</option>
+                    <option value="deg">{unitOptionLabel('deg', t)}</option><option value="rad">{unitOptionLabel('rad', t)}</option>
                   </select>
                 </Field>
               </div>
               <Field label={t('surveys.stationSource')}>
-                <input value={station.source} onChange={(event) => updateStation(index, { source: event.target.value })} className={inputClass} />
+                <input
+                  value={station.source === 'manual' || station.source === 'unknown' ? '' : station.source}
+                  placeholder={station.source === 'unknown' ? t('surveys.sourceUnknown') : t('surveys.sourceManual')}
+                  onChange={(event) => updateStation(index, { source: event.target.value })}
+                  className={inputClass}
+                />
               </Field>
               {formBase && (
                 <Field label={t('surveys.sourceStation')}>
@@ -816,7 +932,15 @@ export default function SurveysWorkspace() {
                     <option value="">{t('surveys.noInheritedSourceStation')}</option>
                     {(detailQuery.data?.stations ?? []).map((source) => {
                       const usedElsewhere = stations.some((other, otherIndex) => otherIndex !== index && other.sourceStationId === source.id)
-                      return <option key={source.id} value={source.id} disabled={usedElsewhere}>#{source.station_index + 1} · MD {fmt(source.md_si, locale)} m · {source.id}</option>
+                      return (
+                        <option key={source.id} value={source.id} disabled={usedElsewhere} dir="auto">
+                          {t('surveys.sourceStationOption', {
+                            station: formatNumber(source.station_index + 1, locale, 0),
+                            md: fmt(source.md_si, locale),
+                            id: source.id,
+                          })}
+                        </option>
+                      )
                     })}
                   </select>
                 </Field>
@@ -829,7 +953,8 @@ export default function SurveysWorkspace() {
               </Button>
             </div>
           </fieldset>
-        ))}
+          )
+        })}
         <Button size="sm" onClick={() => setStations((current) => [...current, emptyStation()])}>{t('surveys.addStation')}</Button>
       </div>
     )
@@ -837,7 +962,7 @@ export default function SurveysWorkspace() {
 
   const selectedDocument = documents.find((document) => document.id === sourceDocumentId) ?? null
   const importBaseNote = currentImportBase
-    ? `${t('surveys.current')} v${currentImportBase.version} → v${currentImportBase.version + 1}`
+    ? `${t('surveys.current')} · ${t('surveys.versionValue', { version: formatNumber(currentImportBase.version, locale, 0) })} → ${t('surveys.versionValue', { version: formatNumber(currentImportBase.version + 1, locale, 0) })}`
     : t('surveys.createNewSeries')
 
   return (
@@ -864,7 +989,7 @@ export default function SurveysWorkspace() {
           <Field label={t('surveys.selectWellbore')}>
             <select value={wellboreId} onChange={(event) => { setWellboreId(event.target.value); setSelectedTrajectoryId(''); setBaselineId(''); setMode(null); setFormBase(null); setComparePair(null) }} className={`${inputClass} max-w-xl`}>
               <option value="">{t('surveys.selectWellbore')}</option>
-              {wellbores.map((bore) => <option key={bore.id} value={bore.id}>{bore.name} · {bore.purpose} · {bore.id}</option>)}
+              {wellbores.map((bore) => <option key={bore.id} value={bore.id} dir="auto">{bore.name} · {wellborePurposeLabel(bore.purpose, t)} · {bore.id}</option>)}
             </select>
           </Field>
         )}
@@ -872,7 +997,7 @@ export default function SurveysWorkspace() {
 
       {wellboreId && (
         <div className="grid gap-4 xl:grid-cols-[minmax(18rem,0.8fr)_minmax(0,1.6fr)]">
-          <Card title={t('surveys.revisions')} subtitle={t('surveys.revisionCount', { count: boreSurveys.length })} dense>
+          <Card title={t('surveys.revisions')} subtitle={t('surveys.revisionCount', { count: formatNumber(boreSurveys.length, locale, 0) })} dense>
             {surveyQuery.error && <ErrorState error={surveyQuery.error} onRetry={surveyQuery.refetch} />}
             {surveyQuery.isPending ? <Loading /> : boreSurveys.length === 0 ? <EmptyState message={t('surveys.noTrajectories')} /> : (
               <ul className="space-y-2">
@@ -885,13 +1010,13 @@ export default function SurveysWorkspace() {
                       className={`w-full rounded-md border p-2 text-start ${item.id === selectedTrajectoryId ? 'border-signal bg-signal/5' : 'border-graphite-200 hover:bg-graphite-50 dark:border-graphite-800 dark:hover:bg-graphite-900'}`}
                     >
                       <span className="flex flex-wrap items-center justify-between gap-1">
-                        <span className="font-medium">{item.name}</span>
+                        <span className="font-medium" dir="auto">{item.name}</span>
                         <span className="flex gap-1">
                           {item.is_current && <Badge tone="ok">{t('surveys.current')}</Badge>}
-                          <Badge tone="neutral">v{item.version}</Badge>
+                          <Badge tone="neutral">{t('surveys.versionValue', { version: formatNumber(item.version, locale, 0) })}</Badge>
                         </span>
                       </span>
-                      <span className="mt-1 block text-[11px] text-graphite-500">{kindLabel(item.kind, t)} · {item.station_count} {t('surveys.stations')} · {datumLabel(item.datum, t)}</span>
+                      <span className="mt-1 block text-[11px] text-graphite-500" dir="auto">{kindLabel(item.kind, t)} · {formatNumber(item.station_count, locale, 0)} {t('surveys.stations')} · {datumLabel(item.datum, t)}</span>
                       <code dir="ltr" className="mt-1 block truncate text-[10px] text-graphite-500">{item.id}</code>
                     </button>
                   </li>
@@ -906,8 +1031,8 @@ export default function SurveysWorkspace() {
             ) : detailQuery.isPending ? <Card><Loading /></Card> : detailQuery.error ? <Card><ErrorState error={detailQuery.error} onRetry={detailQuery.refetch} /></Card> : detailQuery.data ? (
               <>
                 <Card
-                  title={`${detailQuery.data.trajectory.name} · v${detailQuery.data.trajectory.version}`}
-                  subtitle={`${kindLabel(detailQuery.data.trajectory.kind, t)} · ${detailQuery.data.stations.length} ${t('surveys.stations')}`}
+                  title={<span dir="auto">{detailQuery.data.trajectory.name} · {t('surveys.versionValue', { version: formatNumber(detailQuery.data.trajectory.version, locale, 0) })}</span>}
+                  subtitle={`${kindLabel(detailQuery.data.trajectory.kind, t)} · ${formatNumber(detailQuery.data.stations.length, locale, 0)} ${t('surveys.stations')}`}
                   actions={
                     <>
                       <Button size="sm" onClick={() => startManual({
@@ -926,12 +1051,12 @@ export default function SurveysWorkspace() {
                     {[
                       [t('surveys.datum'), `${datumLabel(detailQuery.data.trajectory.datum, t)} · ${datumProvenanceLabel(detailQuery.data.trajectory.datum_provenance, t)}`],
                       [t('surveys.calculationState'), calculationStateLabel(detailQuery.data.trajectory.calculation_state, t)],
-                      [t('surveys.acceptance'), detailQuery.data.trajectory.engineering_acceptance === 'not_established' ? t('surveys.acceptanceNotEstablished') : humanise(detailQuery.data.trajectory.engineering_acceptance)],
-                      [t('surveys.sourceDocument'), detailQuery.data.trajectory.source_document_id ?? '—'],
-                      [t('surveys.engine'), `${detailQuery.data.trajectory.engine_key ?? 'unknown'} · ${detailQuery.data.trajectory.engine_version ?? 'unknown'}`],
-                      [t('surveys.inputsHash'), detailQuery.data.trajectory.inputs_hash ?? '—'],
-                      [t('surveys.outputsHash'), detailQuery.data.trajectory.outputs_hash ?? '—'],
-                      [t('surveys.revisionReason'), detailQuery.data.trajectory.revision_reason ?? '—'],
+                      [t('surveys.acceptance'), engineeringAcceptanceLabel(detailQuery.data.trajectory.engineering_acceptance, t)],
+                      [t('surveys.sourceDocument'), detailQuery.data.trajectory.source_document_id ?? t('common.unknown')],
+                      [t('surveys.engine'), `${detailQuery.data.trajectory.engine_key ?? t('common.unknown')} · ${detailQuery.data.trajectory.engine_version ?? t('common.unknown')}`],
+                      [t('surveys.inputsHash'), detailQuery.data.trajectory.inputs_hash ?? t('common.unknown')],
+                      [t('surveys.outputsHash'), detailQuery.data.trajectory.outputs_hash ?? t('common.unknown')],
+                      [t('surveys.revisionReason'), detailQuery.data.trajectory.revision_reason ?? t('common.unknown')],
                     ].map(([label, value]) => (
                       <div key={label} className="min-w-0 rounded border border-graphite-100 p-2 dark:border-graphite-800">
                         <div className="text-[10px] uppercase text-graphite-500">{label}</div>
@@ -941,7 +1066,7 @@ export default function SurveysWorkspace() {
                   </div>
                   <p className="mt-3 text-[11px] text-warning">{t('surveys.notEstablished')}</p>
                   {detailQuery.data.trajectory.warnings.length > 0 && (
-                    <ul className="mt-2 list-disc ps-4 text-[11px] text-warning">{detailQuery.data.trajectory.warnings.map((warning, index) => <li key={index}>{typeof warning === 'string' ? warning : JSON.stringify(warning)}</li>)}</ul>
+                    <ul className="mt-2 list-disc ps-4 text-[11px] text-warning">{detailQuery.data.trajectory.warnings.map((warning, index) => <li key={index} dir="auto">{surveyWarningLabel(warning, t, locale)}</li>)}</ul>
                   )}
                 </Card>
 
@@ -965,17 +1090,17 @@ export default function SurveysWorkspace() {
                       rowKey={(row) => row.id}
                       empty={<EmptyState message={t('surveys.noTrajectories')} />}
                       columns={[
-                        { key: 'index', header: '#', render: (row) => row.station_index + 1, align: 'end' },
-                        { key: 'md', header: `${t('surveys.md')} (m)`, render: (row) => fmt(row.md_si, locale), align: 'end' },
-                        { key: 'inclination', header: `${t('surveys.inclination')} (deg)`, render: (row) => fmt(row.inclination_deg, locale), align: 'end' },
-                        { key: 'input-azimuth', header: `${t('surveys.inputAzimuth')} (deg)`, render: (row) => `${fmt(row.input_azimuth_deg, locale)} · ${referenceLabel(row.input_azimuth_reference ?? 'unknown', t)}`, align: 'end' },
-                        { key: 'azimuth', header: `${t('surveys.azimuth')} (deg)`, render: (row) => fmt(row.azimuth_deg, locale), align: 'end' },
-                        { key: 'tvd', header: `${t('surveys.tvd')} (m)`, render: (row) => fmt(row.tvd_si, locale), align: 'end' },
-                        { key: 'north', header: `${t('surveys.north')} (m)`, render: (row) => fmt(row.ns_si, locale), align: 'end' },
-                        { key: 'east', header: `${t('surveys.east')} (m)`, render: (row) => fmt(row.ew_si, locale), align: 'end' },
-                        { key: 'dls', header: `${t('surveys.dls')} (deg/30 m)`, render: (row) => fmt(row.dls_deg_per_30m, locale), align: 'end' },
+                        { key: 'index', header: t('surveys.stationNumber'), render: (row) => formatNumber(row.station_index + 1, locale, 0), align: 'end' },
+                        { key: 'md', header: <UnitHeading label={t('surveys.md')} unit="m" />, render: (row) => fmt(row.md_si, locale), align: 'end' },
+                        { key: 'inclination', header: <UnitHeading label={t('surveys.inclination')} unit="deg" />, render: (row) => fmt(row.inclination_deg, locale), align: 'end' },
+                        { key: 'input-azimuth', header: <UnitHeading label={t('surveys.inputAzimuth')} unit="deg" />, render: (row) => <span dir="auto">{fmt(row.input_azimuth_deg, locale)} · {referenceLabel(row.input_azimuth_reference ?? 'unknown', t)}</span>, align: 'end' },
+                        { key: 'azimuth', header: <UnitHeading label={t('surveys.azimuth')} unit="deg" />, render: (row) => fmt(row.azimuth_deg, locale), align: 'end' },
+                        { key: 'tvd', header: <UnitHeading label={t('surveys.tvd')} unit="m" />, render: (row) => fmt(row.tvd_si, locale), align: 'end' },
+                        { key: 'north', header: <UnitHeading label={t('surveys.north')} unit="m" />, render: (row) => fmt(row.ns_si, locale), align: 'end' },
+                        { key: 'east', header: <UnitHeading label={t('surveys.east')} unit="m" />, render: (row) => fmt(row.ew_si, locale), align: 'end' },
+                        { key: 'dls', header: <UnitHeading label={t('surveys.dls')} unit="deg/30 m" />, render: (row) => fmt(row.dls_deg_per_30m, locale), align: 'end' },
                         { key: 'measured-at', header: t('surveys.measuredAt'), render: (row) => formatDateTime(row.measured_at, locale) },
-                        { key: 'source', header: t('surveys.source'), render: (row) => <span>{row.source}<code dir="ltr" className="block text-[10px] text-graphite-500">{row.evidence_ref ?? t('surveys.sourceManualUnreferenced')}</code></span> },
+                        { key: 'source', header: t('surveys.source'), render: (row) => <span dir="auto">{stationSourceLabel(row.source, t)}<code dir="ltr" className="block text-[10px] text-graphite-500">{row.evidence_ref ?? t('surveys.sourceManualUnreferenced')}</code></span> },
                       ]}
                     />
                   </div>
@@ -983,7 +1108,7 @@ export default function SurveysWorkspace() {
                     <Field label={t('surveys.compareWith')} hint={t('surveys.compareHint')}>
                       <select value={baselineId} onChange={(event) => { setBaselineId(event.target.value); setComparePair(null) }} className={inputClass}>
                         <option value="">{t('surveys.compareEmpty')}</option>
-                        {detailQuery.data.history.filter((row) => row.id !== detailQuery.data?.trajectory.id).map((row) => <option key={row.id} value={row.id}>v{row.version} · {row.name} · {row.id}</option>)}
+                        {detailQuery.data.history.filter((row) => row.id !== detailQuery.data?.trajectory.id).map((row) => <option key={row.id} value={row.id} dir="auto">{t('surveys.versionValue', { version: formatNumber(row.version, locale, 0) })} · {row.name} · {row.id}</option>)}
                       </select>
                     </Field>
                     <Button size="sm" variant="primary" disabled={!baselineId || compareQuery.isFetching} onClick={() => setComparePair({ current: detailQuery.data!.trajectory.id, baseline: baselineId })}>{t('surveys.compare')}</Button>
@@ -991,19 +1116,23 @@ export default function SurveysWorkspace() {
                   {compareQuery.error && <div className="mt-2"><ErrorState error={compareQuery.error} /></div>}
                   {compareQuery.data && comparePair?.current === detailQuery.data.trajectory.id && (
                     <div className="mt-3 space-y-2">
-                      <p className="text-[11px] text-graphite-500">{t('surveys.compareHint')} · {t('surveys.comparisonCounts', { matched: compareQuery.data.matched_count, added: compareQuery.data.added_count, removed: compareQuery.data.removed_count })}</p>
+                      <p className="text-[11px] text-graphite-500">{t('surveys.compareHint')} · {t('surveys.comparisonCounts', {
+                        matched: formatNumber(compareQuery.data.matched_count, locale, 0),
+                        added: formatNumber(compareQuery.data.added_count, locale, 0),
+                        removed: formatNumber(compareQuery.data.removed_count, locale, 0),
+                      })}</p>
                       <div className="overflow-x-auto">
                         <Table
                           rows={compareQuery.data.items}
                           rowKey={(row) => `${row.md_si}-${row.state}`}
                           columns={[
-                            { key: 'md', header: 'MD (m)', render: (row) => fmt(row.md_si, locale), align: 'end' },
-                            { key: 'state', header: t('common.status'), render: (row) => <Badge tone={row.state === 'matched_exact_md' ? 'ok' : 'warning'}>{row.state}</Badge> },
-                            { key: 'tvd', header: 'Δ TVD (m)', render: (row) => fmt(row.delta.tvd_si, locale), align: 'end' },
-                            { key: 'ns', header: 'Δ North (m)', render: (row) => fmt(row.delta.ns_si, locale), align: 'end' },
-                            { key: 'ew', header: 'Δ East (m)', render: (row) => fmt(row.delta.ew_si, locale), align: 'end' },
-                            { key: 'inclination', header: 'Δ Inclination (deg)', render: (row) => fmt(row.delta.inclination_deg, locale), align: 'end' },
-                            { key: 'azimuth', header: 'Δ Azimuth (deg)', render: (row) => fmt(row.delta.azimuth_deg, locale), align: 'end' },
+                            { key: 'md', header: <UnitHeading label={t('surveys.md')} unit="m" />, render: (row) => fmt(row.md_si, locale), align: 'end' },
+                            { key: 'state', header: t('common.status'), render: (row) => <Badge tone={row.state === 'matched_exact_md' ? 'ok' : 'warning'}>{comparisonStateLabel(row.state, t)}</Badge> },
+                            { key: 'tvd', header: <UnitHeading label={t('surveys.delta', { field: t('surveys.tvd') })} unit="m" />, render: (row) => fmt(row.delta.tvd_si, locale), align: 'end' },
+                            { key: 'ns', header: <UnitHeading label={t('surveys.delta', { field: t('surveys.north') })} unit="m" />, render: (row) => fmt(row.delta.ns_si, locale), align: 'end' },
+                            { key: 'ew', header: <UnitHeading label={t('surveys.delta', { field: t('surveys.east') })} unit="m" />, render: (row) => fmt(row.delta.ew_si, locale), align: 'end' },
+                            { key: 'inclination', header: <UnitHeading label={t('surveys.delta', { field: t('surveys.inclination') })} unit="deg" />, render: (row) => fmt(row.delta.inclination_deg, locale), align: 'end' },
+                            { key: 'azimuth', header: <UnitHeading label={t('surveys.delta', { field: t('surveys.azimuth') })} unit="deg" />, render: (row) => fmt(row.delta.azimuth_deg, locale), align: 'end' },
                           ]}
                         />
                       </div>
@@ -1019,7 +1148,7 @@ export default function SurveysWorkspace() {
       {mode && (
         <Card
           title={mode === 'manual' ? (formBase ? t('surveys.reviseSelected') : t('surveys.newManual')) : t('surveys.import')}
-          subtitle={mode === 'import' ? t('surveys.reviewRequired') : undefined}
+          subtitle={mode === 'import' ? t('surveys.reviewRequired', { humanValidated: t('surveys.reviewStateHumanValidated') }) : undefined}
           actions={<Button size="sm" variant="ghost" onClick={() => { setMode(null); setFormError(null) }}>{t('common.cancel')}</Button>}
         >
           <form onSubmit={mode === 'manual' ? submitManual : submitImport} className="space-y-4" noValidate>
@@ -1029,6 +1158,7 @@ export default function SurveysWorkspace() {
               </Field>
               <Field label={t('surveys.kind')}>
                 <select value={formKind} disabled={Boolean(formBase)} onChange={(event) => setFormKind(event.target.value as SurveyTrajectoryKind)} className={inputClass}>
+                  {!(kindOptions as readonly string[]).includes(formKind) && <option value={formKind} dir="auto">{kindLabel(formKind, t)}</option>}
                   {kindOptions.map((kind) => <option key={kind} value={kind}>{kindLabel(kind, t)}</option>)}
                 </select>
               </Field>
@@ -1044,7 +1174,7 @@ export default function SurveysWorkspace() {
                 </Field>
               )}
             </div>
-            {mode === 'import' && currentImportBase && <p className="text-xs text-info">{importBaseNote} · {currentImportBase.datum}</p>}
+            {mode === 'import' && currentImportBase && <p className="text-xs text-info">{importBaseNote} · {datumLabel(currentImportBase.datum, t)}</p>}
             {renderCalculationFields(Boolean(formBase || currentImportBase))}
 
             {mode === 'manual' ? (
@@ -1080,15 +1210,27 @@ export default function SurveysWorkspace() {
                             return <input type="checkbox" aria-label={`${t('surveys.sourceRecords')} ${record.id}`} checked={selectedRecordIds.includes(record.id)} disabled={!isEligible} onChange={() => toggleRecord(record.id)} />
                           },
                         },
-                        { key: 'id', header: 'ID', render: (record) => <code dir="ltr" className="text-[10px]">{record.id}</code> },
-                        { key: 'page', header: t('common.page'), render: (record) => record.page_number ?? '—', align: 'end' },
+                        { key: 'id', header: t('surveys.identifier'), render: (record) => <code dir="ltr" className="text-[10px]">{record.id}</code> },
+                        { key: 'page', header: t('common.page'), render: (record) => record.page_number === null ? t('common.unknown') : formatNumber(record.page_number, locale, 0), align: 'end' },
                         { key: 'state', header: t('common.status'), render: (record) => <Eligibility record={record} t={t} /> },
-                        { key: 'values', header: t('surveys.stations'), render: (record) => <code dir="ltr" className="text-[10px]">MD {String(record.payload.md_si ?? 'unknown')} m · INC {String(record.payload.inclination_deg ?? 'unknown')}° · AZI {String(record.payload.azimuth_deg ?? 'unknown')}°</code> },
+                        {
+                          key: 'values',
+                          header: t('surveys.stations'),
+                          render: (record) => (
+                            <span dir="auto">
+                              {t('surveys.surveyRecordSummary', {
+                                md: extractedNumber(record.payload.md_si, locale, t),
+                                inclination: extractedNumber(record.payload.inclination_deg, locale, t),
+                                azimuth: extractedNumber(record.payload.azimuth_deg, locale, t),
+                              })}
+                            </span>
+                          ),
+                        },
                       ]}
                     />
                   </div>
                 )}
-                {selectedDocument && <p className="text-xs text-graphite-500">{eligibleRecords.length} {t('surveys.eligible')} · {sourceRecords.length - eligibleRecords.length} {t('surveys.ineligible')} · {selectedEligibleRecordIds.length} {t('surveys.selectedRecords')}</p>}
+                {selectedDocument && <p className="text-xs text-graphite-500">{formatNumber(eligibleRecords.length, locale, 0)} {t('surveys.eligible')} · {formatNumber(sourceRecords.length - eligibleRecords.length, locale, 0)} {t('surveys.ineligible')} · {formatNumber(selectedEligibleRecordIds.length, locale, 0)} {t('surveys.selectedRecords')}</p>}
               </div>
             )}
 
