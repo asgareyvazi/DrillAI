@@ -1,7 +1,7 @@
 {
   "version": 1,
   "backend": {
-    "collected": 1712,
+    "collected": 1713,
     "postgres_files": 11,
     "postgres": [
       "tests/db/test_cp18_postgres_backup_restore.py::test_cp18_01_postgres_logical_backup_restore_and_migration_recovery_drill",
@@ -20,17 +20,17 @@
       "tests/test_cp20_integration_completeness.py::test_cp20_01_pgvector_nearest_neighbor_and_hybrid_retrieval_on_postgres"
     ],
     "default": {
-      "passed": 1698,
+      "passed": 1699,
       "skipped": 14,
       "deselected": 0
     },
     "linux": {
-      "passed": 1712,
+      "passed": 1713,
       "skipped": 0,
       "deselected": 0
     },
     "windows": {
-      "passed": 1697,
+      "passed": 1698,
       "skipped": 1,
       "deselected": 14,
       "expected_skip_path": "tests/ingestion/test_ocr.py",

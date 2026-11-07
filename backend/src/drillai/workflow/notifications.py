@@ -185,6 +185,7 @@ _SAFE_NOTIFICATION_ERROR_CODES = frozenset(
         "plaintext_secret_header_forbidden",
         "invalid_email_recipient",
         "smtp_not_configured",
+        "smtp_endpoint_policy_blocked",
         "invalid_smtp_url",
         "smtp_tls_required",
         "smtp_recipients_refused",
@@ -466,7 +467,23 @@ class EmailSmtpNotificationAdapter(NotificationAdapter):
                 error="invalid email recipient",
             )
         cfg = dict(message.payload or {})
-        smtp_url = str(cfg.get("smtp_url") or os.environ.get("DRILLAI_SMTP_URL") or "").strip()
+        from drillai.core.config import get_settings
+
+        production = get_settings().is_production
+        configured_smtp_url = str(os.environ.get("DRILLAI_SMTP_URL") or "").strip()
+        payload_smtp_url = str(cfg.get("smtp_url") or "").strip()
+        if production and payload_smtp_url and payload_smtp_url != configured_smtp_url:
+            return DeliveryAttemptOutcome(
+                status="failed_terminal",
+                retryable=False,
+                error_code="smtp_endpoint_policy_blocked",
+                error="production email transport must use the operator-configured SMTP endpoint",
+            )
+        smtp_url = (
+            configured_smtp_url
+            if production
+            else payload_smtp_url or configured_smtp_url
+        )
         if not smtp_url:
             return DeliveryAttemptOutcome(
                 status="failed_terminal",
@@ -493,9 +510,7 @@ class EmailSmtpNotificationAdapter(NotificationAdapter):
             )
         host = parsed.hostname
         port = port or (465 if parsed.scheme == "smtps" else 25)
-        from drillai.core.config import get_settings
-
-        if get_settings().is_production and parsed.scheme != "smtps":
+        if production and parsed.scheme != "smtps":
             return DeliveryAttemptOutcome(
                 status="failed_terminal",
                 retryable=False,

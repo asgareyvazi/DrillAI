@@ -394,6 +394,39 @@ def test_provider_message_ids_are_bounded_opaque_tokens():
 
 
 @pytest.mark.asyncio
+async def test_production_smtp_rejects_message_endpoint_overrides(session, monkeypatch):
+    from types import SimpleNamespace
+
+    import drillai.core.config as config_module
+    import drillai.workflow.notifications as notification_module
+
+    monkeypatch.delenv("DRILLAI_SMTP_URL", raising=False)
+    monkeypatch.setattr(config_module, "get_settings", lambda: SimpleNamespace(is_production=True))
+
+    def unexpected_smtp_connection(**_kwargs):
+        raise AssertionError("the message-supplied SMTP endpoint must not be contacted")
+
+    monkeypatch.setattr(notification_module.smtplib, "SMTP_SSL", unexpected_smtp_connection)
+    org = Organization(slug="notification-smtp-endpoint-policy", name="SMTP endpoint policy")
+    session.add(org)
+    await session.flush()
+    message = OutboundMessage(
+        org_id=org.id,
+        channel="email",
+        recipient="recipient@example.invalid",
+        payload={"smtp_url": "smtps://unapproved.example.invalid:465"},
+        status="queued",
+    )
+
+    outcome = await EmailSmtpNotificationAdapter().send(session, message)
+
+    assert outcome.status == "failed_terminal"
+    assert outcome.retryable is False
+    assert outcome.error_code == "smtp_endpoint_policy_blocked"
+    assert "unapproved.example.invalid" not in str(outcome.error)
+
+
+@pytest.mark.asyncio
 async def test_smtp_permanent_recipient_refusal_is_terminal_and_does_not_store_server_text(
     session, monkeypatch
 ):
