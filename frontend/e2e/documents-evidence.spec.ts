@@ -238,18 +238,24 @@ test.describe('documents → ingestion → records → evidence', () => {
 })
 
 test("the upload assets are the backend's own synthetic fixtures, not hand-written copies", () => {
-  const fixture = readFileSync(path.resolve(here, '..', '..', 'backend', 'tests', 'fixtures', 'synthetic_ddr.py'), 'utf8')
-  const pythonBytes = (name: string): string => {
-    const marker = `${name} = b"""`
-    const body = fixture.slice(fixture.indexOf(marker) + marker.length)
-    return body.slice(0, body.indexOf('"""'))
-  }
+  const canonicalRecords = path.resolve(
+    here,
+    '..',
+    '..',
+    'backend',
+    'tests',
+    'fixtures',
+    'synthetic_ddr_corpus',
+    'records',
+  )
+  const canonicalRecord = (name: string): string =>
+    readFileSync(path.join(canonicalRecords, name), 'utf8')
 
-  // The journey uploads these two files. They are the backend's own ingestion fixtures, so the
-  // browser sends exactly the text the extractors are tested against.
-  expect(readFileSync(UPLOAD_PATH, 'utf8')).toBe(pythonBytes('SYNTHETIC_PROGRAM_TEXT'))
+  // The Python fixture module loads these canonical corpus files; compare the browser-upload copies
+  // directly so a change to the fixture loader's implementation cannot corrupt this assertion.
+  expect(readFileSync(UPLOAD_PATH, 'utf8')).toBe(canonicalRecord('program_negative.txt'))
   expect(readFileSync(UPLOAD_PATH, 'utf8')).toContain('SYNTHETIC TEST DATA')
   expect(readFileSync(path.join(here, 'assets', 'synthetic_ddr_upload.txt'), 'utf8')).toBe(
-    pythonBytes('SYNTHETIC_DDR_TEXT'),
+    canonicalRecord('ddr_015_narrative.txt'),
   )
 })
