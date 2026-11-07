@@ -47,6 +47,20 @@ import {
 } from '../../lib/format'
 import { useSession } from '../../stores/session'
 
+const KNOWN_TIMELINE_KINDS = new Set([
+  'operation',
+  'event',
+  'document',
+  'engine_run',
+  'recommendation',
+  'twin_change',
+  'approval',
+])
+
+function timelineKindLabel(kind: string, translate: (key: string) => string): string {
+  return KNOWN_TIMELINE_KINDS.has(kind) ? translate(`timeline.kindValues.${kind}`) : humanise(kind)
+}
+
 function ProvenanceTime({ value, basis }: { value: string | null; basis?: string | null }) {
   const { t, locale } = useI18n()
   return (
@@ -659,11 +673,15 @@ export default function WellCockpit() {
       {tab === 'timeline' && (
         <Card
           title={t('cockpit.timeline')}
-          subtitle="operations, NPT events, engine runs, documents and twin changes on one axis"
+          subtitle={t('cockpit.timelineSubtitle')}
           actions={
             timeline.data && (
               <Badge tone="neutral">
-                kinds: {timeline.data.kinds_available.join(', ')}
+                {t('cockpit.timelineKinds')}: {timeline.data.kinds_available.map((kind, index) => (
+                  <span key={kind}>
+                    {index > 0 && ', '}<bdi>{timelineKindLabel(kind, t)}</bdi>
+                  </span>
+                ))}
               </Badge>
             )
           }
@@ -692,9 +710,13 @@ export default function WellCockpit() {
                         {entry.summary && <span className="block text-[11px] text-graphite-500">{entry.summary}</span>}
                         {(entry.depth_md_si !== null || entry.duration_hours !== null || entry.npt_hours !== null) && (
                           <span className="block text-[11px] text-graphite-500">
-                            {entry.depth_md_si !== null && <>at {formatNumber(entry.depth_md_si, locale, 0)} m</>}
-                            {entry.duration_hours !== null && <> · {formatDuration(entry.duration_hours)}</>}
-                            {entry.npt_hours !== null && <> · NPT {formatDuration(entry.npt_hours)}</>}
+                            {entry.depth_md_si !== null && (
+                              <> {t('cockpit.timelineDepth')}: <bdi dir="ltr">{formatNumber(entry.depth_md_si, locale, 0)} m</bdi></>
+                            )}
+                            {entry.duration_hours !== null && <> · <bdi dir="ltr">{formatDuration(entry.duration_hours, locale)}</bdi></>}
+                            {entry.npt_hours !== null && (
+                              <> · {t('cockpit.timelineNptLabel')}: <bdi dir="ltr">{formatDuration(entry.npt_hours, locale)}</bdi></>
+                            )}
                           </span>
                         )}
                       </span>
@@ -703,7 +725,11 @@ export default function WellCockpit() {
                           <Badge tone={toneForSeverity(entry.severity)}>{humanise(entry.severity)}</Badge>
                         )}
                         {entry.status && <Badge tone="neutral">{formatStatus(entry.status)}</Badge>}
-                        {entry.npt_hours !== null && <Badge tone="danger">NPT</Badge>}
+                        {entry.npt_hours !== null && (
+                          <Badge tone="danger">
+                            <bdi>{t('cockpit.timelineNptShort')}</bdi>
+                          </Badge>
+                        )}
                         <WhyButton
                           onClick={() =>
                             setEvidenceSubject({

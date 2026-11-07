@@ -182,6 +182,23 @@ describe('WellCockpit: renders the payload the API serves', () => {
     expect(screen.getAllByRole('listitem')).toHaveLength(timeline.entries.length)
   })
 
+  it('localizes timeline context and enum labels in Persian while isolating measurements', async () => {
+    window.localStorage.setItem('drillai.locale', 'fa')
+    const { container } = renderCockpit()
+    await screen.findAllByText(state.well.name)
+
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('tab', { name: /خط زمانی عملیات/ }))
+
+    expect(await screen.findByText('عملیات، رویدادهای زمان غیرمولد (NPT)، اجراهای موتور، اسناد و تغییرهای دوقلوی چاه روی یک محور زمانی.')).toBeInTheDocument()
+    expect(screen.getByText('گونه‌ها:')).toBeInTheDocument()
+    expect(screen.getAllByText('اجرای موتور').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('زمان غیرمولد').length).toBeGreaterThan(0)
+    expect(screen.getAllByText((text) => text.includes('در عمق')).length).toBeGreaterThan(0)
+    expect([...container.querySelectorAll('bdi[dir="ltr"]')].some((node) => node.textContent?.includes('m'))).toBe(true)
+    expect(document.documentElement).toHaveAttribute('dir', 'rtl')
+  })
+
   it('shows the twin aspects the twin endpoint returned', async () => {
     renderCockpit()
     await screen.findAllByText(state.well.name)
