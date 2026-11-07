@@ -358,14 +358,15 @@ def test_cp32_the_certification_jobs_reject_skips(tmp_path: Path) -> None:
         "<testsuites><testsuite><testcase "
         "name='test_cp32_the_certification_jobs_reject_skips[private-param]' "
         "classname='test_cp32_e2e_console_error_contract'>"
-        "<failure type='sqlalchemy.exc.IntegrityError' message='private-value'>assertion details</failure>"
-        "</testcase></testsuite></testsuites>",
+        "<failure type='sqlalchemy.exc.IntegrityError' message='private-value'>"
+        "backend/tests/security/test_cp32_e2e_console_error_contract.py:350: AssertionError: private-value"
+        "</failure></testcase></testsuite></testsuites>",
         encoding="utf-8",
     )
     summaries = diagnostics.failed_node_summaries("", junit_xml_file=junit_path)
     assert summaries == [
         "tests/security/test_cp32_e2e_console_error_contract.py::"
-        "test_cp32_the_certification_jobs_reject_skips [IntegrityError]"
+        "test_cp32_the_certification_jobs_reject_skips [IntegrityError] at line 350"
     ]
     assert "private-param" not in " ".join(summaries)
     assert "private-value" not in " ".join(summaries)

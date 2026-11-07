@@ -1,0 +1,4 @@
+# Manifest-pinned synthetic text fixtures must retain the same bytes on every platform.
+backend/tests/fixtures/synthetic_ddr_corpus/records/*.csv text eol=lf
+backend/tests/fixtures/synthetic_ddr_corpus/records/*.txt text eol=lf
+backend/tests/fixtures/synthetic_ddr_corpus/ocr/*.txt text eol=lf

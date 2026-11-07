@@ -220,6 +220,14 @@ def _junit_test_location(case: ET.Element) -> tuple[str, list[str]] | None:
     return None
 
 
+def _junit_failure_line(failure: ET.Element, location: str) -> str | None:
+    """Extract only the numeric source line for the resolved test file, never traceback text."""
+    trace = (failure.text or "").replace("\\", "/")
+    pattern = re.compile(r"(?m)^\s*.*?(tests/[A-Za-z0-9_./-]+\.py):([1-9][0-9]{0,5})(?::|,|\s|$)")
+    lines = [match.group(2) for match in pattern.finditer(trace) if match.group(1) == location]
+    return lines[-1] if lines else None
+
+
 def _junit_failure_summaries(xml_path: Path, *, limit: int = 12) -> list[str]:
     """Extract stable test locations and exception classes, never assertion messages or values."""
     try:
@@ -241,7 +249,10 @@ def _junit_failure_summaries(xml_path: Path, *, limit: int = 12) -> list[str]:
         node_id = "::".join([location, *class_names, test_name])
         raw_exception = (failure.get("type") or "").rsplit(".", 1)[-1]
         exception = raw_exception if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", raw_exception) else "failure"
+        line_number = _junit_failure_line(failure, location)
         summary = f"{node_id} [{exception}]"
+        if line_number:
+            summary += f" at line {line_number}"
         if summary not in seen:
             summaries.append(summary)
             seen.add(summary)
