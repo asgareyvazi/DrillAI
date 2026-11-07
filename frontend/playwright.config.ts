@@ -66,8 +66,9 @@ export default defineConfig({
   timeout: 90_000,
   expect: { timeout: 15_000 },
   reporter: process.env.CI
-    ? [['list'], ['html', { open: 'never' }], ['json', { outputFile: 'test-results/e2e-results.json' }]]
+    ? [['list'], ['html', { open: 'never' }], ['json', { outputFile: `${process.env.DRILLAI_E2E_OUTPUT_DIR ?? 'test-results'}/e2e-results.json` }]]
     : [['list']],
+  outputDir: process.env.DRILLAI_E2E_OUTPUT_DIR ?? 'test-results',
   globalSetup: './e2e/global-setup.ts',
   use: {
     baseURL: WEB_URL,
@@ -114,6 +115,7 @@ export default defineConfig({
       stderr: 'pipe',
       env: {
         DRILLAI_E2E_API_PORT: String(API_PORT),
+        DRILLAI_E2E_DATA_DIR: process.env.DRILLAI_E2E_DATA_DIR ?? '.e2e',
       },
     },
     {
@@ -139,7 +141,7 @@ export default defineConfig({
       stderr: 'pipe',
       env: {
         DRILLAI_E2E_API_PORT: String(FAULT_API_PORT),
-        DRILLAI_E2E_DATA_DIR: '.e2e-faults',
+        DRILLAI_E2E_DATA_DIR: process.env.DRILLAI_E2E_FAULT_DATA_DIR ?? '.e2e-faults',
         DRILLAI_E2E_FAULTS: 'true',
       },
     },
@@ -166,7 +168,7 @@ export default defineConfig({
       stderr: 'pipe',
       env: {
         DRILLAI_E2E_API_PORT: String(AUTH_API_PORT),
-        DRILLAI_E2E_DATA_DIR: '.e2e-auth',
+        DRILLAI_E2E_DATA_DIR: process.env.DRILLAI_E2E_AUTH_DATA_DIR ?? '.e2e-auth',
         DRILLAI_E2E_AUTH: 'true',
         DRILLAI_E2E_SEED: 'true',
       },

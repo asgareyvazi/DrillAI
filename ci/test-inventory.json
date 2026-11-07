@@ -1,7 +1,7 @@
 {
   "version": 1,
   "backend": {
-    "collected": 1680,
+    "collected": 1700,
     "postgres_files": 11,
     "postgres": [
       "tests/db/test_cp18_postgres_backup_restore.py::test_cp18_01_postgres_logical_backup_restore_and_migration_recovery_drill",
@@ -20,17 +20,17 @@
       "tests/test_cp20_integration_completeness.py::test_cp20_01_pgvector_nearest_neighbor_and_hybrid_retrieval_on_postgres"
     ],
     "default": {
-      "passed": 1666,
+      "passed": 1686,
       "skipped": 14,
       "deselected": 0
     },
     "linux": {
-      "passed": 1680,
+      "passed": 1700,
       "skipped": 0,
       "deselected": 0
     },
     "windows": {
-      "passed": 1665,
+      "passed": 1685,
       "skipped": 1,
       "deselected": 14,
       "expected_skip_path": "tests/ingestion/test_ocr.py",
@@ -38,8 +38,8 @@
     }
   },
   "e2e": {
-    "total": 124,
-    "files": 18,
+    "total": 126,
+    "files": 19,
     "spec_files": [
       "a11y.spec.ts",
       "checkpoint5.spec.ts",
@@ -57,11 +57,12 @@
       "rtl.spec.ts",
       "run-events.spec.ts",
       "run-monitor.spec.ts",
+      "surveys-workspace.spec.ts",
       "well-cockpit.spec.ts",
       "workflow-studio.spec.ts"
     ],
     "projects": {
-      "chromium": 117,
+      "chromium": 119,
       "chromium-faults": 4,
       "chromium-auth": 3
     }

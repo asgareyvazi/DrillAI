@@ -50,6 +50,7 @@ from drillai.documents.scope import DocumentScope, DocumentScopeResolver
 from drillai.security.actions import authorize
 
 router = APIRouter(tags=["documents"])
+_UNIT_INFERENCE_REVIEW_KEY = "_unit_inference_review"
 
 
 class ExtractedRecordReviewChanges(BaseModel):
@@ -61,6 +62,7 @@ class ExtractedRecordReviewChanges(BaseModel):
     observed_at: dt.datetime | None = None
     depth_md_si: float | None = None
     depth_tvd_si: float | None = None
+    unit_inference_reviewed: bool | None = None
 
     @field_validator("observed_at")
     @classmethod
@@ -144,6 +146,9 @@ def _validate_review_value_shape(original: Any, corrected: Any, *, path: str) ->
 def _validate_review_payload_shape(
     original: dict[str, Any], corrected: dict[str, Any], *, record_type: str
 ) -> None:
+    if _UNIT_INFERENCE_REVIEW_KEY in corrected:
+        raise ValidationFailed("unit-inference review metadata is server-managed and cannot be edited")
+    original = {key: value for key, value in original.items() if key != _UNIT_INFERENCE_REVIEW_KEY}
     allowed_additions = (
         {"azimuth_reference", "azimuth_reference_id", "datum", "grid_correction_deg"}
         if record_type == "survey_station"
@@ -157,6 +162,26 @@ def _validate_review_payload_shape(
         _validate_review_value_shape(old_value, corrected[key], path=f"payload.{key}")
     for key in added:
         _validate_review_value_shape(None, corrected[key], path=f"payload.{key}")
+
+
+def _validate_survey_source_snapshot_immutable(original: dict[str, Any], corrected: dict[str, Any]) -> None:
+    """Review may correct accepted values, but never rewrite what the extractor read from the source."""
+    source_snapshot_keys = (
+        "md_source_value",
+        "md_source_unit",
+        "inclination_source_value",
+        "inclination_source_unit",
+        "azimuth_source_value",
+        "azimuth_source_unit",
+        "grid_correction_source_value",
+        "grid_correction_source_unit",
+        "unit_provenance",
+    )
+    changed = [key for key in source_snapshot_keys if key in original and corrected.get(key) != original[key]]
+    if changed:
+        raise ValidationFailed(
+            "source values and source units are immutable; correct the accepted engineering value instead"
+        )
 
 
 def _validate_review_domain_payload(record_type: str, payload: dict[str, Any]) -> None:
@@ -721,6 +746,13 @@ async def review_extracted_record(
         )
 
     changed_fields = set(payload.changes.model_fields_set)
+    has_inferred_units = "unit_inferred" in (record.quality_flags or [])
+    if payload.changes.unit_inference_reviewed is not None and not has_inferred_units:
+        raise ValidationFailed("unit_inference_reviewed is only accepted for records flagged with unit inference")
+    if payload.decision == "validate" and has_inferred_units and payload.changes.unit_inference_reviewed is not True:
+        raise ValidationFailed(
+            "one or more units were inferred by the extractor; inspect the source and explicitly review or correct the accepted values before validation"
+        )
     update_values: dict[str, Any] = {
         "validation_state": next_state,
         "validation_notes": payload.reason,
@@ -734,6 +766,8 @@ async def review_extracted_record(
         _validate_review_payload_shape(
             dict(record.payload or {}), corrected_payload, record_type=record.record_type
         )
+        if record.record_type == "survey_station":
+            _validate_survey_source_snapshot_immutable(dict(record.payload or {}), corrected_payload)
         _validate_review_domain_payload(record.record_type, corrected_payload)
         try:
             encoded_payload = json.dumps(
@@ -788,6 +822,26 @@ async def review_extracted_record(
             raise ValidationFailed(f"{field_name} must be a finite non-negative SI value")
         update_values[field_name] = value
         update_values[basis_field] = "operator_entered" if value is not None else "unknown"
+
+    if payload.decision == "validate" and has_inferred_units:
+        corrected_payload = dict(update_values.get("payload", record.payload or {}))
+        corrected_payload[_UNIT_INFERENCE_REVIEW_KEY] = {
+            "unit_inference_reviewed": True,
+            "review_version": payload.expected_version + 1,
+        }
+        try:
+            encoded_payload = json.dumps(
+                corrected_payload,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+                allow_nan=False,
+            ).encode("utf-8")
+        except (TypeError, ValueError, RecursionError) as exc:
+            raise ValidationFailed("corrected payload must contain finite JSON values") from exc
+        if len(encoded_payload) > 64 * 1024:
+            raise ValidationFailed("corrected payload exceeds the 64 KiB review limit")
+        update_values["payload"] = corrected_payload
 
     if payload.decision == "validate":
         update_values["validated_by"] = auth.principal.id

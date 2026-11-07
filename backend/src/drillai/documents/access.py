@@ -13,8 +13,11 @@ excluding it from current, trusted reads.
 
 from __future__ import annotations
 
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, func, literal, or_, select
+from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.orm import aliased
+from sqlalchemy.sql.functions import FunctionElement
+from sqlalchemy.types import Boolean
 
 from drillai.db.models import (
     Document,
@@ -30,6 +33,39 @@ from drillai.db.models import (
     WellSection,
 )
 from drillai.documents.lifecycle import MIN_PROMOTION_CONFIDENCE, PROMOTABLE_VALIDATION_STATES
+
+
+class _JsonArrayContainsText(FunctionElement[bool]):
+    """Portable membership test for JSON text arrays used by fail-closed trust predicates."""
+
+    type = Boolean()
+    inherit_cache = True
+
+
+@compiles(_JsonArrayContainsText, "sqlite")
+def _compile_json_array_contains_sqlite(element, compiler, **kwargs):
+    column, value = element.clauses
+    return (
+        "EXISTS (SELECT 1 FROM json_each("
+        f"{compiler.process(column, **kwargs)}"
+        ") AS json_array_entry WHERE json_array_entry.value = "
+        f"{compiler.process(value, **kwargs)})"
+    )
+
+
+@compiles(_JsonArrayContainsText, "postgresql")
+def _compile_json_array_contains_postgresql(element, compiler, **kwargs):
+    column, value = element.clauses
+    return (
+        "EXISTS (SELECT 1 FROM json_array_elements_text("
+        f"{compiler.process(column, **kwargs)}"
+        ") AS json_array_entry(value) WHERE json_array_entry.value = "
+        f"{compiler.process(value, **kwargs)})"
+    )
+
+
+def _json_array_contains_text(column, value: str):
+    return _JsonArrayContainsText(column, literal(value))
 
 
 def document_not_quarantined_condition(document=Document, artifact=RawArtifact):
@@ -163,8 +199,16 @@ def extracted_record_trust_condition(record=ExtractedRecord):
         record.confidence.is_(None),
         and_(record.confidence >= 0.0, record.confidence <= 1.0),
     )
+    unit_inference_reviewed = or_(
+        ~_json_array_contains_text(record.quality_flags, "unit_inferred"),
+        and_(
+            record.payload["_unit_inference_review"]["unit_inference_reviewed"].as_boolean().is_(True),
+            record.payload["_unit_inference_review"]["review_version"].as_integer() == record.review_version,
+        ),
+    )
     return and_(
         record.validation_state.in_(PROMOTABLE_VALIDATION_STATES),
+        unit_inference_reviewed,
         or_(
             and_(record.validation_state == "human_validated", valid_human_confidence),
             and_(
@@ -425,6 +469,13 @@ def trajectory_source_conditions(trajectory=Trajectory):
             record.org_id == trajectory.org_id,
             record_document.org_id == trajectory.org_id,
             document_not_quarantined_condition(record_document, record_artifact),
+            or_(
+                and_(
+                    station.raw_source["human_review"]["review_version"].as_integer().is_(None),
+                    record.validation_state != "human_validated",
+                ),
+                station.raw_source["human_review"]["review_version"].as_integer() == record.review_version,
+            ),
             record_bore.org_id == trajectory.org_id,
             record_well.org_id == trajectory.org_id,
             extracted_record_trust_condition(record),

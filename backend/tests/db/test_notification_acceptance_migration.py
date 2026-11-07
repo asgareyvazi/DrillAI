@@ -88,6 +88,9 @@ def test_acceptance_migration_keeps_legacy_sent_unknown_and_guards_new_evidence(
             _insert_outbound(connection, message_id="obm_legacy_sent", status="sent", sent_at="2026-11-03 12:01:00")
 
         command.upgrade(config, HEAD_REVISION)
+        # Keep this acceptance migration regression pinned to its historical target, then
+        # advance the additive descendants so the drift check runs against today's schema.
+        command.upgrade(config, "heads")
         command.check(config)
         with engine.begin() as connection:
             legacy = connection.execute(

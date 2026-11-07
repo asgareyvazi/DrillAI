@@ -397,6 +397,20 @@ class Trajectory(Base, IdMixin, TimestampMixin, OrgScopedMixin):
             "datum_provenance IN ('unknown', 'source_document', 'engine_input', 'legacy_unverified')",
             name="datum_provenance_valid",
         ),
+        CheckConstraint("version > 0", name="revision_version_positive"),
+        UniqueConstraint(
+            "org_id", "wellbore_id", "kind", "name", "version", name="uq_trajectories_revision_identity"
+        ),
+        Index(
+            "uq_trajectories_current_scope",
+            "org_id",
+            "wellbore_id",
+            "kind",
+            "name",
+            unique=True,
+            sqlite_where=text("is_current = 1"),
+            postgresql_where=text("is_current IS TRUE"),
+        ),
     )
 
     wellbore_id: Mapped[str] = mapped_column(
@@ -424,6 +438,9 @@ class Trajectory(Base, IdMixin, TimestampMixin, OrgScopedMixin):
     azimuth_reference: Mapped[str | None] = mapped_column(String(16))
     azimuth_reference_id: Mapped[str | None] = mapped_column(String(120))
     target_formation_id: Mapped[str | None] = mapped_column(String(64))
+    revision_reason: Mapped[str | None] = mapped_column(
+        TextType, comment="operator reason for this immutable trajectory content revision"
+    )
     validation: Mapped[dict] = mapped_column(JsonType, default=dict, nullable=False)
     notes: Mapped[str | None] = mapped_column(TextType)
 

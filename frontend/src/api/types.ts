@@ -798,6 +798,9 @@ export interface ExtractionRecord {
   validation_state: string
   /** Compare-and-swap version for the human review lifecycle, independent of payload schema version. */
   review_version: number
+  /** True only when a unit-inferred record was explicitly reviewed in this exact version. */
+  unit_inference_review_required?: boolean
+  unit_inference_reviewed?: boolean
   validated_by: string | null
   validated_at: string | null
   validation_notes: string
@@ -815,6 +818,7 @@ export interface ExtractionRecord {
 
 export interface ExtractedRecordReviewChanges {
   payload?: Record<string, unknown>
+  unit_inference_reviewed?: boolean
   observed_at?: string | null
   depth_md_si?: number | null
   depth_tvd_si?: number | null
@@ -873,6 +877,161 @@ export interface DocumentDetail {
   chunks: DocumentChunk[]
   records: ExtractionRecord[]
   evidence_links: EvidenceItem[]
+}
+
+export type SurveyTrajectoryKind =
+  | 'plan'
+  | 'design'
+  | 'actual'
+  | 'revised'
+  | 'proposed'
+  | 'interpolated'
+  | 'anti_collision'
+
+export interface SurveyTrajectorySummary {
+  id: string
+  wellbore_id: string
+  name: string
+  kind: SurveyTrajectoryKind
+  version: number
+  is_current: boolean
+  datum: string
+  datum_provenance: string
+  azimuth_reference: string | null
+  azimuth_reference_id: string | null
+  source_document_id: string | null
+  engine_run_id: string | null
+  station_count: number
+  total_md_si: number | null
+  total_tvd_si: number | null
+  max_inclination_deg: number | null
+  revision_reason: string | null
+  calculation_state: string
+  engineering_acceptance: string
+  created_by: string | null
+  created_at: string | null
+  updated_at: string | null
+}
+
+export interface SurveyTrajectoryStation {
+  id: string
+  trajectory_id: string
+  wellbore_id: string
+  station_index: number
+  md_si: number
+  inclination_deg: number
+  azimuth_deg: number
+  input_azimuth_deg: number | null
+  input_azimuth_reference: string | null
+  input_azimuth_reference_id: string | null
+  tvd_si: number
+  ns_si: number
+  ew_si: number
+  tvdss_si: number | null
+  dls_deg_per_30m: number | null
+  build_rate_deg_per_30m: number | null
+  turn_rate_deg_per_30m: number | null
+  closure_distance_si: number | null
+  closure_azimuth_deg: number | null
+  vertical_section_si: number | null
+  toolface_deg: number | null
+  source: string
+  measured_at: string | null
+  measured_at_provenance: string
+  grid_correction_deg: number | null
+  quality_flags: string[]
+  method: string | null
+  engine_version: string | null
+  evidence_ref: string | null
+  raw_source: Record<string, unknown>
+  raw_source_truncated: boolean
+}
+
+export interface SurveyTrajectoryDetail extends SurveyTrajectorySummary {
+  notes: string | null
+  target_formation_id: string | null
+  validation: Record<string, unknown>
+  validation_truncated: boolean
+  unit_contract: Record<string, unknown>
+  engine_key: string | null
+  engine_version: string | null
+  inputs_hash: string | null
+  outputs_hash: string | null
+  warnings: unknown[]
+  violations: unknown[]
+  assumptions: unknown[]
+  limitations: unknown[]
+}
+
+export interface SurveyTrajectoryResponse {
+  trajectory: SurveyTrajectoryDetail
+  stations: SurveyTrajectoryStation[]
+  history: SurveyTrajectorySummary[]
+  station_count_returned: number
+}
+
+export interface SurveyComparisonItem {
+  md_si: number
+  state: 'added' | 'removed' | 'matched_exact_md'
+  baseline_station_id: string | null
+  current_station_id: string | null
+  baseline: Record<string, number | null>
+  current: Record<string, number | null>
+  delta: Record<string, number | null>
+}
+
+export interface SurveyComparison {
+  comparison_basis: string
+  unit_contract: Record<string, unknown>
+  baseline: SurveyTrajectorySummary
+  current: SurveyTrajectorySummary
+  matched_count: number
+  added_count: number
+  removed_count: number
+  items: SurveyComparisonItem[]
+}
+
+export interface SurveyInputStationPayload {
+  md_value: number
+  md_unit: 'm' | 'ft'
+  inclination_value: number
+  inclination_unit: 'deg' | 'rad'
+  azimuth_value: number
+  azimuth_unit: 'deg' | 'rad'
+  azimuth_reference: 'grid' | 'true' | 'magnetic' | 'unknown'
+  azimuth_reference_id?: string | null
+  grid_correction_value?: number | null
+  grid_correction_unit?: 'deg' | 'rad'
+  source?: string
+  toolface_value?: number | null
+  toolface_unit?: 'deg' | 'rad'
+  source_station_id?: string | null
+}
+
+export interface SurveyCreatePayload {
+  wellbore_id: string
+  name: string
+  kind: SurveyTrajectoryKind
+  expected_current_version: number
+  base_trajectory_id?: string | null
+  reason: string
+  datum: 'rkb' | 'msl' | 'gl' | 'cf' | 'derrick_floor' | 'unknown'
+  kb_elevation_value?: number | null
+  kb_elevation_unit?: 'm' | 'ft'
+  target_azimuth_reference?: 'grid' | 'true' | 'magnetic' | null
+  target_azimuth_reference_id?: string | null
+  vertical_section_azimuth_value?: number | null
+  vertical_section_azimuth_unit?: 'deg' | 'rad'
+  vertical_section_azimuth_reference?: 'grid' | 'true' | 'magnetic' | 'unknown'
+  vertical_section_azimuth_reference_id?: string | null
+  max_dls_limit?: number | null
+  max_inclination_limit?: number | null
+  stations: SurveyInputStationPayload[]
+}
+
+export interface SurveyImportPayload extends Omit<SurveyCreatePayload, 'stations'> {
+  source_document_id: string
+  selected_record_ids: string[]
 }
 
 /** region → extraction → record, as the backend builds it. */

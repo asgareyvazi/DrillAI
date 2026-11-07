@@ -262,6 +262,62 @@ async def test_survey_review_validates_frame_identity_datum_correction_and_audit
     assert "EPSG:32631" not in str(review_entries[0]["after"])
 
 
+async def test_unit_inferred_survey_requires_explicit_unit_review_and_keeps_source_units_unknown(client, db):
+    from sqlalchemy import select
+
+    from drillai.db.models import ExtractedRecord
+
+    _well_id, document_id, record = await _upload_survey_record(
+        client, survey_csv=b"MD,Inclination,Azimuth\n500,12,180\n"
+    )
+    assert "unit_inferred" in record["quality_flags"]
+    assert record["unit_inference_review_required"] is True
+    assert record["unit_inference_reviewed"] is False
+    assert record["payload"]["md_source_unit"] is None
+    assert record["unit_context"]["md_si"] == "m"
+
+    url = f"/api/v1/documents/{document_id}/records/{record['id']}/review"
+    unconfirmed = await client.patch(
+        url,
+        headers=headers("engineer", **{"Idempotency-Key": "review-survey-inferred-unit-unconfirmed"}),
+        json={
+            "expected_version": record["review_version"],
+            "decision": "validate",
+            "reason": "Check source units before accepting this inferred value.",
+            "changes": {"payload": record["payload"]},
+        },
+    )
+    assert unconfirmed.status_code == 422, unconfirmed.text
+    assert "explicitly review or correct" in unconfirmed.json()["error"]["message"]
+
+    confirmed = await client.patch(
+        url,
+        headers=headers("engineer", **{"Idempotency-Key": "review-survey-inferred-unit-confirmed"}),
+        json={
+            "expected_version": record["review_version"],
+            "decision": "validate",
+            "reason": "Source was inspected; the unit remains an explicit extraction assumption.",
+            "changes": {"payload": record["payload"], "unit_inference_reviewed": True},
+        },
+    )
+    assert confirmed.status_code == 200, confirmed.text
+    reviewed = confirmed.json()
+    assert reviewed["unit_inference_reviewed"] is True
+    assert reviewed["payload"]["md_source_value"] == 500.0
+    assert reviewed["payload"]["md_source_unit"] is None
+    assert reviewed["payload"]["unit_provenance"]["md"] == "inferred_default"
+    assert "_unit_inference_review" not in reviewed["payload"]
+
+    async with db.session() as session:
+        saved = (
+            await session.execute(select(ExtractedRecord).where(ExtractedRecord.id == record["id"]))
+        ).scalar_one()
+        assert saved.payload["_unit_inference_review"] == {
+            "unit_inference_reviewed": True,
+            "review_version": 2,
+        }
+
+
 async def test_human_validated_record_can_receive_a_versioned_correction(client):
     _well_id, document_id, record = await _upload_depth_record(client)
     url = f"/api/v1/documents/{document_id}/records/{record['id']}/review"

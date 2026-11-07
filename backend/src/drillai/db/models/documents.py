@@ -50,6 +50,7 @@ DOC_TYPES = (
     "drilling_document",    # drilling-report alias supported by extraction and import workflows
     "well_program",
     "drilling_program",
+    "program",              # parser-classified drilling / well program
     "end_of_well_report",
     "service_report",
     "mud_report",

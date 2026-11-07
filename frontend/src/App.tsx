@@ -20,6 +20,7 @@ import OptimisationWorkspace from './pages/engineering/OptimisationWorkspace'
 import AdvisorWorkspace from './pages/engineering/AdvisorWorkspace'
 import ReportsWorkspace from './pages/engineering/ReportsWorkspace'
 import DailyReportsWorkspace from './pages/wells/DailyReportsWorkspace'
+import SurveysWorkspace from './pages/wells/SurveysWorkspace'
 import WorkflowStudio from './pages/workflow/WorkflowStudio'
 import RunMonitor from './pages/workflow/RunMonitor'
 import LibraryPage from './pages/library/LibraryPage'
@@ -109,6 +110,7 @@ export function App() {
         />
         <Route path="/wells/:wellId/cockpit" element={<WellScoped><WellCockpit /></WellScoped>} />
         <Route path="/wells/:wellId/documents" element={<WellScoped><DocumentWorkspace /></WellScoped>} />
+        <Route path="/wells/:wellId/surveys" element={<WellScoped><SurveysWorkspace /></WellScoped>} />
         <Route path="/wells/:wellId/operations" element={<WellScoped><OperationsWorkspace /></WellScoped>} />
         <Route path="/wells/:wellId/engineering" element={<WellScoped><EngineeringWorkspace /></WellScoped>} />
         <Route path="/wells/:wellId/optimisation" element={<WellScoped><OptimisationWorkspace /></WellScoped>} />

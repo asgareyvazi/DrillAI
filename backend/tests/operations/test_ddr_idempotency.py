@@ -1061,6 +1061,45 @@ async def test_survey_retry_reuses_the_existing_station_and_evidence_link(fabric
     assert stations[0].azimuth_deg == pytest.approx(180.0)
 
 
+async def test_unit_inferred_survey_rows_are_not_promoted_without_current_human_review(fabric: Fabric) -> None:
+    document = await _upload_report(
+        fabric,
+        payload=(
+            b"MD,Inclination,Grid Azimuth,Azimuth Reference ID,Vertical Datum\n"
+            b"500,12,180,EPSG:32631,RKB\n"
+        ),
+        filename="survey-inferred-units.csv",
+    )
+    report = await _process(fabric, document["id"])
+
+    async with fabric.session() as session:
+        record = (
+            await session.execute(
+                select(ExtractedRecord).where(
+                    ExtractedRecord.document_id == document["id"],
+                    ExtractedRecord.record_type == "survey_station",
+                )
+            )
+        ).scalar_one()
+        stations = (
+            await session.execute(select(TrajectoryStation).where(TrajectoryStation.evidence_ref == record.id))
+        ).scalars().all()
+        trajectories = (
+            await session.execute(select(Trajectory).where(Trajectory.wellbore_id == document["wellbore_id"]))
+        ).scalars().all()
+
+    assert "unit_inferred" in record.quality_flags
+    assert record.payload["md_source_unit"] is None
+    assert record.promoted_to_id is None
+    assert report["counts"]["trajectory_stations"] == 0
+    assert record.id in report["records_needing_review"]
+    assert any(
+        row.get("record_id") == record.id and "source units were inferred" in row.get("reason", "")
+        for row in report["not_promoted"]
+    )
+    assert stations == [] and trajectories == []
+
+
 async def test_report_period_is_not_promoted_as_a_survey_station_measurement_time(fabric: Fabric) -> None:
     document = await _upload_report(
         fabric,
@@ -1276,7 +1315,13 @@ async def test_legacy_datum_provenance_prevents_station_retry_reuse(fabric: Fabr
     assert len(stations) == 1
 
 
-async def test_survey_from_new_document_appends_only_when_exact_frame_and_datum_match(fabric: Fabric) -> None:
+async def test_survey_from_new_document_creates_an_immutable_source_capture_revision(
+    fabric: Fabric,
+) -> None:
+    from copy import deepcopy
+
+    from drillai.db.models import EvidenceLink
+
     def survey_report(report_number: str, report_date: str, md: int, azimuth: int) -> bytes:
         return (
             "Daily Drilling Report - SYNTHETIC TEST DATA - Well NF-12\n"
@@ -1300,15 +1345,10 @@ async def test_survey_from_new_document_appends_only_when_exact_frame_and_datum_
         filename="survey-match-102.csv",
     )
     first = await _process(fabric, first_document["id"])
-    second = await _process(fabric, second_document["id"])
     assert first["counts"]["trajectory_stations"] == 1
-    assert second["counts"]["trajectory_stations"] == 1
-    assert second["survey_frame_declarations"] == [
-        {"azimuth_reference": "grid", "azimuth_reference_id": "EPSG:32631", "datum": "rkb"}
-    ]
 
     async with fabric.session() as session:
-        trajectory = (
+        parent = (
             await session.execute(
                 select(Trajectory).where(
                     Trajectory.org_id == fabric.org_id(fabric.alpha),
@@ -1318,11 +1358,84 @@ async def test_survey_from_new_document_appends_only_when_exact_frame_and_datum_
                 )
             )
         ).scalar_one()
-        stations = (
+        original_station = (
+            await session.execute(
+                select(TrajectoryStation).where(TrajectoryStation.trajectory_id == parent.id)
+            )
+        ).scalar_one()
+        parent_snapshot = {
+            "id": parent.id,
+            "version": parent.version,
+            "name": parent.name,
+            "source_document_id": parent.source_document_id,
+            "datum": parent.datum,
+            "datum_provenance": parent.datum_provenance,
+            "azimuth_reference": parent.azimuth_reference,
+            "azimuth_reference_id": parent.azimuth_reference_id,
+            "station_count": parent.station_count,
+            "total_md_si": parent.total_md_si,
+            "total_tvd_si": parent.total_tvd_si,
+            "revision_reason": parent.revision_reason,
+            "validation": deepcopy(parent.validation),
+        }
+        station_snapshot = {
+            "id": original_station.id,
+            "trajectory_id": original_station.trajectory_id,
+            "station_index": original_station.station_index,
+            "md_si": original_station.md_si,
+            "inclination_deg": original_station.inclination_deg,
+            "azimuth_deg": original_station.azimuth_deg,
+            "tvd_si": original_station.tvd_si,
+            "evidence_ref": original_station.evidence_ref,
+            "raw_source": deepcopy(original_station.raw_source),
+        }
+
+    second = await _process(fabric, second_document["id"])
+    assert second["counts"]["trajectory_stations"] == 1
+    assert second["survey_frame_declarations"] == [
+        {"azimuth_reference": "grid", "azimuth_reference_id": "EPSG:32631", "datum": "rkb"}
+    ]
+
+    async with fabric.session() as session:
+        trajectories = (
+            await session.execute(
+                select(Trajectory)
+                .where(
+                    Trajectory.org_id == fabric.org_id(fabric.alpha),
+                    Trajectory.wellbore_id == fabric.alpha.wellbore_id,
+                    Trajectory.kind == "actual",
+                )
+                .order_by(Trajectory.version)
+            )
+        ).scalars().all()
+        prior = next(row for row in trajectories if row.id == parent_snapshot["id"])
+        current = next(row for row in trajectories if row.is_current)
+        prior_station = (
+            await session.execute(
+                select(TrajectoryStation).where(TrajectoryStation.id == station_snapshot["id"])
+            )
+        ).scalar_one()
+        current_stations = (
             await session.execute(
                 select(TrajectoryStation)
-                .where(TrajectoryStation.wellbore_id == fabric.alpha.wellbore_id)
-                .order_by(TrajectoryStation.md_si)
+                .where(TrajectoryStation.trajectory_id == current.id)
+                .order_by(TrajectoryStation.station_index)
+            )
+        ).scalars().all()
+        records = (
+            await session.execute(
+                select(ExtractedRecord).where(
+                    ExtractedRecord.document_id.in_([first_document["id"], second_document["id"]]),
+                    ExtractedRecord.record_type == "survey_station",
+                )
+            )
+        ).scalars().all()
+        links = (
+            await session.execute(
+                select(EvidenceLink).where(
+                    EvidenceLink.subject_kind == "trajectory_station",
+                    EvidenceLink.subject_id.in_([station.id for station in current_stations]),
+                )
             )
         ).scalars().all()
         audit = (
@@ -1334,18 +1447,83 @@ async def test_survey_from_new_document_appends_only_when_exact_frame_and_datum_
             )
         ).scalar_one()
 
-    assert trajectory.datum == "rkb"
-    assert trajectory.azimuth_reference == "grid"
-    assert trajectory.azimuth_reference_id == "EPSG:32631"
-    assert len(stations) == 2
-    assert stations[1].input_azimuth_deg == pytest.approx(181.0)
-    assert stations[1].input_azimuth_reference == "grid"
-    assert stations[1].input_azimuth_reference_id == "EPSG:32631"
-    assert stations[1].grid_correction_deg is None
-    assert stations[1].raw_source["vertical_datum"] == "rkb"
+    assert len(trajectories) == 2
+    assert prior.is_current is False
+    assert prior.version == parent_snapshot["version"] == 1
+    assert prior.name == parent_snapshot["name"]
+    assert prior.source_document_id == parent_snapshot["source_document_id"] == first_document["id"]
+    assert prior.datum == parent_snapshot["datum"] == "rkb"
+    assert prior.datum_provenance == parent_snapshot["datum_provenance"] == "source_document"
+    assert prior.azimuth_reference == parent_snapshot["azimuth_reference"] == "grid"
+    assert prior.azimuth_reference_id == parent_snapshot["azimuth_reference_id"] == "EPSG:32631"
+    assert prior.station_count == parent_snapshot["station_count"] == 1
+    assert prior.total_md_si == parent_snapshot["total_md_si"] == pytest.approx(500.0)
+    assert prior.total_tvd_si == parent_snapshot["total_tvd_si"]
+    assert prior.revision_reason == parent_snapshot["revision_reason"]
+    assert prior.validation == parent_snapshot["validation"]
+    assert prior_station.id == station_snapshot["id"]
+    assert prior_station.trajectory_id == station_snapshot["trajectory_id"] == prior.id
+    assert prior_station.station_index == station_snapshot["station_index"]
+    assert prior_station.md_si == station_snapshot["md_si"] == pytest.approx(500.0)
+    assert prior_station.inclination_deg == station_snapshot["inclination_deg"]
+    assert prior_station.azimuth_deg == station_snapshot["azimuth_deg"]
+    assert prior_station.tvd_si == station_snapshot["tvd_si"]
+    assert prior_station.evidence_ref == station_snapshot["evidence_ref"]
+    assert prior_station.raw_source == station_snapshot["raw_source"]
+
+    assert current.id != prior.id
+    assert current.version == 2
+    assert current.is_current is True
+    assert current.source_document_id == first_document["id"]
+    assert current.datum == "rkb"
+    assert current.azimuth_reference == "grid"
+    assert current.azimuth_reference_id == "EPSG:32631"
+    assert current.station_count == 2
+    assert current.total_md_si == pytest.approx(600.0)
+    assert current.revision_reason and "prior source-capture revision remains unchanged" in current.revision_reason
+    assert current.validation["revision_parent"] == {
+        "trajectory_id": prior.id,
+        "version": 1,
+        "revision_kind": "ddr_source_capture_append",
+    }
+    assert current.validation["source_capture_manifest"]["source_document_ids"] == [
+        first_document["id"],
+        second_document["id"],
+    ]
+    assert set(current.validation["source_capture_manifest"]["source_record_ids"]) == {
+        record.id for record in records
+    }
+    assert len(current_stations) == 2
+    assert current_stations[0].id != prior_station.id
+    assert current_stations[0].evidence_ref == prior_station.evidence_ref
+    assert current_stations[0].raw_source == prior_station.raw_source
+    assert current_stations[1].input_azimuth_deg == pytest.approx(181.0)
+    assert current_stations[1].input_azimuth_reference == "grid"
+    assert current_stations[1].input_azimuth_reference_id == "EPSG:32631"
+    assert current_stations[1].grid_correction_deg is None
+    assert current_stations[1].raw_source["vertical_datum"] == "rkb"
+    assert len(records) == 2
+    assert len(links) == 2
+    assert any(record.document_id == first_document["id"] for record in records)
+    assert any(record.document_id == second_document["id"] for record in records)
     assert audit.details["survey_frame_declarations"] == second["survey_frame_declarations"]
-    assert trajectory.validation["state"] == "not_independently_validated"
-    assert trajectory.validation["is_valid"] is False
+    assert current.validation["state"] == "not_independently_validated"
+    assert current.validation["is_valid"] is False
+
+    retry = await _process(fabric, second_document["id"])
+    assert retry["counts"]["trajectory_stations"] == 0
+    assert any("reused 1 existing survey station" in warning for warning in retry["warnings"])
+    async with fabric.session() as session:
+        retry_trajectories = (
+            await session.execute(
+                select(Trajectory).where(
+                    Trajectory.org_id == fabric.org_id(fabric.alpha),
+                    Trajectory.wellbore_id == fabric.alpha.wellbore_id,
+                    Trajectory.kind == "actual",
+                )
+            )
+        ).scalars().all()
+    assert len(retry_trajectories) == 2
 
 
 async def test_a_document_that_is_not_a_ddr_is_refused_with_a_reason(fabric: Fabric) -> None:
@@ -1393,7 +1571,7 @@ async def test_rejected_and_superseded_records_never_enter_the_promotion_path(fa
     assert report["counts"]["trajectory_stations"] == 0
     assert {row["record_id"] for row in report["not_promoted"]} == blocked_ids
     assert all("not eligible for promotion" in row["reason"] for row in report["not_promoted"])
-    assert any("no extracted records passed validation-state and confidence gates" in warning for warning in report["warnings"])
+    assert any("no extracted records passed validation-state, confidence, and unit-review gates" in warning for warning in report["warnings"])
     assert await _counts(fabric) == (0, 0)
 
 

@@ -28,7 +28,11 @@ import type { E2EFixtures } from './global-setup'
 export type { FailedResponse, FailureAllowance, NetworkFailure } from './failure-oracle'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
-const FIXTURES_PATH = path.join(path.resolve(here, '..'), '.e2e', 'fixtures.json')
+const FIXTURES_PATH = path.resolve(
+  path.resolve(here, '..'),
+  process.env.DRILLAI_E2E_DATA_DIR ?? '.e2e',
+  'fixtures.json',
+)
 
 /**
  * The seeded workflow and well, as the server under test reports them.

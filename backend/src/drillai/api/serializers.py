@@ -13,6 +13,7 @@ import math
 from typing import Any
 
 from drillai.assets.vocabulary import SECTION_NUMBER_SEMANTICS
+from drillai.documents.unit_review import public_extracted_record_payload, unit_inference_review_is_current
 
 __all__ = [
     "approval_out",
@@ -462,8 +463,10 @@ def extracted_record_out(
     *,
     payload_max_bytes: int = DEFAULT_JSON_PREVIEW_BYTES,
 ) -> dict[str, Any]:
+    raw_payload = public_extracted_record_payload(row.payload)
+    unit_inference_reviewed = unit_inference_review_is_current(row.payload, row.review_version)
     payload, payload_truncated = bounded_json_preview(
-        row.payload,
+        raw_payload,
         max_bytes=payload_max_bytes,
         max_string_chars=payload_max_bytes,
         max_items=512 if payload_max_bytes > DEFAULT_JSON_PREVIEW_BYTES else 128,
@@ -494,6 +497,8 @@ def extracted_record_out(
         "confidence": row.confidence,
         "validation_state": row.validation_state,
         "review_version": row.review_version,
+        "unit_inference_review_required": "unit_inferred" in (row.quality_flags or []),
+        "unit_inference_reviewed": unit_inference_reviewed,
         "validated_by": row.validated_by,
         "validated_at": _iso(row.validated_at),
         "validation_notes": (row.validation_notes or "")[:2000],

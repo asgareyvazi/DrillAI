@@ -34,10 +34,11 @@ import datetime as dt
 import itertools
 import math
 import re
+from copy import deepcopy
 from dataclasses import dataclass, field
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -63,6 +64,7 @@ from drillai.documents.access import (
 )
 from drillai.documents.lifecycle import MIN_PROMOTION_CONFIDENCE, PROMOTABLE_VALIDATION_STATES
 from drillai.documents.scope import DocumentScope, DocumentScopeResolver
+from drillai.documents.unit_review import has_unreviewed_inferred_units
 from drillai.drilling.classifiers import (
     classify_npt,
     classify_operation_kind,
@@ -94,6 +96,75 @@ _PROMOTION_IDENTITY_CONSTRAINTS = {
     "uq_operations_org_promotion_fingerprint",
     "uq_events_org_promotion_fingerprint",
 }
+
+
+def _public_record_payload(record: ExtractedRecord) -> dict[str, Any]:
+    """Return extracted payload facts without the server-managed unit-review attestation."""
+    payload = record.payload if isinstance(record.payload, dict) else {}
+    return {key: value for key, value in payload.items() if key != "_unit_inference_review"}
+
+
+def _duplicate_trajectory_station(station: TrajectoryStation, *, trajectory_id: str) -> TrajectoryStation:
+    """Copy source-captured station content into a new immutable trajectory revision."""
+    return TrajectoryStation(
+        org_id=station.org_id,
+        trajectory_id=trajectory_id,
+        wellbore_id=station.wellbore_id,
+        station_index=station.station_index,
+        md_si=station.md_si,
+        inclination_deg=station.inclination_deg,
+        azimuth_deg=station.azimuth_deg,
+        input_azimuth_deg=station.input_azimuth_deg,
+        input_azimuth_reference=station.input_azimuth_reference,
+        input_azimuth_reference_id=station.input_azimuth_reference_id,
+        tvd_si=station.tvd_si,
+        ns_si=station.ns_si,
+        ew_si=station.ew_si,
+        tvdss_si=station.tvdss_si,
+        build_rate_deg_per_30m=station.build_rate_deg_per_30m,
+        turn_rate_deg_per_30m=station.turn_rate_deg_per_30m,
+        dls_deg_per_30m=station.dls_deg_per_30m,
+        closure_distance_si=station.closure_distance_si,
+        closure_azimuth_deg=station.closure_azimuth_deg,
+        vertical_section_si=station.vertical_section_si,
+        toolface_deg=station.toolface_deg,
+        source=station.source,
+        measured_at=station.measured_at,
+        measured_at_provenance=station.measured_at_provenance,
+        magnetic_reference=station.magnetic_reference,
+        grid_correction_deg=station.grid_correction_deg,
+        quality_flags=deepcopy(station.quality_flags or []),
+        method=station.method,
+        engine_version=station.engine_version,
+        evidence_ref=station.evidence_ref,
+        raw_source=deepcopy(station.raw_source or {}),
+    )
+
+
+def _duplicate_station_evidence_link(link: EvidenceLink, *, station_id: str) -> EvidenceLink:
+    """Keep each cloned station's original evidence edge without re-pointing historical edges."""
+    return EvidenceLink(
+        org_id=link.org_id,
+        subject_kind=link.subject_kind,
+        subject_id=station_id,
+        evidence_kind=link.evidence_kind,
+        evidence_id=link.evidence_id,
+        document_id=link.document_id,
+        region_id=link.region_id,
+        page_number=link.page_number,
+        well_id=link.well_id,
+        locator=deepcopy(link.locator or {}),
+        excerpt=link.excerpt,
+        confidence=link.confidence,
+        relevance=link.relevance,
+        weight=link.weight,
+        method=link.method,
+        note=link.note,
+        quote_verified=link.quote_verified,
+        quote_check=link.quote_check,
+        created_by=link.created_by,
+        attributes=deepcopy(link.attributes or {}),
+    )
 
 
 def _is_promotion_identity_conflict(exc: IntegrityError) -> bool:
@@ -383,7 +454,7 @@ class DdrProcessor:
         for record in records:
             if record.record_type != "report_header":
                 continue
-            raw = (record.payload or {}).get("report_date")
+            raw = (_public_record_payload(record)).get("report_date")
             if isinstance(raw, str):
                 with contextlib.suppress(ValueError, TypeError):
                     return parse_iso_datetime_utc(raw, assume_utc_for_naive=True)
@@ -430,7 +501,7 @@ class DdrProcessor:
 
     @staticmethod
     def _record_text(record: ExtractedRecord) -> str:
-        payload = record.payload or {}
+        payload = _public_record_payload(record)
         parts = [str(value) for value in payload.values() if isinstance(value, str)]
         return " | ".join(parts) if parts else str(payload)
 
@@ -596,7 +667,7 @@ class DdrProcessor:
                 "method": record.method,
                 "method_version": record.method_version,
             },
-            excerpt=(record.payload and str(record.payload))[:2000] or None,
+            excerpt=(str(_public_record_payload(record))[:2000] or None),
             confidence=record.confidence,
             relevance=1.0,
             weight=1.0,
@@ -689,7 +760,7 @@ class DdrProcessor:
                 )
                 continue
 
-            payload = record.payload or {}
+            payload = _public_record_payload(record)
             text = self._record_text(record)
             classification = classify_operation_kind(text)
             kind = classification.label or "unknown"
@@ -962,7 +1033,7 @@ class DdrProcessor:
                     "no duplicate was created"
                 )
                 continue
-            payload = record.payload or {}
+            payload = _public_record_payload(record)
             raw_hours = _reported_duration(payload)
             hours: float | None = None
             if raw_hours is not None:
@@ -1308,7 +1379,7 @@ class DdrProcessor:
         if not rows:
             return
         latest = rows[-1]
-        payload = {key: value for key, value in (latest.payload or {}).items() if value is not None}
+        payload = {key: value for key, value in _public_record_payload(latest).items() if value is not None}
         if not payload:
             return
         if (
@@ -1364,7 +1435,7 @@ class DdrProcessor:
             if record.record_type != "parameter_set":
                 continue
             unit_context = record.unit_context or {}
-            for label, value in (record.payload or {}).items():
+            for label, value in (_public_record_payload(record)).items():
                 normalised = KNOWN_PARAMETER_LABELS.get(label.strip().casefold())
                 if normalised is None:
                     unrecognised.append(label)
@@ -1492,7 +1563,7 @@ class DdrProcessor:
             return
         payload: dict[str, Any] = {}
         for record in rows:
-            payload.update({key: value for key, value in (record.payload or {}).items() if value is not None})
+            payload.update({key: value for key, value in (_public_record_payload(record)).items() if value is not None})
         if not payload:
             return
         if dry_run:
@@ -1646,7 +1717,7 @@ class DdrProcessor:
 
         valid_rows: list[tuple[ExtractedRecord, dict[str, Any]]] = []
         for record in rows:
-            payload = record.payload or {}
+            payload = _public_record_payload(record)
             values: dict[str, Any] = {}
             invalid: list[str] = []
             for field_name in ("md_si", "inclination_deg", "azimuth_deg"):
@@ -1845,7 +1916,7 @@ class DdrProcessor:
                     and station.source == "report"
                     and station.evidence_ref == record.id
                     and raw_source.get("record_id") == record.id
-                    and raw_source.get("payload") == (record.payload or {})
+                    and raw_source.get("payload") == (_public_record_payload(record))
                     and raw_source.get("vertical_datum") == batch_datum
                     and raw_source.get("vertical_datum_provenance") == "source_document"
                     and raw_source.get("input_azimuth_reference") == batch_reference
@@ -1961,6 +2032,11 @@ class DdrProcessor:
                             "the current trajectory has unverified datum provenance or calculated/stale state; "
                             "appending would invalidate its calculation, so the source rows are queued for human review"
                         )
+                    elif [station.station_index for station in current_stations] != list(range(len(current_stations))):
+                        append_block_reason = (
+                            "the current source capture has non-contiguous station indexes; a new immutable "
+                            "revision cannot preserve its station order safely"
+                        )
                     elif (
                         any(not math.isfinite(depth) for depth in current_depths)
                         or len(set(current_depths)) != len(current_depths)
@@ -1998,21 +2074,113 @@ class DdrProcessor:
         if not new_rows:
             return
 
-        trajectory = (
-            await self.session.execute(
-                select(Trajectory)
-                .where(
+        if current_trajectory is not None:
+            parent = current_trajectory
+            latest_version = await self.session.scalar(
+                select(func.max(Trajectory.version)).where(
                     Trajectory.org_id == self.org_id,
                     Trajectory.wellbore_id == document.wellbore_id,
-                    Trajectory.kind == "actual",
+                    Trajectory.kind == parent.kind,
+                    Trajectory.name == parent.name,
                 )
-                .order_by(Trajectory.is_current.desc(), Trajectory.version.desc())
-                .limit(1)
-                .with_for_update()
             )
-        ).scalars().first()
-        if trajectory is None or not trajectory.is_current:
-            version = (trajectory.version + 1) if trajectory is not None else 1
+            parent_validation = deepcopy(parent.validation if isinstance(parent.validation, dict) else {})
+            manifest = parent_validation.get("source_capture_manifest")
+            manifest = manifest if isinstance(manifest, dict) else {}
+            source_document_ids = [value for value in manifest.get("source_document_ids", []) if isinstance(value, str)]
+            source_record_ids = [value for value in manifest.get("source_record_ids", []) if isinstance(value, str)]
+            for source_document_id in (parent.source_document_id, document.id):
+                if source_document_id and source_document_id not in source_document_ids:
+                    source_document_ids.append(source_document_id)
+            for source_record_id in [
+                *(station.evidence_ref for station in current_stations),
+                *(record.id for record, _values in new_rows),
+            ]:
+                if source_record_id and source_record_id not in source_record_ids:
+                    source_record_ids.append(source_record_id)
+            parent_validation["source_capture_manifest"] = {
+                "source_document_ids": source_document_ids,
+                "source_record_ids": source_record_ids,
+            }
+            parent_validation["revision_parent"] = {
+                "trajectory_id": parent.id,
+                "version": parent.version,
+                "revision_kind": "ddr_source_capture_append",
+            }
+            next_version = max(int(latest_version or 0), parent.version) + 1
+            revision_reason = (
+                f"Appended reviewed source stations from document {document.id}; "
+                "the prior source-capture revision remains unchanged."
+            )
+            parent.is_current = False
+            await self.session.flush()
+            trajectory = Trajectory(
+                org_id=self.org_id,
+                wellbore_id=document.wellbore_id,
+                kind=parent.kind,
+                name=parent.name,
+                source_document_id=parent.source_document_id,
+                datum=parent.datum,
+                datum_provenance=parent.datum_provenance,
+                azimuth_reference=parent.azimuth_reference,
+                azimuth_reference_id=parent.azimuth_reference_id,
+                is_current=True,
+                version=next_version,
+                created_by=self.actor_id or "ddr_processor",
+                engine_run_id=None,
+                station_count=len(current_stations),
+                total_md_si=parent.total_md_si,
+                total_tvd_si=parent.total_tvd_si,
+                max_inclination_deg=parent.max_inclination_deg,
+                target_formation_id=parent.target_formation_id,
+                revision_reason=revision_reason,
+                validation=parent_validation,
+                notes=parent.notes,
+            )
+            self.session.add(trajectory)
+            await self.session.flush()
+
+            existing_indexes: set[int] = set()
+            for previous_station in current_stations:
+                copied_station = _duplicate_trajectory_station(previous_station, trajectory_id=trajectory.id)
+                self.session.add(copied_station)
+                await self.session.flush()
+                existing_indexes.add(copied_station.station_index)
+                previous_links = (
+                    await self.session.execute(
+                        select(EvidenceLink).where(
+                            EvidenceLink.org_id == self.org_id,
+                            EvidenceLink.subject_kind == "trajectory_station",
+                            EvidenceLink.subject_id == previous_station.id,
+                        )
+                    )
+                ).scalars().all()
+                self.session.add_all(
+                    _duplicate_station_evidence_link(link, station_id=copied_station.id)
+                    for link in previous_links
+                )
+            if current_stations:
+                await self.session.flush()
+            report.warnings.append(
+                f"created immutable source-capture trajectory revision v{next_version}; "
+                f"prior revision {parent.id} was retained"
+            )
+        else:
+            previous_trajectory = (
+                await self.session.execute(
+                    select(Trajectory)
+                    .where(
+                        Trajectory.org_id == self.org_id,
+                        Trajectory.wellbore_id == document.wellbore_id,
+                        Trajectory.kind == "actual",
+                    )
+                    .order_by(Trajectory.is_current.desc(), Trajectory.version.desc())
+                    .limit(1)
+                    .with_for_update()
+                )
+            ).scalars().first()
+            version = (previous_trajectory.version + 1) if previous_trajectory is not None else 1
+            source_record_ids = list(dict.fromkeys(record.id for record, _values in new_rows))
             trajectory = Trajectory(
                 org_id=self.org_id,
                 wellbore_id=document.wellbore_id,
@@ -2026,6 +2194,7 @@ class DdrProcessor:
                 is_current=True,
                 version=version,
                 created_by=self.actor_id or "ddr_processor",
+                revision_reason=f"Source capture from document {document.id}; independent validation is not established.",
                 validation={
                     "is_valid": False,
                     "state": "not_independently_validated",
@@ -2034,6 +2203,10 @@ class DdrProcessor:
                         "id": batch_reference_id,
                     },
                     "declared_vertical_datum": batch_datum,
+                    "source_capture_manifest": {
+                        "source_document_ids": [document.id],
+                        "source_record_ids": source_record_ids,
+                    },
                     "issues": [
                         {
                             "severity": "warning",
@@ -2052,19 +2225,7 @@ class DdrProcessor:
             )
             self.session.add(trajectory)
             await self.session.flush()
-
-        existing_indexes = {
-            int(index)
-            for index in (
-                await self.session.execute(
-                    select(TrajectoryStation.station_index).where(
-                        TrajectoryStation.org_id == self.org_id,
-                        TrajectoryStation.trajectory_id == trajectory.id,
-                        TrajectoryStation.wellbore_id == document.wellbore_id,
-                    )
-                )
-            ).scalars().all()
-        }
+            existing_indexes = set()
         next_index = max(existing_indexes, default=-1) + 1
         for record, values in new_rows:
             while next_index in existing_indexes:
@@ -2089,7 +2250,7 @@ class DdrProcessor:
                 quality_flags=list(record.quality_flags or []),
                 raw_source={
                     "record_id": record.id,
-                    "payload": record.payload or {},
+                    "payload": _public_record_payload(record),
                     "input_azimuth_reference": values["azimuth_reference"],
                     "input_azimuth_reference_id": values["azimuth_reference_id"],
                     "input_azimuth_deg": values["azimuth_deg"],
@@ -2181,6 +2342,20 @@ class DdrProcessor:
                     }
                 )
                 continue
+            if has_unreviewed_inferred_units(record.quality_flags, record.payload, record.review_version):
+                ineligible_record_ids.add(record.id)
+                report.records_needing_review.append(record.id)
+                report.not_promoted.append(
+                    {
+                        "record_id": record.id,
+                        "record_type": record.record_type,
+                        "reason": (
+                            "one or more source units were inferred; an explicit current-version human unit review "
+                            "is required before promotion"
+                        ),
+                    }
+                )
+                continue
             confidence = record.confidence
             invalid_confidence = False
             if confidence is not None:
@@ -2233,7 +2408,7 @@ class DdrProcessor:
                     }
                 )
                 continue
-            payload = record.payload or {}
+            payload = _public_record_payload(record)
             invalid_duration_fields = [
                 field_name
                 for field_name in ("duration_hours", "npt_hours")
@@ -2261,7 +2436,7 @@ class DdrProcessor:
         records = eligible_records
         if not records:
             if report.not_promoted:
-                report.warnings.append("no extracted records passed validation-state and confidence gates")
+                report.warnings.append("no extracted records passed validation-state, confidence, and unit-review gates")
             else:
                 report.warnings.append("document has no extracted records to promote")
             return report

@@ -42,6 +42,7 @@ from drillai.core.errors import NotFound, ValidationFailed
 from drillai.db.models import Operation, Project, Well, Wellbore, WellSection
 from drillai.documents.access import operational_source_conditions
 from drillai.documents.lifecycle import MIN_PROMOTION_CONFIDENCE, PROMOTABLE_VALIDATION_STATES
+from drillai.documents.unit_review import has_unreviewed_inferred_units
 
 #: Field order used in every message, so two callers reporting the same disagreement describe it the
 #: same way.
@@ -99,6 +100,15 @@ def validate_source_record(
     if state not in SOURCE_RECORD_STATES:
         raise ValidationFailed(
             f"source record validation state {state!r} is not eligible for linkage",
+            details={"field": "source_record_id", "validation_state": state},
+        )
+    if has_unreviewed_inferred_units(
+        getattr(record, "quality_flags", None),
+        getattr(record, "payload", None),
+        getattr(record, "review_version", None),
+    ):
+        raise ValidationFailed(
+            "source record contains inferred units without explicit review for its current version",
             details={"field": "source_record_id", "validation_state": state},
         )
     confidence = getattr(record, "confidence", None)

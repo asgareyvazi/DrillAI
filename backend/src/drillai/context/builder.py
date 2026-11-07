@@ -68,6 +68,7 @@ from drillai.documents.access import (
     trajectory_source_conditions,
     trajectory_station_evidence_document_condition,
 )
+from drillai.documents.unit_review import public_extracted_record_payload, unit_inference_review_is_current
 from drillai.observability.tracing import get_metrics, get_tracer
 from drillai.operations.time_windows import (
     DEPTH_WINDOW_BASES,
@@ -1105,12 +1106,14 @@ class ExtractedRecordsProvider(SectionProvider):
             if not scope.period_overlaps(observed_at, observed_at):
                 continue
             ids.append(row.id)
+            inferred_units = "unit_inferred" in (row.quality_flags or [])
+            unit_review_current = unit_inference_review_is_current(row.payload, row.review_version)
             section.items.append(
                 ContextItem(
                     kind=f"record.{row.record_type}",
                     id=row.id,
                     label=f"{row.record_type} p.{row.page_number}",
-                    data=row.payload,
+                    data=public_extracted_record_payload(row.payload),
                     source_kind="document",
                     source_ids=[row.id, row.document_id],
                     cites=[row.document_id],
@@ -1121,6 +1124,13 @@ class ExtractedRecordsProvider(SectionProvider):
                         "observed_at": row.observed_at_basis,
                         "depth_md_si": row.depth_md_basis,
                         "depth_tvd_si": row.depth_tvd_basis,
+                        "unit_inference_review_required": "yes" if inferred_units else "no",
+                        "unit_inference_reviewed": (
+                            "yes" if unit_review_current else "no"
+                        ) if inferred_units else "not_required",
+                        "unit_inference_review_version": (
+                            str(row.review_version) if inferred_units and unit_review_current else "not_applicable"
+                        ),
                     },
                     units=row.unit_context,
                     notes=list(row.quality_flags or []),

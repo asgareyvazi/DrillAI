@@ -1204,7 +1204,7 @@ class SurveyTableExtractor(Extractor):
 
     key = "survey_table"
     name = "Survey stations"
-    version = "1.3.0"
+    version = "1.4.0"
     doc_types = ("ddr", "drilling_document", "program", "survey_report", "other")
     priority = 50
 
@@ -1334,7 +1334,30 @@ class SurveyTableExtractor(Extractor):
                     if md is None or md < 0:
                         continue
                     md_si = _depth_to_si(md, md_unit)
-                    payload: dict[str, Any] = {"md_si": md_si}
+                    payload: dict[str, Any] = {
+                        "md_si": md_si,
+                        # Preserve source facts separately from parser defaults. A missing header unit
+                        # remains unknown even though extraction uses a clearly flagged default for its
+                        # provisional canonical value.
+                        "md_source_value": md,
+                        "md_source_unit": md_header_unit or None,
+                        "unit_provenance": {
+                            "md": "source_header" if md_header_unit else "inferred_default",
+                            "inclination": "source_header" if inclination_header_unit else "inferred_default",
+                            **(
+                                {"azimuth": "source_header" if azimuth_header_unit else "inferred_default"}
+                                if "azimuth" in column_of
+                                else {}
+                            ),
+                            **(
+                                {
+                                    "grid_correction": "source_header" if correction_header_unit else "inferred_default"
+                                }
+                                if "grid_correction_deg" in column_of
+                                else {}
+                            ),
+                        },
+                    }
                     field_locations: dict[str, dict[str, Any]] = {}
                     if column_of["md"] < len(row) and (locator := _cell_locator(region, row[column_of["md"]])):
                         field_locations["md_si"] = locator
@@ -1405,11 +1428,13 @@ class SurveyTableExtractor(Extractor):
                         field_locations["azimuth_reference_id"] = locator
 
                     if inclination := cell_value("inclination"):
-                        parsed_inclination = _to_float(inclination)
-                        if parsed_inclination is None:
+                        inclination_source_value = _to_float(inclination)
+                        if inclination_source_value is None:
                             quality_flags.append("ambiguous_or_invalid_inclination")
                         else:
-                            parsed_inclination = _angle_to_degrees(parsed_inclination, inclination_unit)
+                            payload["inclination_source_value"] = inclination_source_value
+                            payload["inclination_source_unit"] = inclination_header_unit or None
+                            parsed_inclination = _angle_to_degrees(inclination_source_value, inclination_unit)
                             if not 0 <= parsed_inclination <= 180:
                                 quality_flags.append("inclination_out_of_range")
                             else:
@@ -1417,11 +1442,13 @@ class SurveyTableExtractor(Extractor):
                                 if locator := _cell_locator(region, row[column_of["inclination"]]):
                                     field_locations["inclination_deg"] = locator
                     if azimuth := cell_value("azimuth"):
-                        parsed_azimuth = _to_float(azimuth)
-                        if parsed_azimuth is None:
+                        azimuth_source_value = _to_float(azimuth)
+                        if azimuth_source_value is None:
                             quality_flags.append("ambiguous_or_invalid_azimuth")
                         else:
-                            parsed_azimuth = _angle_to_degrees(parsed_azimuth, azimuth_unit)
+                            payload["azimuth_source_value"] = azimuth_source_value
+                            payload["azimuth_source_unit"] = azimuth_header_unit or None
+                            parsed_azimuth = _angle_to_degrees(azimuth_source_value, azimuth_unit)
                             if not 0 <= parsed_azimuth < 360:
                                 quality_flags.append("azimuth_out_of_range")
                             else:
@@ -1429,11 +1456,13 @@ class SurveyTableExtractor(Extractor):
                                 if locator := _cell_locator(region, row[column_of["azimuth"]]):
                                     field_locations["azimuth_deg"] = locator
                     if raw_correction := cell_value("grid_correction_deg"):
-                        parsed_correction = _to_float(raw_correction)
-                        if parsed_correction is None:
+                        correction_source_value = _to_float(raw_correction)
+                        if correction_source_value is None:
                             quality_flags.append("ambiguous_or_invalid_grid_correction")
                         else:
-                            parsed_correction = _angle_to_degrees(parsed_correction, correction_unit)
+                            payload["grid_correction_source_value"] = correction_source_value
+                            payload["grid_correction_source_unit"] = correction_header_unit or None
+                            parsed_correction = _angle_to_degrees(correction_source_value, correction_unit)
                             if not -360 <= parsed_correction <= 360:
                                 quality_flags.append("grid_correction_out_of_range")
                             else:

@@ -146,6 +146,50 @@ describe('ExtractedRecordReviewForm', () => {
     expect(onSubmit).not.toHaveBeenCalled()
   })
 
+  it('shows inferred-unit context and requires explicit acknowledgement before validation', async () => {
+    const user = userEvent.setup()
+    const onSubmit = vi.fn()
+    const inferredSurvey: ExtractionRecord = {
+      ...record,
+      record_type: 'survey_station',
+      payload: {
+        md_si: 500,
+        md_source_value: 500,
+        md_source_unit: null,
+        inclination_deg: 12,
+        azimuth_deg: 180,
+        azimuth_reference: 'unknown',
+        datum: 'unknown',
+        unit_provenance: { md: 'inferred_default', inclination: 'inferred_default' },
+      },
+      quality_flags: ['unit_inferred'],
+      unit_context: { md_si: 'm', inclination_deg: 'deg' },
+    }
+    renderForm(onSubmit, inferredSurvey)
+
+    expect(screen.getByText(/inferred unit defaults/i)).toBeInTheDocument()
+    expect(screen.getByText(/"md_si": "m"/)).toBeInTheDocument()
+    const submit = screen.getByTestId('extracted-record-review-submit')
+    expect(submit).toBeDisabled()
+    await user.type(screen.getByTestId('extracted-record-review-reason'), 'Checked the source page')
+    fireEvent.submit(screen.getByTestId('extracted-record-review-form'))
+    expect(await screen.findByRole('alert')).toHaveTextContent(/explicitly review and acknowledge inferred units/i)
+    expect(onSubmit).not.toHaveBeenCalled()
+
+    await user.click(screen.getByRole('checkbox', { name: /i inspected the source/i }))
+    expect(submit).toBeEnabled()
+    await user.click(submit)
+    expect(onSubmit).toHaveBeenCalledWith(
+      {
+        expected_version: 1,
+        decision: 'validate',
+        reason: 'Checked the source page',
+        changes: { payload: inferredSurvey.payload, unit_inference_reviewed: true },
+      },
+      expect.stringMatching(/^ui-record-review-rec_review_1-v1-/),
+    )
+  })
+
   it('submits an explicit rejection with a reason and the observed payload', async () => {
     const user = userEvent.setup()
     const onSubmit = vi.fn()

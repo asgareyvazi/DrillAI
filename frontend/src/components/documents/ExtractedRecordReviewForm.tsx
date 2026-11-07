@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import type { ExtractionRecord, ExtractedRecordReviewRequest } from '../../api/types'
 import { Button, ErrorState, Field } from '../common'
@@ -57,6 +57,8 @@ export function ExtractedRecordReviewForm({
     superseded: t('documents.reviewStateSuperseded'),
   }
   const reviewStateLabel = reviewStateLabels[record.validation_state] ?? humanise(record.validation_state)
+  const hasInferredUnits = record.unit_inference_review_required ?? record.quality_flags.includes('unit_inferred')
+  const [unitInferenceReviewed, setUnitInferenceReviewed] = useState(false)
   const [decision, setDecision] = useState<'validate' | 'reject'>(canValidate ? 'validate' : 'reject')
   const [payloadText, setPayloadText] = useState(() => JSON.stringify(record.payload, null, 2))
   const [observedAt, setObservedAt] = useState(() => toLocalDateTime(record.observed_at))
@@ -68,6 +70,11 @@ export function ExtractedRecordReviewForm({
   const [reason, setReason] = useState('')
   const [validationError, setValidationError] = useState<string | null>(null)
   const [idempotencyKey, setIdempotencyKey] = useState(() => newKey(record))
+
+  useEffect(() => {
+    setUnitInferenceReviewed(false)
+    setValidationError(null)
+  }, [record.id, record.review_version])
 
   const changed = () => {
     setIdempotencyKey(newKey(record))
@@ -88,6 +95,10 @@ export function ExtractedRecordReviewForm({
       setValidationError(t('documents.reviewPayloadMustBeObject'))
       return
     }
+    if (decision === 'validate' && hasInferredUnits && !unitInferenceReviewed) {
+      setValidationError(t('documents.reviewUnitInferenceRequired'))
+      return
+    }
     const utcObservedAt = localDateTimeToUtc(observedAt)
     if (observedAtChanged && observedAt && !utcObservedAt) {
       setValidationError(t('documents.reviewTimeInvalid'))
@@ -96,6 +107,7 @@ export function ExtractedRecordReviewForm({
     const changes: ExtractedRecordReviewRequest['changes'] = {
       payload: correctedPayload as Record<string, unknown>,
     }
+    if (hasInferredUnits) changes.unit_inference_reviewed = unitInferenceReviewed
     if (observedAtChanged) changes.observed_at = utcObservedAt ?? null
     for (const [name, value, wasChanged] of [
       ['depth_md_si', depthMd, depthMdChanged],
@@ -137,6 +149,39 @@ export function ExtractedRecordReviewForm({
         <span>{reviewStateLabel}</span>
         {record.validated_at ? <span>· {formatDateTime(record.validated_at)}</span> : null}
       </div>
+      {(record.quality_flags.length > 0 || Object.keys(record.unit_context).length > 0) ? (
+        <section className="space-y-2 rounded border border-graphite-200 p-2 text-xs dark:border-graphite-800" aria-label={t('documents.reviewQualityFlags')}>
+          <div>
+            <h3 className="font-semibold">{t('documents.reviewQualityFlags')}</h3>
+            {record.quality_flags.length > 0 ? (
+              <ul className="mt-1 list-disc ps-4">{record.quality_flags.map((flag) => <li key={flag}><code dir="ltr">{flag}</code></li>)}</ul>
+            ) : <span>{t('common.none')}</span>}
+          </div>
+          {Object.keys(record.unit_context).length > 0 && (
+            <div>
+              <h3 className="font-semibold">{t('documents.reviewUnitContext')}</h3>
+              <pre dir="ltr" className="mt-1 overflow-x-auto whitespace-pre-wrap">{JSON.stringify(record.unit_context, null, 2)}</pre>
+            </div>
+          )}
+        </section>
+      ) : null}
+      {hasInferredUnits ? (
+        <div role="note" className="space-y-2 rounded border border-warning/40 bg-amber-50/50 p-2 text-xs text-graphite-800 dark:bg-amber-950/20 dark:text-graphite-200">
+          <p>{t('documents.reviewUnitInferenceWarning')}</p>
+          <label className="flex items-start gap-2">
+            <input
+              type="checkbox"
+              checked={unitInferenceReviewed}
+              disabled={pending}
+              onChange={(event) => {
+                setUnitInferenceReviewed(event.target.checked)
+                changed()
+              }}
+            />
+            <span>{t('documents.reviewUnitInferenceCheckbox')}</span>
+          </label>
+        </div>
+      ) : null}
       {record.validation_notes ? (
         <p className="rounded border border-graphite-200 p-2 text-xs text-graphite-600 dark:border-graphite-800 dark:text-graphite-300">
           {t('documents.reviewPreviousNote')}: {record.validation_notes}
@@ -251,7 +296,7 @@ export function ExtractedRecordReviewForm({
         <Button
           type="submit"
           variant="primary"
-          disabled={pending || !canReject || (decision === 'validate' && !canValidate) || !reason.trim()}
+          disabled={pending || !canReject || (decision === 'validate' && !canValidate) || (decision === 'validate' && hasInferredUnits && !unitInferenceReviewed) || !reason.trim()}
           data-testid="extracted-record-review-submit"
         >
           {pending ? t('documents.reviewSaving') : t('documents.reviewSave')}

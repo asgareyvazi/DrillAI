@@ -619,6 +619,45 @@ export const drillingApi = {
     api.get<EvidenceSummary>('/evidence/summary', { query: params, signal }),
   documentFileUrl: (documentId: string) => `/api/v1/documents/${enc(documentId)}/file`,
 
+  // ------------------------------------------------------------------ surveys & trajectory revisions
+  listSurveys: (wellId: string, signal?: AbortSignal) =>
+    api.get<Page<import('./types').SurveyTrajectorySummary>>(`/wells/${enc(wellId)}/surveys`, {
+      signal,
+      validate: expect.paged(),
+    }),
+  getSurvey: (wellId: string, trajectoryId: string, signal?: AbortSignal) =>
+    api.get<import('./types').SurveyTrajectoryResponse>(
+      `/wells/${enc(wellId)}/surveys/${enc(trajectoryId)}`,
+      { signal, validate: expect.object('trajectory') },
+    ),
+  compareSurveys: (wellId: string, trajectoryId: string, baselineId: string, signal?: AbortSignal) =>
+    api.get<import('./types').SurveyComparison>(
+      `/wells/${enc(wellId)}/surveys/${enc(trajectoryId)}/compare/${enc(baselineId)}`,
+      { signal, validate: expect.object('items') },
+    ),
+  createSurvey: (
+    wellId: string,
+    body: import('./types').SurveyCreatePayload,
+    idempotencyKey?: string,
+  ) =>
+    api.post<import('./types').SurveyTrajectoryResponse>(
+      `/wells/${enc(wellId)}/surveys`,
+      body,
+      idempotencyHeader(idempotencyKey),
+    ),
+  importSurvey: (
+    wellId: string,
+    body: import('./types').SurveyImportPayload,
+    idempotencyKey?: string,
+  ) =>
+    api.post<import('./types').SurveyTrajectoryResponse>(
+      `/wells/${enc(wellId)}/surveys/imports`,
+      body,
+      idempotencyHeader(idempotencyKey),
+    ),
+  exportSurveyCsv: (wellId: string, trajectoryId: string, signal?: AbortSignal) =>
+    api.getBlob(`/wells/${enc(wellId)}/surveys/${enc(trajectoryId)}/export.csv`, { signal }),
+
   // ------------------------------------------------------------------ engines
   listEngines: (signal?: AbortSignal) => api.get<Page<EngineListItem>>('/registry/engines', { signal, validate: expect.paged() }),
   getEngine: (key: string, signal?: AbortSignal) => api.get<EngineListItem>(`/registry/engines/${enc(key)}`, { signal }),

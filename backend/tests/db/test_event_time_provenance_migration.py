@@ -94,6 +94,10 @@ def test_migration_keeps_unknown_event_times_unknown_and_preserves_rollback_data
             _insert_legacy_rows(connection)
 
         command.upgrade(config, HEAD_REVISION)
+        # This regression remains anchored at c79f2a61d5b3 -> e2b4c6d8f013. The active
+        # trajectory-governance migration is an additive descendant; advance it before asking
+        # Alembic to compare the database with the current model metadata.
+        command.upgrade(config, "heads")
         command.check(config)
         with engine.begin() as connection:
             anchor = connection.execute(

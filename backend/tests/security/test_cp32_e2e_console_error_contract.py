@@ -260,9 +260,15 @@ def test_cp32_ci_reports_the_playwright_failure_message() -> None:
         assert "e2e-results.json" in step, (
             f"the {name} step must pass the actual Playwright JSON report to the verifier"
         )
-    assert "outputFile: 'test-results/e2e-results.json'" in playwright_config, (
-        "CI must emit Playwright's structured execution report rather than infer project results "
-        "from platform-specific console glyphs"
+    assert (
+        "outputFile: `${process.env.DRILLAI_E2E_OUTPUT_DIR ?? 'test-results'}/e2e-results.json`"
+        in playwright_config
+    ), (
+        "CI must emit Playwright's structured execution report under the isolated, configurable "
+        "output directory rather than infer project results from platform-specific console glyphs"
+    )
+    assert "outputDir: process.env.DRILLAI_E2E_OUTPUT_DIR ?? 'test-results'" in playwright_config, (
+        "Playwright artifacts and its structured report must share the isolated output directory"
     )
     assert "report.stats" in verifier and "test.results" in verifier and "expectedFiles" in verifier, (
         "the E2E verifier must check structured outcomes and exact executed project/file records"

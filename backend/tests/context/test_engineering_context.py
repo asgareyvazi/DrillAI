@@ -14,6 +14,7 @@ from sqlalchemy import select
 
 from drillai.context.builder import (
     ContextBuilder,
+    ExtractedRecordsProvider,
     SectionProvider,
     TrajectoryProvider,
     default_context_builder,
@@ -1461,6 +1462,39 @@ def test_context_item_carries_provenance_fields():
     assert not section.is_empty
 
 
+async def test_extracted_record_context_hides_private_unit_review_payload_and_expires_with_version(
+    session, well_context
+) -> None:
+    document = well_context["documents"][well_context["surface"].id]
+    record = (
+        await session.execute(select(ExtractedRecord).where(ExtractedRecord.document_id == document.id))
+    ).scalar_one()
+    record.payload = {
+        "mud_weight": 9.2,
+        "_unit_inference_review": {"unit_inference_reviewed": True, "review_version": 3},
+    }
+    record.quality_flags = ["unit_inferred"]
+    record.validation_state = "human_validated"
+    record.validated_by = "usr_survey_reviewer"
+    record.validated_at = dt.datetime(2026, 2, 1, 12, tzinfo=dt.UTC)
+    record.review_version = 3
+    await session.flush()
+
+    provider = ExtractedRecordsProvider()
+    current, _sources = await provider.build(session, _request(well_context))
+    item = next(item for item in current.items if item.id == record.id)
+    assert item.data == {"mud_weight": 9.2}
+    assert item.provenance["unit_inference_review_required"] == "yes"
+    assert item.provenance["unit_inference_reviewed"] == "yes"
+    assert item.provenance["unit_inference_review_version"] == "3"
+    assert "_unit_inference_review" not in item.data
+
+    record.review_version = 4
+    await session.flush()
+    stale, _stale_sources = await provider.build(session, _request(well_context))
+    assert record.id not in {item.id for item in stale.items}
+
+
 @pytest.mark.parametrize("invalidation", ["rejected", "superseded", "low_confidence", "quarantined"])
 async def test_trajectory_source_becomes_unavailable_when_a_station_record_is_not_trusted(
     session, well_context, invalidation: str
@@ -1496,7 +1530,7 @@ async def test_trajectory_source_becomes_unavailable_when_a_station_record_is_no
         azimuth_deg=180.0,
         source="report",
         evidence_ref=record.id,
-        raw_source={"record_id": record.id},
+        raw_source={"record_id": record.id, "human_review": {"review_version": record.review_version}},
     )
     session.add(station)
     await session.flush()
@@ -1526,6 +1560,172 @@ async def test_trajectory_source_becomes_unavailable_when_a_station_record_is_no
         record.validation_state = invalidation
     await session.flush()
 
+    stale, stale_sources = await provider.build(session, request)
+    assert stale_sources == []
+    assert stale.items == []
+    assert stale.empty_reason == "no current trajectory on file for this scope"
+
+
+async def test_manual_unreferenced_trajectory_is_eligible_for_well_context(session, well_context) -> None:
+    """Manual trajectories without source documents remain readable; the trust filter is not a ban."""
+    trajectory = Trajectory(
+        org_id=well_context["org"].id,
+        wellbore_id=well_context["wellbore"].id,
+        name="Manual unreferenced trajectory",
+        kind="actual",
+        version=1,
+        is_current=True,
+        source_document_id=None,
+        station_count=1,
+        total_md_si=100.0,
+        total_tvd_si=99.0,
+        validation={"state": "formula_derived", "engineering_acceptance": "not_established"},
+    )
+    session.add(trajectory)
+    await session.flush()
+    station = TrajectoryStation(
+        org_id=well_context["org"].id,
+        trajectory_id=trajectory.id,
+        wellbore_id=well_context["wellbore"].id,
+        station_index=0,
+        md_si=100.0,
+        inclination_deg=4.0,
+        azimuth_deg=90.0,
+        source="manual",
+        evidence_ref=None,
+        raw_source={"source_kind": "manual_entry"},
+    )
+    session.add(station)
+    await session.flush()
+
+    section, sources = await TrajectoryProvider().build(session, _request(well_context, sections=["trajectory"]))
+    assert sources == [trajectory.id, station.id]
+    assert any(item.kind == "trajectory_summary" for item in section.items)
+    assert any(item.kind == "trajectory_station" for item in section.items)
+
+
+async def test_trajectory_context_requires_current_review_for_inferred_units_and_exact_flag_membership(
+    session, well_context
+) -> None:
+    document = well_context["documents"][well_context["surface"].id]
+    record = (
+        await session.execute(select(ExtractedRecord).where(ExtractedRecord.document_id == document.id))
+    ).scalar_one()
+    record.validation_state = "human_validated"
+    record.validated_by = "usr_survey_reviewer"
+    record.validated_at = dt.datetime(2026, 2, 1, 12, tzinfo=dt.UTC)
+    record.review_version = 4
+    record.quality_flags = ["not_unit_inferred"]
+    trajectory = Trajectory(
+        org_id=well_context["org"].id,
+        wellbore_id=well_context["wellbore"].id,
+        name="Synthetic inferred-unit survey",
+        kind="actual",
+        version=1,
+        is_current=True,
+        source_document_id=document.id,
+        station_count=1,
+        total_md_si=400.0,
+        total_tvd_si=398.0,
+    )
+    session.add(trajectory)
+    await session.flush()
+    station = TrajectoryStation(
+        org_id=well_context["org"].id,
+        trajectory_id=trajectory.id,
+        wellbore_id=well_context["wellbore"].id,
+        station_index=0,
+        md_si=400.0,
+        inclination_deg=5.0,
+        azimuth_deg=180.0,
+        source="reviewed_report",
+        evidence_ref=record.id,
+        raw_source={"human_review": {"review_version": record.review_version}},
+    )
+    session.add(station)
+    await session.flush()
+
+    provider = TrajectoryProvider()
+    request = _request(well_context, sections=["trajectory"])
+    section, sources = await provider.build(session, request)
+    assert sources == [trajectory.id, station.id]
+    assert any(item.kind == "trajectory_station" for item in section.items)
+
+    record.quality_flags = ["unit_inferred"]
+    record.payload = {
+        **record.payload,
+        "_unit_inference_review": {"unit_inference_reviewed": True, "review_version": 3},
+    }
+    await session.flush()
+    stale_review, stale_sources = await provider.build(session, request)
+    assert stale_sources == []
+    assert stale_review.items == []
+
+    record.payload = {
+        **record.payload,
+        "_unit_inference_review": {"unit_inference_reviewed": True, "review_version": 4},
+    }
+    await session.flush()
+    reviewed, reviewed_sources = await provider.build(session, request)
+    assert reviewed_sources == [trajectory.id, station.id]
+    assert any(item.kind == "trajectory_station" for item in reviewed.items)
+
+    record.review_version = 5
+    station.raw_source = {"human_review": {"review_version": record.review_version}}
+    await session.flush()
+    stale_version, stale_version_sources = await provider.build(session, request)
+    assert stale_version_sources == []
+    assert stale_version.items == []
+
+
+async def test_human_reviewed_survey_context_expires_when_source_review_version_changes(
+    session, well_context
+) -> None:
+    document = well_context["documents"][well_context["surface"].id]
+    record = (
+        await session.execute(select(ExtractedRecord).where(ExtractedRecord.document_id == document.id))
+    ).scalar_one()
+    record.validation_state = "human_validated"
+    record.validated_by = "usr_survey_reviewer"
+    record.validated_at = dt.datetime(2026, 2, 1, 12, tzinfo=dt.UTC)
+    record.review_version = 4
+    trajectory = Trajectory(
+        org_id=well_context["org"].id,
+        wellbore_id=well_context["wellbore"].id,
+        name="Human-reviewed survey",
+        kind="actual",
+        version=1,
+        is_current=True,
+        source_document_id=document.id,
+        station_count=1,
+        total_md_si=400.0,
+        total_tvd_si=398.0,
+    )
+    session.add(trajectory)
+    await session.flush()
+    station = TrajectoryStation(
+        org_id=well_context["org"].id,
+        trajectory_id=trajectory.id,
+        wellbore_id=well_context["wellbore"].id,
+        station_index=0,
+        md_si=400.0,
+        inclination_deg=5.0,
+        azimuth_deg=180.0,
+        source="reviewed_report",
+        evidence_ref=record.id,
+        raw_source={"human_review": {"review_version": record.review_version}},
+    )
+    session.add(station)
+    await session.flush()
+
+    provider = TrajectoryProvider()
+    request = _request(well_context, sections=["trajectory"])
+    current, sources = await provider.build(session, request)
+    assert sources == [trajectory.id, station.id]
+    assert any(item.kind == "trajectory_station" for item in current.items)
+
+    record.review_version += 1
+    await session.flush()
     stale, stale_sources = await provider.build(session, request)
     assert stale_sources == []
     assert stale.items == []

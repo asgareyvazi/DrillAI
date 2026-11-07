@@ -33,7 +33,7 @@ export type E2EFixtures = {
 }
 
 const here = path.dirname(fileURLToPath(import.meta.url))
-const dataDir = path.join(path.resolve(here, '..'), '.e2e')
+const dataDir = path.resolve(path.resolve(here, '..'), process.env.DRILLAI_E2E_DATA_DIR ?? '.e2e')
 export const FIXTURES_PATH = path.join(dataDir, 'fixtures.json')
 
 const REQUIRED: (keyof E2EFixtures)[] = [

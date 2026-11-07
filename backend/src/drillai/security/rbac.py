@@ -88,6 +88,7 @@ ROLE_CATALOGUE: tuple[Role, ...] = (
             "operation.read",
             "event.read",
             "daily_report.read",
+            "survey.read",
             # The operational monitor is a *read* of the well: the current channel values, how old they
             # are and which alerts are open. A viewer who may read the well may read what it is doing;
             # the writes (recording a measurement, acknowledging an alert) are DRAFT-level actions this
@@ -131,6 +132,7 @@ ROLE_CATALOGUE: tuple[Role, ...] = (
             "daily_report.submit",
             "daily_report.withdraw",
             "daily_report.export",
+            "survey.*",
             # Recording telemetry and answering its alerts: the action levels are DRAFT, which is this
             # role's ceiling. `live.read` is separate from `timeseries.read` on purpose — a socket is a
             # different entitlement from a query, and a role can be given one without the other.
@@ -181,6 +183,7 @@ ROLE_CATALOGUE: tuple[Role, ...] = (
             # thing.
             "operation.*",
             "daily_report.*",
+            "survey.*",
             # Same read gate as the engineer's: the supervisor reviews the events the shift recorded,
             # and `event.read` is the permission those endpoints check.
             "event.read",
@@ -213,6 +216,7 @@ ROLE_CATALOGUE: tuple[Role, ...] = (
             "evidence.*",
             "context.read",
             "engine.*",
+            "survey.read",
             "twin.*",
             "integrity.*",
             "requirement.*",
@@ -252,6 +256,7 @@ ROLE_CATALOGUE: tuple[Role, ...] = (
             "field.read",
             "project.read",
             "daily_report.read",
+            "survey.read",
             "dashboard.read",
             "registry.read",
         ),

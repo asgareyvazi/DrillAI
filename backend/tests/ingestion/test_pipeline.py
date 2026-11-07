@@ -711,6 +711,13 @@ def test_survey_does_not_coerce_ambiguous_depth_or_nonfinite_angles():
     station = next(draft for draft in drafts if draft.record_type == "survey_station")
     assert station.payload == {
         "md_si": 500.0,
+        "md_source_value": 500.0,
+        "md_source_unit": "m",
+        "unit_provenance": {
+            "md": "source_header",
+            "inclination": "source_header",
+            "azimuth": "source_header",
+        },
         "datum": "unknown",
         "azimuth_reference": "unknown",
         "azimuth_reference_id": None,
