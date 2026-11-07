@@ -190,6 +190,7 @@ async def test_advisor_surfaces_safety_engine_feasibility_as_not_field_validatio
     assert calculation["units"]["output_fields"]["kill_rate_si"]["status"] == "unknown"
     assert any("not field validation" in item for item in calculation["limitations"])
     assert any("is_feasible flag" in item for item in answer.limitations)
+    assert any(item["key"] == "npt.none" for item in answer.unknown)
     assert not any(item["key"] == "calculations.none" for item in answer.unknown)
 
 
@@ -251,6 +252,104 @@ async def test_advisor_keeps_safety_field_validation_required_for_historical_eng
         assert any("not attributed to the historical run" in item for item in calculation["limitations"])
         assert any("not field validation" in item for item in calculation["limitations"])
     assert not any(item["key"] == "calculations.none" for item in answer.to_dict()["unknown"])
+
+
+async def test_advisor_limits_npt_case_facts_and_preserves_the_full_aggregate_basis(session, monkeypatch):
+    from drillai.db.models import Organization, Project, Well
+    from drillai.drilling.npt import NptEvent, NptSummary
+
+    org = Organization(slug="advisor-npt-cases", name="Advisor NPT cases")
+    session.add(org)
+    await session.flush()
+    project = Project(org_id=org.id, name="Synthetic NPT project")
+    session.add(project)
+    await session.flush()
+    well = Well(org_id=org.id, project_id=project.id, name="SYNTHETIC-NPT-1")
+    session.add(well)
+    await session.flush()
+
+    cases = [
+        NptEvent(
+            id=f"evt_synthetic_{index}",
+            source="event",
+            title=f"SYNTHETIC TEST DATA NPT case {index}",
+            category="well_control",
+            subcategory="kick",
+            code="SYNTHETIC_CODE",
+            cause=None,
+            hours=1.0,
+            started_at=None,
+            ended_at=None,
+            depth_md_si=None,
+            section_id=None,
+            operation_id=None,
+            operator_controllable=None,
+            confidence=0.75,
+            classification_source="synthetic_fixture",
+            evidence_ref=f"evd_synthetic_{index}",
+            document_id="doc_synthetic",
+            started_at_basis="unknown",
+            ended_at_basis="unknown",
+            hours_basis="reported",
+        )
+        for index in range(12)
+    ]
+    summary = NptSummary(
+        total_hours=12.0,
+        basis="events",
+        hours_events=12.0,
+        hours_operations=0.0,
+        event_count=13,
+        measured_hours_total=12.0,
+        productive_hours=0.0,
+        percent_of_well_time=100.0,
+        by_hours=12.0,
+        cases=cases,
+        cases_truncated=True,
+        case_limit=12,
+    )
+    advisor = OperationsAdvisor(session, org.id)
+
+    async def synthetic_summary(well_id: str, *, include_offsets: bool):
+        assert well_id == well.id
+        assert include_offsets is True
+        return summary
+
+    monkeypatch.setattr(advisor.npt_service, "summarise", synthetic_summary)
+    answer = await advisor.ask(well.id, "npt")
+    payload = answer.to_dict()
+    npt_total = next(item for item in payload["facts"] if item["key"] == "npt.total")
+    case_facts = [item for item in payload["facts"] if item["key"].startswith("npt.case.")]
+    limited = next(item for item in payload["unknown"] if item["key"] == "npt.case_details.limited")
+
+    assert len(case_facts) == 10
+    assert all(item["source"].startswith("npt.event") for item in case_facts)
+    assert all(item["evidence_ref"].startswith("evd_synthetic_") for item in case_facts)
+    assert all(item["provenance"]["started_at_basis"] == "unknown" for item in case_facts)
+    assert npt_total["provenance"]["selected_basis"] == "events"
+    assert npt_total["provenance"]["hours_from_operations"] == 0.0
+    assert "alternate operations basis records 0.0 h" in npt_total["statement"]
+    assert npt_total["provenance"]["event_count"] == 13
+    assert npt_total["provenance"]["cases_returned"] == 12
+    assert npt_total["provenance"]["cases_truncated"] is True
+    assert "at most 10" in limited["statement"]
+    assert "Aggregate totals cover the matching population" in limited["statement"]
+
+    summary = NptSummary(
+        total_hours=0.0,
+        basis="events",
+        hours_events=0.0,
+        hours_operations=4.0,
+        event_count=0,
+        measured_hours_total=4.0,
+        productive_hours=4.0,
+        percent_of_well_time=0.0,
+        by_hours=0.0,
+    )
+    zero_answer = await advisor.ask(well.id, "npt")
+    zero_caveat = next(item for item in zero_answer.unknown if item["key"] == "npt.selected_basis.zero")
+    assert "alternate operations basis records 4.0 h" in zero_caveat["statement"]
+    assert "do not establish absence of physical downtime" in zero_caveat["statement"]
 
 
 async def test_advisor_preserves_measured_source_time_quality_and_unit_provenance(session):

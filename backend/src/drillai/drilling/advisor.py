@@ -52,6 +52,7 @@ from drillai.operations.time_windows import TIME_WINDOW_BASES
 
 _NARRATION_WHITESPACE_RE = re.compile(r"\s+")
 _FIELD_VALIDATION_REQUIRED_ENGINE_KEYS = frozenset({"well_control.kill_sheet", "tubulars.api_5c3"})
+ADVISOR_NPT_CASE_LIMIT = 10
 
 
 def _normalize_narration_statement(value: str) -> str:
@@ -716,21 +717,43 @@ class OperationsAdvisor:
 
         # ---- NPT ---------------------------------------------------------------------------
         npt = await self.npt_service.summarise(well_id, include_offsets=True)
-        if npt.total_hours > 0 or npt.event_count > 0:
+        has_recorded_npt = bool(npt.hours_events or npt.hours_operations or npt.event_count)
+        alternate_basis = "operations" if npt.basis == "events" else "events"
+        alternate_hours = npt.hours_operations if alternate_basis == "operations" else npt.hours_events
+        if has_recorded_npt:
+            statement = (
+                f"NPT {round(npt.total_hours, 2)} h on the recorded {npt.basis} basis "
+                f"over {npt.event_count} selected case(s)"
+            )
+            if npt.percent_of_well_time is not None:
+                statement += f" ({round(npt.percent_of_well_time, 2)}% of recorded well time)"
+            if alternate_hours != npt.total_hours:
+                statement += (
+                    f"; the alternate {alternate_basis} basis records {round(alternate_hours, 2)} h "
+                    "and is not included in this selected total"
+                )
             answer.facts.append(
                 Fact(
                     key="npt.total",
-                    statement=(
-                        f"NPT {round(npt.total_hours, 2)} h over {npt.event_count} recorded cases"
-                        + (
-                            f" ({round(npt.percent_of_well_time, 2)}% of recorded well time)"
-                            if npt.percent_of_well_time is not None
-                            else ""
-                        )
-                    ),
+                    statement=statement,
                     value=npt.total_hours,
                     unit="h",
-                    source=f"events + operations ({npt.basis})",
+                    source=f"npt:{npt.basis}",
+                    source_id=well_id,
+                    provenance={
+                        "selected_basis": npt.basis,
+                        "hours_from_events": npt.hours_events,
+                        "hours_from_operations": npt.hours_operations,
+                        "event_count": npt.event_count,
+                        "measured_hours_total": npt.measured_hours_total,
+                        "productive_hours": npt.productive_hours,
+                        "percent_of_well_time": npt.percent_of_well_time,
+                        "scope": npt.scope,
+                        "cases_returned": len(npt.cases),
+                        "cases_truncated": npt.cases_truncated,
+                        "case_limit": npt.case_limit,
+                        "notes": list(npt.notes),
+                    },
                 )
             )
             for row in npt.by_category[:5]:
@@ -745,9 +768,94 @@ class OperationsAdvisor:
                         ),
                         value=row.hours,
                         unit="h",
-                        source="events.npt_category",
+                        source=f"npt.by_category:{npt.basis}",
+                        source_id=well_id,
+                        provenance={
+                            "selected_basis": npt.basis,
+                            "occurrences": row.occurrences,
+                            "percent_of_total": row.percent_of_total,
+                            "cumulative_percent": row.cumulative_percent,
+                            "operator_controllable": row.operator_controllable,
+                        },
                     )
                 )
+            for case in npt.cases[:ADVISOR_NPT_CASE_LIMIT]:
+                answer.facts.append(
+                    Fact(
+                        key=f"npt.case.{case.id}",
+                        statement=(
+                            f"Recorded NPT case {case.title}: {round(case.hours, 2)} h, "
+                            f"category {case.category}"
+                        ),
+                        value=case.hours,
+                        unit="h",
+                        source=f"npt.{case.source}",
+                        source_id=case.id,
+                        evidence_ref=case.evidence_ref,
+                        provenance={
+                            "category": case.category,
+                            "subcategory": case.subcategory,
+                            "code": case.code,
+                            "cause": case.cause,
+                            "hours_basis": case.hours_basis,
+                            "started_at": case.started_at.isoformat() if case.started_at else None,
+                            "started_at_basis": case.started_at_basis,
+                            "ended_at": case.ended_at.isoformat() if case.ended_at else None,
+                            "ended_at_basis": case.ended_at_basis,
+                            "depth_md_si": case.depth_md_si,
+                            "section_id": case.section_id,
+                            "operation_id": case.operation_id,
+                            "operator_controllable": case.operator_controllable,
+                            "confidence": case.confidence,
+                            "classification_source": case.classification_source,
+                            "document_id": case.document_id,
+                        },
+                    )
+                )
+            if len(npt.cases) > ADVISOR_NPT_CASE_LIMIT or npt.cases_truncated:
+                answer.unknown.append(
+                    {
+                        "key": "npt.case_details.limited",
+                        "statement": (
+                            f"The Advisor includes at most {ADVISOR_NPT_CASE_LIMIT} NPT case facts; "
+                            f"the NPT service returned {len(npt.cases)} case(s) and its case list "
+                            f"truncated={npt.cases_truncated}. Aggregate totals cover the matching population."
+                        ),
+                        "kind": "caveat",
+                        "why_it_matters": "A bounded Advisor evidence list is not a complete event ledger.",
+                        "how_to_supply": "Review the scoped NPT report for the complete case list and breakdown.",
+                    }
+                )
+            if npt.total_hours == 0:
+                zero_statement = f"The selected {npt.basis} basis records zero NPT hours"
+                if alternate_hours != npt.total_hours:
+                    zero_statement += (
+                        f" while the alternate {alternate_basis} basis records "
+                        f"{round(alternate_hours, 2)} h"
+                    )
+                zero_statement += "; zero recorded hours do not establish absence of physical downtime."
+                answer.unknown.append(
+                    {
+                        "key": "npt.selected_basis.zero",
+                        "statement": zero_statement,
+                        "kind": "caveat",
+                        "why_it_matters": "Recorded totals can omit downtime or lack a measured duration; event and operation roll-ups remain separate.",
+                        "how_to_supply": "Verify source reports and record each observed case with its duration and basis.",
+                    }
+                )
+        else:
+            answer.unknown.append(
+                {
+                    "key": "npt.none",
+                    "statement": (
+                        "No NPT hours or cases are recorded on either the events or operations basis; "
+                        "this does not establish zero physical downtime."
+                    ),
+                    "kind": "missing_data",
+                    "why_it_matters": "Unrecorded downtime cannot be measured or attributed.",
+                    "how_to_supply": "Record source-backed NPT events or operation roll-ups for the well.",
+                }
+            )
         for note in npt.notes:
             answer.unknown.append({"key": "npt.caveat", "statement": note, "kind": "caveat"})
 

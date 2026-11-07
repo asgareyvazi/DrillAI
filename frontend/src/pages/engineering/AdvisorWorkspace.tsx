@@ -53,7 +53,8 @@ function unitFields(units: unknown, key: string): Record<string, EngineValueUnit
 export function AdvisorItemCard({ item }: { item: Record<string, unknown> }) {
   const { t } = useI18n()
   const label = String(item.label ?? item.key ?? item.title ?? item.kind ?? 'item')
-  const value = item.value ?? item.detail ?? item.statement ?? null
+  const statement = typeof item.statement === 'string' ? item.statement : null
+  const value = item.value ?? item.detail ?? null
   const unit = typeof item.unit === 'string' ? item.unit : null
   const source = typeof item.source === 'string' ? item.source : null
   const sourceId = typeof item.source_id === 'string' ? item.source_id : null
@@ -82,6 +83,9 @@ export function AdvisorItemCard({ item }: { item: Record<string, unknown> }) {
         )}
       </div>
       {value !== null && typeof value === 'object' && <Json value={value} max={60} />}
+      {statement && (
+        <p className="mt-1 text-sm leading-relaxed text-graphite-700 dark:text-graphite-200">{statement}</p>
+      )}
       {outputs && Object.keys(outputs).length > 0 && (
         <div className="mt-2 space-y-1">
           <h4 className="text-[11px] font-medium">{t('engineering.outputs')}</h4>

@@ -92,13 +92,25 @@ describe('Advisor calculation safety status', () => {
               },
             }}
           />
+          <AdvisorItemCard
+            item={{
+              key: 'npt.case.evt_synthetic',
+              value: 6,
+              unit: 'h',
+              statement: 'Recorded NPT case SYNTHETIC TEST DATA stuck pipe: 6 h, category well control',
+              source: 'npt.event',
+              source_id: 'evt_synthetic',
+              provenance: { hours_basis: 'reported', started_at_basis: 'unknown' },
+            }}
+          />
         </ul>
       </I18nProvider>,
     )
 
+    expect(screen.getByText('Recorded NPT case SYNTHETIC TEST DATA stuck pipe: 6 h, category well control')).toBeInTheDocument()
     expect(screen.getByText('شناسهٔ منبع: opr_test')).toBeInTheDocument()
     expect(screen.getByText('ارجاع شاهد: evd_test')).toBeInTheDocument()
-    expect(screen.getByText('پیشینهٔ ثبت‌شده')).toBeInTheDocument()
+    expect(screen.getAllByText('پیشینهٔ ثبت‌شده')).toHaveLength(2)
     expect(screen.getByText(/actual_end_basis/)).toBeInTheDocument()
     expect(screen.getByText('خروجی‌ها')).toBeInTheDocument()
     expect(screen.getByText('نقض محدودیت‌ها')).toBeInTheDocument()

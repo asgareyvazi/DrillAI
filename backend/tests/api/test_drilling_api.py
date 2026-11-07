@@ -554,6 +554,15 @@ async def test_advisor_separates_facts_calculations_and_unknowns(client):
         )
     ).json()["answer"]
     assert answer["facts"], "the advisor must ground its answer in recorded facts"
+    npt_total = next(item for item in answer["facts"] if item["key"] == "npt.total")
+    assert npt_total["source"] == "npt:events"
+    assert npt_total["provenance"]["selected_basis"] == "events"
+    assert npt_total["provenance"]["hours_from_events"] == pytest.approx(8.5)
+    npt_cases = [item for item in answer["facts"] if item["key"].startswith("npt.case.")]
+    assert len(npt_cases) == 2
+    assert {item["provenance"]["document_id"] for item in npt_cases} == {ids["document_id"]}
+    assert all(item["source_id"] == item["key"].removeprefix("npt.case.") for item in npt_cases)
+    assert all(item["provenance"]["classification_source"] == "recorded" for item in npt_cases)
     measured_wob = next(item for item in answer["facts"] if item["key"] == "measured.wob")
     assert measured_wob["value"] == pytest.approx(18.5 * 4448.2216152605, rel=1e-9)
     assert measured_wob["unit"] == "N"
