@@ -1496,6 +1496,7 @@ export const en = {
     readOnlyBanner: 'Read-only role (viewer): you can inspect connector health, channel mappings, masked secret references, and run history, but cannot create, edit, test, or control connectors.',
     syntheticBadge: 'SYNTHETIC / TEST SOURCE',
     externalBadge: 'EXTERNAL PROTOCOL',
+    readOnlyProfileBadge: 'READ-ONLY SOURCE',
     localHarnessVerified: 'Local protocol harness verified',
     externalVendorUnverified: 'External commercial vendor unverified in CI',
     keyLabel: 'Connector key',

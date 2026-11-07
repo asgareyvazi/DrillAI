@@ -1798,11 +1798,13 @@ class ProtocolProfileSpec:
     evidence_tier: str = "conformance_and_golden_vectors_verified"
     subprotocols: tuple[str, ...] = ()
     supported_encodings: tuple[str, ...] = ()
+    read_only: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "profile": self.profile,
             "provider": self.provider,
+            "read_only": self.read_only,
             "standard_version": self.standard_version,
             "transport": self.transport,
             "wire_encoding": self.wire_encoding,
@@ -1828,6 +1830,7 @@ PROTOCOL_PROFILE_SPECS: dict[str, ProtocolProfileSpec] = {
     "synthetic.v1": ProtocolProfileSpec(
         profile="synthetic.v1",
         provider="synthetic",
+        read_only=True,
         standard_version="1.0",
         transport="in_process",
         wire_encoding="in_memory",
@@ -1853,6 +1856,7 @@ PROTOCOL_PROFILE_SPECS: dict[str, ProtocolProfileSpec] = {
     "witsml.1.4.1.1.soap_http": ProtocolProfileSpec(
         profile="witsml.1.4.1.1.soap_http",
         provider="witsml",
+        read_only=True,
         standard_version="1.4.1.1",
         transport="soap_http",
         wire_encoding="soap_xml",
@@ -1880,6 +1884,7 @@ PROTOCOL_PROFILE_SPECS: dict[str, ProtocolProfileSpec] = {
     "etp.1.2.binary_ws": ProtocolProfileSpec(
         profile="etp.1.2.binary_ws",
         provider="etp",
+        read_only=True,
         standard_version="1.2",
         transport="websocket_avro_binary",
         wire_encoding="avro_binary",
@@ -1921,6 +1926,7 @@ PROTOCOL_PROFILE_SPECS: dict[str, ProtocolProfileSpec] = {
     "etp.1.2.json_ws": ProtocolProfileSpec(
         profile="etp.1.2.json_ws",
         provider="etp",
+        read_only=True,
         standard_version="1.2",
         transport="websocket_json",
         wire_encoding="json_ws_test",

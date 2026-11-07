@@ -175,6 +175,7 @@ beforeEach(() => {
       {
         profile: 'witsml.1.4.1.1.soap_http',
         provider: 'witsml.1.4.1.1.soap_http',
+        read_only: true,
         standard_version: 'WITSML 1.4.1.1',
         transport: 'HTTP/HTTPS SOAP 1.1 XML (WMLS_GetFromStore)',
         wire_encoding: 'soap_xml',
@@ -193,6 +194,7 @@ beforeEach(() => {
       {
         profile: 'etp.1.2.binary_ws',
         provider: 'etp.1.2.binary_ws',
+        read_only: true,
         standard_version: 'ETP 1.2 Binary Avro',
         transport: 'WebSocket (energistics-tp binary Avro)',
         wire_encoding: 'avro_binary',
@@ -211,6 +213,7 @@ beforeEach(() => {
       {
         profile: 'etp.1.2.json_ws',
         provider: 'etp.1.2.json_ws',
+        read_only: true,
         standard_version: 'ETP 1.2 JSON (Internal Test)',
         transport: 'WebSocket JSON framing',
         wire_encoding: 'json_ws_test',
@@ -229,6 +232,7 @@ beforeEach(() => {
       {
         profile: 'synthetic.v1',
         provider: 'synthetic.v1',
+        read_only: true,
         standard_version: 'DrillAI Synthetic v1',
         transport: 'In-process deterministic frame generator',
         wire_encoding: 'in_process_synthetic',
@@ -372,6 +376,8 @@ describe('ConnectorsPage', () => {
     expect(screen.getByTestId('profile-encoding-etp.1.2.json_ws')).toHaveTextContent(
       'json_ws_test',
     )
+    expect(screen.getByTestId('profile-read-only-witsml.1.4.1.1.soap_http')).toBeInTheDocument()
+    expect(screen.getByTestId('profile-read-only-etp.1.2.binary_ws')).toBeInTheDocument()
     expect(screen.getByTestId('manifest-data-outcome')).toHaveTextContent(
       'All valid points accepted',
     )

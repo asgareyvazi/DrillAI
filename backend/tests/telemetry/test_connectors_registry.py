@@ -234,7 +234,30 @@ async def test_connector_crud_lifecycle_rbac_and_audit(
             profile_keys = [p["profile"] for p in profiles_data["profiles"]]
             assert "synthetic.v1" in profile_keys
             assert "witsml.1.4.1.1.soap_http" in profile_keys
+            assert "etp.1.2.binary_ws" in profile_keys
             assert "etp.1.2.json_ws" in profile_keys
+            profile_specs = {item["profile"]: item for item in profiles_data["profiles"]}
+            assert all(item["read_only"] is True for item in profile_specs.values())
+            witsml_spec = profile_specs["witsml.1.4.1.1.soap_http"]
+            assert set(witsml_spec["supported_operations"]) == {
+                "WMLS_GetVersion",
+                "WMLS_GetCap",
+                "WMLS_GetFromStore",
+            }
+            etp_spec = profile_specs["etp.1.2.binary_ws"]
+            assert etp_spec["supported_objects"] == ["channel_streaming"]
+            forbidden_mutations = {
+                "WMLS_AddToStore",
+                "WMLS_UpdateInStore",
+                "WMLS_DeleteFromStore",
+                "PutDataObjects",
+                "DeleteDataObjects",
+                "UpdateDataObjects",
+            }
+            assert all(
+                forbidden_mutations.isdisjoint(item["supported_operations"])
+                for item in profile_specs.values()
+            )
 
             # 2. Viewer cannot create a connector (403)
             viewer_create = await client.post(

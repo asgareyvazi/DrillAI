@@ -769,6 +769,11 @@ export function ConnectorsPage() {
                     ? t('connectors.syntheticBadge')
                     : t('connectors.externalBadge')}
                 </Badge>
+                {spec.read_only && (
+                  <Badge tone="neutral" data-testid={`profile-read-only-${spec.profile}`}>
+                    {t('connectors.readOnlyProfileBadge')}
+                  </Badge>
+                )}
               </div>
               <div className="mt-2 flex flex-wrap gap-1.5 text-xs">
                 {spec.wire_encoding && (

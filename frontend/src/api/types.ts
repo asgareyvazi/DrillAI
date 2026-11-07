@@ -3034,6 +3034,7 @@ export interface WellLiveSnapshot {
 export interface ConnectorProfileSpec {
   profile: string
   provider: string
+  read_only: boolean
   standard_version: string
   transport: string
   wire_encoding?: string
