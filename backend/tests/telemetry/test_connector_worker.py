@@ -139,7 +139,14 @@ async def test_competing_workers_cas_and_stale_worker_fencing(
         non_none = [c for c in claims if c is not None]
         assert len(non_none) == 1
         winner_claim = non_none[0]
+        winner_worker_id = "wrk_alpha" if claims[0] is not None else "wrk_bravo"
         assert winner_claim.fencing_token == 1
+        async with app.state.database.session() as session:
+            claimed_row = await session.get(Connector, cid)
+            assert claimed_row is not None
+            assert claimed_row.worker_id == winner_worker_id
+            assert claimed_row.fencing_token == winner_claim.fencing_token
+            assert claimed_row.lease_expires_at is not None
 
         # Release lease so we can test in-flight lease expiry + preemption deterministically
         async with app.state.database.session() as session:
@@ -193,6 +200,78 @@ async def test_competing_workers_cas_and_stale_worker_fencing(
     finally:
         await app.state.database.dispose()
         reset_settings_cache()
+
+
+async def test_worker_claim_compare_and_swap_rejects_stale_status_snapshot(tmp_path, monkeypatch):
+    """A pre-CAS status change cannot be overwritten by a worker holding a stale row snapshot."""
+    monkeypatch.setenv("DRILLAI_ENVIRONMENT", "test")
+    monkeypatch.setenv("DRILLAI_AUTH_ENABLED", "false")
+    monkeypatch.setenv("DRILLAI_BLOB_BACKEND", "memory")
+    monkeypatch.setenv("DRILLAI_DATABASE_URL", f"sqlite+aiosqlite:///{tmp_path}/wrk_claim_cas.db")
+    monkeypatch.setenv("DRILLAI_SCHEDULER_ENABLED", "false")
+    reset_settings_cache()
+    settings = get_settings()
+    app = create_app(settings)
+
+    async with app.state.database.engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    org_id = "org_000000000000000000000001"
+    well_id = "wel_claim_cas_01"
+    wellbore_id = "wbr_claim_cas_01"
+    await _seed_org_and_well(app, org_id, well_id, wellbore_id, settings.dev_org_slug)
+
+    try:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.post(
+                "/api/v1/connectors",
+                headers={"X-Dev-Roles": "engineer"},
+                json={
+                    "key": "synth-claim-cas-01",
+                    "name": "Synthetic Claim CAS",
+                    "protocol_profile": "synthetic.v1",
+                    "well_id": well_id,
+                    "wellbore_id": wellbore_id,
+                    "config": {
+                        "poll_interval_seconds": 1.0,
+                        "channel_mappings": _mappings(),
+                        "plan": {"spp": [[0.0, 2800.0]], "wob": [[0.0, 20.0]]},
+                    },
+                },
+            )
+            assert response.status_code == 201, response.text
+            connector_id = response.json()["id"]
+            started = await client.post(
+                f"/api/v1/connectors/{connector_id}/start",
+                headers={"X-Dev-Roles": "engineer"},
+                json={"reason": "enable for stale CAS test"},
+            )
+            assert started.status_code == 200, started.text
+
+        async def change_status_after_snapshot(target_connector_id: str) -> None:
+            async with app.state.database.session() as session:
+                row = await session.get(Connector, target_connector_id)
+                assert row is not None
+                row.status = "failed"
+                await session.commit()
+
+        worker = ConnectorWorker(
+            app.state.database,
+            worker_id="wrk_stale_snapshot",
+            before_claim_cas_hook=change_status_after_snapshot,
+        )
+        claim = await worker.claim_connector(connector_id)
+        assert claim is None, "the CAS must reject a status changed after its eligibility read"
+
+        async with app.state.database.session() as session:
+            row = await session.get(Connector, connector_id)
+            assert row is not None
+            assert row.status == "failed"
+            assert row.worker_id is None
+            assert row.lease_expires_at is None
+            assert row.fencing_token == 0
+    finally:
+        await app.state.database.dispose()
 
 
 async def test_worker_witsml_ingestion_backoff_checkpoint_safety_and_run_retention(

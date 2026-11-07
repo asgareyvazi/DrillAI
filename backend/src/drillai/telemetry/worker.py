@@ -113,6 +113,7 @@ class ConnectorWorker:
         retention_limit: int | None = None,
         allow_loopback: bool | None = None,
         before_commit_hook: Callable[[ClaimedConnector], Awaitable[None]] | None = None,
+        before_claim_cas_hook: Callable[[str], Awaitable[None]] | None = None,
     ) -> None:
         settings = get_settings()
         host = socket.gethostname().split(".")[0]
@@ -134,6 +135,7 @@ class ConnectorWorker:
         )
         self.allow_loopback = allow_loopback
         self._before_commit_hook = before_commit_hook
+        self._before_claim_cas_hook = before_claim_cas_hook
         self._stop_event = asyncio.Event()
         self._task: asyncio.Task[None] | None = None
         self._active_connectors: set[str] = set()
@@ -216,7 +218,7 @@ class ConnectorWorker:
     async def claim_connector(
         self, connector_id: str, *, now: dt.datetime | None = None
     ) -> ClaimedConnector | None:
-        """Atomically claim or renew ownership of a connector with a monotonically increasing fencing token."""
+        """Atomically claim a connector using a compare-and-swap over its owner, lease, status, schedule and version."""
         if connector_id in self._active_connectors:
             return None
         current = now or utc_now()
@@ -254,6 +256,9 @@ class ConnectorWorker:
             next_token = prev_token + 1
             next_reconnect = int(row.reconnect_count or 0) + (1 if recovered_expired else 0)
             prev_status = row.status
+            prev_worker_id = row.worker_id
+            prev_lease_expires_at = row.lease_expires_at
+            prev_next_poll_at = row.next_poll_at
             cursor_before = dict(row.cursor or {})
             cfg_version = int(row.config_version or 1)
             org_id = row.org_id
@@ -261,6 +266,9 @@ class ConnectorWorker:
             wellbore_id = row.wellbore_id
             operation_id = row.operation_id
             profile = row.protocol_profile
+
+            if self._before_claim_cas_hook is not None:
+                await self._before_claim_cas_hook(connector_id)
 
             stmt = (
                 update(Connector)
@@ -270,6 +278,22 @@ class ConnectorWorker:
                     Connector.config_version == cfg_version,
                     Connector.is_enabled.is_(True),
                     Connector.desired_state == "enabled",
+                    Connector.status == prev_status,
+                    (
+                        Connector.worker_id.is_(None)
+                        if prev_worker_id is None
+                        else Connector.worker_id == prev_worker_id
+                    ),
+                    (
+                        Connector.lease_expires_at.is_(None)
+                        if prev_lease_expires_at is None
+                        else Connector.lease_expires_at == prev_lease_expires_at
+                    ),
+                    (
+                        Connector.next_poll_at.is_(None)
+                        if prev_next_poll_at is None
+                        else Connector.next_poll_at == prev_next_poll_at
+                    ),
                 )
                 .values(
                     worker_id=self.worker_id,
