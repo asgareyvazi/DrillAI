@@ -472,6 +472,7 @@ async def test_npt_pareto_is_ordered_and_self_consistent(client):
     assert case["depth_md_si"] is None
     assert case["classification_source"] == "recorded"
     assert case["document_id"] == ids["document_id"]
+    assert case["source_record_id"]
     assert {row["key"] for row in npt["by_code"]} == {"STUCK_PIPE", "LOST_CIRC"}
     assert by_category[0]["operator_controllable"] is True
     # The controllability split is exhaustive and never silently folds "unknown" into "zero".
@@ -562,7 +563,16 @@ async def test_advisor_separates_facts_calculations_and_unknowns(client):
     assert len(npt_cases) == 2
     assert {item["provenance"]["document_id"] for item in npt_cases} == {ids["document_id"]}
     assert all(item["source_id"] == item["key"].removeprefix("npt.case.") for item in npt_cases)
+    assert all(item["provenance"]["source_record_id"] for item in npt_cases)
     assert all(item["provenance"]["classification_source"] == "recorded" for item in npt_cases)
+    npt_case_ids = {item["source_id"] for item in npt_cases}
+    npt_evidence = [
+        item
+        for item in answer["evidence"]
+        if item["subject_kind"] == "event" and item["subject_id"] in npt_case_ids
+    ]
+    assert {item["subject_id"] for item in npt_evidence} == npt_case_ids
+    assert all(item["document_id"] == ids["document_id"] for item in npt_evidence)
     measured_wob = next(item for item in answer["facts"] if item["key"] == "measured.wob")
     assert measured_wob["value"] == pytest.approx(18.5 * 4448.2216152605, rel=1e-9)
     assert measured_wob["unit"] == "N"

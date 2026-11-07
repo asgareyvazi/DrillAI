@@ -110,6 +110,7 @@ class NptEvent:
     classification_source: str
     evidence_ref: str | None
     document_id: str | None
+    source_record_id: str | None = None
     started_at_basis: str = "unknown"
     ended_at_basis: str = "unknown"
     hours_basis: str = "unknown"
@@ -138,6 +139,7 @@ class NptEvent:
             "classification_source": self.classification_source,
             "evidence_ref": self.evidence_ref,
             "document_id": self.document_id,
+            "source_record_id": self.source_record_id,
             "note": self.note,
         }
 
@@ -363,6 +365,7 @@ class NptService:
                     classification_source=classification,
                     evidence_ref=row.evidence_ref,
                     document_id=row.source_document_id,
+                    source_record_id=row.source_record_id,
                 )
             )
         return cases
@@ -460,6 +463,7 @@ class NptService:
                     classification_source="operation_rollup",
                     evidence_ref=None,
                     document_id=row.source_document_id,
+                    source_record_id=row.source_record_id,
                     note=(
                         "NPT recorded on the operation row itself; if a matching event exists this "
                         "row is a roll-up of it, not an additional loss"

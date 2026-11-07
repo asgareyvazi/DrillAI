@@ -402,6 +402,7 @@ export interface NptCase {
   classification_source: string
   evidence_ref: string | null
   document_id: string | null
+  source_record_id: string | null
   note: string | null
 }
 

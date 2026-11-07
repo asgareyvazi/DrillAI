@@ -809,6 +809,7 @@ class OperationsAdvisor:
                             "confidence": case.confidence,
                             "classification_source": case.classification_source,
                             "document_id": case.document_id,
+                            "source_record_id": case.source_record_id,
                         },
                     )
                 )
