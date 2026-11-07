@@ -16,7 +16,9 @@ adapter receives a delivery callback or independently verified provider receipt:
 
 * **SMTP Email adapter (`channel="email"`)**:
   - Submits RFC 5322 email messages to an SMTP server with explicit timeout and transient (`4xx`)
-    vs permanent (`5xx`) response classification. SMTP acceptance is not mailbox delivery.
+    vs permanent (`5xx`) response classification. Production requires the operator-configured SMTPS
+    endpoint, checks the authoritative egress policy, and connects to a validated, DNS-pinned address
+    while retaining hostname-based TLS verification. SMTP acceptance is not mailbox delivery.
 
 * **In-App adapter (`channel="in_app"`)**:
   - Records acceptance by the local outbox only; there is no recipient inbox UI or read receipt.
@@ -57,6 +59,7 @@ from drillai.db.models import OutboundMessage, SecretRef
 from drillai.security.secrets import is_credential_header_name, is_valid_env_secret_name
 from drillai.telemetry.connectors import (
     resolve_and_pin_http_endpoint_async,
+    resolve_and_pin_smtp_endpoint_async,
     sync_egress_policy_from_db,
 )
 
@@ -447,6 +450,19 @@ class WebhookNotificationAdapter(NotificationAdapter):
         )
 
 
+class _PinnedSMTPSSL(smtplib.SMTP_SSL):
+    """TLS SMTP client that connects to the policy-approved IP but keeps the hostname for SNI."""
+
+    def __init__(self, *, pinned_ip: str, **kwargs: Any) -> None:
+        self._pinned_ip = pinned_ip
+        super().__init__(**kwargs)
+
+    def _get_socket(self, _host: str, port: int, timeout: float | None):
+        # SMTP_SSL wraps this socket with server_hostname=self._host, preserving certificate
+        # verification for the configured DNS name while preventing a second DNS lookup at connect.
+        return super()._get_socket(self._pinned_ip, port, timeout)
+
+
 class EmailSmtpNotificationAdapter(NotificationAdapter):
     """Outbound SMTP email adapter with timeout, SecretRef credentials, and 4xx/5xx error classification."""
 
@@ -525,6 +541,40 @@ class EmailSmtpNotificationAdapter(NotificationAdapter):
                 error_code="invalid_timeout",
                 error="email timeout must be between 0.1 and 120 seconds",
             )
+
+        pinned_smtp_endpoint = None
+        if production:
+            try:
+                host_for_url = f"[{host}]" if ":" in host else host
+                egress_url = f"smtps://{host_for_url}:{port}"
+                allow_loopback = os.environ.get("DRILLAI_CONNECTOR_ALLOW_LOOPBACK", "").strip().lower() in {
+                    "1",
+                    "true",
+                    "yes",
+                }
+                await sync_egress_policy_from_db(session)
+                pinned_smtp_endpoint = await resolve_and_pin_smtp_endpoint_async(
+                    egress_url,
+                    allow_loopback=allow_loopback,
+                    is_production=production,
+                    dns_timeout_seconds=5.0,
+                )
+            except ValidationFailed as exc:
+                details = exc.details or {}
+                reason = str(details.get("reason") or "egress_policy_blocked")
+                policy_state = str(details.get("policy_state") or "")
+                is_retryable = (
+                    reason in {"dns_lookup_timeout", "timeout"}
+                    or policy_state == "transient_store_error"
+                )
+                return DeliveryAttemptOutcome(
+                    status="failed_retryable" if is_retryable else "failed_terminal",
+                    retryable=is_retryable,
+                    error_code="smtp_endpoint_policy_blocked",
+                    error="configured SMTP destination was rejected by the egress policy",
+                    latency_ms=(time.perf_counter() - started) * 1000.0,
+                )
+
         sender = str(cfg.get("from_address") or os.environ.get("DRILLAI_SMTP_FROM") or "noreply@drillai.local")
         secret_ref = cfg.get("secret_ref")
         password = (
@@ -550,16 +600,23 @@ class EmailSmtpNotificationAdapter(NotificationAdapter):
         msg.set_content(message.body or "")
 
         def _send_sync() -> str:
-            client = (
-                smtplib.SMTP_SSL(
+            if pinned_smtp_endpoint is not None:
+                client = _PinnedSMTPSSL(
+                    pinned_ip=pinned_smtp_endpoint.pinned_ip,
+                    host=pinned_smtp_endpoint.sni_hostname,
+                    port=port,
+                    timeout=timeout_seconds,
+                    context=ssl.create_default_context(),
+                )
+            elif parsed.scheme == "smtps":
+                client = smtplib.SMTP_SSL(
                     host=host,
                     port=port,
                     timeout=timeout_seconds,
                     context=ssl.create_default_context(),
                 )
-                if parsed.scheme == "smtps"
-                else smtplib.SMTP(host=host, port=port, timeout=timeout_seconds)
-            )
+            else:
+                client = smtplib.SMTP(host=host, port=port, timeout=timeout_seconds)
             with client as smtp_client:
                 if parsed.username and password:
                     smtp_client.login(parsed.username, password)

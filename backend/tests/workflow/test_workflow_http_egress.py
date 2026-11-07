@@ -294,3 +294,56 @@ async def test_http_endpoint_rejects_unapproved_private_dns_answer():
     with pytest.raises(ValidationFailed) as caught:
         await resolve_and_pin_http_endpoint_async("https://private-target.invalid/metadata")
     assert caught.value.details["reason"] == "ssrf_blocked"
+
+
+@pytest.mark.asyncio
+async def test_smtp_endpoint_resolver_pins_public_dns_result_and_uses_smtps_port():
+    from drillai.telemetry.connectors import resolve_and_pin_smtp_endpoint_async
+
+    calls: list[tuple[str, int]] = []
+
+    def resolve(host: str, port: int) -> list[str]:
+        calls.append((host, port))
+        return ["93.184.216.34"]
+
+    pinned = await resolve_and_pin_smtp_endpoint_async(
+        "smtps://mail.example.invalid:465",
+        allow_loopback=False,
+        allowed_hosts=[],
+        allowed_private_cidrs=[],
+        is_production=True,
+        resolver=resolve,
+    )
+
+    assert calls == [("mail.example.invalid", 465)]
+    assert pinned.hostname == "mail.example.invalid"
+    assert pinned.port == 465
+    assert pinned.pinned_ip == "93.184.216.34"
+    assert pinned.sni_hostname == "mail.example.invalid"
+    assert pinned.scheme == "smtps"
+
+
+@pytest.mark.asyncio
+async def test_smtp_endpoint_resolver_blocks_private_dns_and_production_plain_smtp():
+    from drillai.telemetry.connectors import resolve_and_pin_smtp_endpoint_async
+
+    with pytest.raises(ValidationFailed) as private_result:
+        await resolve_and_pin_smtp_endpoint_async(
+            "smtps://private-target.invalid:465",
+            allow_loopback=False,
+            allowed_hosts=[],
+            allowed_private_cidrs=[],
+            is_production=True,
+            resolver=lambda _host, _port: ["10.20.30.40"],
+        )
+    assert private_result.value.details["reason"] == "ssrf_blocked"
+
+    with pytest.raises(ValidationFailed) as plaintext_result:
+        await resolve_and_pin_smtp_endpoint_async(
+            "smtp://93.184.216.34:25",
+            allow_loopback=False,
+            allowed_hosts=[],
+            allowed_private_cidrs=[],
+            is_production=True,
+        )
+    assert plaintext_result.value.details["reason"] == "invalid_scheme"

@@ -427,6 +427,149 @@ async def test_production_smtp_rejects_message_endpoint_overrides(session, monke
 
 
 @pytest.mark.asyncio
+async def test_production_smtp_egress_policy_rejection_fails_before_connection(session, monkeypatch):
+    from types import SimpleNamespace
+
+    import drillai.core.config as config_module
+    import drillai.workflow.notifications as notification_module
+    from drillai.core.errors import ValidationFailed
+
+    monkeypatch.setenv("DRILLAI_SMTP_URL", "smtps://mail.example.invalid:465")
+    monkeypatch.setattr(config_module, "get_settings", lambda: SimpleNamespace(is_production=True))
+    policy_sync_calls: list[object] = []
+    endpoint_calls: list[str] = []
+
+    async def sync_policy(active_session):
+        policy_sync_calls.append(active_session)
+
+    async def reject_endpoint(endpoint_url, **_kwargs):
+        endpoint_calls.append(endpoint_url)
+        raise ValidationFailed(
+            "private SMTP target rejected",
+            details={"field": "endpoint_url", "reason": "ssrf_blocked"},
+        )
+
+    monkeypatch.setattr(notification_module, "sync_egress_policy_from_db", sync_policy)
+    monkeypatch.setattr(notification_module, "resolve_and_pin_smtp_endpoint_async", reject_endpoint)
+    monkeypatch.setattr(
+        notification_module,
+        "_PinnedSMTPSSL",
+        lambda **_kwargs: pytest.fail("blocked SMTP target must not open a socket"),
+    )
+
+    org = Organization(slug="smtp-egress-rejected", name="SMTP egress rejected")
+    session.add(org)
+    await session.flush()
+    message = OutboundMessage(
+        org_id=org.id,
+        channel="email",
+        recipient="recipient@example.invalid",
+        status="queued",
+    )
+
+    outcome = await EmailSmtpNotificationAdapter().send(session, message)
+
+    assert policy_sync_calls == [session]
+    assert endpoint_calls == ["smtps://mail.example.invalid:465"]
+    assert outcome.status == "failed_terminal"
+    assert outcome.retryable is False
+    assert outcome.error_code == "smtp_endpoint_policy_blocked"
+    assert "mail.example.invalid" not in str(outcome.error)
+
+
+@pytest.mark.asyncio
+async def test_production_smtp_uses_the_pinned_ip_for_tls_transport(session, monkeypatch):
+    from types import SimpleNamespace
+
+    import drillai.core.config as config_module
+    import drillai.workflow.notifications as notification_module
+
+    monkeypatch.setenv("DRILLAI_SMTP_URL", "smtps://mail.example.invalid:465")
+    monkeypatch.setattr(config_module, "get_settings", lambda: SimpleNamespace(is_production=True))
+    policy_sync_calls: list[object] = []
+    endpoint_calls: list[str] = []
+
+    async def sync_policy(active_session):
+        policy_sync_calls.append(active_session)
+
+    async def resolve_endpoint(endpoint_url, **_kwargs):
+        endpoint_calls.append(endpoint_url)
+        return SimpleNamespace(pinned_ip="93.184.216.34", sni_hostname="mail.example.invalid")
+
+    clients: list[dict[str, object]] = []
+
+    class FakePinnedSmtp:
+        def __init__(self, **kwargs):
+            clients.append(kwargs)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def send_message(self, _message):
+            return None
+
+    monkeypatch.setattr(notification_module, "sync_egress_policy_from_db", sync_policy)
+    monkeypatch.setattr(notification_module, "resolve_and_pin_smtp_endpoint_async", resolve_endpoint)
+    monkeypatch.setattr(notification_module, "_PinnedSMTPSSL", FakePinnedSmtp)
+
+    org = Organization(slug="smtp-egress-pinned", name="SMTP egress pinned")
+    session.add(org)
+    await session.flush()
+    message = OutboundMessage(
+        org_id=org.id,
+        channel="email",
+        recipient="recipient@example.invalid",
+        status="queued",
+    )
+
+    outcome = await EmailSmtpNotificationAdapter().send(session, message)
+
+    assert policy_sync_calls == [session]
+    assert endpoint_calls == ["smtps://mail.example.invalid:465"]
+    assert len(clients) == 1
+    assert clients[0]["pinned_ip"] == "93.184.216.34"
+    assert clients[0]["host"] == "mail.example.invalid"
+    assert clients[0]["port"] == 465
+    assert outcome.status == "accepted"
+    assert outcome.external_provider_verified is False
+
+
+def test_pinned_smtp_tls_client_connects_to_the_approved_ip_and_keeps_hostname_sni(monkeypatch):
+    import drillai.workflow.notifications as notification_module
+    from drillai.workflow.notifications import _PinnedSMTPSSL
+
+    socket_calls: list[tuple[str, int, float | None]] = []
+    tls_calls: list[tuple[object, str]] = []
+    raw_socket = object()
+    tls_socket = object()
+
+    def capture_socket(_client, host, port, timeout):
+        socket_calls.append((host, port, timeout))
+        return raw_socket
+
+    class FakeTlsContext:
+        def wrap_socket(self, sock, *, server_hostname):
+            tls_calls.append((sock, server_hostname))
+            return tls_socket
+
+    monkeypatch.setattr(notification_module.smtplib.SMTP, "_get_socket", capture_socket)
+    client = _PinnedSMTPSSL.__new__(_PinnedSMTPSSL)
+    client._pinned_ip = "93.184.216.34"
+    client.context = FakeTlsContext()
+    client._host = "mail.example.invalid"
+    client.debuglevel = 0
+
+    result = client._get_socket("mail.example.invalid", 465, 7.0)
+
+    assert result is tls_socket
+    assert socket_calls == [("93.184.216.34", 465, 7.0)]
+    assert tls_calls == [(raw_socket, "mail.example.invalid")]
+
+
+@pytest.mark.asyncio
 async def test_smtp_permanent_recipient_refusal_is_terminal_and_does_not_store_server_text(
     session, monkeypatch
 ):

@@ -111,6 +111,7 @@ __all__ = [
     "resolve_and_pin_endpoint",
     "resolve_and_pin_endpoint_async",
     "resolve_and_pin_http_endpoint_async",
+    "resolve_and_pin_smtp_endpoint_async",
     "resolve_secret_refs",
     "set_custom_dns_resolver",
     "set_egress_policy",
@@ -136,9 +137,10 @@ CONNECTOR_KEY_PATTERN = re.compile(r"^[a-z0-9][a-z0-9._-]{1,118}[a-z0-9]$")
 SYSTEM_EGRESS_POLICY_KEY = "global"
 SYSTEM_EGRESS_POLICY_SCOPE = "system"
 SYSTEM_EGRESS_POLICY_ORG_ID = "__system__"
-# Internal socket-pinning profile for workflow HTTP actions and webhooks. It deliberately is not
-# a selectable connector profile, but uses the same authoritative egress and DNS policy machinery.
+# Internal socket-pinning profiles for workflow outbound transports. They deliberately are not
+# selectable connector profiles, but use the same authoritative egress and DNS policy machinery.
 _WORKFLOW_HTTP_EGRESS_PROFILE = "workflow.http"
+_WORKFLOW_SMTP_EGRESS_PROFILE = "workflow.smtp"
 
 EGRESS_POLICY_STATES: tuple[str, ...] = (
     "active",
@@ -2522,7 +2524,10 @@ def resolve_and_pin_endpoint(
     _pre_resolved_ips: Sequence[str] | None = None,
 ) -> PinnedEndpoint:
     """Validate URL, resolve all A/AAAA records with bounded timeout, enforce egress/loopback/private-CIDR policy, and pin socket IP."""
-    if protocol_profile not in PROTOCOL_PROFILE_SPECS and protocol_profile != _WORKFLOW_HTTP_EGRESS_PROFILE:
+    if protocol_profile not in PROTOCOL_PROFILE_SPECS and protocol_profile not in {
+        _WORKFLOW_HTTP_EGRESS_PROFILE,
+        _WORKFLOW_SMTP_EGRESS_PROFILE,
+    }:
         raise ValidationFailed(
             f"unsupported protocol profile {protocol_profile!r}",
             details={
@@ -2593,6 +2598,8 @@ def resolve_and_pin_endpoint(
     scheme = (parsed.scheme or "").lower()
     if protocol_profile in {"witsml.1.4.1.1.soap_http", _WORKFLOW_HTTP_EGRESS_PROFILE}:
         allowed_schemes = ("https",) if is_production else ("https", "http")
+    elif protocol_profile == _WORKFLOW_SMTP_EGRESS_PROFILE:
+        allowed_schemes = ("smtps",) if is_production else ("smtps", "smtp")
     elif protocol_profile in ("etp.1.2.json_ws", "etp.1.2.binary_ws"):
         allowed_schemes = ("wss",) if is_production else ("wss", "ws")
     else:
@@ -2648,7 +2655,15 @@ def resolve_and_pin_endpoint(
             "endpoint_url port must be between 1 and 65535",
             details={"field": "endpoint_url", "port": port, "reason": "invalid_port"},
         )
-    default_port = 443 if scheme in ("https", "wss") else 80
+    default_port = (
+        443
+        if scheme in ("https", "wss")
+        else 465
+        if scheme == "smtps"
+        else 25
+        if scheme == "smtp"
+        else 80
+    )
     effective_port = int(port or default_port)
 
     normalized_allowlist = {h.strip().lower().rstrip(".") for h in allowed_hosts if h and h.strip()}
@@ -2867,7 +2882,15 @@ async def resolve_and_pin_endpoint_async(
         parsed = urlparse(endpoint_url.strip())
         hostname = (parsed.hostname or "").strip().lower().rstrip(".")
         scheme = (parsed.scheme or "").lower()
-        default_port = 443 if scheme in ("https", "wss") else 80
+        default_port = (
+            443
+            if scheme in ("https", "wss")
+            else 465
+            if scheme == "smtps"
+            else 25
+            if scheme == "smtp"
+            else 80
+        )
         try:
             effective_port = int(parsed.port or default_port)
         except ValueError:
@@ -3005,6 +3028,30 @@ async def resolve_and_pin_http_endpoint_async(
     return await resolve_and_pin_endpoint_async(
         endpoint_url,
         _WORKFLOW_HTTP_EGRESS_PROFILE,
+        allow_loopback=allow_loopback,
+        allowed_hosts=allowed_hosts,
+        allowed_private_cidrs=allowed_private_cidrs,
+        is_production=is_production,
+        resolver=resolver,
+        require_dns_resolution=True,
+        dns_timeout_seconds=dns_timeout_seconds,
+    )
+
+
+async def resolve_and_pin_smtp_endpoint_async(
+    endpoint_url: str,
+    *,
+    allow_loopback: bool | None = None,
+    allowed_hosts: Sequence[str] | None = None,
+    allowed_private_cidrs: Sequence[str] | None = None,
+    is_production: bool | None = None,
+    resolver: Callable[[str, int], Sequence[str]] | None = None,
+    dns_timeout_seconds: float = DEFAULT_DNS_TIMEOUT_SECONDS,
+) -> PinnedEndpoint:
+    """Resolve and pin an SMTP(S) destination against authoritative egress policy."""
+    return await resolve_and_pin_endpoint_async(
+        endpoint_url,
+        _WORKFLOW_SMTP_EGRESS_PROFILE,
         allow_loopback=allow_loopback,
         allowed_hosts=allowed_hosts,
         allowed_private_cidrs=allowed_private_cidrs,
