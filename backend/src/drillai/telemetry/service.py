@@ -216,11 +216,15 @@ class LatestReading:
     """The newest measurement on a channel, with everything a screen must show beside the number."""
 
     channel_id: str
+    point_id: str | None
+    source_point_id: str | None
     channel_key: str
     label: str
     dimension: str
     unit: str
     value: float | None
+    source_value: float | None
+    source_unit: str | None
     quality: str
     quality_flags: tuple[str, ...]
     observed_at: dt.datetime | None
@@ -244,11 +248,15 @@ class LatestReading:
 
         return {
             "channel_id": self.channel_id,
+            "point_id": self.point_id,
+            "source_point_id": self.source_point_id,
             "channel_key": self.channel_key,
             "label": self.label,
             "dimension": self.dimension,
             "unit": self.unit,
             "value": self.value,
+            "source_value": self.source_value,
+            "source_unit": self.source_unit,
             "quality": self.quality,
             "quality_flags": list(self.quality_flags),
             "is_trustworthy": self.is_trustworthy,
@@ -1207,11 +1215,15 @@ class TelemetryService:
             readings.append(
                 LatestReading(
                     channel_id=channel.id,
+                    point_id=point.id if point is not None else None,
+                    source_point_id=point.source_point_id if point is not None else None,
                     channel_key=channel.channel_key,
                     label=KPI_CHANNEL_LABELS.get(channel.channel_key, channel.name),
                     dimension=channel.dimension,
                     unit=channel.unit,
                     value=point.value if point is not None else None,
+                    source_value=point.src_value if point is not None else None,
+                    source_unit=point.src_unit if point is not None else None,
                     quality=(point.quality if point is not None else "missing"),
                     quality_flags=tuple(flags),
                     observed_at=observed,

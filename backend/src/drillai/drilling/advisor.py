@@ -48,6 +48,7 @@ from drillai.drilling.npt import NptService
 from drillai.drilling.state import WellStateService
 from drillai.drilling.timeline import TimelineService
 from drillai.engines.unit_contract import stored_unit_contract
+from drillai.operations.time_windows import TIME_WINDOW_BASES
 
 _NARRATION_WHITESPACE_RE = re.compile(r"\s+")
 _FIELD_VALIDATION_REQUIRED_ENGINE_KEYS = frozenset({"well_control.kill_sheet", "tubulars.api_5c3"})
@@ -88,6 +89,7 @@ class Fact:
     source: str = ""
     source_id: str | None = None
     evidence_ref: str | None = None
+    provenance: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -98,6 +100,7 @@ class Fact:
             "source": self.source,
             "source_id": self.source_id,
             "evidence_ref": self.evidence_ref,
+            "provenance": self.provenance,
         }
 
 
@@ -452,15 +455,45 @@ class OperationsAdvisor:
         )
         current = operation["current"]
         if current is not None:
+            current_status = current["status"]
+            current_is_active = current_status == "in_progress"
+            operation_label = (
+                "Current operation"
+                if current_is_active
+                else f"Most recently started operation (recorded status {current_status})"
+            )
+            operation_provenance = {
+                "status": current_status,
+                "actual_start": current["actual_start"],
+                "actual_start_basis": current["actual_start_basis"],
+                "actual_end": current["actual_end"],
+                "actual_end_basis": current["actual_end_basis"],
+                "actual_duration_basis": current["actual_duration_basis"],
+                "data_quality": current["data_quality"],
+            }
             answer.facts.append(
                 Fact(
-                    key="operation.current",
-                    statement=f"Current operation: {current['name']} ({current['kind']})",
+                    key="operation.current" if current_is_active else "operation.latest",
+                    statement=f"{operation_label}: {current['name']} ({current['kind']})",
                     value=current["name"],
                     source="operations",
                     source_id=current["id"],
+                    provenance=operation_provenance,
                 )
             )
+            if not current_is_active:
+                answer.unknown.append(
+                    {
+                        "key": "operation.current",
+                        "statement": (
+                            f"No active operation is established; the most recently started row has "
+                            f"lifecycle status {current_status}."
+                        ),
+                        "kind": "missing_data",
+                        "why_it_matters": "A terminal or non-active lifecycle status is not an actual end timestamp.",
+                        "how_to_supply": "Record the active operation and its source-backed occurrence times.",
+                    }
+                )
             if current["actual_start"]:
                 answer.facts.append(
                     Fact(
@@ -469,7 +502,41 @@ class OperationsAdvisor:
                         value=current["actual_start"],
                         source="operations.actual_start",
                         source_id=current["id"],
+                        provenance={
+                            "time_basis": current["actual_start_basis"],
+                            "data_quality": current["data_quality"],
+                        },
                     )
+                )
+            if current["actual_end"] and current["actual_end_basis"] in TIME_WINDOW_BASES:
+                answer.facts.append(
+                    Fact(
+                        key="operation.current.ended",
+                        statement=f"Ended {current['actual_end']}",
+                        value=current["actual_end"],
+                        source="operations.actual_end",
+                        source_id=current["id"],
+                        provenance={
+                            "time_basis": current["actual_end_basis"],
+                            "data_quality": current["data_quality"],
+                        },
+                    )
+                )
+            elif current["actual_end"] is not None or current_status in {"completed", "cancelled"}:
+                answer.unknown.append(
+                    {
+                        "key": "operation.current.actual_end",
+                        "statement": (
+                            f"A stored actual end value has basis {current['actual_end_basis']}, not an "
+                            "accepted source/operator occurrence-time basis; actual ended_at remains unknown."
+                            if current["actual_end"] is not None
+                            else f"Operation status is {current_status}, but no actual end timestamp is recorded; "
+                            "lifecycle closure does not establish ended_at."
+                        ),
+                        "kind": "missing_data",
+                        "why_it_matters": "An occurrence time cannot be inferred from a lifecycle transition or unverified basis.",
+                        "how_to_supply": "Record actual_end with an explicit source_record or operator_entered time basis.",
+                    }
                 )
             if current["actual_duration_hours"] is not None:
                 answer.facts.append(
@@ -486,6 +553,11 @@ class OperationsAdvisor:
                         unit="h",
                         source="operations.actual_duration_hours",
                         source_id=current["id"],
+                        provenance={
+                            "duration_basis": current["actual_duration_basis"],
+                            "planned_duration_basis": current["planned_duration_basis"],
+                            "duration_variance_hours": current["duration_variance_hours"],
+                        },
                     )
                 )
         previous = operation["previous"]
@@ -497,8 +569,79 @@ class OperationsAdvisor:
                     value=previous["name"],
                     source="operations",
                     source_id=previous["id"],
+                    provenance={
+                        "status": previous["status"],
+                        "actual_start": previous["actual_start"],
+                        "actual_start_basis": previous["actual_start_basis"],
+                        "actual_end": previous["actual_end"],
+                        "actual_end_basis": previous["actual_end_basis"],
+                        "actual_duration_hours": previous["actual_duration_hours"],
+                        "actual_duration_basis": previous["actual_duration_basis"],
+                        "planned_duration_hours": previous["planned_duration_hours"],
+                        "planned_duration_basis": previous["planned_duration_basis"],
+                        "duration_variance_hours": previous["duration_variance_hours"],
+                    },
                 )
             )
+            if previous["actual_end"] and previous["actual_end_basis"] in TIME_WINDOW_BASES:
+                answer.facts.append(
+                    Fact(
+                        key="operation.previous.ended",
+                        statement=f"Previous operation ended {previous['actual_end']}",
+                        value=previous["actual_end"],
+                        source="operations.actual_end",
+                        source_id=previous["id"],
+                        provenance={
+                            "time_basis": previous["actual_end_basis"],
+                            "data_quality": previous["data_quality"],
+                        },
+                    )
+                )
+            elif previous["status"] in {"completed", "cancelled"}:
+                answer.unknown.append(
+                    {
+                        "key": "operation.previous.actual_end",
+                        "statement": (
+                            f"Previous operation status is {previous['status']}, but no accepted actual end "
+                            f"timestamp is recorded (basis {previous['actual_end_basis']}); lifecycle closure "
+                            "does not establish ended_at."
+                        ),
+                        "kind": "missing_data",
+                        "why_it_matters": "An occurrence time cannot be inferred from a lifecycle transition or unverified basis.",
+                        "how_to_supply": "Record actual_end with an explicit source_record or operator_entered time basis.",
+                    }
+                )
+            if previous["duration_variance_hours"] is not None:
+                answer.facts.append(
+                    Fact(
+                        key="operation.previous.duration_variance",
+                        statement=(
+                            f"Recorded duration variance {previous['duration_variance_hours']} h "
+                            "(actual duration minus planned duration)"
+                        ),
+                        value=previous["duration_variance_hours"],
+                        unit="h",
+                        source="operations.actual_duration_hours - planned_duration_hours",
+                        source_id=previous["id"],
+                        provenance={
+                            "derived_by": "actual_duration_hours - planned_duration_hours",
+                            "actual_duration_hours": previous["actual_duration_hours"],
+                            "actual_duration_basis": previous["actual_duration_basis"],
+                            "planned_duration_hours": previous["planned_duration_hours"],
+                            "planned_duration_basis": previous["planned_duration_basis"],
+                        },
+                    )
+                )
+            else:
+                answer.unknown.append(
+                    {
+                        "key": "operation.previous.duration_variance",
+                        "statement": "Duration variance is unknown because actual or planned duration is not recorded.",
+                        "kind": "missing_data",
+                        "why_it_matters": "A variance requires both durations and their recorded bases.",
+                        "how_to_supply": "Record actual and planned durations with explicit bases.",
+                    }
+                )
         if current is None:
             answer.inference.append(
                 {
@@ -518,6 +661,11 @@ class OperationsAdvisor:
                     unit="m",
                     source=progress["current_md_source"] or "well_sections",
                     source_id=progress["current_section"]["id"] if progress["current_section"] else None,
+                    provenance={
+                        "value_basis": "measured_md_si",
+                        "source_field": progress["current_md_source"],
+                        "planned_depth_used": False,
+                    },
                 )
             )
         if progress["current_section"] is not None:
@@ -529,6 +677,10 @@ class OperationsAdvisor:
                     value=section["name"],
                     source="well_sections",
                     source_id=section["id"],
+                    provenance={
+                        "status": section["status"],
+                        "wellbore_id": progress["wellbore_id"],
+                    },
                 )
             )
         for measured in state["measured"]:
@@ -544,6 +696,21 @@ class OperationsAdvisor:
                     source=measured["source"],
                     source_id=measured["source_id"],
                     evidence_ref=measured["evidence_ref"],
+                    provenance={
+                        "time_series_point_id": measured["point_id"],
+                        "source_point_id": measured["source_point_id"],
+                        "source_value": measured["source_value"],
+                        "source_unit": measured["source_unit"],
+                        "value_semantics": measured["value_semantics"],
+                        "conversion": measured["conversion"],
+                        "observed_at": measured["observed_at"],
+                        "observed_at_basis": measured["observed_at_basis"],
+                        "received_at": measured["received_at"],
+                        "quality": measured["quality"],
+                        "freshness": measured["freshness"],
+                        "age_seconds": measured["age_seconds"],
+                        "note": measured["note"],
+                    },
                 )
             )
 

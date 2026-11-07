@@ -1026,11 +1026,15 @@ def latest_reading_out(reading: Any) -> dict[str, Any]:
 
     return {
         "channel_id": reading.channel_id,
+        "point_id": reading.point_id,
+        "source_point_id": reading.source_point_id,
         "channel_key": reading.channel_key,
         "label": reading.label,
         "dimension": reading.dimension,
         "unit": reading.unit,
         "value": reading.value,
+        "source_value": reading.source_value,
+        "source_unit": reading.source_unit,
         "quality": reading.quality,
         "quality_flags": list(reading.quality_flags),
         "is_trustworthy": bool(getattr(reading, "is_trustworthy", reading.value is not None)),

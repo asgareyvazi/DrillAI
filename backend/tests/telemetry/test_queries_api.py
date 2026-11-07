@@ -80,8 +80,20 @@ async def test_latest_returns_the_newest_measurement_per_channel(fabric: Fabric)
     assert body["total"] == 2
     by_key = {item["channel_key"]: item for item in body["items"]}
     assert by_key["spp"]["value"] == pytest.approx(3502.0 * PSI_IN_PA, rel=1e-9)
+    assert by_key["spp"]["source_value"] == pytest.approx(3502.0)
+    assert by_key["spp"]["source_unit"] == "psi"
     assert by_key["spp"]["observed_at"] == (BASE_TS + dt.timedelta(seconds=120)).isoformat()
+    latest_point = await fabric.http.get(
+        f"{PREFIX}/timeseries/{spp['id']}/points",
+        params={"limit": 1, "order": "desc"},
+        headers=fabric.alpha.headers,
+    )
+    assert latest_point.status_code == 200, latest_point.text
+    assert by_key["spp"]["point_id"] == latest_point.json()["items"][0]["id"]
+    assert by_key["spp"]["source_point_id"] == "p-2"
     assert by_key["wob"]["value"] == pytest.approx(20.0 * 4448.2216152605, rel=1e-9)
+    assert by_key["wob"]["source_value"] == pytest.approx(20.0)
+    assert by_key["wob"]["source_unit"] == "klbf"
     # The thresholds the answer was judged against travel with it, so a client cannot apply its own.
     assert body["fresh_seconds"] == 30.0
     assert body["stale_seconds"] == 300.0
@@ -97,6 +109,10 @@ async def test_a_channel_that_never_reported_is_missing_not_absent_and_not_zero(
     assert item["value"] is None
     assert item["quality"] == "missing"
     assert item["freshness"] == "missing"
+    assert item["point_id"] is None
+    assert item["source_point_id"] is None
+    assert item["source_value"] is None
+    assert item["source_unit"] is None
     assert item["observed_at"] is None
     assert item["age_seconds"] is None
 

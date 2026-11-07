@@ -120,6 +120,12 @@ class Measured:
     unit: str | None
     source: str
     source_id: str | None = None
+    point_id: str | None = None
+    source_point_id: str | None = None
+    source_value: float | None = None
+    source_unit: str | None = None
+    value_semantics: str = "canonical"
+    conversion: dict[str, Any] | None = None
     observed_at: dt.datetime | None = None
     observed_at_basis: str = "unknown"
     quality: str = "unverified"
@@ -142,6 +148,12 @@ class Measured:
             "unit": self.unit,
             "source": self.source,
             "source_id": self.source_id,
+            "point_id": self.point_id,
+            "source_point_id": self.source_point_id,
+            "source_value": self.source_value,
+            "source_unit": self.source_unit,
+            "value_semantics": self.value_semantics,
+            "conversion": self.conversion,
             "observed_at": self.observed_at.isoformat() if self.observed_at else None,
             "observed_at_basis": self.observed_at_basis,
             "received_at": self.received_at.isoformat() if self.received_at else None,
@@ -562,6 +574,22 @@ class WellStateService:
                 unit=reading.unit,
                 source=f"time_series:{reading.channel_key}",
                 source_id=reading.channel_id,
+                point_id=reading.point_id,
+                source_point_id=reading.source_point_id,
+                source_value=reading.source_value,
+                source_unit=reading.source_unit,
+                value_semantics="canonical",
+                conversion=(
+                    {
+                        "dimension": reading.dimension,
+                        "source_unit": reading.source_unit,
+                        "canonical_unit": reading.unit,
+                        "applied": reading.source_unit != reading.unit,
+                    }
+                    if reading.source_value is not None and reading.source_unit is not None
+                    else None
+                ),
+                evidence_ref=reading.point_id,
                 observed_at=reading.observed_at,
                 observed_at_basis="source_timestamp" if reading.observed_at is not None else "unknown",
                 received_at=reading.received_at,
@@ -612,6 +640,10 @@ class WellStateService:
                     unit=unit_context.get(key),
                     source="extracted_record:parameter_set",
                     source_id=record.id,
+                    source_value=float(candidate),
+                    source_unit=unit_context.get(key),
+                    value_semantics="extracted_source",
+                    conversion=None,
                     observed_at=record.observed_at,
                     observed_at_basis=record.observed_at_basis or "unknown",
                     quality="validated" if record.validation_state in VALIDATED_STATES else "extracted",

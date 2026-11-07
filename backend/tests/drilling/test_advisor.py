@@ -253,6 +253,171 @@ async def test_advisor_keeps_safety_field_validation_required_for_historical_eng
     assert not any(item["key"] == "calculations.none" for item in answer.to_dict()["unknown"])
 
 
+async def test_advisor_preserves_measured_source_time_quality_and_unit_provenance(session):
+    from drillai.db.models import Document, ExtractedRecord, Organization, Project, Well, Wellbore
+
+    org = Organization(slug="advisor-source-provenance", name="Advisor source provenance")
+    session.add(org)
+    await session.flush()
+    project = Project(org_id=org.id, name="Synthetic provenance project")
+    session.add(project)
+    await session.flush()
+    well = Well(org_id=org.id, project_id=project.id, name="SYNTHETIC-PROVENANCE-1")
+    session.add(well)
+    await session.flush()
+    wellbore = Wellbore(
+        org_id=org.id,
+        well_id=well.id,
+        name="Synthetic main bore",
+        sequence=1,
+        is_active=True,
+    )
+    session.add(wellbore)
+    await session.flush()
+    document = Document(
+        org_id=org.id,
+        project_id=project.id,
+        well_id=well.id,
+        wellbore_id=wellbore.id,
+        doc_type="ddr",
+        title="SYNTHETIC TEST DATA — source provenance",
+        status="extracted",
+        classification="synthetic",
+    )
+    session.add(document)
+    await session.flush()
+    record = ExtractedRecord(
+        org_id=org.id,
+        document_id=document.id,
+        project_id=project.id,
+        well_id=well.id,
+        wellbore_id=wellbore.id,
+        record_type="parameter_set",
+        payload_schema_key="daily_drilling.parameter_set",
+        payload={"wob": 18.5},
+        observed_at=None,
+        observed_at_basis="unknown",
+        depth_md_basis="unknown",
+        depth_tvd_basis="unknown",
+        method="synthetic_fixture",
+        confidence=1.0,
+        validation_state="human_validated",
+        unit_context={"wob": "klbf"},
+        quality_flags=[],
+        is_demo_fixture=True,
+    )
+    session.add(record)
+    await session.flush()
+
+    answer = await OperationsAdvisor(session, org.id).ask(well.id, "performance")
+    fact = next(item.to_dict() for item in answer.facts if item.key == "measured.wob")
+
+    assert fact["value"] == 18.5
+    assert fact["unit"] == "klbf"
+    assert fact["source"] == "extracted_record:parameter_set"
+    assert fact["source_id"] == record.id
+    assert fact["evidence_ref"] == record.id
+    assert fact["provenance"]["observed_at"] is None
+    assert fact["provenance"]["observed_at_basis"] == "unknown"
+    assert fact["provenance"]["received_at"] is None
+    assert fact["provenance"]["source_value"] == 18.5
+    assert fact["provenance"]["source_unit"] == "klbf"
+    assert fact["provenance"]["value_semantics"] == "extracted_source"
+    assert fact["provenance"]["conversion"] is None
+    assert fact["provenance"]["quality"] == "validated"
+    assert fact["provenance"]["freshness"] == "unknown"
+    assert fact["provenance"]["age_seconds"] is None
+    assert "created_at" not in fact["provenance"]
+
+
+async def test_advisor_does_not_treat_closed_operation_status_as_actual_end_time(session):
+    from drillai.db.models import Operation, Organization, Project, Well, Wellbore
+
+    org = Organization(slug="advisor-closed-time", name="Advisor closed-time synthetic test")
+    session.add(org)
+    await session.flush()
+    project = Project(org_id=org.id, name="Synthetic closed-time project")
+    session.add(project)
+    await session.flush()
+    well = Well(org_id=org.id, project_id=project.id, name="SYNTHETIC-CLOSED-1")
+    session.add(well)
+    await session.flush()
+    wellbore = Wellbore(
+        org_id=org.id,
+        well_id=well.id,
+        name="Synthetic main bore",
+        sequence=1,
+        is_active=True,
+    )
+    session.add(wellbore)
+    await session.flush()
+    previous_operation = Operation(
+        org_id=org.id,
+        project_id=project.id,
+        well_id=well.id,
+        wellbore_id=wellbore.id,
+        operation_class="actual",
+        sequence=1,
+        name="Synthetic prior completed operation",
+        kind="drilling",
+        phase="completed",
+        status="completed",
+        actual_start=dt.datetime(2026, 11, 5, 8, 0, tzinfo=dt.UTC),
+        actual_start_basis="source_record",
+        actual_end=dt.datetime(2026, 11, 5, 12, 0, tzinfo=dt.UTC),
+        actual_end_basis="report_date_anchor",
+        actual_duration_hours=None,
+        actual_duration_basis="unknown",
+        source="synthetic_fixture",
+        source_kind="manual",
+        is_demo_fixture=True,
+    )
+    session.add(previous_operation)
+    await session.flush()
+    operation = Operation(
+        org_id=org.id,
+        project_id=project.id,
+        well_id=well.id,
+        wellbore_id=wellbore.id,
+        predecessor_operation_id=previous_operation.id,
+        operation_class="actual",
+        sequence=2,
+        name="Synthetic completed operation",
+        kind="drilling",
+        phase="completed",
+        status="completed",
+        actual_start=dt.datetime(2026, 11, 6, 8, 0, tzinfo=dt.UTC),
+        actual_start_basis="source_record",
+        actual_end=None,
+        actual_end_basis="unknown",
+        actual_duration_hours=None,
+        actual_duration_basis="unknown",
+        source="synthetic_fixture",
+        source_kind="manual",
+        is_demo_fixture=True,
+    )
+    session.add(operation)
+    await session.flush()
+
+    answer = await OperationsAdvisor(session, org.id).ask(well.id, "current_operation")
+    payload = answer.to_dict()
+    facts = {item["key"]: item for item in payload["facts"]}
+    unknown = {item["key"]: item for item in payload["unknown"]}
+
+    assert facts["operation.latest"]["provenance"]["actual_start_basis"] == "source_record"
+    assert facts["operation.latest"]["provenance"]["actual_end"] is None
+    assert facts["operation.current.started"]["value"] == "2026-11-06T08:00:00+00:00"
+    assert "operation.current" in unknown
+    assert "operation.current.actual_end" in unknown
+    assert "operation.previous.actual_end" in unknown
+    assert "lifecycle closure does not establish ended_at" in unknown["operation.current.actual_end"]["statement"]
+    assert "lifecycle closure does not establish ended_at" in unknown["operation.previous.actual_end"]["statement"]
+    assert "report_date_anchor" in unknown["operation.previous.actual_end"]["statement"]
+    assert not any(item["key"] == "operation.current.ended" for item in payload["facts"])
+    assert not any(item["key"] == "operation.previous.ended" for item in payload["facts"])
+    assert not any(item["value"] == operation.created_at.isoformat() for item in payload["facts"])
+
+
 async def test_advisor_evidence_does_not_resolve_a_foreign_document_title(session):
     from drillai.db.models import Document, EvidenceLink, Organization
 

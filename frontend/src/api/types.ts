@@ -1452,12 +1452,23 @@ export interface AdvisorCalculation extends Record<string, unknown> {
   limitations: string[]
 }
 
+export interface AdvisorFact extends Record<string, unknown> {
+  key: string
+  statement: string
+  value: unknown
+  unit: string | null
+  source: string
+  source_id: string | null
+  evidence_ref: string | null
+  provenance: Record<string, unknown>
+}
+
 export interface AdvisorAnswer {
   well_id: string
   question: string
   question_text: string
   generated_at: string
-  facts: Array<Record<string, unknown>>
+  facts: AdvisorFact[]
   calculations: AdvisorCalculation[]
   evidence: Array<Record<string, unknown>>
   inference: Array<Record<string, unknown>>
@@ -2756,11 +2767,15 @@ export interface TelemetryWindowResponse {
 
 export interface TelemetryLatestReading {
   channel_id: string
+  point_id: string | null
+  source_point_id: string | null
   channel_key: string
   label: string
   dimension: string
   unit: string
   value: number | null
+  source_value: number | null
+  source_unit: string | null
   quality: TelemetryQuality | string
   quality_flags: string[]
   is_trustworthy: boolean

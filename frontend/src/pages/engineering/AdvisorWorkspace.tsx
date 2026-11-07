@@ -56,6 +56,9 @@ export function AdvisorItemCard({ item }: { item: Record<string, unknown> }) {
   const value = item.value ?? item.detail ?? item.statement ?? null
   const unit = typeof item.unit === 'string' ? item.unit : null
   const source = typeof item.source === 'string' ? item.source : null
+  const sourceId = typeof item.source_id === 'string' ? item.source_id : null
+  const evidenceRef = typeof item.evidence_ref === 'string' ? item.evidence_ref : null
+  const provenance = isRecord(item.provenance) ? item.provenance : null
   const engine = typeof item.engine_key === 'string' ? item.engine_key : null
   const engineVersion = typeof item.engine_version === 'string' ? item.engine_version : null
   const validationStatus = typeof item.validation_status === 'string' ? item.validation_status : null
@@ -107,10 +110,18 @@ export function AdvisorItemCard({ item }: { item: Record<string, unknown> }) {
           </Badge>
         )}
         {source && <span className="font-mono">{source}</span>}
+        {sourceId && <span dir="ltr" className="font-mono">{t('advisor.sourceId')}: {sourceId}</span>}
+        {evidenceRef && <span dir="ltr" className="font-mono">{t('advisor.evidenceRef')}: {evidenceRef}</span>}
         {basis && <span>basis: {basis}</span>}
         {how && <span>how: {how}</span>}
         {evidenceCount > 0 && <Badge tone="neutral">{evidenceCount} evidence</Badge>}
       </div>
+      {provenance && Object.keys(provenance).length > 0 && (
+        <details className="mt-2 rounded border border-graphite-100 p-2 text-[11px] dark:border-graphite-800">
+          <summary className="cursor-pointer font-medium">{t('advisor.provenance')}</summary>
+          <Json value={provenance} max={100} />
+        </details>
+      )}
       {fieldValidationRequired && (
         <p role="note" data-testid="field-validation-warning" className="mt-2 rounded border border-danger/40 bg-red-50/60 p-2 text-xs text-danger dark:bg-red-950/20">
           {t('engineering.fieldValidationWarning')}

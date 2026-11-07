@@ -81,12 +81,25 @@ describe('Advisor calculation safety status', () => {
               units: {},
               validation_status: 'unknown',
               field_validation_required: true,
+              source: 'operations.actual_start',
+              source_id: 'opr_test',
+              evidence_ref: 'evd_test',
+              provenance: {
+                actual_start: '2026-11-07T00:00:00+00:00',
+                actual_start_basis: 'source_record',
+                actual_end: null,
+                actual_end_basis: 'unknown',
+              },
             }}
           />
         </ul>
       </I18nProvider>,
     )
 
+    expect(screen.getByText('شناسهٔ منبع: opr_test')).toBeInTheDocument()
+    expect(screen.getByText('ارجاع شاهد: evd_test')).toBeInTheDocument()
+    expect(screen.getByText('پیشینهٔ ثبت‌شده')).toBeInTheDocument()
+    expect(screen.getByText(/actual_end_basis/)).toBeInTheDocument()
     expect(screen.getByText('خروجی‌ها')).toBeInTheDocument()
     expect(screen.getByText('نقض محدودیت‌ها')).toBeInTheDocument()
     expect(screen.getAllByText('یکا نامعلوم')).toHaveLength(3)

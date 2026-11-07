@@ -16,11 +16,15 @@ const WELL_ID = '11111111-2222-3333-4444-555555555555'
 function makeReading(freshness: 'live' | 'stale' | 'missing'): TelemetryLatestReading {
   return {
     channel_id: 'ch-spp',
+    point_id: 'tsp-spp-1',
+    source_point_id: 'source-spp-1',
     channel_key: 'spp',
     label: 'Standpipe Pressure',
     dimension: 'pressure',
     unit: 'Pa',
     value: 25_000_000,
+    source_value: 25_000_000,
+    source_unit: 'Pa',
     quality: 'good',
     quality_flags: [],
     is_trustworthy: true,

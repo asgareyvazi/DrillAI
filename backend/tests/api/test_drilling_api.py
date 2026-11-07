@@ -503,6 +503,46 @@ async def test_advisor_separates_facts_calculations_and_unknowns(client):
         },
     )
     assert engine_response.status_code == 200, engine_response.text
+    channel_response = await client.post(
+        "/api/v1/timeseries",
+        headers=headers(),
+        json={
+            "well_id": ids["well_id"],
+            "channel_key": "wob",
+            "name": "SYNTHETIC TEST DATA weight on bit",
+            "dimension": "force",
+            "unit": "klbf",
+            "source": "synthetic",
+            "source_ref": "SYNTHETIC TEST DATA advisor source",
+        },
+    )
+    assert channel_response.status_code == 201, channel_response.text
+    channel = channel_response.json()
+    point_response = await client.post(
+        f"/api/v1/timeseries/{channel['id']}/points",
+        headers=headers(),
+        json={
+            "source_ref": "SYNTHETIC TEST DATA advisor source",
+            "points": [
+                {
+                    "ts": "2026-03-15T08:00:00+00:00",
+                    "received_at": "2026-03-15T08:02:00+00:00",
+                    "value": 18.5,
+                    "unit": "klbf",
+                    "quality": "good",
+                    "source_point_id": "synthetic-wob-point-1",
+                }
+            ],
+        },
+    )
+    assert point_response.status_code == 201, point_response.text
+    point_page = await client.get(
+        f"/api/v1/timeseries/{channel['id']}/points",
+        params={"limit": 1, "order": "desc"},
+        headers=headers(),
+    )
+    assert point_page.status_code == 200, point_page.text
+    point_id = point_page.json()["items"][0]["id"]
     catalogue = (await client.get("/api/v1/advisor/questions", headers=headers())).json()
     assert any(item["key"] == "where_are_we" for item in catalogue["questions"])
 
@@ -514,6 +554,25 @@ async def test_advisor_separates_facts_calculations_and_unknowns(client):
         )
     ).json()["answer"]
     assert answer["facts"], "the advisor must ground its answer in recorded facts"
+    measured_wob = next(item for item in answer["facts"] if item["key"] == "measured.wob")
+    assert measured_wob["value"] == pytest.approx(18.5 * 4448.2216152605, rel=1e-9)
+    assert measured_wob["unit"] == "N"
+    assert measured_wob["source"] == "time_series:wob"
+    assert measured_wob["source_id"] == channel["id"]
+    assert measured_wob["evidence_ref"] == point_id
+    assert measured_wob["provenance"]["time_series_point_id"] == point_id
+    assert measured_wob["provenance"]["source_point_id"] == "synthetic-wob-point-1"
+    assert measured_wob["provenance"]["source_value"] == pytest.approx(18.5)
+    assert measured_wob["provenance"]["source_unit"] == "klbf"
+    assert measured_wob["provenance"]["value_semantics"] == "canonical"
+    assert measured_wob["provenance"]["conversion"] == {
+        "dimension": "force",
+        "source_unit": "klbf",
+        "canonical_unit": "N",
+        "applied": True,
+    }
+    assert measured_wob["provenance"]["observed_at"] == "2026-03-15T08:00:00+00:00"
+    assert measured_wob["provenance"]["received_at"] == "2026-03-15T08:02:00+00:00"
     calculation = next(
         item for item in answer["calculations"] if item["engine_key"] == "drilling.mse"
     )
