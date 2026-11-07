@@ -224,13 +224,37 @@ def _safe_outcome_error(outcome: DeliveryAttemptOutcome) -> str:
     return f"notification attempt failed ({code})" if code else "notification attempt failed"
 
 
-def _safe_provider_message_id(value: str | None) -> str | None:
+def _safe_provider_message_id(
+    value: str | None,
+    *,
+    message: OutboundMessage | None = None,
+) -> str | None:
+    """Keep a bounded opaque receipt token, not URLs, recipients, or secret locators."""
     if not value:
         return None
     candidate = str(value).strip()
-    if len(candidate) > 200 or any(ord(char) < 32 or ord(char) == 127 for char in candidate):
+    if (
+        len(candidate) > 128
+        or not candidate
+        or not candidate[0].isascii()
+        or not candidate[0].isalnum()
+        or any(
+            not char.isascii() or not (char.isalnum() or char in "._-")
+            for char in candidate
+        )
+    ):
         return None
-    return candidate or None
+    if candidate.upper().startswith(("DRILLAI_SECRET_", "SECRET_REF_")):
+        return None
+    if message is not None:
+        payload = message.payload if isinstance(message.payload, dict) else {}
+        explicit_sensitive_values = (message.recipient, payload.get("secret_ref"))
+        if any(
+            isinstance(sensitive, str) and candidate.casefold() == sensitive.strip().casefold()
+            for sensitive in explicit_sensitive_values
+        ):
+            return None
+    return candidate
 
 
 class NotificationAdapter(abc.ABC):
@@ -655,7 +679,7 @@ class NotificationDispatcher:
             message.acceptance_evidence = outcome.acceptance_evidence
             message.next_attempt_at = None
             message.error = None
-            message.provider_message_id = _safe_provider_message_id(outcome.provider_message_id)
+            message.provider_message_id = _safe_provider_message_id(outcome.provider_message_id, message=message)
         elif outcome.retryable and message.attempts < max_attempts:
             message.status = "failed_retryable"
             backoff_seconds = min(300, (2 ** message.attempts) * 5)
@@ -745,7 +769,7 @@ class NotificationDispatcher:
                 "retryable": outcome.retryable,
                 "status_code": outcome.status_code,
                 "latency_ms": round(outcome.latency_ms, 3),
-                "provider_message_id": _safe_provider_message_id(outcome.provider_message_id),
+                "provider_message_id": _safe_provider_message_id(outcome.provider_message_id, message=message),
                 "acceptance_evidence": outcome.acceptance_evidence,
                 "delivery_confirmed": False,
                 "error_code": safe_notification_error_code(outcome.error_code),

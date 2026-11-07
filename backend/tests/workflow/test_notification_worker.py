@@ -288,9 +288,18 @@ async def test_notification_ledger_sanitizes_adapter_errors_and_never_claims_pro
                 status="queued",
                 max_attempts=1,
             )
-            session.add(message)
+            accepted_message = OutboundMessage(
+                org_id=org.id,
+                channel="unsafe_receipt_probe",
+                recipient="safe-recipient",
+                payload={"secret_ref": "notify-password"},
+                status="queued",
+                max_attempts=1,
+            )
+            session.add_all([message, accepted_message])
             await session.flush()
             message_id = message.id
+            accepted_message_id = accepted_message.id
 
         class LeakyAdapter(NotificationAdapter):
             channel = "leaky_probe"
@@ -301,27 +310,87 @@ async def test_notification_ledger_sanitizes_adapter_errors_and_never_claims_pro
                     retryable=True,
                     error_code="provider_503",
                     error="PRIVATE_TOKEN=do-not-persist",
+                    provider_message_id="secret_ref:notification-token",
                     external_provider_verified=True,
                 )
 
-        dispatcher = NotificationDispatcher(adapters={"leaky_probe": LeakyAdapter()})
-        worker = NotificationWorker(database, poll_seconds=1.0, batch_size=1, dispatcher=dispatcher)
-        result = (await worker.run_once())[0]
-        async with database.session() as session:
-            persisted = (
-                await session.execute(select(OutboundMessage).where(OutboundMessage.id == message_id))
-            ).scalar_one()
-            ledger = persisted.attributes["delivery_ledger"]
+        class UnsafeReceiptAdapter(NotificationAdapter):
+            channel = "unsafe_receipt_probe"
 
-        assert result["status"] == "dead_letter"
-        assert result["delivery_confirmed"] is False
-        assert result["external_provider_verified"] is False
+            async def send(self, session, message):
+                return DeliveryAttemptOutcome(
+                    status="accepted",
+                    retryable=False,
+                    acceptance_evidence="http_2xx",
+                    provider_message_id="notify-password",
+                    external_provider_verified=True,
+                )
+
+        dispatcher = NotificationDispatcher(
+            adapters={
+                "leaky_probe": LeakyAdapter(),
+                "unsafe_receipt_probe": UnsafeReceiptAdapter(),
+            }
+        )
+        worker = NotificationWorker(database, poll_seconds=1.0, batch_size=2, dispatcher=dispatcher)
+        results = {item["message_id"]: item for item in await worker.run_once()}
+        async with database.session() as session:
+            records = (
+                await session.execute(
+                    select(OutboundMessage).where(OutboundMessage.id.in_([message_id, accepted_message_id]))
+                )
+            ).scalars().all()
+            persisted_by_id = {item.id: item for item in records}
+            persisted = persisted_by_id[message_id]
+            accepted_persisted = persisted_by_id[accepted_message_id]
+            ledger = persisted.attributes["delivery_ledger"]
+            accepted_ledger = accepted_persisted.attributes["delivery_ledger"]
+
+        assert results[message_id]["status"] == "dead_letter"
+        assert results[message_id]["delivery_confirmed"] is False
+        assert results[message_id]["external_provider_verified"] is False
         assert persisted.error == "notification attempt failed (provider_503)"
+        assert persisted.provider_message_id is None
+        assert ledger[-1]["provider_message_id"] is None
+        assert "secret_ref" not in str(ledger)
         assert "do-not-persist" not in str(persisted.error)
         assert "do-not-persist" not in str(ledger)
         assert ledger[-1]["external_provider_verified"] is False
+
+        assert results[accepted_message_id]["status"] == "accepted"
+        assert results[accepted_message_id]["provider_message_id"] is None
+        assert results[accepted_message_id]["delivery_confirmed"] is False
+        assert accepted_persisted.provider_message_id is None
+        assert accepted_ledger[-1]["provider_message_id"] is None
+        assert "secret_ref" not in str(accepted_ledger)
+        assert "notify-password" not in str(accepted_ledger)
+        assert accepted_ledger[-1]["external_provider_verified"] is False
     finally:
         await database.dispose()
+
+
+def test_provider_message_ids_are_bounded_opaque_tokens():
+    from drillai.workflow.notifications import _safe_provider_message_id
+
+    message = OutboundMessage(
+        org_id="org-1",
+        channel="webhook",
+        recipient="recipient-123",
+        payload={"secret_ref": "notify-password"},
+    )
+    assert _safe_provider_message_id("msg_01HZX8K2R7") == "msg_01HZX8K2R7"
+    assert _safe_provider_message_id("recipient-123", message=message) is None
+    assert _safe_provider_message_id("notify-password", message=message) is None
+    for unsafe in (
+        "recipient@example.invalid",
+        "https://provider.example.invalid/messages/123",
+        "env:DRILLAI_SECRET_WEBHOOK_TOKEN",
+        "secret_ref:notification-token",
+        "DRILLAI_SECRET_WEBHOOK_TOKEN",
+        "id\r\nX-Leak: value",
+        "x" * 129,
+    ):
+        assert _safe_provider_message_id(unsafe) is None
 
 
 @pytest.mark.asyncio
