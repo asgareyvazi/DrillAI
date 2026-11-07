@@ -28,3 +28,7 @@ The rule is intentionally conservative: a provider ID containing other punctuati
 ## Limits
 
 These tests establish local software behavior for sanitization, not external-provider trustworthiness, SMTP/HTTP delivery, mailbox receipt, notification latency or operational availability. Existing delivery rows are not retroactively rewritten. No credentials, real recipients, provider responses or delivery receipts were used or fabricated.
+
+## Exact-SHA CI follow-up
+
+GitHub Actions run [42359053299](https://github.com/asgareyvazi/DrillAI/actions/runs/42359053299), for commit `6c5a44e9e649bce78a30b685ee82fe4902bb3ff2`, is listed as **cancelled**. It provides no pass/fail evidence for that SHA; CP124's exact-SHA certification remains unavailable, and CP132 must certify the final integrated SHA.

@@ -26,3 +26,7 @@ Outside production, message-level SMTP configuration continues to work for local
 ## Limits
 
 This restricts a tenant/workflow-selected endpoint in production; it is not a general SMTP SSRF defense. The operator-provided URL must still be protected by deployment secrets and outbound network policy. A configured endpoint's DNS, IP reachability, TLS certificate, relay authorization and delivery behavior were not exercised. SMTP acceptance remains distinct from recipient delivery.
+
+## Exact-SHA CI follow-up
+
+GitHub Actions run [42359313648](https://github.com/asgareyvazi/DrillAI/actions/runs/42359313648), for commit `7c274ab99017b9ad148c25ca94f28e78a596124c`, is listed as **cancelled**. It provides no pass/fail evidence for that SHA; CP125's exact-SHA certification remains unavailable, and CP132 must certify the final integrated SHA.

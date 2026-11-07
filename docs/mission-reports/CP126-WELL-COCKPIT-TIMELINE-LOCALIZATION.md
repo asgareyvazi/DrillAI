@@ -27,3 +27,9 @@ No event timestamps, source values, title text, summaries, units, or engineering
 ## Limits
 
 This localizes the Well Cockpit timeline only; it does not claim that every Cockpit or Operations Workspace string is localized. The visible source entry title and summary may remain in the language of the source record. Persian text/RTL behavior is covered by component-level rendering, not a field-user language-acceptance study. The full backend suite and final SHA certification remain pending.
+
+## Exact-SHA CI follow-up
+
+GitHub Actions run [42359789735](https://github.com/asgareyvazi/DrillAI/actions/runs/42359789735) tested CP126 commit `24fe365b07dcb24a236a909e1e9b22e52460ace0` and **failed**; it is not certified. Frontend typecheck, lint, tests, build, supply-chain checks, and the fresh SQLite migration check succeeded. The Linux backend job reported **1 failed, 1,712 passed** and identified `tests/test_cp16_adversarial_audit.py::test_cp16_10_documentation_and_contract_consistency_guard`; its annotation and source assertion show the maintained-count guard still expected `390 passed` after CP126 updated the frontend docs to `391 passed`. That guard is corrected in a later commit; this does not retroactively change CP126's result.
+
+The native-Windows backend job reported **4 failed, 1,694 passed, 1 skipped, 14 deselected**, without failed node IDs. Its uploaded artifact (`windows-backend-tests-42359789735-1`, artifact ID `13569192872`) could not be downloaded because the GitHub redirect targeted a storage host outside the permitted egress allowlist. The Windows failure causes therefore remain **unknown**. Stack and browser gates did not run after the backend failures. Neither CP126's local results nor the later test-guard correction certifies this failed SHA; exact-final-SHA Linux/native-Windows certification remains required at CP132.
