@@ -1,0 +1,7 @@
+Daily Drilling Report - SYNTHETIC TEST DATA
+Report No: SYNTH-OCR-017
+Date: 2026-03-17
+Well: NF-12
+Rig: RIG-SYNTH-7
+Depth: 2470 m
+Mud Weight: 12.6 ppg

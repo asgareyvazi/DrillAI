@@ -1,0 +1,111 @@
+{
+  "schema_version": 1,
+  "corpus": {
+    "id": "drillai-synthetic-ddr",
+    "version": "1.0.0",
+    "classification": "synthetic",
+    "source_policy": "Hand-authored fictional records and one locally generated raster page; no external or field source",
+    "external_approval": "not_applicable_synthetic_fixture",
+    "label_status": "synthetic_reference_only",
+    "purpose": [
+      "DDR parser and provenance regression tests",
+      "document-type negative-control tests",
+      "local OCR benchmark mechanics"
+    ],
+    "not_evidence_of": [
+      "field-document accuracy",
+      "OCR quality on real reports",
+      "engineering validation",
+      "operator approval",
+      "production acceptance"
+    ]
+  },
+  "documents": [
+    {
+      "id": "ddr-csv-014",
+      "path": "records/ddr_014_structured.csv",
+      "sha256": "db5f7942f9dac96596ba9ba8fffa40d677dc58ffa0171fc3ad9d492929a30dd7",
+      "media_type": "text/csv",
+      "locale": "en",
+      "role": "structured_positive_reference",
+      "synthetic_marker": "SYNTHETIC TEST DATA",
+      "expected": {
+        "document_class": "daily_report",
+        "report_number": "RPT-NF12-014",
+        "report_date": "2026-03-15",
+        "operation_rows": 5,
+        "measurement_rows": 9
+      },
+      "source_locators": [
+        {"field": "report_number", "value": "RPT-NF12-014", "locator": {"kind": "csv_cell", "row": 2, "column": 2}},
+        {"field": "report_date", "value": "2026-03-15", "locator": {"kind": "csv_cell", "row": 3, "column": 2}},
+        {"field": "well_name_text", "value": "NF-12", "locator": {"kind": "csv_cell", "row": 4, "column": 2}},
+        {"field": "rig_name_text", "value": "RIG-SYNTH-7", "locator": {"kind": "csv_cell", "row": 5, "column": 2}},
+        {"field": "operation_rows", "value": "1-5", "locator": {"kind": "csv_rows", "first": 8, "last": 12}},
+        {"field": "measurement_rows", "value": "9", "locator": {"kind": "csv_rows", "first": 14, "last": 22}}
+      ]
+    },
+    {
+      "id": "ddr-narrative-015",
+      "path": "records/ddr_015_narrative.txt",
+      "sha256": "6ad935c1de4be2c8aca160903c5aecee0190f3e0ab474d0bbbe25d06faaec6ca",
+      "media_type": "text/plain",
+      "locale": "en",
+      "role": "narrative_positive_reference",
+      "synthetic_marker": "SYNTHETIC TEST DATA",
+      "expected": {
+        "document_class": "daily_report",
+        "report_number": "RPT-NF12-015",
+        "report_date": "2026-03-16",
+        "operation_paragraphs": 2,
+        "measurement_lines": 6,
+        "problem_lines": 1
+      },
+      "source_locators": [
+        {"field": "report_number", "value": "RPT-NF12-015", "locator": {"kind": "line", "number": 2}},
+        {"field": "report_date", "value": "2026-03-16", "locator": {"kind": "line", "number": 3}},
+        {"field": "well_name_text", "value": "NF-12", "locator": {"kind": "line", "number": 4}},
+        {"field": "rig_name_text", "value": "RIG-SYNTH-7", "locator": {"kind": "line", "number": 5}},
+        {"field": "first_operation", "value": "Drilling ahead 8-1/2 in section", "locator": {"kind": "line", "number": 8}},
+        {"field": "mud_weight", "value": "12.5 ppg", "locator": {"kind": "line", "number": 16}}
+      ]
+    },
+    {
+      "id": "ddr-negative-program-016",
+      "path": "records/program_negative.txt",
+      "sha256": "f1cd4707480192ae2cba8e234aed070d25e497f1be743e7497492c945732d607",
+      "media_type": "text/plain",
+      "locale": "en",
+      "role": "negative_document_type_control",
+      "synthetic_marker": "SYNTHETIC TEST DATA",
+      "expected": {
+        "document_class": "drilling_program",
+        "daily_report_candidate": false
+      },
+      "source_locators": [
+        {"field": "document_title", "value": "Well Drilling Program", "locator": {"kind": "line", "number": 1}}
+      ]
+    },
+    {
+      "id": "ddr-ocr-scan-017",
+      "path": "ocr/scan_017_image_only.pdf",
+      "sha256": "254124c6ea19b207898546b8da1c72f52db151ed8185af296775f6f497b471dc",
+      "media_type": "application/pdf",
+      "locale": "en",
+      "role": "ocr_development_fixture",
+      "synthetic_marker": "SYNTHETIC TEST DATA",
+      "reference_text": "ocr/scan_017_ground_truth.txt",
+      "reference_sha256": "cb3a29f88a8f135ee9ece416679dacc93e5350ed3f5e8c63786b0cc76a17be9b",
+      "expected": {
+        "document_class": "daily_report",
+        "source_is_raster_only": true,
+        "report_number": "SYNTH-OCR-017",
+        "report_date": "2026-03-17"
+      },
+      "source_locators": [
+        {"field": "report_number", "value": "SYNTH-OCR-017", "locator": {"kind": "ground_truth_line", "number": 2}},
+        {"field": "report_date", "value": "2026-03-17", "locator": {"kind": "ground_truth_line", "number": 3}}
+      ]
+    }
+  ]
+}

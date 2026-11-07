@@ -1,0 +1,31 @@
+{
+  "schema_version": 2,
+  "corpus": {
+    "id": "drillai-synthetic-ddr-ocr",
+    "version": "1.0.0",
+    "classification": "synthetic",
+    "approval": {
+      "declaration": "not_required_synthetic"
+    },
+    "languages": [
+      "eng"
+    ],
+    "sampling_method": "One deterministic, locally generated raster page; not sampled from field or operator documents",
+    "ground_truth_protocol": "Hand-authored intended text for a synthetic image; labels are fixture references and are not independently adjudicated"
+  },
+  "cases": [
+    {
+      "id": "synthetic-scan-017",
+      "pdf": "scan_017_image_only.pdf",
+      "pdf_sha256": "254124c6ea19b207898546b8da1c72f52db151ed8185af296775f6f497b471dc",
+      "ground_truth": "scan_017_ground_truth.txt",
+      "ground_truth_sha256": "cb3a29f88a8f135ee9ece416679dacc93e5350ed3f5e8c63786b0cc76a17be9b",
+      "locale": "en",
+      "document_class": "daily_report",
+      "split": "development",
+      "page_numbers": [
+        1
+      ]
+    }
+  ]
+}

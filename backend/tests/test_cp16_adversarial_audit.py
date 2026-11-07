@@ -1041,10 +1041,19 @@ def test_cp16_10_documentation_and_contract_consistency_guard():
         tuple(int(value.replace(",", "")) if value else 0 for value in (passed, skipped, deselected))
         for passed, skipped, deselected in backend_totals
     }
-    assert parsed_totals == {(1704, 0, 0), (1690, 14, 0)}, (
-        f"README.md backend totals do not match the 1,704-test inventory: {parsed_totals}"
+    inventory_path = REPO_ROOT / "ci" / "test-inventory.json"
+    backend_inventory = json.loads(inventory_path.read_text(encoding="utf-8"))["backend"]
+    expected_totals = {
+        tuple(
+            int(backend_inventory[platform][field])
+            for field in ("passed", "skipped", "deselected")
+        )
+        for platform in ("linux", "default")
+    }
+    assert parsed_totals == expected_totals, (
+        f"README.md backend totals do not match ci/test-inventory.json: {parsed_totals} != {expected_totals}"
     )
-    assert {sum(counts) for counts in parsed_totals} == {1704}, (
+    assert {sum(counts) for counts in parsed_totals} == {backend_inventory["collected"]}, (
         "The PostgreSQL-enabled and SQLite-only totals must describe the same collected inventory."
     )
 

@@ -1,9 +1,10 @@
 """Reproducible, local-only OCR quality benchmark runner.
 
-The manifest names an approved corpus and SHA-256-pinned expected text. The runner never downloads
-content, stores transcripts in its report, or treats Tesseract confidence as semantic correctness. A
-case is scored only when every selected page was actually OCR-processed; missing runtimes, limits, or
-incomplete pages remain explicit and produce a non-zero CLI exit status.
+The manifest names a governed corpus and SHA-256-pinned expected text. Operator-supplied corpora require
+self-attested approval metadata; explicitly synthetic corpora do not, and are restricted to the development
+split. The runner never downloads content, stores transcripts in its report, or treats Tesseract confidence
+as semantic correctness. A case is scored only when every selected page was actually OCR-processed; missing
+runtimes, limits, or incomplete pages remain explicit and produce a non-zero CLI exit status.
 
 Example (manifest and corpus are operator-provided and must not be committed if restricted)::
 
@@ -11,20 +12,24 @@ Example (manifest and corpus are operator-provided and must not be committed if 
       --manifest /secure/ocr/manifest.json --corpus-root /secure/ocr/corpus \\
       --languages eng+fas --output /secure/ocr/benchmark-result.json
 
-Manifest schema 2 (all file paths are relative to ``--corpus-root``)::
+Manifest schema 2 (all file paths are relative to ``--corpus-root``). A synthetic fixture explicitly
+avoids external approval claims and is restricted to the development split::
 
     {"schema_version": 2, "corpus": {
-      "id": "operator-corpus-2026q4", "version": "1.0.0", "classification": "restricted",
-      "approval": {"declaration": "operator_attests_approved", "reference": "GOV-123",
-        "owner_role": "data-steward", "approved_at": "2026-11-02T12:00:00Z"},
-      "languages": ["eng", "fas"], "sampling_method": "stratified sample by form and language",
-      "ground_truth_protocol": "two independent transcribers and documented adjudication"
+      "id": "drillai-synthetic-ddr-ocr", "version": "1.0.0", "classification": "synthetic",
+      "approval": {"declaration": "not_required_synthetic"}, "languages": ["eng"],
+      "sampling_method": "one deterministic generated raster page; not field-sampled",
+      "ground_truth_protocol": "fixture reference text; not independently adjudicated"
     }, "cases": [{
-      "id": "scan-001", "pdf": "scans/scan-001.pdf", "pdf_sha256": "…",
+      "id": "synthetic-scan-001", "pdf": "scans/scan-001.pdf", "pdf_sha256": "…",
       "ground_truth": "labels/scan-001.txt", "ground_truth_sha256": "…",
-      "locale": "fa", "document_class": "daily_report", "split": "holdout",
+      "locale": "en", "document_class": "daily_report", "split": "development",
       "page_numbers": [1]
     }]}
+
+For a non-synthetic operator corpus, the manifest instead requires a self-attested approval declaration,
+reference, owner role, timestamp, sampling method, and ground-truth protocol. That self-attestation is
+reported as unverified by this tool and must not be fabricated for test fixtures.
 
 ``page_numbers`` is optional; when omitted, every page must have been OCR-processed. CER/WER use
 NFKC, case-folding and whitespace normalization and exact Levenshtein distance. Work per metric is
@@ -49,7 +54,7 @@ from drillai.ingestion.ocr import OcrUnavailable, TesseractOcrProvider
 from drillai.ingestion.ocr_runtime import _pdfium_details
 from drillai.ingestion.parsers import MAX_BYTES, parse_bytes
 
-TOOL_VERSION = "ocr-benchmark-v2"
+TOOL_VERSION = "ocr-benchmark-v2.1"
 MAX_MANIFEST_BYTES = 1024 * 1024
 MAX_LABEL_BYTES = 2 * 1024 * 1024
 MAX_CASES = 1000
@@ -189,22 +194,38 @@ def _validate_corpus_metadata(value: Any) -> dict[str, Any]:
     if not _CASE_ID_PATTERN.fullmatch(corpus_id) or not _CASE_ID_PATTERN.fullmatch(corpus_version):
         raise BenchmarkInputError("corpus.id and corpus.version must use letters, digits, dot, underscore or hyphen")
     approval = value.get("approval")
-    if not isinstance(approval, dict) or set(approval) != {"declaration", "reference", "owner_role", "approved_at"}:
-        raise BenchmarkInputError("corpus.approval must declare a self-attested approval reference, owner role and timestamp")
-    if approval.get("declaration") != "operator_attests_approved":
-        raise BenchmarkInputError("corpus.approval.declaration must be operator_attests_approved")
-    approval_metadata = {
-        "declaration": "operator_attests_approved",
-        "reference": _checked_text(approval.get("reference"), "corpus.approval.reference", maximum=240),
-        "owner_role": _checked_text(approval.get("owner_role"), "corpus.approval.owner_role", maximum=120),
-        "approved_at": _checked_text(approval.get("approved_at"), "corpus.approval.approved_at", maximum=40),
-    }
-    try:
-        approved_at = dt.datetime.fromisoformat(approval_metadata["approved_at"].replace("Z", "+00:00"))
-    except ValueError as exc:
-        raise BenchmarkInputError("corpus.approval.approved_at must be an ISO-8601 timezone-aware timestamp") from exc
-    if approved_at.tzinfo is None or approved_at.utcoffset() is None:
-        raise BenchmarkInputError("corpus.approval.approved_at must include a timezone")
+    if classification == "synthetic":
+        if not isinstance(approval, dict) or set(approval) != {"declaration"}:
+            raise BenchmarkInputError(
+                "synthetic corpus.approval must contain only declaration: not_required_synthetic; "
+                "external approval evidence is not applicable"
+            )
+        if approval.get("declaration") != "not_required_synthetic":
+            raise BenchmarkInputError("synthetic corpus.approval.declaration must be not_required_synthetic")
+        approval_metadata = {"declaration": "not_required_synthetic"}
+    else:
+        if not isinstance(approval, dict) or set(approval) != {
+            "declaration", "reference", "owner_role", "approved_at"
+        }:
+            raise BenchmarkInputError(
+                "corpus.approval must declare a self-attested approval reference, owner role and timestamp"
+            )
+        if approval.get("declaration") != "operator_attests_approved":
+            raise BenchmarkInputError("corpus.approval.declaration must be operator_attests_approved")
+        approval_metadata = {
+            "declaration": "operator_attests_approved",
+            "reference": _checked_text(approval.get("reference"), "corpus.approval.reference", maximum=240),
+            "owner_role": _checked_text(approval.get("owner_role"), "corpus.approval.owner_role", maximum=120),
+            "approved_at": _checked_text(approval.get("approved_at"), "corpus.approval.approved_at", maximum=40),
+        }
+        try:
+            approved_at = dt.datetime.fromisoformat(approval_metadata["approved_at"].replace("Z", "+00:00"))
+        except ValueError as exc:
+            raise BenchmarkInputError(
+                "corpus.approval.approved_at must be an ISO-8601 timezone-aware timestamp"
+            ) from exc
+        if approved_at.tzinfo is None or approved_at.utcoffset() is None:
+            raise BenchmarkInputError("corpus.approval.approved_at must include a timezone")
     languages = value.get("languages")
     if (
         not isinstance(languages, list)
@@ -294,6 +315,8 @@ def load_manifest(path: Path) -> tuple[dict[str, Any], list[BenchmarkCase], str]
         split = item.get("split")
         if not isinstance(split, str) or split not in {"development", "validation", "holdout"}:
             raise BenchmarkInputError(f"case {index}.split must be development, validation or holdout")
+        if corpus["classification"] == "synthetic" and split != "development":
+            raise BenchmarkInputError("synthetic corpus cases must use the development split; holdout claims are not allowed")
         if locale == "en" and "eng" not in corpus["languages"]:
             raise BenchmarkInputError(f"case {index} is English but corpus.languages omits eng")
         if locale == "fa" and "fas" not in corpus["languages"]:
@@ -367,6 +390,11 @@ def run_benchmark(
     corpus = _validate_corpus_metadata(manifest.get("corpus"))
     if not isinstance(cases, list) or not 1 <= len(cases) <= MAX_CASES:
         raise BenchmarkInputError(f"benchmark requires between 1 and {MAX_CASES} validated corpus cases")
+    if any(not isinstance(case, BenchmarkCase) for case in cases):
+        raise BenchmarkInputError("benchmark cases must be validated BenchmarkCase entries")
+    synthetic_corpus = corpus["classification"] == "synthetic"
+    if synthetic_corpus and any(case.split != "development" for case in cases):
+        raise BenchmarkInputError("synthetic corpus cases must use the development split; holdout claims are not allowed")
     manifest_sha256 = _checked_digest(manifest_sha256, "manifest_sha256")
     if (
         isinstance(max_total_edit_cells, bool)
@@ -399,8 +427,16 @@ def run_benchmark(
         "manifest_schema_version": manifest.get("schema_version"),
         "manifest_sha256": manifest_sha256,
         "corpus": corpus,
-        "corpus_approval_evidence": "operator_attested_not_independently_verified",
-        "split_integrity_evidence": "operator_declared_not_independently_verified",
+        "corpus_approval_evidence": (
+            "not_applicable_synthetic_corpus"
+            if synthetic_corpus
+            else "operator_attested_not_independently_verified"
+        ),
+        "split_integrity_evidence": (
+            "single_development_fixture_not_independent"
+            if synthetic_corpus
+            else "operator_declared_not_independently_verified"
+        ),
         "provider": provider.name,
         "provider_version": provider.version,
         "provider_adapter_version": getattr(provider, "adapter_version", None),
@@ -411,9 +447,22 @@ def run_benchmark(
         "missing_languages": diagnostics.get("missing_languages", []),
         "pdf_renderer_available": pdfium_available,
         "pdf_renderer_version": pdfium_version,
-        "evaluation_scope": "holdout_included" if any(case.split == "holdout" for case in cases) else "development_only",
-        "metrics_scope_note": "pooled totals mix declared splits; holdout independence is unverified; use split_totals.holdout for operator-declared holdout-only metrics",
-        "quality_assessment": "transcription error metrics only; no engineering or production acceptance",
+        "evaluation_scope": (
+            "development_only"
+            if synthetic_corpus
+            else "holdout_included" if any(case.split == "holdout" for case in cases) else "development_only"
+        ),
+        "metrics_scope_note": (
+            "Synthetic development-fixture metrics do not estimate real-world OCR performance or establish field, "
+            "engineering, or production acceptance."
+            if synthetic_corpus
+            else "pooled totals mix declared splits; holdout independence is unverified; use split_totals.holdout for operator-declared holdout-only metrics"
+        ),
+        "quality_assessment": (
+            "synthetic fixture transcription metrics only; no real-corpus, field, engineering, or production acceptance"
+            if synthetic_corpus
+            else "transcription error metrics only; no engineering or production acceptance"
+        ),
         "configuration": {
             "languages": list(configured_languages),
             "max_pages": max_pages,
@@ -624,7 +673,7 @@ def _parser() -> argparse.ArgumentParser:
         description="Run a bounded, local OCR benchmark against a SHA-256-pinned manifest."
     )
     parser.add_argument("--manifest", required=True, type=Path, help="SHA-256-pinned JSON corpus manifest")
-    parser.add_argument("--corpus-root", required=True, type=Path, help="directory containing the approved corpus")
+    parser.add_argument("--corpus-root", required=True, type=Path, help="directory containing the manifest-pinned corpus")
     parser.add_argument("--languages", default="eng+fas", help="installed Tesseract language ids, e.g. eng+fas")
     parser.add_argument("--tesseract", default="tesseract", help="Tesseract executable name or path")
     parser.add_argument("--timeout", type=float, default=30.0, help="per-page OCR timeout in seconds")

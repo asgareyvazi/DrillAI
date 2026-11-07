@@ -1,0 +1,22 @@
+Daily Drilling Report - SYNTHETIC TEST DATA - Well NF-12
+Report No,RPT-NF12-014
+Date,2026-03-15
+Well,NF-12
+Rig,RIG-SYNTH-7
+Section,8-1/2 in
+Operations,Activity,Code,Duration (h),Depth (m),Description
+1,Drilling ahead 8-1/2 in section,DRL,8.5,2410,Drilling ahead from 2350 m to 2410 m at 120 rpm
+2,Made connection,CONN,0.5,2410,Connection at 2410 m
+3,Stuck pipe while POOH,STUCK,6.0,2408,Stuck pipe at 2408 m; jarring attempted; worked free after 6 hours
+4,Lost circulation,LC,2.5,2412,Lost circulation 15 bbl/hr; LCM pill pumped
+5,Circulating and conditioning mud,CIRC,1.0,2412,Bottoms up and mud conditioning
+Drilling Parameters,Value
+WOB (klbf),18.5
+RPM (rpm),120
+Flow Rate (l/min),2100
+SPP (psi),2450
+Torque (ft-lbf),8200
+Hookload (klbf),245
+ROP (m/h),9.4
+Mud Weight (ppg),12.4
+Depth (m),2412

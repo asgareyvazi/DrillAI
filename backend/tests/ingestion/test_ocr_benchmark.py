@@ -24,18 +24,13 @@ from drillai.ingestion.ocr_benchmark import (
 
 def _corpus_metadata() -> dict:
     return {
-        "id": "approved-field-corpus-2026q4",
+        "id": "drillai-synthetic-test-corpus",
         "version": "1.0.0",
-        "classification": "restricted",
-        "approval": {
-            "declaration": "operator_attests_approved",
-            "reference": "GOV-123",
-            "owner_role": "data-steward",
-            "approved_at": "2026-11-02T12:00:00Z",
-        },
+        "classification": "synthetic",
+        "approval": {"declaration": "not_required_synthetic"},
         "languages": ["eng", "fas"],
-        "sampling_method": "stratified random sample by document class and locale",
-        "ground_truth_protocol": "two independent transcriptions followed by documented adjudication",
+        "sampling_method": "hand-authored synthetic mechanics fixtures; not sampled from field documents",
+        "ground_truth_protocol": "fixture reference labels only; not independently adjudicated",
     }
 
 
@@ -81,7 +76,7 @@ def test_manifest_pins_both_source_pdf_and_ground_truth_hashes(tmp_path) -> None
                 "ground_truth_sha256": hashlib.sha256(label.encode()).hexdigest(),
                 "locale": "fa",
                 "document_class": "daily_report",
-                "split": "holdout",
+                "split": "development",
                 "page_numbers": [1, 2],
             }
         ],
@@ -92,10 +87,10 @@ def test_manifest_pins_both_source_pdf_and_ground_truth_hashes(tmp_path) -> None
 
     manifest, cases, manifest_digest = load_manifest(manifest_path)
     assert manifest["schema_version"] == 2
-    assert manifest["corpus"]["approval"]["declaration"] == "operator_attests_approved"
+    assert manifest["corpus"]["approval"] == {"declaration": "not_required_synthetic"}
     assert cases[0].case_id == "scan-001"
     assert cases[0].locale == "fa"
-    assert cases[0].split == "holdout"
+    assert cases[0].split == "development"
     assert cases[0].page_numbers == (1, 2)
     assert manifest_digest == hashlib.sha256(manifest_raw).hexdigest()
     loaded_pdf, source_path = _read_pinned_file(
@@ -105,7 +100,7 @@ def test_manifest_pins_both_source_pdf_and_ground_truth_hashes(tmp_path) -> None
     assert source_path == corpus / "scans" / "scan.pdf"
 
 
-def test_manifest_requires_self_attested_governance_and_bilingual_case_strata(tmp_path) -> None:
+def test_synthetic_manifest_is_development_only_and_language_aware(tmp_path) -> None:
     manifest = {
         "schema_version": 2,
         "corpus": _corpus_metadata(),
@@ -118,29 +113,30 @@ def test_manifest_requires_self_attested_governance_and_bilingual_case_strata(tm
                 "ground_truth_sha256": "1" * 64,
                 "locale": "fa",
                 "document_class": "daily_report",
-                "split": "holdout",
+                "split": "development",
             }
         ],
     }
     path = tmp_path / "manifest.json"
-    manifest["corpus"]["approval"]["approved_at"] = "2026-11-02T12:00:00"
+
+    manifest["corpus"]["classification"] = "restricted"
     path.write_text(json.dumps(manifest), encoding="utf-8")
-    with pytest.raises(BenchmarkInputError, match="timezone"):
+    with pytest.raises(BenchmarkInputError, match="self-attested approval"):
         load_manifest(path)
 
     manifest["corpus"] = _corpus_metadata()
+    manifest["cases"][0]["split"] = "holdout"
+    path.write_text(json.dumps(manifest), encoding="utf-8")
+    with pytest.raises(BenchmarkInputError, match="synthetic corpus cases must use the development split"):
+        load_manifest(path)
+
+    manifest["cases"][0]["split"] = "development"
     manifest["corpus"]["languages"] = ["eng"]
     path.write_text(json.dumps(manifest), encoding="utf-8")
     with pytest.raises(BenchmarkInputError, match="omits fas"):
         load_manifest(path)
 
     manifest["corpus"]["languages"] = ["eng", "fas"]
-    manifest["corpus"]["approval"]["declaration"] = "approved"
-    path.write_text(json.dumps(manifest), encoding="utf-8")
-    with pytest.raises(BenchmarkInputError, match="operator_attests_approved"):
-        load_manifest(path)
-
-    manifest["corpus"] = _corpus_metadata()
     manifest["cases"][0]["locale"] = {"invalid": "type"}
     path.write_text(json.dumps(manifest), encoding="utf-8")
     with pytest.raises(BenchmarkInputError, match="locale"):
@@ -175,7 +171,7 @@ def test_benchmark_is_blocked_truthfully_when_tesseract_is_unavailable(tmp_path)
         page_numbers=None,
         locale="en",
         document_class="daily_report",
-        split="holdout",
+        split="development",
     )
     report = run_benchmark(
         manifest,
@@ -207,7 +203,7 @@ def test_cli_reports_missing_runtime_as_blocked_and_exits_nonzero(tmp_path) -> N
                         "ground_truth_sha256": "1" * 64,
                         "locale": "en",
                         "document_class": "daily_report",
-                        "split": "holdout",
+                        "split": "development",
                     }
                 ],
             }
@@ -234,7 +230,7 @@ def test_cli_reports_missing_runtime_as_blocked_and_exits_nonzero(tmp_path) -> N
     assert report["cases"] == []
 
 
-def test_benchmark_report_is_stratified_and_omits_transcripts(tmp_path, monkeypatch) -> None:
+def test_synthetic_benchmark_report_is_development_only_and_omits_transcripts(tmp_path, monkeypatch) -> None:
     from drillai.ingestion import ocr_benchmark
 
     pdf = b"fixture bytes; parser is replaced below and this is not OCR evidence"
@@ -252,7 +248,7 @@ def test_benchmark_report_is_stratified_and_omits_transcripts(tmp_path, monkeypa
         page_numbers=None,
         locale="fa",
         document_class="daily_report",
-        split="holdout",
+        split="development",
     )
     development_case = BenchmarkCase(
         case_id="synthetic-development-mechanics-only",
@@ -290,23 +286,25 @@ def test_benchmark_report_is_stratified_and_omits_transcripts(tmp_path, monkeypa
         provider=AvailableProvider(),  # type: ignore[arg-type]
     )
 
-    assert report["status"] == "complete"  # processing status only, not an OCR quality acceptance
-    assert report["evaluation_scope"] == "holdout_included"
-    assert report["corpus_approval_evidence"] == "operator_attested_not_independently_verified"
-    assert report["totals"]["holdout_evaluated_cases"] == 1
-    assert report["split_integrity_evidence"] == "operator_declared_not_independently_verified"
-    assert "holdout independence is unverified" in report["metrics_scope_note"]
-    assert report["totals"]["cer"] > 0.0  # pooled development + holdout metrics are explicitly not holdout-only
+    assert report["status"] == "complete"  # mocked mechanics only; not an OCR quality acceptance
+    assert report["evaluation_scope"] == "development_only"
+    assert report["corpus"]["approval"] == {"declaration": "not_required_synthetic"}
+    assert report["corpus_approval_evidence"] == "not_applicable_synthetic_corpus"
+    assert report["totals"]["holdout_cases"] == 0
+    assert report["totals"]["holdout_evaluated_cases"] == 0
+    assert report["split_integrity_evidence"] == "single_development_fixture_not_independent"
+    assert "do not estimate real-world OCR performance" in report["metrics_scope_note"]
+    assert report["totals"]["cer"] > 0.0
     assert report["totals"]["wer"] > 0.0
-    assert report["split_totals"]["holdout"]["cer"] == 0.0
-    assert report["split_totals"]["holdout"]["wer"] == 0.0
     assert report["split_totals"]["development"]["cer"] > 0.0
     assert report["split_totals"]["development"]["wer"] > 0.0
     assert report["strata"][0]["locale"] == "fa"
     assert report["strata"][0]["document_class"] == "daily_report"
-    assert {stratum["split"] for stratum in report["strata"]} == {"development", "holdout"}
+    assert {stratum["split"] for stratum in report["strata"]} == {"development"}
     assert label not in json.dumps(report, ensure_ascii=False)
-    assert report["quality_assessment"] == "transcription error metrics only; no engineering or production acceptance"
+    assert report["quality_assessment"] == (
+        "synthetic fixture transcription metrics only; no real-corpus, field, engineering, or production acceptance"
+    )
 
 
 def test_benchmark_failure_report_does_not_leak_paths_or_transcript_fragments(tmp_path, monkeypatch) -> None:
@@ -325,7 +323,7 @@ def test_benchmark_failure_report_does_not_leak_paths_or_transcript_fragments(tm
         page_numbers=None,
         locale="en",
         document_class="daily_report",
-        split="holdout",
+        split="development",
     )
 
     class AvailableProvider:
@@ -375,7 +373,7 @@ def test_benchmark_enforces_one_aggregate_edit_distance_budget(tmp_path, monkeyp
         page_numbers=None,
         locale="en",
         document_class="daily_report",
-        split="holdout",
+        split="development",
     )
 
     class AvailableProvider:
@@ -425,7 +423,7 @@ def test_benchmark_rejects_per_metric_workload_before_scoring_or_leaking_text(tm
         page_numbers=None,
         locale="en",
         document_class="daily_report",
-        split="holdout",
+        split="development",
     )
 
     class AvailableProvider:
@@ -474,7 +472,7 @@ def test_benchmark_does_not_score_truncated_ocr_output(tmp_path, monkeypatch) ->
         page_numbers=None,
         locale="en",
         document_class="daily_report",
-        split="holdout",
+        split="development",
     )
 
     class AvailableProvider:
