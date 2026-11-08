@@ -14,14 +14,30 @@ async def test_versioned_synthetic_retrieval_benchmark_checks_scope_grounding_an
     report = await evaluate()
 
     assert report["dataset_classification"] == "synthetic"
-    assert report["dataset_version"] == DATASET_VERSION == "drillai-rag-synthetic-v2"
+    assert report["dataset_version"] == DATASET_VERSION == "drillai-rag-synthetic-v3"
     assert len(report["dataset_sha256"]) == 64
     assert report["retrieval_mode_requested"] == "lexical"
-    assert report["query_count"] == 6
-    assert report["positive_query_count"] == 4
+    assert report["query_count"] == 106
+    assert report["positive_query_count"] == 104
     assert report["no_relevant_query_count"] == 2
-    assert report["corpus_chunk_count"] == 13
+    assert report["corpus_chunk_count"] == 160
     assert report["empty_result_cases"] == 2
+    assert report["scope_profile"] == {
+        "well_scoped_queries": 106,
+        "section_scoped_queries": 105,
+        "depth_window_queries": 102,
+        "period_window_queries": 103,
+        "scope_violations": 0,
+        "forbidden_chunk_retrievals": 0,
+        "quarantined_distractor_chunks": 4,
+        "cross_well_distractor_chunks": 4,
+        "cross_tenant_distractor_chunks": 5,
+    }
+    assert report["citation_profile"]["retrieved_hits"] > 0
+    assert report["citation_profile"]["citation_gaps"] == 0
+    assert report["citation_profile"]["citation_coverage"] == 1.0
+    assert report["citation_profile"]["source_locator_gaps"] == 0
+    assert report["citation_profile"]["source_locator_coverage"] == 1.0
 
     metrics = report["metrics"]
     assert metrics["micro_recall_at_k"] == 1.0
@@ -43,6 +59,12 @@ async def test_versioned_synthetic_retrieval_benchmark_checks_scope_grounding_an
     conflicts = by_id["intermediate-conflicting-mud-values"]
     assert conflicts["retrieved_chunk_ids"][0] == "chk_benchmark_mud-conflict"
     assert "chk_benchmark_mud-properties" not in conflicts["must_not_retrieve_chunk_ids"]
+
+    generated = [case for case in report["queries"] if case["id"].startswith("cp130-unique-record-")]
+    assert len(generated) == 100
+    assert all(case["retrieved_chunk_ids"] == case["expected_relevant_chunk_ids"] for case in generated)
+    assert all(case["scope_violations"] == 0 for case in generated)
+    assert all(case["citation_gaps"] == 0 and case["source_locator_gaps"] == 0 for case in generated)
 
     for case_id in ("unknown-depth-does-not-enter-window", "unknown-time-does-not-enter-period"):
         assert by_id[case_id]["retrieved_chunk_ids"] == []

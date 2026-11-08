@@ -1,0 +1,1036 @@
+{
+  "corpus_id": "cp130-synthetic-ddr-ocr",
+  "version": "1.0.0",
+  "classification": "synthetic",
+  "languages": [
+    "eng"
+  ],
+  "sampling_method": "32 deterministic one-page, rasterized, machine-generated DDR layouts with varied dates, sections, depth, ROP, mud weight, NPT and activity fields; not sampled from field/vendor documents.",
+  "ground_truth_protocol": "Generated from the same explicit synthetic field values used to render each page; not independently adjudicated and not a holdout.",
+  "cases": [
+    {
+      "case_id": "cp130-ddr-001",
+      "language": "eng",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "SYNTHETIC DAILY DRILLING REPORT\nSAMPLE ID: CP130-DDR-001\nREPORT DATE: 2026-01-01\nWELL: CP130-SYNTHETIC-01\nSECTION: 12 1/4 INCH\nMEASURED DEPTH: 1087.5 M\nRATE OF PENETRATION: 11.25 M/H\nMUD WEIGHT: 10.4 PPG\nNONPRODUCTIVE TIME: 0.25 H\nACTIVITY: DRILLING AHEAD",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP130-DDR-001"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-01-01"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "1087.5"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "11.25"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "10.4"
+        },
+        {
+          "key": "npt_h",
+          "expected": "0.25"
+        }
+      ]
+    },
+    {
+      "case_id": "cp130-ddr-002",
+      "language": "eng",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "SYNTHETIC DAILY DRILLING REPORT\nSAMPLE ID: CP130-DDR-002\nREPORT DATE: 2026-01-02\nWELL: CP130-SYNTHETIC-01\nSECTION: 8 1/2 INCH\nMEASURED DEPTH: 1125.0 M\nRATE OF PENETRATION: 16.50 M/H\nMUD WEIGHT: 11.0 PPG\nNONPRODUCTIVE TIME: 0.50 H\nACTIVITY: SLIDE DRILLING",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP130-DDR-002"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-01-02"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "1125.0"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "16.50"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "11.0"
+        },
+        {
+          "key": "npt_h",
+          "expected": "0.50"
+        }
+      ]
+    },
+    {
+      "case_id": "cp130-ddr-003",
+      "language": "eng",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "SYNTHETIC DAILY DRILLING REPORT\nSAMPLE ID: CP130-DDR-003\nREPORT DATE: 2026-01-03\nWELL: CP130-SYNTHETIC-01\nSECTION: 6 1/8 INCH\nMEASURED DEPTH: 1162.5 M\nRATE OF PENETRATION: 21.75 M/H\nMUD WEIGHT: 11.6 PPG\nNONPRODUCTIVE TIME: 0.75 H\nACTIVITY: CONNECTION",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP130-DDR-003"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-01-03"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "1162.5"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "21.75"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "11.6"
+        },
+        {
+          "key": "npt_h",
+          "expected": "0.75"
+        }
+      ]
+    },
+    {
+      "case_id": "cp130-ddr-004",
+      "language": "eng",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "SYNTHETIC DAILY DRILLING REPORT\nSAMPLE ID: CP130-DDR-004\nREPORT DATE: 2026-01-04\nWELL: CP130-SYNTHETIC-01\nSECTION: 17 1/2 INCH\nMEASURED DEPTH: 1200.0 M\nRATE OF PENETRATION: 27.00 M/H\nMUD WEIGHT: 12.2 PPG\nNONPRODUCTIVE TIME: 1.00 H\nACTIVITY: CIRCULATING AND CONDITIONING",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP130-DDR-004"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-01-04"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "1200.0"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "27.00"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "12.2"
+        },
+        {
+          "key": "npt_h",
+          "expected": "1.00"
+        }
+      ]
+    },
+    {
+      "case_id": "cp130-ddr-005",
+      "language": "eng",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "SYNTHETIC DAILY DRILLING REPORT\nSAMPLE ID: CP130-DDR-005\nREPORT DATE: 2026-01-05\nWELL: CP130-SYNTHETIC-01\nSECTION: 12 1/4 INCH\nMEASURED DEPTH: 1237.5 M\nRATE OF PENETRATION: 10.50 M/H\nMUD WEIGHT: 12.8 PPG\nNONPRODUCTIVE TIME: 1.25 H\nACTIVITY: DRILLING AHEAD",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP130-DDR-005"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-01-05"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "1237.5"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "10.50"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "12.8"
+        },
+        {
+          "key": "npt_h",
+          "expected": "1.25"
+        }
+      ]
+    },
+    {
+      "case_id": "cp130-ddr-006",
+      "language": "eng",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "SYNTHETIC DAILY DRILLING REPORT\nSAMPLE ID: CP130-DDR-006\nREPORT DATE: 2026-01-06\nWELL: CP130-SYNTHETIC-01\nSECTION: 8 1/2 INCH\nMEASURED DEPTH: 1275.0 M\nRATE OF PENETRATION: 15.75 M/H\nMUD WEIGHT: 9.8 PPG\nNONPRODUCTIVE TIME: 1.50 H\nACTIVITY: SLIDE DRILLING",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP130-DDR-006"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-01-06"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "1275.0"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "15.75"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "9.8"
+        },
+        {
+          "key": "npt_h",
+          "expected": "1.50"
+        }
+      ]
+    },
+    {
+      "case_id": "cp130-ddr-007",
+      "language": "eng",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "SYNTHETIC DAILY DRILLING REPORT\nSAMPLE ID: CP130-DDR-007\nREPORT DATE: 2026-01-07\nWELL: CP130-SYNTHETIC-01\nSECTION: 6 1/8 INCH\nMEASURED DEPTH: 1312.5 M\nRATE OF PENETRATION: 21.00 M/H\nMUD WEIGHT: 10.4 PPG\nNONPRODUCTIVE TIME: 0.00 H\nACTIVITY: CONNECTION",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP130-DDR-007"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-01-07"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "1312.5"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "21.00"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "10.4"
+        },
+        {
+          "key": "npt_h",
+          "expected": "0.00"
+        }
+      ]
+    },
+    {
+      "case_id": "cp130-ddr-008",
+      "language": "eng",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "SYNTHETIC DAILY DRILLING REPORT\nSAMPLE ID: CP130-DDR-008\nREPORT DATE: 2026-01-08\nWELL: CP130-SYNTHETIC-01\nSECTION: 17 1/2 INCH\nMEASURED DEPTH: 1350.0 M\nRATE OF PENETRATION: 26.25 M/H\nMUD WEIGHT: 11.0 PPG\nNONPRODUCTIVE TIME: 0.25 H\nACTIVITY: CIRCULATING AND CONDITIONING",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP130-DDR-008"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-01-08"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "1350.0"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "26.25"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "11.0"
+        },
+        {
+          "key": "npt_h",
+          "expected": "0.25"
+        }
+      ]
+    },
+    {
+      "case_id": "cp130-ddr-009",
+      "language": "eng",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "SYNTHETIC DAILY DRILLING REPORT\nSAMPLE ID: CP130-DDR-009\nREPORT DATE: 2026-01-09\nWELL: CP130-SYNTHETIC-01\nSECTION: 12 1/4 INCH\nMEASURED DEPTH: 1387.5 M\nRATE OF PENETRATION: 9.75 M/H\nMUD WEIGHT: 11.6 PPG\nNONPRODUCTIVE TIME: 0.50 H\nACTIVITY: DRILLING AHEAD",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP130-DDR-009"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-01-09"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "1387.5"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "9.75"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "11.6"
+        },
+        {
+          "key": "npt_h",
+          "expected": "0.50"
+        }
+      ]
+    },
+    {
+      "case_id": "cp130-ddr-010",
+      "language": "eng",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "SYNTHETIC DAILY DRILLING REPORT\nSAMPLE ID: CP130-DDR-010\nREPORT DATE: 2026-01-10\nWELL: CP130-SYNTHETIC-01\nSECTION: 8 1/2 INCH\nMEASURED DEPTH: 1425.0 M\nRATE OF PENETRATION: 15.00 M/H\nMUD WEIGHT: 12.2 PPG\nNONPRODUCTIVE TIME: 0.75 H\nACTIVITY: SLIDE DRILLING",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP130-DDR-010"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-01-10"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "1425.0"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "15.00"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "12.2"
+        },
+        {
+          "key": "npt_h",
+          "expected": "0.75"
+        }
+      ]
+    },
+    {
+      "case_id": "cp130-ddr-011",
+      "language": "eng",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "SYNTHETIC DAILY DRILLING REPORT\nSAMPLE ID: CP130-DDR-011\nREPORT DATE: 2026-01-11\nWELL: CP130-SYNTHETIC-01\nSECTION: 6 1/8 INCH\nMEASURED DEPTH: 1462.5 M\nRATE OF PENETRATION: 20.25 M/H\nMUD WEIGHT: 12.8 PPG\nNONPRODUCTIVE TIME: 1.00 H\nACTIVITY: CONNECTION",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP130-DDR-011"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-01-11"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "1462.5"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "20.25"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "12.8"
+        },
+        {
+          "key": "npt_h",
+          "expected": "1.00"
+        }
+      ]
+    },
+    {
+      "case_id": "cp130-ddr-012",
+      "language": "eng",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "SYNTHETIC DAILY DRILLING REPORT\nSAMPLE ID: CP130-DDR-012\nREPORT DATE: 2026-01-12\nWELL: CP130-SYNTHETIC-01\nSECTION: 17 1/2 INCH\nMEASURED DEPTH: 1500.0 M\nRATE OF PENETRATION: 25.50 M/H\nMUD WEIGHT: 9.8 PPG\nNONPRODUCTIVE TIME: 1.25 H\nACTIVITY: CIRCULATING AND CONDITIONING",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP130-DDR-012"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-01-12"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "1500.0"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "25.50"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "9.8"
+        },
+        {
+          "key": "npt_h",
+          "expected": "1.25"
+        }
+      ]
+    },
+    {
+      "case_id": "cp130-ddr-013",
+      "language": "eng",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "SYNTHETIC DAILY DRILLING REPORT\nSAMPLE ID: CP130-DDR-013\nREPORT DATE: 2026-01-13\nWELL: CP130-SYNTHETIC-01\nSECTION: 12 1/4 INCH\nMEASURED DEPTH: 1537.5 M\nRATE OF PENETRATION: 9.00 M/H\nMUD WEIGHT: 10.4 PPG\nNONPRODUCTIVE TIME: 1.50 H\nACTIVITY: DRILLING AHEAD",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP130-DDR-013"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-01-13"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "1537.5"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "9.00"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "10.4"
+        },
+        {
+          "key": "npt_h",
+          "expected": "1.50"
+        }
+      ]
+    },
+    {
+      "case_id": "cp130-ddr-014",
+      "language": "eng",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "SYNTHETIC DAILY DRILLING REPORT\nSAMPLE ID: CP130-DDR-014\nREPORT DATE: 2026-01-14\nWELL: CP130-SYNTHETIC-01\nSECTION: 8 1/2 INCH\nMEASURED DEPTH: 1575.0 M\nRATE OF PENETRATION: 14.25 M/H\nMUD WEIGHT: 11.0 PPG\nNONPRODUCTIVE TIME: 0.00 H\nACTIVITY: SLIDE DRILLING",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP130-DDR-014"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-01-14"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "1575.0"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "14.25"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "11.0"
+        },
+        {
+          "key": "npt_h",
+          "expected": "0.00"
+        }
+      ]
+    },
+    {
+      "case_id": "cp130-ddr-015",
+      "language": "eng",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "SYNTHETIC DAILY DRILLING REPORT\nSAMPLE ID: CP130-DDR-015\nREPORT DATE: 2026-01-15\nWELL: CP130-SYNTHETIC-01\nSECTION: 6 1/8 INCH\nMEASURED DEPTH: 1612.5 M\nRATE OF PENETRATION: 19.50 M/H\nMUD WEIGHT: 11.6 PPG\nNONPRODUCTIVE TIME: 0.25 H\nACTIVITY: CONNECTION",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP130-DDR-015"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-01-15"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "1612.5"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "19.50"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "11.6"
+        },
+        {
+          "key": "npt_h",
+          "expected": "0.25"
+        }
+      ]
+    },
+    {
+      "case_id": "cp130-ddr-016",
+      "language": "eng",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "SYNTHETIC DAILY DRILLING REPORT\nSAMPLE ID: CP130-DDR-016\nREPORT DATE: 2026-01-16\nWELL: CP130-SYNTHETIC-01\nSECTION: 17 1/2 INCH\nMEASURED DEPTH: 1650.0 M\nRATE OF PENETRATION: 24.75 M/H\nMUD WEIGHT: 12.2 PPG\nNONPRODUCTIVE TIME: 0.50 H\nACTIVITY: CIRCULATING AND CONDITIONING",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP130-DDR-016"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-01-16"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "1650.0"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "24.75"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "12.2"
+        },
+        {
+          "key": "npt_h",
+          "expected": "0.50"
+        }
+      ]
+    },
+    {
+      "case_id": "cp130-ddr-017",
+      "language": "eng",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "SYNTHETIC DAILY DRILLING REPORT\nSAMPLE ID: CP130-DDR-017\nREPORT DATE: 2026-01-17\nWELL: CP130-SYNTHETIC-01\nSECTION: 12 1/4 INCH\nMEASURED DEPTH: 1687.5 M\nRATE OF PENETRATION: 8.25 M/H\nMUD WEIGHT: 12.8 PPG\nNONPRODUCTIVE TIME: 0.75 H\nACTIVITY: DRILLING AHEAD",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP130-DDR-017"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-01-17"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "1687.5"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "8.25"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "12.8"
+        },
+        {
+          "key": "npt_h",
+          "expected": "0.75"
+        }
+      ]
+    },
+    {
+      "case_id": "cp130-ddr-018",
+      "language": "eng",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "SYNTHETIC DAILY DRILLING REPORT\nSAMPLE ID: CP130-DDR-018\nREPORT DATE: 2026-01-18\nWELL: CP130-SYNTHETIC-01\nSECTION: 8 1/2 INCH\nMEASURED DEPTH: 1725.0 M\nRATE OF PENETRATION: 13.50 M/H\nMUD WEIGHT: 9.8 PPG\nNONPRODUCTIVE TIME: 1.00 H\nACTIVITY: SLIDE DRILLING",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP130-DDR-018"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-01-18"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "1725.0"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "13.50"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "9.8"
+        },
+        {
+          "key": "npt_h",
+          "expected": "1.00"
+        }
+      ]
+    },
+    {
+      "case_id": "cp130-ddr-019",
+      "language": "eng",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "SYNTHETIC DAILY DRILLING REPORT\nSAMPLE ID: CP130-DDR-019\nREPORT DATE: 2026-01-19\nWELL: CP130-SYNTHETIC-01\nSECTION: 6 1/8 INCH\nMEASURED DEPTH: 1762.5 M\nRATE OF PENETRATION: 18.75 M/H\nMUD WEIGHT: 10.4 PPG\nNONPRODUCTIVE TIME: 1.25 H\nACTIVITY: CONNECTION",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP130-DDR-019"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-01-19"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "1762.5"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "18.75"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "10.4"
+        },
+        {
+          "key": "npt_h",
+          "expected": "1.25"
+        }
+      ]
+    },
+    {
+      "case_id": "cp130-ddr-020",
+      "language": "eng",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "SYNTHETIC DAILY DRILLING REPORT\nSAMPLE ID: CP130-DDR-020\nREPORT DATE: 2026-01-20\nWELL: CP130-SYNTHETIC-01\nSECTION: 17 1/2 INCH\nMEASURED DEPTH: 1800.0 M\nRATE OF PENETRATION: 24.00 M/H\nMUD WEIGHT: 11.0 PPG\nNONPRODUCTIVE TIME: 1.50 H\nACTIVITY: CIRCULATING AND CONDITIONING",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP130-DDR-020"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-01-20"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "1800.0"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "24.00"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "11.0"
+        },
+        {
+          "key": "npt_h",
+          "expected": "1.50"
+        }
+      ]
+    },
+    {
+      "case_id": "cp130-ddr-021",
+      "language": "eng",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "SYNTHETIC DAILY DRILLING REPORT\nSAMPLE ID: CP130-DDR-021\nREPORT DATE: 2026-01-21\nWELL: CP130-SYNTHETIC-01\nSECTION: 12 1/4 INCH\nMEASURED DEPTH: 1837.5 M\nRATE OF PENETRATION: 7.50 M/H\nMUD WEIGHT: 11.6 PPG\nNONPRODUCTIVE TIME: 0.00 H\nACTIVITY: DRILLING AHEAD",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP130-DDR-021"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-01-21"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "1837.5"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "7.50"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "11.6"
+        },
+        {
+          "key": "npt_h",
+          "expected": "0.00"
+        }
+      ]
+    },
+    {
+      "case_id": "cp130-ddr-022",
+      "language": "eng",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "SYNTHETIC DAILY DRILLING REPORT\nSAMPLE ID: CP130-DDR-022\nREPORT DATE: 2026-01-22\nWELL: CP130-SYNTHETIC-01\nSECTION: 8 1/2 INCH\nMEASURED DEPTH: 1875.0 M\nRATE OF PENETRATION: 12.75 M/H\nMUD WEIGHT: 12.2 PPG\nNONPRODUCTIVE TIME: 0.25 H\nACTIVITY: SLIDE DRILLING",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP130-DDR-022"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-01-22"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "1875.0"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "12.75"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "12.2"
+        },
+        {
+          "key": "npt_h",
+          "expected": "0.25"
+        }
+      ]
+    },
+    {
+      "case_id": "cp130-ddr-023",
+      "language": "eng",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "SYNTHETIC DAILY DRILLING REPORT\nSAMPLE ID: CP130-DDR-023\nREPORT DATE: 2026-01-23\nWELL: CP130-SYNTHETIC-01\nSECTION: 6 1/8 INCH\nMEASURED DEPTH: 1912.5 M\nRATE OF PENETRATION: 18.00 M/H\nMUD WEIGHT: 12.8 PPG\nNONPRODUCTIVE TIME: 0.50 H\nACTIVITY: CONNECTION",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP130-DDR-023"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-01-23"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "1912.5"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "18.00"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "12.8"
+        },
+        {
+          "key": "npt_h",
+          "expected": "0.50"
+        }
+      ]
+    },
+    {
+      "case_id": "cp130-ddr-024",
+      "language": "eng",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "SYNTHETIC DAILY DRILLING REPORT\nSAMPLE ID: CP130-DDR-024\nREPORT DATE: 2026-01-24\nWELL: CP130-SYNTHETIC-01\nSECTION: 17 1/2 INCH\nMEASURED DEPTH: 1950.0 M\nRATE OF PENETRATION: 23.25 M/H\nMUD WEIGHT: 9.8 PPG\nNONPRODUCTIVE TIME: 0.75 H\nACTIVITY: CIRCULATING AND CONDITIONING",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP130-DDR-024"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-01-24"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "1950.0"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "23.25"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "9.8"
+        },
+        {
+          "key": "npt_h",
+          "expected": "0.75"
+        }
+      ]
+    },
+    {
+      "case_id": "cp130-ddr-025",
+      "language": "eng",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "SYNTHETIC DAILY DRILLING REPORT\nSAMPLE ID: CP130-DDR-025\nREPORT DATE: 2026-01-25\nWELL: CP130-SYNTHETIC-01\nSECTION: 12 1/4 INCH\nMEASURED DEPTH: 1987.5 M\nRATE OF PENETRATION: 6.75 M/H\nMUD WEIGHT: 10.4 PPG\nNONPRODUCTIVE TIME: 1.00 H\nACTIVITY: DRILLING AHEAD",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP130-DDR-025"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-01-25"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "1987.5"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "6.75"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "10.4"
+        },
+        {
+          "key": "npt_h",
+          "expected": "1.00"
+        }
+      ]
+    },
+    {
+      "case_id": "cp130-ddr-026",
+      "language": "eng",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "SYNTHETIC DAILY DRILLING REPORT\nSAMPLE ID: CP130-DDR-026\nREPORT DATE: 2026-01-26\nWELL: CP130-SYNTHETIC-01\nSECTION: 8 1/2 INCH\nMEASURED DEPTH: 2025.0 M\nRATE OF PENETRATION: 12.00 M/H\nMUD WEIGHT: 11.0 PPG\nNONPRODUCTIVE TIME: 1.25 H\nACTIVITY: SLIDE DRILLING",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP130-DDR-026"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-01-26"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "2025.0"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "12.00"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "11.0"
+        },
+        {
+          "key": "npt_h",
+          "expected": "1.25"
+        }
+      ]
+    },
+    {
+      "case_id": "cp130-ddr-027",
+      "language": "eng",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "SYNTHETIC DAILY DRILLING REPORT\nSAMPLE ID: CP130-DDR-027\nREPORT DATE: 2026-01-27\nWELL: CP130-SYNTHETIC-01\nSECTION: 6 1/8 INCH\nMEASURED DEPTH: 2062.5 M\nRATE OF PENETRATION: 17.25 M/H\nMUD WEIGHT: 11.6 PPG\nNONPRODUCTIVE TIME: 1.50 H\nACTIVITY: CONNECTION",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP130-DDR-027"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-01-27"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "2062.5"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "17.25"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "11.6"
+        },
+        {
+          "key": "npt_h",
+          "expected": "1.50"
+        }
+      ]
+    },
+    {
+      "case_id": "cp130-ddr-028",
+      "language": "eng",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "SYNTHETIC DAILY DRILLING REPORT\nSAMPLE ID: CP130-DDR-028\nREPORT DATE: 2026-01-28\nWELL: CP130-SYNTHETIC-01\nSECTION: 17 1/2 INCH\nMEASURED DEPTH: 2100.0 M\nRATE OF PENETRATION: 22.50 M/H\nMUD WEIGHT: 12.2 PPG\nNONPRODUCTIVE TIME: 0.00 H\nACTIVITY: CIRCULATING AND CONDITIONING",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP130-DDR-028"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-01-28"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "2100.0"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "22.50"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "12.2"
+        },
+        {
+          "key": "npt_h",
+          "expected": "0.00"
+        }
+      ]
+    },
+    {
+      "case_id": "cp130-ddr-029",
+      "language": "eng",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "SYNTHETIC DAILY DRILLING REPORT\nSAMPLE ID: CP130-DDR-029\nREPORT DATE: 2026-01-29\nWELL: CP130-SYNTHETIC-01\nSECTION: 12 1/4 INCH\nMEASURED DEPTH: 2137.5 M\nRATE OF PENETRATION: 6.00 M/H\nMUD WEIGHT: 12.8 PPG\nNONPRODUCTIVE TIME: 0.25 H\nACTIVITY: DRILLING AHEAD",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP130-DDR-029"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-01-29"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "2137.5"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "6.00"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "12.8"
+        },
+        {
+          "key": "npt_h",
+          "expected": "0.25"
+        }
+      ]
+    },
+    {
+      "case_id": "cp130-ddr-030",
+      "language": "eng",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "SYNTHETIC DAILY DRILLING REPORT\nSAMPLE ID: CP130-DDR-030\nREPORT DATE: 2026-01-30\nWELL: CP130-SYNTHETIC-01\nSECTION: 8 1/2 INCH\nMEASURED DEPTH: 2175.0 M\nRATE OF PENETRATION: 11.25 M/H\nMUD WEIGHT: 9.8 PPG\nNONPRODUCTIVE TIME: 0.50 H\nACTIVITY: SLIDE DRILLING",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP130-DDR-030"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-01-30"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "2175.0"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "11.25"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "9.8"
+        },
+        {
+          "key": "npt_h",
+          "expected": "0.50"
+        }
+      ]
+    },
+    {
+      "case_id": "cp130-ddr-031",
+      "language": "eng",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "SYNTHETIC DAILY DRILLING REPORT\nSAMPLE ID: CP130-DDR-031\nREPORT DATE: 2026-01-31\nWELL: CP130-SYNTHETIC-01\nSECTION: 6 1/8 INCH\nMEASURED DEPTH: 2212.5 M\nRATE OF PENETRATION: 16.50 M/H\nMUD WEIGHT: 10.4 PPG\nNONPRODUCTIVE TIME: 0.75 H\nACTIVITY: CONNECTION",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP130-DDR-031"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-01-31"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "2212.5"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "16.50"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "10.4"
+        },
+        {
+          "key": "npt_h",
+          "expected": "0.75"
+        }
+      ]
+    },
+    {
+      "case_id": "cp130-ddr-032",
+      "language": "eng",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "SYNTHETIC DAILY DRILLING REPORT\nSAMPLE ID: CP130-DDR-032\nREPORT DATE: 2026-02-01\nWELL: CP130-SYNTHETIC-01\nSECTION: 17 1/2 INCH\nMEASURED DEPTH: 2250.0 M\nRATE OF PENETRATION: 21.75 M/H\nMUD WEIGHT: 11.0 PPG\nNONPRODUCTIVE TIME: 1.00 H\nACTIVITY: CIRCULATING AND CONDITIONING",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP130-DDR-032"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-02-01"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "2250.0"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "21.75"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "11.0"
+        },
+        {
+          "key": "npt_h",
+          "expected": "1.00"
+        }
+      ]
+    }
+  ]
+}

@@ -206,9 +206,11 @@ class OperationsWindow:
 
     @property
     def current_basis(self) -> str:
+        if len(self.current_candidates) > 1:
+            return "ambiguous"
         if self.current is None:
             return "unknown"
-        return "ambiguous" if len(self.current_candidates) > 1 else "recorded"
+        return "recorded"
 
 
 def measured_md(section: WellSection) -> float | None:
@@ -404,28 +406,29 @@ class WellStateService:
         ]
         window.recent = sorted(started, key=lambda op: op.actual_start or dt.datetime.min.replace(tzinfo=dt.UTC))[-12:]
         if started:
-            window.current = max(started, key=lambda op: op.actual_start or dt.datetime.min.replace(tzinfo=dt.UTC))
-            # A tie for the newest start is not resolved by guessing: the competing ids are carried on the
-            # window so a caller can say "one of these two" instead of naming one of them.
-            window.current_candidates = [
-                op.id for op in started if op.actual_start == window.current.actual_start
-            ]
+            latest = max(started, key=lambda op: op.actual_start or dt.datetime.min.replace(tzinfo=dt.UTC))
+            # A tie for the newest start is not resolved by guessing: carry all candidate ids and leave
+            # ``current`` unset so downstream Advisor/workspace code cannot name one arbitrarily.
+            window.current_candidates = [op.id for op in started if op.actual_start == latest.actual_start]
             if len(window.current_candidates) > 1:
+                window.current = None
                 window.current_note = (
                     f"{len(window.current_candidates)} operations share the newest start "
-                    f"({window.current.actual_start.isoformat() if window.current.actual_start else 'unknown'}); "
+                    f"({latest.actual_start.isoformat() if latest.actual_start else 'unknown'}); "
                     "which one is current is not determined by the recorded data"
                 )
-            elif window.current.predecessor_operation_id:
-                window.current_note = "newest started operation, reached from its recorded predecessor"
             else:
-                window.current_note = "newest started operation on the well"
-            if window.current.predecessor_operation_id:
-                window.previous = next(
-                    (op for op in operations if op.id == window.current.predecessor_operation_id), None
-                )
-            if window.previous is None and len(window.recent) > 1:
-                window.previous = window.recent[-2]
+                window.current = latest
+                if window.current.predecessor_operation_id:
+                    window.current_note = "newest started operation, reached from its recorded predecessor"
+                else:
+                    window.current_note = "newest started operation on the well"
+                if window.current.predecessor_operation_id:
+                    window.previous = next(
+                        (op for op in operations if op.id == window.current.predecessor_operation_id), None
+                    )
+                if window.previous is None and len(window.recent) > 1:
+                    window.previous = window.recent[-2]
 
         # 1. Explicitly planned: successor recorded on the current operation.
         if window.current is not None:

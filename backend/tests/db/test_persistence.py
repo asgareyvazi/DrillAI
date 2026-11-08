@@ -6,6 +6,7 @@ config) are covered by the ``postgres``-marked tests when ``DRILLAI_TEST_POSTGRE
 
 from __future__ import annotations
 
+import asyncio
 import datetime as dt
 
 import pytest
@@ -258,6 +259,91 @@ async def test_server_defaults_apply_without_python_defaults():
             assert row.created_at == dt.datetime(2026, 1, 1, tzinfo=dt.UTC)
     finally:
         await db.dispose()
+
+
+async def test_database_dispose_and_reopen_recreates_engine_but_preserves_file_data(tmp_path):
+    from drillai.db.session import Database
+
+    url = f"sqlite+aiosqlite:///{tmp_path / 'lifecycle.db'}"
+    database = Database(url)
+    try:
+        first_engine = database.engine
+        first_factory = database.session_factory
+        await database.create_all()
+        async with database.session() as session:
+            session.add(Organization(slug="lifecycle-preserved", name="Lifecycle preserved"))
+
+        await database.dispose()
+        await database.dispose()
+        assert database._engine is None
+        assert database._session_factory is None
+
+        second_engine = database.engine
+        second_factory = database.session_factory
+        assert second_engine is not first_engine
+        assert second_factory is not first_factory
+        assert await database.healthcheck() == {"status": "ok", "dialect": "sqlite"}
+        async with database.session() as session:
+            persisted = (
+                await session.execute(select(Organization).where(Organization.slug == "lifecycle-preserved"))
+            ).scalar_one()
+        assert persisted.name == "Lifecycle preserved"
+    finally:
+        await database.dispose()
+
+
+async def test_two_independent_database_pools_commit_concurrent_sessions_to_one_file(tmp_path):
+    from sqlalchemy import event
+
+    from drillai.db.session import Database
+
+    url = f"sqlite+aiosqlite:///{tmp_path / 'independent-pools.db'}"
+    first = Database(url)
+    second = Database(url)
+    physical_connections: set[int] = set()
+
+    def record_connection(_connection, _cursor, statement, _parameters, _context, _executemany):
+        if statement.lstrip().upper().startswith(("INSERT", "UPDATE", "SELECT")):
+            physical_connections.add(id(_connection.connection.driver_connection))
+
+    try:
+        await first.create_all()
+        async with first.session() as session:
+            org = Organization(slug="independent-pools", name="Independent pools")
+            session.add(org)
+            await session.flush()
+            project = Project(org_id=org.id, name="Shared file project")
+            session.add(project)
+            await session.flush()
+            org_id, project_id = org.id, project.id
+
+        event.listen(first.engine.sync_engine, "after_cursor_execute", record_connection)
+        event.listen(second.engine.sync_engine, "after_cursor_execute", record_connection)
+
+        async def insert_well(database, index: int) -> str:
+            async with database.session() as session:
+                well = Well(
+                    org_id=org_id,
+                    project_id=project_id,
+                    name=f"Independent worker {index:02d}",
+                )
+                session.add(well)
+                await session.flush()
+                return well.id
+
+        ids = await asyncio.gather(
+            *(insert_well(first if index % 2 == 0 else second, index) for index in range(8))
+        )
+        assert len(set(ids)) == 8
+        assert len(physical_connections) >= 2
+        async with second.session() as session:
+            rows = (
+                await session.execute(select(Well).where(Well.org_id == org_id).order_by(Well.name))
+            ).scalars().all()
+        assert [row.name for row in rows] == [f"Independent worker {index:02d}" for index in range(8)]
+    finally:
+        await first.dispose()
+        await second.dispose()
 
 
 @pytest.mark.postgres

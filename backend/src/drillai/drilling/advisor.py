@@ -455,6 +455,20 @@ class OperationsAdvisor:
             )
         )
         current = operation["current"]
+        if current is None and operation.get("current_basis") == "ambiguous":
+            answer.unknown.append(
+                {
+                    "key": "operation.current.ambiguous",
+                    "statement": (
+                        "Current operation is unknown: multiple recorded actual operations share the latest "
+                        "start time, so the source data does not establish which one is current."
+                    ),
+                    "kind": "conflict",
+                    "candidate_ids": list(operation.get("current_candidates") or []),
+                    "why_it_matters": "Choosing one tied operation would invent an ordering the recorded timestamps do not provide.",
+                    "how_to_supply": "Review the source records and correct or explicitly order the competing operation starts.",
+                }
+            )
         if current is not None:
             current_status = current["status"]
             current_is_active = current_status == "in_progress"

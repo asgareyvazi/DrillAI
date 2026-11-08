@@ -42,7 +42,7 @@ from drillai.db.models import (
 )
 from drillai.rag.retriever import RetrievalQuery, RetrieveMode, retrieve
 
-DATASET_VERSION = "drillai-rag-synthetic-v2"
+DATASET_VERSION = "drillai-rag-synthetic-v3"
 TOP_K = 5
 _MAIN_ORG_ID = "org_rag_benchmark"
 _MAIN_PROJECT_ID = "prj_rag_benchmark"
@@ -302,6 +302,183 @@ _QUERIES = (
         ],
     },
 )
+
+
+def _build_cp130_scale_fixtures() -> tuple[tuple[dict[str, Any], ...], tuple[dict[str, Any], ...]]:
+    """Create 100 unique positive retrieval labels plus 47 deterministic scope distractors."""
+    rows: list[dict[str, Any]] = []
+    queries: list[dict[str, Any]] = []
+    page_by_document: dict[str, int] = {}
+    main_document_id = "doc_cp130_rag_generated"
+
+    def add_row(
+        *,
+        fixture_id: str,
+        document_id: str,
+        scope: str,
+        text: str,
+        depth_from_si: float | None,
+        depth_to_si: float | None,
+        period_start: str | None,
+        period_end: str | None,
+        quarantined: bool = False,
+    ) -> None:
+        page_by_document[document_id] = page_by_document.get(document_id, 0) + 1
+        rows.append(
+            {
+                "id": fixture_id,
+                "document_id": document_id,
+                "scope": scope,
+                "section": "intermediate",
+                "doc_type": "benchmark",
+                "page_number": page_by_document[document_id],
+                "text": text,
+                "depth_from_si": depth_from_si,
+                "depth_to_si": depth_to_si,
+                "period_start": period_start,
+                "period_end": period_end,
+                **({"quarantined": True} if quarantined else {}),
+            }
+        )
+
+    for index in range(100):
+        sequence = index + 1
+        sequence_text = f"{sequence:03d}"
+        sample_day = dt.date(2026, 4, 1) + dt.timedelta(days=index)
+        next_day = sample_day + dt.timedelta(days=1)
+        period_start = dt.datetime.combine(sample_day, dt.time.min, tzinfo=dt.UTC).isoformat()
+        period_end = dt.datetime.combine(next_day, dt.time.min, tzinfo=dt.UTC).isoformat()
+        depth_start = 800.0 + (index % 20) * 50.0
+        depth_end = depth_start + 100.0
+        fixture_id = f"chk_cp130_item_{sequence_text}"
+        add_row(
+            fixture_id=fixture_id,
+            document_id=main_document_id,
+            scope="main",
+            text=(
+                f"Synthetic benchmark record CP130-ITEM-{sequence_text} parameter-{sequence_text} "
+                f"value {100 + index}.25 canonical-SI; deterministic development-only fixture."
+            ),
+            depth_from_si=depth_start,
+            depth_to_si=depth_end,
+            period_start=period_start,
+            period_end=period_end,
+        )
+        next_sequence = sequence % 100 + 1
+        queries.append(
+            {
+                "id": f"cp130-unique-record-{sequence_text}",
+                "text": f"CP130-ITEM-{sequence_text} parameter-{sequence_text}",
+                "section": "intermediate",
+                "doc_type": "benchmark",
+                "depth_from_si": depth_start + 10.0,
+                "depth_to_si": depth_end - 10.0,
+                "period_from": period_start,
+                "period_to": period_end,
+                "relevant_chunk_ids": [fixture_id],
+                "must_not_retrieve_chunk_ids": [
+                    f"chk_cp130_item_{next_sequence:03d}",
+                    "chk_cp130_dist_quarantine_001",
+                    "chk_cp130_dist_other_well_001",
+                    "chk_cp130_dist_other_tenant_001",
+                ],
+            }
+        )
+
+    # These 37 main-scope chunks challenge explicit depth/time filters and unknown-metadata handling.
+    for index in range(20):
+        sequence = index + 1
+        day = dt.date(2026, 4, 1) + dt.timedelta(days=index)
+        start = dt.datetime.combine(day, dt.time.min, tzinfo=dt.UTC).isoformat()
+        end = dt.datetime.combine(day + dt.timedelta(days=1), dt.time.min, tzinfo=dt.UTC).isoformat()
+        add_row(
+            fixture_id=f"chk_cp130_dist_depth_{sequence:03d}",
+            document_id=main_document_id,
+            scope="main",
+            text=f"Synthetic depth distractor CP130-DEPTH-DISTRACTOR-{sequence:03d}; not a target record.",
+            depth_from_si=30_000.0 + index * 100.0,
+            depth_to_si=30_050.0 + index * 100.0,
+            period_start=start,
+            period_end=end,
+        )
+    for index in range(10):
+        sequence = index + 1
+        add_row(
+            fixture_id=f"chk_cp130_dist_time_{sequence:03d}",
+            document_id=main_document_id,
+            scope="main",
+            text=f"Synthetic time distractor CP130-TIME-DISTRACTOR-{sequence:03d}; not a target record.",
+            depth_from_si=800.0 + index * 50.0,
+            depth_to_si=900.0 + index * 50.0,
+            period_start=f"2099-01-{sequence:02d}T00:00:00+00:00",
+            period_end=f"2099-01-{sequence:02d}T23:59:59+00:00",
+        )
+    for index in range(7):
+        sequence = index + 1
+        add_row(
+            fixture_id=f"chk_cp130_dist_unknown_{sequence:03d}",
+            document_id=main_document_id,
+            scope="main",
+            text=f"Synthetic unlocated distractor CP130-UNKNOWN-DISTRACTOR-{sequence:03d}; scope unknown.",
+            depth_from_si=None,
+            depth_to_si=None,
+            period_start=None,
+            period_end=None,
+        )
+
+    # A few deliberately in-window negatives verify quarantine and cross-well/tenant isolation.
+    for index in range(3):
+        sequence = index + 1
+        day = dt.date(2026, 4, 1) + dt.timedelta(days=index)
+        start = dt.datetime.combine(day, dt.time.min, tzinfo=dt.UTC).isoformat()
+        end = dt.datetime.combine(day + dt.timedelta(days=1), dt.time.min, tzinfo=dt.UTC).isoformat()
+        add_row(
+            fixture_id=f"chk_cp130_dist_quarantine_{sequence:03d}",
+            document_id="doc_cp130_rag_quarantine",
+            scope="main",
+            text=f"Synthetic quarantined distractor CP130-QUARANTINE-{sequence:03d}; excluded by trust state.",
+            depth_from_si=800.0 + index * 50.0,
+            depth_to_si=900.0 + index * 50.0,
+            period_start=start,
+            period_end=end,
+            quarantined=True,
+        )
+    for index in range(3):
+        sequence = index + 1
+        day = dt.date(2026, 4, 1) + dt.timedelta(days=index)
+        start = dt.datetime.combine(day, dt.time.min, tzinfo=dt.UTC).isoformat()
+        end = dt.datetime.combine(day + dt.timedelta(days=1), dt.time.min, tzinfo=dt.UTC).isoformat()
+        add_row(
+            fixture_id=f"chk_cp130_dist_other_well_{sequence:03d}",
+            document_id="doc_cp130_rag_other_well",
+            scope="other_well",
+            text=f"Synthetic other-well distractor CP130-WELL-DISTRACTOR-{sequence:03d}.",
+            depth_from_si=800.0 + index * 50.0,
+            depth_to_si=900.0 + index * 50.0,
+            period_start=start,
+            period_end=end,
+        )
+    for index in range(4):
+        sequence = index + 1
+        day = dt.date(2026, 4, 1) + dt.timedelta(days=index)
+        start = dt.datetime.combine(day, dt.time.min, tzinfo=dt.UTC).isoformat()
+        end = dt.datetime.combine(day + dt.timedelta(days=1), dt.time.min, tzinfo=dt.UTC).isoformat()
+        add_row(
+            fixture_id=f"chk_cp130_dist_other_tenant_{sequence:03d}",
+            document_id="doc_cp130_rag_other_tenant",
+            scope="other_tenant",
+            text=f"Synthetic other-tenant distractor CP130-TENANT-DISTRACTOR-{sequence:03d}.",
+            depth_from_si=800.0 + index * 50.0,
+            depth_to_si=900.0 + index * 50.0,
+            period_start=start,
+            period_end=end,
+        )
+    return tuple(rows), tuple(queries)
+
+
+_CP130_CORPUS, _CP130_QUERIES = _build_cp130_scale_fixtures()
+_CORPUS = _CORPUS + _CP130_CORPUS
+_QUERIES = _QUERIES + _CP130_QUERIES
 
 
 def _parse_utc(value: str | None) -> dt.datetime | None:
@@ -670,8 +847,34 @@ async def evaluate() -> dict[str, Any]:
             positive_queries = sum(bool(case["relevant_chunk_ids"]) for case in _QUERIES)
             empty_result_cases = sum(not case["retrieved_chunk_ids"] for case in measured_queries)
             query_count = len(_QUERIES)
+            citation_coverage = (total_hits - citation_gaps) / total_hits if total_hits else 1.0
+            source_locator_coverage = (total_hits - source_locator_gaps) / total_hits if total_hits else 1.0
+            scope_profile = {
+                "well_scoped_queries": query_count,
+                "section_scoped_queries": sum(case.get("section") is not None for case in _QUERIES),
+                "depth_window_queries": sum(
+                    case.get("depth_from_si") is not None or case.get("depth_to_si") is not None
+                    for case in _QUERIES
+                ),
+                "period_window_queries": sum(
+                    case.get("period_from") is not None or case.get("period_to") is not None
+                    for case in _QUERIES
+                ),
+                "scope_violations": scope_violations,
+                "forbidden_chunk_retrievals": total_forbidden_hits,
+                "quarantined_distractor_chunks": sum(bool(row.get("quarantined")) for row in _CORPUS),
+                "cross_well_distractor_chunks": sum(row["scope"] == "other_well" for row in _CORPUS),
+                "cross_tenant_distractor_chunks": sum(row["scope"] == "other_tenant" for row in _CORPUS),
+            }
+            citation_profile = {
+                "retrieved_hits": total_hits,
+                "citation_gaps": citation_gaps,
+                "citation_coverage": citation_coverage,
+                "source_locator_gaps": source_locator_gaps,
+                "source_locator_coverage": source_locator_coverage,
+            }
             return {
-                "tool": "drillai-rag-benchmark-v2",
+                "tool": "drillai-rag-benchmark-v3",
                 "dataset_classification": "synthetic",
                 "dataset_version": DATASET_VERSION,
                 "dataset_sha256": _dataset_sha256(),
@@ -682,6 +885,8 @@ async def evaluate() -> dict[str, Any]:
                 "no_relevant_query_count": query_count - positive_queries,
                 "empty_result_cases": empty_result_cases,
                 "corpus_chunk_count": len(_CORPUS),
+                "scope_profile": scope_profile,
+                "citation_profile": citation_profile,
                 "metrics": {
                     "micro_recall_at_k": total_retrieved_relevant / total_relevant if total_relevant else 0.0,
                     "macro_recall_at_k_positive_queries": sum(recalls) / len(recalls) if recalls else 0.0,
@@ -694,6 +899,7 @@ async def evaluate() -> dict[str, Any]:
                 },
                 "queries": measured_queries,
                 "limitations": [
+                    "The 100 CP130 scale queries and generated distractors are synthetic development fixtures, not field/vendor samples or a holdout.",
                     "Synthetic, hand-labelled development fixtures are not representative field or production evidence.",
                     "Lexical retrieval only; embeddings, hybrid ranking, and LLM answer quality are not evaluated.",
                     "Relevance labels are not independently adjudicated; metrics do not establish semantic correctness or engineering acceptance.",

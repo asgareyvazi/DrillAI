@@ -2,6 +2,7 @@
 backend/tests/fixtures/synthetic_ddr_corpus/records/*.csv text eol=lf
 backend/tests/fixtures/synthetic_ddr_corpus/records/*.txt text eol=lf
 backend/tests/fixtures/synthetic_ddr_corpus/ocr/*.txt text eol=lf
+backend/src/drillai/ingestion/data/*.json text eol=lf
 
 # Browser-upload copies are compared byte-for-byte with the canonical synthetic corpus files.
 frontend/e2e/assets/synthetic_ddr_upload.txt text eol=lf
