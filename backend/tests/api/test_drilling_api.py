@@ -660,6 +660,22 @@ async def test_reports_keep_evidence_apart_from_calculations(client):
     # The payload is the contract; document rendering is explicitly out of scope.
     assert report["rendering_note"]
 
+    management_response = await client.get(
+        f"/api/v1/wells/{ids['well_id']}/reports/management_summary", headers=headers()
+    )
+    assert management_response.status_code == 200, management_response.text
+    management = management_response.json()["report"]
+    management_sections = {section["key"]: section for section in management["sections"]}
+    evidence = management_sections["evidence"]
+    assert evidence["kind"] == "evidence"
+    assert any(
+        item["kind"] == "document" and item["id"] == ids["document_id"]
+        for item in evidence["items"]
+    )
+    # An empty offset-comparison evidence section must not suppress the separate source-evidence trail.
+    assert management_sections["offsets"]["kind"] == "evidence"
+    assert management_sections["offsets"]["items"] == []
+
     unknown = await client.get(
         f"/api/v1/wells/{ids['well_id']}/reports/not_a_report", headers=headers()
     )

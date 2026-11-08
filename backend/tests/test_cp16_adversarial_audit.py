@@ -1018,7 +1018,7 @@ def test_cp16_10_documentation_and_contract_consistency_guard():
 
     # 4. E2E spec file count and backend test file count must match README.md and docs/FRONTEND_TESTING.md
     e2e_spec_files = sorted((REPO_ROOT / "frontend" / "e2e").glob("*.spec.ts"))
-    assert len(e2e_spec_files) == 19
+    assert len(e2e_spec_files) == 20
     backend_test_files = sorted((REPO_ROOT / "backend" / "tests").rglob("test_*.py"))
     assert len(backend_test_files) >= 78
     assert f"{len(backend_test_files)} files" in readme_text or f"{len(backend_test_files)} test files" in readme_text
@@ -1057,9 +1057,9 @@ def test_cp16_10_documentation_and_contract_consistency_guard():
         "The PostgreSQL-enabled and SQLite-only totals must describe the same collected inventory."
     )
 
-    assert "126 tests / 19 files" in readme_text
-    assert "399 passed" in readme_text
-    assert "126 tests / 19 files" in fe_testing_text
-    assert "399 passed" in fe_testing_text
+    assert "127 tests / 20 files" in readme_text
+    assert "400 passed" in readme_text
+    assert "127 tests / 20 files" in fe_testing_text
+    assert "400 passed" in fe_testing_text
     assert "42" in fe_testing_text
 

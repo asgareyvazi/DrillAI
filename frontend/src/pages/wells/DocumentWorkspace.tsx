@@ -8,7 +8,7 @@
  */
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { ApiError } from '../../api/client'
 import { drillingApi } from '../../api/endpoints'
@@ -128,8 +128,15 @@ export default function DocumentWorkspace() {
   const [tab, setTab] = useState('overview')
   const [report, setReport] = useState<DdrProcessingReport | null>(null)
   const [docType, setDocType] = useState('ddr')
+  const [wellboreId, setWellboreId] = useState('')
+  const [sectionId, setSectionId] = useState('')
   const [operationSelection, setOperationSelection] = useState({ wellId: id, operationId: '' })
   const operationId = operationSelection.wellId === id ? operationSelection.operationId : ''
+  useEffect(() => {
+    setWellboreId('')
+    setSectionId('')
+    setOperationSelection({ wellId: id, operationId: '' })
+  }, [id])
   const [message, setMessage] = useState<string | null>(null)
   const [reviewRecordId, setReviewRecordId] = useState<string | null>(null)
   const closeReview = useCallback(() => setReviewRecordId(null), [])
@@ -138,6 +145,11 @@ export default function DocumentWorkspace() {
   const documents = useQuery({
     queryKey: ['documents', id],
     queryFn: ({ signal }) => drillingApi.listDocuments({ well_id: id }, signal),
+  })
+  const sections = useQuery({
+    queryKey: ['sections', wellboreId, 'document-upload'],
+    queryFn: ({ signal }) => drillingApi.listSections(wellboreId, signal),
+    enabled: Boolean(wellboreId),
   })
   const operations = useQuery({
     queryKey: ['operations', id, 'document-upload'],
@@ -153,6 +165,14 @@ export default function DocumentWorkspace() {
     queryKey: ['document', selectedId],
     queryFn: ({ signal }) => drillingApi.getDocument(selectedId as string, signal),
     enabled: Boolean(selectedId),
+  })
+  const wellbores = useQuery({
+    queryKey: ['wellbores', id, 'document-upload'],
+    queryFn: ({ signal }) => drillingApi.listWellbores(id, signal),
+    // A cross-well document deep link must not trigger a secondary read against the address's
+    // untrusted/possibly nonexistent well. A normal workspace may list wellbores immediately;
+    // when a document is selected, wait until its ownership has been established.
+    enabled: !selectedId || (detail.isSuccess && detail.data.document.well_id === id),
   })
   const reviewRecordQuery = useQuery({
     queryKey: ['document-record-review', selectedId, reviewRecordId],
@@ -207,6 +227,8 @@ export default function DocumentWorkspace() {
     mutationFn: (file: File) =>
       drillingApi.uploadDocument(file, {
         well_id: id,
+        ...(wellboreId ? { wellbore_id: wellboreId } : {}),
+        ...(sectionId ? { section_id: sectionId } : {}),
         ...(operationId ? { operation_id: operationId } : {}),
         doc_type: docType,
       }),
@@ -311,10 +333,61 @@ export default function DocumentWorkspace() {
                 )}
               </select>
             </Field>
+            <Field label={t('documents.wellboreScope')} hint={t('documents.wellboreScopeHint')}>
+              <select
+                data-testid="document-upload-wellbore"
+                value={wellboreId}
+                onChange={(event) => {
+                  setWellboreId(event.target.value)
+                  setSectionId('')
+                  setOperationSelection({ wellId: id, operationId: '' })
+                }}
+                className="w-full rounded border border-graphite-300 bg-white px-2 py-1.5 text-sm dark:border-graphite-700 dark:bg-graphite-900"
+              >
+                <option value="">{t('documents.noWellboreScope')}</option>
+                {wellbores.data?.items.map((wellbore) => (
+                  <option key={wellbore.id} value={wellbore.id}>{wellbore.name} · {wellbore.id}</option>
+                ))}
+              </select>
+            </Field>
+            {wellbores.isLoading && <Loading label={t('documents.wellboreLoading')} />}
+            {wellbores.error && <ErrorState error={wellbores.error} />}
+            <Field label={t('documents.sectionScope')} hint={t('documents.sectionScopeHint')}>
+              <select
+                data-testid="document-upload-section"
+                value={sectionId}
+                disabled={!wellboreId}
+                onChange={(event) => {
+                  setSectionId(event.target.value)
+                  setOperationSelection({ wellId: id, operationId: '' })
+                }}
+                className="w-full rounded border border-graphite-300 bg-white px-2 py-1.5 text-sm dark:border-graphite-700 dark:bg-graphite-900"
+              >
+                <option value="">{t('documents.noSectionScope')}</option>
+                {sections.data?.items.map((section) => (
+                  <option key={section.id} value={section.id}>{section.name} · {section.id}</option>
+                ))}
+              </select>
+            </Field>
+            {wellboreId && sections.isPending && <Loading label={t('documents.sectionLoading')} />}
+            {sections.error && <ErrorState error={sections.error} />}
+            {docType === 'ddr' && !wellboreId && (
+              <p role="note" className="rounded border border-warning/40 bg-amber-50/50 p-2 text-[11px] text-graphite-700 dark:bg-amber-950/20 dark:text-graphite-200">
+                {t('documents.ddrWellboreRequiredHint')}
+              </p>
+            )}
             <Field label={t('documents.operationScope')} hint={t('documents.operationScopeHint')}>
               <select
                 value={operationId}
-                onChange={(event) => setOperationSelection({ wellId: id, operationId: event.target.value })}
+                onChange={(event) => {
+                  const selectedOperationId = event.target.value
+                  setOperationSelection({ wellId: id, operationId: selectedOperationId })
+                  const operation = operations.data?.items.find((item) => item.id === selectedOperationId)
+                  if (operation?.wellbore_id) {
+                    setWellboreId(operation.wellbore_id)
+                    setSectionId(operation.section_id ?? '')
+                  }
+                }}
                 className="w-full rounded border border-graphite-300 bg-white px-2 py-1.5 text-sm dark:border-graphite-700 dark:bg-graphite-900"
               >
                 <option value="">{t('documents.wellScope')}</option>

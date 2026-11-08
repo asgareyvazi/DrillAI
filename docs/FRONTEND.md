@@ -39,6 +39,17 @@ cd backend && ./.venv/bin/python ../scripts/seed_demo.py --reset
 cd backend; .\.venv\Scripts\python.exe ..\scripts\seed_demo.py --reset
 ```
 
+## Isolated CP131 synthetic browser pilot
+
+From `frontend/`, run `npm run e2e:cp131` to exercise the synthetic survey → DDR → operations/NPT →
+engineering → lexical retrieval/Advisor → Reports/JSON-export flow against the real API, SQLite
+persistence and browser UI. The runner allocates a fresh `.e2e-cp131-<runId>` database directory and
+`.e2e-cp131-results-<runId>` report directory per invocation. It refuses any pre-existing path and
+never resets/reuses the existing `.e2e` suite data; use a new run ID rather than attempting a reset.
+The fixture is labelled synthetic and is not field evidence. The run does not establish survey
+engineering acceptance, live semantic RAG quality, provider-backed Advisor narration or customer
+acceptance.
+
 ## Structure
 
 ```

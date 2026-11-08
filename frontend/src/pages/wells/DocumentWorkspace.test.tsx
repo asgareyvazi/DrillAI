@@ -10,6 +10,8 @@ import DocumentWorkspace from './DocumentWorkspace'
 
 const apiMock = vi.hoisted(() => ({
   listDocuments: vi.fn(),
+  listWellbores: vi.fn(),
+  listSections: vi.fn(),
   listOperations: vi.fn(),
   getDocument: vi.fn(),
   getExtractedRecord: vi.fn(),
@@ -24,6 +26,8 @@ const apiMock = vi.hoisted(() => ({
 vi.mock('../../api/endpoints', () => ({
   drillingApi: {
     listDocuments: apiMock.listDocuments,
+    listWellbores: apiMock.listWellbores,
+    listSections: apiMock.listSections,
     listOperations: apiMock.listOperations,
     getDocument: apiMock.getDocument,
     getExtractedRecord: apiMock.getExtractedRecord,
@@ -134,6 +138,8 @@ function renderWorkspace() {
 
 beforeEach(() => {
   apiMock.listDocuments.mockReset().mockResolvedValue({ items: [documentRow], total: 1 })
+  apiMock.listWellbores.mockReset().mockResolvedValue({ items: [], total: 0 })
+  apiMock.listSections.mockReset().mockResolvedValue({ items: [], total: 0 })
   apiMock.listOperations.mockReset().mockResolvedValue({ items: [], total: 0 })
   apiMock.getDocument.mockReset().mockResolvedValue(detail)
   apiMock.getExtractedRecord.mockReset().mockResolvedValue(record)
@@ -163,6 +169,34 @@ describe('DocumentWorkspace extracted-record review', () => {
     await waitFor(() => expect(apiMock.uploadDocument).toHaveBeenCalledOnce())
     expect(apiMock.uploadDocument).toHaveBeenCalledWith(file, {
       well_id: documentRow.well_id,
+      doc_type: 'ddr',
+    })
+  })
+
+  it('uploads with explicit wellbore and section scope from the selected hierarchy', async () => {
+    const user = userEvent.setup()
+    apiMock.listWellbores.mockResolvedValue({
+      items: [{ id: 'wb_review_1', well_id: documentRow.well_id, name: 'Main bore' }],
+      total: 1,
+    })
+    apiMock.listSections.mockResolvedValue({
+      items: [{ id: 'sec_review_1', wellbore_id: 'wb_review_1', name: '12-1/4 inch section' }],
+      total: 1,
+    })
+    renderWorkspace()
+
+    await screen.findByRole('option', { name: /Main bore/ })
+    await user.selectOptions(screen.getByTestId('document-upload-wellbore'), 'wb_review_1')
+    await screen.findByRole('option', { name: /12-1\/4 inch section/ })
+    await user.selectOptions(screen.getByTestId('document-upload-section'), 'sec_review_1')
+    const file = new File(['synthetic source'], 'scoped-ddr.csv', { type: 'text/csv' })
+    fireEvent.change(await screen.findByTestId('document-upload-file'), { target: { files: [file] } })
+
+    await waitFor(() => expect(apiMock.uploadDocument).toHaveBeenCalledOnce())
+    expect(apiMock.uploadDocument).toHaveBeenCalledWith(file, {
+      well_id: documentRow.well_id,
+      wellbore_id: 'wb_review_1',
+      section_id: 'sec_review_1',
       doc_type: 'ddr',
     })
   })

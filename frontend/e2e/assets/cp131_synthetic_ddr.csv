@@ -1,0 +1,8 @@
+Report No: 131
+Date: 2026-06-15
+Well: CP131-SYNTHETIC-PILOT-01
+Rig: CP131 SYNTHETIC RIG (not a real asset)
+
+summary,operation,duration (h),depth md (m),mud weight (ppg)
+CP131-PILOT-DAY-MARKER,Drilling ahead,4,1000,10.8
+CP131-PILOT-NPT-MARKER,Stuck pipe,2,1000,10.8

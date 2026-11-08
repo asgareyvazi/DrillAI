@@ -71,8 +71,9 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
     await page.goto(`/connectors?wellId=${wellId}`)
     await expect(page.getByTestId('connectors-workspace')).toBeVisible()
 
-    // Load the local WITSML 1.4.1.1 SOAP protocol harness preset
+    // Load the local WITSML 1.4.1.1 SOAP protocol harness preset before editing its controlled fields.
     await page.getByTestId('preset-local-witsml').click()
+    await expect(page.getByTestId('connector-key-input')).toHaveValue(/^witsml-rig-/)
     const keyInput = page.getByTestId('connector-key-input')
     const uniqueKey = `e2e-witsml-${Date.now().toString(36)}`
     await keyInput.fill(uniqueKey)
@@ -379,12 +380,14 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
 
   test('Journey 6 (Scenario 9): create and run real ETP 1.2 WebSocket connector session & subscription flow', async ({
     page,
+    request,
     wellId,
     consoleErrors,
     failedResponses,
   }) => {
     await page.goto(`/connectors?wellId=${wellId}`)
     await page.getByTestId('preset-local-etp').click()
+    await expect(page.getByTestId('connector-profile-select')).toHaveValue('etp.1.2.json_ws')
 
     const connKey = `e2e-etp-ws-${Date.now().toString(36)}`
     await page.getByTestId('connector-key-input').fill(connKey)
@@ -392,6 +395,12 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
     await page.getByTestId('connector-submit-btn').click()
 
     await expect(page.getByTestId('selected-connector-name')).toHaveText('E2E ETP 1.2 WebSocket Stream')
+    const savedConnectors = await apiGet<{
+      items: Array<ConnectorDto & { secret_refs: Record<string, { masked_value: string }> }>
+    }>(request, `/connectors?well_id=${encodeURIComponent(wellId)}&limit=100`, 'engineer')
+    const savedConnector = savedConnectors.items.find((row) => row.key === connKey)
+    expect(savedConnector?.protocol_profile).toBe('etp.1.2.json_ws')
+    expect(savedConnector?.secret_refs?.bearer_token?.masked_value).toBe('********')
     await expect(page.getByTestId('masked-secret-bearer_token')).toHaveText('********')
 
     // Start and poll ETP 1.2 WebSocket connector
@@ -1360,8 +1369,10 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
       'Independent conformance suite verified',
     )
 
-    // Use the Local ETP 1.2 Binary Avro preset
+    // Use the Local ETP 1.2 Binary Avro preset and wait for the real harness profile to finish loading
+    // before editing the controlled form. The form stays disabled while the asynchronous preset applies.
     await page.getByTestId('preset-local-etp-binary').click()
+    await expect(page.getByTestId('connector-profile-select')).toHaveValue('etp.1.2.binary_ws')
     const uniqueKey = `e2e-etp-bin-${Date.now().toString(36)}`
     await page.getByTestId('connector-key-input').fill(uniqueKey)
     await page.getByTestId('connector-name-input').fill('E2E Rig ETP 1.2 Binary Avro Stream')

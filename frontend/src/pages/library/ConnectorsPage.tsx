@@ -1035,12 +1035,17 @@ export function ConnectorsPage() {
               )}
 
               <form
-                className="mt-4 space-y-3"
+                className="mt-4"
                 onSubmit={(e) => {
                   e.preventDefault()
+                  if (applyPresetMutation.isPending) return
                   saveMutation.mutate()
                 }}
               >
+                <fieldset
+                  disabled={applyPresetMutation.isPending}
+                  className="min-w-0 space-y-3 border-0 p-0"
+                >
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div>
                     <label
@@ -1475,7 +1480,7 @@ export function ConnectorsPage() {
                   <Button
                     type="submit"
                     variant="primary"
-                    disabled={saveMutation.isPending}
+                    disabled={saveMutation.isPending || applyPresetMutation.isPending}
                     data-testid="connector-submit-btn"
                   >
                     {editingConnector
@@ -1483,6 +1488,7 @@ export function ConnectorsPage() {
                       : t('connectors.createButton')}
                   </Button>
                 </div>
+                </fieldset>
               </form>
             </Card>
           )}

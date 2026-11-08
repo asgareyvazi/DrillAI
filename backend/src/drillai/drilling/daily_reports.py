@@ -155,6 +155,34 @@ class DailyReportService:
             )
         return _ResolvedWell(project_id=resolved.project_id, well_id=well_id, wellbore_id=wellbore_id)
 
+    async def _require_source_section_scope(self, scope: _ResolvedWell, section_id: str | None) -> None:
+        """A report may cite a section-scoped source only inside its exact wellbore hierarchy.
+
+        Daily-report identities are wellbore-scoped, while an imported source document can be narrower.
+        Keep that narrower provenance intact: validate the source's recorded section against the same
+        project, well and wellbore instead of treating ``section_id=None`` as a wildcard or dropping it.
+        """
+        if section_id is None:
+            return
+        resolved = await DocumentScopeResolver(self.session, self.org_id).resolve(
+            DocumentScope(
+                project_id=scope.project_id,
+                well_id=scope.well_id,
+                wellbore_id=scope.wellbore_id,
+                section_id=section_id,
+            )
+        )
+        if (
+            resolved.project_id != scope.project_id
+            or resolved.well_id != scope.well_id
+            or resolved.wellbore_id != scope.wellbore_id
+            or resolved.section_id != section_id
+        ):
+            raise ValidationFailed(
+                "source section scope does not match the owning wellbore",
+                details={"section_id": section_id, "well_id": scope.well_id, "wellbore_id": scope.wellbore_id},
+            )
+
     async def _require_well(self, well_id: str) -> Project:
         """Check that a well exists in this organization before list/read queries."""
         well = (
@@ -2674,6 +2702,7 @@ class DailyReportService:
             raise ValidationFailed("source_page_number must be a positive integer")
 
         record: ExtractedRecord | None = None
+        source_section_id: str | None = None
         if record_id:
             record = (
                 await self.session.execute(
@@ -2690,13 +2719,14 @@ class DailyReportService:
                     "rejected or superseded extracted records cannot be used as current report evidence",
                     details={"source_record_id": record.id, "validation_state": record.validation_state},
                 )
+            source_section_id = record.section_id
             if not allow_unvalidated_record:
                 validate_source_record(
                     record,
                     project_id=scope.project_id,
                     well_id=scope.well_id,
                     wellbore_id=scope.wellbore_id,
-                    section_id=None,
+                    section_id=source_section_id,
                     operation_id=operation_id,
                 )
             else:
@@ -2705,9 +2735,10 @@ class DailyReportService:
                     project_id=scope.project_id,
                     well_id=scope.well_id,
                     wellbore_id=scope.wellbore_id,
-                    section_id=None,
+                    section_id=source_section_id,
                     operation_id=operation_id,
                 )
+            await self._require_source_section_scope(scope, source_section_id)
             if document_id is not None and document_id != record.document_id:
                 raise ValidationFailed("source_record_id does not belong to source_document_id")
             document_id = document_id or record.document_id
@@ -2719,6 +2750,29 @@ class DailyReportService:
                 if page_number is not None and page_number != record.page_number:
                     raise ValidationFailed("source_record_id and source_page_number identify different pages")
                 page_number = page_number or record.page_number
+
+        async def validate_document_scope(source_document: Document) -> None:
+            nonlocal source_section_id
+            if record is None:
+                source_section_id = source_document.section_id
+            elif source_document.section_id != source_section_id:
+                raise ValidationFailed(
+                    "source_record_id and source_document_id have different section scopes",
+                    details={
+                        "source_record_id": record.id,
+                        "record_section_id": source_section_id,
+                        "document_section_id": source_document.section_id,
+                    },
+                )
+            validate_source_scope(
+                source_document,
+                project_id=scope.project_id,
+                well_id=scope.well_id,
+                wellbore_id=scope.wellbore_id,
+                section_id=source_section_id,
+                operation_id=operation_id,
+            )
+            await self._require_source_section_scope(scope, source_section_id)
 
         document: Document | None = None
         if document_id:
@@ -2735,14 +2789,7 @@ class DailyReportService:
             ).scalar_one_or_none()
             if document is None:
                 raise NotFound(f"source document {document_id!r} not found or is quarantined")
-            validate_source_scope(
-                document,
-                project_id=scope.project_id,
-                well_id=scope.well_id,
-                wellbore_id=scope.wellbore_id,
-                section_id=None,
-                operation_id=operation_id,
-            )
+            await validate_document_scope(document)
         if region_id:
             region = (
                 await self.session.execute(
@@ -2771,14 +2818,7 @@ class DailyReportService:
                 ).scalar_one_or_none()
                 if document is None:
                     raise NotFound(f"source document {document_id!r} not found or is quarantined")
-                validate_source_scope(
-                    document,
-                    project_id=scope.project_id,
-                    well_id=scope.well_id,
-                    wellbore_id=scope.wellbore_id,
-                    section_id=None,
-                    operation_id=operation_id,
-                )
+                await validate_document_scope(document)
             if region.page_number is not None:
                 if page_number is not None and page_number != region.page_number:
                     raise ValidationFailed("source_region_id and source_page_number identify different pages")

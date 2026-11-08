@@ -30,6 +30,20 @@ export type E2EFixtures = {
   npt_total_hours: number
   timeline_entries: number
   state_counts: Record<string, number>
+  cp131_pilot: {
+    classification: 'synthetic'
+    fixture_id: 'cp131-synthetic-pilot-v1'
+    project_id: string
+    well_id: string
+    well_name: 'CP131-SYNTHETIC-PILOT-01'
+    wellbore_id: string
+    wellbore_name: string
+    section_id: string
+    section_name: string
+    survey_id: null
+    survey_note: string
+    reset_scope: string
+  }
 }
 
 const here = path.dirname(fileURLToPath(import.meta.url))
@@ -45,6 +59,7 @@ const REQUIRED: (keyof E2EFixtures)[] = [
   'failing_workflow_id',
   'recommendation_id',
   'optimization_run_id',
+  'cp131_pilot',
 ]
 
 async function globalSetup(_config: FullConfig): Promise<void> {
@@ -60,6 +75,17 @@ async function globalSetup(_config: FullConfig): Promise<void> {
   })
   if (missing.length > 0) {
     throw new Error(`the fixture seed did not produce: ${missing.join(', ')}`)
+  }
+  const pilot = fixtures.cp131_pilot
+  if (
+    pilot.classification !== 'synthetic' ||
+    pilot.fixture_id !== 'cp131-synthetic-pilot-v1' ||
+    !pilot.project_id ||
+    !pilot.well_id ||
+    !pilot.wellbore_id ||
+    !pilot.section_id
+  ) {
+    throw new Error('the CP131 seed did not produce the isolated, labelled synthetic well hierarchy')
   }
 
   const apiPort = Number(process.env.DRILLAI_E2E_API_PORT ?? 8099)

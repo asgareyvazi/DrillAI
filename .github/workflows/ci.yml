@@ -140,6 +140,7 @@ jobs:
             *passed*) ;;
             *) echo "::error::no pass summary was printed: $summary"; exit 1 ;;
           esac
+          echo "::notice title=Frontend unit tests verified::$summary"
           {
             echo '### Frontend unit and component tests'
             echo '```'
@@ -254,6 +255,7 @@ jobs:
           ocr_summary="$(backend/.venv/bin/python scripts/verify_synthetic_ocr_quality.py \
             "$ocr_report" --corpus backend/src/drillai/ingestion/data/synthetic_ddr_ocr_quality_v1.json)"
           echo "$ocr_summary"
+          echo "::notice title=CP130 synthetic OCR metrics::$ocr_summary"
           {
             echo '### Deployment-image synthetic OCR quality (development-only evidence)'
             echo '```'
@@ -302,6 +304,12 @@ jobs:
           fi
           verdict="$(node scripts/verify-e2e-run.mjs "$RUNNER_TEMP/e2e.log" "$e2e_exit" test-results/e2e-results.json)"
           echo "$verdict"
+          notice_verdict="${verdict//%/%25}"
+          notice_verdict="${notice_verdict//$'\r'/%0D}"
+          notice_verdict="${notice_verdict//$'\n'/%0A}"
+          notice_verdict="${notice_verdict//:/%3A}"
+          notice_verdict="${notice_verdict//,/%2C}"
+          echo "::notice title=Real-browser execution verified::$notice_verdict"
           {
             echo '### Real-browser E2E suite (main, faults and auth stacks)'
             echo '```'
@@ -391,9 +399,13 @@ jobs:
           npm test 2>&1 | Tee-Object -FilePath $logFile
           if ($LASTEXITCODE -ne 0) { throw "Frontend unit tests failed on Windows" }
           $plain = (Get-Content $logFile -Raw) -replace "\x1b\[[0-9;]*[a-zA-Z]", ""
-          if ($plain -notmatch "Tests\s+\d+\s+passed") {
+          $summaryMatch = [regex]::Match($plain, "(?m)^\s*Tests\s+\d+\s+passed[^\r\n]*")
+          if (-not $summaryMatch.Success) {
             throw "Frontend unit tests did not print pass summary on Windows"
           }
+          $summary = $summaryMatch.Value.Trim()
+          if ($summary -match "\bskipped\b") { throw "Frontend unit tests reported skipped tests on Windows: $summary" }
+          Write-Output "::notice title=Frontend unit tests verified::$summary"
 
       - name: Frontend production build (Windows)
         working-directory: frontend
@@ -488,8 +500,13 @@ jobs:
           if (Test-Path $reportFile) { Remove-Item -Force $reportFile }
           npm run e2e 2>&1 | Tee-Object -FilePath $logFile
           $e2eExit = $LASTEXITCODE
-          & node scripts/verify-e2e-run.mjs $logFile $e2eExit $reportFile
-          if ($LASTEXITCODE -ne 0) { throw "Real Playwright execution did not match the reviewed manifest" }
+          $verdict = & node scripts/verify-e2e-run.mjs $logFile $e2eExit $reportFile
+          $verdictExit = $LASTEXITCODE
+          if ($verdictExit -ne 0) { throw "Real Playwright execution did not match the reviewed manifest" }
+          $verdictSummary = ($verdict | Select-Object -Last 1).Trim()
+          if ([string]::IsNullOrWhiteSpace($verdictSummary)) { throw "Playwright verification printed no result summary" }
+          $noticeVerdict = $verdictSummary.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A').Replace(':', '%3A').Replace(',', '%2C')
+          Write-Output "::notice title=Real-browser execution verified::$noticeVerdict"
 
       - name: Upload Windows Playwright evidence on failure
         if: failure()

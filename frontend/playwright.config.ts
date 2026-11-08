@@ -116,6 +116,7 @@ export default defineConfig({
       env: {
         DRILLAI_E2E_API_PORT: String(API_PORT),
         DRILLAI_E2E_DATA_DIR: process.env.DRILLAI_E2E_DATA_DIR ?? '.e2e',
+        DRILLAI_E2E_CP131: 'true',
       },
     },
     {

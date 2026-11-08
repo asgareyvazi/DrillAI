@@ -1,7 +1,7 @@
 {
   "version": 1,
   "backend": {
-    "collected": 1734,
+    "collected": 1740,
     "postgres_files": 12,
     "postgres": [
       "tests/db/test_cp18_postgres_backup_restore.py::test_cp18_01_postgres_logical_backup_restore_and_migration_recovery_drill",
@@ -21,17 +21,17 @@
       "tests/workflow/test_notification_worker.py::test_competing_notification_worker_claims_skip_locked_rows_on_postgres"
     ],
     "default": {
-      "passed": 1719,
+      "passed": 1725,
       "skipped": 15,
       "deselected": 0
     },
     "linux": {
-      "passed": 1734,
+      "passed": 1740,
       "skipped": 0,
       "deselected": 0
     },
     "windows": {
-      "passed": 1718,
+      "passed": 1724,
       "skipped": 1,
       "deselected": 15,
       "expected_skip_path": "tests/ingestion/test_ocr.py",
@@ -39,13 +39,14 @@
     }
   },
   "e2e": {
-    "total": 126,
-    "files": 19,
+    "total": 127,
+    "files": 20,
     "spec_files": [
       "a11y.spec.ts",
       "checkpoint5.spec.ts",
       "connectors-platform.spec.ts",
       "context-deeplinks.spec.ts",
+      "cp131-synthetic-pilot.spec.ts",
       "daily-reports-workspace.spec.ts",
       "documents-evidence.spec.ts",
       "error-auth.spec.ts",
@@ -63,7 +64,7 @@
       "workflow-studio.spec.ts"
     ],
     "projects": {
-      "chromium": 119,
+      "chromium": 120,
       "chromium-faults": 4,
       "chromium-auth": 3
     }

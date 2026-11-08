@@ -7,8 +7,10 @@
  * assertion would be about "nothing", which is exactly the kind of false green this mission exists to
  * remove.
  *
- * The service runs on a throwaway SQLite database in `.e2e/` rebuilt from scratch on every run. No
- * production database, no production credentials, no network access.
+ * The service runs on a caller-isolated throwaway SQLite database (the regular suite uses `.e2e/`;
+ * the CP131 pilot uses a unique `.e2e-cp131-*` directory). The regular demo seed may rebuild its own
+ * disposable database; the CP131-only seed creates or reuses only its named hierarchy and never resets
+ * an existing database. No production database or production credentials are used.
  *
  * Authentication is *disabled* on purpose: this is a development/test environment and the development
  * role header is how the suite (and the in-app role switcher) exercises the authorization model. The
@@ -34,6 +36,7 @@ const port = Number(process.env.DRILLAI_E2E_API_PORT ?? 8099)
 const authEnabled = process.env.DRILLAI_E2E_AUTH === 'true'
 const faultsEnabled = process.env.DRILLAI_E2E_FAULTS === 'true'
 const seed = process.env.DRILLAI_E2E_SEED !== 'false'
+const seedCp131Pilot = process.env.DRILLAI_E2E_CP131 === 'true'
 
 mkdirSync(path.join(dataDir, 'blobs'), { recursive: true })
 
@@ -66,11 +69,20 @@ const databaseUrl = `sqlite+aiosqlite:///${dbFilePosix}`
 /**
  * The fixtures the seed produced, when this instance seeds at all.
  *
- * The main stack seeds and writes `fixtures.json`; the fault stack seeds its own database and writes
- * its own copy; the authentication-enabled stack seeds nothing — it exists so the client can be
- * refused, and it has no data to be refused about.
+ * The regular stack writes the demo fixtures and may add the CP131 hierarchy; the dedicated CP131
+ * stack writes only `cp131_pilot` to its isolated fixture file. The fault stack seeds its own demo
+ * database; the authentication-enabled stack has its own auth-focused setup.
  */
 let fixtures = {}
+
+function parseSeedOutput(stdout, label) {
+  const normalized = stdout.replace(/\r\n/g, '\n')
+  const start = normalized.lastIndexOf('\n{\n')
+  const json = start === -1 ? normalized.slice(normalized.indexOf('{')) : normalized.slice(start + 1)
+  if (!json || !json.trimStart().startsWith('{')) throw new Error(`${label} printed no JSON fixture summary`)
+  return JSON.parse(json)
+}
+
 if (seed) {
   const seeded = spawnSync(
     python,
@@ -90,15 +102,32 @@ if (seed) {
     console.error(seeded.stderr)
     throw new Error(`seeding the E2E fixtures failed (exit ${seeded.status})`)
   }
-  // The seed prints the fixtures as pretty-printed JSON, but a logging line can precede them (the
-  // logger emits one JSON object per line). The fixtures object is the last one printed at column 0,
-  // so it is found by its own indentation rather than by the first brace in the output.
-  // Normalize Windows CRLF line endings first so `\n{\n` matches on both POSIX and Windows.
-  const normalizedStdout = seeded.stdout.replace(/\r\n/g, '\n')
-  const start = normalizedStdout.lastIndexOf('\n{\n')
-  const json =
-    start === -1 ? normalizedStdout.slice(normalizedStdout.indexOf('{')) : normalizedStdout.slice(start + 1)
-  fixtures = JSON.parse(json)
+  // The seed prints a pretty-printed JSON object. A logging line can precede it, so take the last
+  // column-zero JSON object after normalizing Windows CRLF line endings.
+  fixtures = parseSeedOutput(seeded.stdout, 'demo seed')
+}
+
+if (seedCp131Pilot) {
+  const pilot = spawnSync(
+    python,
+    [
+      path.join(repoRoot, 'scripts', 'seed_cp131_pilot.py'),
+      '--database-url',
+      databaseUrl,
+      '--blob-dir',
+      path.join(dataDir, 'blobs'),
+    ],
+    { cwd: backendRoot, env: { ...process.env, PYTHONUNBUFFERED: '1' }, encoding: 'utf8' },
+  )
+  if (pilot.status !== 0) {
+    console.error(pilot.stdout)
+    console.error(pilot.stderr)
+    throw new Error(`seeding the isolated CP131 pilot hierarchy failed (exit ${pilot.status})`)
+  }
+  fixtures.cp131_pilot = parseSeedOutput(pilot.stdout, 'CP131 synthetic pilot seed')
+}
+
+if (seed || seedCp131Pilot) {
   writeFileSync(path.join(dataDir, 'fixtures.json'), JSON.stringify(fixtures, null, 2))
 }
 

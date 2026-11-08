@@ -139,6 +139,7 @@ async def _create_import_evidence(
     *,
     record_payload: dict | None = None,
     record_type: str = "daily_summary",
+    section_id: str | None = None,
 ) -> tuple[str, str]:
     from sqlalchemy import select
 
@@ -148,7 +149,12 @@ async def _create_import_evidence(
     uploaded = await client.post(
         "/api/v1/documents",
         files={"file": ("import-source.txt", b"DAILY DRILLING REPORT\nSynthetic integration-test evidence.\n", "text/plain")},
-        data={"well_id": well_id, "wellbore_id": wellbore_id, "doc_type": "ddr"},
+        data={
+            "well_id": well_id,
+            "wellbore_id": wellbore_id,
+            **({"section_id": section_id} if section_id else {}),
+            "doc_type": "ddr",
+        },
         headers=headers("engineer"),
     )
     assert uploaded.status_code == 201, uploaded.text
@@ -170,6 +176,7 @@ async def _create_import_evidence(
             project_id=document.project_id,
             well_id=document.well_id,
             wellbore_id=document.wellbore_id,
+            section_id=document.section_id,
             record_type=record_type,
             payload_schema_key="test.daily_report_import",
             payload_schema_version=1,
@@ -758,6 +765,18 @@ async def test_daily_report_period_integrity_is_revision_bound_and_does_not_brid
 @pytest.mark.asyncio
 async def test_daily_report_activity_classification_preview_is_read_only_and_scope_checked(client, db):
     well_id, wellbore_id = await _create_well(client)
+    section_response = await client.post(
+        f"/api/v1/wellbores/{wellbore_id}/sections",
+        json={
+            "sequence": 1,
+            "name": "Classification section scope test",
+            "hole_diameter_si": 0.31115,
+            "hole_diameter_nominal": '12-1/4"',
+        },
+        headers=headers("engineer"),
+    )
+    assert section_response.status_code == 201, section_response.text
+    section_id = section_response.json()["id"]
     source_text = "Lost circulation was reported while the crew prepared LCM for the source report."
     document_id, record_id = await _create_import_evidence(
         client,
@@ -765,6 +784,7 @@ async def test_daily_report_activity_classification_preview_is_read_only_and_sco
         well_id,
         wellbore_id,
         record_payload={"activity": source_text},
+        section_id=section_id,
     )
 
     preview = await client.post(
@@ -797,6 +817,7 @@ async def test_daily_report_activity_classification_preview_is_read_only_and_sco
 
     source_detail = await client.get(f"/api/v1/documents/{document_id}", headers=headers("viewer"))
     assert source_detail.status_code == 200, source_detail.text
+    assert source_detail.json()["document"]["section_id"] == section_id
     unchanged = next(row for row in source_detail.json()["records"] if row["id"] == record_id)
     assert unchanged["validation_state"] == "extracted"
     assert unchanged["payload"] == {"activity": source_text}
@@ -999,8 +1020,67 @@ async def test_drilling_document_csv_extraction_flows_into_daily_report_reconcil
 
 @pytest.mark.asyncio
 async def test_imported_daily_report_reconciliation_measurements_and_correction(client, db):
+    from sqlalchemy import select
+
+    from drillai.db.models import ExtractedRecord
+
     well_id, wellbore_id = await _create_well(client)
-    document_id, record_id = await _create_import_evidence(client, db, well_id, wellbore_id)
+    section_ids = []
+    for sequence, name in ((1, "DDR import section A"), (2, "DDR import section B")):
+        response = await client.post(
+            f"/api/v1/wellbores/{wellbore_id}/sections",
+            json={
+                "sequence": sequence,
+                "name": name,
+                "hole_diameter_si": 0.31115,
+                "hole_diameter_nominal": '12-1/4"',
+            },
+            headers=headers("engineer"),
+        )
+        assert response.status_code == 201, response.text
+        section_ids.append(response.json()["id"])
+    section_a, section_b = section_ids
+    document_id, record_id = await _create_import_evidence(
+        client, db, well_id, wellbore_id, section_id=section_a
+    )
+    source_detail = await client.get(f"/api/v1/documents/{document_id}", headers=headers("viewer"))
+    assert source_detail.status_code == 200, source_detail.text
+    assert source_detail.json()["document"]["section_id"] == section_a
+
+    conflicting_document_id, conflicting_record_id = await _create_import_evidence(
+        client, db, well_id, wellbore_id, section_id=section_a
+    )
+    async with db.session_factory() as session:
+        conflicting_record = (
+            await session.execute(select(ExtractedRecord).where(ExtractedRecord.id == conflicting_record_id))
+        ).scalar_one()
+        conflicting_record.section_id = section_b
+        await session.commit()
+    conflicting_payload = {
+        "wellbore_id": wellbore_id,
+        "report_date": "2026-11-02",
+        "report_timezone": "UTC",
+        "shift_code": "day",
+        "report_number": "DDR-SECTION-SCOPE-CONFLICT",
+        "source_document_id": conflicting_document_id,
+        "source_record_id": conflicting_record_id,
+        "field_sources": [
+            {"field_key": "summary", "source_record_id": conflicting_record_id, "source_path": "payload.summary"}
+        ],
+        "content": {
+            "source_document_id": conflicting_document_id,
+            "source_record_id": conflicting_record_id,
+            "summary": "Synthetic section-scope conflict test.",
+        },
+    }
+    conflicting = await client.post(
+        f"/api/v1/wells/{well_id}/daily-reports/imports",
+        json=conflicting_payload,
+        headers=headers("engineer"),
+    )
+    assert conflicting.status_code == 422, conflicting.text
+    assert "different section scopes" in conflicting.json()["error"]["message"]
+
     content = {
         "source_document_id": document_id,
         "source_record_id": record_id,

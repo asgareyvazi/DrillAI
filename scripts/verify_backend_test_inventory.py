@@ -384,6 +384,15 @@ def main() -> int:
     postgres_count = len(manifest["backend"]["postgres"])
     print(f"PostgreSQL inventory verified: {postgres_count} reviewed tests across {file_count} files.")
     print(f"{args.platform} pytest result verified: {summary}")
+    if os.environ.get("GITHUB_ACTIONS") == "true":
+        counts = ", ".join(
+            f"{key}={manifest['backend'][args.platform][key]}" for key in ("passed", "skipped", "deselected")
+        )
+        print(
+            "::notice title=Backend inventory verified::"
+            f"platform={args.platform}; {counts}; collected={manifest['backend']['collected']}; "
+            f"PostgreSQL node IDs={postgres_count} across {file_count} files"
+        )
     return 0
 
 

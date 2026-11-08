@@ -431,11 +431,17 @@ test.describe('workflow studio: create, edit, validate, save, publish', () => {
     failedResponses,
   }) => {
     const workflows = await apiGet<{ items: Workflow[] }>(request, '/workflows')
-    const target = workflows.items.find((item) => item.published_version_id !== null && item.current_version > 0)
-    expect(target, 'the seed must publish at least one workflow').toBeTruthy()
-    if (!target) throw new Error('the seed must publish at least one workflow')
+    // CP131 adds and publishes a one-node lexical-retrieval workflow in this shared E2E database.
+    // This editor journey specifically clicks and edits a saved edge, so target the known seeded
+    // multi-node workflow instead of whichever published workflow happens to sort first.
+    const target = workflows.items.find(
+      (item) => item.key === 'daily-drilling-intelligence' && item.published_version_id !== null && item.current_version > 0,
+    )
+    expect(target, 'the seed must publish the daily-drilling-intelligence graph').toBeTruthy()
+    if (!target) throw new Error('the seed must publish the daily-drilling-intelligence graph')
     const workflowId = target.id
     const before = await detail(request, workflowId)
+    expect(before.graph.edges.length, 'this editor journey requires a saved edge to inspect').toBeGreaterThan(0)
 
     await openStoredWorkflow(page, workflowId, before.version.version)
 

@@ -404,7 +404,7 @@ class ReportingService:
                     items=state["missing"],
                 )
             )
-        if not any(section.kind == "evidence" for section in report.sections):
+        if not any(section.key == "evidence" for section in report.sections):
             evidence_items = [
                 entry.to_dict() for entry in timeline if entry.kind in {"document", "engine_run"}
             ][:50]
