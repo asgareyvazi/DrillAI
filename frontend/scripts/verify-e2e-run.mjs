@@ -54,14 +54,27 @@ const plain = rawLog.replace(/\u001b\[[0-9;]*[a-zA-Z]/g, '').replace(/\r/g, '\n'
 const lines = plain.split(/\n+/).map((line) => line.trim()).filter(Boolean)
 const oracleLines = lines.filter((line) => /^(?:Error|Expected|Received):/.test(line)).slice(-12)
 const reportErrorLines = []
+const failedTestLocations = new Set()
+const reviewedProjects = new Set(Object.keys(manifest?.e2e?.projects ?? {}))
+const reviewedSpecs = new Set(manifest?.e2e?.spec_files ?? [])
 for (const error of report.errors ?? []) {
   if (error.message) reportErrorLines.push(String(error.message))
 }
-function collectReportErrors(suites) {
+function collectReportDiagnostics(suites) {
   for (const suite of suites ?? []) {
     for (const spec of suite.specs ?? []) {
+      const file = String(spec.file ?? '').replaceAll('\\', '/').split('/').at(-1)
+      const safeFile = reviewedSpecs.has(file) ? file : 'unreviewed.spec.ts'
+      const line = Number.isSafeInteger(spec.line) && spec.line > 0 && spec.line < 1_000_000 ? `:${spec.line}` : ''
       for (const test of spec.tests ?? []) {
-        for (const result of test.results ?? []) {
+        const results = Array.isArray(test.results) ? test.results : []
+        const failed = results.some((result) => result?.status !== 'passed' && result?.status !== 'skipped')
+        if (failed) {
+          const project = String(test.projectName ?? '')
+          const safeProject = reviewedProjects.has(project) ? project : 'unreviewed-project'
+          failedTestLocations.add(`${safeProject} ${safeFile}${line}`)
+        }
+        for (const result of results) {
           for (const error of result.errors ?? []) {
             if (error.message) reportErrorLines.push(String(error.message))
             if (error.snippet) reportErrorLines.push(String(error.snippet))
@@ -69,11 +82,22 @@ function collectReportErrors(suites) {
         }
       }
     }
-    collectReportErrors(suite.suites)
+    collectReportDiagnostics(suite.suites)
   }
 }
-collectReportErrors(report.suites)
-failureContext = (oracleLines.length ? oracleLines : reportErrorLines.length ? reportErrorLines : lines.slice(-12)).join('\n')
+collectReportDiagnostics(report.suites)
+const locationContext = [...failedTestLocations]
+  .slice(0, 12)
+  .map((location) => `failed test location: ${location}`)
+if (failedTestLocations.size > 12) {
+  locationContext.push(`and ${failedTestLocations.size - 12} more failed test location(s)`)
+}
+const assertionContext = oracleLines.length
+  ? oracleLines
+  : reportErrorLines.length
+    ? reportErrorLines
+    : lines.slice(-12)
+failureContext = [...locationContext, ...assertionContext].join('\n')
 
 const processExitCode = Number(exitCodeText)
 if (processExitCode !== 0) fail(`Playwright process exited ${processExitCode}`)
