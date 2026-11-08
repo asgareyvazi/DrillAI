@@ -1,6 +1,6 @@
 # CP131 — Synthetic-Well Browser Pilot
 
-**Status:** `PARTIAL` — CP131 repository software scope is locally verified. The exact-final-SHA Linux/native-Windows decision is tracked by CP132 Actions for the final branch commit; field and qualified engineering acceptance are not established.
+**Status:** `DONE` for CP131 repository software and browser acceptance on the integrated CP130–CP132 SHA `286945c9d627ba58a4f765b3f28cc65a5e0003ae`. `NEEDS_FIELD_VALIDATION` remains for field data and qualified engineering acceptance; see the exact-SHA closure below.
 
 ## Scope and data boundaries
 
@@ -63,7 +63,7 @@ The existing-path guard was re-exercised with `DRILLAI_CP131_ALLOW_RESET=true` a
 - The complete isolated three-project local E2E run `full5` passed **127/127**, zero retries (Chromium 120, faults 4, auth 3; 20.4 minutes); `scripts/verify-e2e-run.mjs` accepted both the log and structured report. Fresh `.e2e-cp132-main-*`, `-faults-*`, `-auth-*`, and `-results-*` directories were used; the standard `.e2e` path was absent and untouched. Retained results: `frontend/.e2e-cp132-results-20261020-cp132-full5/` and matching deployment directories.
 - `npm run e2e:cp131` — passed the isolated real-browser pilot as recorded above. The existing-path guard refused the retained sentinel probe before API startup; the sentinel checksum was unchanged.
 
-These are local results on the safely reconciled worktree. The dedicated CP131 run used only its unique `.e2e-cp131-*` paths; the standard `.e2e` paths were absent and untouched. These local results do not themselves certify native Windows or the final commit; the exact-SHA Actions run on the final branch commit must show both platform jobs successful, all acceptance gates executed, and no skipped acceptance step.
+These local results are synthetic software evidence on the reconciled worktree. The dedicated CP131 run used only unique `.e2e-cp131-*` paths; the standard `.e2e` path was absent and untouched. The exact-SHA Linux/native-Windows closure and its actual gate totals are recorded below; they supersede the pre-CI certification requirement in this historical local-verification paragraph.
 
 ## Acceptance and limitations
 
@@ -72,9 +72,20 @@ These are local results on the safely reconciled worktree. The dedicated CP131 r
 | Isolated synthetic browser/API/database flow | `DONE` locally |
 | Section-tagged source validation and linked-document consistency | `DONE` locally; focused and module tests passed |
 | Management-summary source evidence and JSON export | `DONE` locally; regression and browser assertions passed |
-| Standalone CP131-SHA Linux/native-Windows CI | `PARTIAL` — the standalone CP131 SHA was not separately run; the applicable integrated release gate is CP132's final exact-SHA Actions run |
+| Integrated CP131 Linux/native-Windows software acceptance | `DONE` — the CP131 test is included in the 127-test suite on both platforms in CP132 run `42481107515`; the standalone CP131 commit was not separately run |
 | Real DDR/OCR/provider response/customer acceptance | `NEEDS_FIELD_VALIDATION` — no such evidence was generated |
 | Qualified survey or engineering acceptance | `NEEDS_FIELD_VALIDATION` — synthetic grid/datum and formula outputs are not field validation |
 | Semantic RAG quality or live Advisor narrative quality | Not measured; lexical retrieval and computed facts only |
 
 No autonomous rig-control decision, engineering recommendation, verified cause, real-world survey accuracy, delivered notification, customer acceptance, or production deployment is established by this pilot.
+
+## CP133 exact-SHA closure (2026-11-08)
+
+The integrated CP130–CP132 branch commit `286945c9d627ba58a4f765b3f28cc65a5e0003ae` was tested by [GitHub Actions run `42481107515`](https://github.com/asgareyvazi/DrillAI/actions/runs/42481107515), whose `headSha` is that exact commit. Both platform jobs concluded `success`:
+
+| Platform | Job ID | Backend | Frontend | Full Playwright suite |
+| --- | ---: | --- | --- | --- |
+| Linux | `128733009790` | 1,740 passed; 0 skipped/deselected; 1,740 collected; 15 PostgreSQL node IDs across 12 files | 400 passed | 127 passed across 20 spec files; Chromium 120, faults 4, auth 3; 0 retries |
+| Native Windows PowerShell | `128733009555` | 1,724 passed; 1 identified POSIX-only skip; 15 PostgreSQL tests deselected; 1,740 collected | 400 passed | 127 passed across 20 spec files; Chromium 120, faults 4, auth 3; 0 retries |
+
+The reviewed E2E inventory includes `cp131-synthetic-pilot.spec.ts`; therefore the successful 127-test real-browser run on each platform includes the CP131 pilot case. This closes CP131 repository software/browser acceptance on the integrated exact SHA. It does not establish field DDR accuracy, approved-corpus OCR quality, survey/engineering qualification, live-provider narrative quality, customer acceptance, delivery, vendor commissioning, or production readiness. The pilot and all its values remain explicitly synthetic; the source evidence, unknown timestamps and lexical retrieval boundaries above remain unchanged.

@@ -50,6 +50,10 @@ The fixture is labelled synthetic and is not field evidence. The run does not es
 engineering acceptance, live semantic RAG quality, provider-backed Advisor narration or customer
 acceptance.
 
+## Current exact-SHA software/browser result
+
+CP130–CP132 repository software acceptance is `DONE` on SHA `286945c9d627ba58a4f765b3f28cc65a5e0003ae`. Exact-SHA [Actions run `42481107515`](https://github.com/asgareyvazi/DrillAI/actions/runs/42481107515) passed Linux job `128733009790` and native-Windows job `128733009555`. Each platform passed the 400-test frontend suite and all 127 reviewed Playwright tests with zero retries; the CP131 pilot is included. Linux also passed the Docker Compose/deployment-image gate, whose 32 clean generated English cases scored CER 0, WER 0 and critical-field exact rate 1.0. Those fixture results are not field OCR accuracy. Live vendor verification, field survey/engineering acceptance, provider-backed narrative quality, notification delivery and customer acceptance remain unestablished; see `mission-reports/CP132-FINAL-RELEASE-ASSURANCE.md`.
+
 ## Structure
 
 ```

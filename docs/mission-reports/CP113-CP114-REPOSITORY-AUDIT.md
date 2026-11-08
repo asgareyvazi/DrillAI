@@ -5,6 +5,8 @@
 **Audited head:** `4a05196c8b63ba7b7d7740f5869a63529cbf28e3`
 **Prior exact-SHA CI:** run `42122600543` (CP112 closure is recorded in the capability matrix and repeated below).
 
+> **CP133 later closure note (2026-11-08):** This report's audited head and the CP112 evidence below are historical. The subsequent CP130–CP132 integrated SHA `286945c9d627ba58a4f765b3f28cc65a5e0003ae` passed exact-SHA Linux/native-Windows run `42481107515` (jobs `128733009790` / `128733009555`); see `CP132-FINAL-RELEASE-ASSURANCE.md`. This later result does not rewrite or retroactively certify earlier SHAs.
+
 ## Repository reconciliation and review scope
 
 The initial local checkout was at `bfea530602a23bcc08efca85a136240f61c44a0d`, 61 commits behind the fetched authorized remote. Before changing project files, the worktree, index, untracked files, stash list, refs, and remote were inspected. There were no staged changes, no stashes, and no ignored owner data at that point. The 104 local untracked paths were all byte-for-byte identical to files already tracked at the fetched remote; all other tracked worktree content matched that remote. The local branch/index were reconciled with a non-destructive mixed reset; no file contents were overwritten or discarded. The workspace was clean at the audited head. `origin/main` remained `bfa066b28e0071880cb9191a4f1d47fdaa143e04`.

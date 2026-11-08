@@ -26,3 +26,13 @@
 - No genuine connectors, notification provider, SMTP delivery, vendor service, or external customer systems were contacted. An accepted HTTP/SMTP request would not prove delivery.
 - `well_control.kill_sheet` and `tubulars.api_5c3` remain `NEEDS_FIELD_VALIDATION`; no autonomous rig control or arbitrary wellsite write path is authorized.
 - CP130's repository software scope is complete for SHA `70c7de6bada761f5f6f2c580bced9dcb22be13a5` based on the successful exact-SHA run above. That run certifies only this commit; later CP131/CP132 changes require their own exact-final-SHA Actions evidence. No field/vendor evidence or qualified engineering acceptance is implied.
+
+## Later CP132 OCR evidence addendum (2026-11-08)
+
+The statement above that raw metrics could not be recovered was specific to base run `42460161993` and remains historically accurate for that run. The later integrated exact-SHA run `42481107515` tested `286945c9d627ba58a4f765b3f28cc65a5e0003ae`; its Linux job `128733009790` emitted the numeric-only verifier notice:
+
+- `SYNTHETIC_OCR_QUALITY_OK`: 32 generated synthetic cases.
+- CER `0.00000`; WER `0.00000`; critical-field exact rate `1.00000`.
+- Dataset SHA-256: `b682f05c5294a30ac361e26a5f37752587a208aa0d08f83a73e2789e3466ea57`.
+
+This is the deployment-image benchmark's observed result on the pinned synthetic corpus, not OCR evidence for field DDRs. The cases are clean generated English pages; they do not represent Persian documents, vendor forms, difficult/rotated/low-quality scans, independently adjudicated field data, extraction semantics or engineering correctness. No field accuracy, vendor acceptance or production readiness is inferred.

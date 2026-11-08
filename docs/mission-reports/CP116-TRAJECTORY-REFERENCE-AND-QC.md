@@ -20,4 +20,4 @@ QC coverage now also asserts:
 
 - `backend/.venv/bin/python -m ruff check backend/src/drillai/engines/trajectory.py backend/tests/engines/test_trajectory.py` — passed.
 - `backend/.venv/bin/python -m pytest backend/tests/engines/test_trajectory.py -q` — **23 passed**.
-- Exact-final-SHA Linux/native-Windows certification remains a later CP132 gate. The 23 tests are software reference checks, not field calibration or an independent engineering qualification.
+- At the CP116 checkpoint, exact-final-SHA Linux/native-Windows certification remained outstanding. The later integrated CP130–CP132 SHA passed exact-SHA run `42481107515` on both platforms; that does not retroactively certify the CP116-only SHA. The 23 tests are software reference checks, not field calibration or an independent engineering qualification.

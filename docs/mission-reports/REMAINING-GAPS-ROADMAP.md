@@ -15,6 +15,8 @@
 
 ---
 
+> **CP133 current integrated release status (2026-11-08):** The repository software/browser scope through CP132 is `DONE` for SHA `286945c9d627ba58a4f765b3f28cc65a5e0003ae`, certified by exact-SHA [Actions run `42481107515`](https://github.com/asgareyvazi/DrillAI/actions/runs/42481107515) on Linux and native Windows. The older CP20/CP25/CP26 entries above remain historical. The external/field gaps remain open: live vendor commissioning and delivery evidence are `BLOCKED_EXTERNAL`; field OCR, surveys, qualified engineering, customer acceptance and production recovery are `NEEDS_FIELD_VALIDATION` or `NOT_MEASURED` as applicable. This software certification is not a production-readiness declaration; see `CP132-FINAL-RELEASE-ASSURANCE.md`.
+
 ## 1. Closed Capabilities in CP17–CP20 (No Longer Gaps)
 
 The following items from earlier checkpoints have been implemented, verified by automated tests, and closed in CP17–CP20:

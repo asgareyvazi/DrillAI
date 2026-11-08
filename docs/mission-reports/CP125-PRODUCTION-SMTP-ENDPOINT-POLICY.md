@@ -29,4 +29,4 @@ This restricts a tenant/workflow-selected endpoint in production; it is not a ge
 
 ## Exact-SHA CI follow-up
 
-GitHub Actions run [42359313648](https://github.com/asgareyvazi/DrillAI/actions/runs/42359313648), for commit `7c274ab99017b9ad148c25ca94f28e78a596124c`, is listed as **cancelled**. It provides no pass/fail evidence for that SHA; CP125's exact-SHA certification remains unavailable, and CP132 must certify the final integrated SHA.
+GitHub Actions run [42359313648](https://github.com/asgareyvazi/DrillAI/actions/runs/42359313648), for commit `7c274ab99017b9ad148c25ca94f28e78a596124c`, is listed as **cancelled**. It provides no pass/fail evidence for that SHA; CP125's exact-SHA certification remains unavailable; the later integrated CP130–CP132 SHA was certified by run `42481107515` (see `CP132-FINAL-RELEASE-ASSURANCE.md`), without retroactively certifying CP125's cancelled SHA.

@@ -23,7 +23,7 @@ The rule is intentionally conservative: a provider ID containing other punctuati
 - From `backend/`: `./.venv/bin/python -m pytest tests/workflow/test_notification_worker.py -q` — **7 passed, 1 PostgreSQL-marked test skipped**.
 - Backend Ruff passed for the changed Python files; `compileall` passed; `git diff --check` passed.
 - Collection and inventory check: **1,712 tests across 128 files**; the manifest's **14 PostgreSQL tests across 11 files** match live collection.
-- The PostgreSQL-backed independent-worker test was skipped in the focused default run. No full backend suite, native-Windows run or exact-final-SHA certification is claimed at this intermediate CP124 milestone; CP132 remains the exact-final-SHA certification point.
+- The PostgreSQL-backed independent-worker test was skipped in the focused default run. No full backend suite, native-Windows run or exact-final-SHA certification is claimed at this intermediate CP124 milestone; the later CP132 certification is recorded in `CP132-FINAL-RELEASE-ASSURANCE.md` and does not change this checkpoint's evidence.
 
 ## Limits
 
@@ -31,4 +31,4 @@ These tests establish local software behavior for sanitization, not external-pro
 
 ## Exact-SHA CI follow-up
 
-GitHub Actions run [42359053299](https://github.com/asgareyvazi/DrillAI/actions/runs/42359053299), for commit `6c5a44e9e649bce78a30b685ee82fe4902bb3ff2`, is listed as **cancelled**. It provides no pass/fail evidence for that SHA; CP124's exact-SHA certification remains unavailable, and CP132 must certify the final integrated SHA.
+GitHub Actions run [42359053299](https://github.com/asgareyvazi/DrillAI/actions/runs/42359053299), for commit `6c5a44e9e649bce78a30b685ee82fe4902bb3ff2`, is listed as **cancelled**. It provides no pass/fail evidence for that SHA; CP124's exact-SHA certification remains unavailable; the later integrated CP130–CP132 SHA was certified by run `42481107515` (see `CP132-FINAL-RELEASE-ASSURANCE.md`), without retroactively certifying CP124's cancelled SHA.

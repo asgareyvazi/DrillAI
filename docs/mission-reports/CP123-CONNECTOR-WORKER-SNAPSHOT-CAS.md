@@ -25,4 +25,4 @@ The existing competing-worker test verifies that the winner's worker ID, lease a
 
 ## Limits
 
-This strengthens the SQL compare-and-swap invariant; it does not prove database failover, network partitions, multi-host scheduling fairness, production throughput or recovery objectives. The hook-driven regression is deterministic software evidence, not operational concurrency qualification. CP132 still requires exact-final-SHA Linux/native-Windows certification, and deployment/field evidence remains separate.
+This strengthens the SQL compare-and-swap invariant; it does not prove database failover, network partitions, multi-host scheduling fairness, production throughput or recovery objectives. The hook-driven regression is deterministic software evidence, not operational concurrency qualification. The later CP132 exact-final-SHA Linux/native-Windows certification is recorded in `CP132-FINAL-RELEASE-ASSURANCE.md`; deployment and field evidence remain separate.

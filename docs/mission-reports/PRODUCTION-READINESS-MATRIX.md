@@ -5,7 +5,9 @@
 **Phase**: CP17–CP20 End-to-End Engineering Program  
 **Date**: 2026-10-17 (historical CP20 snapshot)
 
-> **Current-release correction (2026-10-20):** The matrix and provenance rows below record prior CP20 evidence and are not certification of the CP25/CP26 release candidate. Current status and blockers are recorded in §3; the latest pushed SHA must be checked against its own Linux/Windows Actions run before claiming release certification.
+> **Historical CP25/CP26 correction (2026-11-08):** The matrix and provenance rows below record prior CP20 evidence and were not certification of the then-current CP25/CP26 candidate. That statement is retained as history, not as the current branch status.
+>
+> **CP133 current integrated closure (2026-11-08):** CP130–CP132 repository software/browser acceptance is `DONE` on SHA `286945c9d627ba58a4f765b3f28cc65a5e0003ae`; exact-SHA [Actions run `42481107515`](https://github.com/asgareyvazi/DrillAI/actions/runs/42481107515) passed Linux job `128733009790` and native-Windows job `128733009555`. Field, vendor, customer, notification-delivery and qualified engineering acceptance remain separate and unestablished; see `CP132-FINAL-RELEASE-ASSURANCE.md`. Rows below remain the dated CP20 matrix, not current test counts.
 
 ---
 
