@@ -1,6 +1,6 @@
 # CP135 — Bilingual ingestion OCR benchmark
 
-**Status (working milestone):** The corpus, runtime gate, stratified metric runner, verifier, and regression tests are implemented. Real OCR accuracy remains **not yet measured on this working milestone**: this local environment has no Tesseract executable/language inventory. The deployment-image exact-SHA run is the acceptance source for measured results and must be added before this report is called complete.
+**Status:** The benchmark implementation is complete, but CP135 is **not accepted**. The exact-SHA Linux deployment-image gate failed when the OCR benchmark process returned nonzero. GitHub's raw log fetch returned `EOF`, and that run produced no downloadable artifact; therefore the image's detailed status, runtime inventory, per-case metrics, and failure reason remain unknown. No threshold, accuracy, or successful-image claim is made. A diagnostic-preserving rerun is required before closing this phase.
 
 ## Scope implemented
 
@@ -9,15 +9,22 @@
 - Coverage: 48 English (`eng`) and 16 Persian (`fas`) cases; 4 page layouts (`single_column`, `table`, `two_column`, `compact`); 4 controlled scan conditions (`clean`, `low_contrast`, `light_skew`, `light_noise`). Every case has a unique ID, explicit synthetic critical-field values, language/layout/scan strata, and an image-only generated PDF digest in measured evidence.
 - The runner sends each generated PDF through the production `parse_bytes` path and the configured PDFium/Tesseract adapters. Persian cases are run only when both `eng` and `fas` are configured and installed. Missing language data, Tesseract, PDFium, rendering dependencies, incomplete page processing, or any metric failure yields a non-passing report/exit status; there is no fallback to fixture text in the deployment-image gate.
 - Global and per-stratum metrics are micro-aggregated from per-case error counts and denominators. The reviewed software thresholds are CER ≤ 0.15, WER ≤ 0.20, and critical-field exact rate ≥ 0.90, required globally and in every reported language, layout, and scan-condition stratum. The report records Python, Tesseract, PDFium, image/RTL renderer dependency versions, configured/available languages, and OCR resource limits. The verifier recomputes global and stratum totals from per-case evidence, checks the corpus digest/runtime languages, and rejects transcript/path material.
-- CI now runs the CP135 corpus inside the backend deployment image and verifies the emitted report. The prior CP132 32-case English result remains a historical result for its original corpus/SHA; it is not presented as CP135 evidence.
+- CI runs the CP135 corpus inside the backend deployment image. The prior CP132 32-case English result remains a historical result for its original corpus/SHA; it is not presented as CP135 evidence.
 
 ## Local verification and boundary
 
 - Focused OCR benchmark/renderer/verifier tests: **7 passed**. These tests use deterministic test providers for harness mechanics; they are not Tesseract accuracy evidence.
 - Full `backend/tests/ingestion` selection: **134 passed**.
-- Full backend suite with embedded PostgreSQL enabled: **1,740 collected and completed, 0 failures, 0 skips**; only the existing `XDG_RUNTIME_DIR` warning was emitted. The maintained inventory remains 1,740.
-- CP16 documentation/count guard: **10 passed**. Ruff, Python compilation, corpus JSON parsing, and `git diff --check`: passed for the implementation at this checkpoint.
+- Full backend suite with embedded PostgreSQL enabled: **1,740 collected and completed, 0 failures, 0 skips** in the recorded local run; that full run preceded the final renderer metadata/preflight addition. The maintained inventory remains 1,740.
+- CP16 documentation/count guard: **10 passed**. Ruff, Python compilation, corpus JSON parsing, and `git diff --check` passed for the implementation checkpoint.
 - Direct local benchmark invocation: **BLOCKED**, exit 2, `quality_evaluated=false`; Tesseract and its language inventory are absent on this host. PDFium is present (`5.15.1`), but this does not substitute for OCR. No local CER/WER/field-accuracy result is claimed.
-- Exact-SHA deployment-image Linux and native-Windows Actions evidence: **pending**. Record actual run ID, head SHA, job results, emitted counts/strata/metrics, and any failures here after the CP135 commit is pushed. A failed or blocked image gate must remain reported as such; do not turn a local fake-provider test into a quality pass.
+
+## Exact-SHA CI evidence
+
+- Run **42521609413**, head SHA `fa25e26ba94daa71982099876c3d5fe448286f6c`: [Actions run](https://github.com/asgareyvazi/DrillAI/actions/runs/42521609413).
+- Linux backend inventory passed: **1,740 passed, 0 skipped, 0 deselected**; frontend unit suite passed **400**. The Docker Compose deployment gate failed at the CP135 deployment-image OCR command; GitHub annotated “the deployment-image synthetic OCR benchmark did not pass.” Downstream Linux E2E steps were skipped because of that failure, so this is not a passing Linux certification.
+- Native Windows job passed. Backend inventory: **1,724 passed, 1 existing platform-specific skip, 15 PostgreSQL deselections; 1,740 collected**. Frontend unit suite: **400 passed**. Browser suite: **127 passed, 0 retries** across 20 spec files (Chromium 120, faults 4, auth 3). This Windows result does not measure the Linux deployment-image OCR gate.
+- The raw Actions log request failed with `EOF`; the run has no artifacts. Thus it is not known whether the image failure was a runtime preflight block, an incomplete case, or a global/stratified threshold miss. Do not infer which, and do not weaken the thresholds to turn this run green.
+- The next CP135 verification commit adds a transcript-free metric/case-ID failure annotation and uploads the already-bounded JSON report on gate failure. Use that fresh exact-SHA run to diagnose, fix the actual cause, and rerun before proceeding to CP136 certification.
 
 All corpus pages and labels are generated synthetic fixtures. Ground truth is generated from the same values used to render the pages and is not independently adjudicated or held out. This benchmark does not establish accuracy on field/vendor documents, handwriting, field scanning conditions, semantic correctness, qualified engineering validation, provider acceptance, customer acceptance, or operational readiness.
