@@ -245,7 +245,7 @@ class OperationsAdvisor:
             return []
         rows = (
             await self.session.execute(
-                select(EvidenceLink)
+                select(EvidenceLink, Document.id, Document.title)
                 .outerjoin(Document, Document.id == EvidenceLink.document_id)
                 .outerjoin(RawArtifact, RawArtifact.id == Document.raw_artifact_id)
                 .where(
@@ -256,27 +256,12 @@ class OperationsAdvisor:
                 .order_by(EvidenceLink.confidence.desc().nullslast(), EvidenceLink.created_at.desc())
                 .limit(limit)
             )
-        ).scalars().all()
+        ).all()
         items: list[EvidenceItem] = []
-        for row in rows:
-            title = None
-            document_id = None
-            if row.document_id:
-                document = (
-                    await self.session.execute(
-                        select(Document.id, Document.title)
-                        .outerjoin(RawArtifact, RawArtifact.id == Document.raw_artifact_id)
-                        .where(
-                            Document.id == row.document_id,
-                            Document.org_id == self.org_id,
-                            document_not_quarantined_condition(),
-                        )
-                    )
-                ).one_or_none()
-                if document is None:
-                    # A corrupt/cross-tenant edge is not evidence the caller may receive.
-                    continue
-                document_id, title = document
+        for row, document_id, title in rows:
+            if row.document_id is not None and document_id is None:
+                # Defense in depth: a broken/cross-tenant edge is not evidence the caller may receive.
+                continue
             items.append(
                 EvidenceItem(
                     id=row.id,

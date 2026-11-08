@@ -7,6 +7,7 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
+from sqlalchemy import event
 
 from drillai.ai.providers import CompletionResponse, Usage
 from drillai.core.errors import ProviderError
@@ -517,36 +518,68 @@ async def test_advisor_does_not_treat_closed_operation_status_as_actual_end_time
     assert not any(item["value"] == operation.created_at.isoformat() for item in payload["facts"])
 
 
-async def test_advisor_evidence_does_not_resolve_a_foreign_document_title(session):
+async def test_advisor_evidence_is_tenant_scoped_in_one_bounded_query(session):
     from drillai.db.models import Document, EvidenceLink, Organization
 
     owner = Organization(slug="advisor-owner", name="Advisor owner")
     foreign = Organization(slug="advisor-foreign", name="Advisor foreign")
     session.add_all([owner, foreign])
     await session.flush()
+    owner_document = Document(
+        org_id=owner.id,
+        doc_type="ddr",
+        title="owner synthetic report title",
+        status="extracted",
+    )
     foreign_document = Document(
         org_id=foreign.id,
         doc_type="ddr",
         title="foreign confidential report title",
         status="extracted",
     )
-    session.add(foreign_document)
+    session.add_all([owner_document, foreign_document])
     await session.flush()
-    hostile_link = EvidenceLink(
-        org_id=owner.id,
-        subject_kind="well",
-        subject_id="wel_owner",
-        evidence_kind="document_page",
-        evidence_id="dpg_foreign",
-        document_id=foreign_document.id,
-        excerpt="not content for the owner tenant",
+    session.add_all(
+        [
+            EvidenceLink(
+                org_id=owner.id,
+                subject_kind="well",
+                subject_id="wel_owner",
+                evidence_kind="document_page",
+                evidence_id="dpg_owner",
+                document_id=owner_document.id,
+                excerpt="owner scoped synthetic evidence",
+            ),
+            EvidenceLink(
+                org_id=owner.id,
+                subject_kind="well",
+                subject_id="wel_owner",
+                evidence_kind="document_page",
+                evidence_id="dpg_foreign",
+                document_id=foreign_document.id,
+                excerpt="not content for the owner tenant",
+            ),
+        ]
     )
-    session.add(hostile_link)
     await session.flush()
 
-    items = await OperationsAdvisor(session, owner.id)._evidence_for(["wel_owner"])
+    statements: list[str] = []
 
-    assert items == []
+    def record_select(_connection, _cursor, statement, _parameters, _context, _executemany) -> None:
+        if statement.lstrip().upper().startswith("SELECT"):
+            statements.append(statement)
+
+    engine = session.get_bind()
+    event.listen(engine, "before_cursor_execute", record_select)
+    try:
+        items = await OperationsAdvisor(session, owner.id)._evidence_for(["wel_owner"])
+    finally:
+        event.remove(engine, "before_cursor_execute", record_select)
+
+    assert len(items) == 1
+    assert items[0].document_id == owner_document.id
+    assert items[0].document_title == "owner synthetic report title"
+    assert len(statements) == 1
 
 
 async def test_provider_failure_is_reported_without_leaking_exception_details():
