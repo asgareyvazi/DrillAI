@@ -335,6 +335,12 @@ export function safeFailureText(rawText: string): string {
   return safe
 }
 
+export function safeFailureAssertionMessage(findings: readonly string[]): string {
+  const safeFindings = findings.map(safeFailureText)
+  const summary = safeFindings.length > 0 ? `: ${safeFindings.join(' | ')}` : ''
+  return `every HTTP or transport failure must be explicitly accounted for${summary}`
+}
+
 export function safeNetworkFailureEvidence(
   failure: NetworkFailure,
 ): Pick<NetworkFailure, 'method' | 'url' | 'errorText' | 'resourceType' | 'signalReason' | 'disposition'> {

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   classifyNetworkFailure,
   evaluateFailureOracle as evaluateAtApplicationOrigin,
+  safeFailureAssertionMessage,
   safeFailureText,
   safeFailureUrl,
   safeNetworkFailureEvidence,
@@ -87,6 +88,14 @@ describe('E2E request-failure oracle', () => {
     expect(result.findings.join(' ')).not.toContain('session-secret')
     expect(result.findings.join(' ')).not.toContain('signed-secret')
     expect(result.findings.join(' ')).not.toContain('hash-secret')
+    const diagnosticMessage = safeFailureAssertionMessage(result.findings)
+    expect(diagnosticMessage).toContain('HTTP 500')
+    expect(diagnosticMessage).not.toContain('credential-secret')
+    expect(diagnosticMessage).not.toContain('query-secret')
+    expect(diagnosticMessage).not.toContain('key-secret')
+    expect(diagnosticMessage).not.toContain('session-secret')
+    expect(diagnosticMessage).not.toContain('signed-secret')
+    expect(diagnosticMessage).not.toContain('hash-secret')
   })
 
   it('redacts credential-like path values as well as URL userinfo and query values', () => {

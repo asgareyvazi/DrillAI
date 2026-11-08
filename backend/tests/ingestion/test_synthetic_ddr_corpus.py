@@ -93,6 +93,17 @@ def test_synthetic_corpus_is_pinned_marked_and_locator_checked() -> None:
 
     assert seen_ids == set(canonical_fixtures)
 
+    repository_root = corpus_root.parents[3]
+    attributes = (repository_root / ".gitattributes").read_text(encoding="utf-8")
+    upload_sources = {
+        "synthetic_program_upload.txt": SYNTHETIC_PROGRAM_TEXT,
+        "synthetic_ddr_upload.txt": SYNTHETIC_DDR_TEXT,
+    }
+    for filename, canonical_bytes in upload_sources.items():
+        relative_path = f"frontend/e2e/assets/{filename}"
+        assert f"{relative_path} text eol=lf" in attributes
+        assert (repository_root / relative_path).read_bytes() == canonical_bytes
+
 
 def test_synthetic_ocr_benchmark_manifest_needs_no_external_approval_and_fails_closed() -> None:
     ocr_root = SYNTHETIC_CORPUS_ROOT / "ocr"

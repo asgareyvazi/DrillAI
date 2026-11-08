@@ -15,6 +15,7 @@ import {
   classifyNetworkFailure,
   evaluateFailureOracle,
   safeNetworkFailureEvidence,
+  safeFailureAssertionMessage,
   safeFailureText,
   safeFailureUrl,
   type AbortEvidence,
@@ -245,12 +246,13 @@ async function assertFailureOracle(state: FailureOracleState, testInfo: TestInfo
     state.applicationOrigin,
   )
   const consoleErrors = appConsoleErrors(state.consoleErrors).map(safeFailureText)
-  if (consoleErrors.length > 0 || responseResult.findings.length > 0) {
+  const safeFindings = responseResult.findings.map(safeFailureText)
+  if (consoleErrors.length > 0 || safeFindings.length > 0) {
     const evidence = {
       project: testInfo.project.name,
       test: testInfo.title,
       consoleErrors,
-      failures: responseResult.findings,
+      failures: safeFindings,
       httpResponses: state.failedResponses.filter((response) => response.status >= 400).map((response) => ({
         method: response.method,
         url: safeFailureUrl(response.url),
@@ -266,7 +268,7 @@ async function assertFailureOracle(state: FailureOracleState, testInfo: TestInfo
     })
   }
   expect(consoleErrors, `application console errors: ${consoleErrors.join(' | ')}`).toEqual([])
-  expect(responseResult.findings, 'every HTTP or transport failure must be explicitly accounted for').toEqual([])
+  expect(safeFindings, safeFailureAssertionMessage(safeFindings)).toEqual([])
 }
 
 /**
@@ -594,5 +596,6 @@ export function expectNoFailures(
     safeConsoleErrors,
     `application console errors: ${safeConsoleErrors.join(' | ')}`,
   ).toEqual([])
-  expect(result.findings, 'every HTTP or transport failure must be explicitly accounted for').toEqual([])
+  const safeFindings = result.findings.map(safeFailureText)
+  expect(safeFindings, safeFailureAssertionMessage(safeFindings)).toEqual([])
 }
