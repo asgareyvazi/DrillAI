@@ -244,20 +244,20 @@ jobs:
             echo "DEPLOYMENT_GATE_FAILED: the stack did not become ready within 90 seconds." >&2
             exit 1
           fi
-          # Execute the pinned, synthetic quality measurement inside the exact backend deployment
-          # image. The report contains metrics and fixture IDs only, never OCR transcripts or PDFs.
-          ocr_report="$RUNNER_TEMP/cp130-synthetic-ocr-quality.json"
+          # Execute the pinned bilingual synthetic quality measurement inside the exact backend
+          # deployment image. The report contains metrics and fixture IDs only, never transcripts/PDFs.
+          ocr_report="$RUNNER_TEMP/cp135-synthetic-ocr-quality.json"
           if ! docker compose exec -T backend python -m drillai.ingestion.ocr_synthetic_quality > "$ocr_report"; then
             cat "$ocr_report"
             echo "::error::the deployment-image synthetic OCR benchmark did not pass"
             exit 1
           fi
           ocr_summary="$(backend/.venv/bin/python scripts/verify_synthetic_ocr_quality.py \
-            "$ocr_report" --corpus backend/src/drillai/ingestion/data/synthetic_ddr_ocr_quality_v1.json)"
+            "$ocr_report" --corpus backend/src/drillai/ingestion/data/synthetic_ddr_ocr_quality_v2.json)"
           echo "$ocr_summary"
-          echo "::notice title=CP130 synthetic OCR metrics::$ocr_summary"
+          echo "::notice title=CP135 synthetic OCR metrics::$ocr_summary"
           {
-            echo '### Deployment-image synthetic OCR quality (development-only evidence)'
+            echo '### CP135 deployment-image synthetic OCR quality (development-only evidence)'
             echo '```'
             echo "$ocr_summary"
             echo 'Classification: synthetic; not field/vendor accuracy or engineering acceptance.'

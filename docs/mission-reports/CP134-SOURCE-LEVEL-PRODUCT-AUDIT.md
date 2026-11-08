@@ -47,6 +47,7 @@ Regression coverage extends the existing Advisor evidence isolation test: one va
 - CP16 maintained-documentation/count consistency guard — **1 passed** after adding the CP133 run record.
 - `git diff --check` and explicit trailing-whitespace checks on the new audit/reconciliation reports — passed.
 - Exact-SHA CP133 Actions run `42505266483` tested `12bce5b`; Linux succeeded and native Windows failed the real-browser gate at `identity-permissions.spec.ts:152` with the annotated `net::ERR_NO_BUFFER_SPACE` transport failure. Its log retrieval returned EOF and no further root cause is established. This historical failure does not certify or invalidate the separately tested CP134 source fix.
+- Exact-SHA CP134 Actions run [`42507488169`](https://github.com/asgareyvazi/DrillAI/actions/runs/42507488169) tested commit `915c623df532a08434881e67486aa14fb87ce688` and **passed Linux and native Windows**. Linux reported 1,740 backend passes/0 skips, 400 frontend tests, and 127 Playwright passes/0 retries; Windows reported 1,724 backend passes, one identified POSIX-only skip and 15 PostgreSQL deselections, 400 frontend tests, and 127 Playwright passes/0 retries. Deployment-image smoke and all acceptance gates passed; only failure-only artifact uploads were skipped. The image ran the prior CP130 32-case English synthetic OCR corpus; this does not measure CP135 or field accuracy.
 
 ## Priority register and disposition
 
