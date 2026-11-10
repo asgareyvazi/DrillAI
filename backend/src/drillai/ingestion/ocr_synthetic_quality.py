@@ -1,6 +1,6 @@
 """In-memory synthetic OCR quality check for the deployed PDFium/Tesseract ingestion path.
 
-The fixture corpus is versioned in ``data/synthetic_ddr_ocr_quality_v2.json``. Each varied page is
+The fixture corpus is versioned in ``data/synthetic_ddr_ocr_quality_v3.json``. Each varied page is
 rendered as an image-only PDF, passed through the same ``parse_bytes`` and PDFium/Tesseract adapters
 used by uploads, and compared with generated ground truth. English and Persian cases run only when
 the configured deployment runtime has both required language packs. No operator data, network access,
@@ -36,7 +36,7 @@ from drillai.ingestion.ocr_benchmark import error_rates, normalize_for_scoring
 from drillai.ingestion.ocr_runtime import _pdfium_details
 from drillai.ingestion.parsers import parse_bytes
 
-_CORPUS_PATH = Path(__file__).with_name("data") / "synthetic_ddr_ocr_quality_v2.json"
+_CORPUS_PATH = Path(__file__).with_name("data") / "synthetic_ddr_ocr_quality_v3.json"
 _MAX_PDF_BYTES = 8 * 1024 * 1024
 _MIN_SYNTHETIC_CASES = 60
 _MAX_SYNTHETIC_CER = 0.15
@@ -113,7 +113,7 @@ def _load_corpus() -> tuple[dict[str, Any], bytes]:
         not isinstance(document, dict)
         or document.get("classification") != "synthetic"
         or document.get("corpus_id") != "cp135-synthetic-ddr-ocr"
-        or document.get("version") != "2.0.0"
+        or document.get("version") != "3.0.0"
         or document.get("languages") != ["eng", "fas"]
         or document.get("stratification_dimensions") != list(_STRATA_DIMENSIONS)
         or not isinstance(document.get("cases"), list)
@@ -166,15 +166,28 @@ def _load_corpus() -> tuple[dict[str, Any], bytes]:
     languages = {case["language"] for case in cases}
     if languages != set(document["languages"]):
         raise ValueError("every declared synthetic OCR language must have at least one scored case")
+    if len(cases) != 64 or any(sum(case["language"] == language for case in cases) != 32 for language in document["languages"]):
+        raise ValueError("the v3 synthetic OCR corpus must balance 32 cases per language")
     for dimension, allowed in (
         ("layout", _SUPPORTED_LAYOUTS),
         ("scan_condition", _SUPPORTED_SCAN_CONDITIONS),
     ):
         counts = {value: sum(case[dimension] == value for case in cases) for value in allowed}
-        if any(count < 4 for count in counts.values()):
-            raise ValueError(f"the synthetic OCR corpus lacks the minimum cases for a {dimension} stratum")
-    if sum(case["language"] == "fas" for case in cases) < 8:
-        raise ValueError("the synthetic OCR corpus lacks the minimum Persian language stratum")
+        if any(count != 16 for count in counts.values()):
+            raise ValueError(f"the v3 synthetic OCR corpus must balance every {dimension} stratum across languages")
+    for language in document["languages"]:
+        for layout in _SUPPORTED_LAYOUTS:
+            for scan_condition in _SUPPORTED_SCAN_CONDITIONS:
+                count = sum(
+                    case["language"] == language
+                    and case["layout"] == layout
+                    and case["scan_condition"] == scan_condition
+                    for case in cases
+                )
+                if count != 2:
+                    raise ValueError(
+                        "the v3 synthetic OCR corpus must contain exactly two cases per language/layout/scan cell"
+                    )
     return document, raw
 
 
@@ -241,11 +254,20 @@ def _raster_pdf(case: dict[str, Any]) -> bytes:
             return get_display(arabic_reshaper.reshape(text))
         return text
 
-    def draw_text(text: str, x: int, y: int, font: Any, *, right_aligned: bool = False) -> None:
+    def draw_text(
+        text: str,
+        x: int,
+        y: int,
+        font: Any,
+        *,
+        right_aligned: bool = False,
+        right_edge: int | None = None,
+    ) -> None:
         rendered = visual_text(text)
         bbox = drawing.textbbox((0, 0), rendered, font=font)
         if right_aligned:
-            x = image.width - 125 - (bbox[2] - bbox[0])
+            edge = image.width - 125 if right_edge is None else right_edge
+            x = edge - (bbox[2] - bbox[0])
         drawing.text((x, y), rendered, font=font, fill=ink)
 
     draw_text(lines[0], 125, 125, bold_path_obj, right_aligned=(language == "fas"))
@@ -269,13 +291,30 @@ def _raster_pdf(case: dict[str, Any]) -> bytes:
             else:
                 draw_text(line, 130, y, regular_path_obj, right_aligned=(language == "fas"))
     elif layout == "two_column":
-        if language != "eng":
-            raise OcrUnavailable("the two-column fixture is reviewed only for English reading order")
         split_at = (len(body) + 1) // 2
+        column_font = regular_path_obj
+        if language == "fas":
+            # Persian labels plus mixed-script values need a narrower type size to remain inside
+            # the two independently read columns without colliding with the central gutter.
+            column_font = ImageFont.truetype(str(regular_path), 30)
         for index, line in enumerate(body[:split_at]):
-            draw_text(line, 120, 330 + index * 170, regular_path_obj)
+            draw_text(
+                line,
+                120,
+                330 + index * 170,
+                column_font,
+                right_aligned=(language == "fas"),
+                right_edge=1590 if language == "fas" else None,
+            )
         for index, line in enumerate(body[split_at:]):
-            draw_text(line, 880, 330 + index * 170, regular_path_obj)
+            draw_text(
+                line,
+                880,
+                330 + index * 170,
+                column_font,
+                right_aligned=(language == "fas"),
+                right_edge=800 if language == "fas" else None,
+            )
         drawing.line((840, 300, 840, 1580), fill=(205, 205, 205), width=2)
     else:
         font = regular_path_obj
@@ -361,7 +400,7 @@ def _resource_limits(settings: Settings) -> dict[str, int | float]:
 
 def _base_report(corpus: dict[str, Any], corpus_bytes: bytes) -> dict[str, Any]:
     return {
-        "tool": "drillai-synthetic-ocr-quality-v2",
+        "tool": "drillai-synthetic-ocr-quality-v3",
         "status": "blocked",
         "quality_evaluated": False,
         "dataset": {
@@ -659,7 +698,7 @@ def main(argv: list[str] | None = None) -> int:
     except Exception as exc:
         # Never put exception text, paths, input bytes, or child-process output in a machine-readable report.
         report = {
-            "tool": "drillai-synthetic-ocr-quality-v2",
+            "tool": "drillai-synthetic-ocr-quality-v3",
             "status": "failed",
             "quality_evaluated": False,
             "reason": f"synthetic OCR benchmark setup failed ({type(exc).__name__})",

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regenerate the deterministic CP135 bilingual synthetic OCR corpus."""
+"""Regenerate the deterministic, fully crossed CP135 bilingual synthetic OCR corpus."""
 
 from __future__ import annotations
 
@@ -17,11 +17,10 @@ DEFAULT_OUTPUT = (
     / "drillai"
     / "ingestion"
     / "data"
-    / "synthetic_ddr_ocr_quality_v2.json"
+    / "synthetic_ddr_ocr_quality_v3.json"
 )
 LAYOUTS = ("single_column", "table", "two_column", "compact")
 SCAN_CONDITIONS = ("clean", "low_contrast", "light_skew", "light_noise")
-PERSIAN_LAYOUTS = ("single_column", "table", "compact", "single_column")
 ENGLISH_LABELS = {
     "sample_id": "SAMPLE ID",
     "report_date": "REPORT DATE",
@@ -66,11 +65,8 @@ PERSIAN_ACTIVITIES = (
 )
 
 
-def _case(index: int) -> dict[str, Any]:
-    language = "eng" if index < 48 else "fas"
-    language_index = index if language == "eng" else index - 48
-    layout = LAYOUTS[index % len(LAYOUTS)] if language == "eng" else PERSIAN_LAYOUTS[language_index % 4]
-    scan_condition = SCAN_CONDITIONS[index % len(SCAN_CONDITIONS)]
+def _case(index: int, *, language: str, layout: str, scan_condition: str) -> dict[str, Any]:
+    language_index = index if language == "eng" else index - 32
     labels = ENGLISH_LABELS if language == "eng" else PERSIAN_LABELS
     activity = (
         ENGLISH_ACTIVITIES[index % len(ENGLISH_ACTIVITIES)]
@@ -132,16 +128,30 @@ def _case(index: int) -> dict[str, Any]:
 
 
 def build_corpus() -> dict[str, Any]:
-    cases = [_case(index) for index in range(64)]
+    cases = []
+    for language in ("eng", "fas"):
+        for layout in LAYOUTS:
+            for scan_condition in SCAN_CONDITIONS:
+                for _replicate in range(2):
+                    index = len(cases)
+                    cases.append(
+                        _case(
+                            index,
+                            language=language,
+                            layout=layout,
+                            scan_condition=scan_condition,
+                        )
+                    )
     return {
         "corpus_id": "cp135-synthetic-ddr-ocr",
-        "version": "2.0.0",
+        "version": "3.0.0",
         "classification": "synthetic",
         "languages": ["eng", "fas"],
         "stratification_dimensions": ["language", "layout", "scan_condition"],
         "sampling_method": (
-            "64 deterministic one-page image-only machine-generated DDR fixtures: 48 English and 16 Persian; "
-            "four page layouts and four controlled scan conditions, crossed by a fixed schedule. "
+            "64 deterministic one-page image-only machine-generated DDR fixtures in a balanced full factorial: "
+            "2 languages x 4 page layouts x 4 controlled scan conditions x 2 independent value sets per cell. "
+            "Every language/layout/scan-condition combination is represented exactly twice. "
             "No field or vendor documents are sampled."
         ),
         "ground_truth_protocol": (

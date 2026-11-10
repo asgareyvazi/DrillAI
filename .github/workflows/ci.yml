@@ -357,7 +357,7 @@ jobs:
             exit 1
           fi
           ocr_summary="$(backend/.venv/bin/python scripts/verify_synthetic_ocr_quality.py \
-            "$ocr_report" --corpus backend/src/drillai/ingestion/data/synthetic_ddr_ocr_quality_v2.json)"
+            "$ocr_report" --corpus backend/src/drillai/ingestion/data/synthetic_ddr_ocr_quality_v3.json)"
           echo "$ocr_summary"
           echo "::notice title=CP135 synthetic OCR metrics::$ocr_summary"
           {

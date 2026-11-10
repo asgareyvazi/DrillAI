@@ -13,6 +13,10 @@ from pathlib import Path
 from typing import Any
 
 MIN_CASES = 60
+BALANCED_CASE_COUNT = 64
+LANGUAGES = ("eng", "fas")
+LAYOUTS = ("single_column", "table", "two_column", "compact")
+SCAN_CONDITIONS = ("clean", "low_contrast", "light_skew", "light_noise")
 STRATA_DIMENSIONS = ("language", "layout", "scan_condition")
 RENDERER_DISTRIBUTIONS = {"Pillow", "reportlab", "arabic-reshaper", "python-bidi", "pypdfium2"}
 RESOURCE_LIMIT_KEYS = {
@@ -115,20 +119,49 @@ def verify(report_path: Path, corpus_path: Path) -> dict[str, Any]:
     languages = corpus.get("languages")
     if (
         not isinstance(corpus_cases, list)
+        or len(corpus_cases) != BALANCED_CASE_COUNT
         or len(corpus_cases) < MIN_CASES
         or corpus.get("corpus_id") != "cp135-synthetic-ddr-ocr"
-        or corpus.get("version") != "2.0.0"
+        or corpus.get("version") != "3.0.0"
         or corpus.get("classification") != "synthetic"
-        or languages != ["eng", "fas"]
+        or languages != list(LANGUAGES)
         or dimensions != list(STRATA_DIMENSIONS)
         or not isinstance(dataset, dict)
     ):
         raise ValueError("checked-in corpus is malformed or below the CP135 bilingual case minimum")
 
+    if any(not isinstance(case, dict) for case in corpus_cases):
+        raise ValueError("the balanced CP135 corpus must contain only case objects")
+    language_counts = {
+        language: sum(case.get("language") == language for case in corpus_cases)
+        for language in LANGUAGES
+    }
+    if language_counts != dict.fromkeys(LANGUAGES, 32):
+        raise ValueError("the v3 corpus must balance 32 cases per language")
+    for dimension, values in (("layout", LAYOUTS), ("scan_condition", SCAN_CONDITIONS)):
+        if any(
+            sum(case.get(dimension) == value for case in corpus_cases) != 16
+            for value in values
+        ):
+            raise ValueError(f"the v3 corpus must balance every {dimension} stratum")
+    for language in LANGUAGES:
+        for layout in LAYOUTS:
+            for scan_condition in SCAN_CONDITIONS:
+                cell_count = sum(
+                    case.get("language") == language
+                    and case.get("layout") == layout
+                    and case.get("scan_condition") == scan_condition
+                    for case in corpus_cases
+                )
+                if cell_count != 2:
+                    raise ValueError(
+                        "the v3 corpus must include exactly two cases per language/layout/scan cell"
+                    )
+
     expected_digest = hashlib.sha256(corpus_bytes).hexdigest()
     runtime = report.get("runtime")
     if (
-        report.get("tool") != "drillai-synthetic-ocr-quality-v2"
+        report.get("tool") != "drillai-synthetic-ocr-quality-v3"
         or report.get("status") != "passed"
         or report.get("quality_evaluated") is not True
         or dataset.get("id") != corpus.get("corpus_id")

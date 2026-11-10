@@ -65,6 +65,7 @@ packages = ["src/drillai"]
 "src/drillai/assets/fonts/LICENSE-DejaVu.txt" = "drillai/assets/fonts/LICENSE-DejaVu.txt"
 "src/drillai/ingestion/data/synthetic_ddr_ocr_quality_v1.json" = "drillai/ingestion/data/synthetic_ddr_ocr_quality_v1.json"
 "src/drillai/ingestion/data/synthetic_ddr_ocr_quality_v2.json" = "drillai/ingestion/data/synthetic_ddr_ocr_quality_v2.json"
+"src/drillai/ingestion/data/synthetic_ddr_ocr_quality_v3.json" = "drillai/ingestion/data/synthetic_ddr_ocr_quality_v3.json"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

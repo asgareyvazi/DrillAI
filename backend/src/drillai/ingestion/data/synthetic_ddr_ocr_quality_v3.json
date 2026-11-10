@@ -1,0 +1,2194 @@
+{
+  "corpus_id": "cp135-synthetic-ddr-ocr",
+  "version": "3.0.0",
+  "classification": "synthetic",
+  "languages": [
+    "eng",
+    "fas"
+  ],
+  "stratification_dimensions": [
+    "language",
+    "layout",
+    "scan_condition"
+  ],
+  "sampling_method": "64 deterministic one-page image-only machine-generated DDR fixtures in a balanced full factorial: 2 languages x 4 page layouts x 4 controlled scan conditions x 2 independent value sets per cell. Every language/layout/scan-condition combination is represented exactly twice. No field or vendor documents are sampled.",
+  "ground_truth_protocol": "Generated from the same explicit synthetic values used to render each page; not independently adjudicated and not a holdout. Persian labels are Unicode source text, shaped only for raster display.",
+  "cases": [
+    {
+      "case_id": "cp135-ddr-001",
+      "language": "eng",
+      "layout": "single_column",
+      "scan_condition": "clean",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "SYNTHETIC DAILY DRILLING REPORT\nSAMPLE ID: CP135-DDR-001\nREPORT DATE: 2026-06-01\nWELL: CP135-SYNTHETIC-01\nSECTION: 12 1/4 INCH\nMEASURED DEPTH: 900.0 M\nRATE OF PENETRATION: 7.25 M/H\nMUD WEIGHT: 9.8 PPG\nNONPRODUCTIVE TIME: 0.00 H\nACTIVITY: DRILLING AHEAD",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP135-DDR-001"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-06-01"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "900.0"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "7.25"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "9.8"
+        },
+        {
+          "key": "npt_h",
+          "expected": "0.00"
+        }
+      ]
+    },
+    {
+      "case_id": "cp135-ddr-002",
+      "language": "eng",
+      "layout": "single_column",
+      "scan_condition": "clean",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "SYNTHETIC DAILY DRILLING REPORT\nSAMPLE ID: CP135-DDR-002\nREPORT DATE: 2026-06-02\nWELL: CP135-SYNTHETIC-02\nSECTION: 8 1/2 INCH\nMEASURED DEPTH: 917.5 M\nRATE OF PENETRATION: 14.00 M/H\nMUD WEIGHT: 10.0 PPG\nNONPRODUCTIVE TIME: 0.25 H\nACTIVITY: SLIDE DRILLING",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP135-DDR-002"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-06-02"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "917.5"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "14.00"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "10.0"
+        },
+        {
+          "key": "npt_h",
+          "expected": "0.25"
+        }
+      ]
+    },
+    {
+      "case_id": "cp135-ddr-003",
+      "language": "eng",
+      "layout": "single_column",
+      "scan_condition": "low_contrast",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "SYNTHETIC DAILY DRILLING REPORT\nSAMPLE ID: CP135-DDR-003\nREPORT DATE: 2026-06-03\nWELL: CP135-SYNTHETIC-01\nSECTION: 6 1/8 INCH\nMEASURED DEPTH: 934.0 M\nRATE OF PENETRATION: 20.75 M/H\nMUD WEIGHT: 10.2 PPG\nNONPRODUCTIVE TIME: 0.50 H\nACTIVITY: CONNECTION",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP135-DDR-003"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-06-03"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "934.0"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "20.75"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "10.2"
+        },
+        {
+          "key": "npt_h",
+          "expected": "0.50"
+        }
+      ]
+    },
+    {
+      "case_id": "cp135-ddr-004",
+      "language": "eng",
+      "layout": "single_column",
+      "scan_condition": "low_contrast",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "SYNTHETIC DAILY DRILLING REPORT\nSAMPLE ID: CP135-DDR-004\nREPORT DATE: 2026-06-04\nWELL: CP135-SYNTHETIC-02\nSECTION: 17 1/2 INCH\nMEASURED DEPTH: 951.5 M\nRATE OF PENETRATION: 27.50 M/H\nMUD WEIGHT: 10.4 PPG\nNONPRODUCTIVE TIME: 0.75 H\nACTIVITY: CIRCULATING AND CONDITIONING",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP135-DDR-004"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-06-04"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "951.5"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "27.50"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "10.4"
+        },
+        {
+          "key": "npt_h",
+          "expected": "0.75"
+        }
+      ]
+    },
+    {
+      "case_id": "cp135-ddr-005",
+      "language": "eng",
+      "layout": "single_column",
+      "scan_condition": "light_skew",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "SYNTHETIC DAILY DRILLING REPORT\nSAMPLE ID: CP135-DDR-005\nREPORT DATE: 2026-06-05\nWELL: CP135-SYNTHETIC-01\nSECTION: 12 1/4 INCH\nMEASURED DEPTH: 968.0 M\nRATE OF PENETRATION: 11.75 M/H\nMUD WEIGHT: 10.6 PPG\nNONPRODUCTIVE TIME: 1.00 H\nACTIVITY: TRIPPING OUT",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP135-DDR-005"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-06-05"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "968.0"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "11.75"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "10.6"
+        },
+        {
+          "key": "npt_h",
+          "expected": "1.00"
+        }
+      ]
+    },
+    {
+      "case_id": "cp135-ddr-006",
+      "language": "eng",
+      "layout": "single_column",
+      "scan_condition": "light_skew",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "SYNTHETIC DAILY DRILLING REPORT\nSAMPLE ID: CP135-DDR-006\nREPORT DATE: 2026-06-06\nWELL: CP135-SYNTHETIC-02\nSECTION: 8 1/2 INCH\nMEASURED DEPTH: 985.5 M\nRATE OF PENETRATION: 18.50 M/H\nMUD WEIGHT: 10.8 PPG\nNONPRODUCTIVE TIME: 1.25 H\nACTIVITY: RUNNING CASING",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP135-DDR-006"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-06-06"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "985.5"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "18.50"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "10.8"
+        },
+        {
+          "key": "npt_h",
+          "expected": "1.25"
+        }
+      ]
+    },
+    {
+      "case_id": "cp135-ddr-007",
+      "language": "eng",
+      "layout": "single_column",
+      "scan_condition": "light_noise",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "SYNTHETIC DAILY DRILLING REPORT\nSAMPLE ID: CP135-DDR-007\nREPORT DATE: 2026-06-07\nWELL: CP135-SYNTHETIC-01\nSECTION: 6 1/8 INCH\nMEASURED DEPTH: 1002.0 M\nRATE OF PENETRATION: 25.25 M/H\nMUD WEIGHT: 11.0 PPG\nNONPRODUCTIVE TIME: 1.50 H\nACTIVITY: CEMENTING",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP135-DDR-007"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-06-07"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "1002.0"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "25.25"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "11.0"
+        },
+        {
+          "key": "npt_h",
+          "expected": "1.50"
+        }
+      ]
+    },
+    {
+      "case_id": "cp135-ddr-008",
+      "language": "eng",
+      "layout": "single_column",
+      "scan_condition": "light_noise",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "SYNTHETIC DAILY DRILLING REPORT\nSAMPLE ID: CP135-DDR-008\nREPORT DATE: 2026-06-08\nWELL: CP135-SYNTHETIC-02\nSECTION: 17 1/2 INCH\nMEASURED DEPTH: 1019.5 M\nRATE OF PENETRATION: 9.50 M/H\nMUD WEIGHT: 11.2 PPG\nNONPRODUCTIVE TIME: 1.75 H\nACTIVITY: WELL CONTROL CHECK",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP135-DDR-008"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-06-08"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "1019.5"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "9.50"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "11.2"
+        },
+        {
+          "key": "npt_h",
+          "expected": "1.75"
+        }
+      ]
+    },
+    {
+      "case_id": "cp135-ddr-009",
+      "language": "eng",
+      "layout": "table",
+      "scan_condition": "clean",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "SYNTHETIC DAILY DRILLING REPORT\nSAMPLE ID: CP135-DDR-009\nREPORT DATE: 2026-06-09\nWELL: CP135-SYNTHETIC-01\nSECTION: 12 1/4 INCH\nMEASURED DEPTH: 1036.0 M\nRATE OF PENETRATION: 16.25 M/H\nMUD WEIGHT: 11.4 PPG\nNONPRODUCTIVE TIME: 2.00 H\nACTIVITY: DRILLING AHEAD",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP135-DDR-009"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-06-09"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "1036.0"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "16.25"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "11.4"
+        },
+        {
+          "key": "npt_h",
+          "expected": "2.00"
+        }
+      ]
+    },
+    {
+      "case_id": "cp135-ddr-010",
+      "language": "eng",
+      "layout": "table",
+      "scan_condition": "clean",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "SYNTHETIC DAILY DRILLING REPORT\nSAMPLE ID: CP135-DDR-010\nREPORT DATE: 2026-06-10\nWELL: CP135-SYNTHETIC-02\nSECTION: 8 1/2 INCH\nMEASURED DEPTH: 1053.5 M\nRATE OF PENETRATION: 23.00 M/H\nMUD WEIGHT: 11.6 PPG\nNONPRODUCTIVE TIME: 2.25 H\nACTIVITY: SLIDE DRILLING",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP135-DDR-010"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-06-10"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "1053.5"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "23.00"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "11.6"
+        },
+        {
+          "key": "npt_h",
+          "expected": "2.25"
+        }
+      ]
+    },
+    {
+      "case_id": "cp135-ddr-011",
+      "language": "eng",
+      "layout": "table",
+      "scan_condition": "low_contrast",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "SYNTHETIC DAILY DRILLING REPORT\nSAMPLE ID: CP135-DDR-011\nREPORT DATE: 2026-06-11\nWELL: CP135-SYNTHETIC-01\nSECTION: 6 1/8 INCH\nMEASURED DEPTH: 1070.0 M\nRATE OF PENETRATION: 7.25 M/H\nMUD WEIGHT: 11.8 PPG\nNONPRODUCTIVE TIME: 2.50 H\nACTIVITY: CONNECTION",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP135-DDR-011"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-06-11"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "1070.0"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "7.25"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "11.8"
+        },
+        {
+          "key": "npt_h",
+          "expected": "2.50"
+        }
+      ]
+    },
+    {
+      "case_id": "cp135-ddr-012",
+      "language": "eng",
+      "layout": "table",
+      "scan_condition": "low_contrast",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "SYNTHETIC DAILY DRILLING REPORT\nSAMPLE ID: CP135-DDR-012\nREPORT DATE: 2026-06-12\nWELL: CP135-SYNTHETIC-02\nSECTION: 17 1/2 INCH\nMEASURED DEPTH: 1087.5 M\nRATE OF PENETRATION: 14.00 M/H\nMUD WEIGHT: 12.0 PPG\nNONPRODUCTIVE TIME: 2.75 H\nACTIVITY: CIRCULATING AND CONDITIONING",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP135-DDR-012"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-06-12"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "1087.5"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "14.00"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "12.0"
+        },
+        {
+          "key": "npt_h",
+          "expected": "2.75"
+        }
+      ]
+    },
+    {
+      "case_id": "cp135-ddr-013",
+      "language": "eng",
+      "layout": "table",
+      "scan_condition": "light_skew",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "SYNTHETIC DAILY DRILLING REPORT\nSAMPLE ID: CP135-DDR-013\nREPORT DATE: 2026-06-13\nWELL: CP135-SYNTHETIC-01\nSECTION: 12 1/4 INCH\nMEASURED DEPTH: 1104.0 M\nRATE OF PENETRATION: 20.75 M/H\nMUD WEIGHT: 12.2 PPG\nNONPRODUCTIVE TIME: 0.00 H\nACTIVITY: TRIPPING OUT",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP135-DDR-013"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-06-13"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "1104.0"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "20.75"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "12.2"
+        },
+        {
+          "key": "npt_h",
+          "expected": "0.00"
+        }
+      ]
+    },
+    {
+      "case_id": "cp135-ddr-014",
+      "language": "eng",
+      "layout": "table",
+      "scan_condition": "light_skew",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "SYNTHETIC DAILY DRILLING REPORT\nSAMPLE ID: CP135-DDR-014\nREPORT DATE: 2026-06-14\nWELL: CP135-SYNTHETIC-02\nSECTION: 8 1/2 INCH\nMEASURED DEPTH: 1121.5 M\nRATE OF PENETRATION: 27.50 M/H\nMUD WEIGHT: 12.4 PPG\nNONPRODUCTIVE TIME: 0.25 H\nACTIVITY: RUNNING CASING",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP135-DDR-014"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-06-14"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "1121.5"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "27.50"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "12.4"
+        },
+        {
+          "key": "npt_h",
+          "expected": "0.25"
+        }
+      ]
+    },
+    {
+      "case_id": "cp135-ddr-015",
+      "language": "eng",
+      "layout": "table",
+      "scan_condition": "light_noise",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "SYNTHETIC DAILY DRILLING REPORT\nSAMPLE ID: CP135-DDR-015\nREPORT DATE: 2026-06-15\nWELL: CP135-SYNTHETIC-01\nSECTION: 6 1/8 INCH\nMEASURED DEPTH: 1138.0 M\nRATE OF PENETRATION: 11.75 M/H\nMUD WEIGHT: 12.6 PPG\nNONPRODUCTIVE TIME: 0.50 H\nACTIVITY: CEMENTING",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP135-DDR-015"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-06-15"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "1138.0"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "11.75"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "12.6"
+        },
+        {
+          "key": "npt_h",
+          "expected": "0.50"
+        }
+      ]
+    },
+    {
+      "case_id": "cp135-ddr-016",
+      "language": "eng",
+      "layout": "table",
+      "scan_condition": "light_noise",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "SYNTHETIC DAILY DRILLING REPORT\nSAMPLE ID: CP135-DDR-016\nREPORT DATE: 2026-06-16\nWELL: CP135-SYNTHETIC-02\nSECTION: 17 1/2 INCH\nMEASURED DEPTH: 1155.5 M\nRATE OF PENETRATION: 18.50 M/H\nMUD WEIGHT: 9.8 PPG\nNONPRODUCTIVE TIME: 0.75 H\nACTIVITY: WELL CONTROL CHECK",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP135-DDR-016"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-06-16"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "1155.5"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "18.50"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "9.8"
+        },
+        {
+          "key": "npt_h",
+          "expected": "0.75"
+        }
+      ]
+    },
+    {
+      "case_id": "cp135-ddr-017",
+      "language": "eng",
+      "layout": "two_column",
+      "scan_condition": "clean",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "SYNTHETIC DAILY DRILLING REPORT\nSAMPLE ID: CP135-DDR-017\nREPORT DATE: 2026-06-17\nWELL: CP135-SYNTHETIC-01\nSECTION: 12 1/4 INCH\nMEASURED DEPTH: 1172.0 M\nRATE OF PENETRATION: 25.25 M/H\nMUD WEIGHT: 10.0 PPG\nNONPRODUCTIVE TIME: 1.00 H\nACTIVITY: DRILLING AHEAD",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP135-DDR-017"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-06-17"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "1172.0"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "25.25"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "10.0"
+        },
+        {
+          "key": "npt_h",
+          "expected": "1.00"
+        }
+      ]
+    },
+    {
+      "case_id": "cp135-ddr-018",
+      "language": "eng",
+      "layout": "two_column",
+      "scan_condition": "clean",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "SYNTHETIC DAILY DRILLING REPORT\nSAMPLE ID: CP135-DDR-018\nREPORT DATE: 2026-06-18\nWELL: CP135-SYNTHETIC-02\nSECTION: 8 1/2 INCH\nMEASURED DEPTH: 1189.5 M\nRATE OF PENETRATION: 9.50 M/H\nMUD WEIGHT: 10.2 PPG\nNONPRODUCTIVE TIME: 1.25 H\nACTIVITY: SLIDE DRILLING",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP135-DDR-018"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-06-18"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "1189.5"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "9.50"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "10.2"
+        },
+        {
+          "key": "npt_h",
+          "expected": "1.25"
+        }
+      ]
+    },
+    {
+      "case_id": "cp135-ddr-019",
+      "language": "eng",
+      "layout": "two_column",
+      "scan_condition": "low_contrast",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "SYNTHETIC DAILY DRILLING REPORT\nSAMPLE ID: CP135-DDR-019\nREPORT DATE: 2026-06-19\nWELL: CP135-SYNTHETIC-01\nSECTION: 6 1/8 INCH\nMEASURED DEPTH: 1206.0 M\nRATE OF PENETRATION: 16.25 M/H\nMUD WEIGHT: 10.4 PPG\nNONPRODUCTIVE TIME: 1.50 H\nACTIVITY: CONNECTION",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP135-DDR-019"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-06-19"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "1206.0"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "16.25"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "10.4"
+        },
+        {
+          "key": "npt_h",
+          "expected": "1.50"
+        }
+      ]
+    },
+    {
+      "case_id": "cp135-ddr-020",
+      "language": "eng",
+      "layout": "two_column",
+      "scan_condition": "low_contrast",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "SYNTHETIC DAILY DRILLING REPORT\nSAMPLE ID: CP135-DDR-020\nREPORT DATE: 2026-06-20\nWELL: CP135-SYNTHETIC-02\nSECTION: 17 1/2 INCH\nMEASURED DEPTH: 1223.5 M\nRATE OF PENETRATION: 23.00 M/H\nMUD WEIGHT: 10.6 PPG\nNONPRODUCTIVE TIME: 1.75 H\nACTIVITY: CIRCULATING AND CONDITIONING",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP135-DDR-020"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-06-20"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "1223.5"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "23.00"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "10.6"
+        },
+        {
+          "key": "npt_h",
+          "expected": "1.75"
+        }
+      ]
+    },
+    {
+      "case_id": "cp135-ddr-021",
+      "language": "eng",
+      "layout": "two_column",
+      "scan_condition": "light_skew",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "SYNTHETIC DAILY DRILLING REPORT\nSAMPLE ID: CP135-DDR-021\nREPORT DATE: 2026-06-21\nWELL: CP135-SYNTHETIC-01\nSECTION: 12 1/4 INCH\nMEASURED DEPTH: 1240.0 M\nRATE OF PENETRATION: 7.25 M/H\nMUD WEIGHT: 10.8 PPG\nNONPRODUCTIVE TIME: 2.00 H\nACTIVITY: TRIPPING OUT",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP135-DDR-021"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-06-21"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "1240.0"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "7.25"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "10.8"
+        },
+        {
+          "key": "npt_h",
+          "expected": "2.00"
+        }
+      ]
+    },
+    {
+      "case_id": "cp135-ddr-022",
+      "language": "eng",
+      "layout": "two_column",
+      "scan_condition": "light_skew",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "SYNTHETIC DAILY DRILLING REPORT\nSAMPLE ID: CP135-DDR-022\nREPORT DATE: 2026-06-22\nWELL: CP135-SYNTHETIC-02\nSECTION: 8 1/2 INCH\nMEASURED DEPTH: 1257.5 M\nRATE OF PENETRATION: 14.00 M/H\nMUD WEIGHT: 11.0 PPG\nNONPRODUCTIVE TIME: 2.25 H\nACTIVITY: RUNNING CASING",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP135-DDR-022"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-06-22"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "1257.5"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "14.00"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "11.0"
+        },
+        {
+          "key": "npt_h",
+          "expected": "2.25"
+        }
+      ]
+    },
+    {
+      "case_id": "cp135-ddr-023",
+      "language": "eng",
+      "layout": "two_column",
+      "scan_condition": "light_noise",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "SYNTHETIC DAILY DRILLING REPORT\nSAMPLE ID: CP135-DDR-023\nREPORT DATE: 2026-06-23\nWELL: CP135-SYNTHETIC-01\nSECTION: 6 1/8 INCH\nMEASURED DEPTH: 1274.0 M\nRATE OF PENETRATION: 20.75 M/H\nMUD WEIGHT: 11.2 PPG\nNONPRODUCTIVE TIME: 2.50 H\nACTIVITY: CEMENTING",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP135-DDR-023"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-06-23"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "1274.0"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "20.75"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "11.2"
+        },
+        {
+          "key": "npt_h",
+          "expected": "2.50"
+        }
+      ]
+    },
+    {
+      "case_id": "cp135-ddr-024",
+      "language": "eng",
+      "layout": "two_column",
+      "scan_condition": "light_noise",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "SYNTHETIC DAILY DRILLING REPORT\nSAMPLE ID: CP135-DDR-024\nREPORT DATE: 2026-06-24\nWELL: CP135-SYNTHETIC-02\nSECTION: 17 1/2 INCH\nMEASURED DEPTH: 1291.5 M\nRATE OF PENETRATION: 27.50 M/H\nMUD WEIGHT: 11.4 PPG\nNONPRODUCTIVE TIME: 2.75 H\nACTIVITY: WELL CONTROL CHECK",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP135-DDR-024"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-06-24"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "1291.5"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "27.50"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "11.4"
+        },
+        {
+          "key": "npt_h",
+          "expected": "2.75"
+        }
+      ]
+    },
+    {
+      "case_id": "cp135-ddr-025",
+      "language": "eng",
+      "layout": "compact",
+      "scan_condition": "clean",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "SYNTHETIC DAILY DRILLING REPORT\nSAMPLE ID: CP135-DDR-025\nREPORT DATE: 2026-06-25\nWELL: CP135-SYNTHETIC-01\nSECTION: 12 1/4 INCH\nMEASURED DEPTH: 1308.0 M\nRATE OF PENETRATION: 11.75 M/H\nMUD WEIGHT: 11.6 PPG\nNONPRODUCTIVE TIME: 0.00 H\nACTIVITY: DRILLING AHEAD",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP135-DDR-025"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-06-25"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "1308.0"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "11.75"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "11.6"
+        },
+        {
+          "key": "npt_h",
+          "expected": "0.00"
+        }
+      ]
+    },
+    {
+      "case_id": "cp135-ddr-026",
+      "language": "eng",
+      "layout": "compact",
+      "scan_condition": "clean",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "SYNTHETIC DAILY DRILLING REPORT\nSAMPLE ID: CP135-DDR-026\nREPORT DATE: 2026-06-26\nWELL: CP135-SYNTHETIC-02\nSECTION: 8 1/2 INCH\nMEASURED DEPTH: 1325.5 M\nRATE OF PENETRATION: 18.50 M/H\nMUD WEIGHT: 11.8 PPG\nNONPRODUCTIVE TIME: 0.25 H\nACTIVITY: SLIDE DRILLING",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP135-DDR-026"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-06-26"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "1325.5"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "18.50"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "11.8"
+        },
+        {
+          "key": "npt_h",
+          "expected": "0.25"
+        }
+      ]
+    },
+    {
+      "case_id": "cp135-ddr-027",
+      "language": "eng",
+      "layout": "compact",
+      "scan_condition": "low_contrast",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "SYNTHETIC DAILY DRILLING REPORT\nSAMPLE ID: CP135-DDR-027\nREPORT DATE: 2026-06-27\nWELL: CP135-SYNTHETIC-01\nSECTION: 6 1/8 INCH\nMEASURED DEPTH: 1342.0 M\nRATE OF PENETRATION: 25.25 M/H\nMUD WEIGHT: 12.0 PPG\nNONPRODUCTIVE TIME: 0.50 H\nACTIVITY: CONNECTION",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP135-DDR-027"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-06-27"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "1342.0"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "25.25"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "12.0"
+        },
+        {
+          "key": "npt_h",
+          "expected": "0.50"
+        }
+      ]
+    },
+    {
+      "case_id": "cp135-ddr-028",
+      "language": "eng",
+      "layout": "compact",
+      "scan_condition": "low_contrast",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "SYNTHETIC DAILY DRILLING REPORT\nSAMPLE ID: CP135-DDR-028\nREPORT DATE: 2026-06-28\nWELL: CP135-SYNTHETIC-02\nSECTION: 17 1/2 INCH\nMEASURED DEPTH: 1359.5 M\nRATE OF PENETRATION: 9.50 M/H\nMUD WEIGHT: 12.2 PPG\nNONPRODUCTIVE TIME: 0.75 H\nACTIVITY: CIRCULATING AND CONDITIONING",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP135-DDR-028"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-06-28"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "1359.5"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "9.50"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "12.2"
+        },
+        {
+          "key": "npt_h",
+          "expected": "0.75"
+        }
+      ]
+    },
+    {
+      "case_id": "cp135-ddr-029",
+      "language": "eng",
+      "layout": "compact",
+      "scan_condition": "light_skew",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "SYNTHETIC DAILY DRILLING REPORT\nSAMPLE ID: CP135-DDR-029\nREPORT DATE: 2026-06-29\nWELL: CP135-SYNTHETIC-01\nSECTION: 12 1/4 INCH\nMEASURED DEPTH: 1376.0 M\nRATE OF PENETRATION: 16.25 M/H\nMUD WEIGHT: 12.4 PPG\nNONPRODUCTIVE TIME: 1.00 H\nACTIVITY: TRIPPING OUT",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP135-DDR-029"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-06-29"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "1376.0"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "16.25"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "12.4"
+        },
+        {
+          "key": "npt_h",
+          "expected": "1.00"
+        }
+      ]
+    },
+    {
+      "case_id": "cp135-ddr-030",
+      "language": "eng",
+      "layout": "compact",
+      "scan_condition": "light_skew",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "SYNTHETIC DAILY DRILLING REPORT\nSAMPLE ID: CP135-DDR-030\nREPORT DATE: 2026-06-30\nWELL: CP135-SYNTHETIC-02\nSECTION: 8 1/2 INCH\nMEASURED DEPTH: 1393.5 M\nRATE OF PENETRATION: 23.00 M/H\nMUD WEIGHT: 12.6 PPG\nNONPRODUCTIVE TIME: 1.25 H\nACTIVITY: RUNNING CASING",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP135-DDR-030"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-06-30"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "1393.5"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "23.00"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "12.6"
+        },
+        {
+          "key": "npt_h",
+          "expected": "1.25"
+        }
+      ]
+    },
+    {
+      "case_id": "cp135-ddr-031",
+      "language": "eng",
+      "layout": "compact",
+      "scan_condition": "light_noise",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "SYNTHETIC DAILY DRILLING REPORT\nSAMPLE ID: CP135-DDR-031\nREPORT DATE: 2026-07-01\nWELL: CP135-SYNTHETIC-01\nSECTION: 6 1/8 INCH\nMEASURED DEPTH: 910.0 M\nRATE OF PENETRATION: 7.25 M/H\nMUD WEIGHT: 9.8 PPG\nNONPRODUCTIVE TIME: 1.50 H\nACTIVITY: CEMENTING",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP135-DDR-031"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-07-01"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "910.0"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "7.25"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "9.8"
+        },
+        {
+          "key": "npt_h",
+          "expected": "1.50"
+        }
+      ]
+    },
+    {
+      "case_id": "cp135-ddr-032",
+      "language": "eng",
+      "layout": "compact",
+      "scan_condition": "light_noise",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "SYNTHETIC DAILY DRILLING REPORT\nSAMPLE ID: CP135-DDR-032\nREPORT DATE: 2026-07-02\nWELL: CP135-SYNTHETIC-02\nSECTION: 17 1/2 INCH\nMEASURED DEPTH: 927.5 M\nRATE OF PENETRATION: 14.00 M/H\nMUD WEIGHT: 10.0 PPG\nNONPRODUCTIVE TIME: 1.75 H\nACTIVITY: WELL CONTROL CHECK",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP135-DDR-032"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-07-02"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "927.5"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "14.00"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "10.0"
+        },
+        {
+          "key": "npt_h",
+          "expected": "1.75"
+        }
+      ]
+    },
+    {
+      "case_id": "cp135-ddr-033",
+      "language": "fas",
+      "layout": "single_column",
+      "scan_condition": "clean",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "گزارش روزانه حفاری مصنوعی\nشناسه نمونه: CP135-DDR-033\nتاریخ گزارش: 2026-07-03\nچاه: CP135-SYNTHETIC-01\nبخش: 12 1/4 اینچ\nعمق اندازه گیری: 944.0 M\nسرعت حفاری: 20.75 M/H\nوزن گل: 10.2 PPG\nزمان غیرمولد: 2.00 H\nفعالیت: حفاری به جلو",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP135-DDR-033"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-07-03"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "944.0"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "20.75"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "10.2"
+        },
+        {
+          "key": "npt_h",
+          "expected": "2.00"
+        }
+      ]
+    },
+    {
+      "case_id": "cp135-ddr-034",
+      "language": "fas",
+      "layout": "single_column",
+      "scan_condition": "clean",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "گزارش روزانه حفاری مصنوعی\nشناسه نمونه: CP135-DDR-034\nتاریخ گزارش: 2026-07-04\nچاه: CP135-SYNTHETIC-02\nبخش: 8 1/2 اینچ\nعمق اندازه گیری: 961.5 M\nسرعت حفاری: 27.50 M/H\nوزن گل: 10.4 PPG\nزمان غیرمولد: 2.25 H\nفعالیت: حفاری لغزشی",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP135-DDR-034"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-07-04"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "961.5"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "27.50"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "10.4"
+        },
+        {
+          "key": "npt_h",
+          "expected": "2.25"
+        }
+      ]
+    },
+    {
+      "case_id": "cp135-ddr-035",
+      "language": "fas",
+      "layout": "single_column",
+      "scan_condition": "low_contrast",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "گزارش روزانه حفاری مصنوعی\nشناسه نمونه: CP135-DDR-035\nتاریخ گزارش: 2026-07-05\nچاه: CP135-SYNTHETIC-01\nبخش: 6 1/8 اینچ\nعمق اندازه گیری: 978.0 M\nسرعت حفاری: 11.75 M/H\nوزن گل: 10.6 PPG\nزمان غیرمولد: 2.50 H\nفعالیت: اتصال لوله",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP135-DDR-035"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-07-05"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "978.0"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "11.75"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "10.6"
+        },
+        {
+          "key": "npt_h",
+          "expected": "2.50"
+        }
+      ]
+    },
+    {
+      "case_id": "cp135-ddr-036",
+      "language": "fas",
+      "layout": "single_column",
+      "scan_condition": "low_contrast",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "گزارش روزانه حفاری مصنوعی\nشناسه نمونه: CP135-DDR-036\nتاریخ گزارش: 2026-07-06\nچاه: CP135-SYNTHETIC-02\nبخش: 17 1/2 اینچ\nعمق اندازه گیری: 995.5 M\nسرعت حفاری: 18.50 M/H\nوزن گل: 10.8 PPG\nزمان غیرمولد: 2.75 H\nفعالیت: گردش گل و آماده سازی",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP135-DDR-036"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-07-06"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "995.5"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "18.50"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "10.8"
+        },
+        {
+          "key": "npt_h",
+          "expected": "2.75"
+        }
+      ]
+    },
+    {
+      "case_id": "cp135-ddr-037",
+      "language": "fas",
+      "layout": "single_column",
+      "scan_condition": "light_skew",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "گزارش روزانه حفاری مصنوعی\nشناسه نمونه: CP135-DDR-037\nتاریخ گزارش: 2026-07-07\nچاه: CP135-SYNTHETIC-01\nبخش: 12 1/4 اینچ\nعمق اندازه گیری: 1012.0 M\nسرعت حفاری: 25.25 M/H\nوزن گل: 11.0 PPG\nزمان غیرمولد: 0.00 H\nفعالیت: خروج لوله ها",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP135-DDR-037"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-07-07"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "1012.0"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "25.25"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "11.0"
+        },
+        {
+          "key": "npt_h",
+          "expected": "0.00"
+        }
+      ]
+    },
+    {
+      "case_id": "cp135-ddr-038",
+      "language": "fas",
+      "layout": "single_column",
+      "scan_condition": "light_skew",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "گزارش روزانه حفاری مصنوعی\nشناسه نمونه: CP135-DDR-038\nتاریخ گزارش: 2026-07-08\nچاه: CP135-SYNTHETIC-02\nبخش: 8 1/2 اینچ\nعمق اندازه گیری: 1029.5 M\nسرعت حفاری: 9.50 M/H\nوزن گل: 11.2 PPG\nزمان غیرمولد: 0.25 H\nفعالیت: لوله گذاری",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP135-DDR-038"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-07-08"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "1029.5"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "9.50"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "11.2"
+        },
+        {
+          "key": "npt_h",
+          "expected": "0.25"
+        }
+      ]
+    },
+    {
+      "case_id": "cp135-ddr-039",
+      "language": "fas",
+      "layout": "single_column",
+      "scan_condition": "light_noise",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "گزارش روزانه حفاری مصنوعی\nشناسه نمونه: CP135-DDR-039\nتاریخ گزارش: 2026-07-09\nچاه: CP135-SYNTHETIC-01\nبخش: 6 1/8 اینچ\nعمق اندازه گیری: 1046.0 M\nسرعت حفاری: 16.25 M/H\nوزن گل: 11.4 PPG\nزمان غیرمولد: 0.50 H\nفعالیت: سیمان کاری",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP135-DDR-039"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-07-09"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "1046.0"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "16.25"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "11.4"
+        },
+        {
+          "key": "npt_h",
+          "expected": "0.50"
+        }
+      ]
+    },
+    {
+      "case_id": "cp135-ddr-040",
+      "language": "fas",
+      "layout": "single_column",
+      "scan_condition": "light_noise",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "گزارش روزانه حفاری مصنوعی\nشناسه نمونه: CP135-DDR-040\nتاریخ گزارش: 2026-07-10\nچاه: CP135-SYNTHETIC-02\nبخش: 17 1/2 اینچ\nعمق اندازه گیری: 1063.5 M\nسرعت حفاری: 23.00 M/H\nوزن گل: 11.6 PPG\nزمان غیرمولد: 0.75 H\nفعالیت: بررسی کنترل چاه",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP135-DDR-040"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-07-10"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "1063.5"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "23.00"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "11.6"
+        },
+        {
+          "key": "npt_h",
+          "expected": "0.75"
+        }
+      ]
+    },
+    {
+      "case_id": "cp135-ddr-041",
+      "language": "fas",
+      "layout": "table",
+      "scan_condition": "clean",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "گزارش روزانه حفاری مصنوعی\nشناسه نمونه: CP135-DDR-041\nتاریخ گزارش: 2026-07-11\nچاه: CP135-SYNTHETIC-01\nبخش: 12 1/4 اینچ\nعمق اندازه گیری: 1080.0 M\nسرعت حفاری: 7.25 M/H\nوزن گل: 11.8 PPG\nزمان غیرمولد: 1.00 H\nفعالیت: حفاری به جلو",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP135-DDR-041"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-07-11"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "1080.0"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "7.25"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "11.8"
+        },
+        {
+          "key": "npt_h",
+          "expected": "1.00"
+        }
+      ]
+    },
+    {
+      "case_id": "cp135-ddr-042",
+      "language": "fas",
+      "layout": "table",
+      "scan_condition": "clean",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "گزارش روزانه حفاری مصنوعی\nشناسه نمونه: CP135-DDR-042\nتاریخ گزارش: 2026-07-12\nچاه: CP135-SYNTHETIC-02\nبخش: 8 1/2 اینچ\nعمق اندازه گیری: 1097.5 M\nسرعت حفاری: 14.00 M/H\nوزن گل: 12.0 PPG\nزمان غیرمولد: 1.25 H\nفعالیت: حفاری لغزشی",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP135-DDR-042"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-07-12"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "1097.5"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "14.00"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "12.0"
+        },
+        {
+          "key": "npt_h",
+          "expected": "1.25"
+        }
+      ]
+    },
+    {
+      "case_id": "cp135-ddr-043",
+      "language": "fas",
+      "layout": "table",
+      "scan_condition": "low_contrast",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "گزارش روزانه حفاری مصنوعی\nشناسه نمونه: CP135-DDR-043\nتاریخ گزارش: 2026-07-13\nچاه: CP135-SYNTHETIC-01\nبخش: 6 1/8 اینچ\nعمق اندازه گیری: 1114.0 M\nسرعت حفاری: 20.75 M/H\nوزن گل: 12.2 PPG\nزمان غیرمولد: 1.50 H\nفعالیت: اتصال لوله",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP135-DDR-043"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-07-13"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "1114.0"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "20.75"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "12.2"
+        },
+        {
+          "key": "npt_h",
+          "expected": "1.50"
+        }
+      ]
+    },
+    {
+      "case_id": "cp135-ddr-044",
+      "language": "fas",
+      "layout": "table",
+      "scan_condition": "low_contrast",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "گزارش روزانه حفاری مصنوعی\nشناسه نمونه: CP135-DDR-044\nتاریخ گزارش: 2026-07-14\nچاه: CP135-SYNTHETIC-02\nبخش: 17 1/2 اینچ\nعمق اندازه گیری: 1131.5 M\nسرعت حفاری: 27.50 M/H\nوزن گل: 12.4 PPG\nزمان غیرمولد: 1.75 H\nفعالیت: گردش گل و آماده سازی",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP135-DDR-044"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-07-14"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "1131.5"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "27.50"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "12.4"
+        },
+        {
+          "key": "npt_h",
+          "expected": "1.75"
+        }
+      ]
+    },
+    {
+      "case_id": "cp135-ddr-045",
+      "language": "fas",
+      "layout": "table",
+      "scan_condition": "light_skew",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "گزارش روزانه حفاری مصنوعی\nشناسه نمونه: CP135-DDR-045\nتاریخ گزارش: 2026-07-15\nچاه: CP135-SYNTHETIC-01\nبخش: 12 1/4 اینچ\nعمق اندازه گیری: 1148.0 M\nسرعت حفاری: 11.75 M/H\nوزن گل: 12.6 PPG\nزمان غیرمولد: 2.00 H\nفعالیت: خروج لوله ها",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP135-DDR-045"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-07-15"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "1148.0"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "11.75"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "12.6"
+        },
+        {
+          "key": "npt_h",
+          "expected": "2.00"
+        }
+      ]
+    },
+    {
+      "case_id": "cp135-ddr-046",
+      "language": "fas",
+      "layout": "table",
+      "scan_condition": "light_skew",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "گزارش روزانه حفاری مصنوعی\nشناسه نمونه: CP135-DDR-046\nتاریخ گزارش: 2026-07-16\nچاه: CP135-SYNTHETIC-02\nبخش: 8 1/2 اینچ\nعمق اندازه گیری: 1165.5 M\nسرعت حفاری: 18.50 M/H\nوزن گل: 9.8 PPG\nزمان غیرمولد: 2.25 H\nفعالیت: لوله گذاری",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP135-DDR-046"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-07-16"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "1165.5"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "18.50"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "9.8"
+        },
+        {
+          "key": "npt_h",
+          "expected": "2.25"
+        }
+      ]
+    },
+    {
+      "case_id": "cp135-ddr-047",
+      "language": "fas",
+      "layout": "table",
+      "scan_condition": "light_noise",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "گزارش روزانه حفاری مصنوعی\nشناسه نمونه: CP135-DDR-047\nتاریخ گزارش: 2026-07-17\nچاه: CP135-SYNTHETIC-01\nبخش: 6 1/8 اینچ\nعمق اندازه گیری: 1182.0 M\nسرعت حفاری: 25.25 M/H\nوزن گل: 10.0 PPG\nزمان غیرمولد: 2.50 H\nفعالیت: سیمان کاری",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP135-DDR-047"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-07-17"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "1182.0"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "25.25"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "10.0"
+        },
+        {
+          "key": "npt_h",
+          "expected": "2.50"
+        }
+      ]
+    },
+    {
+      "case_id": "cp135-ddr-048",
+      "language": "fas",
+      "layout": "table",
+      "scan_condition": "light_noise",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "گزارش روزانه حفاری مصنوعی\nشناسه نمونه: CP135-DDR-048\nتاریخ گزارش: 2026-07-18\nچاه: CP135-SYNTHETIC-02\nبخش: 17 1/2 اینچ\nعمق اندازه گیری: 1199.5 M\nسرعت حفاری: 9.50 M/H\nوزن گل: 10.2 PPG\nزمان غیرمولد: 2.75 H\nفعالیت: بررسی کنترل چاه",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP135-DDR-048"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-07-18"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "1199.5"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "9.50"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "10.2"
+        },
+        {
+          "key": "npt_h",
+          "expected": "2.75"
+        }
+      ]
+    },
+    {
+      "case_id": "cp135-ddr-049",
+      "language": "fas",
+      "layout": "two_column",
+      "scan_condition": "clean",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "گزارش روزانه حفاری مصنوعی\nشناسه نمونه: CP135-DDR-049\nتاریخ گزارش: 2026-07-19\nچاه: CP135-SYNTHETIC-01\nبخش: 12 1/4 اینچ\nعمق اندازه گیری: 1216.0 M\nسرعت حفاری: 16.25 M/H\nوزن گل: 10.4 PPG\nزمان غیرمولد: 0.00 H\nفعالیت: حفاری به جلو",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP135-DDR-049"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-07-19"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "1216.0"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "16.25"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "10.4"
+        },
+        {
+          "key": "npt_h",
+          "expected": "0.00"
+        }
+      ]
+    },
+    {
+      "case_id": "cp135-ddr-050",
+      "language": "fas",
+      "layout": "two_column",
+      "scan_condition": "clean",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "گزارش روزانه حفاری مصنوعی\nشناسه نمونه: CP135-DDR-050\nتاریخ گزارش: 2026-07-20\nچاه: CP135-SYNTHETIC-02\nبخش: 8 1/2 اینچ\nعمق اندازه گیری: 1233.5 M\nسرعت حفاری: 23.00 M/H\nوزن گل: 10.6 PPG\nزمان غیرمولد: 0.25 H\nفعالیت: حفاری لغزشی",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP135-DDR-050"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-07-20"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "1233.5"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "23.00"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "10.6"
+        },
+        {
+          "key": "npt_h",
+          "expected": "0.25"
+        }
+      ]
+    },
+    {
+      "case_id": "cp135-ddr-051",
+      "language": "fas",
+      "layout": "two_column",
+      "scan_condition": "low_contrast",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "گزارش روزانه حفاری مصنوعی\nشناسه نمونه: CP135-DDR-051\nتاریخ گزارش: 2026-07-21\nچاه: CP135-SYNTHETIC-01\nبخش: 6 1/8 اینچ\nعمق اندازه گیری: 1250.0 M\nسرعت حفاری: 7.25 M/H\nوزن گل: 10.8 PPG\nزمان غیرمولد: 0.50 H\nفعالیت: اتصال لوله",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP135-DDR-051"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-07-21"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "1250.0"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "7.25"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "10.8"
+        },
+        {
+          "key": "npt_h",
+          "expected": "0.50"
+        }
+      ]
+    },
+    {
+      "case_id": "cp135-ddr-052",
+      "language": "fas",
+      "layout": "two_column",
+      "scan_condition": "low_contrast",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "گزارش روزانه حفاری مصنوعی\nشناسه نمونه: CP135-DDR-052\nتاریخ گزارش: 2026-07-22\nچاه: CP135-SYNTHETIC-02\nبخش: 17 1/2 اینچ\nعمق اندازه گیری: 1267.5 M\nسرعت حفاری: 14.00 M/H\nوزن گل: 11.0 PPG\nزمان غیرمولد: 0.75 H\nفعالیت: گردش گل و آماده سازی",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP135-DDR-052"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-07-22"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "1267.5"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "14.00"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "11.0"
+        },
+        {
+          "key": "npt_h",
+          "expected": "0.75"
+        }
+      ]
+    },
+    {
+      "case_id": "cp135-ddr-053",
+      "language": "fas",
+      "layout": "two_column",
+      "scan_condition": "light_skew",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "گزارش روزانه حفاری مصنوعی\nشناسه نمونه: CP135-DDR-053\nتاریخ گزارش: 2026-07-23\nچاه: CP135-SYNTHETIC-01\nبخش: 12 1/4 اینچ\nعمق اندازه گیری: 1284.0 M\nسرعت حفاری: 20.75 M/H\nوزن گل: 11.2 PPG\nزمان غیرمولد: 1.00 H\nفعالیت: خروج لوله ها",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP135-DDR-053"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-07-23"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "1284.0"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "20.75"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "11.2"
+        },
+        {
+          "key": "npt_h",
+          "expected": "1.00"
+        }
+      ]
+    },
+    {
+      "case_id": "cp135-ddr-054",
+      "language": "fas",
+      "layout": "two_column",
+      "scan_condition": "light_skew",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "گزارش روزانه حفاری مصنوعی\nشناسه نمونه: CP135-DDR-054\nتاریخ گزارش: 2026-07-24\nچاه: CP135-SYNTHETIC-02\nبخش: 8 1/2 اینچ\nعمق اندازه گیری: 1301.5 M\nسرعت حفاری: 27.50 M/H\nوزن گل: 11.4 PPG\nزمان غیرمولد: 1.25 H\nفعالیت: لوله گذاری",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP135-DDR-054"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-07-24"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "1301.5"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "27.50"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "11.4"
+        },
+        {
+          "key": "npt_h",
+          "expected": "1.25"
+        }
+      ]
+    },
+    {
+      "case_id": "cp135-ddr-055",
+      "language": "fas",
+      "layout": "two_column",
+      "scan_condition": "light_noise",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "گزارش روزانه حفاری مصنوعی\nشناسه نمونه: CP135-DDR-055\nتاریخ گزارش: 2026-07-25\nچاه: CP135-SYNTHETIC-01\nبخش: 6 1/8 اینچ\nعمق اندازه گیری: 1318.0 M\nسرعت حفاری: 11.75 M/H\nوزن گل: 11.6 PPG\nزمان غیرمولد: 1.50 H\nفعالیت: سیمان کاری",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP135-DDR-055"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-07-25"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "1318.0"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "11.75"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "11.6"
+        },
+        {
+          "key": "npt_h",
+          "expected": "1.50"
+        }
+      ]
+    },
+    {
+      "case_id": "cp135-ddr-056",
+      "language": "fas",
+      "layout": "two_column",
+      "scan_condition": "light_noise",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "گزارش روزانه حفاری مصنوعی\nشناسه نمونه: CP135-DDR-056\nتاریخ گزارش: 2026-07-26\nچاه: CP135-SYNTHETIC-02\nبخش: 17 1/2 اینچ\nعمق اندازه گیری: 1335.5 M\nسرعت حفاری: 18.50 M/H\nوزن گل: 11.8 PPG\nزمان غیرمولد: 1.75 H\nفعالیت: بررسی کنترل چاه",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP135-DDR-056"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-07-26"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "1335.5"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "18.50"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "11.8"
+        },
+        {
+          "key": "npt_h",
+          "expected": "1.75"
+        }
+      ]
+    },
+    {
+      "case_id": "cp135-ddr-057",
+      "language": "fas",
+      "layout": "compact",
+      "scan_condition": "clean",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "گزارش روزانه حفاری مصنوعی\nشناسه نمونه: CP135-DDR-057\nتاریخ گزارش: 2026-07-27\nچاه: CP135-SYNTHETIC-01\nبخش: 12 1/4 اینچ\nعمق اندازه گیری: 1352.0 M\nسرعت حفاری: 25.25 M/H\nوزن گل: 12.0 PPG\nزمان غیرمولد: 2.00 H\nفعالیت: حفاری به جلو",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP135-DDR-057"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-07-27"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "1352.0"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "25.25"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "12.0"
+        },
+        {
+          "key": "npt_h",
+          "expected": "2.00"
+        }
+      ]
+    },
+    {
+      "case_id": "cp135-ddr-058",
+      "language": "fas",
+      "layout": "compact",
+      "scan_condition": "clean",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "گزارش روزانه حفاری مصنوعی\nشناسه نمونه: CP135-DDR-058\nتاریخ گزارش: 2026-07-28\nچاه: CP135-SYNTHETIC-02\nبخش: 8 1/2 اینچ\nعمق اندازه گیری: 1369.5 M\nسرعت حفاری: 9.50 M/H\nوزن گل: 12.2 PPG\nزمان غیرمولد: 2.25 H\nفعالیت: حفاری لغزشی",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP135-DDR-058"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-07-28"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "1369.5"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "9.50"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "12.2"
+        },
+        {
+          "key": "npt_h",
+          "expected": "2.25"
+        }
+      ]
+    },
+    {
+      "case_id": "cp135-ddr-059",
+      "language": "fas",
+      "layout": "compact",
+      "scan_condition": "low_contrast",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "گزارش روزانه حفاری مصنوعی\nشناسه نمونه: CP135-DDR-059\nتاریخ گزارش: 2026-07-29\nچاه: CP135-SYNTHETIC-01\nبخش: 6 1/8 اینچ\nعمق اندازه گیری: 1386.0 M\nسرعت حفاری: 16.25 M/H\nوزن گل: 12.4 PPG\nزمان غیرمولد: 2.50 H\nفعالیت: اتصال لوله",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP135-DDR-059"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-07-29"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "1386.0"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "16.25"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "12.4"
+        },
+        {
+          "key": "npt_h",
+          "expected": "2.50"
+        }
+      ]
+    },
+    {
+      "case_id": "cp135-ddr-060",
+      "language": "fas",
+      "layout": "compact",
+      "scan_condition": "low_contrast",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "گزارش روزانه حفاری مصنوعی\nشناسه نمونه: CP135-DDR-060\nتاریخ گزارش: 2026-07-30\nچاه: CP135-SYNTHETIC-02\nبخش: 17 1/2 اینچ\nعمق اندازه گیری: 903.5 M\nسرعت حفاری: 23.00 M/H\nوزن گل: 12.6 PPG\nزمان غیرمولد: 2.75 H\nفعالیت: گردش گل و آماده سازی",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP135-DDR-060"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-07-30"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "903.5"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "23.00"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "12.6"
+        },
+        {
+          "key": "npt_h",
+          "expected": "2.75"
+        }
+      ]
+    },
+    {
+      "case_id": "cp135-ddr-061",
+      "language": "fas",
+      "layout": "compact",
+      "scan_condition": "light_skew",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "گزارش روزانه حفاری مصنوعی\nشناسه نمونه: CP135-DDR-061\nتاریخ گزارش: 2026-07-31\nچاه: CP135-SYNTHETIC-01\nبخش: 12 1/4 اینچ\nعمق اندازه گیری: 920.0 M\nسرعت حفاری: 7.25 M/H\nوزن گل: 9.8 PPG\nزمان غیرمولد: 0.00 H\nفعالیت: خروج لوله ها",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP135-DDR-061"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-07-31"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "920.0"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "7.25"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "9.8"
+        },
+        {
+          "key": "npt_h",
+          "expected": "0.00"
+        }
+      ]
+    },
+    {
+      "case_id": "cp135-ddr-062",
+      "language": "fas",
+      "layout": "compact",
+      "scan_condition": "light_skew",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "گزارش روزانه حفاری مصنوعی\nشناسه نمونه: CP135-DDR-062\nتاریخ گزارش: 2026-08-01\nچاه: CP135-SYNTHETIC-02\nبخش: 8 1/2 اینچ\nعمق اندازه گیری: 937.5 M\nسرعت حفاری: 14.00 M/H\nوزن گل: 10.0 PPG\nزمان غیرمولد: 0.25 H\nفعالیت: لوله گذاری",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP135-DDR-062"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-08-01"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "937.5"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "14.00"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "10.0"
+        },
+        {
+          "key": "npt_h",
+          "expected": "0.25"
+        }
+      ]
+    },
+    {
+      "case_id": "cp135-ddr-063",
+      "language": "fas",
+      "layout": "compact",
+      "scan_condition": "light_noise",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "گزارش روزانه حفاری مصنوعی\nشناسه نمونه: CP135-DDR-063\nتاریخ گزارش: 2026-08-02\nچاه: CP135-SYNTHETIC-01\nبخش: 6 1/8 اینچ\nعمق اندازه گیری: 954.0 M\nسرعت حفاری: 20.75 M/H\nوزن گل: 10.2 PPG\nزمان غیرمولد: 0.50 H\nفعالیت: سیمان کاری",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP135-DDR-063"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-08-02"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "954.0"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "20.75"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "10.2"
+        },
+        {
+          "key": "npt_h",
+          "expected": "0.50"
+        }
+      ]
+    },
+    {
+      "case_id": "cp135-ddr-064",
+      "language": "fas",
+      "layout": "compact",
+      "scan_condition": "light_noise",
+      "document_class": "daily_drilling_report",
+      "ground_truth": "گزارش روزانه حفاری مصنوعی\nشناسه نمونه: CP135-DDR-064\nتاریخ گزارش: 2026-08-03\nچاه: CP135-SYNTHETIC-02\nبخش: 17 1/2 اینچ\nعمق اندازه گیری: 971.5 M\nسرعت حفاری: 27.50 M/H\nوزن گل: 10.4 PPG\nزمان غیرمولد: 0.75 H\nفعالیت: بررسی کنترل چاه",
+      "critical_fields": [
+        {
+          "key": "sample_id",
+          "expected": "CP135-DDR-064"
+        },
+        {
+          "key": "report_date",
+          "expected": "2026-08-03"
+        },
+        {
+          "key": "measured_depth_m",
+          "expected": "971.5"
+        },
+        {
+          "key": "rop_m_per_h",
+          "expected": "27.50"
+        },
+        {
+          "key": "mud_weight_ppg",
+          "expected": "10.4"
+        },
+        {
+          "key": "npt_h",
+          "expected": "0.75"
+        }
+      ]
+    }
+  ]
+}

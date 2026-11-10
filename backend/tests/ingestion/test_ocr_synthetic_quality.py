@@ -22,15 +22,15 @@ def test_pinned_synthetic_ocr_corpus_has_64_unique_bilingual_stratified_cases(tm
     corpus, raw = quality._load_corpus()
 
     assert corpus["classification"] == "synthetic"
-    assert corpus["version"] == "2.0.0"
+    assert corpus["version"] == "3.0.0"
     assert corpus["stratification_dimensions"] == ["language", "layout", "scan_condition"]
     assert len(corpus["cases"]) == 64
     assert len({case["case_id"] for case in corpus["cases"]}) == 64
-    assert Counter(case["language"] for case in corpus["cases"]) == {"eng": 48, "fas": 16}
+    assert Counter(case["language"] for case in corpus["cases"]) == {"eng": 32, "fas": 32}
     assert Counter(case["layout"] for case in corpus["cases"]) == {
-        "single_column": 20,
+        "single_column": 16,
         "table": 16,
-        "two_column": 12,
+        "two_column": 16,
         "compact": 16,
     }
     assert Counter(case["scan_condition"] for case in corpus["cases"]) == {
@@ -39,6 +39,27 @@ def test_pinned_synthetic_ocr_corpus_has_64_unique_bilingual_stratified_cases(tm
         "light_skew": 16,
         "light_noise": 16,
     }
+    actual_cells = {
+        (language, layout, scan): sum(
+            case["language"] == language
+            and case["layout"] == layout
+            and case["scan_condition"] == scan
+            for case in corpus["cases"]
+        )
+        for language in ("eng", "fas")
+        for layout in quality._SUPPORTED_LAYOUTS
+        for scan in quality._SUPPORTED_SCAN_CONDITIONS
+    }
+    expected_cells = dict.fromkeys(
+        (
+            (language, layout, scan)
+            for language in ("eng", "fas")
+            for layout in quality._SUPPORTED_LAYOUTS
+            for scan in quality._SUPPORTED_SCAN_CONDITIONS
+        ),
+        2,
+    )
+    assert actual_cells == expected_cells
     assert all(len(case["critical_fields"]) == 6 for case in corpus["cases"])
     assert "No field or vendor documents are sampled" in corpus["sampling_method"]
     assert "not independently adjudicated" in corpus["ground_truth_protocol"]
@@ -87,6 +108,8 @@ def test_critical_field_metric_requires_language_specific_value_under_expected_l
 def test_generated_english_and_persian_pages_are_image_only_and_use_real_pdfium_ingestion() -> None:
     corpus, _ = quality._load_corpus()
     cases = (corpus["cases"][0], corpus["cases"][49])
+    assert cases[0]["language"] == "eng"
+    assert cases[1]["language"] == "fas" and cases[1]["layout"] == "two_column"
 
     for case in cases:
         expected = case["ground_truth"]
@@ -257,7 +280,7 @@ def _valid_quality_report(corpus: dict, raw: bytes) -> dict:
     total_word_count = sum(item["expected_words"] for item in case_evidence)
     total_critical_count = sum(item["critical_fields_expected"] for item in case_evidence)
     return {
-        "tool": "drillai-synthetic-ocr-quality-v2",
+        "tool": "drillai-synthetic-ocr-quality-v3",
         "status": "passed",
         "quality_evaluated": True,
         "dataset": {
@@ -340,8 +363,8 @@ def test_deployment_quality_report_verifier_accepts_complete_pinned_metrics(tmp_
 
     assert result.returncode == 0, result.stderr
     assert "SYNTHETIC_OCR_QUALITY_OK cases=64" in result.stdout
-    assert "language=eng:48,fas:16" in result.stdout
-    assert "layout=compact:16,single_column:20,table:16,two_column:12" in result.stdout
+    assert "language=eng:32,fas:32" in result.stdout
+    assert "layout=compact:16,single_column:16,table:16,two_column:16" in result.stdout
 
 
 def test_deployment_quality_report_verifier_rejects_transcript_leak_and_digest_mismatch(tmp_path) -> None:
