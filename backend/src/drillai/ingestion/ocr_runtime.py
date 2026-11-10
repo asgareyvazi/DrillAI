@@ -19,7 +19,12 @@ from pathlib import Path
 from typing import Any
 
 from drillai.core.config import Settings, get_settings
-from drillai.ingestion.ocr import TESSERACT_ADAPTER_VERSION, OcrUnavailable, TesseractOcrProvider
+from drillai.ingestion.ocr import (
+    TESSERACT_ADAPTER_VERSION,
+    TESSERACT_PAGE_SEGMENTATION_MODE,
+    OcrUnavailable,
+    TesseractOcrProvider,
+)
 
 _RUNTIME_PROBE_LOCK = threading.Lock()
 
@@ -67,6 +72,7 @@ def inspect_ocr_runtime(
     resolved = settings or get_settings()
     configuration = {
         "languages": resolved.ocr_languages.split("+"),
+        "page_segmentation_mode": TESSERACT_PAGE_SEGMENTATION_MODE,
         "timeout_seconds_per_page": resolved.ocr_timeout_seconds,
         "max_blank_pages_per_document": resolved.ocr_max_pages,
         "max_page_pixels": resolved.ocr_max_page_pixels,

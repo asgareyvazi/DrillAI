@@ -272,6 +272,7 @@ def _valid_quality_report(corpus: dict, raw: bytes) -> dict:
         "runtime": {
             "provider": "tesseract",
             "adapter_version": quality.TESSERACT_ADAPTER_VERSION,
+            "page_segmentation_mode": quality.TESSERACT_PAGE_SEGMENTATION_MODE,
             "runtime_version": "test-fixture-only",
             "python_version": "3.11.8",
             "pdf_renderer_version": "test-fixture-only",

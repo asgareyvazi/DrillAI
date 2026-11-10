@@ -37,7 +37,10 @@ __all__ = [
 MAX_TSV_BYTES = 16 * 1024 * 1024
 MAX_DIAGNOSTIC_OUTPUT_BYTES = 128 * 1024
 DIAGNOSTIC_TIMEOUT_SECONDS = 3.0
-TESSERACT_ADAPTER_VERSION = "tesseract-cli-tsv-v2"
+TESSERACT_ADAPTER_VERSION = "tesseract-cli-tsv-v3"
+TESSERACT_PAGE_SEGMENTATION_MODE = 3
+# Automatic page segmentation lets Tesseract detect page blocks and columns; deployment-image
+# CP135 measured severe two-column/RTL errors with the previous single-block PSM 6 configuration.
 _PROCESS_SEMAPHORES: dict[int, threading.BoundedSemaphore] = {}
 _PROCESS_SEMAPHORES_LOCK = threading.Lock()
 _TESSERACT_DIAGNOSTIC_CACHE: dict[tuple[str, str, float, str, str], dict[str, object]] = {}
@@ -439,7 +442,16 @@ class TesseractOcrProvider:
         child_env = self._child_environment()
         try:
             process = subprocess.Popen(
-                [executable, "stdin", "stdout", "--psm", "6", "-l", self.languages, "tsv"],
+                [
+                    executable,
+                    "stdin",
+                    "stdout",
+                    "--psm",
+                    str(TESSERACT_PAGE_SEGMENTATION_MODE),
+                    "-l",
+                    self.languages,
+                    "tsv",
+                ],
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.DEVNULL,

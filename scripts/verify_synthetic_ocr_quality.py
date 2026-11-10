@@ -139,6 +139,8 @@ def verify(report_path: Path, corpus_path: Path) -> dict[str, Any]:
         or dataset.get("languages") != languages
         or dataset.get("stratification_dimensions") != dimensions
         or not isinstance(runtime, dict)
+        or runtime.get("adapter_version") != "tesseract-cli-tsv-v3"
+        or runtime.get("page_segmentation_mode") != 3
         or runtime.get("required_languages") != languages
         or not set(languages).issubset(runtime.get("configured_languages", []))
         or not set(languages).issubset(runtime.get("available_languages", []))

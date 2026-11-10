@@ -230,7 +230,7 @@ def test_tesseract_cli_adapter_uses_stdin_and_bounds_child_output(tmp_path: Path
         "if sys.argv[1:] == ['--list-langs']:\n"
         " print('List of available languages (2):\\neng\\nfas')\n"
         " sys.exit(0)\n"
-        "assert sys.argv[1:] == ['stdin', 'stdout', '--psm', '6', '-l', 'eng+fas', 'tsv']\n"
+        "assert sys.argv[1:] == ['stdin', 'stdout', '--psm', '3', '-l', 'eng+fas', 'tsv']\n"
         "assert sys.stdin.buffer.read() == b'png-contract'\n"
         "assert 'DRILLAI_TEST_SECRET' not in os.environ\n"
         f"sys.stdout.write({expected!r})\n",
@@ -243,7 +243,7 @@ def test_tesseract_cli_adapter_uses_stdin_and_bounds_child_output(tmp_path: Path
         languages="eng,fas", executable=str(script), timeout_seconds=5, max_output_bytes=1024
     )
     assert provider.availability() == (True, None)
-    assert provider.version == "tesseract-cli-tsv-v2; tesseract 5.3.0"
+    assert provider.version == "tesseract-cli-tsv-v3; tesseract 5.3.0"
     lines = provider.recognize(b"png-contract")
     assert len(lines) == 1
     assert lines[0].text == "Drill"
@@ -317,7 +317,7 @@ def test_tesseract_diagnostics_verify_languages_and_capture_runtime_version(monk
     assert diagnostics["available_languages"] == ["eng"]
     assert diagnostics["missing_languages"] == ["fas"]
     assert diagnostics["reason"] == "Tesseract is missing configured language data: fas"
-    assert provider.version == "tesseract-cli-tsv-v2; tesseract 5.4.1"
+    assert provider.version == "tesseract-cli-tsv-v3; tesseract 5.4.1"
 
 
 def test_tesseract_diagnostic_version_rejects_path_or_untrusted_process_text(monkeypatch) -> None:
@@ -386,9 +386,9 @@ def test_tesseract_runtime_diagnostics_are_cached_across_provider_instances(monk
     second = second_provider.diagnostics()
     second["available_languages"].append("tampered")
 
-    assert first_version == "tesseract-cli-tsv-v2; tesseract 5.4.1"
+    assert first_version == "tesseract-cli-tsv-v3; tesseract 5.4.1"
     assert calls == ["--version", "--list-langs"]
-    assert second_provider.version == "tesseract-cli-tsv-v2; tesseract 5.4.1"
+    assert second_provider.version == "tesseract-cli-tsv-v3; tesseract 5.4.1"
     assert first["available_languages"] == ["eng", "fas"]
 
 

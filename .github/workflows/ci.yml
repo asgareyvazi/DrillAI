@@ -256,14 +256,16 @@ jobs:
           import json
           import sys
 
-          MAX_ANNOTATION_BYTES = 2800
+          MAX_ANNOTATION_BYTES = 3800
+          MAX_NOTICES = 9  # Leave the tenth per-step annotation slot for the hard failure.
+          notices = []
 
           def emit(title, payload):
               message = json.dumps(payload, ensure_ascii=True, sort_keys=True, separators=(",", ":"))
               if len(message.encode("utf-8")) > MAX_ANNOTATION_BYTES:
                   raise ValueError("sanitized CP135 annotation exceeds its safe size bound")
               escaped = message.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
-              print(f"::notice title={title}::{escaped}")
+              notices.append(f"::notice title={title}::{escaped}")
 
           def emit_batches(title, field, rows):
               batch = []
@@ -307,7 +309,7 @@ jobs:
               "all_strata_thresholds_passed",
           )
           runtime_fields = (
-              "provider", "adapter_version", "runtime_version", "python_version", "pdf_renderer_version",
+              "provider", "adapter_version", "page_segmentation_mode", "runtime_version", "python_version", "pdf_renderer_version",
               "renderer_dependencies", "resource_limits", "required_languages", "configured_languages", "available_languages",
           )
           summary = {
@@ -321,11 +323,23 @@ jobs:
               "runtime": {key: runtime.get(key) for key in runtime_fields},
               "metrics": {key: metrics.get(key) for key in metric_fields},
           }
-          emit("CP135 OCR runtime and global metrics", summary)
-
+          strata_summary = {}
           for dimension, rows in stratified.items():
               if isinstance(rows, list):
-                  emit_batches(f"CP135 OCR stratum {dimension}", "rows", rows)
+                  strata_summary[dimension] = [
+                      {
+                          "stratum": row.get("stratum"),
+                          "cases": row.get("case_count"),
+                          "evaluated": row.get("evaluated_cases"),
+                          "incomplete": row.get("incomplete_or_failed_cases"),
+                          "characters": [row.get("character_errors"), row.get("expected_characters"), row.get("character_error_rate")],
+                          "words": [row.get("word_errors"), row.get("expected_words"), row.get("word_error_rate")],
+                          "critical": [row.get("critical_fields_matched"), row.get("critical_fields_expected"), row.get("critical_field_exact_rate")],
+                          "passed": row.get("thresholds_passed"),
+                      }
+                      for row in rows if isinstance(row, dict)
+                  ]
+          emit("CP135 OCR runtime, global and stratified metrics", {"summary": summary, "strata": strata_summary})
 
           cases = report.get("cases", [])
           if isinstance(cases, list):
@@ -334,6 +348,10 @@ jobs:
                   "cases",
                   [{key: case.get(key) for key in case_fields} for case in cases if isinstance(case, dict)],
               )
+          if len(notices) > MAX_NOTICES:
+              raise ValueError("CP135 diagnostic exceeded the GitHub per-step annotation bound")
+          for notice in notices:
+              print(notice)
           PY
             echo "::error::the deployment-image synthetic OCR benchmark did not pass"
             exit 1

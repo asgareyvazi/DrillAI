@@ -26,7 +26,12 @@ from pathlib import Path
 from typing import Any
 
 from drillai.core.config import Settings, get_settings
-from drillai.ingestion.ocr import TESSERACT_ADAPTER_VERSION, OcrUnavailable, TesseractOcrProvider
+from drillai.ingestion.ocr import (
+    TESSERACT_ADAPTER_VERSION,
+    TESSERACT_PAGE_SEGMENTATION_MODE,
+    OcrUnavailable,
+    TesseractOcrProvider,
+)
 from drillai.ingestion.ocr_benchmark import error_rates, normalize_for_scoring
 from drillai.ingestion.ocr_runtime import _pdfium_details
 from drillai.ingestion.parsers import parse_bytes
@@ -373,6 +378,7 @@ def _base_report(corpus: dict[str, Any], corpus_bytes: bytes) -> dict[str, Any]:
         "runtime": {
             "provider": "tesseract",
             "adapter_version": TESSERACT_ADAPTER_VERSION,
+            "page_segmentation_mode": TESSERACT_PAGE_SEGMENTATION_MODE,
             "runtime_version": None,
             "python_version": platform.python_version(),
             "pdf_renderer_version": None,
