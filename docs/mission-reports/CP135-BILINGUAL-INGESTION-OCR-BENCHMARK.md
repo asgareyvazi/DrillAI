@@ -1,6 +1,6 @@
 # CP135 — Bilingual ingestion OCR benchmark
 
-**Status:** CP135 is **not accepted**. Exact-SHA run **42728606694** evaluated all 64 v2 cases with PSM 3 and the required Tesseract/PDFium/English/Persian components, but failed globally (CER **0.399696**, WER **0.496546**, critical-field exact rate **0.419271**) and in every stratum. On the same v2 corpus/runtime, this is worse than the previous PSM 6 run **42725631378** (CER **0.262858**, WER **0.370898**, critical exact **0.583333**); PSM 3 is not accepted as a fix. All 64 transcript-free per-case rows were recovered from run 427286's bounded check annotations and saved at `docs/mission-reports/CP135-RUN-42728606694-CASE-EVIDENCE.json`; the artifact-download endpoint still returns `EOF`. A balanced v3 full-factorial corpus is now in the worktree for the next exact-SHA measurement. Run 427286's Windows job also failed one existing timestamp-provenance test, so this run is not cross-platform certification. Thresholds remain unchanged; no OCR pass, field accuracy, or operational readiness is claimed.
+**Status:** CP135 is **not accepted**. Exact-SHA run **42730779071** measured all 64 cases in the balanced v3 corpus with PSM 3, but failed globally (CER **0.523881**, WER **0.657216**, critical-field exact rate **0.270833**) and in every language/layout/scan stratum. The full-factorial evidence isolates the failures: all 16 English `single_column`/`compact` pages were exact, while English `table`/`two_column` and all 32 Persian cases were poor; no Persian critical field matched. PSM 3 is not accepted. The earlier v2 PSM 6 run **42725631378** outperformed PSM 3 on the same v2 corpus/runtime, so the next exact-SHA experiment returns to PSM 6 against v3. All 64 transcript-free v3 case rows are preserved at `docs/mission-reports/CP135-RUN-42730779071-CASE-EVIDENCE.json`. Run 427307's Windows backend inventory passed, but Playwright failed on an unaccounted `ERR_NO_BUFFER_SPACE` response; therefore cross-platform certification is also not green. Thresholds remain unchanged; no OCR pass, field accuracy, or operational readiness is claimed.
 
 ## Scope implemented
 
@@ -19,7 +19,7 @@
 - CP16 documentation/count guard: **10 passed**. Ruff, Python compilation, corpus JSON parsing, and `git diff --check` passed for the implementation checkpoint.
 - After the diagnostic chunking edits, the CP24 SHA-pinning guard, CP16 documentation guard, focused OCR tests (**54 tests**), and full `backend/tests/ingestion` selection (**134 tests**) passed; Ruff passed. Run 427286 later confirmed the updated workflow emitted one combined runtime/global/stratified notice plus eight case-batch notices and preserved **64/64 actual case rows**. A separate local formatter-only check also emitted 9 notices (maximum command line **3,732 bytes**) with 64 placeholder IDs; it is formatting evidence only, not OCR evidence.
 - The PSM 3 adapter (`tesseract-cli-tsv-v3`) passed focused OCR contract/runtime/renderer/verifier tests (**52 tests**) and full ingestion tests (**134 tests**) before the balanced-corpus revision. Exact run 427286 then measured a regression on the v2 corpus; details and the complete transcript-free rows are recorded below. This host has no Tesseract executable, so no local OCR accuracy claim is made.
-- The balanced v3 corpus, Persian two-column renderer, v3 corpus verifier, packaging entry, and tests passed a focused local selection (**37 tests**) and Ruff. A fresh full ingestion selection and exact-SHA deployment-image measurement for v3 are still required.
+- The balanced v3 corpus, Persian two-column renderer, v3 corpus verifier, packaging entry, and tests passed a focused local selection (**37 tests**) and Ruff; full `backend/tests/ingestion` passed **134 tests**. After PSM 3 failed on both v2 and v3, the current worktree returns the adapter to single-block PSM 6 as adapter v4. Full ingestion (**134 tests**), Ruff, CP16 documentation guard, and CP24 SHA-pinning guard pass for this PSM 6 candidate; its exact-SHA v3 deployment measurement is pending.
 - Direct local benchmark invocation: **BLOCKED**, exit 2, `quality_evaluated=false`; Tesseract and its language inventory are absent on this host. PDFium is present (`5.15.1`), but this does not substitute for OCR. No local CER/WER/field-accuracy result is claimed.
 
 ## Exact-SHA CI evidence
@@ -75,5 +75,29 @@
 - The nine bounded OCR diagnostic notices retained the combined runtime/global/stratified summary and all 64 actual per-case rows. They were retrieved from the GitHub check-run annotations; the raw report artifact (`cp135-synthetic-ocr-report-42728606694`, 6,990 bytes) could not be downloaded here (`EOF`). Transcript-free case rows, PDF digests, counts/rates, strata, and run provenance are preserved in `docs/mission-reports/CP135-RUN-42728606694-CASE-EVIDENCE.json`.
 - The native Windows job failed on `tests/operations/test_ddr_idempotency.py::test_report_period_is_not_promoted_as_a_survey_station_measurement_time`: annotation summary **1,723 passed, 1 failed, 1 skipped, 15 PostgreSQL deselected (1,740 collected)**; frontend **400 passed**. Later Windows stack/E2E steps did not run. The failure log artifact also returned `EOF`, so the exception/root cause is not known from this evidence and is not attributed to the OCR change.
 - The next exact-SHA run must measure the balanced v3 corpus and independently resolve the Windows failure. No result is inferred from v2's confounded layout/scan schedule, and no threshold or case was removed.
+
+### Balanced v3 PSM 3 measurement — exact-SHA run 42730779071
+
+- Head SHA: `3ff6a8787c32de033071a2d3b72107f919147f13`; dataset `3.0.0`, SHA-256 `31aca80b4323fe470d34705e36038296ef620adb7525373f5196c9f561b6735d`; adapter `tesseract-cli-tsv-v3`, PSM **3**.
+- Linux backend inventory passed **1,740/1,740** and frontend unit tests passed **400**. The deployment-image OCR gate failed; Linux E2E was consequently skipped. Runtime: Python **3.11.18**, Tesseract **5.5.0**, PDFium **5.15.2**; configured/available languages `eng` and `fas` (with `osd` installed). All **64/64** pages completed, with **0** incomplete/failed cases. Median case time **1,074.307 ms**, p95 **1,394.520 ms**, total **71,590.431 ms**.
+- Global metrics: **8,018/15,305** character errors (CER **0.523881**), **1,530/2,328** word errors (WER **0.657216**), **104/384** critical fields exact (**0.270833**), exact-case rate **0.250000**. All thresholds failed.
+
+  | Dimension | Stratum | Cases | CER | WER | Critical exact rate |
+  |---|---|---:|---:|---:|---:|
+  | Language | `eng` | 32 | 0.322541 | 0.364583 | 0.541667 |
+  | Language | `fas` | 32 | 0.753461 | 0.943878 | 0.000000 |
+  | Layout | `compact` | 16 | 0.317896 | 0.450172 | 0.500000 |
+  | Layout | `single_column` | 16 | 0.309343 | 0.448454 | 0.500000 |
+  | Layout | `table` | 16 | 0.763969 | 0.878007 | 0.000000 |
+  | Layout | `two_column` | 16 | 0.703288 | 0.852234 | 0.083333 |
+  | Scan | `clean` | 16 | 0.521648 | 0.655172 | 0.270833 |
+  | Scan | `light_noise` | 16 | 0.525295 | 0.656897 | 0.270833 |
+  | Scan | `light_skew` | 16 | 0.517241 | 0.644828 | 0.270833 |
+  | Scan | `low_contrast` | 16 | 0.531186 | 0.671769 | 0.270833 |
+
+- The 32-cell evidence shows **all eight English `single_column` and all eight English `compact` cases** were exact across the four scan conditions. English table cases were consistently around CER 0.66–0.68 with no critical exact fields; English two-column cases were around CER 0.61–0.62 with 1/6 critical fields. All 32 Persian cases had **0/6** critical fields, independent of scan condition; Persian table/two-column cells were especially poor. The complete per-case rows and PDF hashes are saved in `docs/mission-reports/CP135-RUN-42730779071-CASE-EVIDENCE.json` (check-run annotations, no transcripts).
+- The updated failure diagnostic emitted one combined runtime/global/stratified notice and eight per-case batches; all **64 actual case rows** were present. No transcripts were emitted.
+- Native Windows backend tests passed: **1,724 passed, 1 platform-specific skip, 15 PostgreSQL deselections (1,740 collected)**; frontend **400 passed**. The full Windows Playwright step then failed at `identity-permissions.spec.ts:97` because the product returned unaccounted `net::ERR_NO_BUFFER_SPACE` for `GET /api/v1/wells?limit=200`. The exact failure is preserved in the check annotation; no browser suite pass is claimed for this run.
+- PSM 3 is rejected as the default based on the measured failures. The next experiment uses PSM 6 on the same balanced v3 corpus. The v3 run does not inherit or erase v2 results, and no thresholds or cases were adjusted.
 
 All corpus pages and labels are generated synthetic fixtures. Ground truth is generated from the same values used to render the pages and is not independently adjudicated or held out. This benchmark does not establish accuracy on field/vendor documents, handwriting, field scanning conditions, semantic correctness, qualified engineering validation, provider acceptance, customer acceptance, or operational readiness.

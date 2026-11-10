@@ -37,10 +37,9 @@ __all__ = [
 MAX_TSV_BYTES = 16 * 1024 * 1024
 MAX_DIAGNOSTIC_OUTPUT_BYTES = 128 * 1024
 DIAGNOSTIC_TIMEOUT_SECONDS = 3.0
-TESSERACT_ADAPTER_VERSION = "tesseract-cli-tsv-v3"
-TESSERACT_PAGE_SEGMENTATION_MODE = 3
-# Automatic page segmentation lets Tesseract detect page blocks and columns; deployment-image
-# CP135 measured severe two-column/RTL errors with the previous single-block PSM 6 configuration.
+TESSERACT_ADAPTER_VERSION = "tesseract-cli-tsv-v4"
+TESSERACT_PAGE_SEGMENTATION_MODE = 6
+# PSM 6 is the next measured candidate after PSM 3 regressed on the balanced v3 deployment-image run.
 _PROCESS_SEMAPHORES: dict[int, threading.BoundedSemaphore] = {}
 _PROCESS_SEMAPHORES_LOCK = threading.Lock()
 _TESSERACT_DIAGNOSTIC_CACHE: dict[tuple[str, str, float, str, str], dict[str, object]] = {}

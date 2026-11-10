@@ -12,8 +12,8 @@ from drillai.ingestion import ocr_runtime
 
 class StubProvider:
     name = "tesseract"
-    adapter_version = "tesseract-cli-tsv-v3"
-    version = "tesseract-cli-tsv-v3; tesseract 5.4.1"
+    adapter_version = "tesseract-cli-tsv-v4"
+    version = "tesseract-cli-tsv-v4; tesseract 5.4.1"
 
     def __init__(self, **kwargs):
         self.kwargs = kwargs
@@ -71,7 +71,7 @@ def test_enabled_runtime_requires_tesseract_languages_and_pdfium(monkeypatch) ->
     assert report["available_languages"] == ["eng", "fas", "osd"]
     assert report["pdf_renderer_version"] == "4.30.0"
     assert report["configuration"]["max_concurrent_tesseract_processes"] == 3
-    assert report["configuration"]["page_segmentation_mode"] == 3
+    assert report["configuration"]["page_segmentation_mode"] == 6
     assert report["quality_evaluated"] is False
     assert "/opt" not in str(report)
 
