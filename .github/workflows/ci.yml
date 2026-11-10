@@ -252,48 +252,89 @@ jobs:
             # Keep the failure diagnosable even when GitHub's raw log endpoint is unavailable. The
             # annotation is deliberately limited to runtime, metric, stratum, and case-ID evidence;
             # the report itself contains no transcript, page image, local path, or uploaded content.
-            cp135_ocr_diagnostic="$(python3 - "$ocr_report" <<'PY'
+            python3 - "$ocr_report" <<'PY' || true
           import json
           import sys
+
+          MAX_ANNOTATION_BYTES = 2800
+
+          def emit(title, payload):
+              message = json.dumps(payload, ensure_ascii=True, sort_keys=True, separators=(",", ":"))
+              if len(message.encode("utf-8")) > MAX_ANNOTATION_BYTES:
+                  raise ValueError("sanitized CP135 annotation exceeds its safe size bound")
+              escaped = message.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+              print(f"::notice title={title}::{escaped}")
+
+          def emit_batches(title, field, rows):
+              batch = []
+              first = 1
+              for row in rows:
+                  candidate = batch + [row]
+                  message = json.dumps({field: candidate}, ensure_ascii=True, sort_keys=True, separators=(",", ":"))
+                  if batch and len(message.encode("utf-8")) > MAX_ANNOTATION_BYTES:
+                      last = first + len(batch) - 1
+                      emit(f"{title} {first:03d}-{last:03d}", {field: batch})
+                      first = last + 1
+                      batch = [row]
+                  else:
+                      batch = candidate
+              if batch:
+                  last = first + len(batch) - 1
+                  emit(f"{title} {first:03d}-{last:03d}", {field: batch})
 
           try:
               with open(sys.argv[1], encoding="utf-8") as source:
                   report = json.load(source)
           except (OSError, ValueError):
               report = {}
+          if not isinstance(report, dict):
+              report = {}
 
+          dataset = report.get("dataset") if isinstance(report.get("dataset"), dict) else {}
           metrics = report.get("metrics") if isinstance(report.get("metrics"), dict) else {}
           runtime = report.get("runtime") if isinstance(report.get("runtime"), dict) else {}
-          case_fields = ("id", "status", "reason", "cer", "wer", "critical_fields_matched", "critical_fields_expected", "processing_ms")
+          stratified = metrics.get("stratified_metrics") if isinstance(metrics.get("stratified_metrics"), dict) else {}
+          case_fields = (
+              "id", "language", "layout", "scan_condition", "status", "reason", "pdf_sha256", "cer", "wer",
+              "character_errors", "expected_characters", "word_errors", "expected_words", "critical_fields_matched",
+              "critical_fields_expected", "processing_ms", "recognition_ms",
+          )
           metric_fields = (
               "case_count", "evaluated_cases", "incomplete_or_failed_cases", "character_errors", "expected_characters",
               "character_error_rate", "word_errors", "expected_words", "word_error_rate", "exact_case_rate",
-              "critical_field_exact_rate", "critical_fields_matched", "critical_fields_expected", "thresholds_passed",
-              "all_strata_thresholds_passed", "stratified_metrics",
+              "critical_field_exact_rate", "critical_fields_matched", "critical_fields_expected", "median_case_processing_ms",
+              "p95_case_processing_ms", "median_tesseract_ms", "p95_tesseract_ms", "total_elapsed_ms", "thresholds_passed",
+              "all_strata_thresholds_passed",
           )
-          diagnostic = {
+          runtime_fields = (
+              "provider", "adapter_version", "runtime_version", "python_version", "pdf_renderer_version",
+              "renderer_dependencies", "resource_limits", "required_languages", "configured_languages", "available_languages",
+          )
+          summary = {
               "status": report.get("status"),
               "quality_evaluated": report.get("quality_evaluated"),
               "reason": report.get("reason"),
-              "runtime": {key: runtime.get(key) for key in (
-                  "provider", "adapter_version", "runtime_version", "pdf_renderer_version", "renderer_dependencies",
-                  "required_languages", "configured_languages", "available_languages",
+              "dataset": {key: dataset.get(key) for key in (
+                  "id", "version", "classification", "sha256", "case_count", "languages", "stratification_dimensions",
               )},
+              "thresholds": report.get("thresholds"),
+              "runtime": {key: runtime.get(key) for key in runtime_fields},
               "metrics": {key: metrics.get(key) for key in metric_fields},
-              "cases": [
-                  {key: case.get(key) for key in case_fields}
-                  for case in report.get("cases", []) if isinstance(case, dict)
-              ] if isinstance(report.get("cases"), list) else [],
           }
-          print(json.dumps(diagnostic, ensure_ascii=False, sort_keys=True, separators=(",", ":")))
+          emit("CP135 OCR runtime and global metrics", summary)
+
+          for dimension, rows in stratified.items():
+              if isinstance(rows, list):
+                  emit_batches(f"CP135 OCR stratum {dimension}", "rows", rows)
+
+          cases = report.get("cases", [])
+          if isinstance(cases, list):
+              emit_batches(
+                  "CP135 OCR cases",
+                  "cases",
+                  [{key: case.get(key) for key in case_fields} for case in cases if isinstance(case, dict)],
+              )
           PY
-            )" || cp135_ocr_diagnostic=''
-            cp135_ocr_diagnostic="${cp135_ocr_diagnostic//%/%25}"
-            cp135_ocr_diagnostic="${cp135_ocr_diagnostic//$'\r'/%0D}"
-            cp135_ocr_diagnostic="${cp135_ocr_diagnostic//$'\n'/%0A}"
-            if [ -n "$cp135_ocr_diagnostic" ]; then
-              echo "::notice title=CP135 synthetic OCR diagnostic::$cp135_ocr_diagnostic"
-            fi
             echo "::error::the deployment-image synthetic OCR benchmark did not pass"
             exit 1
           fi
