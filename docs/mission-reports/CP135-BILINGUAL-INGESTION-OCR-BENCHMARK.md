@@ -1,6 +1,8 @@
 # CP135 — Bilingual ingestion OCR benchmark
 
-**Status:** CP135 remains **not accepted**. The latest exact-SHA run, **42734158263** on commit `138c7491bc2e3b64a8b219a9ba388022bf4c29f3`, evaluated all 64 balanced v3 cases with adapter v4 / PSM 6, but failed the unchanged global and stratified gates: CER **0.402810**, WER **0.557990**, critical-field exact **0.393229**. The evidence isolates broad Persian errors and severe two-column errors, while scan-condition metrics are comparatively uniform; all transcript-free case rows are preserved at `docs/mission-reports/CP135-RUN-42734158263-CASE-EVIDENCE.json`. Native Windows passed backend inventory (1,724 passed, 1 identified skip, 15 PostgreSQL deselected), frontend tests (400), and Playwright (127/127); this does not remedy the Linux OCR failure. Thresholds remain CER ≤ **0.15**, WER ≤ **0.20**, and critical-field exact ≥ **0.90** globally and in every language/layout/scan stratum. No OCR pass, field accuracy, or operational readiness is claimed.
+**Status:** CP135 remains **not accepted**. The latest exact-SHA run, **43564605450** on commit `1ad8475ad659435a8abea904781cca0d6f97376f`, evaluated all 64 balanced v3 cases with adapter v5 / PSM 6, but failed the unchanged global and stratified gates: CER **0.325776**, WER **0.477663**, critical-field exact **0.471354**. English passed its language stratum; Persian had CER **0.651797**, WER **0.893707**, and zero exact critical fields. The complete transcript-free, annotation-backed per-case evidence is `docs/mission-reports/CP135-RUN-43564605450-CASE-EVIDENCE.json` (SHA-256 `4f490f2dbaada0486dfe3f97ad6777e9628d393d4a88becd517fc9f0dd1e063d`). Native Windows backend inventory passed (1,726 passed, 1 identified skip, 15 PostgreSQL deselected) but its browser suite failed with `ERR_NO_BUFFER_SPACE` while fetching `/src/stores/identityBridge.ts` in `run-events.spec.ts:263`; the cause remains unknown. This does not remedy the Linux OCR failure or establish cross-platform browser certification. Thresholds remain CER ≤ **0.15**, WER ≤ **0.20**, and critical-field exact ≥ **0.90** globally and in every language/layout/scan stratum. No OCR pass, field accuracy, or operational readiness is claimed.
+
+The preceding exact-SHA run, **42734158263** on commit `138c7491bc2e3b64a8b219a9ba388022bf4c29f3`, measured adapter v4 / PSM 6 and also failed: CER **0.402810**, WER **0.557990**, critical-field exact **0.393229**. Its transcript-free rows remain at `docs/mission-reports/CP135-RUN-42734158263-CASE-EVIDENCE.json`. Native Windows passed that earlier run's browser suite (127/127); this does not remedy either run's Linux OCR failure.
 
 The earlier exact-SHA PSM 3 run **42730779071** also failed all gates (CER **0.523881**, WER **0.657216**, critical-field exact **0.270833**). Its full-factorial evidence showed English single-column/compact pages exact, while table/two-column and Persian were poor. The PSM 6 / v4 and PSM 3 histories remain separate; see the run sections below. The initial PSM 3 Windows Playwright `ERR_NO_BUFFER_SPACE` failure is historical and was not repeated in run 427341.
 
@@ -47,6 +49,30 @@ The earlier exact-SHA PSM 3 run **42730779071** also failed all gates (CER **0.5
 - Candidate behavior was PSM 6 by default and PSM 11 only when pixel inspection found a long visible central divider, followed by geometry-based column ordering with script-direction selection. English metrics pass all three language thresholds; the Persian language stratum and the two-column, scan-condition, and several other strata fail one or more unchanged thresholds. These generated same-source labels and synthetic pages do not establish field OCR performance. This experiment is retained to make the candidate's failure reproducible from per-case evidence, not to authorize deployment.
 
 ## Exact-SHA CI evidence
+
+### Adapter-v5 exact-SHA measurement — run 43564605450
+
+- Run **43564605450**, head SHA `1ad8475ad659435a8abea904781cca0d6f97376f`: [Actions run](https://github.com/asgareyvazi/DrillAI/actions/runs/43564605450). The Linux and native-Windows jobs both failed, for distinct reasons.
+- Linux backend inventory passed **1,742/1,742** and frontend unit tests passed **400**. The Docker Compose deployment smoke gate failed because the deployment-image OCR benchmark did not pass; later Linux E2E and inventory-verification steps were skipped as downstream steps. This is not a Linux certification.
+- Actual runtime was Python **3.11.18**, Tesseract **5.5.0**, PDFium **5.15.2**, adapter `tesseract-cli-tsv-v5`, PSM **6**, configured/available languages `eng` and `fas` (with `osd` installed). All **64/64** cases were evaluated, with **0** incomplete or failed cases. The failure was a measured OCR-quality failure, not a missing-runtime preflight block.
+- Global metrics: **4,986/15,305** character errors (CER **0.325776**), **1,112/2,328** word errors (WER **0.477663**), **181/384** critical fields exact (**0.471354**), exact-case rate **0.359375**. All three global thresholds failed.
+
+  | Dimension | Stratum | Cases | CER | WER | Critical exact rate |
+  |---|---|---:|---:|---:|---:|
+  | Language | `eng` | 32 | 0.039858 | 0.052951 | 0.942708 |
+  | Language | `fas` | 32 | 0.651797 | 0.893707 | 0.000000 |
+  | Layout | `compact` | 16 | 0.299581 | 0.458763 | 0.500000 |
+  | Layout | `single_column` | 16 | 0.294164 | 0.445017 | 0.500000 |
+  | Layout | `table` | 16 | 0.303655 | 0.450172 | 0.489583 |
+  | Layout | `two_column` | 16 | 0.405532 | 0.556701 | 0.395833 |
+  | Scan | `clean` | 16 | 0.298347 | 0.453448 | 0.500000 |
+  | Scan | `light_noise` | 16 | 0.300917 | 0.450000 | 0.500000 |
+  | Scan | `light_skew` | 16 | 0.397210 | 0.548276 | 0.385417 |
+  | Scan | `low_contrast` | 16 | 0.307216 | 0.459184 | 0.500000 |
+
+- The complete per-case evidence is reconstructed only from the run's GitHub check-run annotations (which contain IDs, PDF digests, error counts, denominators, strata and timings, not transcripts): `docs/mission-reports/CP135-RUN-43564605450-CASE-EVIDENCE.json`, SHA-256 `4f490f2dbaada0486dfe3f97ad6777e9628d393d4a88becd517fc9f0dd1e063d`. The failed-log download returned `EOF`; the check-run annotation endpoint remained available and exposed all 64 case records and the full metrics notice.
+- The exact-SHA Windows backend inventory passed **1,726 tests**, with the one identified POSIX-only skip and **15 PostgreSQL deselections** (1,742 collected); frontend unit tests passed **400**. The real-browser suite failed in `run-events.spec.ts:263` after an unprovoked script request for `/src/stores/identityBridge.ts` returned `net::ERR_NO_BUFFER_SPACE`. The failure was reported by the run verifier; it is not a test skip. No cause was established, and the Windows browser job did not pass.
+- Both failures are kept distinct: the Linux OCR quality result is a reproducible CP135 acceptance failure; the Windows browser transport error is unresolved. The run does not meet CP151's exact-SHA cross-platform certification requirement, and does not establish field/customer/provider acceptance or production readiness.
 
 - Run **42521609413**, head SHA `fa25e26ba94daa71982099876c3d5fe448286f6c`: [Actions run](https://github.com/asgareyvazi/DrillAI/actions/runs/42521609413).
 - Linux backend inventory passed: **1,740 passed, 0 skipped, 0 deselected**; frontend unit suite passed **400**. The Docker Compose deployment gate failed at the CP135 deployment-image OCR command; GitHub annotated “the deployment-image synthetic OCR benchmark did not pass.” Downstream Linux E2E steps were skipped because of that failure, so this is not a passing Linux certification.
