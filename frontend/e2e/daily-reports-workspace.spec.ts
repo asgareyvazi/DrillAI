@@ -3,6 +3,7 @@
  * revisions in the browser. Reads and independent authorization refusals are checked against the API.
  */
 
+import { createHash } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import {
   apiAttempt,
@@ -12,6 +13,11 @@ import {
   expectNoFailures,
   test,
 } from './fixtures'
+import { readDailyReportDatabaseSnapshot } from './database-readback'
+
+function sha256(value: string): string {
+  return createHash('sha256').update(value, 'utf8').digest('hex')
+}
 
 interface DailyReportRevisionSummary {
   id: string
@@ -91,7 +97,7 @@ interface DailyReportRead {
 }
 
 interface ImportedDocumentDetail {
-  document: { id: string; title: string; status: string }
+  document: { id: string; title: string; status: string; well_id: string | null; wellbore_id: string | null }
   records: Array<{
     id: string
     record_type: string
@@ -155,22 +161,24 @@ test.describe('daily-report lifecycle in a real browser', () => {
       `${summary},Drilling ahead,8,2450,12.5`,
       '',
     ].join('\n')
-    const upload = await request.post('/api/v1/documents', {
-      headers: { 'X-Dev-Roles': 'engineer' },
-      multipart: {
-        file: {
-          name: `synthetic-ddr-import-${tag}.csv`,
-          mimeType: 'text/csv',
-          buffer: Buffer.from(csv, 'utf8'),
-        },
-        well_id: well.id,
-        wellbore_id: wellbore.id,
-        doc_type: 'ddr',
-        title: `Synthetic DDR import ${tag}`,
-      },
+    await page.goto(`/wells/${well.id}/documents`)
+    await page.getByTestId('shell-role-switch').selectOption('engineer')
+    await expect(page.getByTestId('shell-role-switch')).toHaveValue('engineer')
+    await page.getByTestId('document-upload-type').selectOption('ddr')
+    await expect(page.getByTestId('document-upload-wellbore')).toContainText('Main bore')
+    await page.getByTestId('document-upload-wellbore').selectOption(wellbore.id)
+    const uploadResponsePromise = page.waitForResponse((response) =>
+      response.request().method() === 'POST' && new URL(response.url()).pathname === '/api/v1/documents',
+    )
+    await page.getByTestId('document-upload-file').setInputFiles({
+      name: `synthetic-ddr-import-${tag}.csv`,
+      mimeType: 'text/csv',
+      buffer: Buffer.from(csv, 'utf8'),
     })
-    expect(upload.ok(), `upload -> ${upload.status()}`).toBeTruthy()
-    const uploaded = (await upload.json()) as { document: { id: string } }
+    const uploadResponse = await uploadResponsePromise
+    expect(uploadResponse.status(), 'the browser document upload must succeed').toBe(201)
+    const uploaded = (await uploadResponse.json()) as { document: { id: string } }
+    await expect(page.getByText(/Uploaded /)).toBeVisible({ timeout: 30_000 })
     await expect.poll(async () => {
       const detail = await apiGet<ImportedDocumentDetail>(request, `/documents/${uploaded.document.id}`, 'engineer')
       return detail.records.some((record) =>
@@ -189,6 +197,12 @@ test.describe('daily-report lifecycle in a real browser', () => {
       )
     }, { timeout: 60_000, message: 'the CSV extractor must preserve row values and source-backed report identity' }).toBe(true)
     const document = await apiGet<ImportedDocumentDetail>(request, `/documents/${uploaded.document.id}`, 'engineer')
+    expect(document.document).toMatchObject({
+      id: uploaded.document.id,
+      well_id: well.id,
+      wellbore_id: wellbore.id,
+      status: 'extracted',
+    })
     const sourceRecord = document.records.find((record) =>
       record.record_type === 'operation_row' && record.payload.summary === summary,
     )
@@ -316,6 +330,81 @@ test.describe('daily-report lifecycle in a real browser', () => {
     const reconciled = await apiGet<DailyReportRead>(request, reportPath(well.id, importedRow.id), 'engineer')
     expect(reconciled.latest_revision.edit_version).toBe(2)
     expect(reconciled.latest_revision.reconciliation.every((item) => item.resolution_state === 'accepted')).toBe(true)
+
+    const submittedReadbackPromise = page.waitForResponse((response) => {
+      const url = new URL(response.url())
+      return response.request().method() === 'GET' &&
+        url.pathname === `/api/v1${reportPath(well.id, importedRow.id)}` &&
+        response.ok()
+    })
+    await page.getByTestId('daily-report-submit').click()
+    await enterReason(page, 'Submit the reconciled imported report for independent review.')
+    const submittedResponse = await submittedReadbackPromise
+    const submitted = (await submittedResponse.json()) as DailyReportRead
+    expect(submitted.report.id).toBe(importedRow.id)
+    expect(submitted.latest_revision.status).toBe('submitted')
+    expect(submitted.latest_revision.submitted_by).toBeTruthy()
+    await expect(page.getByTestId('daily-report-detail').getByText('Submitted', { exact: true })).toBeVisible()
+
+    await page.getByTestId('shell-role-switch').selectOption('drilling_supervisor')
+    await expect(page.getByTestId('shell-role-switch')).toHaveValue('drilling_supervisor')
+    await expect(page.getByTestId('daily-report-approve')).toBeEnabled()
+    const approvedReadbackPromise = page.waitForResponse((response) => {
+      const url = new URL(response.url())
+      return response.request().method() === 'GET' &&
+        url.pathname === `/api/v1${reportPath(well.id, importedRow.id)}` &&
+        response.ok()
+    })
+    await page.getByTestId('daily-report-approve').click()
+    await enterReason(page, 'Independent reviewer matched the accepted proposal to the uploaded source.')
+    const approvedResponse = await approvedReadbackPromise
+    const approved = (await approvedResponse.json()) as DailyReportRead
+    expect(approved.report.id).toBe(importedRow.id)
+    expect(approved.latest_revision.status).toBe('approved')
+    expect(approved.latest_revision.decided_by).not.toBe(approved.latest_revision.submitted_by)
+    await expect(page.getByTestId('daily-report-detail').getByText('Approved', { exact: true })).toBeVisible()
+
+    // Verify the same imported revision, source links, accepted decisions, and typed values in the
+    // actual isolated SQLite database, using a separate read-only connection (no application API mock).
+    const database = readDailyReportDatabaseSnapshot(importedRow.id, well.id, wellbore.id)
+    expect(database.report).toMatchObject({
+      id: importedRow.id,
+      well_id: well.id,
+      wellbore_id: wellbore.id,
+      report_date: reportDate,
+      report_number: reportNumber,
+      latest_revision_number: 1,
+      latest_approved_revision_number: 1,
+    })
+    expect(database.revision).toMatchObject({
+      revision_number: 1,
+      status: 'approved',
+      source_kind: 'import',
+      source_document_id: uploaded.document.id,
+      source_record_id: sourceRecord.id,
+      summary_sha256: sha256(summary),
+    })
+    expect(database.revision.content_hash).toMatch(/^[a-f0-9]{64}$/)
+    expect(database.activity).toMatchObject({
+      title_sha256: sha256('Drilling ahead'),
+      operation_kind: 'drilling',
+      duration_source_value: 8,
+      duration_source_unit: 'h',
+      source_document_id: uploaded.document.id,
+      source_record_id: sourceRecord.id,
+      resolution_state: 'accepted',
+    })
+    expect(database.measurement).toMatchObject({
+      parameter_key: 'mud_weight',
+      source_value: 12.5,
+      source_unit: 'ppg',
+      accepted_input_value: 12.5,
+      accepted_input_unit: 'ppg',
+      source_document_id: uploaded.document.id,
+      source_record_id: sourceRecord.id,
+      resolution_state: 'accepted',
+    })
+    expect(database.reconciliation).toEqual({ total: 5, accepted: 5, source_documents: 1, source_records: 2 })
     expectNoFailures(consoleErrors, failedResponses)
   })
 
