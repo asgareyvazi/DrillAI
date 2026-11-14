@@ -336,6 +336,7 @@ class DailyReportService:
             report_number = _nonempty_text(report_number, "report_number", 120)
         if wellbore_id is not None:
             wellbore_id = _nonempty_text(wellbore_id, "wellbore_id", 128)
+            await self._resolve_well(well_id, wellbore_id)
 
         stmt = (
             select(DailyDrillingReport)

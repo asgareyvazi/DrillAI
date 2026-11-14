@@ -1488,9 +1488,8 @@ async def test_duplicate_import_identity_returns_existing_report_without_mutatin
         params={"wellbore_id": other_wellbore_id},
         headers=headers("engineer"),
     )
-    assert foreign_wellbore_filter.status_code == 200, foreign_wellbore_filter.text
-    assert foreign_wellbore_filter.json()["items"] == []
-    assert foreign_wellbore_filter.json()["total"] == 0
+    assert foreign_wellbore_filter.status_code == 422, foreign_wellbore_filter.text
+    assert "wellbore_id does not belong to the supplied well_id" in foreign_wellbore_filter.json()["error"]["message"]
     case_mismatch = await client.get(
         f"/api/v1/wells/{well_id}/daily-reports",
         params={"report_number": "ddr-import-idempotent-conflict"},
