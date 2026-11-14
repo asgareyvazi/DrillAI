@@ -29,12 +29,23 @@ def _isolated_database_path(raw_path: str) -> Path:
     return resolved
 
 
-def read_snapshot(database_url: str, *, report_id: str, well_id: str, wellbore_id: str) -> dict[str, object]:
+def read_snapshot(
+    database_url: str,
+    *,
+    report_id: str,
+    well_id: str,
+    wellbore_id: str,
+    revision_number: int | None = None,
+) -> dict[str, object]:
     if (
         not database_url.startswith(_SQLITE_URL_PREFIX)
         or "?" in database_url
         or "#" in database_url
         or not all((report_id, well_id, wellbore_id))
+        or (
+            revision_number is not None
+            and (not isinstance(revision_number, int) or isinstance(revision_number, bool) or revision_number < 1)
+        )
     ):
         raise ValueError("readback requires an isolated SQLite E2E URL and explicit report/well scope")
     raw_path = unquote(database_url[len(_SQLITE_URL_PREFIX) :])
@@ -59,14 +70,17 @@ def read_snapshot(database_url: str, *, report_id: str, well_id: str, wellbore_i
         ).fetchone()
         if report is None:
             raise ValueError("no report exists in the requested E2E well/wellbore scope")
+        selected_revision_number = report["latest_revision_number"] if revision_number is None else revision_number
+        if selected_revision_number > report["latest_revision_number"]:
+            raise ValueError("the requested revision is beyond the report's latest revision")
         revision = connection.execute(
             """
             SELECT id, org_id, report_id, revision_number, edit_version, status, source_kind,
-                   source_document_id, source_record_id, summary, content_hash
+                   source_document_id, source_record_id, summary, content_hash, supersedes_revision_id
             FROM daily_drilling_report_revisions
             WHERE org_id = ? AND report_id = ? AND revision_number = ?
             """,
-            (report["org_id"], report["id"], report["latest_revision_number"]),
+            (report["org_id"], report["id"], selected_revision_number),
         ).fetchone()
         if revision is None:
             raise ValueError("the report's current revision is missing from the E2E database")
@@ -126,6 +140,7 @@ def read_snapshot(database_url: str, *, report_id: str, well_id: str, wellbore_i
             "source_kind": revision["source_kind"],
             "source_document_id": revision["source_document_id"],
             "source_record_id": revision["source_record_id"],
+            "supersedes_revision_id": revision["supersedes_revision_id"],
             "summary_sha256": hashlib.sha256((revision["summary"] or "").encode("utf-8")).hexdigest(),
             "content_hash": revision["content_hash"],
         },
@@ -155,6 +170,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("report_id")
     parser.add_argument("well_id")
     parser.add_argument("wellbore_id")
+    parser.add_argument("--revision-number", type=int)
     args = parser.parse_args(argv)
     try:
         result = read_snapshot(
@@ -162,6 +178,7 @@ def main(argv: list[str] | None = None) -> int:
             report_id=args.report_id,
             well_id=args.well_id,
             wellbore_id=args.wellbore_id,
+            revision_number=args.revision_number,
         )
     except (OSError, sqlite3.Error, ValueError, TypeError):
         # Never echo a path, database URL, SQL exception, or source payload into Playwright output.

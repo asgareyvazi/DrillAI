@@ -41,6 +41,7 @@ interface DailyReportRecord {
   shift_code: string
   report_number: string | null
   latest_revision_number: number
+  latest_approved_revision_number: number | null
   latest_revision: DailyReportRevisionSummary | null
 }
 
@@ -405,6 +406,90 @@ test.describe('daily-report lifecycle in a real browser', () => {
       resolution_state: 'accepted',
     })
     expect(database.reconciliation).toEqual({ total: 5, accepted: 5, source_documents: 1, source_records: 2 })
+
+    // A correction is a new draft that points back to the approved import; its source facts stay
+    // linked, but every proposal must be reconciled again and the approved pointer must not move.
+    await page.getByTestId('daily-report-correction').click()
+    await enterReason(page, 'Create a new revision after reviewing the approved imported source.')
+    await expect(page.getByTestId('daily-report-detail')).toContainText('Draft')
+    const correctionRead = await apiGet<DailyReportRead>(request, reportPath(well.id, importedRow.id), 'engineer')
+    expect(correctionRead.report.latest_revision_number).toBe(2)
+    expect(correctionRead.report.latest_approved_revision_number).toBe(1)
+    expect(correctionRead.latest_revision).toMatchObject({
+      revision_number: 2,
+      status: 'draft',
+      source_kind: 'import',
+      source_document_id: uploaded.document.id,
+      source_record_id: sourceRecord.id,
+      supersedes_revision_id: approved.latest_revision.id,
+    })
+    expect(correctionRead.latest_revision.reconciliation).toHaveLength(5)
+    expect(correctionRead.latest_revision.reconciliation.every((item) =>
+      item.resolution_state === 'proposed' && item.proposal_matches_current,
+    )).toBe(true)
+
+    const correctedDatabase = readDailyReportDatabaseSnapshot(importedRow.id, well.id, wellbore.id, 2)
+    expect(correctedDatabase.report).toMatchObject({
+      latest_revision_number: 2,
+      latest_approved_revision_number: 1,
+    })
+    expect(correctedDatabase.revision).toMatchObject({
+      revision_number: 2,
+      status: 'draft',
+      source_kind: 'import',
+      source_document_id: uploaded.document.id,
+      source_record_id: sourceRecord.id,
+      supersedes_revision_id: database.revision.id,
+      summary_sha256: sha256(summary),
+    })
+    expect(correctedDatabase.activity).toMatchObject({
+      source_document_id: uploaded.document.id,
+      source_record_id: sourceRecord.id,
+      duration_source_value: 8,
+      duration_source_unit: 'h',
+      resolution_state: 'proposed',
+    })
+    expect(correctedDatabase.measurement).toMatchObject({
+      source_document_id: uploaded.document.id,
+      source_record_id: sourceRecord.id,
+      source_value: 12.5,
+      source_unit: 'ppg',
+      accepted_input_value: 12.5,
+      accepted_input_unit: 'ppg',
+      resolution_state: 'proposed',
+    })
+    expect(correctedDatabase.reconciliation).toEqual({ total: 5, accepted: 0, source_documents: 1, source_records: 2 })
+
+    // A historical database read is explicit and must not rewrite the report's current pointers.
+    const historicalDatabase = readDailyReportDatabaseSnapshot(importedRow.id, well.id, wellbore.id, 1)
+    expect(historicalDatabase.report).toMatchObject({
+      latest_revision_number: 2,
+      latest_approved_revision_number: 1,
+    })
+    expect(historicalDatabase.revision).toMatchObject({
+      id: database.revision.id,
+      revision_number: 1,
+      status: 'approved',
+      source_document_id: uploaded.document.id,
+      source_record_id: sourceRecord.id,
+    })
+    expect(historicalDatabase.reconciliation).toEqual({ total: 5, accepted: 5, source_documents: 1, source_records: 2 })
+
+    const correctionHistory = await apiGet<DailyReportHistory>(
+      request,
+      `${reportPath(well.id, importedRow.id)}/history`,
+      'viewer',
+    )
+    expect(correctionHistory.total).toBe(2)
+    expect(correctionHistory.items.find((revision) => revision.revision_number === 1)).toMatchObject({
+      id: approved.latest_revision.id,
+      status: 'approved',
+    })
+    expect(correctionHistory.items.find((revision) => revision.revision_number === 2)).toMatchObject({
+      id: correctionRead.latest_revision.id,
+      status: 'draft',
+      supersedes_revision_id: approved.latest_revision.id,
+    })
     expectNoFailures(consoleErrors, failedResponses)
   })
 

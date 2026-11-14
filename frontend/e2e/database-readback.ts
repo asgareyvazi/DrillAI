@@ -24,6 +24,7 @@ export interface DailyReportDatabaseSnapshot {
     source_kind: string
     source_document_id: string | null
     source_record_id: string | null
+    supersedes_revision_id: string | null
     summary_sha256: string
     content_hash: string | null
   }
@@ -75,13 +76,21 @@ export function readDailyReportDatabaseSnapshot(
   reportId: string,
   wellId: string,
   wellboreId: string,
+  revisionNumber?: number,
 ): DailyReportDatabaseSnapshot {
   const databaseUrl = fixtures().database_url
   const script = path.join(repoRoot, 'scripts', 'verify_daily_report_db_readback.py')
+  const args = [script, databaseUrl, reportId, wellId, wellboreId]
+  if (revisionNumber !== undefined) {
+    if (!Number.isSafeInteger(revisionNumber) || revisionNumber < 1) {
+      throw new Error('Read-only daily-report database readback failed for the isolated E2E fixture.')
+    }
+    args.push('--revision-number', String(revisionNumber))
+  }
   try {
     const stdout = execFileSync(
       resolvePython(),
-      [script, databaseUrl, reportId, wellId, wellboreId],
+      args,
       { cwd: repoRoot, encoding: 'utf8', timeout: 15_000, maxBuffer: 256 * 1024, windowsHide: true },
     )
     return JSON.parse(stdout) as DailyReportDatabaseSnapshot

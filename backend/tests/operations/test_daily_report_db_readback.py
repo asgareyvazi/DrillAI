@@ -39,7 +39,7 @@ def _seed_isolated_report_database(path: Path) -> None:
                 id TEXT PRIMARY KEY, org_id TEXT NOT NULL, report_id TEXT NOT NULL,
                 revision_number INTEGER NOT NULL, edit_version INTEGER NOT NULL, status TEXT NOT NULL,
                 source_kind TEXT NOT NULL, source_document_id TEXT, source_record_id TEXT,
-                summary TEXT, content_hash TEXT
+                summary TEXT, content_hash TEXT, supersedes_revision_id TEXT
             );
             CREATE TABLE daily_report_activities (
                 id TEXT PRIMARY KEY, org_id TEXT NOT NULL, revision_id TEXT NOT NULL,
@@ -65,10 +65,10 @@ def _seed_isolated_report_database(path: Path) -> None:
             ("report-1", "org-1", "well-1", "bore-1", "2026-06-01", "DDR-1", 1, 1),
         )
         connection.execute(
-            "INSERT INTO daily_drilling_report_revisions VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO daily_drilling_report_revisions VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 "revision-1", "org-1", "report-1", 1, 2, "approved", "import",
-                "document-1", "record-1", "Synthetic drilling ahead", "a" * 64,
+                "document-1", "record-1", "Synthetic drilling ahead", "a" * 64, None,
             ),
         )
         connection.execute(
@@ -109,6 +109,7 @@ def test_snapshot_is_scoped_read_only_and_contains_only_hashes_for_free_text(tmp
         "latest_revision_number": 1,
         "latest_approved_revision_number": 1,
     }
+    assert snapshot["revision"]["supersedes_revision_id"] is None
     assert snapshot["revision"]["summary_sha256"] == hashlib.sha256(
         b"Synthetic drilling ahead"
     ).hexdigest()
@@ -142,6 +143,84 @@ def test_snapshot_is_scoped_read_only_and_contains_only_hashes_for_free_text(tmp
         sqlite3.OperationalError
     ):
         connection.execute("UPDATE daily_drilling_reports SET report_number = 'changed'")
+
+
+def test_snapshot_reads_a_requested_historical_revision_without_moving_the_latest_pointer(tmp_path) -> None:
+    database = _isolated_database_path(tmp_path)
+    _seed_isolated_report_database(database)
+    database_url = f"sqlite+aiosqlite:///{database.as_posix()}"
+    with sqlite3.connect(database) as connection:
+        connection.execute(
+            "UPDATE daily_drilling_reports SET latest_revision_number = 2 WHERE id = 'report-1'"
+        )
+        connection.execute(
+            "INSERT INTO daily_drilling_report_revisions VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                "revision-2", "org-1", "report-1", 2, 1, "draft", "import",
+                "document-1", "record-1", "Corrected synthetic summary", "b" * 64, "revision-1",
+            ),
+        )
+        connection.execute(
+            "INSERT INTO daily_report_activities VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                "activity-2", "org-1", "revision-2", 1, "Corrected drilling ahead", "drilling",
+                28_800, 8.0, "h", "document-1", "record-2", "proposed",
+            ),
+        )
+        connection.execute(
+            "INSERT INTO daily_report_measurements VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                "measurement-2", "org-1", "revision-2", "mud_weight", 0, 12.5, "ppg",
+                12.5, "ppg", 1_497.915, "kg/m3", "document-1", "record-2", "proposed",
+            ),
+        )
+        for index in range(5):
+            connection.execute(
+                "INSERT INTO daily_report_reconciliations VALUES (?, ?, ?, ?, ?, ?)",
+                (f"reconciliation-v2-{index}", "org-1", "revision-2", "proposed", "document-1", f"record-{index + 1}"),
+            )
+
+    historical = read_snapshot(
+        database_url, report_id="report-1", well_id="well-1", wellbore_id="bore-1", revision_number=1
+    )
+    assert historical["report"]["latest_revision_number"] == 2
+    assert historical["report"]["latest_approved_revision_number"] == 1
+    assert historical["revision"]["revision_number"] == 1
+    assert historical["revision"]["status"] == "approved"
+    assert historical["revision"]["supersedes_revision_id"] is None
+    assert historical["reconciliation"] == {
+        "total": 5,
+        "accepted": 5,
+        "source_documents": 1,
+        "source_records": 5,
+    }
+
+    latest = read_snapshot(database_url, report_id="report-1", well_id="well-1", wellbore_id="bore-1")
+    assert latest["report"]["latest_revision_number"] == 2
+    assert latest["revision"]["revision_number"] == 2
+    assert latest["revision"]["status"] == "draft"
+    assert latest["revision"]["supersedes_revision_id"] == "revision-1"
+    assert latest["revision"]["summary_sha256"] == hashlib.sha256(b"Corrected synthetic summary").hexdigest()
+    assert latest["reconciliation"] == {
+        "total": 5,
+        "accepted": 0,
+        "source_documents": 1,
+        "source_records": 5,
+    }
+
+    with pytest.raises(ValueError, match="beyond the report's latest revision"):
+        read_snapshot(
+            database_url, report_id="report-1", well_id="well-1", wellbore_id="bore-1", revision_number=3
+        )
+    for invalid_revision in (0, -1, True):
+        with pytest.raises(ValueError, match="isolated SQLite E2E URL and explicit report/well scope"):
+            read_snapshot(
+                database_url,
+                report_id="report-1",
+                well_id="well-1",
+                wellbore_id="bore-1",
+                revision_number=invalid_revision,
+            )
 
 
 def test_snapshot_rejects_unscoped_database_urls_and_cross_well_reads(tmp_path) -> None:
