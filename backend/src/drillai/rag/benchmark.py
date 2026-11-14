@@ -1,14 +1,16 @@
-"""Deterministic, synthetic retrieval benchmark for the local RAG ranking contract.
+"""Deterministic, synthetic multi-mode retrieval benchmark for the local RAG ranking contract.
 
-This command evaluates the production lexical retrieval service in an isolated SQLite database. A
-versioned, fictional corpus supplies exact development-fixture relevance labels, cross-scope distractors,
-unknown depth/time metadata, a quarantined source, and explicit source locators. It reports lexical
-Recall@k/Precision@k/MRR, exclusions, scope violations, citation coverage, and locator coverage only.
+This command measures metadata and lexical retrieval separately in an isolated SQLite database and
+records semantic/hybrid availability without conflating lexical fallback with vector quality. A
+versioned fictional corpus supplies fixture relevance labels, near-miss and cross-scope distractors,
+unknown depth/time metadata, quarantined sources, and explicit source locators. It reports top-k
+ranking, no-relevant-query, scope, citation, locator, and per-query-stratum metrics.
 
-It makes no network calls and uses no embedding or LLM provider. Its relevance labels are hand-authored
-software fixtures, not independent review or evidence of production-corpus, semantic, engineering, or
-answer quality. An unknown depth or reporting period remains unknown and is excluded when a query asks
-for a bounded depth/time window; record creation time is never substituted for a missing source period.
+It makes no network calls and creates no embeddings or LLM/provider responses. Semantic and hybrid
+scores remain not evaluated without authentic stored vectors. Relevance labels are development
+fixtures, not independent review or evidence of production-corpus, semantic, engineering, or answer
+quality. An unknown depth or reporting period remains unknown; record creation time is never substituted
+for a missing source period.
 
 Run from ``backend/``::
 
@@ -23,6 +25,7 @@ import asyncio
 import datetime as dt
 import hashlib
 import json
+import math
 import sys
 from pathlib import Path
 from typing import Any
@@ -42,8 +45,11 @@ from drillai.db.models import (
 )
 from drillai.rag.retriever import RetrievalQuery, RetrieveMode, retrieve
 
-DATASET_VERSION = "drillai-rag-synthetic-v3"
+DATASET_VERSION = "drillai-rag-synthetic-v4"
 TOP_K = 5
+SCALE_POSITIVE_QUERY_COUNT = 256
+SCALE_NEAR_MISS_CHUNK_COUNT = 192
+SCALE_NO_MATCH_QUERY_COUNT = 16
 _MAIN_ORG_ID = "org_rag_benchmark"
 _MAIN_PROJECT_ID = "prj_rag_benchmark"
 _MAIN_WELL_ID = "wel_rag_benchmark"
@@ -275,7 +281,7 @@ _QUERIES = (
     },
     {
         "id": "unknown-depth-does-not-enter-window",
-        "text": "mud check plastic viscosity 22 cp",
+        "text": "mud check plastic viscosity 22 cp inside an explicit depth window",
         "section": "intermediate",
         "depth_from_si": 2200.0,
         "depth_to_si": 2300.0,
@@ -289,7 +295,7 @@ _QUERIES = (
     },
     {
         "id": "unknown-time-does-not-enter-period",
-        "text": "mud check plastic viscosity 22 cp",
+        "text": "mud check plastic viscosity 22 cp inside an explicit reporting period",
         "section": "intermediate",
         "period_from": "2026-03-18T00:00:01+00:00",
         "period_to": "2026-03-19T00:00:00+00:00",
@@ -304,12 +310,12 @@ _QUERIES = (
 )
 
 
-def _build_cp130_scale_fixtures() -> tuple[tuple[dict[str, Any], ...], tuple[dict[str, Any], ...]]:
-    """Create 100 unique positive retrieval labels plus 47 deterministic scope distractors."""
+def _build_cp139_scale_fixtures() -> tuple[tuple[dict[str, Any], ...], tuple[dict[str, Any], ...]]:
+    """Build 508 versioned synthetic chunks and 278 distinct retrieval questions."""
     rows: list[dict[str, Any]] = []
     queries: list[dict[str, Any]] = []
     page_by_document: dict[str, int] = {}
-    main_document_id = "doc_cp130_rag_generated"
+    main_document_id = "doc_cp139_rag_generated"
 
     def add_row(
         *,
@@ -341,22 +347,29 @@ def _build_cp130_scale_fixtures() -> tuple[tuple[dict[str, Any], ...], tuple[dic
             }
         )
 
-    for index in range(100):
+    query_phrases = (
+        ("identifier_lookup", "CP139-ITEM-{sequence} parameter-{sequence}"),
+        ("record_phrase", "synthetic drilling record CP139-ITEM-{sequence} parameter-{sequence}"),
+        ("parameter_phrase", "locate parameter-{sequence} on record CP139-ITEM-{sequence}"),
+        ("canonical_value", "canonical-SI value for CP139-ITEM-{sequence} parameter-{sequence}"),
+    )
+    for index in range(SCALE_POSITIVE_QUERY_COUNT):
         sequence = index + 1
         sequence_text = f"{sequence:03d}"
         sample_day = dt.date(2026, 4, 1) + dt.timedelta(days=index)
         next_day = sample_day + dt.timedelta(days=1)
         period_start = dt.datetime.combine(sample_day, dt.time.min, tzinfo=dt.UTC).isoformat()
         period_end = dt.datetime.combine(next_day, dt.time.min, tzinfo=dt.UTC).isoformat()
+        query_period_end = (dt.datetime.combine(next_day, dt.time.min, tzinfo=dt.UTC) - dt.timedelta(microseconds=1)).isoformat()
         depth_start = 800.0 + (index % 20) * 50.0
         depth_end = depth_start + 100.0
-        fixture_id = f"chk_cp130_item_{sequence_text}"
+        fixture_id = f"chk_cp139_item_{sequence_text}"
         add_row(
             fixture_id=fixture_id,
             document_id=main_document_id,
             scope="main",
             text=(
-                f"Synthetic benchmark record CP130-ITEM-{sequence_text} parameter-{sequence_text} "
+                f"Synthetic benchmark record CP139-ITEM-{sequence_text} parameter-{sequence_text} "
                 f"value {100 + index}.25 canonical-SI; deterministic development-only fixture."
             ),
             depth_from_si=depth_start,
@@ -364,25 +377,69 @@ def _build_cp130_scale_fixtures() -> tuple[tuple[dict[str, Any], ...], tuple[dic
             period_start=period_start,
             period_end=period_end,
         )
-        next_sequence = sequence % 100 + 1
+        next_sequence = sequence % SCALE_POSITIVE_QUERY_COUNT + 1
+        stratum, query_template = query_phrases[index % len(query_phrases)]
         queries.append(
             {
-                "id": f"cp130-unique-record-{sequence_text}",
-                "text": f"CP130-ITEM-{sequence_text} parameter-{sequence_text}",
+                "id": f"cp139-unique-record-{sequence_text}",
+                "stratum": stratum,
+                "text": query_template.format(sequence=sequence_text),
                 "section": "intermediate",
                 "doc_type": "benchmark",
                 "depth_from_si": depth_start + 10.0,
                 "depth_to_si": depth_end - 10.0,
                 "period_from": period_start,
-                "period_to": period_end,
+                "period_to": query_period_end,
                 "relevant_chunk_ids": [fixture_id],
                 "must_not_retrieve_chunk_ids": [
-                    f"chk_cp130_item_{next_sequence:03d}",
-                    "chk_cp130_dist_quarantine_001",
-                    "chk_cp130_dist_other_well_001",
-                    "chk_cp130_dist_other_tenant_001",
+                    f"chk_cp139_item_{next_sequence:03d}",
+                    "chk_cp139_dist_quarantine_001",
+                    "chk_cp139_dist_other_well_001",
+                    "chk_cp139_dist_other_tenant_001",
                 ],
             }
+        )
+
+    for index in range(SCALE_NO_MATCH_QUERY_COUNT):
+        sequence = index + 1
+        sequence_text = f"{sequence:03d}"
+        queries.append(
+            {
+                "id": f"cp139-no-match-{sequence_text}",
+                "stratum": "no_match",
+                "text": f"nohitmarker-139-{sequence_text} qzv-miss-{sequence_text}",
+                "section": "intermediate",
+                "doc_type": "benchmark",
+                "depth_from_si": 800.0 + (index % 20) * 50.0,
+                "depth_to_si": 900.0 + (index % 20) * 50.0,
+                "period_from": "2026-04-01T00:00:00+00:00",
+                "period_to": "2026-04-02T00:00:00+00:00",
+                "relevant_chunk_ids": [],
+                "must_not_retrieve_chunk_ids": [],
+            }
+        )
+
+    # Hard negatives share a parameter identifier and well/depth/time window with one target, but
+    # not that target's unique record identifier. They test ranking rather than access-control filters.
+    for index in range(SCALE_NEAR_MISS_CHUNK_COUNT):
+        target_index = index % SCALE_POSITIVE_QUERY_COUNT
+        target_sequence = target_index + 1
+        sequence_text = f"{index + 1:03d}"
+        sample_day = dt.date(2026, 4, 1) + dt.timedelta(days=target_index)
+        next_day = sample_day + dt.timedelta(days=1)
+        depth_start = 800.0 + (target_index % 20) * 50.0
+        add_row(
+            fixture_id=f"chk_cp139_near_miss_{sequence_text}",
+            document_id=main_document_id,
+            scope="main",
+            text=(
+                f"Synthetic benchmark near-match CP139-DECOY-{sequence_text} parameter-{target_sequence:03d} "
+                "context-only placeholder; this is not the requested CP139 item."
+            ),
+            depth_from_si=depth_start,
+            depth_to_si=depth_start + 100.0,
+            period_start=dt.datetime.combine(sample_day, dt.time.min, tzinfo=dt.UTC).isoformat(),
+            period_end=dt.datetime.combine(next_day, dt.time.min, tzinfo=dt.UTC).isoformat(),
         )
 
     # These 37 main-scope chunks challenge explicit depth/time filters and unknown-metadata handling.
@@ -392,10 +449,10 @@ def _build_cp130_scale_fixtures() -> tuple[tuple[dict[str, Any], ...], tuple[dic
         start = dt.datetime.combine(day, dt.time.min, tzinfo=dt.UTC).isoformat()
         end = dt.datetime.combine(day + dt.timedelta(days=1), dt.time.min, tzinfo=dt.UTC).isoformat()
         add_row(
-            fixture_id=f"chk_cp130_dist_depth_{sequence:03d}",
+            fixture_id=f"chk_cp139_dist_depth_{sequence:03d}",
             document_id=main_document_id,
             scope="main",
-            text=f"Synthetic depth distractor CP130-DEPTH-DISTRACTOR-{sequence:03d}; not a target record.",
+            text=f"Synthetic depth distractor CP139-DEPTH-DISTRACTOR-{sequence:03d}; not a target record.",
             depth_from_si=30_000.0 + index * 100.0,
             depth_to_si=30_050.0 + index * 100.0,
             period_start=start,
@@ -404,10 +461,10 @@ def _build_cp130_scale_fixtures() -> tuple[tuple[dict[str, Any], ...], tuple[dic
     for index in range(10):
         sequence = index + 1
         add_row(
-            fixture_id=f"chk_cp130_dist_time_{sequence:03d}",
+            fixture_id=f"chk_cp139_dist_time_{sequence:03d}",
             document_id=main_document_id,
             scope="main",
-            text=f"Synthetic time distractor CP130-TIME-DISTRACTOR-{sequence:03d}; not a target record.",
+            text=f"Synthetic time distractor CP139-TIME-DISTRACTOR-{sequence:03d}; not a target record.",
             depth_from_si=800.0 + index * 50.0,
             depth_to_si=900.0 + index * 50.0,
             period_start=f"2099-01-{sequence:02d}T00:00:00+00:00",
@@ -416,10 +473,10 @@ def _build_cp130_scale_fixtures() -> tuple[tuple[dict[str, Any], ...], tuple[dic
     for index in range(7):
         sequence = index + 1
         add_row(
-            fixture_id=f"chk_cp130_dist_unknown_{sequence:03d}",
+            fixture_id=f"chk_cp139_dist_unknown_{sequence:03d}",
             document_id=main_document_id,
             scope="main",
-            text=f"Synthetic unlocated distractor CP130-UNKNOWN-DISTRACTOR-{sequence:03d}; scope unknown.",
+            text=f"Synthetic unlocated distractor CP139-UNKNOWN-DISTRACTOR-{sequence:03d}; scope unknown.",
             depth_from_si=None,
             depth_to_si=None,
             period_start=None,
@@ -433,10 +490,10 @@ def _build_cp130_scale_fixtures() -> tuple[tuple[dict[str, Any], ...], tuple[dic
         start = dt.datetime.combine(day, dt.time.min, tzinfo=dt.UTC).isoformat()
         end = dt.datetime.combine(day + dt.timedelta(days=1), dt.time.min, tzinfo=dt.UTC).isoformat()
         add_row(
-            fixture_id=f"chk_cp130_dist_quarantine_{sequence:03d}",
-            document_id="doc_cp130_rag_quarantine",
+            fixture_id=f"chk_cp139_dist_quarantine_{sequence:03d}",
+            document_id="doc_cp139_rag_quarantine",
             scope="main",
-            text=f"Synthetic quarantined distractor CP130-QUARANTINE-{sequence:03d}; excluded by trust state.",
+            text=f"Synthetic quarantined distractor CP139-QUARANTINE-{sequence:03d}; excluded by trust state.",
             depth_from_si=800.0 + index * 50.0,
             depth_to_si=900.0 + index * 50.0,
             period_start=start,
@@ -449,10 +506,10 @@ def _build_cp130_scale_fixtures() -> tuple[tuple[dict[str, Any], ...], tuple[dic
         start = dt.datetime.combine(day, dt.time.min, tzinfo=dt.UTC).isoformat()
         end = dt.datetime.combine(day + dt.timedelta(days=1), dt.time.min, tzinfo=dt.UTC).isoformat()
         add_row(
-            fixture_id=f"chk_cp130_dist_other_well_{sequence:03d}",
-            document_id="doc_cp130_rag_other_well",
+            fixture_id=f"chk_cp139_dist_other_well_{sequence:03d}",
+            document_id="doc_cp139_rag_other_well",
             scope="other_well",
-            text=f"Synthetic other-well distractor CP130-WELL-DISTRACTOR-{sequence:03d}.",
+            text=f"Synthetic other-well distractor CP139-WELL-DISTRACTOR-{sequence:03d}.",
             depth_from_si=800.0 + index * 50.0,
             depth_to_si=900.0 + index * 50.0,
             period_start=start,
@@ -464,10 +521,10 @@ def _build_cp130_scale_fixtures() -> tuple[tuple[dict[str, Any], ...], tuple[dic
         start = dt.datetime.combine(day, dt.time.min, tzinfo=dt.UTC).isoformat()
         end = dt.datetime.combine(day + dt.timedelta(days=1), dt.time.min, tzinfo=dt.UTC).isoformat()
         add_row(
-            fixture_id=f"chk_cp130_dist_other_tenant_{sequence:03d}",
-            document_id="doc_cp130_rag_other_tenant",
+            fixture_id=f"chk_cp139_dist_other_tenant_{sequence:03d}",
+            document_id="doc_cp139_rag_other_tenant",
             scope="other_tenant",
-            text=f"Synthetic other-tenant distractor CP130-TENANT-DISTRACTOR-{sequence:03d}.",
+            text=f"Synthetic other-tenant distractor CP139-TENANT-DISTRACTOR-{sequence:03d}.",
             depth_from_si=800.0 + index * 50.0,
             depth_to_si=900.0 + index * 50.0,
             period_start=start,
@@ -476,9 +533,9 @@ def _build_cp130_scale_fixtures() -> tuple[tuple[dict[str, Any], ...], tuple[dic
     return tuple(rows), tuple(queries)
 
 
-_CP130_CORPUS, _CP130_QUERIES = _build_cp130_scale_fixtures()
-_CORPUS = _CORPUS + _CP130_CORPUS
-_QUERIES = _QUERIES + _CP130_QUERIES
+_CP139_CORPUS, _CP139_QUERIES = _build_cp139_scale_fixtures()
+_CORPUS = _CORPUS + _CP139_CORPUS
+_QUERIES = _QUERIES + _CP139_QUERIES
 
 
 def _parse_utc(value: str | None) -> dt.datetime | None:
@@ -524,6 +581,152 @@ def _overlaps_period(hit, query: dict[str, Any]) -> bool:
     period_from = _parse_utc(query.get("period_from"))
     period_to = _parse_utc(query.get("period_to"))
     return not ((period_to is not None and start > period_to) or (period_from is not None and end < period_from))
+
+
+async def _measure_query_mode(
+    session,
+    *,
+    org_id: str,
+    well_id: str,
+    wellbore_id: str,
+    sections: dict[str, WellSection],
+    mode: RetrieveMode,
+) -> list[dict[str, Any]]:
+    """Measure one ranking mode over the fixed query set without mixing its results with another mode."""
+    measured: list[dict[str, Any]] = []
+    for case in _QUERIES:
+        section = sections.get(case.get("section"))
+        result = await retrieve(
+            session,
+            org_id,
+            RetrievalQuery(
+                text=case["text"],
+                mode=mode,
+                well_id=well_id,
+                wellbore_id=wellbore_id,
+                section_id=section.id if section else None,
+                doc_type=case.get("doc_type"),
+                depth_from_si=case.get("depth_from_si"),
+                depth_to_si=case.get("depth_to_si"),
+                period_from=_parse_utc(case.get("period_from")),
+                period_to=_parse_utc(case.get("period_to")),
+                limit=TOP_K,
+            ),
+        )
+        retrieved_ids = [hit.chunk_id for hit in result.hits]
+        relevant_ids = set(case["relevant_chunk_ids"])
+        forbidden_ids = set(case.get("must_not_retrieve_chunk_ids", []))
+        relevant_ranks = [
+            rank for rank, chunk_id in enumerate(retrieved_ids, start=1) if chunk_id in relevant_ids
+        ]
+        recall = len(relevant_ranks) / len(relevant_ids) if relevant_ids else 0.0
+        precision = len(relevant_ranks) / TOP_K
+        scope_violations = sum(
+            hit.org_id != org_id
+            or hit.well_id != well_id
+            or hit.wellbore_id != wellbore_id
+            or (section is not None and hit.section_id != section.id)
+            or (case.get("doc_type") is not None and hit.doc_type != case["doc_type"])
+            or not _overlaps_depth(hit, case)
+            or not _overlaps_period(hit, case)
+            for hit in result.hits
+        )
+        citation_gaps = sum(not hit.citations for hit in result.hits)
+        locator_gaps = sum(
+            not isinstance(hit.source_locator, dict)
+            or hit.source_locator.get("kind") != "synthetic_fixture"
+            or hit.source_locator.get("fixture_id") != hit.chunk_id
+            or hit.source_locator.get("page_number") != hit.page_number
+            for hit in result.hits
+        )
+        measured.append(
+            {
+                "id": case["id"],
+                "stratum": case.get("stratum", "baseline"),
+                "query_text_sha256": hashlib.sha256(case["text"].encode("utf-8")).hexdigest(),
+                "mode_used": result.mode_used,
+                "filters_applied": {
+                    key: value.isoformat() if isinstance(value, dt.datetime) else value
+                    for key, value in result.filters_applied.items()
+                },
+                "expected_relevant_chunk_ids": sorted(relevant_ids),
+                "retrieved_chunk_ids": retrieved_ids,
+                "must_not_retrieve_chunk_ids": sorted(forbidden_ids),
+                "forbidden_retrieved_chunk_ids": sorted(forbidden_ids.intersection(retrieved_ids)),
+                "relevant_retrieved": len(relevant_ranks),
+                "relevant_ranks": relevant_ranks,
+                "recall_at_k": recall,
+                "precision_at_k": precision,
+                "reciprocal_rank": 1.0 / relevant_ranks[0] if relevant_ranks else 0.0,
+                "scope_violations": scope_violations,
+                "citation_gaps": citation_gaps,
+                "source_locator_gaps": locator_gaps,
+            }
+        )
+    return measured
+
+
+def _retrieval_metrics(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """Aggregate standard top-k ranking, abstention, provenance, and scope measurements."""
+    positive = [row for row in rows if row["expected_relevant_chunk_ids"]]
+    no_relevant = [row for row in rows if not row["expected_relevant_chunk_ids"]]
+    relevant_total = sum(len(row["expected_relevant_chunk_ids"]) for row in positive)
+    retrieved_relevant_total = sum(row["relevant_retrieved"] for row in rows)
+    hit_count = sum(len(row["retrieved_chunk_ids"]) for row in rows)
+    citation_gaps = sum(row["citation_gaps"] for row in rows)
+    locator_gaps = sum(row["source_locator_gaps"] for row in rows)
+    false_positive_queries = sum(bool(row["retrieved_chunk_ids"]) for row in no_relevant)
+    ndcg_values = []
+    for row in rows:
+        relevant = set(row["expected_relevant_chunk_ids"])
+        ranks = [rank for rank, chunk_id in enumerate(row["retrieved_chunk_ids"], start=1) if chunk_id in relevant]
+        dcg = math.fsum(1.0 / math.log2(rank + 1) for rank in ranks)
+        ideal_count = min(len(relevant), TOP_K)
+        ideal_dcg = math.fsum(1.0 / math.log2(rank + 1) for rank in range(1, ideal_count + 1))
+        ndcg_values.append(dcg / ideal_dcg if ideal_dcg else 0.0)
+    return {
+        "micro_recall_at_k": retrieved_relevant_total / relevant_total if relevant_total else 0.0,
+        "macro_recall_at_k_positive_queries": (
+            sum(row["recall_at_k"] for row in positive) / len(positive) if positive else 0.0
+        ),
+        "macro_precision_at_k_all_queries": (
+            sum(row["precision_at_k"] for row in rows) / len(rows) if rows else 0.0
+        ),
+        "mean_reciprocal_rank_positive_queries": (
+            sum(row["reciprocal_rank"] for row in positive) / len(positive) if positive else 0.0
+        ),
+        "hit_rate_at_k_positive_queries": (
+            sum(bool(row["relevant_retrieved"]) for row in positive) / len(positive) if positive else 0.0
+        ),
+        "macro_ndcg_at_k_all_queries": sum(ndcg_values) / len(ndcg_values) if ndcg_values else 0.0,
+        "positive_query_count": len(positive),
+        "no_relevant_query_count": len(no_relevant),
+        "empty_result_count": sum(not row["retrieved_chunk_ids"] for row in rows),
+        "no_relevant_false_positive_query_count": false_positive_queries,
+        "no_relevant_false_positive_rate": (
+            false_positive_queries / len(no_relevant) if no_relevant else 0.0
+        ),
+        "retrieved_nonrelevant_hit_count": sum(
+            len(row["retrieved_chunk_ids"]) - row["relevant_retrieved"] for row in rows
+        ),
+        "retrieved_hit_count": hit_count,
+        "scope_violations": sum(row["scope_violations"] for row in rows),
+        "forbidden_chunk_retrievals": sum(len(row["forbidden_retrieved_chunk_ids"]) for row in rows),
+        "citation_gaps": citation_gaps,
+        "citation_coverage": (hit_count - citation_gaps) / hit_count if hit_count else 1.0,
+        "source_locator_gaps": locator_gaps,
+        "source_locator_coverage": (hit_count - locator_gaps) / hit_count if hit_count else 1.0,
+    }
+
+
+def _stratified_metrics(rows: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    strata: dict[str, list[dict[str, Any]]] = {}
+    for row in rows:
+        strata.setdefault(row["stratum"], []).append(row)
+    return {
+        stratum: {"query_count": len(cases), **_retrieval_metrics(cases)}
+        for stratum, cases in sorted(strata.items())
+    }
 
 
 async def evaluate() -> dict[str, Any]:
@@ -738,6 +941,8 @@ async def evaluate() -> dict[str, Any]:
                         page_number=corpus_row["page_number"],
                         text=corpus_row["text"],
                         kind="text",
+                        created_at=dt.datetime(2026, 1, 1, tzinfo=dt.UTC)
+                        + dt.timedelta(seconds=corpus_row["page_number"]),
                         well_id=scope["well"].id,
                         wellbore_id=scope["wellbore"].id,
                         section_id=section.id if section else None,
@@ -752,105 +957,111 @@ async def evaluate() -> dict[str, Any]:
                 )
             await session.flush()
 
-            measured_queries: list[dict[str, Any]] = []
-            total_relevant = total_retrieved_relevant = 0
-            total_hits = total_forbidden_hits = scope_violations = 0
-            citation_gaps = source_locator_gaps = 0
-            reciprocal_ranks: list[float] = []
-            recalls: list[float] = []
-            precisions: list[float] = []
-            for case in _QUERIES:
+            query_count = len(_QUERIES)
+            positive_queries = sum(bool(case["relevant_chunk_ids"]) for case in _QUERIES)
+            distinct_query_text_count = len({case["text"] for case in _QUERIES})
+            measured_queries = await _measure_query_mode(
+                session,
+                org_id=main_org.id,
+                well_id=main_well.id,
+                wellbore_id=main_wellbore.id,
+                sections=main_scope["sections"],
+                mode=RetrieveMode.LEXICAL,
+            )
+            metadata_queries = await _measure_query_mode(
+                session,
+                org_id=main_org.id,
+                well_id=main_well.id,
+                wellbore_id=main_wellbore.id,
+                sections=main_scope["sections"],
+                mode=RetrieveMode.METADATA,
+            )
+            metrics = _retrieval_metrics(measured_queries)
+            metadata_metrics = _retrieval_metrics(metadata_queries)
+
+            async def optional_mode_profile(mode: RetrieveMode) -> dict[str, Any]:
+                """Probe vector modes without fabricating/storing vectors or making provider calls."""
+                case = next(item for item in _QUERIES if item["relevant_chunk_ids"])
                 section = main_scope["sections"].get(case.get("section"))
-                period_from = _parse_utc(case.get("period_from"))
-                period_to = _parse_utc(case.get("period_to"))
                 result = await retrieve(
                     session,
                     main_org.id,
                     RetrievalQuery(
                         text=case["text"],
-                        mode=RetrieveMode.LEXICAL,
+                        mode=mode,
                         well_id=main_well.id,
                         wellbore_id=main_wellbore.id,
                         section_id=section.id if section else None,
                         doc_type=case.get("doc_type"),
                         depth_from_si=case.get("depth_from_si"),
                         depth_to_si=case.get("depth_to_si"),
-                        period_from=period_from,
-                        period_to=period_to,
+                        period_from=_parse_utc(case.get("period_from")),
+                        period_to=_parse_utc(case.get("period_to")),
                         limit=TOP_K,
                     ),
                 )
-                retrieved_ids = [hit.chunk_id for hit in result.hits]
-                relevant_ids = set(case["relevant_chunk_ids"])
-                forbidden_ids = set(case.get("must_not_retrieve_chunk_ids", []))
-                relevant_ranks = [
-                    index for index, chunk_id in enumerate(retrieved_ids, start=1) if chunk_id in relevant_ids
-                ]
-                relevant_count = len(relevant_ids)
-                retrieved_relevant_count = len(relevant_ranks)
-                reciprocal_rank = 1.0 / relevant_ranks[0] if relevant_ranks else 0.0
-                precision = retrieved_relevant_count / TOP_K
-                recall = retrieved_relevant_count / relevant_count if relevant_count else 0.0
-                forbidden_retrieved = sorted(forbidden_ids.intersection(retrieved_ids))
-                case_scope_violations = sum(
-                    hit.org_id != main_org.id
-                    or hit.well_id != main_well.id
-                    or hit.wellbore_id != main_wellbore.id
-                    or (section is not None and hit.section_id != section.id)
-                    or (case.get("doc_type") is not None and hit.doc_type != case["doc_type"])
-                    or not _overlaps_depth(hit, case)
-                    or not _overlaps_period(hit, case)
-                    for hit in result.hits
-                )
-                case_citation_gaps = sum(not hit.citations for hit in result.hits)
-                case_source_locator_gaps = sum(
-                    not isinstance(hit.source_locator, dict)
-                    or hit.source_locator.get("kind") != "synthetic_fixture"
-                    or hit.source_locator.get("fixture_id") != hit.chunk_id
-                    or hit.source_locator.get("page_number") != hit.page_number
-                    for hit in result.hits
-                )
-                filters_applied = {
-                    key: value.isoformat() if isinstance(value, dt.datetime) else value
-                    for key, value in result.filters_applied.items()
-                }
-                measured_queries.append(
-                    {
-                        "id": case["id"],
-                        "mode_used": result.mode_used,
-                        "filters_applied": filters_applied,
-                        "expected_relevant_chunk_ids": sorted(relevant_ids),
-                        "retrieved_chunk_ids": retrieved_ids,
-                        "must_not_retrieve_chunk_ids": sorted(forbidden_ids),
-                        "forbidden_retrieved_chunk_ids": forbidden_retrieved,
-                        "relevant_retrieved": retrieved_relevant_count,
-                        "recall_at_k": recall,
-                        "precision_at_k": precision,
-                        "reciprocal_rank": reciprocal_rank,
-                        "scope_violations": case_scope_violations,
-                        "citation_gaps": case_citation_gaps,
-                        "source_locator_gaps": case_source_locator_gaps,
+                if result.mode_used != mode.value:
+                    return {
+                        "status": "not_evaluated",
+                        "requested_mode": mode.value,
+                        "requested_query_count": query_count,
+                        "measured_query_count": 0,
+                        "probe_query_id": case["id"],
+                        "probe_mode_used": result.mode_used,
+                        "fallback_notes": result.notes,
+                        "metrics": None,
+                        "stratified_metrics": None,
+                        "reason": (
+                            "Authentic stored chunk embeddings are unavailable; semantic/hybrid ranking was "
+                            "not scored. The probe records the product fallback separately. No vectors were "
+                            "fabricated and no embedding provider was called by this benchmark."
+                        ),
                     }
+                optional_queries = await _measure_query_mode(
+                    session,
+                    org_id=main_org.id,
+                    well_id=main_well.id,
+                    wellbore_id=main_wellbore.id,
+                    sections=main_scope["sections"],
+                    mode=mode,
                 )
-                total_relevant += relevant_count
-                total_retrieved_relevant += retrieved_relevant_count
-                if relevant_count:
-                    reciprocal_ranks.append(reciprocal_rank)
-                    recalls.append(recall)
-                precisions.append(precision)
-                total_hits += len(result.hits)
-                total_forbidden_hits += len(forbidden_retrieved)
-                scope_violations += case_scope_violations
-                citation_gaps += case_citation_gaps
-                source_locator_gaps += case_source_locator_gaps
+                return {
+                    "status": "measured",
+                    "requested_mode": mode.value,
+                    "requested_query_count": query_count,
+                    "measured_query_count": len(optional_queries),
+                    "mode_used_counts": {mode.value: len(optional_queries)},
+                    "metrics": _retrieval_metrics(optional_queries),
+                    "stratified_metrics": _stratified_metrics(optional_queries),
+                    "queries": optional_queries,
+                }
 
-            positive_queries = sum(bool(case["relevant_chunk_ids"]) for case in _QUERIES)
-            empty_result_cases = sum(not case["retrieved_chunk_ids"] for case in measured_queries)
-            query_count = len(_QUERIES)
-            citation_coverage = (total_hits - citation_gaps) / total_hits if total_hits else 1.0
-            source_locator_coverage = (total_hits - source_locator_gaps) / total_hits if total_hits else 1.0
+            lexical_mode_profile = {
+                "status": "measured",
+                "requested_mode": RetrieveMode.LEXICAL.value,
+                "requested_query_count": query_count,
+                "measured_query_count": len(measured_queries),
+                "mode_used_counts": {RetrieveMode.LEXICAL.value: len(measured_queries)},
+                "metrics": metrics,
+                "stratified_metrics": _stratified_metrics(measured_queries),
+            }
+            metadata_mode_profile = {
+                "status": "measured",
+                "requested_mode": RetrieveMode.METADATA.value,
+                "requested_query_count": query_count,
+                "measured_query_count": len(metadata_queries),
+                "mode_used_counts": {RetrieveMode.METADATA.value: len(metadata_queries)},
+                "metrics": metadata_metrics,
+                "stratified_metrics": _stratified_metrics(metadata_queries),
+                "queries": metadata_queries,
+            }
+            semantic_mode_profile = await optional_mode_profile(RetrieveMode.SEMANTIC)
+            hybrid_mode_profile = await optional_mode_profile(RetrieveMode.HYBRID)
+
             scope_profile = {
+                "retrieval_mode": RetrieveMode.LEXICAL.value,
                 "well_scoped_queries": query_count,
+                "distinct_query_text_count": distinct_query_text_count,
                 "section_scoped_queries": sum(case.get("section") is not None for case in _QUERIES),
                 "depth_window_queries": sum(
                     case.get("depth_from_si") is not None or case.get("depth_to_si") is not None
@@ -860,49 +1071,66 @@ async def evaluate() -> dict[str, Any]:
                     case.get("period_from") is not None or case.get("period_to") is not None
                     for case in _QUERIES
                 ),
-                "scope_violations": scope_violations,
-                "forbidden_chunk_retrievals": total_forbidden_hits,
+                "scope_violations": metrics["scope_violations"],
+                "forbidden_chunk_retrievals": metrics["forbidden_chunk_retrievals"],
                 "quarantined_distractor_chunks": sum(bool(row.get("quarantined")) for row in _CORPUS),
                 "cross_well_distractor_chunks": sum(row["scope"] == "other_well" for row in _CORPUS),
                 "cross_tenant_distractor_chunks": sum(row["scope"] == "other_tenant" for row in _CORPUS),
+                "corpus_chunks_by_scope": {
+                    scope_key: sum(row["scope"] == scope_key for row in _CORPUS)
+                    for scope_key in ("main", "other_well", "other_tenant")
+                },
             }
             citation_profile = {
-                "retrieved_hits": total_hits,
-                "citation_gaps": citation_gaps,
-                "citation_coverage": citation_coverage,
-                "source_locator_gaps": source_locator_gaps,
-                "source_locator_coverage": source_locator_coverage,
+                "retrieval_mode": RetrieveMode.LEXICAL.value,
+                "retrieved_hits": metrics["retrieved_hit_count"],
+                "citation_gaps": metrics["citation_gaps"],
+                "citation_coverage": metrics["citation_coverage"],
+                "source_locator_gaps": metrics["source_locator_gaps"],
+                "source_locator_coverage": metrics["source_locator_coverage"],
+            }
+            mode_profiles = {
+                "metadata": metadata_mode_profile,
+                "lexical": lexical_mode_profile,
+                "semantic": semantic_mode_profile,
+                "hybrid": hybrid_mode_profile,
             }
             return {
-                "tool": "drillai-rag-benchmark-v3",
+                "tool": "drillai-rag-benchmark-v4",
+                "benchmark_disposition": "lexical_and_metadata_measured; semantic_and_hybrid_not_evaluated_without_authentic_embeddings",
                 "dataset_classification": "synthetic",
                 "dataset_version": DATASET_VERSION,
                 "dataset_sha256": _dataset_sha256(),
                 "retrieval_mode_requested": RetrieveMode.LEXICAL.value,
+                "retrieval_modes_requested": [mode.value for mode in RetrieveMode],
+                "mode_profiles": mode_profiles,
+                "embedding_evaluation": {
+                    "authentic_stored_embedding_count": sum(
+                        row.get("embedding") is not None for row in _CORPUS
+                    ),
+                    "synthetic_embedding_count": 0,
+                    "provider_embedding_calls": 0,
+                    "note": (
+                        "The benchmark inserts text and metadata only. Semantic/hybrid probes stop at the "
+                        "missing-stored-embeddings check; no vectors are fabricated and no provider is called."
+                    ),
+                },
                 "top_k": TOP_K,
                 "query_count": query_count,
+                "distinct_query_text_count": distinct_query_text_count,
                 "positive_query_count": positive_queries,
                 "no_relevant_query_count": query_count - positive_queries,
-                "empty_result_cases": empty_result_cases,
+                "empty_result_cases": metrics["empty_result_count"],
                 "corpus_chunk_count": len(_CORPUS),
                 "scope_profile": scope_profile,
                 "citation_profile": citation_profile,
-                "metrics": {
-                    "micro_recall_at_k": total_retrieved_relevant / total_relevant if total_relevant else 0.0,
-                    "macro_recall_at_k_positive_queries": sum(recalls) / len(recalls) if recalls else 0.0,
-                    "macro_precision_at_k_all_queries": sum(precisions) / query_count if query_count else 0.0,
-                    "mean_reciprocal_rank_positive_queries": sum(reciprocal_ranks) / len(reciprocal_ranks) if reciprocal_ranks else 0.0,
-                    "scope_violations": scope_violations,
-                    "forbidden_chunk_retrievals": total_forbidden_hits,
-                    "citation_coverage": (total_hits - citation_gaps) / total_hits if total_hits else 1.0,
-                    "source_locator_coverage": (total_hits - source_locator_gaps) / total_hits if total_hits else 1.0,
-                },
+                "metrics": metrics,
                 "queries": measured_queries,
                 "limitations": [
-                    "The 100 CP130 scale queries and generated distractors are synthetic development fixtures, not field/vendor samples or a holdout.",
-                    "Synthetic, hand-labelled development fixtures are not representative field or production evidence.",
-                    "Lexical retrieval only; embeddings, hybrid ranking, and LLM answer quality are not evaluated.",
-                    "Relevance labels are not independently adjudicated; metrics do not establish semantic correctness or engineering acceptance.",
+                    "The 256 generated positive queries, 16 no-match queries, 192 same-scope near-miss chunks, and remaining scope distractors are deterministic synthetic development fixtures, not field/vendor samples or a holdout.",
+                    "Lexical and metadata modes are measured separately. Semantic and hybrid modes are requested and probed but are not scored because the benchmark has no authentic stored embeddings; lexical fallback is never counted as semantic quality.",
+                    "No embedding vectors are generated for this corpus and no embedding/LLM provider is called by the benchmark.",
+                    "Relevance labels are fixture-authored, not independently adjudicated; metrics do not establish semantic correctness, answer quality, or engineering acceptance.",
                     "Depth windows use explicit canonical SI metadata; time windows use explicit source periods. Missing metadata is excluded, never inferred from text or created_at.",
                 ],
             }
@@ -911,7 +1139,7 @@ async def evaluate() -> dict[str, Any]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Evaluate deterministic lexical retrieval on a synthetic development corpus.")
+    parser = argparse.ArgumentParser(description="Measure distinct retrieval modes on a synthetic development corpus.")
     parser.add_argument("--output", type=Path, help="write JSON to this path instead of stdout")
     args = parser.parse_args(argv)
     try:
