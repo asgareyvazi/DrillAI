@@ -2163,6 +2163,51 @@ async def test_daily_report_concurrent_draft_updates_have_one_winner(client):
     assert winner.json()["revision"]["edit_version"] == 2
     assert winner.json()["revision"]["content_hash_verified"] is True
 
+    # Corrections use a second compare-and-swap on the report's latest-revision pointer. After
+    # independently approving revision 1, two simultaneous correction requests must not both claim
+    # revision 2 or leave an orphaned latest pointer.
+    submit = await client.post(
+        f"/api/v1/wells/{well_id}/daily-reports/{report_id}/revisions/1/submit",
+        json={"expected_edit_version": 2, "reason": "Submit the winning draft for independent review."},
+        headers=headers("engineer"),
+    )
+    assert submit.status_code == 200, submit.text
+    approved = await client.post(
+        f"/api/v1/wells/{well_id}/daily-reports/{report_id}/revisions/1/approve",
+        json={"expected_edit_version": 3, "reason": "Independently review the winning revision."},
+        headers=headers("drilling_supervisor"),
+    )
+    assert approved.status_code == 200, approved.text
+
+    async def create_correction(key: str):
+        return await client.post(
+            f"/api/v1/wells/{well_id}/daily-reports/{report_id}/corrections",
+            json={"reason": f"Concurrent correction request {key}."},
+            headers={**headers("engineer"), "Idempotency-Key": f"daily-report-correction-race-{key}"},
+        )
+
+    correction_a, correction_b = await asyncio.gather(
+        create_correction("a"),
+        create_correction("b"),
+    )
+    assert sorted((correction_a.status_code, correction_b.status_code)) == [201, 409], (
+        correction_a.text,
+        correction_b.text,
+    )
+    correction_winner = correction_a if correction_a.status_code == 201 else correction_b
+    assert correction_winner.json()["report"]["latest_revision_number"] == 2
+    assert correction_winner.json()["report"]["latest_approved_revision_number"] == 1
+    assert correction_winner.json()["revision"]["revision_number"] == 2
+    assert correction_winner.json()["revision"]["supersedes_revision_id"] == approved.json()["revision"]["id"]
+    history = await client.get(
+        f"/api/v1/wells/{well_id}/daily-reports/{report_id}/history",
+        headers=headers("viewer"),
+    )
+    assert history.status_code == 200, history.text
+    assert history.json()["total"] == 2
+    assert [item["revision_number"] for item in history.json()["items"]] == [2, 1]
+    assert history.json()["items"][0]["supersedes_revision_id"] == history.json()["items"][1]["id"]
+
 
 @pytest.mark.asyncio
 async def test_daily_report_withdraw_is_audited_and_can_be_corrected(client):
