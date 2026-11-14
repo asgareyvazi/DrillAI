@@ -22,6 +22,7 @@ from drillai.core.config import Settings, get_settings
 from drillai.ingestion.ocr import (
     TESSERACT_ADAPTER_VERSION,
     TESSERACT_PAGE_SEGMENTATION_MODE,
+    TESSERACT_TWO_COLUMN_PAGE_SEGMENTATION_MODE,
     OcrUnavailable,
     TesseractOcrProvider,
 )
@@ -73,6 +74,8 @@ def inspect_ocr_runtime(
     configuration = {
         "languages": resolved.ocr_languages.split("+"),
         "page_segmentation_mode": TESSERACT_PAGE_SEGMENTATION_MODE,
+        "two_column_page_segmentation_mode": TESSERACT_TWO_COLUMN_PAGE_SEGMENTATION_MODE,
+        "layout_detection": "visible-central-divider-only; otherwise-unclassified",
         "timeout_seconds_per_page": resolved.ocr_timeout_seconds,
         "max_blank_pages_per_document": resolved.ocr_max_pages,
         "max_page_pixels": resolved.ocr_max_page_pixels,

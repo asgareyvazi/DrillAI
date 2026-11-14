@@ -296,6 +296,11 @@ def _valid_quality_report(corpus: dict, raw: bytes) -> dict:
             "provider": "tesseract",
             "adapter_version": quality.TESSERACT_ADAPTER_VERSION,
             "page_segmentation_mode": quality.TESSERACT_PAGE_SEGMENTATION_MODE,
+            "layout_policy": {
+                "central_divider_detection": "long_visible_line_in_center_band",
+                "two_column_page_segmentation_mode": quality.TESSERACT_TWO_COLUMN_PAGE_SEGMENTATION_MODE,
+                "reading_order": "text-script-direction-from-ocr-lines",
+            },
             "runtime_version": "test-fixture-only",
             "python_version": "3.11.8",
             "pdf_renderer_version": "test-fixture-only",

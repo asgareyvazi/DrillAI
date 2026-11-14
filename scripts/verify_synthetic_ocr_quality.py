@@ -19,6 +19,11 @@ LAYOUTS = ("single_column", "table", "two_column", "compact")
 SCAN_CONDITIONS = ("clean", "low_contrast", "light_skew", "light_noise")
 STRATA_DIMENSIONS = ("language", "layout", "scan_condition")
 RENDERER_DISTRIBUTIONS = {"Pillow", "reportlab", "arabic-reshaper", "python-bidi", "pypdfium2"}
+LAYOUT_POLICY = {
+    "central_divider_detection": "long_visible_line_in_center_band",
+    "two_column_page_segmentation_mode": 11,
+    "reading_order": "text-script-direction-from-ocr-lines",
+}
 RESOURCE_LIMIT_KEYS = {
     "max_generated_pdf_bytes",
     "ocr_max_pages",
@@ -172,8 +177,9 @@ def verify(report_path: Path, corpus_path: Path) -> dict[str, Any]:
         or dataset.get("languages") != languages
         or dataset.get("stratification_dimensions") != dimensions
         or not isinstance(runtime, dict)
-        or runtime.get("adapter_version") != "tesseract-cli-tsv-v4"
+        or runtime.get("adapter_version") != "tesseract-cli-tsv-v5"
         or runtime.get("page_segmentation_mode") != 6
+        or runtime.get("layout_policy") != LAYOUT_POLICY
         or runtime.get("required_languages") != languages
         or not set(languages).issubset(runtime.get("configured_languages", []))
         or not set(languages).issubset(runtime.get("available_languages", []))

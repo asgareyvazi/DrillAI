@@ -21,6 +21,7 @@ import re
 import shutil
 import subprocess
 import threading
+import unicodedata
 from contextlib import suppress
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -37,9 +38,10 @@ __all__ = [
 MAX_TSV_BYTES = 16 * 1024 * 1024
 MAX_DIAGNOSTIC_OUTPUT_BYTES = 128 * 1024
 DIAGNOSTIC_TIMEOUT_SECONDS = 3.0
-TESSERACT_ADAPTER_VERSION = "tesseract-cli-tsv-v4"
+TESSERACT_ADAPTER_VERSION = "tesseract-cli-tsv-v5"
 TESSERACT_PAGE_SEGMENTATION_MODE = 6
-# PSM 6 is the next measured candidate after PSM 3 regressed on the balanced v3 deployment-image run.
+TESSERACT_TWO_COLUMN_PAGE_SEGMENTATION_MODE = 11
+# PSM 6 remains the fixed default; PSM 11 is selected only for a measured, long central divider.
 _PROCESS_SEMAPHORES: dict[int, threading.BoundedSemaphore] = {}
 _PROCESS_SEMAPHORES_LOCK = threading.Lock()
 _TESSERACT_DIAGNOSTIC_CACHE: dict[tuple[str, str, float, str, str], dict[str, object]] = {}
@@ -91,6 +93,98 @@ _REQUIRED_TSV_COLUMNS = (
     "conf",
     "text",
 )
+
+
+def _detect_central_column_divider(image_png: bytes) -> tuple[int, int, int] | None:
+    """Detect an explicit, long central divider without treating ordinary text as a second column.
+
+    This is deliberately a narrow positive signal: a large blank region is not enough to guess that
+    a page has columns. If layout cannot be established from rendered pixels, the fixed default PSM
+    is retained and no claim is made that the page was segmented into columns.
+    """
+    if not image_png.startswith(b"\x89PNG\r\n\x1a\n"):
+        return None
+    try:
+        import numpy as np
+        from PIL import Image
+
+        with Image.open(io.BytesIO(image_png)) as source:
+            width, height = source.size
+            if width < 200 or height < 200:
+                return None
+            gray = np.asarray(source.convert("L"))
+    except ImportError:
+        # Layout detection is an optional optimization. If its image/numeric libraries are absent,
+        # retain the conservative PSM 6 path rather than making core OCR unavailable.
+        return None
+    except (OSError, ValueError) as exc:
+        raise OcrUnavailable("the rendered page could not be inspected for a visible column divider") from exc
+
+    x0, x1 = int(width * 0.42), int(width * 0.58)
+    y0, y1 = int(height * 0.10), int(height * 0.75)
+    if x1 <= x0 or y1 <= y0:
+        return None
+    central = gray[y0:y1, x0:x1] < 235
+    counts = np.count_nonzero(central, axis=0)
+    offset = int(np.argmax(counts))
+    split_x = x0 + offset
+    vertical_span = y1 - y0
+    divider_pixels = int(counts[offset])
+    if split_x / width < 0.44 or split_x / width > 0.56:
+        return None
+    if divider_pixels < max(64, int(vertical_span * 0.35)):
+        return None
+
+    column = gray[y0:y1, split_x] < 235
+    ink_rows = np.flatnonzero(column)
+    if not ink_rows.size:
+        return None
+    runs = np.split(ink_rows, np.flatnonzero(np.diff(ink_rows) > 3) + 1)
+    longest_run = max((int(run[-1] - run[0] + 1) for run in runs if run.size), default=0)
+    if longest_run < int(vertical_span * 0.30):
+        return None
+
+    gutter = max(2, int(width * 0.004))
+    left_ink = int(np.count_nonzero(gray[y0:y1, : max(0, split_x - gutter)] < 235))
+    right_ink = int(np.count_nonzero(gray[y0:y1, min(width, split_x + gutter) :] < 235))
+    if left_ink < 500 or right_ink < 500:
+        return None
+    return split_x, width, height
+
+
+def _is_predominantly_rtl(lines: list[OcrLine]) -> bool:
+    rtl_count = 0
+    ltr_count = 0
+    for line in lines:
+        for character in line.text:
+            direction = unicodedata.bidirectional(character)
+            rtl_count += direction in {"R", "AL", "AN"}
+            ltr_count += direction == "L"
+    return rtl_count > ltr_count
+
+
+def _order_column_lines(
+    lines: list[OcrLine], *, split_x: int, image_width: int, image_height: int
+) -> list[OcrLine]:
+    """Order detected columns top-to-bottom, with RTL columns read from right to left."""
+    if len(lines) < 4 or image_width < 1 or image_height < 1:
+        return lines
+    header_limit = int(image_height * 0.12)
+    header = [line for line in lines if line.bbox[1] < header_limit]
+    body = [line for line in lines if line.bbox[1] >= header_limit]
+    left = [line for line in body if line.bbox[0] + line.bbox[2] / 2 < split_x]
+    right = [line for line in body if line.bbox[0] + line.bbox[2] / 2 >= split_x]
+    if len(left) < 2 or len(right) < 2:
+        return lines
+    def sort_key(line: OcrLine) -> tuple[int, int]:
+        return line.bbox[1], line.bbox[0]
+
+    header.sort(key=sort_key)
+    left.sort(key=sort_key)
+    right.sort(key=sort_key)
+    if _is_predominantly_rtl(lines):
+        return header + right + left
+    return header + left + right
 
 
 def parse_tesseract_tsv(data: bytes) -> list[OcrLine]:
@@ -177,6 +271,7 @@ class TesseractOcrProvider:
     timeout_seconds: float = 30.0
     max_output_bytes: int = 4 * 1024 * 1024
     max_concurrency: int = 2
+    page_segmentation_mode: int = TESSERACT_PAGE_SEGMENTATION_MODE
 
     name: str = "tesseract"
     _runtime_version: str | None = field(default=None, init=False, repr=False)
@@ -214,6 +309,13 @@ class TesseractOcrProvider:
             raise ValueError(f"max_output_bytes must be between 1 KiB and {MAX_TSV_BYTES} bytes")
         if isinstance(self.max_concurrency, bool) or not isinstance(self.max_concurrency, int) or not 1 <= self.max_concurrency <= 8:
             raise ValueError("max_concurrency must be an integer between 1 and 8")
+        if (
+            isinstance(self.page_segmentation_mode, bool)
+            or not isinstance(self.page_segmentation_mode, int)
+            or not 1 <= self.page_segmentation_mode <= 13
+            or self.page_segmentation_mode == 2
+        ):
+            raise ValueError("page_segmentation_mode must be a supported OCR mode from 1 to 13 (excluding 2)")
 
     def _resolved_executable(self) -> str | None:
         resolved = shutil.which(self.executable)
@@ -433,11 +535,41 @@ class TesseractOcrProvider:
                 f"OCR concurrency limit ({self.max_concurrency}) is reached; retry when capacity is available"
             )
         try:
-            return self._recognize_acquired(image_png, executable)
+            divider = (
+                _detect_central_column_divider(image_png)
+                if self.page_segmentation_mode in {
+                    TESSERACT_PAGE_SEGMENTATION_MODE,
+                    TESSERACT_TWO_COLUMN_PAGE_SEGMENTATION_MODE,
+                }
+                else None
+            )
+            page_segmentation_mode = self.page_segmentation_mode
+            if divider is not None and page_segmentation_mode == TESSERACT_PAGE_SEGMENTATION_MODE:
+                page_segmentation_mode = TESSERACT_TWO_COLUMN_PAGE_SEGMENTATION_MODE
+            lines = self._recognize_acquired(
+                image_png,
+                executable,
+                page_segmentation_mode=page_segmentation_mode,
+            )
+            if divider is not None:
+                split_x, image_width, image_height = divider
+                return _order_column_lines(
+                    lines,
+                    split_x=split_x,
+                    image_width=image_width,
+                    image_height=image_height,
+                )
+            return lines
         finally:
             semaphore.release()
 
-    def _recognize_acquired(self, image_png: bytes, executable: str) -> list[OcrLine]:
+    def _recognize_acquired(
+        self,
+        image_png: bytes,
+        executable: str,
+        *,
+        page_segmentation_mode: int,
+    ) -> list[OcrLine]:
         child_env = self._child_environment()
         try:
             process = subprocess.Popen(
@@ -446,7 +578,7 @@ class TesseractOcrProvider:
                     "stdin",
                     "stdout",
                     "--psm",
-                    str(TESSERACT_PAGE_SEGMENTATION_MODE),
+                    str(page_segmentation_mode),
                     "-l",
                     self.languages,
                     "tsv",

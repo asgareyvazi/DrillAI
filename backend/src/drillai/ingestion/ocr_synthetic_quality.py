@@ -29,6 +29,7 @@ from drillai.core.config import Settings, get_settings
 from drillai.ingestion.ocr import (
     TESSERACT_ADAPTER_VERSION,
     TESSERACT_PAGE_SEGMENTATION_MODE,
+    TESSERACT_TWO_COLUMN_PAGE_SEGMENTATION_MODE,
     OcrUnavailable,
     TesseractOcrProvider,
 )
@@ -418,6 +419,11 @@ def _base_report(corpus: dict[str, Any], corpus_bytes: bytes) -> dict[str, Any]:
             "provider": "tesseract",
             "adapter_version": TESSERACT_ADAPTER_VERSION,
             "page_segmentation_mode": TESSERACT_PAGE_SEGMENTATION_MODE,
+            "layout_policy": {
+                "central_divider_detection": "long_visible_line_in_center_band",
+                "two_column_page_segmentation_mode": TESSERACT_TWO_COLUMN_PAGE_SEGMENTATION_MODE,
+                "reading_order": "text-script-direction-from-ocr-lines",
+            },
             "runtime_version": None,
             "python_version": platform.python_version(),
             "pdf_renderer_version": None,
