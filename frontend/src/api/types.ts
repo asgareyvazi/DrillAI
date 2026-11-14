@@ -1435,6 +1435,7 @@ export interface AdvisorNarrative {
   guardrails?: { blocked: boolean; findings: Array<Record<string, unknown>> }
   guardrail?: string
   prompt_confined_to?: string[]
+  grounding_refs?: Array<Record<string, unknown>>
 }
 
 export interface AdvisorCalculation extends Record<string, unknown> {
@@ -1451,6 +1452,9 @@ export interface AdvisorCalculation extends Record<string, unknown> {
   validation_status: string
   field_validation_required: boolean
   limitations: string[]
+  provenance: Record<string, unknown>
+  citations: Array<Record<string, unknown>>
+  grounding: Record<string, unknown>
 }
 
 export interface AdvisorFact extends Record<string, unknown> {
@@ -1462,6 +1466,8 @@ export interface AdvisorFact extends Record<string, unknown> {
   source_id: string | null
   evidence_ref: string | null
   provenance: Record<string, unknown>
+  citations: Array<Record<string, unknown>>
+  grounding: Record<string, unknown>
 }
 
 export interface AdvisorAnswer {
@@ -1478,6 +1484,7 @@ export interface AdvisorAnswer {
   narrative: AdvisorNarrative | null
   context_used: Record<string, unknown>
   limitations: string[]
+  grounding: Record<string, unknown>
   sections: Record<'facts' | 'calculations' | 'evidence' | 'inference' | 'recommendation' | 'unknown', number>
   sources: string[]
 }

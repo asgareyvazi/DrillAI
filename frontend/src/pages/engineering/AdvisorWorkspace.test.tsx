@@ -22,6 +22,7 @@ const answer = (narrative: AdvisorAnswer['narrative']): AdvisorAnswer => ({
   narrative,
   context_used: {},
   limitations: [],
+  grounding: {},
   sections: { facts: 0, calculations: 0, evidence: 0, inference: 0, recommendation: 0, unknown: 0 },
   sources: [],
 })
@@ -32,7 +33,13 @@ describe('Advisor copy-only response contract', () => {
     render(
       <I18nProvider>
         <AnswerView
-          answer={answer({ status: 'generated', text: statement, model: 'stub-model', provider: 'stub-provider' })}
+          answer={answer({
+            status: 'generated',
+            text: statement,
+            model: 'stub-model',
+            provider: 'stub-provider',
+            grounding_refs: [{ section: 'facts', key: 'measured.wob', citation_ids: ['source:measured.wob:measurement_point:tsp_synthetic'] }],
+          })}
           onEvidence={() => undefined}
           llmRequested
         />
@@ -41,6 +48,8 @@ describe('Advisor copy-only response contract', () => {
 
     expect(screen.getByText(statement)).toBeInTheDocument()
     expect(screen.getByText(/گزاره‌های رونوشت‌شده از stub-model/)).toBeInTheDocument()
+    expect(screen.getByTestId('advisor-narrative-grounding')).toHaveTextContent('facts: measured.wob')
+    expect(screen.getByTestId('advisor-narrative-grounding')).toHaveTextContent('source:measured.wob:measurement_point:tsp_synthetic')
   })
 
   it('shows a localized withheld state and never renders unsafe provider text', () => {
@@ -63,6 +72,51 @@ describe('Advisor copy-only response contract', () => {
 
     expect(screen.getByText('پاسخ ارائه‌دهنده با هیچ گزارهٔ کامل منبع تطبیق دقیق نداشت و نمایش داده نشد.')).toBeInTheDocument()
     expect(screen.queryByText(unsafeText)).not.toBeInTheDocument()
+  })
+})
+
+describe('Advisor claim grounding display', () => {
+  it('shows an explicit measurement citation, source scope and stale freshness in Persian', () => {
+    render(
+      <I18nProvider>
+        <ul>
+          <AdvisorItemCard
+            item={{
+              key: 'measured.wob',
+              statement: 'Weight on bit = 80,000 N',
+              source: 'time_series:wob',
+              source_id: 'tms_synthetic',
+              evidence_ref: 'tsp_synthetic',
+              citations: [
+                {
+                  citation_id: 'source:measured.wob:measurement_point:tsp_synthetic',
+                  kind: 'measurement_point',
+                  source: 'time_series:wob',
+                  source_id: 'tsp_synthetic',
+                  scope: { organization_id: 'org_synthetic', well_id: 'wel_synthetic', wellbore_id: 'wbr_synthetic' },
+                },
+              ],
+              grounding: {
+                status: 'cited',
+                scope: { organization_id: 'org_synthetic', well_id: 'wel_synthetic', wellbore_id: 'wbr_synthetic' },
+                freshness: {
+                  status: 'stale',
+                  as_of: '2026-10-19T00:00:00Z',
+                  age_seconds: 3600,
+                  basis: 'source_timestamp',
+                },
+              },
+            }}
+          />
+        </ul>
+      </I18nProvider>,
+    )
+
+    expect(screen.getByTestId('advisor-freshness')).toHaveTextContent('تازگی منبع: کهنه')
+    expect(screen.getByText('استنادها')).toBeInTheDocument()
+    expect(screen.getByTestId('advisor-citation')).toHaveTextContent('نقطهٔ اندازه‌گیری')
+    expect(screen.getByTestId('advisor-citation')).toHaveTextContent('tsp_synthetic')
+    expect(screen.getByTestId('advisor-citation')).toHaveTextContent('well_id=wel_synthetic')
   })
 })
 

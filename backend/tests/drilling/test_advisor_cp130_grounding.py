@@ -143,4 +143,5 @@ async def test_advisor_reports_tied_current_operations_as_unknown_without_select
     assert ambiguous["kind"] == "conflict"
     assert set(ambiguous["candidate_ids"]) == {operation.id for operation in candidates}
     assert "does not establish which one is current" in ambiguous["statement"]
+    assert not any(item["key"] == "operation.current" for item in payload["inference"])
     assert payload["narrative"] is None

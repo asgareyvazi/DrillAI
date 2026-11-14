@@ -33,13 +33,21 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from drillai.ai.providers import ChatMessage, CompletionRequest
 from drillai.ai.router import LlmRouter, TaskProfile
 from drillai.core.errors import EngineNotFound, ProviderError, ValidationFailed
-from drillai.db.models import Document, EngineRun, EvidenceLink, RawArtifact
+from drillai.db.models import (
+    Document,
+    EngineRun,
+    EvidenceLink,
+    Operation,
+    RawArtifact,
+    Wellbore,
+    WellSection,
+)
 from drillai.documents.access import (
     document_not_quarantined_condition,
     evidence_document_not_quarantined_condition,
@@ -58,6 +66,40 @@ ADVISOR_NPT_CASE_LIMIT = 10
 def _normalize_narration_statement(value: str) -> str:
     """Collapse whitespace only; narration must preserve each supplied statement verbatim."""
     return _NARRATION_WHITESPACE_RE.sub(" ", value).strip()
+
+
+def _fact_freshness(fact: Fact) -> dict[str, Any]:
+    """Expose freshness only when the source contract supplies it; never substitute ingestion time."""
+    provenance = fact.provenance
+    state = provenance.get("freshness")
+    allowed = {"fresh", "stale", "missing", "unknown"}
+    if state not in allowed and "observed_at_basis" in provenance:
+        state = "unknown" if provenance.get("observed_at_basis") == "unknown" else "not_assessed"
+    elif state not in allowed:
+        state = "not_assessed"
+    return {
+        "status": state,
+        "as_of": provenance.get("observed_at"),
+        "age_seconds": provenance.get("age_seconds"),
+        "basis": provenance.get("observed_at_basis")
+        or ("telemetry_freshness_policy" if fact.source.startswith("time_series:") else "not_assessed"),
+        "note": (
+            provenance.get("note")
+            or "Generated-at time is not a substitute for a source observation timestamp."
+        ),
+    }
+
+
+def _fact_citation_kind(fact: Fact) -> str:
+    if fact.source.startswith("time_series:") and fact.evidence_ref:
+        return "measurement_point"
+    if fact.source.startswith("extracted_record:"):
+        return "extracted_record"
+    if fact.source.startswith(("npt:", "npt.by_category:")):
+        return "scoped_aggregate"
+    if fact.provenance.get("derived_by"):
+        return "derived_record"
+    return "database_record"
 
 
 #: Questions the advisor is architecturally able to answer. Each key maps to the sections it
@@ -91,6 +133,8 @@ class Fact:
     source_id: str | None = None
     evidence_ref: str | None = None
     provenance: dict[str, Any] = field(default_factory=dict)
+    citations: list[dict[str, Any]] = field(default_factory=list)
+    grounding: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -102,6 +146,8 @@ class Fact:
             "source_id": self.source_id,
             "evidence_ref": self.evidence_ref,
             "provenance": self.provenance,
+            "citations": self.citations,
+            "grounding": self.grounding,
         }
 
 
@@ -122,6 +168,9 @@ class Calculation:
     validation_status: str = "unknown"
     field_validation_required: bool = False
     limitations: list[str] = field(default_factory=list)
+    provenance: dict[str, Any] = field(default_factory=dict)
+    citations: list[dict[str, Any]] = field(default_factory=list)
+    grounding: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -138,6 +187,9 @@ class Calculation:
             "validation_status": self.validation_status,
             "field_validation_required": self.field_validation_required,
             "limitations": self.limitations,
+            "provenance": self.provenance,
+            "citations": self.citations,
+            "grounding": self.grounding,
         }
 
 
@@ -153,6 +205,17 @@ class EvidenceItem:
     confidence: float | None
     subject_kind: str | None = None
     subject_id: str | None = None
+    evidence_id: str | None = None
+    region_id: str | None = None
+    locator: dict[str, Any] = field(default_factory=dict)
+    quote_verified: bool | None = None
+    quote_check: str | None = None
+    well_id: str | None = None
+    document_well_id: str | None = None
+    project_id: str | None = None
+    wellbore_id: str | None = None
+    section_id: str | None = None
+    operation_id: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -166,6 +229,17 @@ class EvidenceItem:
             "confidence": self.confidence,
             "subject_kind": self.subject_kind,
             "subject_id": self.subject_id,
+            "evidence_id": self.evidence_id,
+            "region_id": self.region_id,
+            "locator": self.locator,
+            "quote_verified": self.quote_verified,
+            "quote_check": self.quote_check,
+            "well_id": self.well_id,
+            "document_well_id": self.document_well_id,
+            "project_id": self.project_id,
+            "wellbore_id": self.wellbore_id,
+            "section_id": self.section_id,
+            "operation_id": self.operation_id,
         }
 
 
@@ -183,6 +257,7 @@ class AdvisorAnswer:
     unknown: list[dict[str, Any]] = field(default_factory=list)
     context_used: dict[str, Any] = field(default_factory=dict)
     limitations: list[str] = field(default_factory=list)
+    grounding: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -199,6 +274,7 @@ class AdvisorAnswer:
             "unknown": self.unknown,
             "context_used": self.context_used,
             "limitations": self.limitations,
+            "grounding": self.grounding,
             "sources": sorted(
                 {item.source for item in self.facts if item.source}
                 | {item.document_id for item in self.evidence if item.document_id}
@@ -240,17 +316,85 @@ class OperationsAdvisor:
 
     # ------------------------------------------------------------------ evidence
 
-    async def _evidence_for(self, subject_ids: list[str], *, limit: int = 25) -> list[EvidenceItem]:
+    async def _evidence_for(
+        self,
+        subject_ids: list[str],
+        *,
+        well_id: str,
+        project_id: str,
+        limit: int = 25,
+    ) -> list[EvidenceItem]:
         if not subject_ids:
             return []
+        wellbore_in_scope = (
+            select(Wellbore.id)
+            .where(
+                Wellbore.id == Document.wellbore_id,
+                Wellbore.org_id == self.org_id,
+                Wellbore.well_id == well_id,
+            )
+            .exists()
+        )
+        section_in_scope = (
+            select(WellSection.id)
+            .join(Wellbore, Wellbore.id == WellSection.wellbore_id)
+            .where(
+                WellSection.id == Document.section_id,
+                WellSection.org_id == self.org_id,
+                Wellbore.org_id == self.org_id,
+                Wellbore.well_id == well_id,
+                or_(Document.wellbore_id.is_(None), WellSection.wellbore_id == Document.wellbore_id),
+            )
+            .exists()
+        )
+        operation_in_scope = (
+            select(Operation.id)
+            .where(
+                Operation.id == Document.operation_id,
+                Operation.org_id == self.org_id,
+                Operation.well_id == well_id,
+                or_(Document.wellbore_id.is_(None), Operation.wellbore_id.is_(None), Operation.wellbore_id == Document.wellbore_id),
+                or_(Document.section_id.is_(None), Operation.section_id.is_(None), Operation.section_id == Document.section_id),
+            )
+            .exists()
+        )
+        document_scope = and_(
+            or_(Document.well_id.is_(None), Document.well_id == well_id),
+            or_(Document.project_id.is_(None), Document.project_id == project_id),
+            or_(Document.wellbore_id.is_(None), wellbore_in_scope),
+            or_(Document.section_id.is_(None), section_in_scope),
+            or_(Document.operation_id.is_(None), operation_in_scope),
+        )
+        scope_anchor = or_(
+            EvidenceLink.well_id == well_id,
+            and_(EvidenceLink.subject_kind == "well", EvidenceLink.subject_id == well_id),
+            Document.well_id == well_id,
+            Document.project_id == project_id,
+            Document.wellbore_id.is_not(None),
+            Document.section_id.is_not(None),
+            Document.operation_id.is_not(None),
+        )
         rows = (
             await self.session.execute(
-                select(EvidenceLink, Document.id, Document.title)
+                select(
+                    EvidenceLink,
+                    Document.id,
+                    Document.title,
+                    Document.well_id,
+                    Document.project_id,
+                    Document.wellbore_id,
+                    Document.section_id,
+                    Document.operation_id,
+                )
                 .outerjoin(Document, Document.id == EvidenceLink.document_id)
                 .outerjoin(RawArtifact, RawArtifact.id == Document.raw_artifact_id)
                 .where(
                     EvidenceLink.org_id == self.org_id,
                     EvidenceLink.subject_id.in_(subject_ids),
+                    or_(EvidenceLink.well_id.is_(None), EvidenceLink.well_id == well_id),
+                    or_(Document.id.is_(None), document_scope),
+                    scope_anchor,
+                    or_(Document.id.is_not(None), EvidenceLink.well_id == well_id),
                     evidence_document_not_quarantined_condition(),
                 )
                 .order_by(EvidenceLink.confidence.desc().nullslast(), EvidenceLink.created_at.desc())
@@ -258,7 +402,16 @@ class OperationsAdvisor:
             )
         ).all()
         items: list[EvidenceItem] = []
-        for row, document_id, title in rows:
+        for (
+            row,
+            document_id,
+            title,
+            document_well_id,
+            document_project_id,
+            document_wellbore_id,
+            document_section_id,
+            document_operation_id,
+        ) in rows:
             if row.document_id is not None and document_id is None:
                 # Defense in depth: a broken/cross-tenant edge is not evidence the caller may receive.
                 continue
@@ -274,6 +427,17 @@ class OperationsAdvisor:
                     confidence=row.confidence,
                     subject_kind=row.subject_kind,
                     subject_id=row.subject_id,
+                    evidence_id=row.evidence_id,
+                    region_id=row.region_id,
+                    locator=dict(row.locator or {}),
+                    quote_verified=bool(row.quote_verified),
+                    quote_check=row.quote_check,
+                    well_id=row.well_id,
+                    document_well_id=document_well_id,
+                    project_id=document_project_id,
+                    wellbore_id=document_wellbore_id,
+                    section_id=document_section_id,
+                    operation_id=document_operation_id,
                 )
             )
         return items
@@ -294,6 +458,437 @@ class OperationsAdvisor:
             .all()
         )
 
+    def _ground_answer(self, answer: AdvisorAnswer, *, scope: dict[str, Any]) -> None:
+        """Attach scoped citations and freshness, withholding any positive claim without a source ID."""
+        base_scope = {
+            "organization_id": self.org_id,
+            "project_id": scope.get("project_id"),
+            "well_id": answer.well_id,
+            "wellbore_id": scope.get("wellbore_id"),
+        }
+
+        def cite_source(
+            *,
+            claim_key: str,
+            kind: str,
+            source: str,
+            source_id: str,
+            fact_scope: dict[str, Any] | None = None,
+            evidence_ref: str | None = None,
+            locator: dict[str, Any] | None = None,
+            note: str,
+        ) -> dict[str, Any]:
+            return {
+                "citation_id": f"source:{claim_key}:{kind}:{source_id}",
+                "kind": kind,
+                "source": source,
+                "source_id": source_id,
+                "evidence_ref": evidence_ref,
+                "scope": fact_scope or base_scope,
+                "locator": locator or {},
+                "note": note,
+            }
+
+        evidence_links = [item for item in answer.evidence if item.kind != "document"]
+        grounded_facts: list[Fact] = []
+        withheld_count = 0
+        for fact in answer.facts:
+            if not fact.source or not isinstance(fact.source_id, str) or not fact.source_id.strip():
+                withheld_count += 1
+                answer.unknown.append(
+                    {
+                        "key": f"grounding.withheld.{fact.key}",
+                        "statement": f"Claim {fact.key} was withheld because its source record could not be identified.",
+                        "kind": "missing_evidence",
+                        "how_to_supply": "Provide a same-tenant source row with an explicit record identifier.",
+                    }
+                )
+                continue
+
+            source_scope = fact.provenance.get("scope")
+            source_scope = source_scope if isinstance(source_scope, dict) else {}
+            source_well_id = fact.provenance.get("well_id") or source_scope.get("well_id")
+            source_project_id = fact.provenance.get("project_id") or source_scope.get("project_id")
+            if source_well_id not in (None, answer.well_id) or source_project_id not in (
+                None,
+                base_scope["project_id"],
+            ):
+                withheld_count += 1
+                answer.unknown.append(
+                    {
+                        "key": f"grounding.withheld.{fact.key}",
+                        "statement": f"Claim {fact.key} was withheld because its recorded scope conflicts with the requested well.",
+                        "kind": "scope_conflict",
+                        "how_to_supply": "Correct the source record scope and re-run the scoped answer.",
+                    }
+                )
+                continue
+
+            kind = _fact_citation_kind(fact)
+            source_wellbore_id = fact.provenance.get("wellbore_id") or source_scope.get("wellbore_id")
+            source_section_id = fact.provenance.get("section_id") or source_scope.get("section_id")
+            source_operation_id = fact.provenance.get("operation_id") or source_scope.get("operation_id")
+            if source_operation_id is None and fact.source.startswith("operations"):
+                source_operation_id = fact.source_id
+            fact_scope = {
+                **base_scope,
+                "project_id": source_project_id or base_scope["project_id"],
+                "well_id": source_well_id or answer.well_id,
+                "wellbore_id": source_wellbore_id,
+                "section_id": source_section_id,
+                "operation_id": source_operation_id,
+                "request_wellbore_id": base_scope["wellbore_id"],
+                "scope_level": (
+                    "operation"
+                    if source_operation_id
+                    else "section"
+                    if source_section_id
+                    else "wellbore"
+                    if source_wellbore_id
+                    else "well"
+                ),
+            }
+            cited_id = fact.evidence_ref if kind == "measurement_point" and fact.evidence_ref else fact.source_id
+            locator = {"source_field": fact.source, "record_id": fact.source_id}
+            for field_name in (
+                "time_series_point_id",
+                "source_record_id",
+                "document_id",
+                "section_id",
+                "operation_id",
+                "page_number",
+                "region_id",
+            ):
+                value = fact.provenance.get(field_name)
+                if value is not None:
+                    locator[field_name] = value
+            citations = [
+                cite_source(
+                    claim_key=fact.key,
+                    kind=kind,
+                    source=fact.source,
+                    source_id=cited_id,
+                    fact_scope=fact_scope,
+                    evidence_ref=fact.evidence_ref,
+                    locator=locator,
+                    note=(
+                        "This identifies the stored row or scoped aggregate used; it is not independent "
+                        "validation of source truth or engineering correctness."
+                    ),
+                )
+            ]
+            aggregate_or_identity = (
+                fact.key == "well.identity"
+                or fact.source.startswith(("npt:", "npt.by_category:"))
+            )
+            if not aggregate_or_identity:
+                for item in evidence_links:
+                    if not (
+                        item.subject_id == fact.source_id
+                        or (fact.evidence_ref and item.evidence_id == fact.evidence_ref)
+                        or (fact.evidence_ref and item.id == fact.evidence_ref)
+                    ):
+                        continue
+                    bore_mismatch = item.wellbore_id is not None and (
+                        item.wellbore_id != source_wellbore_id
+                        if source_wellbore_id is not None
+                        else not (
+                            (source_section_id is not None and item.section_id == source_section_id)
+                            or (source_operation_id is not None and item.operation_id == source_operation_id)
+                        )
+                    )
+                    if (
+                        item.well_id not in (None, answer.well_id)
+                        or item.project_id not in (None, base_scope["project_id"])
+                        or bore_mismatch
+                        or item.section_id not in (None, source_section_id)
+                        or item.operation_id not in (None, source_operation_id)
+                    ):
+                        continue
+                    citations.append(
+                        {
+                            "citation_id": f"evidence:{item.id}",
+                            "kind": "document_excerpt",
+                            "source": item.kind,
+                            "source_id": item.evidence_id or item.id,
+                            "evidence_link_id": item.id,
+                            "document_id": item.document_id,
+                            "document_title": item.document_title,
+                            "page_number": item.page_number,
+                            "region_id": item.region_id,
+                            "locator": dict(item.locator or {}),
+                            "excerpt": item.excerpt,
+                            "method": item.method,
+                            "confidence": item.confidence,
+                            "quote_verified": item.quote_verified,
+                            "quote_check": item.quote_check,
+                            "scope": {
+                                "organization_id": self.org_id,
+                                "project_id": item.project_id,
+                                "well_id": item.well_id,
+                                "wellbore_id": item.wellbore_id,
+                                "section_id": item.section_id,
+                                "operation_id": item.operation_id,
+                                "document_scope": {
+                                    "project_id": item.project_id,
+                                    "well_id": item.document_well_id,
+                                    "wellbore_id": item.wellbore_id,
+                                    "section_id": item.section_id,
+                                    "operation_id": item.operation_id,
+                                },
+                                "request_scope": base_scope,
+                            },
+                            "note": (
+                                "Quote verification checks textual occurrence only; it does not validate "
+                                "the claim, extraction, units, or engineering meaning."
+                            ),
+                        }
+                    )
+            fact.citations = citations
+            fact.grounding = {
+                "status": "cited",
+                "scope": fact_scope,
+                "freshness": _fact_freshness(fact),
+                "citation_count": len(citations),
+            }
+            grounded_facts.append(fact)
+        answer.facts = grounded_facts
+
+        grounded_calculations: list[Calculation] = []
+        for calculation in answer.calculations:
+            if not calculation.engine_run_id:
+                withheld_count += 1
+                answer.unknown.append(
+                    {
+                        "key": f"grounding.withheld.{calculation.engine_key}",
+                        "statement": f"Calculation {calculation.engine_key} was withheld because its engine run ID is missing.",
+                        "kind": "missing_evidence",
+                        "how_to_supply": "Persist and cite the engine run that produced the calculation.",
+                    }
+                )
+                continue
+            recorded_scope = calculation.provenance.get("scope")
+            recorded_scope = recorded_scope if isinstance(recorded_scope, dict) else {}
+            calculation_well_id = recorded_scope.get("well_id")
+            calculation_project_id = recorded_scope.get("project_id")
+            if calculation_well_id not in (None, answer.well_id) or calculation_project_id not in (
+                None,
+                base_scope["project_id"],
+            ):
+                withheld_count += 1
+                answer.unknown.append(
+                    {
+                        "key": f"grounding.withheld.{calculation.engine_key}",
+                        "statement": f"Calculation {calculation.engine_key} was withheld because its recorded scope conflicts with the requested well.",
+                        "kind": "scope_conflict",
+                        "how_to_supply": "Correct the engine-run subject scope and re-run the scoped answer.",
+                    }
+                )
+                continue
+            calculation_scope = {
+                "organization_id": self.org_id,
+                "project_id": calculation_project_id,
+                "well_id": calculation_well_id or answer.well_id,
+                "wellbore_id": recorded_scope.get("wellbore_id"),
+                "section_id": recorded_scope.get("section_id"),
+                "operation_id": recorded_scope.get("operation_id"),
+                "scope_level": recorded_scope.get("scope_level") or "well",
+                "request_scope": base_scope,
+            }
+            calculation.citations = [
+                cite_source(
+                    claim_key=f"calculation.{calculation.engine_key}",
+                    kind="engine_run",
+                    source=calculation.engine_key,
+                    source_id=calculation.engine_run_id,
+                    fact_scope=calculation_scope,
+                    evidence_ref=None,
+                    locator={
+                        "engine_version": calculation.engine_version,
+                        "inputs_hash": calculation.provenance.get("inputs_hash"),
+                        "outputs_hash": calculation.provenance.get("outputs_hash"),
+                    },
+                    note="Identifies the stored engine run; feasibility is not field validation or authorization.",
+                )
+            ]
+            calculation.grounding = {
+                "status": "cited",
+                "scope": calculation_scope,
+                "freshness": {
+                    "status": "not_assessed",
+                    "as_of": calculation.ran_at.isoformat() if calculation.ran_at else None,
+                    "age_seconds": None,
+                    "basis": "engine_run_time_is_not_a_current_validity_check",
+                    "note": "A stored engine result is not revalidated against current inputs or field conditions.",
+                },
+            }
+            grounded_calculations.append(calculation)
+        answer.calculations = grounded_calculations
+
+        fact_by_key = {fact.key: fact for fact in answer.facts}
+        grounded_inferences: list[dict[str, Any]] = []
+        for inference in answer.inference:
+            citations: list[dict[str, Any]] = []
+            for key in inference.get("supporting_fact_keys", []):
+                supporting_fact = fact_by_key.get(key)
+                if supporting_fact is not None:
+                    citations.extend(
+                        {
+                            "citation_id": f"claim-reference:{key}:{citation['citation_id']}",
+                            "kind": "claim_reference",
+                            "claim_key": key,
+                            "source_citation_id": citation["citation_id"],
+                            "scope": citation.get("scope", base_scope),
+                            "note": "This inference explicitly depends on the cited structured claim.",
+                        }
+                        for citation in supporting_fact.citations
+                    )
+            for record in inference.get("supporting_records", []):
+                source_id = record.get("source_id")
+                source = record.get("source")
+                if not isinstance(source_id, str) or not source_id or not isinstance(source, str) or not source:
+                    continue
+                record_scope = record.get("scope")
+                record_scope = record_scope if isinstance(record_scope, dict) else {}
+                record_well_id = record_scope.get("well_id")
+                record_project_id = record_scope.get("project_id")
+                if record_well_id not in (None, answer.well_id) or record_project_id not in (
+                    None,
+                    base_scope["project_id"],
+                ):
+                    continue
+                record_operation_id = record_scope.get("operation_id")
+                if record_operation_id is None and source.startswith("operations"):
+                    record_operation_id = source_id
+                inference_scope = {
+                    "organization_id": self.org_id,
+                    "project_id": record_project_id or base_scope["project_id"],
+                    "well_id": record_well_id or answer.well_id,
+                    "wellbore_id": record_scope.get("wellbore_id"),
+                    "section_id": record_scope.get("section_id"),
+                    "operation_id": record_operation_id,
+                    "scope_level": record_scope.get("scope_level")
+                    or ("operation" if record_operation_id else "wellbore" if record_scope.get("wellbore_id") else "well"),
+                    "request_scope": base_scope,
+                }
+                citations.append(
+                    cite_source(
+                        claim_key=str(inference.get("key", "inference")),
+                        kind=str(record.get("kind", "database_record")),
+                        source=source,
+                        source_id=source_id,
+                        fact_scope=inference_scope,
+                        locator={"basis": inference.get("basis")},
+                        note=str(record.get("note") or "Scoped stored row used as an inference basis."),
+                    )
+                )
+            if not citations:
+                withheld_count += 1
+                answer.unknown.append(
+                    {
+                        "key": f"grounding.withheld.{inference.get('key', 'inference')}",
+                        "statement": "An inference was withheld because its supporting claim or record could not be cited.",
+                        "kind": "missing_evidence",
+                        "how_to_supply": "Attach source record references to every inference basis.",
+                    }
+                )
+                continue
+            inference["citations"] = citations
+            inference["grounding"] = {"status": "cited", "scope": base_scope}
+            grounded_inferences.append(inference)
+        answer.inference = grounded_inferences
+
+        grounded_recommendations: list[dict[str, Any]] = []
+        for recommendation in answer.recommendation:
+            recommendation_id = recommendation.get("id")
+            if not isinstance(recommendation_id, str) or not recommendation_id:
+                withheld_count += 1
+                answer.unknown.append(
+                    {
+                        "key": "grounding.withheld.recommendation",
+                        "statement": "A recommendation was withheld because its stored record ID is missing.",
+                        "kind": "missing_evidence",
+                        "how_to_supply": "Persist a recommendation record and its supporting engine-run IDs.",
+                    }
+                )
+                continue
+            recorded_scope = recommendation.get("scope")
+            recorded_scope = recorded_scope if isinstance(recorded_scope, dict) else {}
+            recommendation_well_id = recorded_scope.get("well_id")
+            recommendation_project_id = recorded_scope.get("project_id")
+            if recommendation_well_id not in (None, answer.well_id) or recommendation_project_id not in (
+                None,
+                base_scope["project_id"],
+            ):
+                withheld_count += 1
+                answer.unknown.append(
+                    {
+                        "key": "grounding.withheld.recommendation",
+                        "statement": "A recommendation was withheld because its recorded scope conflicts with the requested well.",
+                        "kind": "scope_conflict",
+                        "how_to_supply": "Correct the recommendation scope and re-run the scoped answer.",
+                    }
+                )
+                continue
+            recommendation_scope = {
+                "organization_id": self.org_id,
+                "project_id": recommendation_project_id,
+                "well_id": recommendation_well_id or answer.well_id,
+                "wellbore_id": recorded_scope.get("wellbore_id"),
+                "section_id": recorded_scope.get("section_id"),
+                "operation_id": recorded_scope.get("operation_id"),
+                "scope_level": recorded_scope.get("scope_level") or "well",
+                "request_scope": base_scope,
+            }
+            citations = [
+                cite_source(
+                    claim_key=f"recommendation.{recommendation_id}",
+                    kind="recommendation_record",
+                    source="recommendations",
+                    source_id=recommendation_id,
+                    fact_scope=recommendation_scope,
+                    locator={"engine_run_ids": list(recommendation.get("engine_run_ids") or [])},
+                    note=(
+                        "Identifies the stored proposal and its recorded engine-run references; it is not "
+                        "authorization to execute the action or independent field validation."
+                    ),
+                )
+            ]
+            recommendation["citations"] = citations
+            recommendation["grounding"] = {"status": "cited", "scope": recommendation_scope}
+            grounded_recommendations.append(recommendation)
+        answer.recommendation = grounded_recommendations
+
+        claim_citations = [item.citations for item in answer.facts + answer.calculations]
+        claim_citations.extend(item.get("citations", []) for item in answer.inference)
+        claim_citations.extend(item.get("citations", []) for item in answer.recommendation)
+        freshness = [_fact_freshness(fact) for fact in answer.facts]
+        measurement_freshness = [
+            _fact_freshness(fact) for fact in answer.facts if fact.source.startswith("time_series:")
+        ]
+        answer.grounding = {
+            "contract": "advisor-grounding-v1",
+            "scope": base_scope,
+            "claim_count": len(claim_citations),
+            "cited_claim_count": sum(bool(item) for item in claim_citations),
+            "uncited_claim_count": sum(not item for item in claim_citations),
+            "withheld_claim_count": withheld_count,
+            "abstained_or_unknown_count": len(answer.unknown),
+            "freshness": {
+                "measurement_claim_count": len(measurement_freshness),
+                "stale_measurement_claim_count": sum(item["status"] == "stale" for item in measurement_freshness),
+                "unknown_measurement_claim_count": sum(
+                    item["status"] in {"unknown", "missing"} for item in measurement_freshness
+                ),
+                "not_assessed_record_claim_count": sum(item["status"] == "not_assessed" for item in freshness),
+                "generated_at_is_not_source_time": True,
+            },
+            "evidence_policy": (
+                "Same-tenant and requested-well source references are required. Document quote matching "
+                "establishes text occurrence only, not truth, extraction accuracy, or engineering correctness."
+            ),
+        }
+
     # ------------------------------------------------------------------ narrative
 
     async def _narrate(self, answer: AdvisorAnswer) -> dict[str, Any] | None:
@@ -307,9 +902,14 @@ class OperationsAdvisor:
         from drillai.ai.guardrails import evaluate_output, wrap_untrusted_content
 
         payload = {
-            "facts": [item.to_dict() for item in answer.facts],
-            "calculations": [item.to_dict() for item in answer.calculations],
-            "unknown": answer.unknown,
+            "facts": [{"key": item.key, "statement": item.statement} for item in answer.facts],
+            "calculations": [
+                {"key": item.engine_key, "statement": item.statement} for item in answer.calculations
+            ],
+            "unknown": [
+                {"key": item.get("key", "unknown"), "statement": item.get("statement", "")}
+                for item in answer.unknown
+            ],
         }
         safe_payload, input_guardrails = wrap_untrusted_content(
             json.dumps(payload, sort_keys=True, ensure_ascii=False, default=str)
@@ -396,6 +996,30 @@ class OperationsAdvisor:
                 "guardrails": guardrails.to_dict(),
                 "note": "the structured facts and calculations remain available; unsafe narration was withheld",
             }
+        narrated_statements = {_normalize_narration_statement(statement) for statement in statements}
+        grounding_refs = [
+            {
+                "section": "facts",
+                "key": fact.key,
+                "citation_ids": [item["citation_id"] for item in fact.citations],
+            }
+            for fact in answer.facts
+            if _normalize_narration_statement(fact.statement) in narrated_statements
+        ]
+        grounding_refs.extend(
+            {
+                "section": "calculations",
+                "key": calculation.engine_key,
+                "citation_ids": [item["citation_id"] for item in calculation.citations],
+            }
+            for calculation in answer.calculations
+            if _normalize_narration_statement(calculation.statement) in narrated_statements
+        )
+        grounding_refs.extend(
+            {"section": "unknown", "key": item.get("key", "unknown"), "citation_ids": []}
+            for item in answer.unknown
+            if _normalize_narration_statement(str(item.get("statement", ""))) in narrated_statements
+        )
         return {
             "status": "generated",
             "text": response.text,
@@ -406,6 +1030,7 @@ class OperationsAdvisor:
             "guardrails": guardrails.to_dict(),
             "guardrail": "narration was checked; it cannot modify facts or calculations",
             "prompt_confined_to": ["facts", "calculations", "unknown"],
+            "grounding_refs": grounding_refs,
         }
 
     # ------------------------------------------------------------------ assembly
@@ -426,6 +1051,8 @@ class OperationsAdvisor:
         answer.context_used = {
             "well": well["name"],
             "well_id": well["id"],
+            "project_id": well["project_id"],
+            "wellbore_id": progress["wellbore_id"],
             "missing_keys": [item["key"] for item in state["missing"]],
         }
 
@@ -464,6 +1091,11 @@ class OperationsAdvisor:
             )
             operation_provenance = {
                 "status": current_status,
+                "well_id": well["id"],
+                "project_id": well["project_id"],
+                "wellbore_id": current["wellbore_id"],
+                "section_id": current["section_id"],
+                "operation_id": current["id"],
                 "actual_start": current["actual_start"],
                 "actual_start_basis": current["actual_start_basis"],
                 "actual_end": current["actual_end"],
@@ -503,6 +1135,11 @@ class OperationsAdvisor:
                         source="operations.actual_start",
                         source_id=current["id"],
                         provenance={
+                            "well_id": well["id"],
+                            "project_id": well["project_id"],
+                            "wellbore_id": current["wellbore_id"],
+                            "section_id": current["section_id"],
+                            "operation_id": current["id"],
                             "time_basis": current["actual_start_basis"],
                             "data_quality": current["data_quality"],
                         },
@@ -517,6 +1154,11 @@ class OperationsAdvisor:
                         source="operations.actual_end",
                         source_id=current["id"],
                         provenance={
+                            "well_id": well["id"],
+                            "project_id": well["project_id"],
+                            "wellbore_id": current["wellbore_id"],
+                            "section_id": current["section_id"],
+                            "operation_id": current["id"],
                             "time_basis": current["actual_end_basis"],
                             "data_quality": current["data_quality"],
                         },
@@ -554,6 +1196,11 @@ class OperationsAdvisor:
                         source="operations.actual_duration_hours",
                         source_id=current["id"],
                         provenance={
+                            "well_id": well["id"],
+                            "project_id": well["project_id"],
+                            "wellbore_id": current["wellbore_id"],
+                            "section_id": current["section_id"],
+                            "operation_id": current["id"],
                             "duration_basis": current["actual_duration_basis"],
                             "planned_duration_basis": current["planned_duration_basis"],
                             "duration_variance_hours": current["duration_variance_hours"],
@@ -571,6 +1218,11 @@ class OperationsAdvisor:
                     source_id=previous["id"],
                     provenance={
                         "status": previous["status"],
+                        "well_id": well["id"],
+                        "project_id": well["project_id"],
+                        "wellbore_id": previous["wellbore_id"],
+                        "section_id": previous["section_id"],
+                        "operation_id": previous["id"],
                         "actual_start": previous["actual_start"],
                         "actual_start_basis": previous["actual_start_basis"],
                         "actual_end": previous["actual_end"],
@@ -592,6 +1244,11 @@ class OperationsAdvisor:
                         source="operations.actual_end",
                         source_id=previous["id"],
                         provenance={
+                            "well_id": well["id"],
+                            "project_id": well["project_id"],
+                            "wellbore_id": previous["wellbore_id"],
+                            "section_id": previous["section_id"],
+                            "operation_id": previous["id"],
                             "time_basis": previous["actual_end_basis"],
                             "data_quality": previous["data_quality"],
                         },
@@ -624,6 +1281,11 @@ class OperationsAdvisor:
                         source="operations.actual_duration_hours - planned_duration_hours",
                         source_id=previous["id"],
                         provenance={
+                            "well_id": well["id"],
+                            "project_id": well["project_id"],
+                            "wellbore_id": previous["wellbore_id"],
+                            "section_id": previous["section_id"],
+                            "operation_id": previous["id"],
                             "derived_by": "actual_duration_hours - planned_duration_hours",
                             "actual_duration_hours": previous["actual_duration_hours"],
                             "actual_duration_basis": previous["actual_duration_basis"],
@@ -642,13 +1304,29 @@ class OperationsAdvisor:
                         "how_to_supply": "Record actual and planned durations with explicit bases.",
                     }
                 )
-        if current is None:
+        if current is None and operation.get("current_basis") != "ambiguous":
             answer.inference.append(
                 {
                     "key": "operation.current",
                     "statement": "No started operation is recorded, so 'where are we' cannot be answered from data",
                     "basis": "operations table has no row with actual_start",
                     "confidence": "n/a",
+                    "supporting_records": [
+                        {
+                            "kind": "scoped_query",
+                            "source": "operations.current_selection",
+                            "source_id": well["id"],
+                            "scope": {
+                                "project_id": well["project_id"],
+                                "well_id": well["id"],
+                                "scope_level": "well",
+                            },
+                            "note": (
+                                "No matching started operation was found in the requested well's stored rows; "
+                                "this does not establish physical field absence."
+                            ),
+                        }
+                    ],
                 }
             )
         if progress["current_md_si"] is not None:
@@ -664,6 +1342,10 @@ class OperationsAdvisor:
                     provenance={
                         "value_basis": "measured_md_si",
                         "source_field": progress["current_md_source"],
+                        "well_id": well["id"],
+                        "project_id": well["project_id"],
+                        "wellbore_id": progress["wellbore_id"],
+                        "section_id": progress["current_section"]["id"] if progress["current_section"] else None,
                         "planned_depth_used": False,
                     },
                 )
@@ -679,7 +1361,10 @@ class OperationsAdvisor:
                     source_id=section["id"],
                     provenance={
                         "status": section["status"],
+                        "well_id": well["id"],
+                        "project_id": well["project_id"],
                         "wellbore_id": progress["wellbore_id"],
+                        "section_id": section["id"],
                     },
                 )
             )
@@ -697,6 +1382,10 @@ class OperationsAdvisor:
                     source_id=measured["source_id"],
                     evidence_ref=measured["evidence_ref"],
                     provenance={
+                        "well_id": measured["well_id"],
+                        "wellbore_id": measured["wellbore_id"],
+                        "operation_id": measured["operation_id"],
+                        "project_id": measured["project_id"],
                         "time_series_point_id": measured["point_id"],
                         "source_point_id": measured["source_point_id"],
                         "source_value": measured["source_value"],
@@ -869,6 +1558,15 @@ class OperationsAdvisor:
                     source="risks",
                     source_id=risk["id"],
                     evidence_ref=risk["evidence_ref"],
+                    provenance={
+                        "project_id": risk.project_id,
+                        "well_id": risk.well_id,
+                        "wellbore_id": risk.wellbore_id,
+                        "section_id": risk.section_id,
+                        "operation_id": risk.operation_id,
+                        "source_well_id": risk.source_well_id,
+                        "artifact_version_id": risk.artifact_version_id,
+                    },
                 )
             )
 
@@ -929,6 +1627,23 @@ class OperationsAdvisor:
                     validation_status=validation_status,
                     field_validation_required=field_validation_required,
                     limitations=limitations,
+                    provenance={
+                        "scope": {
+                            "project_id": run.project_id,
+                            "well_id": run.well_id,
+                            "wellbore_id": run.wellbore_id,
+                            "section_id": run.section_id,
+                            "operation_id": run.operation_id,
+                            "subject_kind": run.subject_kind,
+                            "subject_id": run.subject_id,
+                        },
+                        "inputs_hash": run.inputs_hash,
+                        "outputs_hash": run.outputs_hash,
+                        "input_source_kind": run.input_source_kind,
+                        "input_source_id": run.input_source_id,
+                        "started_at": run.started_at.isoformat() if run.started_at else None,
+                        "finished_at": run.finished_at.isoformat() if run.finished_at else None,
+                    },
                 )
             )
 
@@ -937,7 +1652,13 @@ class OperationsAdvisor:
         subject_ids += [item.source_id for item in answer.facts if item.source_id]
         context = await self._context_documents(well_id)
         answer.evidence.extend(context)
-        answer.evidence.extend(await self._evidence_for([sid for sid in subject_ids if sid]))
+        answer.evidence.extend(
+            await self._evidence_for(
+                [sid for sid in subject_ids if sid],
+                well_id=well["id"],
+                project_id=well["project_id"],
+            )
+        )
 
         # ---- INFERENCE -----------------------------------------------------------------------
         if operation["next_basis"] == "inferred":
@@ -952,6 +1673,30 @@ class OperationsAdvisor:
                     "basis": operation["next_note"],
                     "confidence": "plan, not confirmation",
                     "basis_kind": "inferred",
+                    "supporting_records": [
+                        {
+                            "kind": "database_record" if operation["next"] else "scoped_query",
+                            "source": "operations",
+                            "source_id": operation["next"]["id"] if operation["next"] else well["id"],
+                            "scope": (
+                                {
+                                    "project_id": well["project_id"],
+                                    "well_id": well["id"],
+                                    "wellbore_id": operation["next"].get("wellbore_id"),
+                                    "section_id": operation["next"].get("section_id"),
+                                    "operation_id": operation["next"]["id"],
+                                    "scope_level": "operation",
+                                }
+                                if operation["next"]
+                                else {
+                                    "project_id": well["project_id"],
+                                    "well_id": well["id"],
+                                    "scope_level": "well",
+                                }
+                            ),
+                            "note": "The next-operation statement is derived from recorded operation ordering only.",
+                        }
+                    ],
                 }
             )
         elif operation["next_basis"] == "planned" and operation["next"]:
@@ -962,6 +1707,7 @@ class OperationsAdvisor:
                     value=operation["next"]["name"],
                     source="operations",
                     source_id=operation["next"]["id"],
+                    provenance={"wellbore_id": operation["next"].get("wellbore_id"), "status": operation["next"]["status"]},
                 )
             )
         if npt.total_hours > 0 and npt.by_category:
@@ -975,8 +1721,9 @@ class OperationsAdvisor:
                             f"{worst.hours} h of {round(npt.total_hours, 2)} h NPT "
                             f"({worst.percent_of_total}%)"
                         ),
-                        "confidence": "high (arithmetic over recorded events)",
+                        "confidence": "arithmetic over recorded NPT rows",
                         "basis_kind": "derived_from_evidence",
+                        "supporting_fact_keys": ["npt.total", f"npt.category.{worst.key}"],
                     }
                 )
 
@@ -1029,6 +1776,30 @@ class OperationsAdvisor:
                     "constraints_applied": row.constraints_applied,
                     "why_not": row.why_not,
                     "engine_run_ids": row.engine_run_ids,
+                    "scope": {
+                        "project_id": row.project_id,
+                        "well_id": row.well_id,
+                        "wellbore_id": row.wellbore_id,
+                        "section_id": row.section_id,
+                        "operation_id": row.operation_id,
+                        "scope_level": (
+                            "operation"
+                            if row.operation_id
+                            else "section"
+                            if row.section_id
+                            else "wellbore"
+                            if row.wellbore_id
+                            else "well"
+                        ),
+                    },
+                    "provenance": {
+                        "created_at": row.created_at.isoformat() if row.created_at else None,
+                        "created_by": row.created_by,
+                        "created_by_kind": row.created_by_kind,
+                        "reviewed_by": row.reviewed_by,
+                        "reviewed_at": row.reviewed_at.isoformat() if row.reviewed_at else None,
+                        "approval_request_id": row.approval_request_id,
+                    },
                     "requires_approval": row.action_level in {"L3", "L4", "L5"},
                 }
             )
@@ -1052,7 +1823,17 @@ class OperationsAdvisor:
                 "infer a measurement that was never recorded.",
                 "An engine is_feasible flag reports only the constraints encoded in that run; it is not "
                 "field validation, a safety case, or authorization to operate.",
+                "A source-row citation identifies stored provenance, not independent validation of source truth.",
+                "Telemetry freshness is per measurement; other record types have no shared freshness threshold. "
+                "generated_at is answer assembly time, not a source observation time.",
             ]
+        )
+        self._ground_answer(
+            answer,
+            scope={
+                "project_id": well["project_id"],
+                "wellbore_id": progress["wellbore_id"],
+            },
         )
         answer.narrative = await self._narrate(answer)
         return answer
@@ -1090,6 +1871,17 @@ class OperationsAdvisor:
                     confidence=None,
                     subject_kind="well",
                     subject_id=well_id,
+                    evidence_id=None,
+                    region_id=None,
+                    locator={"kind": "document_on_file", "document_id": row.id},
+                    quote_verified=None,
+                    quote_check=None,
+                    well_id=row.well_id,
+                    document_well_id=row.well_id,
+                    project_id=row.project_id,
+                    wellbore_id=row.wellbore_id,
+                    section_id=row.section_id,
+                    operation_id=row.operation_id,
                 )
             )
         return items

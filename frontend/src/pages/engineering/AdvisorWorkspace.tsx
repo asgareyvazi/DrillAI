@@ -50,6 +50,19 @@ function unitFields(units: unknown, key: string): Record<string, EngineValueUnit
   return units[key] as Record<string, EngineValueUnitContract>
 }
 
+const CITATION_KIND_KEYS: Record<string, string> = {
+  database_record: 'advisor.databaseRecord',
+  derived_record: 'advisor.derivedRecord',
+  scoped_aggregate: 'advisor.scopedAggregate',
+  measurement_point: 'advisor.measurementPoint',
+  extracted_record: 'advisor.extractedRecord',
+  engine_run: 'advisor.engineRun',
+  recommendation_record: 'advisor.recommendationRecord',
+  document_excerpt: 'advisor.documentExcerpt',
+  scoped_query: 'advisor.scopedQuery',
+  claim_reference: 'advisor.claimReference',
+}
+
 export function AdvisorItemCard({ item }: { item: Record<string, unknown> }) {
   const { t } = useI18n()
   const label = String(item.label ?? item.key ?? item.title ?? item.kind ?? 'item')
@@ -70,6 +83,30 @@ export function AdvisorItemCard({ item }: { item: Record<string, unknown> }) {
   const evidenceCount = Array.isArray(item.evidence) ? (item.evidence as unknown[]).length : 0
   const outputs = isRecord(item.outputs) ? item.outputs : null
   const violations = Array.isArray(item.violations) ? item.violations : []
+  const citations = Array.isArray(item.citations) ? item.citations.filter(isRecord) : []
+  const grounding = isRecord(item.grounding) ? item.grounding : null
+  const freshness = grounding && isRecord(grounding.freshness) ? grounding.freshness : null
+  const freshnessStatus = typeof freshness?.status === 'string' ? freshness.status : null
+  const freshnessLabelKey =
+    freshnessStatus === 'fresh'
+      ? 'advisor.fresh'
+      : freshnessStatus === 'stale'
+        ? 'advisor.stale'
+        : freshnessStatus === 'missing'
+          ? 'advisor.missingFreshness'
+          : freshnessStatus === 'unknown'
+            ? 'advisor.unknownFreshness'
+            : freshnessStatus === 'not_assessed'
+              ? 'advisor.notAssessed'
+              : null
+  const freshnessTone =
+    freshnessStatus === 'fresh'
+      ? 'ok'
+      : freshnessStatus === 'not_assessed'
+        ? 'neutral'
+        : freshnessStatus
+          ? 'warning'
+          : 'neutral'
 
   return (
     <li className="rounded-md border border-graphite-100 p-2.5 dark:border-graphite-800">
@@ -119,7 +156,62 @@ export function AdvisorItemCard({ item }: { item: Record<string, unknown> }) {
         {basis && <span>basis: {basis}</span>}
         {how && <span>how: {how}</span>}
         {evidenceCount > 0 && <Badge tone="neutral">{evidenceCount} evidence</Badge>}
+        {freshnessLabelKey && (
+          <Badge tone={freshnessTone} data-testid="advisor-freshness">
+            {t('advisor.freshness')}: {t(freshnessLabelKey)}
+            {typeof freshness?.age_seconds === 'number' ? ` · ${freshness.age_seconds.toFixed(0)} s` : ''}
+          </Badge>
+        )}
       </div>
+      {citations.length > 0 && (
+        <div className="mt-2 space-y-1" data-testid="advisor-citations">
+          <h4 className="text-[11px] font-medium">{t('advisor.citations')}</h4>
+          <ul className="space-y-1 text-[11px] text-graphite-600 dark:text-graphite-300">
+            {citations.map((citation, index) => {
+              const kind = typeof citation.kind === 'string' ? citation.kind : ''
+              const kindKey = CITATION_KIND_KEYS[kind] ?? 'advisor.citation'
+              const citationSource = typeof citation.source === 'string' ? citation.source : null
+              const citationId = typeof citation.source_id === 'string' ? citation.source_id : null
+              const documentTitle = typeof citation.document_title === 'string' ? citation.document_title : null
+              const pageNumber = typeof citation.page_number === 'number' ? citation.page_number : null
+              const citationScopeRecord = isRecord(citation.scope) ? citation.scope : null
+              const citationDocumentScopeRecord =
+                citationScopeRecord && isRecord(citationScopeRecord.document_scope)
+                  ? citationScopeRecord.document_scope
+                  : null
+              const scopeFields = ['organization_id', 'project_id', 'well_id', 'wellbore_id', 'section_id', 'operation_id']
+              const citationScopeParts = citationScopeRecord
+                ? scopeFields
+                    .filter((field) => typeof citationScopeRecord[field] === 'string')
+                    .map((field) => `${field}=${String(citationScopeRecord[field])}`)
+                : []
+              const documentScopeParts = citationDocumentScopeRecord
+                ? scopeFields
+                    .filter((field) => typeof citationDocumentScopeRecord[field] === 'string')
+                    .map((field) => `document.${field}=${String(citationDocumentScopeRecord[field])}`)
+                : []
+              const citationScope = [...citationScopeParts, ...documentScopeParts].join(' · ')
+              return (
+                <li key={String(citation.citation_id ?? index)} data-testid="advisor-citation" className="flex flex-wrap gap-1">
+                  <span>{t(kindKey)}:</span>
+                  <span dir="ltr" className="font-mono">
+                    {[citationSource, citationId, documentTitle, pageNumber === null ? null : `p. ${pageNumber}`]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </span>
+                  {citationScope && (
+                    <span dir="ltr" className="font-mono text-graphite-500">
+                      {t('advisor.citationScope')}: {citationScope}
+                    </span>
+                  )}
+                  {citation.quote_verified === true && <Badge tone="ok">{t('common.quoteVerified')}</Badge>}
+                  {citation.quote_verified === false && <Badge tone="warning">{t('common.quoteNotVerified')}</Badge>}
+                </li>
+              )
+            })}
+          </ul>
+        </div>
+      )}
       {provenance && Object.keys(provenance).length > 0 && (
         <details className="mt-2 rounded border border-graphite-100 p-2 text-[11px] dark:border-graphite-800">
           <summary className="cursor-pointer font-medium">{t('advisor.provenance')}</summary>
@@ -157,6 +249,17 @@ export function AnswerView({
         : llmRequested
           ? t('advisor.narrativeNone')
           : t('advisor.narrativeNotRequested')
+  const grounding = isRecord(answer.grounding) ? answer.grounding : null
+  const groundingScope = grounding && isRecord(grounding.scope) ? grounding.scope : null
+  const freshnessSummary = grounding && isRecord(grounding.freshness) ? grounding.freshness : null
+  const scopeText = groundingScope
+    ? [groundingScope.organization_id, groundingScope.project_id, groundingScope.well_id, groundingScope.wellbore_id]
+        .filter((value): value is string => typeof value === 'string' && value.length > 0)
+        .join(' / ')
+    : ''
+  const narrativeGroundingRefs = Array.isArray(answer.narrative?.grounding_refs)
+    ? answer.narrative.grounding_refs.filter(isRecord)
+    : []
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
@@ -167,6 +270,29 @@ export function AnswerView({
           {t('common.showEvidence')}
         </Button>
       </div>
+
+      {grounding && (
+        <Card title={t('advisor.grounding')}>
+          <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs" data-testid="advisor-grounding-summary">
+            <span>
+              {t('advisor.citedClaims')}: {typeof grounding.cited_claim_count === 'number' ? grounding.cited_claim_count : 0}/
+              {typeof grounding.claim_count === 'number' ? grounding.claim_count : 0}
+            </span>
+            <span>
+              {t('advisor.abstentions')}: {typeof grounding.abstained_or_unknown_count === 'number' ? grounding.abstained_or_unknown_count : 0}
+            </span>
+            <span>
+              {t('advisor.staleReadings')}: {typeof freshnessSummary?.stale_measurement_claim_count === 'number' ? freshnessSummary.stale_measurement_claim_count : 0}
+            </span>
+          </div>
+          {scopeText && (
+            <p className="mt-2 text-[11px] text-graphite-500">
+              {t('advisor.scope')}: <code dir="ltr">{scopeText}</code>
+            </p>
+          )}
+          <p className="mt-2 text-[11px] text-graphite-500">{t('advisor.groundingPolicy')}</p>
+        </Card>
+      )}
 
       <div className="grid gap-3 xl:grid-cols-2">
         {SECTION_ORDER.map((key) => {
@@ -228,6 +354,31 @@ export function AnswerView({
           </blockquote>
         ) : (
           <EmptyState message={narrativeStatusMessage} hint={t('advisor.llmHint')} />
+        )}
+        {narrativeGroundingRefs.length > 0 && (
+          <div className="mt-2 space-y-1 text-[11px]" data-testid="advisor-narrative-grounding">
+            <h4 className="font-medium">{t('advisor.narrativeSources')}</h4>
+            <ul className="space-y-1">
+              {narrativeGroundingRefs.map((reference, index) => {
+                const referenceLabel = [reference.section, reference.key]
+                  .filter((value): value is string => typeof value === 'string')
+                  .join(': ')
+                const citationIds = Array.isArray(reference.citation_ids)
+                  ? reference.citation_ids.filter((value): value is string => typeof value === 'string')
+                  : []
+                return (
+                  <li key={`${referenceLabel}-${index}`} className="flex flex-wrap gap-1">
+                    <span>{referenceLabel}</span>
+                    {citationIds.length > 0 ? (
+                      <span dir="ltr" className="font-mono">{citationIds.join(' · ')}</span>
+                    ) : (
+                      <Badge tone="neutral">{t('advisor.abstention')}</Badge>
+                    )}
+                  </li>
+                )
+              })}
+            </ul>
+          </div>
         )}
         <p className="mt-2 text-[11px] text-graphite-500">
           {t('advisor.llmHint')}
@@ -350,10 +501,22 @@ export default function AdvisorWorkspace() {
         wellId={id}
         items={(answer?.evidence ?? []).map((item) => ({
           document_id: (item.document_id as string) ?? null,
-          page: (item.page as number) ?? null,
+          page: (item.page_number as number) ?? null,
+          region: (item.region_id as string) ?? null,
           excerpt: (item.excerpt as string) ?? null,
           method: (item.method as string) ?? null,
           confidence: (item.confidence as number) ?? null,
+          quote_verified: (item.quote_verified as boolean | null) ?? null,
+          evidence_id: (item.evidence_id as string) ?? (item.id as string) ?? null,
+          locator: (item.locator as Record<string, unknown>) ?? null,
+          scope: {
+            project_id: (item.project_id as string | null) ?? null,
+            well_id: (item.well_id as string | null) ?? null,
+            document_well_id: (item.document_well_id as string | null) ?? null,
+            wellbore_id: (item.wellbore_id as string | null) ?? null,
+            section_id: (item.section_id as string | null) ?? null,
+            operation_id: (item.operation_id as string | null) ?? null,
+          },
           title: (item.document_title as string) ?? null,
         }))}
       />

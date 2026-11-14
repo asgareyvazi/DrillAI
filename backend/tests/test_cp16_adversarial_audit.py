@@ -1058,8 +1058,8 @@ def test_cp16_10_documentation_and_contract_consistency_guard():
     )
 
     assert "127 tests / 20 files" in readme_text
-    assert "400 passed" in readme_text
+    assert "402 passed" in readme_text
     assert "127 tests / 20 files" in fe_testing_text
-    assert "400 passed" in fe_testing_text
+    assert "402 passed" in fe_testing_text
     assert "42" in fe_testing_text
 

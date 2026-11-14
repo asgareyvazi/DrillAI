@@ -537,7 +537,14 @@ async def test_advisor_evidence_is_tenant_scoped_in_one_bounded_query(session):
         title="foreign confidential report title",
         status="extracted",
     )
-    session.add_all([owner_document, foreign_document])
+    same_tenant_other_well_document = Document(
+        org_id=owner.id,
+        well_id="wel_other_scope",
+        doc_type="ddr",
+        title="same-tenant other-well confidential title",
+        status="extracted",
+    )
+    session.add_all([owner_document, foreign_document, same_tenant_other_well_document])
     await session.flush()
     session.add_all(
         [
@@ -559,6 +566,16 @@ async def test_advisor_evidence_is_tenant_scoped_in_one_bounded_query(session):
                 document_id=foreign_document.id,
                 excerpt="not content for the owner tenant",
             ),
+            EvidenceLink(
+                org_id=owner.id,
+                subject_kind="well",
+                subject_id="wel_owner",
+                evidence_kind="document_page",
+                evidence_id="dpg_other_well",
+                document_id=same_tenant_other_well_document.id,
+                well_id="wel_owner",
+                excerpt="not content from another well",
+            ),
         ]
     )
     await session.flush()
@@ -572,13 +589,18 @@ async def test_advisor_evidence_is_tenant_scoped_in_one_bounded_query(session):
     engine = session.get_bind()
     event.listen(engine, "before_cursor_execute", record_select)
     try:
-        items = await OperationsAdvisor(session, owner.id)._evidence_for(["wel_owner"])
+        items = await OperationsAdvisor(session, owner.id)._evidence_for(
+            ["wel_owner"], well_id="wel_owner", project_id="prj_owner"
+        )
     finally:
         event.remove(engine, "before_cursor_execute", record_select)
 
     assert len(items) == 1
     assert items[0].document_id == owner_document.id
     assert items[0].document_title == "owner synthetic report title"
+    assert items[0].quote_verified is False
+    assert "foreign confidential" not in str([item.to_dict() for item in items])
+    assert "other-well confidential" not in str([item.to_dict() for item in items])
     assert len(statements) == 1
 
 

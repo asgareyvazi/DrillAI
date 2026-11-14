@@ -32,6 +32,7 @@ export interface EvidenceCitation {
   quote_verified?: boolean | null
   evidence_id?: string | null
   locator?: Record<string, unknown> | null
+  scope?: Record<string, unknown> | null
   title?: string | null
 }
 
@@ -39,6 +40,10 @@ function Citation({ citation }: { citation: EvidenceCitation }) {
   const { t } = useI18n()
   const locator = citation.locator ?? {}
   const region = citation.region ?? (typeof locator.region === 'string' ? locator.region : null)
+  const scopeSummary = Object.entries(citation.scope ?? {})
+    .filter(([, value]) => typeof value === 'string' && value.length > 0)
+    .map(([key, value]) => `${key}=${String(value)}`)
+    .join(' · ')
   return (
     <li className="rounded-md border border-graphite-200 p-3 dark:border-graphite-800">
       <div className="flex flex-wrap items-center gap-2 text-[11px] text-graphite-500">
@@ -59,6 +64,11 @@ function Citation({ citation }: { citation: EvidenceCitation }) {
         {citation.quote_verified === false && <Badge tone="warning">{t('common.quoteNotVerified')}</Badge>}
         {citation.quote_verified === true && <Badge tone="ok">{t('common.quoteVerified')}</Badge>}
       </div>
+      {scopeSummary && (
+        <p dir="ltr" className="mt-1 break-words text-[10px] text-graphite-500">
+          {t('advisor.citationScope')}: {scopeSummary}
+        </p>
+      )}
       {citation.excerpt ? (
         <blockquote className="mt-2 border-s-2 border-signal/50 ps-2 text-sm text-graphite-700 italic dark:text-graphite-200">
           {citation.excerpt}

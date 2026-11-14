@@ -216,6 +216,9 @@ class LatestReading:
     """The newest measurement on a channel, with everything a screen must show beside the number."""
 
     channel_id: str
+    well_id: str | None
+    wellbore_id: str | None
+    operation_id: str | None
     point_id: str | None
     source_point_id: str | None
     channel_key: str
@@ -248,6 +251,9 @@ class LatestReading:
 
         return {
             "channel_id": self.channel_id,
+            "well_id": self.well_id,
+            "wellbore_id": self.wellbore_id,
+            "operation_id": self.operation_id,
             "point_id": self.point_id,
             "source_point_id": self.source_point_id,
             "channel_key": self.channel_key,
@@ -1215,6 +1221,9 @@ class TelemetryService:
             readings.append(
                 LatestReading(
                     channel_id=channel.id,
+                    well_id=channel.well_id,
+                    wellbore_id=channel.wellbore_id,
+                    operation_id=channel.operation_id,
                     point_id=point.id if point is not None else None,
                     source_point_id=point.source_point_id if point is not None else None,
                     channel_key=channel.channel_key,

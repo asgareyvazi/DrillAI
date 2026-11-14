@@ -15,7 +15,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { ApiError } from '../../api/client'
 import { drillingApi } from '../../api/endpoints'
 import { I18nProvider } from '../../i18n'
-import { EvidenceSummaryStrip } from './EvidencePanel'
+import { EvidenceList, EvidenceSummaryStrip } from './EvidencePanel'
 
 vi.mock('../../api/endpoints', () => ({
   drillingApi: { evidenceSummary: vi.fn(), listEvidence: vi.fn() },
@@ -49,6 +49,25 @@ const summaryPayload = {
 
 beforeEach(() => {
   vi.clearAllMocks()
+})
+
+describe('evidence citation provenance', () => {
+  it('renders the stored scope beside its source locator', () => {
+    renderStrip(
+      <EvidenceList
+        citations={[
+          {
+            evidence_id: 'evd_synthetic',
+            title: 'SYNTHETIC scoped source',
+            document_id: 'doc_synthetic',
+            scope: { well_id: 'wel_synthetic', wellbore_id: 'wbr_synthetic' },
+          },
+        ]}
+      />,
+    )
+
+    expect(screen.getByText(/well_id=wel_synthetic · wellbore_id=wbr_synthetic/)).toBeInTheDocument()
+  })
 })
 
 describe('the cockpit evidence strip', () => {

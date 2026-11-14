@@ -1,7 +1,7 @@
 {
   "version": 1,
   "backend": {
-    "collected": 1745,
+    "collected": 1751,
     "postgres_files": 12,
     "postgres": [
       "tests/db/test_cp18_postgres_backup_restore.py::test_cp18_01_postgres_logical_backup_restore_and_migration_recovery_drill",
@@ -21,17 +21,17 @@
       "tests/workflow/test_notification_worker.py::test_competing_notification_worker_claims_skip_locked_rows_on_postgres"
     ],
     "default": {
-      "passed": 1730,
+      "passed": 1736,
       "skipped": 15,
       "deselected": 0
     },
     "linux": {
-      "passed": 1745,
+      "passed": 1751,
       "skipped": 0,
       "deselected": 0
     },
     "windows": {
-      "passed": 1729,
+      "passed": 1735,
       "skipped": 1,
       "deselected": 15,
       "expected_skip_path": "tests/ingestion/test_ocr.py",
