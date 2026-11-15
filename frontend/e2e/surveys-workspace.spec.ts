@@ -24,6 +24,9 @@ interface SurveySummary {
   version: number
   is_current: boolean
   datum: string
+  datum_provenance: string
+  azimuth_reference: string | null
+  azimuth_reference_id: string | null
   source_document_id: string | null
   station_count: number
   calculation_state: string
@@ -40,6 +43,13 @@ interface SurveyStation {
   station_index: number
   md_si: number
   inclination_deg: number
+  azimuth_deg: number
+  input_azimuth_deg: number | null
+  input_azimuth_reference: string | null
+  input_azimuth_reference_id: string | null
+  tvd_si: number
+  tvdss_si: number | null
+  grid_correction_deg: number | null
   evidence_ref: string | null
   raw_source: Record<string, unknown>
 }
@@ -49,6 +59,7 @@ interface SurveyDetail {
     engine_key: string | null
     inputs_hash: string | null
     outputs_hash: string | null
+    validation: { calculation_parameters: Record<string, unknown> }
   }
   stations: SurveyStation[]
   history: SurveySummary[]
@@ -252,6 +263,94 @@ test.describe('survey revision and source review in a real browser', () => {
     expect(importedDetail.stations.every((station) => station.evidence_ref)).toBe(true)
     expect(importedDetail.stations.every((station) => station.raw_source.source_record_id)).toBe(true)
     expect(importedDetail.stations.every((station) => station.raw_source.human_review)).toBe(true)
+    expectNoFailures(consoleErrors, failedResponses)
+  })
+
+  test('requires explicit datum and azimuth-frame identities and reads back declared corrections', async ({
+    page,
+    request,
+    wellId,
+    consoleErrors,
+    failedResponses,
+  }) => {
+    const wellboreId = await wellboreFor(request, wellId)
+    const name = `E2E explicit frame survey ${Date.now().toString(36)}`
+    const gridFrameId = 'SYNTHETIC-GRID-FRAME-01'
+    const trueFrameId = 'SYNTHETIC-TRUE-FRAME-01'
+
+    await page.goto(wellPath('/surveys'))
+    await page.getByLabel('Select a wellbore').selectOption(wellboreId)
+    await page.getByRole('button', { name: 'New manual trajectory' }).click()
+    await page.getByLabel('Series name').fill(name)
+    await page.getByLabel('Trajectory kind').selectOption('plan')
+    await page.getByLabel('Reason for this revision').fill('Synthetic browser check of explicit datum and azimuth frames')
+    await page.getByLabel('Measured depth 1').fill('0')
+    await page.getByLabel('Inclination 1').fill('0')
+    await page.getByLabel('Input azimuth 1').fill('0')
+    await page.getByLabel('Measured depth 2').fill('100')
+    await page.getByLabel('Inclination 2').fill('10')
+    await page.getByLabel('Input azimuth 2').fill('5')
+
+    await page.getByLabel('Vertical datum').selectOption('msl')
+    await page.getByLabel('KB elevation').fill('25')
+    await page.getByRole('button', { name: 'Calculate and save revision' }).click()
+    await expect(page.getByRole('alert')).toHaveText('KB elevation is only accepted with an RKB datum; no conversion is applied.')
+
+    await page.getByLabel('Vertical datum').selectOption('rkb')
+    await page.getByLabel('KB elevation').fill('0')
+    await page.getByRole('button', { name: 'Calculate and save revision' }).click()
+    await expect(page.getByRole('alert')).toHaveText(
+      'Station 1 has no known azimuth reference; select grid, true, or magnetic before calculating.',
+    )
+
+    const stationForms = page.locator('fieldset')
+    await stationForms.nth(0).getByLabel('Azimuth reference').selectOption('true')
+    await stationForms.nth(1).getByLabel('Azimuth reference').selectOption('true')
+    await page.getByRole('button', { name: 'Calculate and save revision' }).click()
+    await expect(page.getByRole('alert')).toHaveText('Station 1 needs an exact identity for its declared azimuth frame.')
+
+    await stationForms.nth(0).getByLabel('Exact frame identity').fill(trueFrameId)
+    await stationForms.nth(1).getByLabel('Exact frame identity').fill(trueFrameId)
+    await page.getByLabel('Target azimuth frame (optional)').selectOption('grid')
+    await page.getByLabel('Exact frame identity').nth(0).fill(gridFrameId)
+    await stationForms.nth(0).getByLabel('Grid correction (optional)').fill('-2')
+    await stationForms.nth(1).getByLabel('Grid correction (optional)').fill('1')
+    await page.getByLabel('Vertical-section azimuth (optional)').fill('90')
+    await page.getByLabel('Azimuth reference').nth(0).selectOption('grid')
+    await page.getByLabel('Exact frame identity').nth(1).fill(gridFrameId)
+
+    await page.getByRole('button', { name: 'Calculate and save revision' }).click()
+    await expect(page.getByText(/Trajectory revision saved/)).toBeVisible()
+    await expect(page.getByText('Calculated coordinate frame', { exact: true })).toBeVisible()
+    await expect(page.getByText(gridFrameId, { exact: true })).toHaveCount(2)
+    await expect(page.getByText(trueFrameId, { exact: true })).toHaveCount(2)
+
+    const list = await apiGet<SurveyList>(request, `/wells/${wellId}/surveys`)
+    const saved = list.items.find((item) => item.name === name && item.version === 1)
+    expect(saved, 'the browser-created frame-aware trajectory must be persisted').toBeTruthy()
+    expect(saved?.datum).toBe('rkb')
+    expect(saved?.datum_provenance).toBe('engine_input')
+    expect(saved?.azimuth_reference).toBe('grid')
+    expect(saved?.azimuth_reference_id).toBe(gridFrameId)
+
+    const detail = await apiGet<SurveyDetail>(request, `/wells/${wellId}/surveys/${saved?.id}`)
+    const parameters = detail.trajectory.validation.calculation_parameters
+    expect(detail.trajectory.datum).toBe('rkb')
+    expect(parameters.kb_elevation_si).toBe(0)
+    expect(parameters.target_azimuth_reference).toBe('grid')
+    expect(parameters.target_azimuth_reference_id).toBe(gridFrameId)
+    expect(parameters.vertical_section_azimuth_deg).toBe(90)
+    expect(parameters.vertical_section_azimuth_reference).toBe('grid')
+    expect(parameters.vertical_section_azimuth_reference_id).toBe(gridFrameId)
+    expect(detail.stations).toHaveLength(2)
+    expect(detail.stations[0]?.input_azimuth_reference).toBe('true')
+    expect(detail.stations[0]?.input_azimuth_reference_id).toBe(trueFrameId)
+    expect(detail.stations[0]?.grid_correction_deg).toBe(-2)
+    expect(detail.stations[0]?.azimuth_deg).toBe(358)
+    expect(detail.stations[0]?.tvdss_si).toBeCloseTo(detail.stations[0]?.tvd_si ?? Number.NaN)
+    expect(detail.stations[1]?.input_azimuth_reference_id).toBe(trueFrameId)
+    expect(detail.stations[1]?.grid_correction_deg).toBe(1)
+    expect(detail.stations[1]?.azimuth_deg).toBeCloseTo(6)
     expectNoFailures(consoleErrors, failedResponses)
   })
 })

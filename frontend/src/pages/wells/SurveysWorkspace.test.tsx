@@ -392,6 +392,11 @@ const localizationCases = [
       warningMagneticNorth: 'Trajectory coordinates are referenced to magnetic north; they have not been converted to grid or true north.',
       warningStationGap: 'A station gap of 30 m before measured depth 100 m reduces accuracy.',
       warningHighDls: 'Dogleg severity 15 deg/30 m at measured depth 100 m exceeds 12 deg/30 m.',
+      outputFrame: 'Calculated coordinate frame',
+      verticalSectionFrame: 'Vertical-section azimuth and frame',
+      appliedGridCorrection: 'Applied grid correction',
+      frameSafetyNote: 'Datum and frame identities are preserved exactly. No vertical-datum conversion, magnetic declination, or grid convergence is inferred; any grid correction shown is an explicit input and is not independently verified.',
+      notProvided: 'Not provided',
       grid: 'Grid',
       manual: 'Manual',
       matched: 'Matched at exact measured depth',
@@ -440,6 +445,11 @@ const localizationCases = [
       warningMagneticNorth: 'مختصات مسیر نسبت به شمال مغناطیسی هستند و به شمال شبکه‌ای یا حقیقی تبدیل نشده‌اند.',
       warningStationGap: 'فاصلهٔ ۳۰ متر پیش از عمق اندازه‌گیری ۱۰۰ متر، دقت را کاهش می‌دهد.',
       warningHighDls: 'شدت تغییر زاویهٔ ۱۵ درجه بر ۳۰ متر در عمق اندازه‌گیری ۱۰۰ متر از حد ۱۲ درجه بر ۳۰ متر بیشتر است.',
+      outputFrame: 'چارچوب مختصات محاسبه‌شده',
+      verticalSectionFrame: 'آزیموت و چارچوب مقطع قائم',
+      appliedGridCorrection: 'اصلاح شبکهٔ اعمال‌شده',
+      frameSafetyNote: 'مبنای قائم و شناسه‌های چارچوب دقیقاً حفظ می‌شوند. تبدیل مبنای قائم، میل مغناطیسی یا همگرایی شبکه حدس زده نمی‌شود؛ هر اصلاح شبکهٔ نمایش‌داده‌شده ورودی صریح است و مستقلاً راستی‌آزمایی نشده است.',
+      notProvided: 'ارائه نشده',
       grid: 'شبکه‌ای',
       manual: 'ورود دستی',
       matched: 'تطبیق دقیق عمق اندازه‌گیری',
@@ -497,6 +507,14 @@ describe('SurveysWorkspace localization', () => {
     expect(screen.getByText(labels.warningMagneticNorth)).toBeInTheDocument()
     expect(screen.getByText(labels.warningStationGap)).toBeInTheDocument()
     expect(screen.getByText(labels.warningHighDls)).toBeInTheDocument()
+    expect(screen.getByText(labels.outputFrame)).toBeInTheDocument()
+    expect(screen.getByText(labels.verticalSectionFrame)).toBeInTheDocument()
+    expect(document.body.textContent).toContain(`${labels.appliedGridCorrection} (deg)`)
+    expect(screen.getByText(labels.frameSafetyNote)).toBeInTheDocument()
+    expect(document.body.textContent).toContain(labels.notProvided)
+    expect(document.body.textContent).toContain('true-frame-synthetic')
+    expect(document.body.textContent).toContain('grid-frame-synthetic')
+    expect(document.body.textContent).toContain('vendor_frame-frame-synthetic')
     expect(document.body.textContent).toContain(labels.inputAzimuthHeader)
     expect(document.body.textContent).toContain(labels.grid)
     expect(document.body.textContent).toContain(labels.manual)
@@ -617,7 +635,7 @@ describe('SurveysWorkspace localization', () => {
     renderWorkspace()
 
     await user.click(await screen.findByRole('button', { name: 'Correct current revision' }))
-    const targetReference = screen.getByLabelText('Target azimuth frame (optional)')
+    const targetReference = screen.getByRole('combobox', { name: 'Target azimuth frame (optional)' })
     const frameSelectors = screen.getAllByRole('combobox', { name: 'Azimuth reference' })
     expect(screen.getByLabelText('Trajectory kind')).toHaveValue('unexpected_kind')
     expect(screen.getByRole('option', { name: 'Unrecognized value: unexpected_kind' })).toBeInTheDocument()

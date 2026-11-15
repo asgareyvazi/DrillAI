@@ -456,3 +456,111 @@ async def test_survey_read_rbac_is_read_only_for_viewers(client):
         headers=headers("viewer"),
     )
     assert denied.status_code == 403, denied.text
+
+
+async def test_manual_survey_rejects_implicit_frames_and_persists_explicit_datum_and_corrections(client):
+    _project_id, well_id, wellbore_id = await _create_well(client, name="Synthetic explicit-frame survey well")
+    payload = _manual_payload(wellbore_id, name="Synthetic explicit-frame trajectory")
+    payload.update(
+        datum="rkb",
+        kb_elevation_value=0.0,
+        kb_elevation_unit="m",
+    )
+
+    incompatible_kb = await client.post(
+        f"/api/v1/wells/{well_id}/surveys",
+        json={**payload, "name": "Synthetic incompatible KB datum", "datum": "msl"},
+        headers=headers("engineer"),
+    )
+    assert incompatible_kb.status_code == 422, incompatible_kb.text
+    assert "KB elevation is only accepted when the declared trajectory datum is rkb" in incompatible_kb.text
+
+    unknown_reference_stations = [dict(station) for station in payload["stations"]]
+    unknown_reference_stations[0].update(azimuth_reference="unknown", azimuth_reference_id=None)
+    unknown_reference = await client.post(
+        f"/api/v1/wells/{well_id}/surveys",
+        json={**payload, "name": "Synthetic unknown azimuth reference", "stations": unknown_reference_stations},
+        headers=headers("engineer"),
+    )
+    assert unknown_reference.status_code == 422, unknown_reference.text
+    assert "have unknown azimuth_reference" in unknown_reference.text
+
+    mixed_frame_stations = [dict(station) for station in payload["stations"]]
+    mixed_frame_stations[1]["azimuth_reference_id"] = "SYNTHETIC-OTHER-TRUE-NORTH"
+    mixed_frames = await client.post(
+        f"/api/v1/wells/{well_id}/surveys",
+        json={**payload, "name": "Synthetic mixed azimuth frames", "stations": mixed_frame_stations},
+        headers=headers("engineer"),
+    )
+    assert mixed_frames.status_code == 422, mixed_frames.text
+    assert "incompatible azimuth reference identities" in mixed_frames.text
+
+    explicit_target_without_correction = await client.post(
+        f"/api/v1/wells/{well_id}/surveys",
+        json={
+            **payload,
+            "name": "Synthetic missing signed frame corrections",
+            "target_azimuth_reference": "grid",
+            "target_azimuth_reference_id": "SYNTHETIC-GRID-FRAME-01",
+        },
+        headers=headers("engineer"),
+    )
+    assert explicit_target_without_correction.status_code == 422, explicit_target_without_correction.text
+    assert "requires an explicit signed grid_correction_deg" in explicit_target_without_correction.text
+
+    frame_id = "SYNTHETIC-GRID-FRAME-01"
+    stations = [
+        {**payload["stations"][0], "grid_correction_value": -2.0, "grid_correction_unit": "deg"},
+        {**payload["stations"][1], "grid_correction_value": 1.0, "grid_correction_unit": "deg"},
+    ]
+    payload.update(
+        target_azimuth_reference="grid",
+        target_azimuth_reference_id=frame_id,
+        vertical_section_azimuth_value=90.0,
+        vertical_section_azimuth_unit="deg",
+        vertical_section_azimuth_reference="grid",
+        vertical_section_azimuth_reference_id=frame_id,
+        stations=stations,
+    )
+    created = await client.post(
+        f"/api/v1/wells/{well_id}/surveys",
+        json=payload,
+        headers=headers("engineer", **{"Idempotency-Key": "survey-explicit-frame-zero-kb"}),
+    )
+    assert created.status_code == 201, created.text
+
+    trajectory = created.json()["trajectory"]
+    assert trajectory["datum"] == "rkb"
+    assert trajectory["datum_provenance"] == "engine_input"
+    assert trajectory["azimuth_reference"] == "grid"
+    assert trajectory["azimuth_reference_id"] == frame_id
+    parameters = trajectory["validation"]["calculation_parameters"]
+    assert parameters["kb_elevation_si"] == pytest.approx(0.0)
+    assert parameters["target_azimuth_reference"] == "grid"
+    assert parameters["target_azimuth_reference_id"] == frame_id
+    assert parameters["vertical_section_azimuth_deg"] == pytest.approx(90.0)
+    assert parameters["vertical_section_azimuth_reference"] == "grid"
+    assert parameters["vertical_section_azimuth_reference_id"] == frame_id
+
+    first, second = created.json()["stations"]
+    assert first["input_azimuth_reference"] == second["input_azimuth_reference"] == "true"
+    assert first["input_azimuth_reference_id"] == second["input_azimuth_reference_id"] == "SYNTHETIC-TRUE-NORTH"
+    assert first["grid_correction_deg"] == pytest.approx(-2.0)
+    assert second["grid_correction_deg"] == pytest.approx(1.0)
+    assert first["azimuth_deg"] == pytest.approx(358.0)
+    assert second["azimuth_deg"] == pytest.approx(13.0)
+    assert first["tvdss_si"] == pytest.approx(first["tvd_si"])
+    assert first["raw_source"]["source_values"]["grid_correction_value"] == -2.0
+    assert first["raw_source"]["calculation"]["accepted_engine_input"]["azimuth_reference_id"] == "SYNTHETIC-TRUE-NORTH"
+
+    persisted = await client.get(
+        f"/api/v1/wells/{well_id}/surveys/{trajectory['id']}", headers=headers("engineer")
+    )
+    assert persisted.status_code == 200, persisted.text
+    persisted_trajectory = persisted.json()["trajectory"]
+    persisted_parameters = persisted_trajectory["validation"]["calculation_parameters"]
+    assert persisted_trajectory["azimuth_reference_id"] == frame_id
+    assert persisted_parameters["kb_elevation_si"] == pytest.approx(0.0)
+    assert persisted_parameters["target_azimuth_reference_id"] == frame_id
+    assert persisted_parameters["vertical_section_azimuth_reference_id"] == frame_id
+    assert persisted.json()["stations"][0]["grid_correction_deg"] == pytest.approx(-2.0)

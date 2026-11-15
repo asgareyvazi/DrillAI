@@ -1,7 +1,7 @@
 /** First-class survey review, revision, visualization and export workspace. */
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { drillingApi } from '../../api/endpoints'
 import type {
@@ -307,6 +307,52 @@ function datumProvenanceLabel(value: string, t: Translate): string {
   if (value === 'legacy_unverified') return t('surveys.datumLegacyUnverified')
   if (value === 'unknown') return t('common.unknown')
   return t('surveys.unknownEnumValue', { value })
+}
+
+function frameSummaryValue(reference: unknown, identity: unknown, t: Translate): ReactNode {
+  const referenceCode = typeof reference === 'string' ? reference : 'unknown'
+  const frameId = typeof identity === 'string' && identity.trim() ? identity : t('common.unknown')
+  return (
+    <span dir="auto" className="inline-flex flex-wrap items-center gap-x-1">
+      <span>{referenceLabel(referenceCode, t)}</span>
+      <code dir="ltr" className="break-all text-[11px]">{frameId}</code>
+    </span>
+  )
+}
+
+function surveyReferenceFields(
+  trajectory: SurveyTrajectoryDetail,
+  locale: string,
+  t: Translate,
+): Array<{ label: string; value: ReactNode }> {
+  const validation = asRecord(trajectory.validation)
+  const parameters = asRecord(validation.calculation_parameters)
+  const kbElevation = parameters.kb_elevation_si
+  const verticalAzimuth = parameters.vertical_section_azimuth_deg
+  const verticalReference = parameters.vertical_section_azimuth_reference
+  const verticalReferenceId = parameters.vertical_section_azimuth_reference_id
+  const verticalSectionValue =
+    typeof verticalAzimuth === 'number' && Number.isFinite(verticalAzimuth) ? (
+      <span dir="auto" className="inline-flex flex-wrap items-center gap-x-1">
+        <bdi dir="ltr">{formatNumber(verticalAzimuth, locale, 3)} deg</bdi>
+        {frameSummaryValue(verticalReference, verticalReferenceId, t)}
+      </span>
+    ) : t('surveys.notProvided')
+
+  return [
+    {
+      label: t('surveys.outputAzimuthFrame'),
+      value: frameSummaryValue(trajectory.azimuth_reference, trajectory.azimuth_reference_id, t),
+    },
+    {
+      label: t('surveys.kbElevationCanonical'),
+      value:
+        typeof kbElevation === 'number' && Number.isFinite(kbElevation)
+          ? <bdi dir="ltr">{formatNumber(kbElevation, locale, 3)} m</bdi>
+          : t('surveys.notProvided'),
+    },
+    { label: t('surveys.verticalSectionFrame'), value: verticalSectionValue },
+  ]
 }
 
 function wellborePurposeLabel(value: string, t: Translate): string {
@@ -682,7 +728,10 @@ export default function SurveysWorkspace() {
       if (!isAzimuthReference(station.azimuthReference)) {
         throw new Error(t('surveys.errorUnknownAzimuthFrame', { value: station.azimuthReference }))
       }
-      if (station.azimuthReference !== 'unknown' && !station.azimuthReferenceId.trim()) {
+      if (station.azimuthReference === 'unknown') {
+        throw new Error(t('surveys.errorAzimuthReferenceRequired', { station: stationNumber }))
+      }
+      if (!station.azimuthReferenceId.trim()) {
         throw new Error(t('surveys.errorAzimuthFrame', { station: stationNumber }))
       }
       return {
@@ -702,6 +751,12 @@ export default function SurveysWorkspace() {
         ...(formBase && station.sourceStationId ? { source_station_id: station.sourceStationId } : {}),
       }
     })
+  }
+
+  function validateDatumInputs() {
+    if (datum !== 'rkb' && calculation.kbElevation.trim()) {
+      throw new Error(t('surveys.errorKbDatum'))
+    }
   }
 
   function formHeaders() {
@@ -730,6 +785,7 @@ export default function SurveysWorkspace() {
         throw new Error(t('surveys.errorSeriesIdentity'))
       }
       if (formBase && formBase.datum !== datum) throw new Error(t('surveys.errorDatumChange'))
+      validateDatumInputs()
       const payload: SurveyCreatePayload = {
         ...formHeaders(),
         expected_current_version: formBase?.version ?? 0,
@@ -751,6 +807,7 @@ export default function SurveysWorkspace() {
       if (selectedEligibleRecordIds.length < 2) throw new Error(t('surveys.errorReviewedRecords'))
       if (!formName.trim()) throw new Error(t('surveys.errorSeriesName'))
       if (!reason.trim()) throw new Error(t('surveys.errorRevisionReason'))
+      validateDatumInputs()
       const base = currentImportBase
       if (base && base.datum !== datum) throw new Error(t('surveys.errorImportDatum'))
       const payload: SurveyImportPayload = {
@@ -786,26 +843,32 @@ export default function SurveysWorkspace() {
           </select>
         </Field>
         <div className="grid grid-cols-[1fr_5rem] gap-2">
-          <Field label={t('surveys.kbElevation')}>
-            <input type="number" step="any" value={calculation.kbElevation} onChange={(event) => setCalculation((old) => ({ ...old, kbElevation: event.target.value }))} className={inputClass} />
-          </Field>
+          <div>
+            <Field label={t('surveys.kbElevation')}>
+              <input type="number" step="any" value={calculation.kbElevation} onChange={(event) => setCalculation((old) => ({ ...old, kbElevation: event.target.value }))} className={inputClass} />
+            </Field>
+            <p className="mt-1 text-[11px] text-graphite-500">{t('surveys.kbElevationHint')}</p>
+          </div>
           <Field label={t('surveys.unit')}>
             <select value={calculation.kbElevationUnit} onChange={(event) => setCalculation((old) => ({ ...old, kbElevationUnit: event.target.value as 'm' | 'ft' }))} className={inputClass}>
               <option value="m">{unitOptionLabel('m', t)}</option><option value="ft">{unitOptionLabel('ft', t)}</option>
             </select>
           </Field>
         </div>
-        <Field label={t('surveys.targetFrame')}>
-          <select value={calculation.targetReference} onChange={(event) => setCalculation((old) => ({ ...old, targetReference: event.target.value }))} className={inputClass}>
+        <div>
+          <Field label={t('surveys.targetFrame')}>
+            <select value={calculation.targetReference} onChange={(event) => setCalculation((old) => ({ ...old, targetReference: event.target.value }))} className={inputClass}>
             <option value="">{t('surveys.noTargetConversion')}</option>
             {calculation.targetReference && !isTargetReference(calculation.targetReference) && (
               <option value={calculation.targetReference} dir="auto">{t('surveys.unknownEnumValue', { value: calculation.targetReference })}</option>
             )}
             <option value="grid">{t('surveys.referenceGrid')}</option>
             <option value="true">{t('surveys.referenceTrue')}</option>
-            <option value="magnetic">{t('surveys.referenceMagnetic')}</option>
-          </select>
-        </Field>
+              <option value="magnetic">{t('surveys.referenceMagnetic')}</option>
+            </select>
+          </Field>
+          <p className="mt-1 text-[11px] text-graphite-500">{t('surveys.azimuthConversionHint')}</p>
+        </div>
         {calculation.targetReference && (
           <Field label={t('surveys.frameIdentity')}>
             <input value={calculation.targetReferenceId} onChange={(event) => setCalculation((old) => ({ ...old, targetReferenceId: event.target.value }))} className={inputClass} />
@@ -1049,21 +1112,31 @@ export default function SurveysWorkspace() {
                   {exportMutation.error && <ErrorState error={exportMutation.error} />}
                   <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
                     {[
-                      [t('surveys.datum'), `${datumLabel(detailQuery.data.trajectory.datum, t)} · ${datumProvenanceLabel(detailQuery.data.trajectory.datum_provenance, t)}`],
-                      [t('surveys.calculationState'), calculationStateLabel(detailQuery.data.trajectory.calculation_state, t)],
-                      [t('surveys.acceptance'), engineeringAcceptanceLabel(detailQuery.data.trajectory.engineering_acceptance, t)],
-                      [t('surveys.sourceDocument'), detailQuery.data.trajectory.source_document_id ?? t('common.unknown')],
-                      [t('surveys.engine'), `${detailQuery.data.trajectory.engine_key ?? t('common.unknown')} · ${detailQuery.data.trajectory.engine_version ?? t('common.unknown')}`],
-                      [t('surveys.inputsHash'), detailQuery.data.trajectory.inputs_hash ?? t('common.unknown')],
-                      [t('surveys.outputsHash'), detailQuery.data.trajectory.outputs_hash ?? t('common.unknown')],
-                      [t('surveys.revisionReason'), detailQuery.data.trajectory.revision_reason ?? t('common.unknown')],
-                    ].map(([label, value]) => (
+                      {
+                        label: t('surveys.datum'),
+                        value: `${datumLabel(detailQuery.data.trajectory.datum, t)} · ${datumProvenanceLabel(detailQuery.data.trajectory.datum_provenance, t)}`,
+                      },
+                      ...surveyReferenceFields(detailQuery.data.trajectory, locale, t),
+                      { label: t('surveys.calculationState'), value: calculationStateLabel(detailQuery.data.trajectory.calculation_state, t) },
+                      { label: t('surveys.acceptance'), value: engineeringAcceptanceLabel(detailQuery.data.trajectory.engineering_acceptance, t) },
+                      {
+                        label: t('surveys.sourceDocument'),
+                        value: detailQuery.data.trajectory.source_document_id
+                          ? <code dir="ltr" className="break-all">{detailQuery.data.trajectory.source_document_id}</code>
+                          : t('common.unknown'),
+                      },
+                      { label: t('surveys.engine'), value: `${detailQuery.data.trajectory.engine_key ?? t('common.unknown')} · ${detailQuery.data.trajectory.engine_version ?? t('common.unknown')}` },
+                      { label: t('surveys.inputsHash'), value: <code dir="ltr" className="break-all">{detailQuery.data.trajectory.inputs_hash ?? t('common.unknown')}</code> },
+                      { label: t('surveys.outputsHash'), value: <code dir="ltr" className="break-all">{detailQuery.data.trajectory.outputs_hash ?? t('common.unknown')}</code> },
+                      { label: t('surveys.revisionReason'), value: detailQuery.data.trajectory.revision_reason ?? t('common.unknown') },
+                    ].map(({ label, value }) => (
                       <div key={label} className="min-w-0 rounded border border-graphite-100 p-2 dark:border-graphite-800">
                         <div className="text-[10px] uppercase text-graphite-500">{label}</div>
                         <div dir="auto" className="break-words text-xs">{value}</div>
                       </div>
                     ))}
                   </div>
+                  <p className="mt-2 text-[11px] text-graphite-500">{t('surveys.frameSafetyNote')}</p>
                   <p className="mt-3 text-[11px] text-warning">{t('surveys.notEstablished')}</p>
                   {detailQuery.data.trajectory.warnings.length > 0 && (
                     <ul className="mt-2 list-disc ps-4 text-[11px] text-warning">{detailQuery.data.trajectory.warnings.map((warning, index) => <li key={index} dir="auto">{surveyWarningLabel(warning, t, locale)}</li>)}</ul>
@@ -1093,8 +1166,22 @@ export default function SurveysWorkspace() {
                         { key: 'index', header: t('surveys.stationNumber'), render: (row) => formatNumber(row.station_index + 1, locale, 0), align: 'end' },
                         { key: 'md', header: <UnitHeading label={t('surveys.md')} unit="m" />, render: (row) => fmt(row.md_si, locale), align: 'end' },
                         { key: 'inclination', header: <UnitHeading label={t('surveys.inclination')} unit="deg" />, render: (row) => fmt(row.inclination_deg, locale), align: 'end' },
-                        { key: 'input-azimuth', header: <UnitHeading label={t('surveys.inputAzimuth')} unit="deg" />, render: (row) => <span dir="auto">{fmt(row.input_azimuth_deg, locale)} · {referenceLabel(row.input_azimuth_reference ?? 'unknown', t)}</span>, align: 'end' },
+                        {
+                          key: 'input-azimuth',
+                          header: <UnitHeading label={t('surveys.inputAzimuth')} unit="deg" />,
+                          render: (row) => (
+                            <span dir="auto">
+                              {fmt(row.input_azimuth_deg, locale)} · {frameSummaryValue(
+                                row.input_azimuth_reference ?? 'unknown',
+                                row.input_azimuth_reference_id,
+                                t,
+                              )}
+                            </span>
+                          ),
+                          align: 'end',
+                        },
                         { key: 'azimuth', header: <UnitHeading label={t('surveys.azimuth')} unit="deg" />, render: (row) => fmt(row.azimuth_deg, locale), align: 'end' },
+                        { key: 'grid-correction', header: <UnitHeading label={t('surveys.appliedGridCorrection')} unit="deg" />, render: (row) => fmt(row.grid_correction_deg, locale), align: 'end' },
                         { key: 'tvd', header: <UnitHeading label={t('surveys.tvd')} unit="m" />, render: (row) => fmt(row.tvd_si, locale), align: 'end' },
                         { key: 'north', header: <UnitHeading label={t('surveys.north')} unit="m" />, render: (row) => fmt(row.ns_si, locale), align: 'end' },
                         { key: 'east', header: <UnitHeading label={t('surveys.east')} unit="m" />, render: (row) => fmt(row.ew_si, locale), align: 'end' },
