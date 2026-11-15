@@ -340,6 +340,13 @@ def test_cp32_the_certification_jobs_reject_skips(tmp_path: Path) -> None:
     assert spec is not None and spec.loader is not None
     diagnostics = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(diagnostics)
+    # Pytest's verbose JUnit run wraps its summary in '=' banners; the inventory verifier must parse
+    # both this standard format and the unwrapped quiet format while still requiring a duration.
+    _, verbose_counts = diagnostics.parse_summary(
+        "================ 11 passed, 2 warnings in 4.25s (0:00:04) ================\n"
+    )
+    _, quiet_counts = diagnostics.parse_summary("11 passed, 2 warnings in 4.25s\n")
+    assert verbose_counts == quiet_counts == {"passed": 11, "warnings": 2}
     junit_path = tmp_path / "pytest.xml"
     junit_path.write_text(
         "<testsuites><testsuite><testcase file='tests/db/test_scope.py' "

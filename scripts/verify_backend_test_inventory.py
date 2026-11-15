@@ -24,7 +24,10 @@ INVENTORY_PATH = ROOT / "ci" / "test-inventory.json"
 ANSI_RE = re.compile(r"\x1b\[[0-9;]*[a-zA-Z]")
 NODEID_RE = re.compile(r"^tests[\\/].+\.py::[^\s]+$")
 SUMMARY_LINE_RE = re.compile(
-    r"^\s*\d+\s+(?:passed|failed|errors?|skipped|deselected|xfailed|xpassed)\b.*\bin\s+\S+"
+    # Pytest's verbose summary is banner-wrapped (``==== 10 passed in 1.2s ====``), while quiet
+    # output starts directly with the count. Accept both formats without relaxing the required
+    # duration, exact platform totals, or zero-exit checks below.
+    r"^\s*(?:=+\s*)?\d+\s+(?:passed|failed|errors?|skipped|deselected|xfailed|xpassed)\b.*\bin\s+\S+"
 )
 STATUS_RE = re.compile(r"(\d+)\s+(passed|failed|errors?|skipped|deselected|xfailed|xpassed|warnings?)\b")
 SKIP_LINE_RE = re.compile(r"^\s*SKIPPED\s+\[(\d+)\]\s+(.+):(\d+):\s*(.*?)\s*$")
