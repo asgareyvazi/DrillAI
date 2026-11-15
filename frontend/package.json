@@ -14,6 +14,7 @@
     "test:watch": "vitest",
     "e2e": "node scripts/run-e2e.mjs",
     "e2e:cp131": "node scripts/run-e2e.mjs --config=playwright.cp131.config.ts",
+    "e2e:cp150": "node scripts/run-e2e.mjs --config=playwright.cp150.config.ts",
     "e2e:verify-shape": "node scripts/verify-e2e-shape.mjs",
     "browser:prepare": "node scripts/prepare-chromium.mjs"
   },

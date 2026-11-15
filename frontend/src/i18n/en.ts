@@ -1444,6 +1444,13 @@ export const en = {
     notificationAcceptedAt: 'Accepted at',
     notificationAcceptance: 'Acceptance evidence',
     notificationProviderId: 'Provider message ID',
+    notificationReceiptStatus: 'Recipient delivery receipt',
+    notificationReceiptStates: {
+      unknown: 'No verified receipt',
+      sent: 'Sent (verified provider receipt)',
+      delivered: 'Delivered (verified provider receipt)',
+      bounced: 'Bounced (verified provider receipt)',
+    },
     notificationLastError: 'Last error code',
     notificationRetry: 'Review retry',
     notificationRetryTitle: 'Manual notification requeue',

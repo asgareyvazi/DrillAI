@@ -1,6 +1,8 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
+import type { NotificationSummary } from '../../api/types'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { I18nProvider } from '../../i18n'
 import PlatformPage from './PlatformPage'
@@ -94,6 +96,7 @@ describe('PlatformPage OCR runtime status', () => {
       accepted_at: null,
       acceptance_evidence: null,
       provider_message_id: null,
+      recipient_delivery_status: 'unknown',
       delivery_confirmed: false,
       external_provider_verified: false,
       recipient_present: true,
@@ -109,6 +112,7 @@ describe('PlatformPage OCR runtime status', () => {
     renderPlatformPage()
 
     expect(await screen.findByText('Manual reconciliation required')).toBeInTheDocument()
+    expect(screen.getByText('No verified receipt')).toBeInTheDocument()
     expect(screen.getByText('Transport acceptance is not recipient delivery.')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Review retry' }))
     const reason = screen.getByLabelText('Audit reason (10–500 characters)')
@@ -136,5 +140,81 @@ describe('PlatformPage OCR runtime status', () => {
     expect(screen.getByText('python -m drillai.ingestion.ocr_runtime --self-test')).toHaveAttribute('dir', 'ltr')
     expect(screen.getByText('برای بررسی اینکه Tesseract متنی برمی‌گرداند، آزمون مصنوعی محلی را در همین محیط backend اجرا کنید. این آزمون معیار سنجش دقت نیست.')).toBeInTheDocument()
     expect(document.documentElement.dir).toBe('rtl')
+  })
+
+  it('keeps receipt semantics, accessible requeue controls, RTL/LTR text, and API readback distinct', async () => {
+    localStorage.setItem('drillai.locale', 'fa')
+    const user = userEvent.setup()
+    let persistedRow: NotificationSummary = {
+      id: 'obm_cp149_ambiguous_1',
+      channel: 'webhook',
+      status: 'reconciliation_required',
+      attempts: 2,
+      max_attempts: 3,
+      next_attempt_at: null,
+      accepted_at: '2026-10-19T11:50:00Z',
+      acceptance_evidence: 'http_2xx',
+      provider_message_id: 'http-msg-cp149-1',
+      recipient_delivery_status: 'unknown',
+      delivery_confirmed: false,
+      external_provider_verified: false,
+      recipient_present: true,
+      workflow_run_id: null,
+      well_id: null,
+      last_error_code: 'stale_sending_ambiguous',
+      last_attempt_at: '2026-10-19T11:55:00Z',
+      created_at: '2026-10-19T11:45:00Z',
+    }
+    api.notificationOutbox.mockImplementation(async () => ({ items: [{ ...persistedRow }], limit: 50 }))
+    api.identity.mockResolvedValue({ permissions: ['integration.manage'], max_action_level: 'L4' })
+    api.retryNotification.mockImplementation(async () => {
+      persistedRow = {
+        ...persistedRow,
+        status: 'queued',
+        attempts: 0,
+        accepted_at: null,
+        acceptance_evidence: null,
+        provider_message_id: null,
+        last_error_code: null,
+      }
+      return { requeued: true, item: { ...persistedRow } }
+    })
+    renderPlatformPage()
+
+    expect(await screen.findByText('نیازمند تطبیق دستی')).toBeInTheDocument()
+    expect(screen.getByRole('columnheader', { name: 'رسید تحویل به گیرنده' })).toBeInTheDocument()
+    expect(screen.getByText('رسید تأییدشده‌ای در دست نیست')).toBeInTheDocument()
+    expect(screen.getByText('پذیرش انتقال‌دهنده به معنی تحویل به گیرنده نیست.')).toBeInTheDocument()
+    await waitFor(() => expect(document.documentElement.dir).toBe('rtl'))
+    expect(document.documentElement.lang).toBe('fa')
+    const dataRow = screen.getByRole('row', { name: /obm_cp149_ambiguous_1/ })
+    expect(dataRow.querySelector('code[dir="ltr"]')).toHaveTextContent('obm_cp149_ambiguous_1')
+    expect(dataRow.querySelectorAll('[dir="ltr"]').length).toBeGreaterThanOrEqual(3)
+
+    const reviewButton = screen.getByRole('button', { name: 'بازبینی تلاش مجدد' })
+    reviewButton.focus()
+    await user.keyboard('{Enter}')
+    const retryRegion = screen.getByRole('region', { name: /قرار دادن دستی اعلان در صف/ })
+    expect(retryRegion).toBeInTheDocument()
+    const reason = screen.getByRole('textbox', { name: 'دلیل ثبت در گزارش (۱۰ تا ۵۰۰ نویسه)' })
+    const duplicateRisk = screen.getByRole('checkbox', {
+      name: 'می‌پذیرم که تلاش قبلی ممکن است به انتقال‌دهنده رسیده باشد و تلاش مجدد می‌تواند پیام تکراری ایجاد کند.',
+    })
+    const confirm = screen.getByRole('button', { name: 'پذیرش خطر و قرار دادن در صف' })
+    expect(confirm).toBeDisabled()
+    await user.type(reason, 'بررسی دستی وضعیت مبهم')
+    expect(confirm).toBeDisabled()
+    await user.click(duplicateRisk)
+    expect(confirm).toBeEnabled()
+    await user.click(confirm)
+
+    await waitFor(() => expect(api.retryNotification).toHaveBeenCalledWith(
+      'obm_cp149_ambiguous_1',
+      { reason: 'بررسی دستی وضعیت مبهم', acknowledge_duplicate_risk: true },
+    ))
+    expect(await screen.findByText('در صف')).toBeInTheDocument()
+    expect(screen.getByText('رسید تأییدشده‌ای در دست نیست')).toBeInTheDocument()
+    expect(api.notificationOutbox.mock.calls.length).toBeGreaterThanOrEqual(2)
+    expect(persistedRow.status).toBe('queued')
   })
 })

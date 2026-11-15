@@ -19,7 +19,7 @@ import re
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field, field_validator
+from pydantic import Field, ValidationInfo, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
@@ -169,7 +169,7 @@ class Settings(BaseSettings):
     scheduler_enabled: bool = True
     scheduler_poll_seconds: float = 5.0
     notification_worker_enabled: bool = False
-    notification_poll_seconds: float = Field(default=5.0, ge=0.2, le=60.0)
+    notification_poll_seconds: float = Field(default=5.0, ge=0.2, le=60.0, allow_inf_nan=False)
     notification_batch_size: int = Field(default=50, ge=1, le=100)
 
     # ------------------------------------------------------------------ connectors
@@ -198,6 +198,8 @@ class Settings(BaseSettings):
     e2e_faults: bool = False
 
     @field_validator(
+        "notification_poll_seconds",
+        "notification_batch_size",
         "connector_worker_lease_seconds",
         "connector_worker_poll_seconds",
         "connector_worker_max_concurrency",
@@ -205,9 +207,17 @@ class Settings(BaseSettings):
         mode="before",
     )
     @classmethod
-    def _reject_boolean_connector_worker_limits(cls, value: object) -> object:
+    def _reject_boolean_worker_limits(cls, value: object, info: ValidationInfo) -> object:
         if isinstance(value, bool):
-            raise ValueError("connector worker numeric limits must not be booleans")
+            raise ValueError("worker numeric limits must not be booleans")
+        if info.field_name in {
+            "notification_batch_size",
+            "connector_worker_max_concurrency",
+            "connector_run_retention_limit",
+        } and isinstance(value, float):
+            # Pydantic normally coerces integral floats such as 1.0 to int; resource caps use
+            # integer inputs only. Numeric strings from environment variables remain supported.
+            raise ValueError("worker integer limits must not be supplied as floats")
         return value
 
     @field_validator("database_url")

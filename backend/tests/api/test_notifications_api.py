@@ -80,6 +80,50 @@ async def test_notification_outbox_redacts_content_and_enforces_tenant_scope(cli
 
 
 @pytest.mark.asyncio
+async def test_notification_outbox_separates_transport_state_from_recipient_receipt(client, db, api_settings):
+    accepted_at = dt.datetime(2026, 10, 19, 12, 0, tzinfo=UTC)
+    lifecycle_fields = {
+        "queued": {},
+        "sending": {},
+        "accepted": {
+            "accepted_at": accepted_at,
+            "acceptance_evidence": "local_in_app_outbox",
+        },
+        # Legacy sent rows have no receipt provenance and must remain unconfirmed.
+        "sent": {"sent_at": accepted_at},
+        "failed_retryable": {},
+        "failed_terminal": {},
+        "dead_letter": {},
+        "reconciliation_required": {},
+    }
+    async with db.session() as session:
+        org = await ensure_org(session, api_settings.dev_org_slug)
+        message_ids = {}
+        for status, fields in lifecycle_fields.items():
+            row = OutboundMessage(
+                org_id=org.id,
+                channel="in_app",
+                recipient=f"user:{status}",
+                status=status,
+                **fields,
+            )
+            session.add(row)
+            await session.flush()
+            message_ids[status] = row.id
+
+    response = await client.get("/api/v1/platform/notifications?limit=100", headers=headers("admin"))
+    assert response.status_code == 200, response.text
+    items_by_id = {item["id"]: item for item in response.json()["items"]}
+    assert set(message_ids.values()).issubset(items_by_id)
+    for status, message_id in message_ids.items():
+        item = items_by_id[message_id]
+        assert item["status"] == status
+        assert item["recipient_delivery_status"] == "unknown"
+        assert item["delivery_confirmed"] is False
+        assert item["external_provider_verified"] is False
+
+
+@pytest.mark.asyncio
 async def test_notification_manual_requeue_requires_ack_and_audits_without_payload(client, db, api_settings):
     async with db.session() as session:
         org = await ensure_org(session, api_settings.dev_org_slug)

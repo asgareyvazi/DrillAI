@@ -12,6 +12,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import datetime as dt
+import math
 from typing import Any
 
 from drillai.core.clock import utc_now
@@ -36,12 +37,18 @@ class NotificationWorker:
         batch_size: int = 50,
         dispatcher: NotificationDispatcher | None = None,
     ) -> None:
-        if not 0.2 <= poll_seconds <= 60.0:
-            raise ValueError("notification poll interval must be between 0.2 and 60 seconds")
-        if not 1 <= batch_size <= 100:
-            raise ValueError("notification batch size must be between 1 and 100")
+        if isinstance(poll_seconds, bool):
+            raise ValueError("notification poll interval must be a finite number between 0.2 and 60 seconds")
+        try:
+            normalized_poll_seconds = float(poll_seconds)
+        except (TypeError, ValueError, OverflowError) as exc:
+            raise ValueError("notification poll interval must be a finite number between 0.2 and 60 seconds") from exc
+        if not math.isfinite(normalized_poll_seconds) or not 0.2 <= normalized_poll_seconds <= 60.0:
+            raise ValueError("notification poll interval must be a finite number between 0.2 and 60 seconds")
+        if isinstance(batch_size, bool) or not isinstance(batch_size, int) or not 1 <= batch_size <= 100:
+            raise ValueError("notification batch size must be an integer between 1 and 100")
         self.database = database
-        self.poll_seconds = poll_seconds
+        self.poll_seconds = normalized_poll_seconds
         self.batch_size = batch_size
         self.dispatcher = dispatcher
         self.cycles_completed = 0

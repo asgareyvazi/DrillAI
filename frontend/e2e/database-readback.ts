@@ -78,7 +78,23 @@ export function readDailyReportDatabaseSnapshot(
   wellboreId: string,
   revisionNumber?: number,
 ): DailyReportDatabaseSnapshot {
-  const databaseUrl = fixtures().database_url
+  return readDailyReportDatabaseSnapshotFromDatabase(
+    fixtures().database_url,
+    reportId,
+    wellId,
+    wellboreId,
+    revisionNumber,
+  )
+}
+
+/** Use the same restricted read-only verifier with a non-default isolated E2E database URL. */
+export function readDailyReportDatabaseSnapshotFromDatabase(
+  databaseUrl: string,
+  reportId: string,
+  wellId: string,
+  wellboreId: string,
+  revisionNumber?: number,
+): DailyReportDatabaseSnapshot {
   const script = path.join(repoRoot, 'scripts', 'verify_daily_report_db_readback.py')
   const args = [script, databaseUrl, reportId, wellId, wellboreId]
   if (revisionNumber !== undefined) {

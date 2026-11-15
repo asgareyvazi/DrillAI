@@ -19,6 +19,13 @@ function statusTone(status: NotificationSummary['status']): 'neutral' | 'ok' | '
   return 'neutral'
 }
 
+function receiptTone(status: NotificationSummary['recipient_delivery_status']): 'neutral' | 'ok' | 'warning' | 'danger' {
+  if (status === 'delivered') return 'ok'
+  if (status === 'bounced') return 'danger'
+  if (status === 'sent') return 'warning'
+  return 'neutral'
+}
+
 export default function NotificationOutboxPanel() {
   const { t, locale } = useI18n()
   const queryClient = useQueryClient()
@@ -142,6 +149,15 @@ export default function NotificationOutboxPanel() {
                 render: (row) => row.provider_message_id
                   ? <code className="text-xs" dir="ltr">{row.provider_message_id}</code>
                   : '—',
+              },
+              {
+                key: 'recipient_delivery_status',
+                header: t('platform.notificationReceiptStatus'),
+                render: (row) => (
+                  <Badge tone={receiptTone(row.recipient_delivery_status)}>
+                    {t(`platform.notificationReceiptStates.${row.recipient_delivery_status}`)}
+                  </Badge>
+                ),
               },
               {
                 key: 'last_error_code',

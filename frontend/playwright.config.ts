@@ -86,7 +86,7 @@ export default defineConfig({
     {
       // The product's own journeys, against the development-identity service.
       name: 'chromium',
-      testIgnore: /error-(faults|auth)\.spec\.ts/,
+      testIgnore: /(?:error-(?:faults|auth)|cp150-two-well-pilot)\.spec\.ts/,
       use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 }, baseURL: WEB_URL },
     },
     {

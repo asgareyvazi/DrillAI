@@ -588,13 +588,30 @@ jobs:
             throw "scripts/verify_stack.py failed on Windows"
           }
 
-      - name: External vendor interop runner on Windows (scripts/verify_external_vendor_interop.py)
+      - name: External vendor interop runner on Windows (offline harness only)
         shell: pwsh
         run: |
+          # This certification job is not an operator-approved vendor test. Clear any runner-level
+          # endpoint or credential variables so the opt-in mode must report zero external calls.
+          foreach ($name in @(
+            "DRILLAI_EXTERNAL_WITSML_URL",
+            "DRILLAI_EXTERNAL_WITSML_USERNAME",
+            "DRILLAI_EXTERNAL_WITSML_PASSWORD",
+            "DRILLAI_EXTERNAL_ETP_URL",
+            "DRILLAI_EXTERNAL_ETP_TOKEN"
+          )) { Remove-Item "Env:$name" -ErrorAction SilentlyContinue }
           .\backend\.venv\Scripts\python.exe scripts/verify_external_vendor_interop.py --mode harness
           if ($LASTEXITCODE -ne 0) { throw "verify_external_vendor_interop.py --mode harness failed on Windows" }
-          .\backend\.venv\Scripts\python.exe scripts/verify_external_vendor_interop.py --mode external
+          $externalOutput = & .\backend\.venv\Scripts\python.exe scripts/verify_external_vendor_interop.py --mode external
           if ($LASTEXITCODE -ne 0) { throw "verify_external_vendor_interop.py --mode external failed on Windows" }
+          $externalReport = ($externalOutput -join [Environment]::NewLine) | ConvertFrom-Json
+          if ($externalReport.external_gate_status -ne "BLOCKED_BY_EXTERNAL_EVIDENCE" -or
+              $externalReport.external_vendor_verified -ne $false -or
+              $externalReport.network_calls_made -ne 0 -or
+              $externalReport.external_vendor_probe.network_calls_made -ne 0) {
+            throw "Windows CI must not make external vendor calls; the live vendor gate remains blocked"
+          }
+          Write-Output "::notice title=External vendor interop gate::harness passed; external evidence blocked; network_calls_made=0"
 
       - name: Verify the reviewed E2E inventory (shared manifest) (Windows)
         working-directory: frontend

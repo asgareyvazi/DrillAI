@@ -1440,6 +1440,13 @@ export const fa = {
     notificationAcceptedAt: 'زمان پذیرش',
     notificationAcceptance: 'شاهد پذیرش',
     notificationProviderId: 'شناسهٔ پیام فراهم‌کننده',
+    notificationReceiptStatus: 'رسید تحویل به گیرنده',
+    notificationReceiptStates: {
+      unknown: 'رسید تأییدشده‌ای در دست نیست',
+      sent: 'ارسال‌شده طبق رسید تأییدشدهٔ فراهم‌کننده',
+      delivered: 'تحویل‌شده طبق رسید تأییدشدهٔ فراهم‌کننده',
+      bounced: 'بازگشت‌خورده طبق رسید تأییدشدهٔ فراهم‌کننده',
+    },
     notificationLastError: 'کد آخرین خطا',
     notificationRetry: 'بازبینی تلاش مجدد',
     notificationRetryTitle: 'قرار دادن دستی اعلان در صف',

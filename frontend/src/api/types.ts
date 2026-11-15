@@ -2522,6 +2522,8 @@ export type NotificationDeliveryStatus =
   | 'dead_letter'
   | 'reconciliation_required'
 
+export type NotificationRecipientDeliveryStatus = 'unknown' | 'sent' | 'delivered' | 'bounced'
+
 export interface NotificationSummary {
   id: string
   channel: string
@@ -2532,6 +2534,7 @@ export interface NotificationSummary {
   accepted_at: string | null
   acceptance_evidence: 'http_2xx' | 'smtp_server_accepted' | 'local_in_app_outbox' | null
   provider_message_id: string | null
+  recipient_delivery_status: NotificationRecipientDeliveryStatus
   delivery_confirmed: false
   external_provider_verified: boolean
   recipient_present: boolean

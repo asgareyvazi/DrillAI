@@ -22,6 +22,7 @@ from __future__ import annotations
 import asyncio
 import json
 import math
+import os
 import re
 import shutil
 import sys
@@ -31,6 +32,7 @@ from pathlib import Path
 
 import httpx
 import pytest
+import yaml
 from alembic import command
 from alembic.config import Config
 from sqlalchemy import select
@@ -933,6 +935,27 @@ async def test_cp16_09_external_vendor_interoperability_contract_and_unsupported
     """Verify scripts/verify_external_vendor_interop.py in both harness and external modes."""
     script_path = REPO_ROOT / "scripts" / "verify_external_vendor_interop.py"
     assert script_path.is_file()
+    offline_environment = os.environ.copy()
+    external_variables = (
+        "DRILLAI_EXTERNAL_WITSML_URL",
+        "DRILLAI_EXTERNAL_WITSML_USERNAME",
+        "DRILLAI_EXTERNAL_WITSML_PASSWORD",
+        "DRILLAI_EXTERNAL_ETP_URL",
+        "DRILLAI_EXTERNAL_ETP_TOKEN",
+    )
+    for name in external_variables:
+        offline_environment.pop(name, None)
+
+    # CI is not an authorized operator environment. Its Windows interop step must clear every
+    # opt-in endpoint/credential and fail unless the external probe reports zero network calls.
+    workflow = yaml.safe_load((REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8"))
+    windows_steps = workflow["jobs"]["windows-certification"]["steps"]
+    interop_step = next(step for step in windows_steps if "External vendor interop" in step.get("name", ""))
+    assert "offline harness only" in interop_step["name"]
+    for name in external_variables:
+        assert name in interop_step["run"]
+    assert "network_calls_made -ne 0" in interop_step["run"]
+    assert "BLOCKED_BY_EXTERNAL_EVIDENCE" in interop_step["run"]
 
     # 1. Offline harness mode
     proc_harness = await asyncio.create_subprocess_exec(
@@ -942,6 +965,7 @@ async def test_cp16_09_external_vendor_interoperability_contract_and_unsupported
         "harness",
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
+        env=offline_environment,
     )
     stdout_h, stderr_h = await proc_harness.communicate()
     assert proc_harness.returncode == 0, stderr_h.decode()
@@ -962,6 +986,7 @@ async def test_cp16_09_external_vendor_interoperability_contract_and_unsupported
         "external",
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
+        env=offline_environment,
     )
     stdout_e, stderr_e = await proc_ext.communicate()
     assert proc_ext.returncode == 0, stderr_e.decode()
@@ -1016,26 +1041,39 @@ def test_cp16_10_documentation_and_contract_consistency_guard():
     assert PROTOCOL_PROFILE_SPECS["etp.1.2.binary_ws"].production_supported is True
     assert PROTOCOL_PROFILE_SPECS["witsml.1.4.1.1.soap_http"].production_supported is True
 
-    # 4. E2E spec file count and backend test file count must match README.md and docs/FRONTEND_TESTING.md
-    e2e_spec_files = sorted((REPO_ROOT / "frontend" / "e2e").glob("*.spec.ts"))
-    assert len(e2e_spec_files) == 20
+    # 4. The standard E2E inventory is the 20-spec suite. CP150 is deliberately isolated behind
+    # its own Playwright config, so count and validate it separately instead of silently treating
+    # it as part of the 128-case default suite.
+    e2e_dir = REPO_ROOT / "frontend" / "e2e"
+    e2e_spec_files = sorted(e2e_dir.glob("*.spec.ts"))
+    cp150_spec_name = "cp150-two-well-pilot.spec.ts"
+    cp150_spec = e2e_dir / cp150_spec_name
+    standard_spec_names = [path.name for path in e2e_spec_files if path.name != cp150_spec_name]
+    e2e_inventory = json.loads((REPO_ROOT / "ci" / "test-inventory.json").read_text(encoding="utf-8"))["e2e"]
+    assert len(e2e_spec_files) == 21
+    assert cp150_spec.is_file()
+    assert standard_spec_names == e2e_inventory["spec_files"]
+    assert len(standard_spec_names) == e2e_inventory["files"] == 20
+    standard_playwright = (REPO_ROOT / "frontend" / "playwright.config.ts").read_text(encoding="utf-8")
+    cp150_playwright = (REPO_ROOT / "frontend" / "playwright.cp150.config.ts").read_text(encoding="utf-8")
+    assert re.search(r"testIgnore\s*:\s*/[^/\n]*cp150-two-well-pilot[^/\n]*/", standard_playwright)
+    assert "testMatch: /cp150-two-well-pilot\\.spec\\.ts/" in cp150_playwright
     backend_test_files = sorted((REPO_ROOT / "backend" / "tests").rglob("test_*.py"))
     assert len(backend_test_files) >= 78
     assert f"{len(backend_test_files)} files" in readme_text or f"{len(backend_test_files)} test files" in readme_text
 
-    # The two current backend totals in README are either explicitly identified as manifest
-    # expectations or verified observations. In either case, the PostgreSQL-enabled and
-    # PostgreSQL-excluded splits must reconcile to the same reviewed inventory. A stale count makes
-    # the claims disagree while each still looks plausible in isolation, which is exactly how the
-    # previous "1,097 passed, 7 skipped" claim drifted away from the real split. Every term is
-    # counted, because a suite that also has unconditional skips cannot be reconciled by comparing
-    # the passed counts alone.
+    # The README marks the current manifest totals explicitly; older phase counts remain historical
+    # and are intentionally not interpreted as the current backend inventory. Reconcile the two
+    # current PostgreSQL-enabled/default totals (including skips) to the reviewed manifest.
+    current_totals_marker = "Current CP150 backend manifest totals:"
+    assert current_totals_marker in readme_text, "README.md must identify the current backend manifest totals"
+    current_totals_line = readme_text.split(current_totals_marker, 1)[1].split("\n", 1)[0]
     backend_totals = re.findall(
-        r"\*\*([\d,]+) passed(?:, ([\d,]+) skipped)?(?:, ([\d,]+) deselected)?\*\*", readme_text
+        r"\*\*([\d,]+) passed(?:, ([\d,]+) skipped)?(?:, ([\d,]+) deselected)?\*\*",
+        current_totals_line,
     )
     assert len(backend_totals) == 2, (
-        "README.md must quote exactly two current backend totals: PostgreSQL enabled and "
-        "the PostgreSQL-excluded default run"
+        "README.md must quote the current PostgreSQL-enabled and PostgreSQL-excluded manifest totals"
     )
     parsed_totals = {
         tuple(int(value.replace(",", "")) if value else 0 for value in (passed, skipped, deselected))
@@ -1058,8 +1096,8 @@ def test_cp16_10_documentation_and_contract_consistency_guard():
     )
 
     assert "128 tests / 20 files" in readme_text
-    assert "405 tests in 40 files" in readme_text
+    assert "406 tests across 40 files" in readme_text
     assert "128 tests / 20 files" in fe_testing_text
-    assert "405 tests in 40 files" in fe_testing_text
+    assert "406 tests across 40 files" in fe_testing_text
     assert "42" in fe_testing_text
 

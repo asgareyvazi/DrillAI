@@ -7,9 +7,11 @@ import datetime as dt
 import smtplib
 
 import pytest
+from pydantic import ValidationError
 from sqlalchemy import select
 
 from drillai.core.clock import utc_now
+from drillai.core.config import Settings
 from drillai.db.models import Organization, OutboundMessage
 from drillai.security.actions import ActionLevel, Principal
 from drillai.workflow.nodes import NodeContext, NotifyConfig, _notify
@@ -22,6 +24,44 @@ from drillai.workflow.notifications import (
     NotificationDispatcher,
     claim_pending_notifications,
 )
+
+
+def test_notification_worker_resource_limits_are_finite_exact_and_bounded():
+    invalid_settings = (
+        {"notification_poll_seconds": float("nan")},
+        {"notification_poll_seconds": float("inf")},
+        {"notification_poll_seconds": 0.1},
+        {"notification_poll_seconds": 60.1},
+        {"notification_poll_seconds": True},
+        {"notification_batch_size": 0},
+        {"notification_batch_size": 101},
+        {"notification_batch_size": 1.0},
+        {"notification_batch_size": 1.5},
+        {"notification_batch_size": True},
+    )
+    for values in invalid_settings:
+        with pytest.raises(ValidationError):
+            Settings(**values)
+
+    invalid_overrides = (
+        {"poll_seconds": float("nan")},
+        {"poll_seconds": float("inf")},
+        {"poll_seconds": float("-inf")},
+        {"poll_seconds": 0.1},
+        {"poll_seconds": 60.1},
+        {"poll_seconds": True},
+        {"batch_size": 0},
+        {"batch_size": 101},
+        {"batch_size": 1.5},
+        {"batch_size": 1.0},
+        {"batch_size": True},
+    )
+    for overrides in invalid_overrides:
+        with pytest.raises(ValueError):
+            NotificationWorker(object(), **overrides)
+
+    assert NotificationWorker(object(), poll_seconds=0.2, batch_size=1).poll_seconds == 0.2
+    assert NotificationWorker(object(), poll_seconds=60.0, batch_size=100).batch_size == 100
 
 
 @pytest.mark.asyncio

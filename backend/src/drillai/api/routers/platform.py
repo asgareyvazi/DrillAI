@@ -392,6 +392,9 @@ def _notification_summary(row: OutboundMessage) -> dict[str, Any]:
         "accepted_at": row.accepted_at.isoformat() if row.accepted_at else None,
         "acceptance_evidence": row.acceptance_evidence,
         "provider_message_id": row.provider_message_id if row.acceptance_evidence == "http_2xx" else None,
+        # No authenticated recipient-receipt ingest path exists, so even transport acceptance
+        # and legacy `sent` rows remain delivery-unknown in the read model.
+        "recipient_delivery_status": "unknown",
         "delivery_confirmed": False,
         "external_provider_verified": False,
         "recipient_present": bool(row.recipient),

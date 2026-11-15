@@ -19,7 +19,7 @@
  */
 
 import { spawn, spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
+import { existsSync, lstatSync, mkdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -37,8 +37,19 @@ const authEnabled = process.env.DRILLAI_E2E_AUTH === 'true'
 const faultsEnabled = process.env.DRILLAI_E2E_FAULTS === 'true'
 const seed = process.env.DRILLAI_E2E_SEED !== 'false'
 const seedCp131Pilot = process.env.DRILLAI_E2E_CP131 === 'true'
-
-mkdirSync(path.join(dataDir, 'blobs'), { recursive: true })
+const seedCp150Pilot = process.env.DRILLAI_E2E_CP150 === 'true'
+if ((seedCp150Pilot && seed) || (seedCp150Pilot && seedCp131Pilot)) {
+  throw new Error('CP150 must run alone against its fresh two-well database; demo/CP131 seeds are forbidden')
+}
+const databaseFile = path.join(dataDir, 'e2e.db')
+const blobDir = path.join(dataDir, 'blobs')
+if (seedCp150Pilot) {
+  if (!existsSync(dataDir) || lstatSync(dataDir).isSymbolicLink() || existsSync(databaseFile) || existsSync(blobDir)) {
+    throw new Error('CP150 requires a fresh, non-symlinked directory without an existing database or blob store')
+  }
+} else {
+  mkdirSync(blobDir, { recursive: true })
+}
 
 function resolvePython(backendDir) {
   if (process.env.DRILLAI_PYTHON && existsSync(process.env.DRILLAI_PYTHON)) {
@@ -127,7 +138,28 @@ if (seedCp131Pilot) {
   fixtures.cp131_pilot = parseSeedOutput(pilot.stdout, 'CP131 synthetic pilot seed')
 }
 
-if (seed || seedCp131Pilot) {
+if (seedCp150Pilot) {
+  const pilot = spawnSync(
+    python,
+    [
+      path.join(repoRoot, 'scripts', 'seed_cp150_pilot.py'),
+      '--database-url',
+      databaseUrl,
+      '--blob-dir',
+      path.join(dataDir, 'blobs'),
+    ],
+    { cwd: backendRoot, env: { ...process.env, PYTHONUNBUFFERED: '1' }, encoding: 'utf8' },
+  )
+  if (pilot.status !== 0) {
+    console.error(pilot.stdout)
+    console.error(pilot.stderr)
+    throw new Error(`seeding the isolated CP150 two-well hierarchy failed (exit ${pilot.status})`)
+  }
+  fixtures.cp150_pilot = parseSeedOutput(pilot.stdout, 'CP150 two-well synthetic pilot seed')
+  fixtures.org_slug = fixtures.cp150_pilot.org_slug
+}
+
+if (seed || seedCp131Pilot || seedCp150Pilot) {
   writeFileSync(path.join(dataDir, 'fixtures.json'), JSON.stringify(fixtures, null, 2))
 }
 
@@ -140,6 +172,8 @@ const env = {
   DRILLAI_BLOB_BACKEND: 'filesystem',
   DRILLAI_BLOB_ROOT: path.join(dataDir, 'blobs'),
   DRILLAI_SCHEDULER_ENABLED: 'false',
+  DRILLAI_NOTIFICATION_WORKER_ENABLED: 'false',
+  DRILLAI_CONNECTOR_WORKER_ENABLED: 'false',
   DRILLAI_CONNECTOR_ALLOW_LOOPBACK: 'false',
   DRILLAI_CONNECTOR_ALLOW_PRIVATE_NETWORKS: 'false',
   DRILLAI_DEV_ORG_SLUG: fixtures.org_slug ?? 'demo-operator',
