@@ -28,6 +28,7 @@ import concurrent.futures
 import contextlib
 import datetime as dt
 import ipaddress
+import math
 import os
 import re
 import socket
@@ -3221,49 +3222,95 @@ def validate_connector_config(
             details={"field": "config.tls_verify", "reason": "tls_verify_required"},
         )
 
-    poll_interval = float(config.get("poll_interval_seconds", 2.0))
-    if poll_interval < 0.05 or poll_interval > 3600.0:
-        raise ValidationFailed(
-            "poll_interval_seconds must be between 0.05 and 3600 seconds",
-            details={"field": "config.poll_interval_seconds", "value": poll_interval},
-        )
+    def _bounded_float(name: str, default: float, minimum: float, maximum: float) -> float:
+        raw_value = config.get(name, default)
+        field_name = f"config.{name}"
+        if isinstance(raw_value, bool):
+            raise ValidationFailed(
+                f"{name} must be a finite number between {minimum:g} and {maximum:g}",
+                details={"field": field_name, "reason": "invalid_config"},
+            )
+        try:
+            value = float(raw_value)
+        except (TypeError, ValueError, OverflowError) as exc:
+            raise ValidationFailed(
+                f"{name} must be a finite number between {minimum:g} and {maximum:g}",
+                details={"field": field_name, "reason": "invalid_config"},
+            ) from exc
+        if not math.isfinite(value) or value < minimum or value > maximum:
+            raise ValidationFailed(
+                f"{name} must be a finite number between {minimum:g} and {maximum:g}",
+                details={"field": field_name, "reason": "invalid_config"},
+            )
+        return value
 
-    timeout_seconds = float(config.get("timeout_seconds", 10.0))
-    if timeout_seconds < 0.2 or timeout_seconds > 60.0:
-        raise ValidationFailed(
-            "timeout_seconds must be between 0.2 and 60 seconds",
-            details={"field": "config.timeout_seconds", "value": timeout_seconds},
-        )
+    def _bounded_int(name: str, default: int, minimum: int, maximum: int) -> int:
+        raw_value = config.get(name, default)
+        field_name = f"config.{name}"
+        if isinstance(raw_value, bool):
+            raise ValidationFailed(
+                f"{name} must be an integer between {minimum} and {maximum}",
+                details={"field": field_name, "reason": "invalid_config"},
+            )
+        if isinstance(raw_value, int):
+            value = raw_value
+        elif isinstance(raw_value, float) and math.isfinite(raw_value) and raw_value.is_integer():
+            value = int(raw_value)
+        elif isinstance(raw_value, str) and re.fullmatch(r"[+-]?\d+", raw_value.strip()):
+            try:
+                value = int(raw_value.strip())
+            except (ValueError, OverflowError) as exc:
+                raise ValidationFailed(
+                    f"{name} must be an integer between {minimum} and {maximum}",
+                    details={"field": field_name, "reason": "invalid_config"},
+                ) from exc
+        else:
+            raise ValidationFailed(
+                f"{name} must be an integer between {minimum} and {maximum}",
+                details={"field": field_name, "reason": "invalid_config"},
+            )
+        if value < minimum or value > maximum:
+            raise ValidationFailed(
+                f"{name} must be an integer between {minimum} and {maximum}",
+                details={"field": field_name, "reason": "invalid_config"},
+            )
+        return value
 
-    max_points_per_poll = int(config.get("max_points_per_poll", 250))
-    if max_points_per_poll < 1 or max_points_per_poll > 500:
-        raise ValidationFailed(
-            "max_points_per_poll must be between 1 and 500",
-            details={"field": "config.max_points_per_poll", "value": max_points_per_poll},
-        )
-
-    max_consecutive_failures = int(config.get("max_consecutive_failures", 5))
-    if max_consecutive_failures < 1 or max_consecutive_failures > 50:
-        raise ValidationFailed(
-            "max_consecutive_failures must be between 1 and 50",
-            details={"field": "config.max_consecutive_failures", "value": max_consecutive_failures},
-        )
-
-    base_backoff_seconds = float(config.get("base_backoff_seconds", 1.0))
-    max_backoff_seconds = float(config.get("max_backoff_seconds", 30.0))
-    if (
-        base_backoff_seconds < 0.01
-        or max_backoff_seconds < base_backoff_seconds
-        or max_backoff_seconds > 3600.0
-    ):
+    poll_interval = _bounded_float("poll_interval_seconds", 2.0, 0.05, 3600.0)
+    timeout_seconds = _bounded_float("timeout_seconds", 10.0, 0.2, 60.0)
+    max_points_per_poll = _bounded_int("max_points_per_poll", 250, 1, 500)
+    max_consecutive_failures = _bounded_int("max_consecutive_failures", 5, 1, 50)
+    base_backoff_seconds = _bounded_float("base_backoff_seconds", 1.0, 0.01, 3600.0)
+    max_backoff_seconds = _bounded_float("max_backoff_seconds", 30.0, 0.01, 3600.0)
+    if max_backoff_seconds < base_backoff_seconds:
         raise ValidationFailed(
             "backoff bounds must satisfy 0.01 <= base_backoff_seconds <= max_backoff_seconds <= 3600",
-            details={
-                "field": "config.backoff_seconds",
-                "base_backoff_seconds": base_backoff_seconds,
-                "max_backoff_seconds": max_backoff_seconds,
-            },
+            details={"field": "config.backoff_seconds", "reason": "invalid_config"},
         )
+
+    # Protocol adapters consume these optional controls directly. Validate them here too so
+    # malformed persisted values cannot fail after DNS/secret work or enlarge a request budget.
+    optional_integer_bounds = {
+        "max_retries": (2, 0, 5),
+        "max_return_nodes": (500, 1, 500),
+        "max_pages_per_poll": (3, 1, 10),
+        "max_data_items": (max_points_per_poll, 1, 500),
+        "max_message_rate": (500, 1, 500),
+    }
+    normalized_optional_limits: dict[str, int] = {}
+    for name, (default, minimum, maximum) in optional_integer_bounds.items():
+        if name in config and config[name] is not None:
+            normalized_optional_limits[name] = _bounded_int(name, default, minimum, maximum)
+
+    if "loop" in config:
+        if not isinstance(config["loop"], bool):
+            raise ValidationFailed(
+                "loop must be a boolean",
+                details={"field": "config.loop", "reason": "invalid_config"},
+            )
+        normalized_loop = config["loop"]
+    else:
+        normalized_loop = None
 
     parsed_specs = parse_channel_mappings(config.get("channel_mappings"))
     normalized_mappings: list[dict[str, Any]] = [
@@ -3291,6 +3338,10 @@ def validate_connector_config(
         "max_backoff_seconds": max_backoff_seconds,
         "channel_mappings": normalized_mappings,
     }
+    normalized.update(normalized_optional_limits)
+    if normalized_loop is not None:
+        normalized["loop"] = normalized_loop
+
     for extra_key in (
         "well_uid",
         "wellbore_uid",
@@ -3298,17 +3349,28 @@ def validate_connector_config(
         "uid_well",
         "uid_wellbore",
         "uid_log",
-        "max_return_nodes",
-        "max_pages_per_poll",
         "plan",
         "start_iso",
         "quality",
-        "max_data_items",
-        "max_message_rate",
     ):
         if extra_key in config and config[extra_key] is not None:
             normalized[extra_key] = config[extra_key]
     return normalized
+
+
+def validate_persisted_connector_config(
+    config: dict[str, Any] | None,
+    *,
+    protocol_profile: str,
+) -> dict[str, Any]:
+    """Revalidate stored connector policy without exposing malformed persisted values in errors."""
+    try:
+        return validate_connector_config(config, protocol_profile=protocol_profile)
+    except Exception as exc:
+        raise ValidationFailed(
+            "stored connector configuration is invalid",
+            details={"field": "config", "reason": "invalid_config"},
+        ) from exc
 
 
 def _ensure_aware(value: dt.datetime | None) -> dt.datetime | None:
@@ -3867,12 +3929,12 @@ class ConnectorService:
                 details={"field": "key", "key": clean_key, "existing_id": existing},
             )
 
+        validated_config = validate_connector_config(config, protocol_profile=protocol_profile)
+        validated_secrets = validate_secret_refs(secret_refs)
         await sync_egress_policy_from_db(self.session)
         validated_endpoint = await validate_connector_endpoint_async(
             endpoint_url, protocol_profile, allow_loopback=allow_loopback
         )
-        validated_secrets = validate_secret_refs(secret_refs)
-        validated_config = validate_connector_config(config, protocol_profile=protocol_profile)
 
         auth_mode = validated_config.get("auth_mode", "none")
         if auth_mode == "basic" and (
@@ -4004,12 +4066,10 @@ class ConnectorService:
         new_description = row.description
         if description is not None:
             new_description = description.strip() or None
-        new_endpoint_url = row.endpoint_url
-        if endpoint_url is not None:
-            await sync_egress_policy_from_db(self.session)
-            new_endpoint_url = await validate_connector_endpoint_async(
-                endpoint_url, row.protocol_profile, allow_loopback=allow_loopback
-            )
+        new_config = dict(row.config or {})
+        if config is not None:
+            new_config.update(config)
+        new_config = validate_connector_config(new_config, protocol_profile=row.protocol_profile)
 
         merged_secrets = dict(row.secret_refs or {})
         if clear_secret_slots:
@@ -4019,10 +4079,12 @@ class ConnectorService:
             new_secrets = validate_secret_refs(secret_refs, allow_masked_placeholders=True)
             merged_secrets.update(new_secrets)
 
-        new_config = dict(row.config or {})
-        if config is not None:
-            merged_config = {**new_config, **config}
-            new_config = validate_connector_config(merged_config, protocol_profile=row.protocol_profile)
+        new_endpoint_url = row.endpoint_url
+        if endpoint_url is not None:
+            await sync_egress_policy_from_db(self.session)
+            new_endpoint_url = await validate_connector_endpoint_async(
+                endpoint_url, row.protocol_profile, allow_loopback=allow_loopback
+            )
 
         auth_mode = new_config.get("auth_mode", "none")
         if auth_mode == "basic" and ("username" not in merged_secrets or "password" not in merged_secrets):
@@ -4276,9 +4338,13 @@ class ConnectorService:
         row: Connector,
         *,
         resolved_secrets: dict[str, str] | None = None,
+        validated_config_override: dict[str, Any] | None = None,
     ) -> SourceAdapter:
-        """Instantiate the concrete SourceAdapter for a connector's declared protocol profile."""
-        cfg = dict(row.config or {})
+        """Instantiate an adapter from bounded configuration before it can access an endpoint."""
+        cfg = validate_connector_config(
+            validated_config_override if validated_config_override is not None else row.config,
+            protocol_profile=row.protocol_profile,
+        )
         mappings = list(cfg.get("channel_mappings") or [])
         descriptors = [
             ChannelDescriptor(
@@ -4391,6 +4457,10 @@ class ConnectorService:
         resolved_secrets: dict[str, str] = {}
         milestones: list[dict[str, Any]] = []
         try:
+            validated_config = validate_persisted_connector_config(
+                row.config,
+                protocol_profile=row.protocol_profile,
+            )
             await sync_egress_policy_from_db(self.session)
             pinned = await resolve_and_pin_endpoint_async(
                 row.endpoint_url,
@@ -4408,7 +4478,11 @@ class ConnectorService:
             resolved_secrets = await resolve_secret_refs(
                 self.session, self.org_id, dict(row.secret_refs or {})
             )
-            adapter = await self.build_adapter(row, resolved_secrets=resolved_secrets)
+            adapter = await self.build_adapter(
+                row,
+                resolved_secrets=resolved_secrets,
+                validated_config_override=validated_config,
+            )
             await adapter.connect()
             milestones.append(
                 {
@@ -4606,7 +4680,11 @@ class ConnectorService:
             parsed_scheme = (urlparse(str(row.endpoint_url or "")).scheme or "").lower()
             is_tls_scheme = parsed_scheme in ("https", "wss")
             if not milestones:
-                failed_stage = "endpoint_policy_validated"
+                failed_stage = (
+                    "connector_configuration_validation"
+                    if category == "invalid_config"
+                    else "endpoint_policy_validated"
+                )
             elif len(milestones) == 1 and category == "tls_error":
                 milestones.append(
                     {
@@ -4762,14 +4840,22 @@ class ConnectorService:
     ) -> dict[str, Any]:
         """Preview channel descriptors and a bounded sample of frames without persisting points."""
         row = await self.get(connector_id)
+        validated_config = validate_persisted_connector_config(
+            row.config,
+            protocol_profile=row.protocol_profile,
+        )
         bounded_limit = min(max(1, int(sample_limit)), 50)
         active_pol = await sync_egress_policy_from_db(self.session)
         active_pol_rev = int(active_pol.get("revision", 1))
-        resolved_secrets = await resolve_secret_refs(self.session, self.org_id, dict(row.secret_refs or {}))
         await validate_connector_endpoint_async(
             row.endpoint_url, row.protocol_profile, allow_loopback=allow_loopback
         )
-        adapter = await self.build_adapter(row, resolved_secrets=resolved_secrets)
+        resolved_secrets = await resolve_secret_refs(self.session, self.org_id, dict(row.secret_refs or {}))
+        adapter = await self.build_adapter(
+            row,
+            resolved_secrets=resolved_secrets,
+            validated_config_override=validated_config,
+        )
         await adapter.connect()
         try:
             descriptors = list(await adapter.describe_channels())
@@ -4883,6 +4969,10 @@ class ConnectorService:
                     "stored_config_version": current_cfg_version,
                 },
             )
+        validated_config = validate_persisted_connector_config(
+            row.config,
+            protocol_profile=row.protocol_profile,
+        )
 
         cursor_before = dict(row.cursor or {})
         replay_cursor: dict[str, Any] = {}
@@ -4921,7 +5011,11 @@ class ConnectorService:
         saved_row_cursor = row.cursor
         row.cursor = replay_cursor
         try:
-            adapter = await self.build_adapter(row, resolved_secrets=resolved_secrets)
+            adapter = await self.build_adapter(
+                row,
+                resolved_secrets=resolved_secrets,
+                validated_config_override=validated_config,
+            )
         finally:
             row.cursor = saved_row_cursor
 

@@ -180,10 +180,10 @@ class Settings(BaseSettings):
     connector_allowed_private_networks: str = ""
     connector_harness_ports: str = ""
     connector_worker_enabled: bool = False
-    connector_worker_lease_seconds: float = 30.0
-    connector_worker_poll_seconds: float = 1.0
-    connector_worker_max_concurrency: int = 8
-    connector_run_retention_limit: int = 100
+    connector_worker_lease_seconds: float = Field(default=30.0, ge=0.45, le=300.0, allow_inf_nan=False)
+    connector_worker_poll_seconds: float = Field(default=1.0, ge=0.05, le=60.0, allow_inf_nan=False)
+    connector_worker_max_concurrency: int = Field(default=8, ge=1, le=64)
+    connector_run_retention_limit: int = Field(default=100, ge=1, le=10_000)
     connector_max_response_bytes: int = 5 * 1024 * 1024  # 5 MB per protocol response
     connector_request_timeout_seconds: float = 10.0
 
@@ -196,6 +196,19 @@ class Settings(BaseSettings):
     # body, an unhandled fault). The app factory refuses to start when this is set in production, so
     # the flag cannot open a debug endpoint on a deployment.
     e2e_faults: bool = False
+
+    @field_validator(
+        "connector_worker_lease_seconds",
+        "connector_worker_poll_seconds",
+        "connector_worker_max_concurrency",
+        "connector_run_retention_limit",
+        mode="before",
+    )
+    @classmethod
+    def _reject_boolean_connector_worker_limits(cls, value: object) -> object:
+        if isinstance(value, bool):
+            raise ValueError("connector worker numeric limits must not be booleans")
+        return value
 
     @field_validator("database_url")
     @classmethod

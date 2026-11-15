@@ -12,6 +12,7 @@ import argparse
 import asyncio
 import contextlib
 import datetime as dt
+import math
 import os
 import random
 import signal
@@ -40,6 +41,7 @@ from drillai.telemetry.connectors import (
     redact_sensitive_text,
     resolve_secret_refs,
     sync_egress_policy_from_db,
+    validate_connector_config,
     validate_connector_endpoint_async,
 )
 from drillai.telemetry.outbox import emit
@@ -119,20 +121,35 @@ class ConnectorWorker:
         host = socket.gethostname().split(".")[0]
         self.database = database
         self.worker_id = worker_id or f"wrk_{host}_{os.getpid()}_{new_id('w')[-6:]}"
-        self.lease_seconds = float(
-            lease_seconds if lease_seconds is not None else settings.connector_worker_lease_seconds
-        )
-        self.poll_interval_seconds = float(
+
+        raw_lease = lease_seconds if lease_seconds is not None else settings.connector_worker_lease_seconds
+        raw_poll_interval = (
             poll_interval_seconds
             if poll_interval_seconds is not None
             else settings.connector_worker_poll_seconds
         )
-        self.max_concurrency = int(
+        if isinstance(raw_lease, bool) or isinstance(raw_poll_interval, bool):
+            raise ConfigurationError("connector worker lease and poll intervals must be finite numbers")
+        try:
+            self.lease_seconds = float(raw_lease)
+            self.poll_interval_seconds = float(raw_poll_interval)
+        except (TypeError, ValueError, OverflowError) as exc:
+            raise ConfigurationError("connector worker lease and poll intervals must be finite numbers") from exc
+        if not math.isfinite(self.lease_seconds) or not 0.45 <= self.lease_seconds <= 300.0:
+            raise ConfigurationError("connector worker lease_seconds must be between 0.45 and 300 seconds")
+        if not math.isfinite(self.poll_interval_seconds) or not 0.05 <= self.poll_interval_seconds <= 60.0:
+            raise ConfigurationError("connector worker poll_interval_seconds must be between 0.05 and 60 seconds")
+
+        raw_concurrency = (
             max_concurrency if max_concurrency is not None else settings.connector_worker_max_concurrency
         )
-        self.retention_limit = int(
-            retention_limit if retention_limit is not None else settings.connector_run_retention_limit
-        )
+        raw_retention = retention_limit if retention_limit is not None else settings.connector_run_retention_limit
+        if isinstance(raw_concurrency, bool) or not isinstance(raw_concurrency, int) or not 1 <= raw_concurrency <= 64:
+            raise ConfigurationError("connector worker max_concurrency must be an integer between 1 and 64")
+        if isinstance(raw_retention, bool) or not isinstance(raw_retention, int) or not 1 <= raw_retention <= 10_000:
+            raise ConfigurationError("connector worker retention_limit must be an integer between 1 and 10000")
+        self.max_concurrency = raw_concurrency
+        self.retention_limit = raw_retention
         self.allow_loopback = allow_loopback
         self._before_commit_hook = before_commit_hook
         self._before_claim_cas_hook = before_claim_cas_hook
@@ -397,7 +414,20 @@ class ConnectorWorker:
                         claimed, t0, started=started, trace_id=trace_id
                     )
 
-                cfg = dict(row.config or {})
+                try:
+                    cfg = validate_connector_config(
+                        row.config,
+                        protocol_profile=row.protocol_profile,
+                    )
+                except Exception as exc:
+                    # Persisted rows can outlive application validators or be changed out of band.
+                    # Refuse malformed runtime policy before DNS, secret resolution, or adapter I/O,
+                    # and do not persist the raw config/parser details into the run ledger.
+                    raise ValidationFailed(
+                        "stored connector configuration is invalid",
+                        details={"field": "config", "reason": "invalid_config"},
+                    ) from exc
+
                 row_config_version = int(row.config_version or claimed.config_version)
                 active_policy = await sync_egress_policy_from_db(read_session)
                 self.last_policy_revision = int(active_policy.get("revision", 1))
@@ -411,7 +441,11 @@ class ConnectorWorker:
                     read_session, row.org_id, dict(row.secret_refs or {})
                 )
                 conn_svc = ConnectorService(read_session, row.org_id)
-                adapter = await conn_svc.build_adapter(row, resolved_secrets=resolved_secrets)
+                adapter = await conn_svc.build_adapter(
+                    row,
+                    resolved_secrets=resolved_secrets,
+                    validated_config_override=cfg,
+                )
 
             # Perform external protocol connect/fetch outside the DB transaction with a fenced lease-renewal heartbeat.
             lost_lease = False
@@ -836,13 +870,23 @@ class ConnectorWorker:
                     claimed, t0, started=started, trace_id=trace_id
                 )
 
-            cfg = dict(row.config or {})
+            try:
+                cfg = validate_connector_config(
+                    row.config,
+                    protocol_profile=row.protocol_profile,
+                )
+                stored_config_invalid = False
+            except Exception:
+                # Retry policy is not trusted when the persisted config fails its own bounds.
+                cfg = {}
+                stored_config_invalid = True
             max_failures = int(cfg.get("max_consecutive_failures", 5))
             base_backoff = float(cfg.get("base_backoff_seconds", 1.0))
             max_backoff = float(cfg.get("max_backoff_seconds", 30.0))
 
             new_error_count = int(row.error_count or 0) + 1
-            if new_error_count >= max_failures:
+            terminal_config_failure = stored_config_invalid or category == "invalid_config"
+            if terminal_config_failure or new_error_count >= max_failures:
                 new_status = "failed"
                 backoff = 0.0
                 next_poll_at = None
@@ -902,6 +946,7 @@ class ConnectorWorker:
                 "consecutive_failures": new_error_count,
                 "backoff_seconds": backoff,
                 "next_status": new_status,
+                "terminal_config_failure": terminal_config_failure,
                 "checkpoint_status": "rolled_back" if err_manifest is not None else "failed",
                 "persisted": False,
                 "policy_revision": self.last_policy_revision,

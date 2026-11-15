@@ -87,6 +87,58 @@ def test_plaintext_secrets_and_tls_disable_are_refused():
     assert valid_refs["password"] == "secret_ref:rig1_witsml_pass"
 
 
+def test_connector_runtime_numeric_bounds_reject_non_finite_and_non_integral_values():
+    valid_base = {"channel_mappings": _sample_mappings()}
+    invalid_values = (
+        ("poll_interval_seconds", float("nan")),
+        ("timeout_seconds", float("inf")),
+        ("base_backoff_seconds", float("-inf")),
+        ("max_backoff_seconds", "NaN"),
+        ("max_points_per_poll", 2.5),
+        ("max_consecutive_failures", True),
+        ("max_retries", 1.5),
+        ("max_return_nodes", float("inf")),
+        ("max_pages_per_poll", 11),
+        ("max_data_items", 501),
+        ("max_message_rate", False),
+        ("max_pages_per_poll", "9" * 5000),
+        ("loop", "false"),
+    )
+    for field_name, value in invalid_values:
+        with pytest.raises(ValidationFailed) as exc_info:
+            validate_connector_config(
+                {**valid_base, field_name: value},
+                protocol_profile="witsml.1.4.1.1.soap_http",
+            )
+        assert exc_info.value.details["field"] == f"config.{field_name}"
+        assert exc_info.value.details["reason"] == "invalid_config"
+
+    boundary_config = validate_connector_config(
+        {
+            **valid_base,
+            "poll_interval_seconds": 0.05,
+            "timeout_seconds": 0.2,
+            "max_points_per_poll": 500,
+            "max_consecutive_failures": 1,
+            "base_backoff_seconds": 0.01,
+            "max_backoff_seconds": 3600.0,
+            "max_retries": 0,
+            "max_return_nodes": 500,
+            "max_pages_per_poll": 10,
+            "max_data_items": 500,
+            "max_message_rate": 500,
+            "loop": False,
+        },
+        protocol_profile="witsml.1.4.1.1.soap_http",
+    )
+    assert boundary_config["poll_interval_seconds"] == 0.05
+    assert boundary_config["max_points_per_poll"] == 500
+    assert boundary_config["max_retries"] == 0
+    assert boundary_config["max_pages_per_poll"] == 10
+    assert boundary_config["max_message_rate"] == 500
+    assert boundary_config["loop"] is False
+
+
 def test_ssrf_guard_blocks_metadata_loopback_and_private_networks():
     for blocked_url in (
         "https://169.254.169.254/latest/meta-data/",

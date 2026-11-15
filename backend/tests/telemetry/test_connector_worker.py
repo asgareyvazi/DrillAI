@@ -10,12 +10,14 @@ from typing import Any
 
 import pytest
 from httpx import ASGITransport, AsyncClient
+from pydantic import ValidationError
 from sqlalchemy import func, select, update
 
 from drillai.api.app import create_app
 from drillai.core.clock import utc_now
-from drillai.core.config import get_settings, reset_settings_cache
-from drillai.db.models import Base, Connector, ConnectorRun, Organization, Project, Well, Wellbore
+from drillai.core.config import Settings, get_settings, reset_settings_cache
+from drillai.core.errors import ConfigurationError
+from drillai.db.models import Base, Connector, ConnectorRun, Organization, Project, TimeSeries, Well, Wellbore
 from drillai.observability.tracing import get_metrics
 from drillai.telemetry.protocols.witsml import LocalWitsmlSoapServer
 from drillai.telemetry.worker import ClaimedConnector, ConnectorWorker
@@ -66,6 +68,33 @@ async def _seed_org_and_well(app, org_id: str, well_id: str, wellbore_id: str, s
             )
         )
         await session.commit()
+
+
+def test_connector_worker_rejects_unbounded_supervisor_limits():
+    for invalid_setting in (
+        {"connector_worker_lease_seconds": float("nan")},
+        {"connector_worker_lease_seconds": True},
+        {"connector_worker_poll_seconds": float("inf")},
+        {"connector_worker_poll_seconds": False},
+        {"connector_worker_max_concurrency": 65},
+        {"connector_worker_max_concurrency": True},
+        {"connector_run_retention_limit": 0},
+        {"connector_run_retention_limit": True},
+    ):
+        with pytest.raises(ValidationError):
+            Settings(**invalid_setting)
+
+    for overrides in (
+        {"lease_seconds": float("nan")},
+        {"poll_interval_seconds": float("inf")},
+        {"max_concurrency": 65},
+        {"max_concurrency": 1.5},
+        {"max_concurrency": True},
+        {"retention_limit": 0},
+        {"retention_limit": True},
+    ):
+        with pytest.raises(ConfigurationError):
+            ConnectorWorker(object(), **overrides)
 
 
 async def test_competing_workers_cas_and_stale_worker_fencing(
@@ -444,6 +473,109 @@ async def test_worker_witsml_ingestion_backoff_checkpoint_safety_and_run_retenti
             assert "drillai.connector.polls_total" in snap["counters"]
             assert "drillai.connector.errors_total" in snap["counters"]
             assert "drillai.connector.poll_duration_ms" in snap["histograms"]
+    finally:
+        await app.state.database.dispose()
+        reset_settings_cache()
+
+
+async def test_invalid_persisted_connector_config_fails_closed_before_transport(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+):
+    """A corrupt stored runtime config must not reach DNS, secrets, adapter I/O, or point writes."""
+    monkeypatch.setenv("DRILLAI_ENVIRONMENT", "test")
+    monkeypatch.setenv("DRILLAI_AUTH_ENABLED", "false")
+    monkeypatch.setenv("DRILLAI_BLOB_BACKEND", "memory")
+    monkeypatch.setenv("DRILLAI_DATABASE_URL", f"sqlite+aiosqlite:///{tmp_path}/wrk_invalid_config.db")
+    monkeypatch.setenv("DRILLAI_SCHEDULER_ENABLED", "false")
+    reset_settings_cache()
+    settings = get_settings()
+    app = create_app(settings)
+
+    async with app.state.database.engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    org_id = "org_000000000000000000000001"
+    well_id = "wel_wrk_invalid_config"
+    wellbore_id = "wbr_wrk_invalid_config"
+    await _seed_org_and_well(app, org_id, well_id, wellbore_id, settings.dev_org_slug)
+
+    try:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            headers = {"X-Dev-Roles": "engineer"}
+            created = await client.post(
+                "/api/v1/connectors",
+                headers=headers,
+                json={
+                    "key": "synth-invalid-config",
+                    "name": "Invalid Stored Config Regression",
+                    "protocol_profile": "synthetic.v1",
+                    "well_id": well_id,
+                    "wellbore_id": wellbore_id,
+                    "config": {
+                        "poll_interval_seconds": 1.0,
+                        "channel_mappings": _mappings(),
+                        "plan": {"spp": [[0.0, 2800.0]], "wob": [[0.0, 20.0]]},
+                    },
+                },
+            )
+            assert created.status_code == 201, created.text
+            connector_id = created.json()["id"]
+            started = await client.post(
+                f"/api/v1/connectors/{connector_id}/start",
+                headers=headers,
+                json={"reason": "enable the synthetic config regression"},
+            )
+            assert started.status_code == 200, started.text
+
+        cursor_before = {"checkpoint": "unchanged-on-config-error"}
+        async with app.state.database.session() as session:
+            row = await session.get(Connector, connector_id)
+            assert row is not None
+            row.config = {**row.config, "timeout_seconds": "Infinity"}
+            row.cursor = cursor_before
+            await session.commit()
+
+        async def unexpected_runtime_io(*_args: Any, **_kwargs: Any) -> None:
+            pytest.fail("invalid connector config reached endpoint validation, secret lookup, or adapter build")
+
+        monkeypatch.setattr(
+            "drillai.telemetry.worker.validate_connector_endpoint_async",
+            unexpected_runtime_io,
+        )
+        monkeypatch.setattr("drillai.telemetry.worker.resolve_secret_refs", unexpected_runtime_io)
+        monkeypatch.setattr(
+            "drillai.telemetry.connectors.ConnectorService.build_adapter",
+            unexpected_runtime_io,
+        )
+        worker = ConnectorWorker(app.state.database, worker_id="wrk_invalid_config")
+        outcomes = await worker.run_once()
+        assert len(outcomes) == 1
+        assert outcomes[0].status == "failed"
+        assert outcomes[0].error_category == "invalid_config"
+        assert outcomes[0].cursor_after == cursor_before
+
+        async with app.state.database.session() as session:
+            row = await session.get(Connector, connector_id)
+            assert row is not None
+            assert row.status == "failed"
+            assert row.last_error_category == "invalid_config"
+            assert row.next_poll_at is None
+            assert row.cursor == cursor_before
+            assert row.last_error == "stored connector configuration is invalid"
+
+            failed_run = (
+                await session.execute(
+                    select(ConnectorRun).where(ConnectorRun.connector_id == connector_id)
+                )
+            ).scalar_one()
+            assert failed_run.status == "failed"
+            assert failed_run.error_category == "invalid_config"
+            assert failed_run.cursor_before == cursor_before
+            assert failed_run.cursor_after == cursor_before
+            assert failed_run.details["terminal_config_failure"] is True
+            assert "Infinity" not in str(failed_run.details)
+            series_count = int((await session.execute(select(func.count()).select_from(TimeSeries))).scalar_one())
+            assert series_count == 0
     finally:
         await app.state.database.dispose()
         reset_settings_cache()
