@@ -1,8 +1,8 @@
 /**
  * Reports Workspace against the report payload contract served by ReportingService.
  *
- * The UI must render the backend's real section metadata and export the same structured report as
- * JSON; it must not assume document rendering or fields the API does not return.
+ * The UI must render the backend's real section metadata and save server-rendered JSON, PDF and
+ * XLSX bytes unchanged; it must not invent fields or calculations.
  */
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -123,7 +123,7 @@ const report = {
   ],
   section_kinds: ['assumptions', 'calculations', 'facts'],
   is_renderable: true,
-  rendering_note: 'This is a structured payload; Word/PDF rendering is a separate presentation layer.',
+  rendering_note: 'This structured payload is exported as JSON, PDF or XLSX; DOCX rendering is not implemented',
 } satisfies Report
 
 function renderWorkspace() {
@@ -145,9 +145,10 @@ function renderWorkspace() {
 }
 
 beforeEach(() => {
+  window.localStorage.setItem('drillai.locale', 'en')
   apiMock.reportKinds.mockReset().mockResolvedValue({
     kinds: [{ key: 'daily_drilling', description: 'The last reporting period' }],
-    note: 'Structured report payload only; document rendering is not implemented.',
+    note: 'Structured report payload with JSON, PDF and XLSX exports.',
   })
   apiMock.buildReport.mockReset().mockResolvedValue({ report })
   apiMock.exportReport.mockReset().mockResolvedValue(
@@ -155,7 +156,10 @@ beforeEach(() => {
   )
 })
 
-afterEach(() => act(() => useSession.setState({ unitSystem: 'si' })))
+afterEach(() => {
+  act(() => useSession.setState({ unitSystem: 'si' }))
+  window.localStorage.removeItem('drillai.locale')
+})
 
 describe('ReportsWorkspace', () => {
   it('renders the backend report contract and exports the exact authorized JSON response bytes', async () => {
@@ -179,14 +183,14 @@ describe('ReportsWorkspace', () => {
       await user.click(await screen.findByRole('button', { name: 'Build' }))
       expect(await screen.findByText('Recorded drilling state')).toBeInTheDocument()
       expect(screen.getByText('Current measured depth')).toBeInTheDocument()
-      expect(screen.getByText('This is a structured payload; Word/PDF rendering is a separate presentation layer.')).toBeInTheDocument()
+      expect(screen.getByText('This structured payload is exported as JSON, PDF or XLSX; DOCX rendering is not implemented')).toBeInTheDocument()
       expect(screen.getByText('Report metadata')).toBeInTheDocument()
       await user.click(screen.getByText(/hydraulics.laminar@1.0.0/))
       expect(await screen.findByText('ppg')).toBeInTheDocument()
       expect(screen.getByText('10')).toBeInTheDocument()
 
       await user.click(screen.getByTestId('report-export-json'))
-      await waitFor(() => expect(apiMock.exportReport).toHaveBeenCalledWith('wel_capture', 'daily_drilling'))
+      await waitFor(() => expect(apiMock.exportReport).toHaveBeenCalledWith('wel_capture', 'daily_drilling', 'json', 'en'))
       expect(createObjectURL).toHaveBeenCalledWith(exportBlob)
       expect(exportBlob.type).toBe('application/json')
       expect(click).toHaveBeenCalledOnce()
@@ -235,5 +239,70 @@ describe('ReportsWorkspace', () => {
     expect(screen.getByText(/outputs output-hash/)).toBeInTheDocument()
     expect(screen.getByText('10')).toBeVisible()
     expect(screen.getByText('ppg')).toBeVisible()
+  })
+
+  it.each([
+    { format: 'pdf' as const, mimeType: 'application/pdf' },
+    {
+      format: 'xlsx' as const,
+      mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    },
+  ])('downloads the exact server-rendered $format bytes', async ({ format, mimeType }) => {
+    const user = userEvent.setup()
+    const blob = new Blob([format === 'pdf' ? '%PDF-1.7 synthetic' : 'PK\\x03\\x04synthetic'], { type: mimeType })
+    apiMock.exportReport.mockResolvedValue(blob)
+    const originalCreateObjectURL = Object.getOwnPropertyDescriptor(URL, 'createObjectURL')
+    const originalRevokeObjectURL = Object.getOwnPropertyDescriptor(URL, 'revokeObjectURL')
+    const createObjectURL = vi.fn(() => 'blob:drillai-structured-report')
+    Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: createObjectURL })
+    Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: vi.fn() })
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
+      expect(this.download).toBe(`drillai-daily_drilling-wel_capture.${format}`)
+    })
+
+    try {
+      renderWorkspace()
+      await user.click(await screen.findByRole('button', { name: 'Build' }))
+      await user.click(await screen.findByTestId(`report-export-${format}`))
+      await waitFor(() =>
+        expect(apiMock.exportReport).toHaveBeenCalledWith('wel_capture', 'daily_drilling', format, 'en'),
+      )
+      expect(createObjectURL).toHaveBeenCalledWith(blob)
+      expect(click).toHaveBeenCalledOnce()
+    } finally {
+      if (originalCreateObjectURL) Object.defineProperty(URL, 'createObjectURL', originalCreateObjectURL)
+      else Reflect.deleteProperty(URL, 'createObjectURL')
+      if (originalRevokeObjectURL) Object.defineProperty(URL, 'revokeObjectURL', originalRevokeObjectURL)
+      else Reflect.deleteProperty(URL, 'revokeObjectURL')
+    }
+  })
+
+  it('uses the selected Persian locale for a PDF export', async () => {
+    const user = userEvent.setup()
+    window.localStorage.setItem('drillai.locale', 'fa')
+    const blob = new Blob(['%PDF-1.7 synthetic'], { type: 'application/pdf' })
+    apiMock.exportReport.mockResolvedValue(blob)
+    const originalCreateObjectURL = Object.getOwnPropertyDescriptor(URL, 'createObjectURL')
+    const originalRevokeObjectURL = Object.getOwnPropertyDescriptor(URL, 'revokeObjectURL')
+    Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: vi.fn(() => 'blob:fa-report') })
+    Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: vi.fn() })
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
+      expect(this.download).toBe('drillai-daily_drilling-wel_capture.pdf')
+    })
+
+    try {
+      renderWorkspace()
+      await user.click(await screen.findByRole('button', { name: 'ساخت' }))
+      await user.click(await screen.findByTestId('report-export-pdf'))
+      await waitFor(() =>
+        expect(apiMock.exportReport).toHaveBeenCalledWith('wel_capture', 'daily_drilling', 'pdf', 'fa'),
+      )
+      expect(click).toHaveBeenCalledOnce()
+    } finally {
+      if (originalCreateObjectURL) Object.defineProperty(URL, 'createObjectURL', originalCreateObjectURL)
+      else Reflect.deleteProperty(URL, 'createObjectURL')
+      if (originalRevokeObjectURL) Object.defineProperty(URL, 'revokeObjectURL', originalRevokeObjectURL)
+      else Reflect.deleteProperty(URL, 'revokeObjectURL')
+    }
   })
 })

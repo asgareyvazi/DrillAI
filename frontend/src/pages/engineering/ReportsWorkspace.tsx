@@ -3,15 +3,15 @@
  *
  * A report here is a structured payload that keeps facts, calculations, evidence, recommendations
  * and assumptions in separate sections, because a report that flattens them is the mechanism by
- * which invented numbers reach a decision. Document rendering (PDF/DOCX) is deliberately not
- * implemented and the page says so rather than offering a button that does nothing.
+ * which invented numbers reach a decision. JSON, PDF and XLSX exports use the server's rendered
+ * bytes unchanged; no calculations are performed in the browser.
  */
 
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { drillingApi } from '../../api/endpoints'
-import type { EngineValueUnitContract, Report, ReportSection } from '../../api/types'
+import type { EngineValueUnitContract, Report, ReportExportFormat, ReportSection } from '../../api/types'
 import { UnitAwareResult } from '../../components/engineering/UnitAwareResult'
 import { PageHeader } from '../../components/layout/AppShell'
 import {
@@ -135,13 +135,13 @@ function SectionBody({ section }: { section: ReportSection }) {
   )
 }
 
-function downloadReportJson(blob: Blob, kind: string, wellId: string): void {
+function downloadReport(blob: Blob, kind: string, wellId: string, format: ReportExportFormat): void {
   const safeKind = kind.replace(/[^a-zA-Z0-9_-]/g, '_')
   const safeWellId = wellId.replace(/[^a-zA-Z0-9_-]/g, '_')
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url
-  link.download = `drillai-${safeKind}-${safeWellId}.json`
+  link.download = `drillai-${safeKind}-${safeWellId}.${format}`
   link.style.display = 'none'
   document.body.append(link)
   link.click()
@@ -150,7 +150,7 @@ function downloadReportJson(blob: Blob, kind: string, wellId: string): void {
 }
 
 export default function ReportsWorkspace() {
-  const { t } = useI18n()
+  const { t, locale } = useI18n()
   const { wellId } = useParams<{ wellId: string }>()
   const id = wellId as string
   const [kind, setKind] = useState('daily_drilling')
@@ -161,16 +161,18 @@ export default function ReportsWorkspace() {
     mutationFn: (reportKind: string) => drillingApi.buildReport(id, reportKind),
     onSuccess: (data) => setReport(data.report),
   })
-  const exportJson = useMutation({
-    mutationFn: (reportKind: string) => drillingApi.exportReport(id, reportKind),
-    onSuccess: (blob, reportKind) => downloadReportJson(blob, reportKind, id),
+  const exportReport = useMutation({
+    mutationFn: ({ reportKind, format }: { reportKind: string; format: ReportExportFormat }) =>
+      drillingApi.exportReport(id, reportKind, format, locale),
+    onSuccess: (blob, variables) =>
+      downloadReport(blob, variables.reportKind, id, variables.format),
   })
 
   return (
     <div className="space-y-4">
       <PageHeader
         title={t('reports.title')}
-        description="Structured report payloads: facts, calculations, evidence, recommendations and assumptions are kept apart so a reader can tell them apart."
+        description={t('reports.description')}
         breadcrumb={<Link to={`/wells/${id}/cockpit`}>{t('nav.cockpit')}</Link>}
       />
 
@@ -218,11 +220,31 @@ export default function ReportsWorkspace() {
                 {report.period_to && <Badge tone="neutral">to {formatDateTime(report.period_to)}</Badge>}
                 <Badge tone="neutral">{report.sections.length} sections</Badge>
                 <Button
-                  onClick={() => exportJson.mutate(report.kind)}
-                  disabled={exportJson.isPending}
+                  onClick={() => exportReport.mutate({ reportKind: report.kind, format: 'json' })}
+                  disabled={exportReport.isPending}
                   data-testid="report-export-json"
                 >
-                  {exportJson.isPending ? t('reports.exporting') : t('reports.exportJson')}
+                  {exportReport.isPending && exportReport.variables?.format === 'json'
+                    ? t('reports.exporting')
+                    : t('reports.exportJson')}
+                </Button>
+                <Button
+                  onClick={() => exportReport.mutate({ reportKind: report.kind, format: 'pdf' })}
+                  disabled={exportReport.isPending}
+                  data-testid="report-export-pdf"
+                >
+                  {exportReport.isPending && exportReport.variables?.format === 'pdf'
+                    ? t('reports.exporting')
+                    : t('reports.exportPdf')}
+                </Button>
+                <Button
+                  onClick={() => exportReport.mutate({ reportKind: report.kind, format: 'xlsx' })}
+                  disabled={exportReport.isPending}
+                  data-testid="report-export-xlsx"
+                >
+                  {exportReport.isPending && exportReport.variables?.format === 'xlsx'
+                    ? t('reports.exporting')
+                    : t('reports.exportXlsx')}
                 </Button>
               </>
             }
@@ -234,8 +256,16 @@ export default function ReportsWorkspace() {
                 </Badge>
               ))}
             </div>
-            {exportJson.error ? (
-              <ErrorState error={exportJson.error} onRetry={() => exportJson.mutate(report.kind)} />
+            {exportReport.error ? (
+              <ErrorState
+                error={exportReport.error}
+                onRetry={() =>
+                  exportReport.mutate({
+                    reportKind: report.kind,
+                    format: exportReport.variables?.format ?? 'json',
+                  })
+                }
+              />
             ) : null}
             <p className="mt-3 text-xs text-graphite-500">{report.rendering_note}</p>
             <details className="mt-3 rounded border border-graphite-200 p-3 text-xs dark:border-graphite-800">
@@ -258,8 +288,8 @@ export default function ReportsWorkspace() {
 
       {!report && !build.isPending && (
         <EmptyState
-          message="Choose a report kind and build it."
-          hint="Document rendering to PDF/DOCX is not implemented in this deployment: the payload is the deliverable."
+          message={t('reports.buildHint')}
+          hint={t('reports.exportFormatsHint')}
         />
       )}
     </div>

@@ -881,6 +881,9 @@ export const fa = {
   },
   reports: {
     title: 'گزارش‌ها',
+    description: 'بخش‌های گزارش ساختاریافته، واقعیت‌ها، محاسبات، شواهد، توصیه‌ها و فرض‌ها را از هم جدا نگه می‌دارند.',
+    buildHint: 'نوع گزارش را انتخاب و آن را ایجاد کنید.',
+    exportFormatsHint: 'خروجی‌های موجود: JSON، PDF و Excel.',
     kind: 'نوع گزارش',
     build: 'ساخت',
     facts: 'واقعیت‌ها',
@@ -889,6 +892,8 @@ export const fa = {
     emptySection: 'این بخش خالی است',
     emptySectionHint: 'برای این بخش چیزی ثبت یا محاسبه نشده است.',
     exportJson: 'دریافت JSON',
+    exportPdf: 'دریافت PDF',
+    exportXlsx: 'دریافت اکسل',
     exporting: 'آماده‌سازی خروجی…',
     metadata: 'فرادادهٔ گزارش',
   },

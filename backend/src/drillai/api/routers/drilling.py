@@ -9,8 +9,7 @@ from __future__ import annotations
 
 import datetime as dt
 import hashlib
-import json
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, Query, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
@@ -29,6 +28,11 @@ from drillai.drilling.npt import NptService
 from drillai.drilling.optimisation import COMPUTED_OBJECTIVES, NOT_EVALUATED, DrillingOptimisationService
 from drillai.drilling.reporting import REPORT_KINDS, ReportingService
 from drillai.drilling.state import KPI_CHANNELS, KPI_SNAPSHOT_CONTRACT, WellStateService
+from drillai.drilling.structured_report_exports import (
+    REPORT_EXPORT_MEDIA_TYPES,
+    StructuredReportExportError,
+    render_structured_report_export,
+)
 from drillai.drilling.timeline import (
     TIMELINE_KINDS,
     TimelineService,
@@ -318,7 +322,7 @@ async def report_kinds(
         "kinds": [{"key": key, "description": text} for key, text in REPORT_KINDS.items()],
         "note": (
             "a report is a structured payload separating facts, calculations, evidence, "
-            "recommendations and assumptions; document rendering is not implemented"
+            "recommendations and assumptions; exports are available as JSON, PDF and XLSX"
         ),
     }
 
@@ -338,8 +342,8 @@ async def build_report(
     return {"report": report.to_dict()}
 
 
-@router.get("/wells/{well_id}/reports/{kind}/export", summary="Export a scoped report as JSON")
-async def export_report_json(
+@router.get("/wells/{well_id}/reports/{kind}/export", summary="Export a scoped report as JSON, PDF or XLSX")
+async def export_report(
     well_id: str,
     kind: str,
     request: Request,
@@ -347,8 +351,10 @@ async def export_report_json(
     auth: Annotated[AuthContext, Depends(require("well.read"))],
     period_from: dt.datetime | None = None,
     period_to: dt.datetime | None = None,
+    export_format: Literal["json", "pdf", "xlsx"] = Query(default="json", alias="format"),
+    locale: Literal["en", "fa"] = Query(default="en"),
 ) -> Response:
-    """Build and audit a tenant-scoped JSON attachment; document rendering remains separate."""
+    """Build, render, audit and return an authorized tenant-scoped report attachment."""
     authorize(auth.principal, "report.export", context={"well_id": well_id, "kind": kind})
     try:
         period_from = ensure_utc(period_from) if period_from is not None else None
@@ -365,23 +371,16 @@ async def export_report_json(
     report = await ReportingService(session, org_id).build(
         kind, well_id, period_from=period_from, period_to=period_to
     )
-    payload = {"report": report.to_dict()}
     try:
-        serialized = json.dumps(
-            payload,
-            ensure_ascii=False,
-            sort_keys=True,
-            separators=(",", ":"),
-            allow_nan=False,
-        ).encode("utf-8")
-    except (TypeError, ValueError, RecursionError) as exc:
-        raise ValidationFailed("report contains a value that cannot be represented as finite JSON") from exc
-    max_export_bytes = 20 * 1024 * 1024
-    if len(serialized) > max_export_bytes:
-        raise ValidationFailed(
-            "report export exceeds the configured response limit",
-            details={"bytes": len(serialized), "limit": max_export_bytes},
+        serialized = render_structured_report_export(
+            report.to_dict(),
+            export_format=export_format,
+            locale=locale,
         )
+    except StructuredReportExportError as exc:
+        raise ValidationFailed(
+            str(exc), details={"format": export_format}
+        ) from exc
 
     digest = hashlib.sha256(serialized).hexdigest()
     await record_audit(
@@ -396,7 +395,8 @@ async def export_report_json(
         well_id=well_id,
         details={
             "kind": kind,
-            "format": "json",
+            "format": export_format,
+            "locale": locale,
             "bytes": len(serialized),
             "sha256": digest,
             "period_from": period_from.isoformat() if period_from else None,
@@ -405,9 +405,9 @@ async def export_report_json(
     )
     return Response(
         content=serialized,
-        media_type="application/json",
+        media_type=REPORT_EXPORT_MEDIA_TYPES[export_format],
         headers={
-            "Content-Disposition": f'attachment; filename="drillai-{kind}.json"',
+            "Content-Disposition": f'attachment; filename="drillai-{kind}.{export_format}"',
             "Cache-Control": "no-store",
             "X-Content-Type-Options": "nosniff",
             "ETag": f'"{digest}"',

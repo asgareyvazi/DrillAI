@@ -1522,6 +1522,9 @@ export interface Report {
   rendering_note: string
 }
 
+export type ReportExportFormat = 'json' | 'pdf' | 'xlsx'
+export type ReportExportLocale = 'en' | 'fa'
+
 export interface ReportKind {
   key: string
   description: string

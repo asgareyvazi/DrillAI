@@ -885,6 +885,9 @@ export const en = {
   },
   reports: {
     title: 'Reports',
+    description: 'Structured report sections keep facts, calculations, evidence, recommendations and assumptions distinct.',
+    buildHint: 'Choose a report kind and build it.',
+    exportFormatsHint: 'Available exports: JSON, PDF and Excel.',
     kind: 'Report kind',
     build: 'Build',
     facts: 'Facts',
@@ -893,6 +896,8 @@ export const en = {
     emptySection: 'This section is empty',
     emptySectionHint: 'Nothing was recorded or computed for this section.',
     exportJson: 'Export JSON',
+    exportPdf: 'Export PDF',
+    exportXlsx: 'Export Excel',
     exporting: 'Preparing export…',
     metadata: 'Report metadata',
   },

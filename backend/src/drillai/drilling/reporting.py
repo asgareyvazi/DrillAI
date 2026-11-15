@@ -94,8 +94,8 @@ class Report:
             "section_kinds": sorted({section.kind for section in self.sections}),
             "is_renderable": True,
             "rendering_note": (
-                "this payload is the report contract; document rendering (Word/PDF) is a separate "
-                "presentation layer and is not implemented"
+                "this structured payload is exported as JSON, PDF or XLSX; DOCX rendering is not "
+                "implemented"
             ),
         }
 

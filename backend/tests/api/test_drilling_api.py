@@ -685,40 +685,97 @@ async def test_reports_keep_evidence_apart_from_calculations(client):
     ]
 
 
-async def test_report_json_export_is_scoped_audited_and_attachment_safe(client):
+async def test_report_export_formats_are_scoped_audited_and_attachment_safe(client):
     import hashlib
 
+    from openpyxl import load_workbook
+    from pypdf import PdfReader
+
     ids = await _well_with_report(client)
-    response = await client.get(
-        f"/api/v1/wells/{ids['well_id']}/reports/daily_drilling/export",
-        headers=headers("engineer"),
-    )
-    assert response.status_code == 200, response.text
-    assert response.headers["content-type"].startswith("application/json")
-    assert response.headers["content-disposition"] == 'attachment; filename="drillai-daily_drilling.json"'
-    assert response.headers["cache-control"] == "no-store"
-    assert response.headers["x-content-type-options"] == "nosniff"
-    assert response.headers["etag"] == f'"{hashlib.sha256(response.content).hexdigest()}"'
-    exported = response.json()["report"]
+    export_url = f"/api/v1/wells/{ids['well_id']}/reports/daily_drilling/export"
+    formats = {
+        "json": "application/json",
+        "pdf": "application/pdf",
+        "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    }
+    artifacts = {}
+    for export_format, media_type in formats.items():
+        response = await client.get(
+            export_url,
+            params={"format": export_format, "locale": "fa"},
+            headers=headers("engineer"),
+        )
+        assert response.status_code == 200, response.text
+        assert response.headers["content-type"].startswith(media_type)
+        assert response.headers["content-disposition"] == (
+            f'attachment; filename="drillai-daily_drilling.{export_format}"'
+        )
+        assert response.headers["cache-control"] == "no-store"
+        assert response.headers["x-content-type-options"] == "nosniff"
+        assert response.headers["etag"] == f'"{hashlib.sha256(response.content).hexdigest()}"'
+        assert len(response.content) > 100
+        artifacts[export_format] = response
+
+    exported = artifacts["json"].json()["report"]
     assert exported["kind"] == "daily_drilling"
     assert exported["well_id"] == ids["well_id"]
     assert exported["metadata"]["well"]["id"] == ids["well_id"]
+    pdf_reader = PdfReader(io.BytesIO(artifacts["pdf"].content))
+    assert len(pdf_reader.pages) >= 1
+    assert "NF-12" in "\n".join(page.extract_text() or "" for page in pdf_reader.pages)
+    workbook = load_workbook(io.BytesIO(artifacts["xlsx"].content), data_only=False)
+    assert workbook.sheetnames == ["نمای کلی", "واقعیت‌ها", "محاسبات", "شواهد", "توصیه‌ها", "فرض‌ها"]
+    assert all(workbook[sheet].sheet_view.rightToLeft is True for sheet in workbook.sheetnames)
+    assert workbook["واقعیت‌ها"].max_row > 3
+    assert workbook["شواهد"].max_row > 3
 
     audit = await client.get(f"/api/v1/wells/{ids['well_id']}/audit-log", headers=headers())
     assert audit.status_code == 200, audit.text
     exports = [row for row in audit.json()["items"] if row["action"] == "report.export"]
-    assert len(exports) == 1
-    assert exports[0]["permission_decision"]["required"] == "report.export"
-    assert exports[0]["details"]["format"] == "json"
-    assert exports[0]["details"]["sha256"] == hashlib.sha256(response.content).hexdigest()
-    assert exports[0]["details"]["bytes"] == len(response.content)
-    assert exports[0]["details"].get("body") is None
+    assert len(exports) == len(formats)
+    by_format = {row["details"]["format"]: row for row in exports}
+    assert set(by_format) == set(formats)
+    for export_format, response in artifacts.items():
+        row = by_format[export_format]
+        assert row["permission_decision"]["required"] == "report.export"
+        assert row["permission_decision"]["granted"] is True
+        assert row["details"]["locale"] == "fa"
+        assert row["details"]["sha256"] == hashlib.sha256(response.content).hexdigest()
+        assert row["details"]["bytes"] == len(response.content)
+        assert row["details"].get("body") is None
 
-    denied = await client.get(
-        f"/api/v1/wells/{ids['well_id']}/reports/daily_drilling/export",
-        headers=headers("viewer"),
-    )
+    denied = await client.get(export_url, params={"format": "pdf", "locale": "fa"}, headers=headers("viewer"))
     assert denied.status_code == 403, denied.text
+    unsupported = await client.get(export_url, params={"format": "docx"}, headers=headers("engineer"))
+    assert unsupported.status_code == 422, unsupported.text
+    invalid_locale = await client.get(export_url, params={"format": "pdf", "locale": "ar"}, headers=headers("engineer"))
+    assert invalid_locale.status_code == 422, invalid_locale.text
+
+
+async def test_binary_report_export_fails_closed_when_audit_recording_fails(client, app, monkeypatch):
+    import httpx
+
+    from drillai.api.routers import drilling as drilling_router
+
+    ids = await _well_with_report(client)
+
+    async def fail_audit(*_args, **_kwargs):
+        raise RuntimeError("injected report-export audit failure")
+
+    transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
+    for export_format in ("pdf", "xlsx"):
+        with monkeypatch.context() as patch:
+            patch.setattr(drilling_router, "record_audit", fail_audit)
+            async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as failing_client:
+                response = await failing_client.get(
+                    f"/api/v1/wells/{ids['well_id']}/reports/daily_drilling/export",
+                    params={"format": export_format, "locale": "fa"},
+                    headers=headers("engineer"),
+                )
+        assert response.status_code == 500
+        assert not response.content.startswith(b"%PDF-")
+        assert not response.content.startswith(b"PK\\x03\\x04")
+        assert "injected report-export audit failure" not in response.text
 
 
 async def test_engine_unit_contract_survives_report_payload_and_json_export(client):

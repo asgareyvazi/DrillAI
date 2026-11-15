@@ -92,6 +92,8 @@ import type {
   ProviderCatalogue,
   RecommendationRow,
   Report,
+  ReportExportFormat,
+  ReportExportLocale,
   SyntheticCommissionPayload,
   SyntheticCommissionResponse,
   TelemetryChannel,
@@ -689,10 +691,17 @@ export const drillingApi = {
   reportKinds: (signal?: AbortSignal) => api.get<{ kinds: ReportKind[]; note: string }>('/reports/kinds', { signal }),
   buildReport: (wellId: string, kind: string, signal?: AbortSignal) =>
     api.get<{ report: Report }>(`/wells/${enc(wellId)}/reports/${enc(kind)}`, { signal }),
-  exportReport: (wellId: string, kind: string, signal?: AbortSignal) =>
+  exportReport: (
+    wellId: string,
+    kind: string,
+    format: ReportExportFormat,
+    locale: ReportExportLocale = 'en',
+    signal?: AbortSignal,
+  ) =>
     api.getBlob(`/wells/${enc(wellId)}/reports/${enc(kind)}/export`, {
       signal,
-      validate: expect.object('report'),
+      query: { format, locale },
+      validate: format === 'json' ? expect.object('report') : undefined,
     }),
 
   // ------------------------------------------------------------------ governed daily drilling reports
