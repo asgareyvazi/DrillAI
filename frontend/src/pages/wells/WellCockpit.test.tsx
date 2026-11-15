@@ -126,6 +126,8 @@ describe('WellCockpit: renders the payload the API serves', () => {
     expect((await screen.findAllByText(String(total))).length).toBeGreaterThan(0)
     // The basis is stated on the card and repeated under the Pareto: both are the backend's words.
     expect(screen.getAllByText(npt.npt.basis).length).toBeGreaterThan(0)
+    expect(screen.getByText('NPT roll-up from actual operations', { selector: 'dt' })).toBeInTheDocument()
+    expect(screen.getByText('Actual rows only; planned and forecast rows are excluded')).toBeInTheDocument()
     for (const row of npt.npt.by_category.filter((category) => category.occurrences > 0)) {
       // Each Pareto row carries its controllability in words; the row is selectable by that name.
       const suffix =
@@ -186,6 +188,9 @@ describe('WellCockpit: renders the payload the API serves', () => {
     window.localStorage.setItem('drillai.locale', 'fa')
     const { container } = renderCockpit()
     await screen.findAllByText(state.well.name)
+
+    expect(screen.getByText('تجمیع NPT از عملیات واقعی', { selector: 'dt' })).toBeInTheDocument()
+    expect(screen.getByText('فقط ردیف‌های واقعی؛ ردیف‌های برنامه و پیش‌بینی‌شده مستثنا هستند')).toBeInTheDocument()
 
     const user = userEvent.setup()
     await user.click(screen.getByRole('tab', { name: /خط زمانی عملیات/ }))

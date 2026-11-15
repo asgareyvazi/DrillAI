@@ -25,11 +25,11 @@ The cockpit keeps the unit attached to the recorded channel. Unit conversion is 
 `GET /api/v1/wells/{well_id}/npt` verifies tenant ownership and returns two independent NPT sources. They are never added together:
 
 - `basis=events`: numerator is the sum of matching event `npt_hours`, falling back to the recorded event duration only when the dedicated NPT-hours value is absent.
-- `basis=operations`: numerator is the sum of matching operation `npt_hours` roll-ups.
+- `basis=operations`: numerator is the sum of `npt_hours` from matching `operation_class=actual` operation rows only. Planned and forecast operation values remain plan data and are excluded from the historical operations-basis NPT KPI; the event basis remains a separate source.
 - `event_count` is the count for the selected source, not the number of rows in the bounded evidence page.
 - `productive_hours` is the sum of `actual_duration_hours` for recorded `operation_class=actual`, `is_productive=true` operations in the same well, section, operation, and explicit time window.
 - `denominator_hours = productive_hours + selected numerator`; `percent_of_well_time = 100 * numerator / denominator_hours`, and is `null` when the denominator is zero. This is a scoped fraction of recorded productive-plus-selected-NPT hours, not a claim about elapsed calendar time.
-- `since` and `until` must be timezone-aware and `since < until`. Only basis-bearing intervals can match a window; a lifecycle closure timestamp, ingest time, or lone report period end is not an event boundary. Rows are selected when their recorded interval overlaps the window, and their full recorded hours are summed without proration; precise partial-window allocations require source interval detail.
+- `since` and `until` must be timezone-aware and `since < until`. Only basis-bearing intervals can match a window; a lifecycle closure timestamp, ingest time, or lone report period end is not an event boundary. The operations basis uses actual start/end values and their provenance for actual rows; it never substitutes a planned interval when actual time is missing. Rows are selected when their recorded interval overlaps the window, and their full recorded hours are summed without proration; precise partial-window allocations require source interval detail.
 - The case list is bounded (`case_limit`/`cases_truncated`) while totals and breakdowns cover the full matching population. Case rows retain their source IDs, event-time basis, duration basis, unit/category evidence and uncertainty.
 - `metric_contract`, `scope`, and `generated_at` travel with the values. No recorded NPT row is not proof that no physical downtime occurred; a zero remains a zero recorded total, not an inferred operating fact.
 

@@ -1023,10 +1023,10 @@ def test_cp16_10_documentation_and_contract_consistency_guard():
     assert len(backend_test_files) >= 78
     assert f"{len(backend_test_files)} files" in readme_text or f"{len(backend_test_files)} test files" in readme_text
 
-    # The backend totals the README quotes must reconcile: the suite with PostgreSQL enabled and the
-    # same suite with the PostgreSQL-marked tests skipped describe the same number of tests, so
-    # passed + skipped + deselected must be the same figure in both claims. A stale count makes the
-    # claims disagree while each still looks plausible in isolation, which is exactly how the
+    # The two current backend totals in README are either explicitly identified as manifest
+    # expectations or verified observations. In either case, the PostgreSQL-enabled and
+    # PostgreSQL-excluded splits must reconcile to the same reviewed inventory. A stale count makes
+    # the claims disagree while each still looks plausible in isolation, which is exactly how the
     # previous "1,097 passed, 7 skipped" claim drifted away from the real split. Every term is
     # counted, because a suite that also has unconditional skips cannot be reconciled by comparing
     # the passed counts alone.
@@ -1034,8 +1034,8 @@ def test_cp16_10_documentation_and_contract_consistency_guard():
         r"\*\*([\d,]+) passed(?:, ([\d,]+) skipped)?(?:, ([\d,]+) deselected)?\*\*", readme_text
     )
     assert len(backend_totals) == 2, (
-        "README.md must quote the completed backend totals exactly twice: PostgreSQL enabled and "
-        "the SQLite-only run with the PostgreSQL-marked tests skipped"
+        "README.md must quote exactly two current backend totals: PostgreSQL enabled and "
+        "the PostgreSQL-excluded default run"
     )
     parsed_totals = {
         tuple(int(value.replace(",", "")) if value else 0 for value in (passed, skipped, deselected))

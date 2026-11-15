@@ -241,3 +241,152 @@ async def test_npt_metric_window_rejects_ambiguous_or_empty_time_bounds(session,
             since=dt.datetime(2026, 3, 16, tzinfo=dt.UTC),
             until=dt.datetime(2026, 3, 16, tzinfo=dt.UTC),
         )
+
+
+async def test_operations_basis_excludes_plan_and_forecast_from_actual_loss_kpi(session, well):
+    start = dt.datetime(2026, 3, 15, 8, tzinfo=dt.UTC)
+    wellbore = Wellbore(org_id=well.org_id, well_id=well.id, name="Main bore", sequence=1)
+    session.add(wellbore)
+    await session.flush()
+    session.add_all(
+        [
+            Operation(
+                org_id=well.org_id,
+                project_id=well.project_id,
+                well_id=well.id,
+                wellbore_id=wellbore.id,
+                operation_class="actual",
+                sequence=1,
+                name="Recorded actual loss",
+                kind="drilling",
+                actual_start=start,
+                actual_start_basis="source_record",
+                actual_end=start + dt.timedelta(hours=2),
+                actual_end_basis="source_record",
+                npt_hours=2.0,
+                npt_hours_basis="reported",
+                is_productive=False,
+            ),
+            Operation(
+                org_id=well.org_id,
+                project_id=well.project_id,
+                well_id=well.id,
+                wellbore_id=wellbore.id,
+                operation_class="actual",
+                sequence=2,
+                name="Recorded productive time",
+                kind="drilling",
+                actual_start=start + dt.timedelta(hours=2),
+                actual_start_basis="source_record",
+                actual_end=start + dt.timedelta(hours=6),
+                actual_end_basis="source_record",
+                actual_duration_hours=4.0,
+                actual_duration_basis="reported",
+                is_productive=True,
+            ),
+            Operation(
+                org_id=well.org_id,
+                project_id=well.project_id,
+                well_id=well.id,
+                wellbore_id=wellbore.id,
+                operation_class="plan",
+                sequence=3,
+                name="Planned loss estimate",
+                kind="drilling",
+                planned_start=start,
+                planned_start_basis="source_record",
+                planned_end=start + dt.timedelta(hours=7),
+                planned_end_basis="source_record",
+                npt_hours=7.0,
+                npt_hours_basis="planned",
+                is_productive=False,
+            ),
+            Operation(
+                org_id=well.org_id,
+                project_id=well.project_id,
+                well_id=well.id,
+                wellbore_id=wellbore.id,
+                operation_class="forecast",
+                sequence=4,
+                name="Forecast loss estimate",
+                kind="drilling",
+                planned_start=start,
+                planned_start_basis="source_record",
+                planned_end=start + dt.timedelta(hours=3),
+                planned_end_basis="source_record",
+                npt_hours=3.0,
+                npt_hours_basis="planned",
+                is_productive=False,
+            ),
+        ]
+    )
+    await session.flush()
+
+    payload = (
+        await NptService(session, org_id=well.org_id).summarise(
+            well.id,
+            basis="operations",
+            include_offsets=False,
+        )
+    ).to_dict()
+
+    assert payload["total_hours"] == pytest.approx(2.0)
+    assert payload["hours_from_operations"] == pytest.approx(2.0)
+    assert payload["productive_hours"] == pytest.approx(4.0)
+    assert payload["denominator_hours"] == pytest.approx(6.0)
+    assert payload["percent_of_well_time"] == pytest.approx(100.0 / 3.0, abs=0.01)
+    assert payload["event_count"] == 1
+    assert [case["title"] for case in payload["cases"]] == ["Recorded actual loss"]
+    assert payload["cases"][0]["started_at"] == start.isoformat()
+    assert payload["cases"][0]["ended_at"] == (start + dt.timedelta(hours=2)).isoformat()
+    assert "operation_class=actual" in payload["metric_contract"]["denominator"]
+    assert "planned/forecast values remain plan data" in payload["metric_contract"]["denominator"]
+
+
+async def test_operations_window_does_not_fall_back_to_planned_times_for_actual_row(session, well):
+    wellbore = Wellbore(org_id=well.org_id, well_id=well.id, name="Main bore", sequence=1)
+    session.add(wellbore)
+    await session.flush()
+    planned_start = dt.datetime(2026, 3, 15, 8, tzinfo=dt.UTC)
+    session.add(
+        Operation(
+            org_id=well.org_id,
+            project_id=well.project_id,
+            well_id=well.id,
+            wellbore_id=wellbore.id,
+            operation_class="actual",
+            sequence=1,
+            name="Actual loss with no observed time",
+            kind="drilling",
+            planned_start=planned_start,
+            planned_start_basis="source_record",
+            planned_end=planned_start + dt.timedelta(hours=2),
+            planned_end_basis="source_record",
+            npt_hours=2.0,
+            npt_hours_basis="reported",
+            is_productive=False,
+        )
+    )
+    await session.flush()
+
+    service = NptService(session, org_id=well.org_id)
+    unwindowed = (
+        await service.summarise(well.id, basis="operations", include_offsets=False)
+    ).to_dict()
+    assert unwindowed["total_hours"] == pytest.approx(2.0)
+    assert unwindowed["cases"][0]["started_at"] is None
+    assert unwindowed["cases"][0]["started_at_basis"] == "legacy_unverified"
+
+    windowed = (
+        await service.summarise(
+            well.id,
+            basis="operations",
+            since=planned_start,
+            until=planned_start + dt.timedelta(hours=3),
+            include_offsets=False,
+        )
+    ).to_dict()
+    assert windowed["total_hours"] == 0.0
+    assert windowed["event_count"] == 0
+    assert windowed["cases"] == []
+    assert windowed["productive_hours"] == 0.0

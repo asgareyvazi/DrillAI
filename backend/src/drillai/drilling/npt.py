@@ -48,7 +48,11 @@ NPT_BASES = ("events", "operations")
 NPT_METRIC_CONTRACT: dict[str, Any] = {
     "unit": "hours",
     "numerator": "sum of recorded NPT hours from the explicitly selected events or operations basis",
-    "denominator": "matching actual productive operation hours plus the selected NPT numerator, using the same well/section/operation/time scope",
+    "denominator": (
+        "matching actual productive operation hours plus the selected NPT numerator, using the same "
+        "well/section/operation/time scope. The operations basis includes only operation_class=actual "
+        "rows; planned/forecast values remain plan data."
+    ),
     "percentage": "100 * numerator / denominator; null when denominator is zero",
     "window": "only the caller-supplied since/until interval; no implicit reporting period",
     "window_hours_policy": "recorded interval rows are included on overlap and their full reported hours are summed without proration",
@@ -383,6 +387,9 @@ class NptService:
         clauses: list[Any] = [
             Operation.org_id == self.org_id,
             Operation.well_id == well_id,
+            # The operations basis is actual-time accounting. Plan/forecast NPT values stay distinct
+            # from the actual productive-hours denominator and are not added to historical loss KPIs.
+            Operation.operation_class == "actual",
             *operational_source_conditions(Operation),
             # A zero-hour roll-up is "no loss booked here", not an NPT occurrence: keeping it would
             # inflate the occurrence count and put an empty row in the evidence list.
@@ -435,11 +442,10 @@ class NptService:
             hours = float(row.npt_hours or 0.0)
             if hours <= 0:
                 continue
-            planned = row.operation_class in {"plan", "forecast"}
-            started_at = row.planned_start if planned else row.actual_start
-            ended_at = row.planned_end if planned else row.actual_end
-            started_at_basis = row.planned_start_basis if planned else row.actual_start_basis
-            ended_at_basis = row.planned_end_basis if planned else row.actual_end_basis
+            started_at = row.actual_start
+            ended_at = row.actual_end
+            started_at_basis = row.actual_start_basis
+            ended_at_basis = row.actual_end_basis
             cases.append(
                 NptEvent(
                     id=row.id,

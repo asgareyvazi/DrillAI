@@ -362,7 +362,12 @@ function NptCard({ npt, onSelectCause }: { npt: NptSummary; onSelectCause: (key:
           source="events recorded without a code"
           reason="every recorded NPT event carries a controllability classification"
         />
-        <Value label={t('cockpit.nptFromOperations')} value={npt.hours_from_operations} unit="h" source="operation.npt_hours" />
+        <Value
+          label={t('cockpit.nptFromOperations')}
+          value={npt.hours_from_operations}
+          unit="h"
+          source={t('cockpit.nptOperationsBasis')}
+        />
         <Value label={t('cockpit.nptProductiveHours')} value={npt.productive_hours} unit="h" source="recorded actual productive operations" />
         <Value label={t('cockpit.nptDenominatorHours')} value={npt.denominator_hours} unit="h" source={t('cockpit.nptDenominatorDefinition')} />
       </dl>
