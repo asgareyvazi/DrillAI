@@ -6,7 +6,7 @@
 
 **Date:** 2026-10-20
 
-**Status:** Implementation and focused reference checks are in place. Both full local backend suites passed and their inventories verified. Native-Windows and exact-SHA CI evidence are not yet available.
+**Status:** Implementation and focused reference checks are in place. Both full local backend suites passed and their inventories verified. Exact-SHA Actions run `43687721588` failed its Linux OCR gate and Windows Playwright gate; CP142 is not cross-platform certified.
 
 ## Scope
 
@@ -25,7 +25,7 @@ All vectors state their units in the engine contract and use synthetic values on
 - `backend/tests/engines/test_cp142_independent_calculation_assurance.py` contains the three independent-reference tests.
 - `ci/test-inventory.json` reviews the three additional collected test IDs (1,755 collected tests across 135 files). Local `pytest --collect-only` confirmed that collection count.
 - `scripts/verify_backend_test_inventory.py` now parses both quiet and standard banner-wrapped verbose pytest summaries without changing the required duration, exit-code, or exact-count checks. The existing CP32 CI-contract regression tests both output shapes.
-- `README.md` and `docs/FRONTEND_TESTING.md` distinguish manifest expectations from completed test results and preserve the earlier CP141 evidence as historical.
+- `README.md` and `docs/FRONTEND_TESTING.md` distinguish CP142 observed results, the current manifest expectations, and the separate CP141 history.
 
 ## Verification record
 
@@ -36,9 +36,14 @@ All vectors state their units in the engine contract and use synthetic values on
 | CP16 documentation/count consistency guard | Passed. The README presents the CP142 PostgreSQL and SQLite totals as observed local results, and the consistency guard reconciles them with the reviewed inventory. |
 | PostgreSQL-enabled complete backend suite | Passed: **1,755 passed, 0 skipped**, in 1,666.75 seconds. Pytest emitted three non-failing warnings. The inventory verifier accepted the verbose pytest summary and confirmed all 15 reviewed PostgreSQL test IDs across 12 files. |
 | Default SQLite complete backend suite | Passed: **1,740 passed, 15 skipped**, in 1,377.32 seconds. Both warnings were non-failing JUnit `record_property` compatibility notices. The inventory verifier passed and identified exactly the 15 PostgreSQL-only skips. |
-| Exact-SHA Linux/native-Windows certification | Not yet run for the CP142 commit. |
+| Exact-SHA Actions run `43687721588` for `f0eaac4cd25fd7089333deec6aa133f4042b037f` | Failed overall. Linux backend/inventory and Windows backend/inventory completed successfully, but Linux deployment-image OCR and Windows Playwright failed; details and evidence boundaries follow below. |
 
-The manifest expects PostgreSQL-enabled Linux 1,755 passed / 0 skipped and default SQLite 1,740 passed / 15 PostgreSQL-only skips; both local outcomes and inventory verifications are observed. The Windows expectation is 1,739 passed / 1 identified POSIX-only skip / 15 PostgreSQL deselections and remains unobserved until native-Windows execution. Exact-SHA CI for this phase and the later final CP151 certification remain outstanding.
+The CP142 local manifest expected PostgreSQL-enabled Linux 1,755 passed / 0 skipped and default SQLite 1,740 passed / 15 PostgreSQL-only skips; both local outcomes and inventory verifications were observed. Exact-SHA run `43687721588` accepted the Linux inventory at 1,755 passed / 0 skipped and Windows inventory at 1,739 passed / 1 identified POSIX-only skip / 15 PostgreSQL deselections (1,755 collected); Windows also reported 402 frontend tests. The run nevertheless failed two independent acceptance gates:
+
+- Linux's 64-case deployment-image synthetic OCR gate reported global CER **0.325776**, WER **0.477663**, and critical-field exact rate **0.471354**; thresholds did not pass. In the Persian stratum (32 cases), CER was **0.651797**, WER **0.893707**, and critical-field exact rate **0/192**. These OCR outcomes are not calculation evidence and are not accepted. The output explicitly identified the synthetic benchmark threshold failure.
+- Windows Playwright failed at `cp131-synthetic-pilot.spec.ts:305` on an unprovoked `GET http://127.0.0.1:5199/@react-refresh` transport error `net::ERR_NO_BUFFER_SPACE`. The cause is unknown. GitHub's full log retrieval returned EOF; no retry or allowance was used.
+
+The CP142 exact-SHA run therefore does not certify the repository cross-platform. This run's results do not change the separate CP135 benchmark failure record. The CP151 requirement remains a fresh Linux/native-Windows run on one identical final SHA with every acceptance gate passing.
 
 ## Acceptance boundary
 
