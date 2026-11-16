@@ -146,7 +146,10 @@ export default defineConfig({
       timeout: 120_000,
       stdout: 'pipe',
       stderr: 'pipe',
-      env: { DRILLAI_API_URL: API_URL },
+      env: {
+        DRILLAI_API_URL: API_URL,
+        DRILLAI_E2E_DISABLE_HMR: 'true',
+      },
     },
   ],
 })

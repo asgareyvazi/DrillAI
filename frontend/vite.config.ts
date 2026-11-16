@@ -30,6 +30,8 @@ export default defineConfig({
     host: '0.0.0.0',
     port: 5173,
     strictPort: false,
+    // Real-browser tests use isolated contexts, not live reload; do not open an HMR websocket per test.
+    hmr: process.env.DRILLAI_E2E_DISABLE_HMR === 'true' ? false : undefined,
     allowedHosts: true,
     proxy: {
       '/api': {

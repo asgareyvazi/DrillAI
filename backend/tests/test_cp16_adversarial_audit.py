@@ -1062,10 +1062,10 @@ def test_cp16_10_documentation_and_contract_consistency_guard():
     assert len(backend_test_files) >= 78
     assert f"{len(backend_test_files)} files" in readme_text or f"{len(backend_test_files)} test files" in readme_text
 
-    # The README marks the current manifest totals explicitly; older phase counts remain historical
+    # The README marks the current CP151 manifest totals explicitly; older phase counts remain historical
     # and are intentionally not interpreted as the current backend inventory. Reconcile the two
     # current PostgreSQL-enabled/default totals (including skips) to the reviewed manifest.
-    current_totals_marker = "Current CP150 backend manifest totals:"
+    current_totals_marker = "Current CP151 backend manifest totals:"
     assert current_totals_marker in readme_text, "README.md must identify the current backend manifest totals"
     current_totals_line = readme_text.split(current_totals_marker, 1)[1].split("\n", 1)[0]
     backend_totals = re.findall(

@@ -129,6 +129,7 @@ export default defineConfig({
       stderr: 'pipe',
       env: {
         DRILLAI_API_URL: API_URL,
+        DRILLAI_E2E_DISABLE_HMR: 'true',
       },
     },
     {
@@ -156,6 +157,7 @@ export default defineConfig({
       env: {
         DRILLAI_API_URL: FAULT_API_URL,
         VITE_API_TIMEOUT_MS: FAULT_TIMEOUT_MS,
+        DRILLAI_E2E_DISABLE_HMR: 'true',
       },
     },
     {
@@ -183,6 +185,7 @@ export default defineConfig({
       stderr: 'pipe',
       env: {
         DRILLAI_API_URL: AUTH_API_URL,
+        DRILLAI_E2E_DISABLE_HMR: 'true',
       },
     },
   ],
