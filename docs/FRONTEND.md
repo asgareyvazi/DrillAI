@@ -52,6 +52,8 @@ acceptance.
 
 ## Current exact-SHA software/browser result
 
+The latest recorded exact-SHA workflow, [run `43811089178`](https://github.com/asgareyvazi/DrillAI/actions/runs/43811089178) on `3a556c441b086666bfadc1651a6afb7d953f1dcc`, **failed overall**. Linux standard Playwright passed 128/128 with zero retries and the isolated narrow CP150 pilot passed 1/1, but the Compose smoke failed on the deployment-image CP135 OCR-quality gate. Native Windows standard Playwright passed 128/128 with zero retries, but its backend failed the survey-station promotion assertion; Windows CP150 was not run. These results do not establish the next SHA or field acceptance. See `mission-reports/CP152-RUN-438110-EVIDENCE-AND-RECOVERY.md`.
+
 CP130–CP132 repository software acceptance is `DONE` on SHA `286945c9d627ba58a4f765b3f28cc65a5e0003ae`. Exact-SHA [Actions run `42481107515`](https://github.com/asgareyvazi/DrillAI/actions/runs/42481107515) passed Linux job `128733009790` and native-Windows job `128733009555`. Each platform passed the 400-test frontend suite and all 127 reviewed Playwright tests with zero retries; the CP131 pilot is included. Linux also passed the Docker Compose/deployment-image gate, whose 32 clean generated English cases scored CER 0, WER 0 and critical-field exact rate 1.0. Those fixture results are not field OCR accuracy. Live vendor verification, field survey/engineering acceptance, provider-backed narrative quality, notification delivery and customer acceptance remain unestablished; see `mission-reports/CP132-FINAL-RELEASE-ASSURANCE.md`.
 
 ## Structure
