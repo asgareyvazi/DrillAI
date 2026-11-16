@@ -133,6 +133,15 @@ def test_page_layout_detector_requires_a_long_central_separator_and_orders_colum
     assert abs(split_x - 500) <= 1
     assert (width, height) == (1000, 1200)
 
+    skewed = divided.rotate(0.4, resample=Image.Resampling.BICUBIC, fillcolor="white")
+    skewed_png = io.BytesIO()
+    skewed.save(skewed_png, format="PNG")
+    skewed_divider = ocr_module._detect_central_column_divider(skewed_png.getvalue())
+    assert skewed_divider is not None
+    skewed_split_x, skewed_width, skewed_height = skewed_divider
+    assert abs(skewed_split_x - 500) <= 10
+    assert (skewed_width, skewed_height) == (1000, 1200)
+
     table = Image.new("RGB", (1000, 1200), "white")
     table_draw = ImageDraw.Draw(table)
     for y in (220, 360, 500, 640, 780):
@@ -310,7 +319,7 @@ def test_tesseract_cli_adapter_uses_stdin_and_bounds_child_output(tmp_path: Path
         languages="eng,fas", executable=str(script), timeout_seconds=5, max_output_bytes=1024
     )
     assert provider.availability() == (True, None)
-    assert provider.version == "tesseract-cli-tsv-v5; tesseract 5.3.0"
+    assert provider.version == "tesseract-cli-tsv-v7; tesseract 5.3.0"
     lines = provider.recognize(b"png-contract")
     assert len(lines) == 1
     assert lines[0].text == "Drill"
@@ -321,6 +330,38 @@ def test_tesseract_cli_adapter_uses_stdin_and_bounds_child_output(tmp_path: Path
     monkeypatch.setattr(ocr_module, "_detect_central_column_divider", lambda _png: None)
     default_lines = provider.recognize(b"png-contract")
     assert [line.text for line in default_lines] == ["Drill"]
+
+    rtl_script = tmp_path / "rtl-language-route"
+    languages_seen = tmp_path / "languages-seen"
+    english_and_persian = _tsv(
+        [_word(left=20, top=20, width=90, height=20, conf="91", text="فارسی")]
+    ).decode()
+    persian_only = _tsv(
+        [_word(left=20, top=20, width=90, height=20, conf="92", text="متن")]
+    ).decode()
+    rtl_script.write_text(
+        chr(10).join(
+            [
+                "#!/usr/bin/env python3",
+                "import sys",
+                "assert sys.argv[1:4] == ['stdin', 'stdout', '--psm'] and sys.argv[4] == '6'",
+                "assert sys.argv[5] == '-l' and sys.argv[7] == 'tsv'",
+                "assert sys.stdin.buffer.read() == b'rtl-png'",
+                f"open({str(languages_seen)!r}, 'a', encoding='utf-8').write(sys.argv[6] + chr(10))",
+                f"sys.stdout.write({english_and_persian!r} if sys.argv[6] == 'eng+fas' else {persian_only!r})",
+            ]
+        )
+        + chr(10),
+        encoding="utf-8",
+    )
+    rtl_script.chmod(0o755)
+    rtl_provider = TesseractOcrProvider(
+        languages="eng+fas", executable=str(rtl_script), timeout_seconds=5
+    )
+    rtl_lines = rtl_provider.recognize(b"rtl-png")
+    assert [line.text for line in rtl_lines] == ["متن"]
+    assert languages_seen.read_text(encoding="utf-8").splitlines() == ["eng+fas", "fas"]
+    assert rtl_provider.languages == "eng+fas"
 
     noisy = tmp_path / "noisy-tesseract"
     noisy.write_text(
@@ -336,6 +377,29 @@ def test_tesseract_cli_adapter_uses_stdin_and_bounds_child_output(tmp_path: Path
     )
     with pytest.raises(OcrUnavailable, match="output exceeded"):
         bounded.recognize(b"small image")
+
+
+def test_tesseract_rtl_language_routing_shares_the_original_page_deadline(monkeypatch) -> None:
+    provider = TesseractOcrProvider(languages="eng+fas", timeout_seconds=7)
+    monkeypatch.setattr(provider, "_resolved_executable", lambda: "/opt/tesseract")
+    monkeypatch.setattr(ocr_module, "_detect_central_column_divider", lambda _png: None)
+    monkeypatch.setattr(ocr_module.time, "monotonic", lambda: 100.0)
+    calls: list[tuple[str, float]] = []
+
+    def recognize(_image_png, _executable, *, page_segmentation_mode, languages, deadline_monotonic):
+        assert page_segmentation_mode == 6
+        calls.append((languages, deadline_monotonic))
+        if len(calls) == 1:
+            return [OcrLine("فارسی", 0.8, (10, 10, 100, 20))]
+        return [OcrLine("متن", 0.9, (10, 10, 100, 20))]
+
+    monkeypatch.setattr(provider, "_recognize_acquired", recognize)
+
+    lines = provider.recognize(b"synthetic-png")
+
+    assert [line.text for line in lines] == ["متن"]
+    assert calls == [("eng+fas", 107.0), ("fas", 107.0)]
+    assert provider.languages == "eng+fas"
 
 
 def test_tesseract_provider_availability_is_explicit_for_missing_executable() -> None:
@@ -389,7 +453,7 @@ def test_tesseract_diagnostics_verify_languages_and_capture_runtime_version(monk
     assert diagnostics["available_languages"] == ["eng"]
     assert diagnostics["missing_languages"] == ["fas"]
     assert diagnostics["reason"] == "Tesseract is missing configured language data: fas"
-    assert provider.version == "tesseract-cli-tsv-v5; tesseract 5.4.1"
+    assert provider.version == "tesseract-cli-tsv-v7; tesseract 5.4.1"
 
 
 def test_tesseract_diagnostic_version_rejects_path_or_untrusted_process_text(monkeypatch) -> None:
@@ -458,9 +522,9 @@ def test_tesseract_runtime_diagnostics_are_cached_across_provider_instances(monk
     second = second_provider.diagnostics()
     second["available_languages"].append("tampered")
 
-    assert first_version == "tesseract-cli-tsv-v5; tesseract 5.4.1"
+    assert first_version == "tesseract-cli-tsv-v7; tesseract 5.4.1"
     assert calls == ["--version", "--list-langs"]
-    assert second_provider.version == "tesseract-cli-tsv-v5; tesseract 5.4.1"
+    assert second_provider.version == "tesseract-cli-tsv-v7; tesseract 5.4.1"
     assert first["available_languages"] == ["eng", "fas"]
 
 

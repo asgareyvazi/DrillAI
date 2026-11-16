@@ -21,11 +21,12 @@ import re
 import shutil
 import subprocess
 import threading
+import time
 import unicodedata
 from contextlib import suppress
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Protocol
+from typing import Any, Protocol
 
 __all__ = [
     "OcrLine",
@@ -38,10 +39,15 @@ __all__ = [
 MAX_TSV_BYTES = 16 * 1024 * 1024
 MAX_DIAGNOSTIC_OUTPUT_BYTES = 128 * 1024
 DIAGNOSTIC_TIMEOUT_SECONDS = 3.0
-TESSERACT_ADAPTER_VERSION = "tesseract-cli-tsv-v5"
+TESSERACT_ADAPTER_VERSION = "tesseract-cli-tsv-v7"
 TESSERACT_PAGE_SEGMENTATION_MODE = 6
 TESSERACT_TWO_COLUMN_PAGE_SEGMENTATION_MODE = 11
+TESSERACT_LANGUAGE_ROUTING_POLICY = (
+    "eng+fas-first-pass; predominantly-RTL-output-rerun-with-fas; shared-per-page-timeout"
+)
 # PSM 6 remains the fixed default; PSM 11 is selected only for a measured, long central divider.
+# The bilingual language route uses at most two sequential Tesseract invocations under one semaphore
+# and one shared per-page timeout; this is an explicit second recognition strategy, not a retry on error.
 _PROCESS_SEMAPHORES: dict[int, threading.BoundedSemaphore] = {}
 _PROCESS_SEMAPHORES_LOCK = threading.Lock()
 _TESSERACT_DIAGNOSTIC_CACHE: dict[tuple[str, str, float, str, str], dict[str, object]] = {}
@@ -96,11 +102,13 @@ _REQUIRED_TSV_COLUMNS = (
 
 
 def _detect_central_column_divider(image_png: bytes) -> tuple[int, int, int] | None:
-    """Detect an explicit, long central divider without treating ordinary text as a second column.
+    """Detect a long central column divider, including one with a small scan skew.
 
     This is deliberately a narrow positive signal: a large blank region is not enough to guess that
-    a page has columns. If layout cannot be established from rendered pixels, the fixed default PSM
-    is retained and no claim is made that the page was segmented into columns.
+    a page has columns. The fast path checks a vertical separator; a bounded fallback follows a
+    separator tilted by at most one degree, as can happen when the scan is lightly skewed. If neither
+    rendered-pixel check establishes a separator, the fixed default PSM is retained and no claim is
+    made that the page was segmented into columns.
     """
     if not image_png.startswith(b"\x89PNG\r\n\x1a\n"):
         return None
@@ -124,32 +132,71 @@ def _detect_central_column_divider(image_png: bytes) -> tuple[int, int, int] | N
     y0, y1 = int(height * 0.10), int(height * 0.75)
     if x1 <= x0 or y1 <= y0:
         return None
+
+    vertical_span = y1 - y0
+    minimum_ink_rows = max(64, int(vertical_span * 0.35))
+    minimum_continuous_rows = int(vertical_span * 0.30)
+
+    def supports_two_columns(split_x: int, supported_rows: Any) -> bool:
+        if split_x / width < 0.44 or split_x / width > 0.56:
+            return False
+        ink_rows = np.flatnonzero(supported_rows)
+        if ink_rows.size < minimum_ink_rows:
+            return False
+        runs = np.split(ink_rows, np.flatnonzero(np.diff(ink_rows) > 3) + 1)
+        longest_run = max((int(run[-1] - run[0] + 1) for run in runs if run.size), default=0)
+        if longest_run < minimum_continuous_rows:
+            return False
+
+        gutter = max(2, int(width * 0.004))
+        left_ink = int(np.count_nonzero(gray[y0:y1, : max(0, split_x - gutter)] < 235))
+        right_ink = int(np.count_nonzero(gray[y0:y1, min(width, split_x + gutter) :] < 235))
+        return left_ink >= 500 and right_ink >= 500
+
+    # Most pages that carry an upright divider finish here; only weak or skewed candidates incur the
+    # bounded angle search below.
     central = gray[y0:y1, x0:x1] < 235
     counts = np.count_nonzero(central, axis=0)
     offset = int(np.argmax(counts))
     split_x = x0 + offset
-    vertical_span = y1 - y0
     divider_pixels = int(counts[offset])
-    if split_x / width < 0.44 or split_x / width > 0.56:
-        return None
-    if divider_pixels < max(64, int(vertical_span * 0.35)):
-        return None
+    if divider_pixels >= minimum_ink_rows:
+        column = gray[y0:y1, split_x] < 235
+        if supports_two_columns(split_x, column):
+            return split_x, width, height
 
-    column = gray[y0:y1, split_x] < 235
-    ink_rows = np.flatnonzero(column)
-    if not ink_rows.size:
-        return None
-    runs = np.split(ink_rows, np.flatnonzero(np.diff(ink_rows) > 3) + 1)
-    longest_run = max((int(run[-1] - run[0] + 1) for run in runs if run.size), default=0)
-    if longest_run < int(vertical_span * 0.30):
-        return None
+    # A skewed separator drifts across adjacent x positions, so no single vertical projection
+    # contains enough ink. Test a fixed 0.1-degree angle grid in a ±1-degree envelope. Each candidate
+    # is a three-pixel-wide line sample to tolerate rasterization/anti-aliasing without treating a
+    # single crossing text row as a divider. The central band and per-page pixel ceiling bound the
+    # work and temporary arrays.
+    y_positions = np.arange(y0, y1)
+    candidate_centers = np.arange(x0, x1)
+    center_y = (y0 + y1 - 1) / 2.0
+    best_count = 0
+    best_split_x = 0
+    best_supported_rows = None
+    for angle_tenths in range(-10, 11):
+        slope = math.tan(math.radians(angle_tenths / 10.0))
+        x_offsets = np.rint(slope * (y_positions - center_y)).astype(np.int32)
+        x_positions = candidate_centers[None, :] + x_offsets[:, None]
+        valid_positions = (x_positions > 0) & (x_positions < width - 1)
+        supported_rows = np.zeros(x_positions.shape, dtype=bool)
+        for neighbor in (-1, 0, 1):
+            sample_x = np.clip(x_positions + neighbor, 0, width - 1)
+            supported_rows |= gray[y_positions[:, None], sample_x] < 235
+        supported_rows &= valid_positions
+        angle_counts = np.count_nonzero(supported_rows, axis=0)
+        candidate_index = int(np.argmax(angle_counts))
+        candidate_count = int(angle_counts[candidate_index])
+        if candidate_count > best_count:
+            best_count = candidate_count
+            best_split_x = int(candidate_centers[candidate_index])
+            best_supported_rows = supported_rows[:, candidate_index].copy()
 
-    gutter = max(2, int(width * 0.004))
-    left_ink = int(np.count_nonzero(gray[y0:y1, : max(0, split_x - gutter)] < 235))
-    right_ink = int(np.count_nonzero(gray[y0:y1, min(width, split_x + gutter) :] < 235))
-    if left_ink < 500 or right_ink < 500:
+    if best_supported_rows is None or not supports_two_columns(best_split_x, best_supported_rows):
         return None
-    return split_x, width, height
+    return best_split_x, width, height
 
 
 def _is_predominantly_rtl(lines: list[OcrLine]) -> bool:
@@ -546,11 +593,25 @@ class TesseractOcrProvider:
             page_segmentation_mode = self.page_segmentation_mode
             if divider is not None and page_segmentation_mode == TESSERACT_PAGE_SEGMENTATION_MODE:
                 page_segmentation_mode = TESSERACT_TWO_COLUMN_PAGE_SEGMENTATION_MODE
+            deadline_monotonic = time.monotonic() + self.timeout_seconds
             lines = self._recognize_acquired(
                 image_png,
                 executable,
                 page_segmentation_mode=page_segmentation_mode,
+                languages=self.languages,
+                deadline_monotonic=deadline_monotonic,
             )
+            if set(self.languages.split("+")) == {"eng", "fas"} and _is_predominantly_rtl(lines):
+                # Tesseract's combined English/Persian model can mis-weight RTL pages. A first-pass
+                # script signal selects the configured Persian model; the same deadline and semaphore
+                # bound both explicit passes, and a failed second pass remains a failure.
+                lines = self._recognize_acquired(
+                    image_png,
+                    executable,
+                    page_segmentation_mode=page_segmentation_mode,
+                    languages="fas",
+                    deadline_monotonic=deadline_monotonic,
+                )
             if divider is not None:
                 split_x, image_width, image_height = divider
                 return _order_column_lines(
@@ -569,7 +630,12 @@ class TesseractOcrProvider:
         executable: str,
         *,
         page_segmentation_mode: int,
+        languages: str,
+        deadline_monotonic: float,
     ) -> list[OcrLine]:
+        timeout_remaining = deadline_monotonic - time.monotonic()
+        if timeout_remaining <= 0:
+            raise OcrUnavailable("Tesseract exceeded the configured per-page timeout")
         child_env = self._child_environment()
         try:
             process = subprocess.Popen(
@@ -580,7 +646,7 @@ class TesseractOcrProvider:
                     "--psm",
                     str(page_segmentation_mode),
                     "-l",
-                    self.languages,
+                    languages,
                     "tsv",
                 ],
                 stdin=subprocess.PIPE,
@@ -634,7 +700,7 @@ class TesseractOcrProvider:
         writer.start()
         timed_out = False
         try:
-            process.wait(timeout=self.timeout_seconds)
+            process.wait(timeout=timeout_remaining)
         except subprocess.TimeoutExpired:
             timed_out = True
             with suppress(OSError):

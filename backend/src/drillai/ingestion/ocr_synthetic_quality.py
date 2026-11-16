@@ -28,6 +28,7 @@ from typing import Any
 from drillai.core.config import Settings, get_settings
 from drillai.ingestion.ocr import (
     TESSERACT_ADAPTER_VERSION,
+    TESSERACT_LANGUAGE_ROUTING_POLICY,
     TESSERACT_PAGE_SEGMENTATION_MODE,
     TESSERACT_TWO_COLUMN_PAGE_SEGMENTATION_MODE,
     OcrUnavailable,
@@ -419,8 +420,9 @@ def _base_report(corpus: dict[str, Any], corpus_bytes: bytes) -> dict[str, Any]:
             "provider": "tesseract",
             "adapter_version": TESSERACT_ADAPTER_VERSION,
             "page_segmentation_mode": TESSERACT_PAGE_SEGMENTATION_MODE,
+            "language_routing_policy": TESSERACT_LANGUAGE_ROUTING_POLICY,
             "layout_policy": {
-                "central_divider_detection": "long_visible_line_in_center_band",
+                "central_divider_detection": "long_visible_centerline_with_small_skew_search",
                 "two_column_page_segmentation_mode": TESSERACT_TWO_COLUMN_PAGE_SEGMENTATION_MODE,
                 "reading_order": "text-script-direction-from-ocr-lines",
             },
