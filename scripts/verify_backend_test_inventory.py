@@ -11,6 +11,7 @@ import argparse
 import contextlib
 import io
 import json
+import math
 import os
 import re
 import sys
@@ -264,6 +265,111 @@ def _junit_failure_summaries(xml_path: Path, *, limit: int = 12) -> list[str]:
     return summaries
 
 
+_CP153_SURVEY_DIAGNOSTIC_PREFIX = "CP153_SURVEY_PROMOTION_DIAGNOSTIC="
+_CP153_COUNT_KEYS = frozenset(
+    {
+        "operations",
+        "operations_linked",
+        "operations_updated",
+        "events",
+        "events_updated",
+        "twin_aspects",
+        "trajectory_stations",
+        "promoted",
+        "needs_review",
+    }
+)
+_CP153_RECORD_VALUE_KEYS = frozenset(
+    {
+        "md_si",
+        "inclination_deg",
+        "azimuth_deg",
+        "azimuth_reference",
+        "azimuth_reference_id",
+        "datum",
+    }
+)
+
+
+def _cp153_number(value: Any) -> int | float | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    return value if isinstance(value, int) or math.isfinite(value) else None
+
+
+def cp153_survey_failure_diagnostic(log_text: str, *, max_chars: int = 3000) -> str | None:
+    """Expose a bounded, allow-listed diagnostic for the synthetic Windows survey regression only."""
+    plain = ANSI_RE.sub("", log_text)
+    for line in plain.splitlines():
+        marker = line.find(_CP153_SURVEY_DIAGNOSTIC_PREFIX)
+        if marker < 0:
+            continue
+        encoded = line[marker + len(_CP153_SURVEY_DIAGNOSTIC_PREFIX):].strip()
+        try:
+            raw = json.loads(encoded)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(raw, dict):
+            continue
+
+        raw_counts = raw.get("reported_counts")
+        counts = {
+            key: value
+            for key, value in raw_counts.items()
+            if key in _CP153_COUNT_KEYS and isinstance(value, int) and not isinstance(value, bool)
+        } if isinstance(raw_counts, dict) else {}
+        records: list[dict[str, Any]] = []
+        for item in raw.get("source_records", [])[:2] if isinstance(raw.get("source_records"), list) else []:
+            if not isinstance(item, dict):
+                continue
+            values = item.get("values")
+            safe_values: dict[str, Any] = {}
+            if isinstance(values, dict):
+                for key, value in values.items():
+                    if key not in _CP153_RECORD_VALUE_KEYS:
+                        continue
+                    if value is None or isinstance(value, str):
+                        safe_values[key] = value[:120] if isinstance(value, str) else value
+                    elif isinstance(value, (int, float)) and not isinstance(value, bool):
+                        finite_value = _cp153_number(value)
+                        if finite_value is not None:
+                            safe_values[key] = finite_value
+            confidence = _cp153_number(item.get("confidence"))
+            depth = _cp153_number(item.get("depth_md_si"))
+            records.append(
+                {
+                    "record_type": item.get("record_type") if item.get("record_type") == "survey_station" else None,
+                    "validation_state": item.get("validation_state")
+                    if isinstance(item.get("validation_state"), str)
+                    and item.get("validation_state") in {"extracted", "rule_validated", "human_validated", "needs_review"}
+                    else None,
+                    "confidence": confidence,
+                    "observed_at": item.get("observed_at")[:64] if isinstance(item.get("observed_at"), str) else None,
+                    "observed_at_basis": item.get("observed_at_basis")
+                    if isinstance(item.get("observed_at_basis"), str)
+                    and item.get("observed_at_basis") in {"source_record", "unknown"}
+                    else None,
+                    "depth_md_si": depth,
+                    "quality_flags": [value[:80] for value in item.get("quality_flags", [])[:10] if isinstance(value, str)]
+                    if isinstance(item.get("quality_flags"), list)
+                    else [],
+                    "values": safe_values,
+                }
+            )
+        raw_reasons = raw.get("not_promoted_reasons")
+        reasons = [value[:240] for value in raw_reasons[:3] if isinstance(value, str)] if isinstance(raw_reasons, list) else []
+        diagnostic = {
+            "reported_counts": counts,
+            "record_count": raw.get("record_count") if isinstance(raw.get("record_count"), int) and not isinstance(raw.get("record_count"), bool) else None,
+            "persisted_station_count": raw.get("persisted_station_count") if isinstance(raw.get("persisted_station_count"), int) and not isinstance(raw.get("persisted_station_count"), bool) else None,
+            "source_records": records,
+            "not_promoted_reasons": reasons,
+        }
+        rendered = json.dumps(diagnostic, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False)
+        return rendered if len(rendered) <= max_chars else rendered[:max_chars] + "…[truncated]"
+    return None
+
+
 def failed_node_summaries(
     log_text: str,
     *,
@@ -311,6 +417,9 @@ def verify_platform_result(
     expected = backend[platform]
     if pytest_exit_code != 0:
         details = [f"pytest exited {pytest_exit_code}; a zero process exit is required"]
+        survey_diagnostic = cp153_survey_failure_diagnostic(log_text)
+        if survey_diagnostic is not None:
+            details.append("CP153 synthetic survey-promotion diagnostics (allow-listed): " + survey_diagnostic)
         failed_nodes = failed_node_summaries(log_text, junit_xml_file=junit_xml_file)
         details.append(
             "failed node IDs and exception classes: " + ", ".join(failed_nodes)

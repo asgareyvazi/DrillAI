@@ -340,6 +340,35 @@ def test_cp32_the_certification_jobs_reject_skips(tmp_path: Path) -> None:
     assert spec is not None and spec.loader is not None
     diagnostics = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(diagnostics)
+    survey_line = "CP153_SURVEY_PROMOTION_DIAGNOSTIC=" + json.dumps(
+        {
+            "reported_counts": {"trajectory_stations": 0, "private_count": 9},
+            "record_count": 2,
+            "persisted_station_count": 0,
+            "source_records": [
+                {
+                    "record_type": "survey_station",
+                    "validation_state": "extracted",
+                    "confidence": 0.65,
+                    "observed_at": "2026-03-15T10:00:00+00:00",
+                    "observed_at_basis": "source_record",
+                    "depth_md_si": 500.0,
+                    "quality_flags": ["unit_inferred"],
+                    "values": {"md_si": 500.0, "private_value": "must-not-appear"},
+                }
+            ],
+            "not_promoted_reasons": ["synthetic fixture row needs review"],
+            "private_payload": "must-not-appear",
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    survey_summary = diagnostics.cp153_survey_failure_diagnostic("E " + survey_line)
+    assert survey_summary is not None
+    assert '"trajectory_stations":0' in survey_summary
+    assert '"record_count":2' in survey_summary
+    assert "synthetic fixture row needs review" in survey_summary
+    assert "must-not-appear" not in survey_summary and "private_count" not in survey_summary
     # Pytest's verbose JUnit run wraps its summary in '=' banners; the inventory verifier must parse
     # both this standard format and the unwrapped quiet format while still requiring a duration.
     _, verbose_counts = diagnostics.parse_summary(

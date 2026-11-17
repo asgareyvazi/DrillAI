@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import asyncio
 import datetime as dt
+import json
 from typing import Any
 
 import pytest
@@ -1167,7 +1168,40 @@ async def test_report_period_is_not_promoted_as_a_survey_station_measurement_tim
         ).scalars().all()
 
     expected_station_time = dt.datetime(2026, 3, 15, 10, tzinfo=dt.UTC)
-    assert report["counts"]["trajectory_stations"] == 2
+    diagnostic = {
+        "reported_counts": report.get("counts", {}),
+        "record_count": len(records),
+        "source_records": [
+            {
+                "record_type": record.record_type,
+                "validation_state": record.validation_state,
+                "confidence": record.confidence,
+                "observed_at": record.observed_at.isoformat() if record.observed_at else None,
+                "observed_at_basis": record.observed_at_basis,
+                "depth_md_si": record.depth_md_si,
+                "quality_flags": record.quality_flags or [],
+                "values": {
+                    key: record.payload.get(key)
+                    for key in (
+                        "md_si",
+                        "inclination_deg",
+                        "azimuth_deg",
+                        "azimuth_reference",
+                        "azimuth_reference_id",
+                        "datum",
+                    )
+                    if key in record.payload
+                },
+            }
+            for record in records
+        ],
+        "not_promoted_reasons": [row.get("reason", "") for row in report.get("not_promoted", [])],
+        "persisted_station_count": len(stations),
+    }
+    assert report["counts"]["trajectory_stations"] == 2, (
+        "CP153_SURVEY_PROMOTION_DIAGNOSTIC="
+        + json.dumps(diagnostic, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    )
     assert [record.observed_at for record in records] == [expected_station_time, None]
     assert [station.measured_at for station in stations] == [expected_station_time, None]
     assert [station.measured_at_provenance for station in stations] == ["source_record", "unknown"]
