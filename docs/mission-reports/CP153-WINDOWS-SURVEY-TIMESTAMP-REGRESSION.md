@@ -22,3 +22,7 @@ No Windows-specific cause is inferred from that result. The source path accepts 
 - CP166 must rerun the full backend and the same accepted SHA on Linux and native Windows. This report alone does not close CP153.
 
 No operational timestamps, station values, units, or source references were invented. No field/customer acceptance is implied.
+
+## Subsequent exact-SHA observation
+
+[Run 44296549169](https://github.com/asgareyvazi/DrillAI/actions/runs/44296549169) on `bb97059abf1fb02850056b1844b66dfd6e2be023` reproduced the unchanged Windows failure. The diagnostic shows 500 m with `source_record` timestamp and 600 m with `unknown`/null time, but both stations were held as non-increasing in source order. Those diagnostic rows are independently sorted by depth and do not reveal the order processed. The promoter currently receives rows ordered by page, creation timestamp and ID rather than source-row position, a plausible tie-related hazard; actual timestamps and consumed ordering were not recorded, so this is a hypothesis, not a demonstrated root cause. Source row evidence is retained in evidence-link locators. Correcting and testing reliable, scoped row ordering and ambiguous/missing/descending cases remains open, as does a passing exact-SHA Windows run; the report period must never become a station time.
