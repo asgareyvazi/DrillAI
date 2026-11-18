@@ -263,3 +263,29 @@ def test_mse_requires_positive_parameters(engines):
         engines.execute("drilling.mse", _mse_input(rop_si=0.0))
     with pytest.raises(EngineInputInvalid):
         engines.execute("drilling.mse", _mse_input(rpm_si=-1.0))
+
+
+def test_mse_numerical_underflow_and_overflow_fail_closed(engines):
+    """Finite but extreme values must not become exceptions or misleading finite zero outputs."""
+    from drillai.core.errors import EngineConvergenceError
+
+    cases = [
+        {"bit_diameter_si": 1e-300},  # squared area underflows
+        {"bit_diameter_si": 1e308},  # squared area overflows
+        {"rop_si": 5e-324},  # m/h conversion underflows
+        {"rpm_si": 5e-324},  # angular velocity underflows
+        {"rpm_si": 1e-100, "torque_si": 5e-324},  # rotary numerator underflows
+        {"bit_diameter_si": 1e154, "rop_si": 1e308},  # denominator overflows
+        {"bit_diameter_si": 10.0, "wob_si": 5e-324},  # axial term underflows
+        {"confined_compressive_strength_si": 5e-324},  # efficiency underflows
+        {"wob_si": 1e-300, "torque_si": 1e-300, "reference_mse_si": 1e308},  # ratio underflows
+    ]
+    stages = (
+        "bit_area", "bit_area", "rop_conversion", "angular_velocity", "rotary_numerator",
+        "rotary_denominator", "axial_component", "efficiency", "dysfunction_ratio",
+    )
+    assert engines.get("drilling.mse").spec.version == "1.1.1"
+    for case, stage in zip(cases, stages, strict=True):
+        with pytest.raises(EngineConvergenceError, match="non-finite or underflow") as exc:
+            engines.execute("drilling.mse", _mse_input(**case))
+        assert exc.value.details == {"engine": "drilling.mse", "stage": stage}

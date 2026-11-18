@@ -1180,3 +1180,27 @@ async def test_engine_api_rejects_nonfinite_inputs_without_persisting_a_result(c
     async with app.state.database.session() as session:
         count = (await session.execute(select(func.count()).select_from(EngineRun))).scalar_one()
     assert count == 0
+
+
+async def test_engine_api_rejects_mse_numerical_exception_and_underflow_without_run(client):
+    from sqlalchemy import func, select
+
+    from drillai.db.models import EngineRun
+
+    values = [
+        {"bit_diameter_si": 1e-300},
+        {"bit_diameter_si": 1e308},
+        {"rpm_si": 1e-100, "torque_si": 5e-324},
+    ]
+    base = {"wob_si": 42000, "torque_si": 2650, "rpm_si": 96, "rop_si": 18, "bit_diameter_si": 0.2032}
+    for overrides in values:
+        response = await client.post(
+            "/api/v1/registry/engines/drilling.mse/run",
+            headers=headers(),
+            json={"inputs": {**base, **overrides}},
+        )
+        assert response.status_code == 422, response.text
+        assert response.json()["error"]["code"] == "engine.convergence_failed"
+    async with client._transport.app.state.database.session() as session:
+        count = (await session.execute(select(func.count()).select_from(EngineRun))).scalar_one()
+    assert count == 0

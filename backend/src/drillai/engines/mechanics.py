@@ -23,6 +23,7 @@ from itertools import pairwise
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from drillai.core.errors import EngineConvergenceError
 from drillai.engines.contract import ConstraintViolation, EngineResult, EngineSpec, FunctionEngine
 from drillai.engines.registry import register_engine
 from drillai.units.registry import quantity_field
@@ -412,26 +413,48 @@ def _neutral_point(results: list[StationResult]) -> float | None:
 
 
 # --------------------------------------------------------------------------- MSE
+def _mse_positive_finite(value: float, stage: str) -> float:
+    # Each checked term is mathematically strictly positive for valid MSE inputs. A zero produced
+    # by floating-point underflow is not a physically meaningful zero-energy drilling prediction.
+    if not math.isfinite(value) or value <= 0.0:
+        raise EngineConvergenceError(
+            "drilling.mse encountered a non-finite or underflowed numerical term",
+            details={"engine": "drilling.mse", "stage": stage},
+        )
+    return value
+
+
 def compute_mse(inputs: MseEngineInput) -> EngineResult:
     warnings: list[str] = []
     violations: list[ConstraintViolation] = []
 
-    area = math.pi / 4.0 * inputs.bit_diameter_si**2
-    rop_m_per_s = inputs.rop_si / 3600.0
-    rpm_rev_per_s = inputs.rpm_si * 2.0 * math.pi / 60.0
+    try:
+        area = _mse_positive_finite(math.pi / 4.0 * inputs.bit_diameter_si**2, "bit_area")
+    except OverflowError as exc:
+        raise EngineConvergenceError(
+            "drilling.mse encountered a non-finite or underflowed numerical term",
+            details={"engine": "drilling.mse", "stage": "bit_area"},
+        ) from exc
+    rop_m_per_s = _mse_positive_finite(inputs.rop_si / 3600.0, "rop_conversion")
+    rpm_rev_per_s = _mse_positive_finite(inputs.rpm_si * 2.0 * math.pi / 60.0, "angular_velocity")
 
-    axial = inputs.wob_si / area
-    torsional = (rpm_rev_per_s * inputs.torque_si) / (area * rop_m_per_s)
-    mse = axial + torsional
+    numerator = _mse_positive_finite(rpm_rev_per_s * inputs.torque_si, "rotary_numerator")
+    denominator = _mse_positive_finite(area * rop_m_per_s, "rotary_denominator")
+    axial = _mse_positive_finite(inputs.wob_si / area, "axial_component")
+    torsional = _mse_positive_finite(numerator / denominator, "torsional_component")
+    mse = _mse_positive_finite(axial + torsional, "specific_energy")
+    mse_psi = _mse_positive_finite(mse / 6894.757293168361, "specific_energy_psi")
+    wob_per_diameter = _mse_positive_finite(inputs.wob_si / inputs.bit_diameter_si, "wob_per_diameter")
 
     efficiency = None
     if inputs.confined_compressive_strength_si:
-        efficiency = min(1.0, inputs.confined_compressive_strength_si / mse)
+        strength_ratio = _mse_positive_finite(inputs.confined_compressive_strength_si / mse, "efficiency")
+        efficiency = min(1.0, strength_ratio)
 
     dysfunction_ratio = None
     indicator = "unknown"
     if inputs.reference_mse_si:
-        dysfunction_ratio = mse / inputs.reference_mse_si
+        dysfunction_ratio = _mse_positive_finite(mse / inputs.reference_mse_si, "dysfunction_ratio")
         if dysfunction_ratio < 1.05:
             indicator = "efficient"
         elif dysfunction_ratio < 1.35:
@@ -479,12 +502,12 @@ def compute_mse(inputs: MseEngineInput) -> EngineResult:
         mse_si=mse,
         mse_axial_component_si=axial,
         mse_torsional_component_si=torsional,
-        mse_psi=mse / 6894.757293168361,
+        mse_psi=mse_psi,
         drilling_efficiency=efficiency,
         dysfunction_ratio=dysfunction_ratio,
         dysfunction_indicator=indicator,
         rop_si=inputs.rop_si,
-        wob_per_diameter_si=inputs.wob_si / inputs.bit_diameter_si,
+        wob_per_diameter_si=wob_per_diameter,
         estimated_confined_strength_si=inputs.confined_compressive_strength_si,
         notes=notes,
     )
@@ -530,7 +553,7 @@ TORQUE_DRAG_SPEC = EngineSpec(
 MSE_SPEC = EngineSpec(
     key="drilling.mse",
     name="Mechanical specific energy and drilling efficiency",
-    version="1.1.0",
+    version="1.1.1",
     domain_pack="Bit Pack",
     category="mechanics",
     summary=(

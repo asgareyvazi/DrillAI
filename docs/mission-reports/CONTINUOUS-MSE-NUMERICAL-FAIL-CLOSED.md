@@ -1,0 +1,19 @@
+# MSE numerical underflow and overflow handling
+
+**Status: PARTIAL.** This is a narrow numerical failure control for `drilling.mse`, not physical operating-range validation, a complete numerical audit or field acceptance.
+
+## Reproduction and changes
+
+At revision `eafb38b7ba73385b64990284cef1c29b2384fc9b`, positive finite adversarial diameters `1e-300` and `1e308` caused respectively a division-by-zero and an overflow before the registry's non-finite-result check. Other positive finite inputs can produce zero-valued intermediate terms through underflow, or infinity in products, leading to a finite but misleading output. These synthetic values are not realistic operating parameters and are not proposed physical bounds.
+
+The MSE implementation now checks its mathematically positive area, unit-conversion values, rotary numerator/denominator, axial and torsional terms, total, reported pressure-unit conversion and WOB/diameter for positivity and finiteness. Supplied strength and reference ratios are checked before reporting. Area exponentiation overflow is caught specifically; these numerical failures return `engine.convergence_failed` rather than replacing a term or publishing a result. The MSE spec version is incremented from `1.1.0` to `1.1.1`. No other engine's exception handling is reclassified. The error identifies the calculation stage, without echoing input values.
+
+Nine cases in `tests/engines/test_mechanics.py` exercise area underflow/overflow, conversion underflow, product and denominator failures, component underflow and optional ratio underflow. The API regression tests selected overflow/underflow inputs against HTTP 422 and verifies no engine run is written. Before implementation, the new targeted test failed with `ZeroDivisionError`. Existing independent MSE reference calculation and normal mechanics tests remain unchanged. The focused registry, engines, API and documentation consistency selection passed **178**; Ruff passed. The manifest grew by two actual test functions to 1,804 collected. The full local SQLite suite passed **1,789 with 15 reviewed PostgreSQL skips**, and the default inventory verifier passed. After that run, stage-specific assertions and the version assertion were added to an existing test and exercised in a further focused selection (**20 passed**), not in a repeated full run. This is not a PostgreSQL-enabled or native-Windows result. Exact-SHA CI for the change must be reported separately.
+
+## Boundaries
+
+This check does not validate physical operating limits, reject every subnormal or guarantee numerical accuracy: relative precision loss, intermediate rounding, ignored optional fields, assumptions and input provenance still require engineering review. Other engines can still encounter arithmetic exceptions or finite-but-invalid values, and direct calls can bypass registry checks. No implementation can infer missing source inputs, and no arithmetic is delegated to AI. `well_control.kill_sheet` and `tubulars.api_5c3` remain `NEEDS_FIELD_VALIDATION`.
+
+## Workspace continuity
+
+On continuation the local branch ref was again restored to ancestor `bfea530602a23bcc08efca85a136240f61c44a0d` while files contained the previously pushed revision. After fetch, all **680** tracked files at remote `eafb38b7ba73385b64990284cef1c29b2384fc9b` were individually checked against their Git blobs and modes, with zero missing/different; the existing index had no staged changes and the local ref was an ancestor. Only then were the index and the same authorized branch ref advanced to that already-present descendant, without overwriting workspace files. The four untracked browser-artifact directories were preserved; historical deleted CP150 retries and unavailable CP145 stash were not recovered. Main remained `bfa066b28e0071880cb9191a4f1d47fdaa143e04` at fetch.
