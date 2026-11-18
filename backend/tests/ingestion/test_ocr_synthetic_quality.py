@@ -77,6 +77,25 @@ def test_pinned_synthetic_ocr_corpus_has_64_unique_bilingual_stratified_cases(tm
     assert generated.read_bytes() == raw
 
 
+def test_persian_fixture_preserves_iso_dates_and_mixed_ltr_tokens_visually() -> None:
+    corpus, corpus_bytes = quality._load_corpus()
+    case = corpus["cases"][32]
+    date = next(field["expected"] for field in case["critical_fields"] if field["key"] == "report_date")
+    sample_id = next(field["expected"] for field in case["critical_fields"] if field["key"] == "sample_id")
+    ltr_mark = chr(0x200E)
+
+    rendered = quality._visual_fixture_text(f"تاریخ گزارش: {date}\nشناسه نمونه: {sample_id}", "fas")
+
+    assert f"{ltr_mark}{date}{ltr_mark}" in rendered
+    assert sample_id in rendered
+    assert f"{ltr_mark}{sample_id}{ltr_mark}" not in rendered
+    assert case["ground_truth"].splitlines()[2].endswith(date)
+    assert quality._base_report(corpus, corpus_bytes)["runtime"]["fixture_rendering_policy"] == {
+        "version": "cp135-rtl-ltr-isolation-v3",
+        "rtl_left_to_right_runs": "U+200E-LRM-isolation-for-ISO-dates-only",
+    }
+
+
 def test_critical_field_metric_requires_language_specific_value_under_expected_label() -> None:
     english_fields = [
         {"key": "report_date", "expected": "2026-01-01"},
@@ -297,6 +316,7 @@ def _valid_quality_report(corpus: dict, raw: bytes) -> dict:
             "adapter_version": quality.TESSERACT_ADAPTER_VERSION,
             "page_segmentation_mode": quality.TESSERACT_PAGE_SEGMENTATION_MODE,
             "language_routing_policy": quality.TESSERACT_LANGUAGE_ROUTING_POLICY,
+            "fixture_rendering_policy": dict(quality._SYNTHETIC_FIXTURE_RENDERER_POLICY),
             "layout_policy": {
                 "central_divider_detection": "long_visible_centerline_with_small_skew_search",
                 "two_column_page_segmentation_mode": quality.TESSERACT_TWO_COLUMN_PAGE_SEGMENTATION_MODE,

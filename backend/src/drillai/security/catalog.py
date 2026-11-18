@@ -83,10 +83,28 @@ PLATFORM_ACTIONS: tuple[tuple[str, ActionLevel, str, str], ...] = (
     ("twin.update", ActionLevel.DRAFT, "Write a computed aspect or snapshot into the twin.", "twin.update"),
     # --- draft ---------------------------------------------------------------------------
     (
+        "artifact.read",
+        ActionLevel.OBSERVE,
+        "Read a tenant-scoped versioned engineering artifact and its review history.",
+        "artifact.read",
+    ),
+    (
         "artifact.draft",
         ActionLevel.DRAFT,
-        "Create or edit a candidate (non-approved) artefact version.",
+        "Create or edit a candidate (non-approved) engineering product revision.",
         "artifact.draft",
+    ),
+    (
+        "artifact.validate",
+        ActionLevel.DRAFT,
+        "Run deterministic validation against one exact engineering-product revision and its attached evidence.",
+        "artifact.draft",
+    ),
+    (
+        "artifact.export",
+        ActionLevel.DRAFT,
+        "Export a selected versioned engineering-product revision with provenance and audit evidence.",
+        "artifact.export",
     ),
     (
         "daily_report.create",
@@ -355,8 +373,14 @@ PLATFORM_ACTIONS: tuple[tuple[str, ActionLevel, str, str], ...] = (
     (
         "artifact.submit",
         ActionLevel.PROPOSE,
-        "Submit an artefact version for review/approval.",
+        "Submit a versioned engineering-product revision for independent review.",
         "action:artifact.submit",
+    ),
+    (
+        "artifact.review",
+        ActionLevel.PROPOSE,
+        "Record an independent human review of an exact engineering-product revision.",
+        "action:artifact.review",
     ),
     (
         "requirement.verify",
@@ -380,7 +404,13 @@ PLATFORM_ACTIONS: tuple[tuple[str, ActionLevel, str, str], ...] = (
     (
         "artifact.approve",
         ActionLevel.EXECUTE_WITH_APPROVAL,
-        "Approve an artefact version (human authority).",
+        "Approve an engineering-product revision after independent review (human authority).",
+        "action:artifact.approve",
+    ),
+    (
+        "artifact.reject",
+        ActionLevel.EXECUTE_WITH_APPROVAL,
+        "Reject an engineering-product revision after independent review (human authority).",
         "action:artifact.approve",
     ),
     (

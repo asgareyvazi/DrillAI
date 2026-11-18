@@ -66,6 +66,11 @@ _FIELD_LABELS = {
     },
 }
 _NUMERIC_FIELD_KEYS = {"measured_depth_m", "rop_m_per_h", "mud_weight_ppg", "npt_h"}
+_SYNTHETIC_FIXTURE_RENDERER_POLICY = {
+    "version": "cp135-rtl-ltr-isolation-v3",
+    "rtl_left_to_right_runs": "U+200E-LRM-isolation-for-ISO-dates-only",
+}
+_ISO_DATE_RE = re.compile(r"(?<![0-9])20[0-9]{2}-[0-9]{2}-[0-9]{2}(?![0-9])")
 _RENDERER_DISTRIBUTIONS = {
     "Pillow": "Pillow",
     "reportlab": "reportlab",
@@ -221,8 +226,6 @@ def _critical_field_matches(
 def _raster_pdf(case: dict[str, Any]) -> bytes:
     """Create a deterministic, one-page, image-only DDR PDF entirely in memory."""
     try:
-        import arabic_reshaper
-        from bidi.algorithm import get_display
         from PIL import Image, ImageDraw, ImageFont
         from reportlab.lib.utils import ImageReader
         from reportlab.pdfgen import canvas
@@ -252,9 +255,7 @@ def _raster_pdf(case: dict[str, Any]) -> bytes:
     bold_path_obj = ImageFont.truetype(str(bold_path), 50)
 
     def visual_text(text: str) -> str:
-        if language == "fas":
-            return get_display(arabic_reshaper.reshape(text))
-        return text
+        return _visual_fixture_text(text, language)
 
     def draw_text(
         text: str,
@@ -400,6 +401,25 @@ def _resource_limits(settings: Settings) -> dict[str, int | float]:
     }
 
 
+def _visual_fixture_text(text: str, language: str) -> str:
+    """Preserve the source order of ISO dates in RTL synthetic fixture images.
+
+    The Unicode bidi algorithm reorders hyphen-separated ISO date components inside an RTL line.
+    Isolate only that known date form with invisible LRM marks; other labels, identifiers, values,
+    ground truth, and scoring normalization remain unchanged.
+    """
+    if language != "fas":
+        return text
+    try:
+        import arabic_reshaper
+        from bidi.algorithm import get_display
+    except Exception as exc:
+        raise OcrUnavailable("the Persian fixture renderer is not installed") from exc
+
+    isolated = _ISO_DATE_RE.sub(lambda match: f"{chr(0x200E)}{match.group(0)}{chr(0x200E)}", text)
+    return get_display(arabic_reshaper.reshape(isolated))
+
+
 def _base_report(corpus: dict[str, Any], corpus_bytes: bytes) -> dict[str, Any]:
     return {
         "tool": "drillai-synthetic-ocr-quality-v3",
@@ -421,6 +441,7 @@ def _base_report(corpus: dict[str, Any], corpus_bytes: bytes) -> dict[str, Any]:
             "adapter_version": TESSERACT_ADAPTER_VERSION,
             "page_segmentation_mode": TESSERACT_PAGE_SEGMENTATION_MODE,
             "language_routing_policy": TESSERACT_LANGUAGE_ROUTING_POLICY,
+            "fixture_rendering_policy": dict(_SYNTHETIC_FIXTURE_RENDERER_POLICY),
             "layout_policy": {
                 "central_divider_detection": "long_visible_centerline_with_small_skew_search",
                 "two_column_page_segmentation_mode": TESSERACT_TWO_COLUMN_PAGE_SEGMENTATION_MODE,
@@ -434,6 +455,7 @@ def _base_report(corpus: dict[str, Any], corpus_bytes: bytes) -> dict[str, Any]:
             "required_languages": list(corpus["languages"]),
             "configured_languages": [],
             "available_languages": [],
+            "traineddata_sha256": {},
         },
         "thresholds": {
             "max_character_error_rate": _MAX_SYNTHETIC_CER,
@@ -546,6 +568,7 @@ def run_synthetic_quality_benchmark(settings: Settings | None = None) -> dict[st
             "runtime_version": diagnostics.get("runtime_version"),
             "pdf_renderer_version": pdfium_version,
             "available_languages": sorted(diagnostics.get("available_languages", [])),
+            "traineddata_sha256": dict(diagnostics.get("traineddata_sha256", {})),
         }
     )
     missing_languages = set(diagnostics.get("missing_languages", []))

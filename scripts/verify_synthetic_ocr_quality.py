@@ -24,6 +24,10 @@ LAYOUT_POLICY = {
     "two_column_page_segmentation_mode": 11,
     "reading_order": "text-script-direction-from-ocr-lines",
 }
+FIXTURE_RENDERING_POLICY = {
+    "version": "cp135-rtl-ltr-isolation-v3",
+    "rtl_left_to_right_runs": "U+200E-LRM-isolation-for-ISO-dates-only",
+}
 LANGUAGE_ROUTING_POLICY = (
     "eng+fas-first-pass; predominantly-RTL-output-rerun-with-fas; shared-per-page-timeout"
 )
@@ -184,6 +188,7 @@ def verify(report_path: Path, corpus_path: Path) -> dict[str, Any]:
         or runtime.get("page_segmentation_mode") != 6
         or runtime.get("language_routing_policy") != LANGUAGE_ROUTING_POLICY
         or runtime.get("layout_policy") != LAYOUT_POLICY
+        or runtime.get("fixture_rendering_policy") != FIXTURE_RENDERING_POLICY
         or runtime.get("required_languages") != languages
         or not set(languages).issubset(runtime.get("configured_languages", []))
         or not set(languages).issubset(runtime.get("available_languages", []))

@@ -65,6 +65,54 @@ def _process_semaphore(limit: int) -> threading.BoundedSemaphore:
         return semaphore
 
 
+def _traineddata_sha256(languages: list[str] | tuple[str, ...]) -> dict[str, str]:
+    """Hash installed language models when their data directory can be resolved safely.
+
+    Only digests leave this helper; executable/data paths and OCR text remain private. Deployments that
+    want reproducible model provenance should set ``TESSDATA_PREFIX`` explicitly, as the container
+    does, rather than relying on a distribution-specific compiled-in path.
+    """
+    import hashlib
+
+    candidates: list[Path] = []
+    prefix = os.environ.get("TESSDATA_PREFIX")
+    if prefix:
+        root = Path(prefix)
+        candidates.extend((root, root / "tessdata"))
+    if os.name == "nt":
+        program_files = os.environ.get("PROGRAMFILES")
+        if program_files:
+            candidates.append(Path(program_files) / "Tesseract-OCR" / "tessdata")
+    else:
+        candidates.extend(
+            (
+                Path("/usr/share/tesseract-ocr/5/tessdata"),
+                Path("/usr/share/tesseract-ocr/4.00/tessdata"),
+                Path("/usr/share/tessdata"),
+            )
+        )
+    resolved: list[Path] = []
+    for candidate in candidates:
+        try:
+            canonical = candidate.resolve(strict=True)
+        except OSError:
+            continue
+        if canonical.is_dir() and canonical not in resolved:
+            resolved.append(canonical)
+    result: dict[str, str] = {}
+    for language in sorted(set(languages)):
+        for directory in resolved:
+            model = directory / f"{language}.traineddata"
+            try:
+                with model.open("rb") as source:
+                    digest = hashlib.file_digest(source, "sha256").hexdigest()
+            except OSError:
+                continue
+            result[language] = digest
+            break
+    return result
+
+
 @dataclass(frozen=True)
 class OcrLine:
     text: str
@@ -477,6 +525,7 @@ class TesseractOcrProvider:
                     "configured_languages": list(snapshot["configured_languages"]),
                     "available_languages": list(snapshot["available_languages"]),
                     "missing_languages": list(snapshot["missing_languages"]),
+                    "traineddata_sha256": dict(snapshot.get("traineddata_sha256", {})),
                 }
                 snapshot = _TESSERACT_DIAGNOSTIC_CACHE[key]
 
@@ -490,6 +539,7 @@ class TesseractOcrProvider:
                 "configured_languages": list(snapshot["configured_languages"]),
                 "available_languages": list(snapshot["available_languages"]),
                 "missing_languages": list(snapshot["missing_languages"]),
+                "traineddata_sha256": dict(snapshot.get("traineddata_sha256", {})),
             }
 
     def _probe_diagnostics(self) -> dict[str, object]:
@@ -501,6 +551,7 @@ class TesseractOcrProvider:
             "configured_languages": configured,
             "available_languages": [],
             "missing_languages": configured,
+            "traineddata_sha256": {},
             "reason": None,
         }
         executable = self._resolved_executable()
@@ -560,6 +611,7 @@ class TesseractOcrProvider:
                 "runtime_version": self._runtime_version,
                 "available_languages": list(installed),
                 "missing_languages": missing,
+                "traineddata_sha256": _traineddata_sha256(configured),
                 "reason": self._diagnostic_reason,
             }
         )

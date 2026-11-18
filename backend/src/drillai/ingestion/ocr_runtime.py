@@ -95,6 +95,7 @@ def inspect_ocr_runtime(
         "configured_languages": configuration["languages"],
         "available_languages": [],
         "missing_languages": configuration["languages"],
+        "traineddata_sha256": {},
         "tesseract_available": None,
         "pdf_renderer_available": None,
         "pdf_renderer_version": None,
@@ -119,6 +120,7 @@ def inspect_ocr_runtime(
     runtime = dict(cached_runtime)
     runtime["available_languages"] = list(cached_runtime.get("available_languages", []))
     runtime["missing_languages"] = list(cached_runtime.get("missing_languages", []))
+    runtime["traineddata_sha256"] = dict(cached_runtime.get("traineddata_sha256", {}))
     tesseract_available = bool(runtime["available"])
     runtime_ready = tesseract_available and pdfium_available
     reasons = [
@@ -139,6 +141,7 @@ def inspect_ocr_runtime(
             "runtime_version": runtime.get("runtime_version"),
             "available_languages": runtime.get("available_languages", []),
             "missing_languages": runtime.get("missing_languages", configuration["languages"]),
+            "traineddata_sha256": runtime.get("traineddata_sha256", {}),
             "tesseract_available": tesseract_available,
             "pdf_renderer_available": pdfium_available,
             "pdf_renderer_version": pdfium_version,

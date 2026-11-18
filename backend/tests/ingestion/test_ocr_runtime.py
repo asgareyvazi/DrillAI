@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 
 import pytest
 
 from drillai.core.config import Settings
 from drillai.ingestion import ocr_runtime
+from drillai.ingestion.ocr import _traineddata_sha256
 
 
 class StubProvider:
@@ -25,8 +27,22 @@ class StubProvider:
             "configured_languages": ["eng", "fas"],
             "available_languages": ["eng", "fas", "osd"],
             "missing_languages": [],
+            "traineddata_sha256": {"eng": "a" * 64, "fas": "b" * 64},
             "reason": None,
         }
+
+
+def test_traineddata_hashing_reports_only_installed_model_digests(tmp_path, monkeypatch) -> None:
+    language_dir = tmp_path / "tessdata"
+    language_dir.mkdir()
+    model_bytes = b"synthetic traineddata provenance fixture"
+    (language_dir / "fas.traineddata").write_bytes(model_bytes)
+    monkeypatch.setenv("TESSDATA_PREFIX", str(language_dir))
+
+    result = _traineddata_sha256(["fas", "eng"])
+
+    assert result == {"fas": hashlib.sha256(model_bytes).hexdigest()}
+    assert str(tmp_path) not in json.dumps(result)
 
 
 def test_ocr_language_configuration_is_normalized_and_invalid_values_are_rejected() -> None:
@@ -69,6 +85,7 @@ def test_enabled_runtime_requires_tesseract_languages_and_pdfium(monkeypatch) ->
     assert report["required_ready"] is True
     assert report["runtime_version"] == "tesseract 5.4.1"
     assert report["available_languages"] == ["eng", "fas", "osd"]
+    assert report["traineddata_sha256"] == {"eng": "a" * 64, "fas": "b" * 64}
     assert report["pdf_renderer_version"] == "4.30.0"
     assert report["configuration"]["max_concurrent_tesseract_processes"] == 3
     assert report["configuration"]["page_segmentation_mode"] == 6

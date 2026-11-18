@@ -1530,6 +1530,138 @@ export interface ReportKind {
   description: string
 }
 
+// --------------------------------------------------------------------------- versioned engineering products
+
+export type EngineeringProductKind = 'program' | 'procedure'
+export type EngineeringProductState = 'draft' | 'in_review' | 'approved' | 'superseded' | 'archived' | 'rejected'
+export type EngineeringProductExportFormat = 'json' | 'markdown'
+
+export interface EngineeringProductArtifact {
+  id: string
+  org_id: string
+  kind: EngineeringProductKind
+  title: string
+  code: string | null
+  status: EngineeringProductState
+  current_version: number
+  owner: string | null
+  project_id: string | null
+  well_id: string | null
+  wellbore_id: string | null
+  section_id: string | null
+  operation_id: string | null
+  domain_pack: string | null
+  created_at: string | null
+  updated_at: string | null
+}
+
+export interface EngineeringProductFinding {
+  code: string
+  severity: 'error' | 'warning' | 'info'
+  message: string
+  path: string | null
+  details: Record<string, unknown>
+}
+
+export interface EngineeringProductValidation {
+  state: 'blocked' | 'warnings' | 'passed'
+  validated_at: string
+  validated_by: string
+  content_hash: string
+  ruleset: string
+  engine_finding_count: number
+  engine_run_snapshots: Array<Record<string, unknown>>
+  attached_engine_findings_fingerprint: string
+  linked_program_state: EngineeringProductState | 'missing' | null
+  field_acceptance: 'not_established'
+  findings: EngineeringProductFinding[]
+  finding_ids?: string[]
+}
+
+export interface EngineeringProductVersion {
+  id: string
+  artifact_id: string
+  version: number
+  state: EngineeringProductState
+  schema_key: 'drilling_program' | 'controlled_procedure'
+  schema_version: number
+  payload: Record<string, unknown>
+  authored_by: string | null
+  authored_at: string | null
+  reviewed_by: string | null
+  reviewed_at: string | null
+  approved_by: string | null
+  approved_at: string | null
+  approval_request_id: string | null
+  change_reason: string | null
+  supersedes_version_id: string | null
+  content_hash: string | null
+  validation_summary: {
+    source_lineage?: Array<Record<string, unknown>>
+    linked_program?: Record<string, unknown> | null
+    validation?: EngineeringProductValidation | null
+    [key: string]: unknown
+  }
+  engine_run_ids: string[]
+  created_at: string | null
+}
+
+export interface EngineeringProductItem {
+  artifact: EngineeringProductArtifact
+  current_version: EngineeringProductVersion | null
+}
+
+export interface EngineeringProductApproval {
+  id: string
+  kind: string
+  subject_kind: string | null
+  subject_id: string | null
+  status: string
+  title: string
+  required_role: string | null
+  requested_by: string | null
+  requested_at: string | null
+  request_payload: Record<string, unknown>
+  decided_by: string | null
+  decided_at: string | null
+  decision_note: string | null
+}
+
+export interface EngineeringProductCreatePayload {
+  kind: EngineeringProductKind
+  title: string
+  code?: string | null
+  project_id?: string | null
+  wellbore_id?: string | null
+  section_id?: string | null
+  operation_id?: string | null
+  payload: Record<string, unknown>
+  linked_program_version_id?: string | null
+}
+
+export interface EngineeringProductRevisionPayload {
+  expected_current_version: number
+  change_reason: string
+  payload: Record<string, unknown>
+  linked_program_version_id?: string | null
+}
+
+export interface EngineeringProductDetail {
+  artifact: EngineeringProductArtifact
+  current_version: EngineeringProductVersion
+  linked_program: Record<string, unknown> | null
+  linked_program_current_state: EngineeringProductState | 'missing' | null
+  approval_request: EngineeringProductApproval | null
+}
+
+export interface EngineeringProductVersionDetail {
+  artifact: EngineeringProductArtifact
+  version: EngineeringProductVersion
+  linked_program: Record<string, unknown> | null
+  linked_program_current_state: EngineeringProductState | 'missing' | null
+  approval_request: EngineeringProductApproval | null
+}
+
 // --------------------------------------------------------------------------- daily drilling reports
 
 export type DailyReportStatus = 'draft' | 'submitted' | 'approved' | 'rejected' | 'withdrawn'

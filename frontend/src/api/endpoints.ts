@@ -89,6 +89,17 @@ import type {
   PlatformExtractors,
   PlatformTools,
   Project,
+  EngineeringProductApproval,
+  EngineeringProductArtifact,
+  EngineeringProductCreatePayload,
+  EngineeringProductDetail,
+  EngineeringProductExportFormat,
+  EngineeringProductItem,
+  EngineeringProductKind,
+  EngineeringProductRevisionPayload,
+  EngineeringProductValidation,
+  EngineeringProductVersion,
+  EngineeringProductVersionDetail,
   ProviderCatalogue,
   RecommendationRow,
   Report,
@@ -683,6 +694,73 @@ export const drillingApi = {
   dependencies: (signal?: AbortSignal) => api.get<{ graph: import('./types').DependencyGraph }>('/engineering/dependencies', { signal }),
   impact: (wellId: string, ports: string[], signal?: AbortSignal) =>
     api.get<{ impact: ImpactReport }>(`/wells/${enc(wellId)}/engineering/impact`, { query: { ports }, signal }),
+  listEngineeringProducts: (wellId: string, kind?: EngineeringProductKind, signal?: AbortSignal) =>
+    api.get<{ items: EngineeringProductItem[]; total: number }>(
+      `/wells/${enc(wellId)}/engineering-products`,
+      { query: { kind }, signal, validate: expect.paged() },
+    ),
+  createEngineeringProduct: (wellId: string, body: EngineeringProductCreatePayload, idempotencyKey?: string) =>
+    api.post<{ artifact: EngineeringProductArtifact; version: EngineeringProductVersion }>(
+      `/wells/${enc(wellId)}/engineering-products`,
+      body,
+      idempotencyHeader(idempotencyKey),
+    ),
+  getEngineeringProduct: (artifactId: string, signal?: AbortSignal) =>
+    api.get<EngineeringProductDetail>(`/engineering-products/${enc(artifactId)}`, { signal }),
+  listEngineeringProductVersions: (artifactId: string, signal?: AbortSignal) =>
+    api.get<{ items: EngineeringProductVersion[]; total: number }>(
+      `/engineering-products/${enc(artifactId)}/versions`,
+      { signal, validate: expect.paged() },
+    ),
+  getEngineeringProductVersion: (artifactId: string, versionId: string, signal?: AbortSignal) =>
+    api.get<EngineeringProductVersionDetail>(
+      `/engineering-products/${enc(artifactId)}/versions/${enc(versionId)}`,
+      { signal },
+    ),
+  reviseEngineeringProduct: (artifactId: string, body: EngineeringProductRevisionPayload, idempotencyKey?: string) =>
+    api.post<{ artifact: EngineeringProductArtifact; version: EngineeringProductVersion }>(
+      `/engineering-products/${enc(artifactId)}/versions`,
+      body,
+      idempotencyHeader(idempotencyKey),
+    ),
+  validateEngineeringProduct: (artifactId: string, versionId: string) =>
+    api.post<{
+      artifact: EngineeringProductArtifact
+      version: EngineeringProductVersion
+      validation: EngineeringProductValidation
+    }>(`/engineering-products/${enc(artifactId)}/versions/${enc(versionId)}/validate`),
+  submitEngineeringProduct: (artifactId: string, versionId: string) =>
+    api.post<{
+      artifact: EngineeringProductArtifact
+      version: EngineeringProductVersion
+      approval_request: EngineeringProductApproval
+    }>(`/engineering-products/${enc(artifactId)}/versions/${enc(versionId)}/submit`),
+  reviewEngineeringProduct: (artifactId: string, versionId: string, notes: string) =>
+    api.post<{
+      artifact: EngineeringProductArtifact
+      version: EngineeringProductVersion
+      approval_request: EngineeringProductApproval
+    }>(`/engineering-products/${enc(artifactId)}/versions/${enc(versionId)}/review`, { notes }),
+  decideEngineeringProduct: (
+    artifactId: string,
+    versionId: string,
+    body: { approval_id: string; decision: 'approved' | 'rejected'; note: string },
+  ) =>
+    api.post<{
+      artifact: EngineeringProductArtifact
+      version: EngineeringProductVersion
+      approval_request: EngineeringProductApproval
+    }>(`/engineering-products/${enc(artifactId)}/versions/${enc(versionId)}/decision`, body),
+  exportEngineeringProduct: (
+    artifactId: string,
+    versionId: string,
+    format: EngineeringProductExportFormat,
+    signal?: AbortSignal,
+  ) =>
+    api.getBlob(
+      `/engineering-products/${enc(artifactId)}/versions/${enc(versionId)}/exports/${format}`,
+      { signal },
+    ),
 
   // ------------------------------------------------------------------ advisor & reports
   advisorQuestions: (signal?: AbortSignal) => api.get<AdvisorQuestionCatalogue>('/advisor/questions', { signal }),

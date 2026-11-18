@@ -30,6 +30,7 @@ from drillai.api.routers import (
     daily_reports,
     documents,
     drilling,
+    engineering_products,
     evidence,
     health,
     live,
@@ -294,6 +295,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.include_router(surveys.router, prefix=prefix)
         app.include_router(twin.router, prefix=prefix)
         app.include_router(drilling.router, prefix=prefix)
+        app.include_router(engineering_products.router, prefix=prefix)
 
         if settings.e2e_faults:
             from drillai.api.routers import faults

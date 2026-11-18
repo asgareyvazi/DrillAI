@@ -57,6 +57,7 @@ export const DEFAULT_TIMEOUT_MS = Number(import.meta.env.VITE_API_TIMEOUT_MS ?? 
 const PREVIEW_LIMIT = 400
 const DOWNLOAD_MIME_TYPES = new Set([
   'text/csv',
+  'text/markdown',
   'application/pdf',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -498,7 +499,7 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
   const headers: Record<string, string> = {
     Accept:
       options.responseType === 'blob'
-        ? 'application/json, text/csv, application/pdf, application/vnd.openxmlformats-officedocument.wordprocessingml.document, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        ? 'application/json, text/csv, text/markdown, application/pdf, application/vnd.openxmlformats-officedocument.wordprocessingml.document, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         : 'application/json',
   }
   if (identity.token) headers.Authorization = `Bearer ${identity.token}`

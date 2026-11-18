@@ -6,6 +6,57 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { fixtures } from './fixtures'
 
+export interface EngineeringProductDatabaseSnapshot {
+  artifact: {
+    id: string
+    org_id: string
+    project_id: string | null
+    well_id: string
+    wellbore_id: string
+    kind: 'program' | 'procedure'
+    status: string
+    current_version: number
+    is_demo_fixture: number | boolean
+  }
+  version: {
+    id: string
+    artifact_id: string
+    version: number
+    state: string
+    schema_key: string
+    schema_version: number
+    payload: Record<string, unknown>
+    content_hash: string | null
+    authored_by: string | null
+    reviewed_by: string | null
+    approved_by: string | null
+    approval_request_id: string | null
+    supersedes_version_id: string | null
+    validation_summary: Record<string, unknown>
+    engine_run_ids: string[]
+  }
+  versions: Array<{
+    id: string
+    version: number
+    state: string
+    content_hash: string | null
+    authored_by: string | null
+    reviewed_by: string | null
+    approved_by: string | null
+    approval_request_id: string | null
+    supersedes_version_id: string | null
+  }>
+  approval: {
+    id: string
+    status: string
+    requested_by: string | null
+    decided_by: string | null
+    reviewed_by: string | null
+    subject_kind: string | null
+    subject_id: string | null
+  } | null
+}
+
 export interface DailyReportDatabaseSnapshot {
   report: {
     id: string
@@ -113,5 +164,30 @@ export function readDailyReportDatabaseSnapshotFromDatabase(
   } catch {
     // Child-process errors can contain command arguments or database paths. Keep test output scoped.
     throw new Error('Read-only daily-report database readback failed for the isolated E2E fixture.')
+  }
+}
+
+/** Read the persisted version and approval trail with an independent, query-only SQLite connection. */
+export function readEngineeringProductDatabaseSnapshotFromDatabase(
+  databaseUrl: string,
+  artifactId: string,
+  wellId: string,
+  wellboreId: string,
+  versionId: string,
+): EngineeringProductDatabaseSnapshot {
+  if (![artifactId, wellId, wellboreId, versionId].every((value) => value.trim().length > 0)) {
+    throw new Error('Read-only engineering-product database readback failed for the isolated E2E fixture.')
+  }
+  const script = path.join(repoRoot, 'scripts', 'verify_engineering_product_db_readback.py')
+  try {
+    const stdout = execFileSync(
+      resolvePython(),
+      [script, databaseUrl, artifactId, wellId, wellboreId, versionId],
+      { cwd: repoRoot, encoding: 'utf8', timeout: 15_000, maxBuffer: 512 * 1024, windowsHide: true },
+    )
+    return JSON.parse(stdout) as EngineeringProductDatabaseSnapshot
+  } catch {
+    // Child-process errors can contain command arguments or database paths. Keep test output scoped.
+    throw new Error('Read-only engineering-product database readback failed for the isolated E2E fixture.')
   }
 }
