@@ -18,3 +18,7 @@
 ## Work still required
 
 Complete full source/report comparison, targeted root-cause and security work, the full integrated matrix and the full historical capability catalogue. Only report same-SHA CI results after the applicable checks actually execute. Recheck upstream availability of a compatible patched dependency; a no-patch condition is not a successful supply-chain gate. The earlier 2026-11-15 date precedes 2026-11-16; do not use the reversed chronology as a provenance argument.
+
+## Independent CI gate execution (master mission)
+
+The previous exact-SHA certification stopped after the failing full supply-chain verifier, hiding independent backend and deployment evidence. The workflow now runs later independent gates after an unrelated failure when their installation prerequisites succeeded, unless the job is cancelled. These steps retain their original commands and failure behavior; the supply-chain failure still fails the job. Compose-dependent checks still require a successful Compose start and cleanup still runs separately. A contract test verifies the relevant prerequisite conditions and the absence of `continue-on-error`; the reviewed backend inventory increases by exactly one for that new test. This is evidence collection, not a security remediation or a green-CI claim. The next exact-SHA CI run is required to establish native Windows and deployment results.

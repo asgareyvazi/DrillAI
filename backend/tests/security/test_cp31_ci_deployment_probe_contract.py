@@ -520,3 +520,45 @@ async def test_cp31_ci_04_the_readiness_route_the_gate_probes_answers_get_with_t
             assert _matches("content-security-policy:", _header_block(response), True)
     finally:
         await app.state.database.dispose()
+
+
+def test_master_ci_independent_gates_run_after_failure_without_suppressing_verdicts() -> None:
+    """Audit failure stays red while independent gates collect their own evidence."""
+    workflow = yaml.safe_load(WORKFLOW_PATH.read_text(encoding="utf-8"))
+    linux_steps = workflow["jobs"]["certification"]["steps"]
+    windows_steps = workflow["jobs"]["windows-certification"]["steps"]
+    linux = {step.get("name"): step for step in linux_steps if step.get("name")}
+    windows = {step.get("name"): step for step in windows_steps if step.get("name")}
+
+    assert linux["Install the backend (editable, dev + OCR test extras)"]["id"] == "linux_backend_install"
+    assert linux["Install the frontend (npm ci)"]["id"] == "linux_frontend_install"
+    assert windows["Bootstrap Windows workspace (scripts/bootstrap.ps1)"]["id"] == "windows_bootstrap"
+    linux_backend = "${{ !cancelled() && steps.linux_backend_install.outcome == 'success' }}"
+    linux_both = (
+        "${{ !cancelled() && steps.linux_backend_install.outcome == 'success' "
+        "&& steps.linux_frontend_install.outcome == 'success' }}"
+    )
+    windows_bootstrap = "${{ !cancelled() && steps.windows_bootstrap.outcome == 'success' }}"
+    for name in ("Backend tests (SQLite + embedded PostgreSQL)", "Backend lint", "Migration check (fresh database)"):
+        assert linux[name]["if"] == linux_backend
+    for name in (
+        "Supply-chain, SHA-pinning, and secret-leakage verification",
+        "Multi-process stack verification (scripts/verify_stack.py)",
+        "Compose configuration and readiness",
+    ):
+        assert linux[name]["if"] == linux_both
+    for name in (
+        "Supply-chain, SHA-pinning, and secret-leakage verification (Windows)",
+        "Backend lint (Windows)",
+        "Migration check on fresh SQLite database (Windows)",
+        "Backend SQLite test suite (Windows)",
+        "Multi-process stack verification on Windows (scripts/verify_stack.py)",
+    ):
+        assert windows[name]["if"] == windows_bootstrap
+    for step in (*linux_steps, *windows_steps):
+        assert not step.get("continue-on-error", False), step.get("name")
+    assert "verify_backend_test_inventory.py" in linux["Backend tests (SQLite + embedded PostgreSQL)"]["run"]
+    assert "verify_backend_test_inventory.py" in windows["Backend SQLite test suite (Windows)"]["run"]
+    assert linux["Deployment-image CP135 OCR quality"]["if"] == (
+        "${{ !cancelled() && steps.compose_up.outcome == 'success' }}"
+    )

@@ -99,6 +99,7 @@ jobs:
       # service with that interpreter (`frontend/e2e/start-api.mjs`), so the path is part of the
       # contract, not a convenience.
       - name: Install the backend (editable, dev + OCR test extras)
+        id: linux_backend_install
         run: |
           python -m venv backend/.venv
           backend/.venv/bin/python -m pip install --upgrade pip "setuptools>=83.0.0"
@@ -107,21 +108,26 @@ jobs:
       # The lockfile is authoritative: `npm ci` installs exactly what is committed and fails if the
       # lockfile and the manifest disagree. It is never regenerated here.
       - name: Install the frontend (npm ci)
+        id: linux_frontend_install
+        if: ${{ !cancelled() }}
         working-directory: frontend
         run: npm ci --no-audit --no-fund
 
       # ------------------------------------------------------------------ frontend gates
       - name: Frontend typecheck
+        if: ${{ !cancelled() && steps.linux_frontend_install.outcome == 'success' }}
         working-directory: frontend
         run: npm run typecheck
 
       - name: Frontend lint
+        if: ${{ !cancelled() && steps.linux_frontend_install.outcome == 'success' }}
         working-directory: frontend
         run: npm run lint
 
       # A skipped unit test is not a pass: the gate reads its own result line and fails on one, so a
       # green step means the whole suite ran.
       - name: Frontend unit and component tests
+        if: ${{ !cancelled() && steps.linux_frontend_install.outcome == 'success' }}
         working-directory: frontend
         run: |
           set -o pipefail
@@ -149,16 +155,21 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Frontend production build
+        if: ${{ !cancelled() && steps.linux_frontend_install.outcome == 'success' }}
         working-directory: frontend
         run: npm run build
 
+      # Each gate still fails the job normally. Later independent gates explicitly check their
+      # installation prerequisites so an unrelated failure cannot hide backend or deployment results.
       - name: Supply-chain, SHA-pinning, and secret-leakage verification
+        if: ${{ !cancelled() && steps.linux_backend_install.outcome == 'success' && steps.linux_frontend_install.outcome == 'success' }}
         run: backend/.venv/bin/python scripts/verify_supply_chain_and_secrets.py
 
       # ------------------------------------------------------------------ backend gates
       # No `-q` on the command line: `pyproject.toml` already sets it, and a second one suppresses the
       # summary line entirely — which is exactly the line this gate certifies from.
       - name: Backend tests (SQLite + embedded PostgreSQL)
+        if: ${{ !cancelled() && steps.linux_backend_install.outcome == 'success' }}
         id: backend_tests
         working-directory: backend
         run: |
@@ -186,12 +197,14 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Backend lint
+        if: ${{ !cancelled() && steps.linux_backend_install.outcome == 'success' }}
         working-directory: backend
         run: .venv/bin/python -m ruff check .
 
       # Migration verification runs against a database created for this step, never against a
       # developer's database and never against one left over from an earlier run.
       - name: Migration check (fresh database)
+        if: ${{ !cancelled() && steps.linux_backend_install.outcome == 'success' }}
         working-directory: backend
         env:
           DRILLAI_DATABASE_URL: sqlite+aiosqlite:///${{ runner.temp }}/ci-migration.db
@@ -201,6 +214,7 @@ jobs:
           .venv/bin/python -m alembic check
 
       - name: Multi-process stack verification (scripts/verify_stack.py)
+        if: ${{ !cancelled() && steps.linux_backend_install.outcome == 'success' && steps.linux_frontend_install.outcome == 'success' }}
         run: |
           set -o pipefail
           backend/.venv/bin/python scripts/verify_stack.py 2>&1 | tee "$RUNNER_TEMP/verify-stack.log"
@@ -216,6 +230,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Compose configuration and readiness
+        if: ${{ !cancelled() && steps.linux_backend_install.outcome == 'success' && steps.linux_frontend_install.outcome == 'success' }}
         id: compose_up
         env:
           POSTGRES_PASSWORD: ci_ephemeral_pg_password_9f8e7d
@@ -513,21 +528,25 @@ jobs:
           npm --version
 
       - name: Bootstrap Windows workspace (scripts/bootstrap.ps1)
+        id: windows_bootstrap
         shell: pwsh
         run: |
           & ./scripts/bootstrap.ps1
 
       - name: Frontend typecheck (Windows)
+        if: ${{ !cancelled() && steps.windows_bootstrap.outcome == 'success' }}
         working-directory: frontend
         shell: pwsh
         run: npm run typecheck
 
       - name: Frontend lint (Windows)
+        if: ${{ !cancelled() && steps.windows_bootstrap.outcome == 'success' }}
         working-directory: frontend
         shell: pwsh
         run: npm run lint
 
       - name: Frontend unit and component tests (Windows)
+        if: ${{ !cancelled() && steps.windows_bootstrap.outcome == 'success' }}
         working-directory: frontend
         shell: pwsh
         run: |
@@ -545,22 +564,26 @@ jobs:
           Write-Output "::notice title=Frontend unit tests verified::$summary"
 
       - name: Frontend production build (Windows)
+        if: ${{ !cancelled() && steps.windows_bootstrap.outcome == 'success' }}
         working-directory: frontend
         shell: pwsh
         run: npm run build
 
       - name: Supply-chain, SHA-pinning, and secret-leakage verification (Windows)
+        if: ${{ !cancelled() && steps.windows_bootstrap.outcome == 'success' }}
         shell: pwsh
         run: |
           .\backend\.venv\Scripts\python.exe scripts/verify_supply_chain_and_secrets.py
           if ($LASTEXITCODE -ne 0) { throw "verify_supply_chain_and_secrets.py failed on Windows" }
 
       - name: Backend lint (Windows)
+        if: ${{ !cancelled() && steps.windows_bootstrap.outcome == 'success' }}
         working-directory: backend
         shell: pwsh
         run: .\.venv\Scripts\python.exe -m ruff check .
 
       - name: Migration check on fresh SQLite database (Windows)
+        if: ${{ !cancelled() && steps.windows_bootstrap.outcome == 'success' }}
         working-directory: backend
         shell: pwsh
         run: |
@@ -573,6 +596,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "alembic check failed on Windows" }
 
       - name: Backend SQLite test suite (Windows)
+        if: ${{ !cancelled() && steps.windows_bootstrap.outcome == 'success' }}
         id: backend_sqlite_tests
         working-directory: backend
         shell: pwsh
@@ -590,6 +614,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Backend test totals or the reviewed PostgreSQL/skip inventory failed verification" }
 
       - name: Multi-process stack verification on Windows (scripts/verify_stack.py)
+        if: ${{ !cancelled() && steps.windows_bootstrap.outcome == 'success' }}
         shell: pwsh
         run: |
           $ErrorActionPreference = "Continue"
@@ -604,6 +629,7 @@ jobs:
           }
 
       - name: External vendor interop runner on Windows (offline harness only)
+        if: ${{ !cancelled() && steps.windows_bootstrap.outcome == 'success' }}
         shell: pwsh
         run: |
           # This certification job is not an operator-approved vendor test. Clear any runner-level
