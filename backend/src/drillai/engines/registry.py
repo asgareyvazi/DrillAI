@@ -7,13 +7,39 @@ single lookup used by the API (``/engines``), workflow nodes, agent tools and op
 
 from __future__ import annotations
 
+import math
 from collections.abc import Iterable, Iterator
 from typing import Any
 
 from pydantic import BaseModel, ValidationError
 
-from drillai.core.errors import EngineInputInvalid, EngineNotFound
+from drillai.core.errors import EngineConvergenceError, EngineInputInvalid, EngineNotFound
 from drillai.engines.contract import Engine, EngineResult, EngineSpec, FunctionEngine
+
+
+def _has_nonfinite_float(value: Any) -> bool:
+    """Inspect nested typed models and JSON-like containers without echoing input values."""
+    pending = [value]
+    seen: set[int] = set()
+    while pending:
+        item = pending.pop()
+        if isinstance(item, float):
+            if not math.isfinite(item):
+                return True
+        elif isinstance(item, (BaseModel, dict, list, tuple, set, frozenset)):
+            identity = id(item)
+            if identity in seen:
+                continue
+            seen.add(identity)
+            if isinstance(item, BaseModel):
+                pending.extend(item.__dict__.values())
+                if item.__pydantic_extra__:
+                    pending.extend(item.__pydantic_extra__.values())
+            elif isinstance(item, dict):
+                pending.extend(item.values())
+            else:
+                pending.extend(item)
+    return False
 
 
 class EngineRegistry:
@@ -106,6 +132,10 @@ class EngineRegistry:
     # ------------------------------------------------------------------ execution
     def execute(self, key: str, inputs: BaseModel | dict[str, Any]) -> tuple[EngineSpec, EngineResult]:
         engine = self.get(key)
+        # Check before validation as well as after coercion. Pydantic error details may otherwise
+        # contain a non-finite raw input, which is itself not safe to serialize in a JSON response.
+        if _has_nonfinite_float(inputs):
+            raise EngineInputInvalid(f"non-finite numeric inputs for engine {key!r}", details={"engine": key})
         if isinstance(inputs, BaseModel):
             payload = inputs
         else:
@@ -116,7 +146,13 @@ class EngineRegistry:
                     f"invalid inputs for engine {key!r}",
                     details={"engine": key, "errors": exc.errors(include_url=False)},
                 ) from exc
+        if _has_nonfinite_float(payload):
+            raise EngineInputInvalid(f"non-finite numeric inputs for engine {key!r}", details={"engine": key})
         result = engine.run(payload)
+        # Finite inputs can still overflow inside a model. Refuse to publish or persist an invalid
+        # result envelope rather than sanitizing it into a misleading numeric answer.
+        if _has_nonfinite_float(result):
+            raise EngineConvergenceError(f"engine {key!r} produced a non-finite result", details={"engine": key})
         return engine.spec, result
 
 

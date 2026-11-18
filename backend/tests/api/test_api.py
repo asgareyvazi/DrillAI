@@ -1145,3 +1145,38 @@ async def test_csv_helper_is_deterministic():
     rows = list(csv.DictReader(io.StringIO(CSV_REPORT)))
     assert len(rows) == 2
     assert rows[0]["mud_weight_ppg"] == "12.4"
+
+
+async def test_engine_api_rejects_nonfinite_inputs_without_persisting_a_result(client):
+    import json
+
+    from sqlalchemy import func, select
+
+    from drillai.db.models import EngineRun
+
+    # String coercion is supported by the model, but a non-finite numeric value must not become a
+    # successful calculation or an invalid JSON response. The raw JSON NaN form must also fail.
+    for value in ("Infinity", "NaN", float("inf"), float("nan")):
+        body = {"inputs": {"wob_si": value, "torque_si": 2650, "rpm_si": 96, "rop_si": 18, "bit_diameter_si": 0.2032}}
+        response = await client.post(
+            "/api/v1/registry/engines/drilling.mse/run",
+            headers={**headers(), "Content-Type": "application/json"},
+            content=json.dumps(body),
+        )
+        assert response.status_code == 422, response.text
+        assert response.json()["error"]["code"] == "engine.input_invalid"
+        json.dumps(response.json(), allow_nan=False)
+
+    overflow = await client.post(
+        "/api/v1/registry/engines/drilling.mse/run",
+        headers=headers(),
+        json={"inputs": {"wob_si": 1e308, "torque_si": 2650, "rpm_si": 96, "rop_si": 18, "bit_diameter_si": 0.2032}},
+    )
+    assert overflow.status_code == 422, overflow.text
+    assert overflow.json()["error"]["code"] == "engine.convergence_failed"
+    json.dumps(overflow.json(), allow_nan=False)
+
+    app = client._transport.app
+    async with app.state.database.session() as session:
+        count = (await session.execute(select(func.count()).select_from(EngineRun))).scalar_one()
+    assert count == 0

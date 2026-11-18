@@ -226,3 +226,53 @@ def test_registration_rejects_namespace_collisions_atomically(empty_registry: En
     added = empty_registry.register_function(second, fn, aliases=("other-short",))
     assert empty_registry.get("other-short") is added
     assert empty_registry.get("drilling.mse") is first
+
+
+def test_registry_rejects_nonfinite_engine_inputs_before_and_after_validation(engines):
+    """Neither nested floats, strings coerced to floats nor constructed models are safe inputs."""
+    from drillai.engines.mechanics import MseEngineInput
+
+    base = {"wob_si": 42000.0, "torque_si": 2650.0, "rpm_si": 96.0, "rop_si": 18.0, "bit_diameter_si": 0.2032}
+    for value in (float("inf"), float("-inf"), float("nan"), "Infinity", "NaN"):
+        with pytest.raises(EngineInputInvalid) as exc:
+            engines.execute("drilling.mse", {**base, "wob_si": value})
+        # The error must itself be strict-JSON serializable, without invalid raw values.
+        import json
+
+        json.dumps(exc.value.to_payload(), allow_nan=False)
+    constructed = MseEngineInput.model_construct(**{**base, "wob_si": float("inf")})
+    with pytest.raises(EngineInputInvalid, match="non-finite"):
+        engines.execute("drilling.mse", constructed)
+    nested = {
+        "stations": [
+            {"md_si": 0.0, "inclination_deg": 0.0, "azimuth_deg": 0.0},
+            {"md_si": float("inf"), "inclination_deg": 1.0, "azimuth_deg": 0.0},
+        ]
+    }
+    with pytest.raises(EngineInputInvalid, match="non-finite"):
+        engines.execute("trajectory.minimum_curvature", nested)
+
+    from drillai.core.errors import EngineConvergenceError
+
+    # This real engine overflows in ordinary floating-point multiplication despite finite inputs.
+    with pytest.raises(EngineConvergenceError, match="non-finite"):
+        engines.execute("drilling.mse", {**base, "wob_si": 1e308})
+
+
+def test_registry_rejects_nonfinite_output_even_from_finite_inputs(empty_registry: EngineRegistry):
+    from pydantic import BaseModel
+
+    from drillai.core.errors import EngineConvergenceError
+
+    class NestedOutput(BaseModel):
+        nested: dict[str, list[float]]
+
+    def bad_result(inputs):
+        return EngineResult(outputs=NestedOutput(nested={"value": [float("nan")]}))
+
+    empty_registry.register_function(MSE_SPEC, bad_result)
+    with pytest.raises(EngineConvergenceError, match="non-finite"):
+        empty_registry.execute(
+            "drilling.mse",
+            {"wob_si": 42000.0, "torque_si": 2650.0, "rpm_si": 96.0, "rop_si": 18.0, "bit_diameter_si": 0.2032},
+        )

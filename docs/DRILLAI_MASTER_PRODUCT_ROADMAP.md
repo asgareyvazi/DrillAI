@@ -30,7 +30,7 @@ CP135 synthetic OCR remains `NOT_ACCEPTED`: unchanged global CER â‰¤0.15, WER â‰
 
 ### Runtime engine registry at baseline
 
-The runtime registry reports the following keys and versions. `formula_derived` refers to the registry's classification, not independent or field validation. Detailed equations, assumptions, independent examples and per-engine source/tests still require the Phase 2 audit. A registry namespace collision fix and its focused evidence are documented in [engine registry assurance](mission-reports/MASTER-MISSION-ENGINE-REGISTRY-ASSURANCE.md); this does not constitute completion of that audit.
+The runtime registry reports the following keys and versions. `formula_derived` refers to the registry's classification, not independent or field validation. Detailed equations, assumptions, independent examples and per-engine source/tests still require the Phase 2 audit. A registry namespace collision fix and its focused evidence are documented in [engine registry assurance](mission-reports/MASTER-MISSION-ENGINE-REGISTRY-ASSURANCE.md). A separate [non-finite execution boundary](mission-reports/CONTINUOUS-ENGINE-NONFINITE-BOUNDARY.md) rejects tested invalid input and output; neither change constitutes completion of the per-engine audit or field validation.
 
 | Key | Version | Registry status | Source module |
 |---|---|---|---|
