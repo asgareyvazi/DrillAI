@@ -1,0 +1,3774 @@
+{
+  "snapshot_revision": "80cd5eca853d81746658b4b4a556b8704e386b0c",
+  "classification": "runtime self-declarations, not independent validation; not a historical or future engine inventory",
+  "engines": [
+    {
+      "key": "drilling.mse",
+      "version": "1.1.0",
+      "source": "backend/src/drillai/engines/mechanics.py",
+      "function": "compute_mse",
+      "input_model": "MseEngineInput",
+      "output_model": "MseEngineOutput",
+      "validation_status": "formula_derived",
+      "assumptions": [
+        "MSE from surface parameters (no downhole WOB/torque correction)",
+        "constant ROP/WOB/torque within the interval"
+      ],
+      "limitations": [
+        "surface-measured values include friction losses and vibration effects",
+        "no bit wear or dull-grading correction",
+        "requires a reference MSE or rock strength for absolute judgements"
+      ],
+      "declared_references_unverified": [
+        "Teale (1965) — The Concept of Specific Energy in Rock Drilling",
+        "Pessier & Fear (1992) — MSE drilling dysfunction"
+      ],
+      "input_units": {
+        "wob_si": {
+          "status": "declared",
+          "value_unit": "N",
+          "dimension": "force",
+          "canonical_unit": "N",
+          "unknown_reason": null
+        },
+        "torque_si": {
+          "status": "declared",
+          "value_unit": "N.m",
+          "dimension": "torque",
+          "canonical_unit": "N.m",
+          "unknown_reason": null
+        },
+        "rpm_si": {
+          "status": "declared",
+          "value_unit": "rpm",
+          "dimension": "rotational_speed",
+          "canonical_unit": "rad/s",
+          "unknown_reason": null
+        },
+        "rop_si": {
+          "status": "declared",
+          "value_unit": "m/h",
+          "dimension": "velocity",
+          "canonical_unit": "m/s",
+          "unknown_reason": null
+        },
+        "bit_diameter_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "flow_rate_si": {
+          "status": "declared",
+          "value_unit": "m3/s",
+          "dimension": "volume_flow",
+          "canonical_unit": "m3/s",
+          "unknown_reason": null
+        },
+        "confined_compressive_strength_si": {
+          "status": "declared",
+          "value_unit": "Pa",
+          "dimension": "pressure",
+          "canonical_unit": "Pa",
+          "unknown_reason": null
+        },
+        "bit_hydraulic_horsepower_per_area_si": {
+          "status": "declared",
+          "value_unit": "W/m2",
+          "dimension": "power_per_area",
+          "canonical_unit": "W/m2",
+          "unknown_reason": null
+        },
+        "reference_mse_si": {
+          "status": "declared",
+          "value_unit": "J/m3",
+          "dimension": "specific_energy",
+          "canonical_unit": "J/m3",
+          "unknown_reason": null
+        },
+        "depth_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        }
+      },
+      "output_units": {
+        "bit_area_si": {
+          "status": "declared",
+          "value_unit": "m2",
+          "dimension": "area",
+          "canonical_unit": "m2",
+          "unknown_reason": null
+        },
+        "mse_si": {
+          "status": "declared",
+          "value_unit": "J/m3",
+          "dimension": "specific_energy",
+          "canonical_unit": "J/m3",
+          "unknown_reason": null
+        },
+        "mse_axial_component_si": {
+          "status": "declared",
+          "value_unit": "J/m3",
+          "dimension": "specific_energy",
+          "canonical_unit": "J/m3",
+          "unknown_reason": null
+        },
+        "mse_torsional_component_si": {
+          "status": "declared",
+          "value_unit": "J/m3",
+          "dimension": "specific_energy",
+          "canonical_unit": "J/m3",
+          "unknown_reason": null
+        },
+        "mse_psi": {
+          "status": "declared",
+          "value_unit": "psi",
+          "dimension": "specific_energy",
+          "canonical_unit": "J/m3",
+          "unknown_reason": null
+        },
+        "drilling_efficiency": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "dysfunction_ratio": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "rop_si": {
+          "status": "declared",
+          "value_unit": "m/h",
+          "dimension": "velocity",
+          "canonical_unit": "m/s",
+          "unknown_reason": null
+        },
+        "wob_per_diameter_si": {
+          "status": "declared",
+          "value_unit": "N/m",
+          "dimension": "force_per_length",
+          "canonical_unit": "N/m",
+          "unknown_reason": null
+        },
+        "estimated_confined_strength_si": {
+          "status": "declared",
+          "value_unit": "Pa",
+          "dimension": "pressure",
+          "canonical_unit": "Pa",
+          "unknown_reason": null
+        }
+      }
+    },
+    {
+      "key": "hydraulics.laminar",
+      "version": "1.2.0",
+      "source": "backend/src/drillai/engines/fluids.py",
+      "function": "compute_hydraulics",
+      "input_model": "HydraulicsEngineInput",
+      "output_model": "HydraulicsEngineOutput",
+      "validation_status": "formula_derived",
+      "assumptions": [
+        "laminar Bingham-plastic rheology (PV/YP)",
+        "slot approximation for the annulus",
+        "clean concentric geometry, no surface line losses",
+        "cuttings are spherical with the declared density and diameter"
+      ],
+      "limitations": [
+        "turbulent flow is detected (Reynolds) but not modelled: results are optimistic in that regime",
+        "Herschel-Bulkley / power-law fluids are not supported yet",
+        "no temperature/pressure-dependent density, no eccentricity, no surge/swab",
+        "no motor/BHA pressure drop unless supplied as an element"
+      ],
+      "declared_references_unverified": [
+        "Bourgoyne et al., Applied Drilling Engineering (laminar Bingham-plastic relations)",
+        "API RP 13D — Rheology and Hydraulics of Oil-Well Drilling Fluids (framework)"
+      ],
+      "input_units": {
+        "elements[].from_depth_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "elements[].to_depth_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "elements[].od_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "elements[].id_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "elements[].linear_mass_si": {
+          "status": "declared",
+          "value_unit": "kg/m",
+          "dimension": "linear_density",
+          "canonical_unit": "kg/m",
+          "unknown_reason": null
+        },
+        "flow_rate_si": {
+          "status": "declared",
+          "value_unit": "m3/s",
+          "dimension": "volume_flow",
+          "canonical_unit": "m3/s",
+          "unknown_reason": null
+        },
+        "mud_weight_si": {
+          "status": "declared",
+          "value_unit": "kg/m3",
+          "dimension": "density",
+          "canonical_unit": "kg/m3",
+          "unknown_reason": null
+        },
+        "plastic_viscosity_si": {
+          "status": "declared",
+          "value_unit": "Pa.s",
+          "dimension": "dynamic_viscosity",
+          "canonical_unit": "Pa.s",
+          "unknown_reason": null
+        },
+        "yield_point_si": {
+          "status": "declared",
+          "value_unit": "Pa.yp",
+          "dimension": "yield_stress",
+          "canonical_unit": "Pa.yp",
+          "unknown_reason": null
+        },
+        "bit_depth_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "bit_tvd_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "bit_diameter_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "tfa_si": {
+          "status": "declared",
+          "value_unit": "m2",
+          "dimension": "area",
+          "canonical_unit": "m2",
+          "unknown_reason": null
+        },
+        "nozzle_count": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "discharge_coefficient": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "rop_si": {
+          "status": "declared",
+          "value_unit": "m/h",
+          "dimension": "velocity",
+          "canonical_unit": "m/s",
+          "unknown_reason": null
+        },
+        "cutting_diameter_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "cutting_density_si": {
+          "status": "declared",
+          "value_unit": "kg/m3",
+          "dimension": "density",
+          "canonical_unit": "kg/m3",
+          "unknown_reason": null
+        },
+        "ecd_limit_si": {
+          "status": "declared",
+          "value_unit": "kg/m3",
+          "dimension": "density",
+          "canonical_unit": "kg/m3",
+          "unknown_reason": null
+        },
+        "fracture_gradient_si": {
+          "status": "declared",
+          "value_unit": "Pa/m",
+          "dimension": "pressure_gradient",
+          "canonical_unit": "Pa/m",
+          "unknown_reason": null
+        },
+        "pore_pressure_gradient_si": {
+          "status": "declared",
+          "value_unit": "Pa/m",
+          "dimension": "pressure_gradient",
+          "canonical_unit": "Pa/m",
+          "unknown_reason": null
+        }
+      },
+      "output_units": {
+        "flow_rate_si": {
+          "status": "declared",
+          "value_unit": "m3/s",
+          "dimension": "volume_flow",
+          "canonical_unit": "m3/s",
+          "unknown_reason": null
+        },
+        "flow_rate_lpm": {
+          "status": "declared",
+          "value_unit": "L/min",
+          "dimension": "volume_flow",
+          "canonical_unit": "m3/s",
+          "unknown_reason": null
+        },
+        "mud_weight_si": {
+          "status": "declared",
+          "value_unit": "kg/m3",
+          "dimension": "density",
+          "canonical_unit": "kg/m3",
+          "unknown_reason": null
+        },
+        "bit_diameter_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "bit_tvd_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "tfa_si": {
+          "status": "declared",
+          "value_unit": "m2",
+          "dimension": "area",
+          "canonical_unit": "m2",
+          "unknown_reason": null
+        },
+        "nozzle_equivalent_diameter_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "bit_pressure_drop_si": {
+          "status": "declared",
+          "value_unit": "Pa",
+          "dimension": "pressure",
+          "canonical_unit": "Pa",
+          "unknown_reason": null
+        },
+        "string_pressure_loss_si": {
+          "status": "declared",
+          "value_unit": "Pa",
+          "dimension": "pressure",
+          "canonical_unit": "Pa",
+          "unknown_reason": null
+        },
+        "annulus_pressure_loss_si": {
+          "status": "declared",
+          "value_unit": "Pa",
+          "dimension": "pressure",
+          "canonical_unit": "Pa",
+          "unknown_reason": null
+        },
+        "total_pressure_loss_si": {
+          "status": "declared",
+          "value_unit": "Pa",
+          "dimension": "pressure",
+          "canonical_unit": "Pa",
+          "unknown_reason": null
+        },
+        "standpipe_pressure_expected_si": {
+          "status": "declared",
+          "value_unit": "Pa",
+          "dimension": "pressure",
+          "canonical_unit": "Pa",
+          "unknown_reason": null
+        },
+        "bit_hydraulic_horsepower_si": {
+          "status": "declared",
+          "value_unit": "W",
+          "dimension": "power",
+          "canonical_unit": "W",
+          "unknown_reason": null
+        },
+        "hydraulic_horsepower_per_area_si": {
+          "status": "declared",
+          "value_unit": "W/m2",
+          "dimension": "power_per_area",
+          "canonical_unit": "W/m2",
+          "unknown_reason": null
+        },
+        "jet_velocity_si": {
+          "status": "declared",
+          "value_unit": "m/s",
+          "dimension": "velocity",
+          "canonical_unit": "m/s",
+          "unknown_reason": null
+        },
+        "jet_impact_force_si": {
+          "status": "declared",
+          "value_unit": "N",
+          "dimension": "force",
+          "canonical_unit": "N",
+          "unknown_reason": null
+        },
+        "ecd_bottom_si": {
+          "status": "declared",
+          "value_unit": "kg/m3",
+          "dimension": "density",
+          "canonical_unit": "kg/m3",
+          "unknown_reason": null
+        },
+        "ecd_margin_si": {
+          "status": "declared",
+          "value_unit": "kg/m3",
+          "dimension": "density",
+          "canonical_unit": "kg/m3",
+          "unknown_reason": null
+        },
+        "annular_velocity_max_si": {
+          "status": "declared",
+          "value_unit": "m/s",
+          "dimension": "velocity",
+          "canonical_unit": "m/s",
+          "unknown_reason": null
+        },
+        "annular_velocity_min_si": {
+          "status": "declared",
+          "value_unit": "m/s",
+          "dimension": "velocity",
+          "canonical_unit": "m/s",
+          "unknown_reason": null
+        },
+        "slip_velocity_si": {
+          "status": "declared",
+          "value_unit": "m/s",
+          "dimension": "velocity",
+          "canonical_unit": "m/s",
+          "unknown_reason": null
+        },
+        "cutting_transport_ratio": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "cuttings_concentration_volume_fraction": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "stages[].from_depth_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "stages[].to_depth_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "stages[].length_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "stages[].hydraulic_diameter_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "stages[].flow_area_si": {
+          "status": "declared",
+          "value_unit": "m2",
+          "dimension": "area",
+          "canonical_unit": "m2",
+          "unknown_reason": null
+        },
+        "stages[].velocity_si": {
+          "status": "declared",
+          "value_unit": "m/s",
+          "dimension": "velocity",
+          "canonical_unit": "m/s",
+          "unknown_reason": null
+        },
+        "stages[].pressure_loss_si": {
+          "status": "declared",
+          "value_unit": "Pa",
+          "dimension": "pressure",
+          "canonical_unit": "Pa",
+          "unknown_reason": null
+        },
+        "stages[].pressure_loss_gradient_si": {
+          "status": "declared",
+          "value_unit": "Pa/m",
+          "dimension": "pressure_gradient",
+          "canonical_unit": "Pa/m",
+          "unknown_reason": null
+        },
+        "stages[].reynolds_number": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "stages[].annular_velocity_si": {
+          "status": "declared",
+          "value_unit": "m/s",
+          "dimension": "velocity",
+          "canonical_unit": "m/s",
+          "unknown_reason": null
+        },
+        "ecd_profile[].md_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "ecd_profile[].annulus_pressure_loss_si": {
+          "status": "declared",
+          "value_unit": "Pa",
+          "dimension": "pressure",
+          "canonical_unit": "Pa",
+          "unknown_reason": null
+        },
+        "ecd_profile[].annular_velocity_si": {
+          "status": "declared",
+          "value_unit": "m/s",
+          "dimension": "velocity",
+          "canonical_unit": "m/s",
+          "unknown_reason": null
+        }
+      }
+    },
+    {
+      "key": "integrity.barrier_envelope",
+      "version": "1.1.0",
+      "source": "backend/src/drillai/engines/integrity.py",
+      "function": "compute_integrity",
+      "input_model": "IntegrityInput",
+      "output_model": "IntegrityOutput",
+      "validation_status": "formula_derived",
+      "assumptions": [
+        "the declared barrier elements and their depth intervals are accurate",
+        "independence is expressed through the independence group",
+        "a verified element without an evidence reference is treated as unverified"
+      ],
+      "limitations": [
+        "does not size barriers against actual pressure loads (use the tubular/cement design engines)",
+        "no annular pressure or sustained-casing-pressure diagnostics",
+        "no risk-based anomaly trending"
+      ],
+      "declared_references_unverified": [
+        "NORSOK D-010 — Well integrity in drilling and well operations",
+        "API RP 96 — Deepwater well design and integrity (barrier concepts)"
+      ],
+      "input_units": {
+        "elements[].from_depth_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "elements[].to_depth_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "well_depth_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "required_barriers": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "minimum_independent_kinds": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        }
+      },
+      "output_units": {
+        "required_barriers": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "verified_barrier_count": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "intervals[].from_depth_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "intervals[].to_depth_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "intervals[].verified_barriers": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "intervals[].shortfall": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "gaps[].from_depth_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "gaps[].to_depth_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "gaps[].verified_barriers": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "gaps[].shortfall": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        }
+      }
+    },
+    {
+      "key": "offsets.similarity",
+      "version": "1.1.0",
+      "source": "backend/src/drillai/engines/offsets.py",
+      "function": "compute_offsets",
+      "input_model": "OffsetInput",
+      "output_model": "OffsetOutput",
+      "validation_status": "formula_derived",
+      "assumptions": [
+        "well attributes are comparable and consistently reported (same datum and definitions)",
+        "the analyst choose the weights, tolerances and the minimum coverage",
+        "formation names refer to the same stratigraphic nomenclature across wells"
+      ],
+      "limitations": [
+        "no learned similarity (geological or trajectory embedding) — factors are declared and inspectable",
+        "no automatic outlier removal beyond the explicit exclusions and coverage rule",
+        "hazard aggregation is descriptive; it does not compute probabilities"
+      ],
+      "declared_references_unverified": [
+        "SPE ATCE 2020 — Smart Custom Well Design Based On Automated Offset Well Analysis",
+        "IADC/SPE offset-analysis workflows (candidate selection, hazard compilation by depth)"
+      ],
+      "input_units": {
+        "reference.tvd_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "reference.md_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "reference.hole_size_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "reference.mud_weight_si": {
+          "status": "declared",
+          "value_unit": "kg/m3",
+          "dimension": "density",
+          "canonical_unit": "kg/m3",
+          "unknown_reason": null
+        },
+        "reference.max_inclination_deg": {
+          "status": "declared",
+          "value_unit": "deg",
+          "dimension": "angle",
+          "canonical_unit": "rad",
+          "unknown_reason": null
+        },
+        "candidates[].tvd_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "candidates[].md_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "candidates[].hole_size_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "candidates[].mud_weight_si": {
+          "status": "declared",
+          "value_unit": "kg/m3",
+          "dimension": "density",
+          "canonical_unit": "kg/m3",
+          "unknown_reason": null
+        },
+        "candidates[].max_inclination_deg": {
+          "status": "declared",
+          "value_unit": "deg",
+          "dimension": "angle",
+          "canonical_unit": "rad",
+          "unknown_reason": null
+        },
+        "lessons[].depth_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "weights.*": {
+          "status": "unknown",
+          "value_unit": null,
+          "dimension": null,
+          "canonical_unit": null,
+          "unknown_reason": "No authoritative unit is declared for this numeric value."
+        },
+        "tolerances.depth_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "tolerances.hole_size_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "tolerances.mud_weight_si": {
+          "status": "declared",
+          "value_unit": "kg/m3",
+          "dimension": "density",
+          "canonical_unit": "kg/m3",
+          "unknown_reason": null
+        },
+        "tolerances.inclination_deg": {
+          "status": "declared",
+          "value_unit": "deg",
+          "dimension": "angle",
+          "canonical_unit": "rad",
+          "unknown_reason": null
+        },
+        "tolerances.recency_years": {
+          "status": "declared",
+          "value_unit": "a",
+          "dimension": "time",
+          "canonical_unit": "s",
+          "unknown_reason": null
+        },
+        "minimum_coverage": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        }
+      },
+      "output_units": {
+        "ranked[].rank": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "ranked[].score": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "ranked[].coverage": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "ranked[].factors[].score": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "ranked[].factors[].weight": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "ranked[].factors[].contribution": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "ranked[].factors[].reference_value": {
+          "status": "unknown",
+          "value_unit": null,
+          "dimension": null,
+          "canonical_unit": null,
+          "unknown_reason": "No authoritative unit is declared for this numeric value."
+        },
+        "ranked[].factors[].candidate_value": {
+          "status": "unknown",
+          "value_unit": null,
+          "dimension": null,
+          "canonical_unit": null,
+          "unknown_reason": "No authoritative unit is declared for this numeric value."
+        },
+        "rejected[].rank": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "rejected[].score": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "rejected[].coverage": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "rejected[].factors[].score": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "rejected[].factors[].weight": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "rejected[].factors[].contribution": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "rejected[].factors[].reference_value": {
+          "status": "unknown",
+          "value_unit": null,
+          "dimension": null,
+          "canonical_unit": null,
+          "unknown_reason": "No authoritative unit is declared for this numeric value."
+        },
+        "rejected[].factors[].candidate_value": {
+          "status": "unknown",
+          "value_unit": null,
+          "dimension": null,
+          "canonical_unit": null,
+          "unknown_reason": "No authoritative unit is declared for this numeric value."
+        },
+        "statistics[].count": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "statistics[].weighted_mean": {
+          "status": "unknown",
+          "value_unit": null,
+          "dimension": null,
+          "canonical_unit": null,
+          "unknown_reason": "No authoritative unit is declared for this numeric value."
+        },
+        "statistics[].median": {
+          "status": "unknown",
+          "value_unit": null,
+          "dimension": null,
+          "canonical_unit": null,
+          "unknown_reason": "No authoritative unit is declared for this numeric value."
+        },
+        "statistics[].minimum": {
+          "status": "unknown",
+          "value_unit": null,
+          "dimension": null,
+          "canonical_unit": null,
+          "unknown_reason": "No authoritative unit is declared for this numeric value."
+        },
+        "statistics[].maximum": {
+          "status": "unknown",
+          "value_unit": null,
+          "dimension": null,
+          "canonical_unit": null,
+          "unknown_reason": "No authoritative unit is declared for this numeric value."
+        },
+        "statistics[].p10": {
+          "status": "unknown",
+          "value_unit": null,
+          "dimension": null,
+          "canonical_unit": null,
+          "unknown_reason": "No authoritative unit is declared for this numeric value."
+        },
+        "statistics[].p90": {
+          "status": "unknown",
+          "value_unit": null,
+          "dimension": null,
+          "canonical_unit": null,
+          "unknown_reason": "No authoritative unit is declared for this numeric value."
+        },
+        "hazards[].occurrences": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "hazards[].severity.*": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "lessons_considered": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "normalized_weights.*": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        }
+      }
+    },
+    {
+      "key": "optimization.pareto",
+      "version": "1.1.0",
+      "source": "backend/src/drillai/engines/optimization.py",
+      "function": "compute_pareto",
+      "input_model": "ParetoInput",
+      "output_model": "ParetoOutput",
+      "validation_status": "formula_derived",
+      "assumptions": [
+        "candidate objective values are trusted as produced by the engines",
+        "the caller declares direction and weight of each objective"
+      ],
+      "limitations": [
+        "no surrogate or gradient-based search",
+        "no interaction terms between parameters"
+      ],
+      "declared_references_unverified": [
+        "Pareto dominance; Spearman rank correlation"
+      ],
+      "input_units": {
+        "candidates[].values.*": {
+          "status": "unknown",
+          "value_unit": null,
+          "dimension": null,
+          "canonical_unit": null,
+          "unknown_reason": "No authoritative unit is declared for this numeric value."
+        },
+        "candidates[].objectives.*": {
+          "status": "unknown",
+          "value_unit": null,
+          "dimension": null,
+          "canonical_unit": null,
+          "unknown_reason": "No authoritative unit is declared for this numeric value."
+        },
+        "candidates[].uncertainty.*": {
+          "status": "unknown",
+          "value_unit": null,
+          "dimension": null,
+          "canonical_unit": null,
+          "unknown_reason": "No authoritative unit is declared for this numeric value."
+        },
+        "objectives[].weight": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "top_n": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        }
+      },
+      "output_units": {
+        "feasible_count": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "infeasible_count": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "ranking[].rank": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "ranking[].score": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "ranking[].objective_scores.*": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "ranking[].robust_score": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "trade_offs[].best_value": {
+          "status": "unknown",
+          "value_unit": null,
+          "dimension": null,
+          "canonical_unit": null,
+          "unknown_reason": "No authoritative unit is declared for this numeric value."
+        },
+        "trade_offs[].worst_value": {
+          "status": "unknown",
+          "value_unit": null,
+          "dimension": null,
+          "canonical_unit": null,
+          "unknown_reason": "No authoritative unit is declared for this numeric value."
+        },
+        "trade_offs[].spread": {
+          "status": "unknown",
+          "value_unit": null,
+          "dimension": null,
+          "canonical_unit": null,
+          "unknown_reason": "No authoritative unit is declared for this numeric value."
+        },
+        "sensitivities[].spearman_rho": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "sensitivities[].samples": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "feasible_ranges.*.*": {
+          "status": "unknown",
+          "value_unit": null,
+          "dimension": null,
+          "canonical_unit": null,
+          "unknown_reason": "No authoritative unit is declared for this numeric value."
+        },
+        "feasible_ranges.*.count": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        }
+      }
+    },
+    {
+      "key": "optimization.sweep",
+      "version": "1.1.0",
+      "source": "backend/src/drillai/engines/optimization.py",
+      "function": "compute_sweep",
+      "input_model": "SweepInput",
+      "output_model": "SweepOutput",
+      "validation_status": "formula_derived",
+      "assumptions": [
+        "parameters are independent",
+        "ranges are physically admissible as supplied"
+      ],
+      "limitations": [
+        "no surrogate modelling",
+        "no adaptive sampling"
+      ],
+      "declared_references_unverified": [
+        "Halton low-discrepancy sequences (deterministic design of experiments)"
+      ],
+      "input_units": {
+        "parameters[].min_si": {
+          "status": "unknown",
+          "value_unit": null,
+          "dimension": null,
+          "canonical_unit": null,
+          "unknown_reason": "No authoritative unit is declared for this numeric value."
+        },
+        "parameters[].max_si": {
+          "status": "unknown",
+          "value_unit": null,
+          "dimension": null,
+          "canonical_unit": null,
+          "unknown_reason": "No authoritative unit is declared for this numeric value."
+        },
+        "parameters[].steps": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "parameters[].fixed": {
+          "status": "unknown",
+          "value_unit": null,
+          "dimension": null,
+          "canonical_unit": null,
+          "unknown_reason": "No authoritative unit is declared for this numeric value."
+        },
+        "samples": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "max_candidates": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        }
+      },
+      "output_units": {
+        "candidates[].values.*": {
+          "status": "unknown",
+          "value_unit": null,
+          "dimension": null,
+          "canonical_unit": null,
+          "unknown_reason": "No authoritative unit is declared for this numeric value."
+        },
+        "candidates[].index": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "candidate_count": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "parameter_levels.*[]": {
+          "status": "unknown",
+          "value_unit": null,
+          "dimension": null,
+          "canonical_unit": null,
+          "unknown_reason": "No authoritative unit is declared for this numeric value."
+        }
+      }
+    },
+    {
+      "key": "readiness.assessment",
+      "version": "1.1.0",
+      "source": "backend/src/drillai/engines/readiness.py",
+      "function": "compute_readiness",
+      "input_model": "ReadinessInput",
+      "output_model": "ReadinessOutput",
+      "validation_status": "formula_derived",
+      "assumptions": [
+        "quantity available reflects the inventory at the as-of date",
+        "lead times are calendar days and do not model partial shipments",
+        "certification validity covers the whole operation window"
+      ],
+      "limitations": [
+        "no probabilistic lead-time modelling",
+        "no cost or vendor-priority optimisation",
+        "personnel competency matrices are out of scope for this engine"
+      ],
+      "declared_references_unverified": [
+        "Well construction readiness practice (BOM availability, lead-time feasibility)"
+      ],
+      "input_units": {
+        "requirements[].quantity_required": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "requirements[].quantity_available": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "requirements[].lead_time_days": {
+          "status": "declared",
+          "value_unit": "d",
+          "dimension": "time",
+          "canonical_unit": "s",
+          "unknown_reason": null
+        }
+      },
+      "output_units": {
+        "ready_count": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "at_risk_count": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "not_ready_count": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "items[].quantity_shortfall": {
+          "status": "unknown",
+          "value_unit": null,
+          "dimension": null,
+          "canonical_unit": null,
+          "unknown_reason": "No authoritative unit is declared for this numeric value."
+        },
+        "longest_lead_time_days": {
+          "status": "declared",
+          "value_unit": "d",
+          "dimension": "time",
+          "canonical_unit": "s",
+          "unknown_reason": null
+        }
+      }
+    },
+    {
+      "key": "schematic.well_model",
+      "version": "1.1.0",
+      "source": "backend/src/drillai/engines/schematic.py",
+      "function": "compute_schematic",
+      "input_model": "SchematicInput",
+      "output_model": "SchematicOutput",
+      "validation_status": "formula_derived",
+      "assumptions": [
+        "depths are measured depth in the declared datum",
+        "strings are concentric and vertical for the purpose of annulus capacity derivation",
+        "cement is shown as a top-to-shoe interval without internal displacement detail"
+      ],
+      "limitations": [
+        "no deviated-schematic projection (a TVD view requires the trajectory)",
+        "no centraliser, coupling or accessory detail",
+        "cement quality and channeling are not represented"
+      ],
+      "declared_references_unverified": [
+        "Well schematic presentation practice (ISO 13628 / operator standards)"
+      ],
+      "input_units": {
+        "wellhead_elevation_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "ground_level_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "hole_sections[].top_depth_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "hole_sections[].bottom_depth_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "hole_sections[].hole_diameter_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "casing_strings[].outer_diameter_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "casing_strings[].inner_diameter_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "casing_strings[].top_depth_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "casing_strings[].shoe_depth_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "casing_strings[].cement_top_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "casing_strings[].weight_kg_per_m": {
+          "status": "declared",
+          "value_unit": "kg/m",
+          "dimension": "linear_density",
+          "canonical_unit": "kg/m",
+          "unknown_reason": null
+        },
+        "completion[].top_depth_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "completion[].bottom_depth_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "completion[].outer_diameter_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "completion[].inner_diameter_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "formation_tops.*": {
+          "status": "unknown",
+          "value_unit": null,
+          "dimension": null,
+          "canonical_unit": null,
+          "unknown_reason": "No authoritative unit is declared for this numeric value."
+        },
+        "total_depth_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        }
+      },
+      "output_units": {
+        "total_depth_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "wellhead_elevation_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "ground_level_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "annuli[].from_depth_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "annuli[].to_depth_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "annuli[].equivalent_diameter_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "annuli[].capacity_m3_per_m": {
+          "status": "declared",
+          "value_unit": "m2",
+          "dimension": "area",
+          "canonical_unit": "m2",
+          "unknown_reason": null
+        },
+        "issues[].limit": {
+          "status": "unknown",
+          "value_unit": null,
+          "dimension": null,
+          "canonical_unit": null,
+          "unknown_reason": "No authoritative unit is declared for this numeric value."
+        },
+        "issues[].actual": {
+          "status": "unknown",
+          "value_unit": null,
+          "dimension": null,
+          "canonical_unit": null,
+          "unknown_reason": "No authoritative unit is declared for this numeric value."
+        },
+        "strings[].outer_diameter_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "strings[].inner_diameter_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "strings[].top_depth_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "strings[].shoe_depth_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "strings[].cement_top_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "hole_sections[].top_depth_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "hole_sections[].bottom_depth_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "hole_sections[].hole_diameter_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "completion[].top_depth_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "completion[].bottom_depth_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "completion[].outer_diameter_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "completion[].inner_diameter_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "formation_tops[].top_depth_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "render_hints.wellhead_elevation_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "render_hints.depth_scale.minimum": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "render_hints.depth_scale.maximum": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "strings[].capacity_m3_per_m": {
+          "status": "declared",
+          "value_unit": "m2",
+          "dimension": "area",
+          "canonical_unit": "m2",
+          "unknown_reason": null
+        },
+        "hole_sections[].capacity_m3_per_m": {
+          "status": "declared",
+          "value_unit": "m2",
+          "dimension": "area",
+          "canonical_unit": "m2",
+          "unknown_reason": null
+        },
+        "strings[].weight_kg_per_m": {
+          "status": "declared",
+          "value_unit": "kg/m",
+          "dimension": "linear_density",
+          "canonical_unit": "kg/m",
+          "unknown_reason": null
+        }
+      }
+    },
+    {
+      "key": "torque_drag.soft_string",
+      "version": "1.1.0",
+      "source": "backend/src/drillai/engines/mechanics.py",
+      "function": "compute_torque_drag",
+      "input_model": "TorqueDragInput",
+      "output_model": "TorqueDragOutput",
+      "validation_status": "formula_derived",
+      "assumptions": [
+        "soft string: bending stiffness is neglected",
+        "constant Coulomb friction coefficients over the whole string",
+        "buoyancy via density ratio"
+      ],
+      "limitations": [
+        "no buckling (sinusoidal/helical) or lock-up analysis",
+        "no temperature/curvature-dependent friction, no tool-joint local effects",
+        "stretch is linear-elastic only"
+      ],
+      "declared_references_unverified": [
+        "Johancsik, Friesen & Dawson, SPE 11380 (1984) — Torque and Drag in Directional Wells",
+        "Aadnoy et al. — Petroleum Rock Mechanics (soft-string treatment)"
+      ],
+      "input_units": {
+        "survey[].md_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "survey[].inclination_deg": {
+          "status": "declared",
+          "value_unit": "deg",
+          "dimension": "angle",
+          "canonical_unit": "rad",
+          "unknown_reason": null
+        },
+        "survey[].azimuth_deg": {
+          "status": "declared",
+          "value_unit": "deg",
+          "dimension": "angle",
+          "canonical_unit": "rad",
+          "unknown_reason": null
+        },
+        "survey[].tvd_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "string[].from_depth_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "string[].to_depth_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "string[].od_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "string[].id_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "string[].linear_mass_si": {
+          "status": "declared",
+          "value_unit": "kg/m",
+          "dimension": "linear_density",
+          "canonical_unit": "kg/m",
+          "unknown_reason": null
+        },
+        "mud_weight_si": {
+          "status": "declared",
+          "value_unit": "kg/m3",
+          "dimension": "density",
+          "canonical_unit": "kg/m3",
+          "unknown_reason": null
+        },
+        "bit_depth_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "friction_factor_pickup": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "friction_factor_slackoff": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "friction_factor_rotating": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "wob_si": {
+          "status": "declared",
+          "value_unit": "N",
+          "dimension": "force",
+          "canonical_unit": "N",
+          "unknown_reason": null
+        },
+        "bit_torque_si": {
+          "status": "declared",
+          "value_unit": "N.m",
+          "dimension": "torque",
+          "canonical_unit": "N.m",
+          "unknown_reason": null
+        },
+        "bit_torque_coefficient": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "bit_diameter_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "pressure_area_si": {
+          "status": "declared",
+          "value_unit": "m2",
+          "dimension": "area",
+          "canonical_unit": "m2",
+          "unknown_reason": null
+        },
+        "pump_pressure_si": {
+          "status": "declared",
+          "value_unit": "Pa",
+          "dimension": "pressure",
+          "canonical_unit": "Pa",
+          "unknown_reason": null
+        },
+        "surface_pressure_limit_si": {
+          "status": "declared",
+          "value_unit": "Pa",
+          "dimension": "pressure",
+          "canonical_unit": "Pa",
+          "unknown_reason": null
+        },
+        "rig_hookload_limit_si": {
+          "status": "declared",
+          "value_unit": "N",
+          "dimension": "force",
+          "canonical_unit": "N",
+          "unknown_reason": null
+        },
+        "youngs_modulus_si": {
+          "status": "declared",
+          "value_unit": "Pa",
+          "dimension": "pressure",
+          "canonical_unit": "Pa",
+          "unknown_reason": null
+        },
+        "density_si": {
+          "status": "declared",
+          "value_unit": "kg/m3",
+          "dimension": "density",
+          "canonical_unit": "kg/m3",
+          "unknown_reason": null
+        }
+      },
+      "output_units": {
+        "string_weight_air_si": {
+          "status": "declared",
+          "value_unit": "N",
+          "dimension": "force",
+          "canonical_unit": "N",
+          "unknown_reason": null
+        },
+        "buoyancy_factor": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "string_weight_buoyed_si": {
+          "status": "declared",
+          "value_unit": "N",
+          "dimension": "force",
+          "canonical_unit": "N",
+          "unknown_reason": null
+        },
+        "hookload_pickup_si": {
+          "status": "declared",
+          "value_unit": "N",
+          "dimension": "force",
+          "canonical_unit": "N",
+          "unknown_reason": null
+        },
+        "hookload_slackoff_si": {
+          "status": "declared",
+          "value_unit": "N",
+          "dimension": "force",
+          "canonical_unit": "N",
+          "unknown_reason": null
+        },
+        "hookload_rotating_si": {
+          "status": "declared",
+          "value_unit": "N",
+          "dimension": "force",
+          "canonical_unit": "N",
+          "unknown_reason": null
+        },
+        "drag_up_si": {
+          "status": "declared",
+          "value_unit": "N",
+          "dimension": "force",
+          "canonical_unit": "N",
+          "unknown_reason": null
+        },
+        "drag_down_si": {
+          "status": "declared",
+          "value_unit": "N",
+          "dimension": "force",
+          "canonical_unit": "N",
+          "unknown_reason": null
+        },
+        "surface_torque_off_bottom_si": {
+          "status": "declared",
+          "value_unit": "N.m",
+          "dimension": "torque",
+          "canonical_unit": "N.m",
+          "unknown_reason": null
+        },
+        "surface_torque_on_bottom_si": {
+          "status": "declared",
+          "value_unit": "N.m",
+          "dimension": "torque",
+          "canonical_unit": "N.m",
+          "unknown_reason": null
+        },
+        "bit_torque_si": {
+          "status": "declared",
+          "value_unit": "N.m",
+          "dimension": "torque",
+          "canonical_unit": "N.m",
+          "unknown_reason": null
+        },
+        "side_force_max_si": {
+          "status": "declared",
+          "value_unit": "N",
+          "dimension": "force",
+          "canonical_unit": "N",
+          "unknown_reason": null
+        },
+        "side_force_max_md_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "stretch_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "tension_max_si": {
+          "status": "declared",
+          "value_unit": "N",
+          "dimension": "force",
+          "canonical_unit": "N",
+          "unknown_reason": null
+        },
+        "neutral_point_md_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "stations[].md_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "stations[].inclination_deg": {
+          "status": "declared",
+          "value_unit": "deg",
+          "dimension": "angle",
+          "canonical_unit": "rad",
+          "unknown_reason": null
+        },
+        "stations[].tvd_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "stations[].tension_pickup_si": {
+          "status": "declared",
+          "value_unit": "N",
+          "dimension": "force",
+          "canonical_unit": "N",
+          "unknown_reason": null
+        },
+        "stations[].tension_slackoff_si": {
+          "status": "declared",
+          "value_unit": "N",
+          "dimension": "force",
+          "canonical_unit": "N",
+          "unknown_reason": null
+        },
+        "stations[].tension_rotating_si": {
+          "status": "declared",
+          "value_unit": "N",
+          "dimension": "force",
+          "canonical_unit": "N",
+          "unknown_reason": null
+        },
+        "stations[].side_force_si": {
+          "status": "declared",
+          "value_unit": "N",
+          "dimension": "force",
+          "canonical_unit": "N",
+          "unknown_reason": null
+        },
+        "stations[].normal_force_si": {
+          "status": "declared",
+          "value_unit": "N",
+          "dimension": "force",
+          "canonical_unit": "N",
+          "unknown_reason": null
+        },
+        "stations[].dogleg_deg": {
+          "status": "declared",
+          "value_unit": "deg",
+          "dimension": "angle",
+          "canonical_unit": "rad",
+          "unknown_reason": null
+        }
+      }
+    },
+    {
+      "key": "trajectory.minimum_curvature",
+      "version": "1.3.0",
+      "source": "backend/src/drillai/engines/trajectory.py",
+      "function": "minimum_curvature",
+      "input_model": "TrajectoryEngineInput",
+      "output_model": "TrajectoryEngineOutput",
+      "validation_status": "formula_derived",
+      "assumptions": [
+        "minimum curvature between stations",
+        "constant inclination/azimuth rate within an interval",
+        "station and vertical-section azimuth references must be explicit and compatible with the common output reference",
+        "no azimuth-reference conversion or vertical-datum compatibility is inferred",
+        "an explicit signed correction is required for conversion into a named grid frame"
+      ],
+      "limitations": [
+        "does not model bending moments, toolface history or BHA sag",
+        "tight-radius and high-dogleg rotary-steerable behaviour is only as accurate as station spacing",
+        "does not derive magnetic declination/grid convergence; caller-supplied corrections are not independently verified",
+        "does not perform anti-collision or error-model (ISCWSA) uncertainty analysis"
+      ],
+      "declared_references_unverified": [
+        "API RP 7G — Drill Stem Design and Operating Limits (survey calculation practice)",
+        "SPE 84246 / standard minimum-curvature formulation"
+      ],
+      "input_units": {
+        "stations[].md_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "stations[].inclination_deg": {
+          "status": "declared",
+          "value_unit": "deg",
+          "dimension": "angle",
+          "canonical_unit": "rad",
+          "unknown_reason": null
+        },
+        "stations[].azimuth_deg": {
+          "status": "declared",
+          "value_unit": "deg",
+          "dimension": "angle",
+          "canonical_unit": "rad",
+          "unknown_reason": null
+        },
+        "stations[].grid_correction_deg": {
+          "status": "declared",
+          "value_unit": "deg",
+          "dimension": "angle",
+          "canonical_unit": "rad",
+          "unknown_reason": null
+        },
+        "stations[].toolface_deg": {
+          "status": "declared",
+          "value_unit": "deg",
+          "dimension": "angle",
+          "canonical_unit": "rad",
+          "unknown_reason": null
+        },
+        "kb_elevation_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "vertical_section_azimuth_deg": {
+          "status": "declared",
+          "value_unit": "deg",
+          "dimension": "angle",
+          "canonical_unit": "rad",
+          "unknown_reason": null
+        },
+        "tie_in.tvd_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "tie_in.ns_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "tie_in.ew_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "max_dls_limit": {
+          "status": "declared",
+          "value_unit": "deg/30m",
+          "dimension": "angle_per_length",
+          "canonical_unit": "rad/m",
+          "unknown_reason": null
+        },
+        "max_inc_limit": {
+          "status": "declared",
+          "value_unit": "deg",
+          "dimension": "angle",
+          "canonical_unit": "rad",
+          "unknown_reason": null
+        }
+      },
+      "output_units": {
+        "stations[].index": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "stations[].md_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "stations[].inclination_deg": {
+          "status": "declared",
+          "value_unit": "deg",
+          "dimension": "angle",
+          "canonical_unit": "rad",
+          "unknown_reason": null
+        },
+        "stations[].azimuth_deg": {
+          "status": "declared",
+          "value_unit": "deg",
+          "dimension": "angle",
+          "canonical_unit": "rad",
+          "unknown_reason": null
+        },
+        "stations[].input_azimuth_deg": {
+          "status": "declared",
+          "value_unit": "deg",
+          "dimension": "angle",
+          "canonical_unit": "rad",
+          "unknown_reason": null
+        },
+        "stations[].azimuth_correction_applied_deg": {
+          "status": "declared",
+          "value_unit": "deg",
+          "dimension": "angle",
+          "canonical_unit": "rad",
+          "unknown_reason": null
+        },
+        "stations[].tvd_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "stations[].ns_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "stations[].ew_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "stations[].tvdss_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "stations[].dls_deg_per_30m": {
+          "status": "declared",
+          "value_unit": "deg/30m",
+          "dimension": "angle_per_length",
+          "canonical_unit": "rad/m",
+          "unknown_reason": null
+        },
+        "stations[].build_rate_deg_per_30m": {
+          "status": "declared",
+          "value_unit": "deg/30m",
+          "dimension": "angle_per_length",
+          "canonical_unit": "rad/m",
+          "unknown_reason": null
+        },
+        "stations[].turn_rate_deg_per_30m": {
+          "status": "declared",
+          "value_unit": "deg/30m",
+          "dimension": "angle_per_length",
+          "canonical_unit": "rad/m",
+          "unknown_reason": null
+        },
+        "stations[].closure_distance_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "stations[].closure_azimuth_deg": {
+          "status": "declared",
+          "value_unit": "deg",
+          "dimension": "angle",
+          "canonical_unit": "rad",
+          "unknown_reason": null
+        },
+        "stations[].vertical_section_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "stations[].delta_md_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "stations[].dogleg_angle_deg": {
+          "status": "declared",
+          "value_unit": "deg",
+          "dimension": "angle",
+          "canonical_unit": "rad",
+          "unknown_reason": null
+        },
+        "total_md_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "total_tvd_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "total_displacement_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "closure_azimuth_deg": {
+          "status": "declared",
+          "value_unit": "deg",
+          "dimension": "angle",
+          "canonical_unit": "rad",
+          "unknown_reason": null
+        },
+        "max_inclination_deg": {
+          "status": "declared",
+          "value_unit": "deg",
+          "dimension": "angle",
+          "canonical_unit": "rad",
+          "unknown_reason": null
+        },
+        "max_inclination_md_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "max_dls_deg_per_30m": {
+          "status": "declared",
+          "value_unit": "deg/30m",
+          "dimension": "angle_per_length",
+          "canonical_unit": "rad/m",
+          "unknown_reason": null
+        },
+        "max_dls_md_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "average_dls_deg_per_30m": {
+          "status": "declared",
+          "value_unit": "deg/30m",
+          "dimension": "angle_per_length",
+          "canonical_unit": "rad/m",
+          "unknown_reason": null
+        },
+        "survey_count": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        }
+      }
+    },
+    {
+      "key": "tubulars.api_5c3",
+      "version": "1.1.0",
+      "source": "backend/src/drillai/engines/tubulars.py",
+      "function": "compute_tubular_design",
+      "input_model": "TubularDesignInput",
+      "output_model": "TubularDesignOutput",
+      "validation_status": "needs_field_validation",
+      "assumptions": [
+        "nominal wall thickness (manufacturer tolerances other than the API 0.875 burst factor are not applied)",
+        "yield strength is the specified minimum for the grade",
+        "pressure loads are static, no thermal or bending stresses beyond the axial term"
+      ],
+      "limitations": [
+        "pipe body only: no connection, coupling or thread rating",
+        "no buckling or bending stress from doglegs",
+        "bending, thermal and dynamic loads must be added by a dedicated design workflow"
+      ],
+      "declared_references_unverified": [
+        "API TR 5C3 (2018) — Calculating Performance Properties of Pipe Used as Casing or Tubing",
+        "API Bull 5C3 / equivalent TR equations for collapse domains"
+      ],
+      "input_units": {
+        "segments[].from_depth_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "segments[].to_depth_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "segments[].outer_diameter_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "segments[].wall_thickness_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "segments[].yield_stress_si": {
+          "status": "declared",
+          "value_unit": "Pa",
+          "dimension": "pressure",
+          "canonical_unit": "Pa",
+          "unknown_reason": null
+        },
+        "segments[].linear_mass_si": {
+          "status": "declared",
+          "value_unit": "kg/m",
+          "dimension": "linear_density",
+          "canonical_unit": "kg/m",
+          "unknown_reason": null
+        },
+        "segments[].internal_pressure_si": {
+          "status": "declared",
+          "value_unit": "Pa",
+          "dimension": "pressure",
+          "canonical_unit": "Pa",
+          "unknown_reason": null
+        },
+        "segments[].external_pressure_si": {
+          "status": "declared",
+          "value_unit": "Pa",
+          "dimension": "pressure",
+          "canonical_unit": "Pa",
+          "unknown_reason": null
+        },
+        "segments[].axial.hanging_weight_si": {
+          "status": "declared",
+          "value_unit": "N",
+          "dimension": "force",
+          "canonical_unit": "N",
+          "unknown_reason": null
+        },
+        "segments[].axial.overpull_si": {
+          "status": "declared",
+          "value_unit": "N",
+          "dimension": "force",
+          "canonical_unit": "N",
+          "unknown_reason": null
+        },
+        "segments[].axial.pressure_area_force_si": {
+          "status": "declared",
+          "value_unit": "N",
+          "dimension": "force",
+          "canonical_unit": "N",
+          "unknown_reason": null
+        },
+        "segments[].wear_allowance": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "design_factors.burst": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "design_factors.collapse": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "design_factors.tension": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "design_factors.triaxial": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "mud_weight_si": {
+          "status": "declared",
+          "value_unit": "kg/m3",
+          "dimension": "density",
+          "canonical_unit": "kg/m3",
+          "unknown_reason": null
+        }
+      },
+      "output_units": {
+        "segments[].from_depth_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "segments[].to_depth_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "segments[].d_over_t": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "segments[].axial_stress_si": {
+          "status": "declared",
+          "value_unit": "Pa",
+          "dimension": "pressure",
+          "canonical_unit": "Pa",
+          "unknown_reason": null
+        },
+        "segments[].equivalent_yield_stress_si": {
+          "status": "declared",
+          "value_unit": "Pa",
+          "dimension": "pressure",
+          "canonical_unit": "Pa",
+          "unknown_reason": null
+        },
+        "segments[].axial_derating_factor": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "segments[].burst_rating_si": {
+          "status": "declared",
+          "value_unit": "Pa",
+          "dimension": "pressure",
+          "canonical_unit": "Pa",
+          "unknown_reason": null
+        },
+        "segments[].burst_rating_uniaxial_si": {
+          "status": "declared",
+          "value_unit": "Pa",
+          "dimension": "pressure",
+          "canonical_unit": "Pa",
+          "unknown_reason": null
+        },
+        "segments[].collapse_rating_si": {
+          "status": "declared",
+          "value_unit": "Pa",
+          "dimension": "pressure",
+          "canonical_unit": "Pa",
+          "unknown_reason": null
+        },
+        "segments[].collapse_rating_uniaxial_si": {
+          "status": "declared",
+          "value_unit": "Pa",
+          "dimension": "pressure",
+          "canonical_unit": "Pa",
+          "unknown_reason": null
+        },
+        "segments[].axial_yield_force_si": {
+          "status": "declared",
+          "value_unit": "N",
+          "dimension": "force",
+          "canonical_unit": "N",
+          "unknown_reason": null
+        },
+        "segments[].axial_load_si": {
+          "status": "declared",
+          "value_unit": "N",
+          "dimension": "force",
+          "canonical_unit": "N",
+          "unknown_reason": null
+        },
+        "segments[].burst_safety_factor": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "segments[].collapse_safety_factor": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "segments[].tension_safety_factor": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "segments[].triaxial_safety_factor": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "segments[].triaxial_equivalent_stress_si": {
+          "status": "declared",
+          "value_unit": "Pa",
+          "dimension": "pressure",
+          "canonical_unit": "Pa",
+          "unknown_reason": null
+        },
+        "segments[].net_collapse_load_si": {
+          "status": "declared",
+          "value_unit": "Pa",
+          "dimension": "pressure",
+          "canonical_unit": "Pa",
+          "unknown_reason": null
+        },
+        "segments[].net_burst_load_si": {
+          "status": "declared",
+          "value_unit": "Pa",
+          "dimension": "pressure",
+          "canonical_unit": "Pa",
+          "unknown_reason": null
+        },
+        "segments[].violations[].limit": {
+          "status": "unknown",
+          "value_unit": null,
+          "dimension": null,
+          "canonical_unit": null,
+          "unknown_reason": "No authoritative unit is declared for this numeric value."
+        },
+        "segments[].violations[].actual": {
+          "status": "unknown",
+          "value_unit": null,
+          "dimension": null,
+          "canonical_unit": null,
+          "unknown_reason": "No authoritative unit is declared for this numeric value."
+        },
+        "design_factors.burst": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "design_factors.collapse": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "design_factors.tension": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "design_factors.triaxial": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "minimum_safety_factor": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "violations[].limit": {
+          "status": "unknown",
+          "value_unit": null,
+          "dimension": null,
+          "canonical_unit": null,
+          "unknown_reason": "No authoritative unit is declared for this numeric value."
+        },
+        "violations[].actual": {
+          "status": "unknown",
+          "value_unit": null,
+          "dimension": null,
+          "canonical_unit": null,
+          "unknown_reason": "No authoritative unit is declared for this numeric value."
+        }
+      }
+    },
+    {
+      "key": "twin.reconciliation",
+      "version": "1.2.0",
+      "source": "backend/src/drillai/engines/twin.py",
+      "function": "compute_reconciliation",
+      "input_model": "TrajectoryComparisonInput",
+      "output_model": "TrackReconciliationOutput",
+      "validation_status": "formula_derived",
+      "assumptions": [
+        "both surveys are processed with minimum curvature using their own tie-in",
+        "actual position between survey stations is interpolated linearly in MD",
+        "the actual survey is anchored to the planned first station by default"
+      ],
+      "limitations": [
+        "no positional uncertainty (ISCWSA) model",
+        "no automatic detection of a wrong tie-in or datum shift beyond the anchor statement",
+        "predicted rather than surveyed positions must be passed as `actual` deliberately"
+      ],
+      "declared_references_unverified": [
+        "Minimum-curvature survey computation (same implementation as trajectory.minimum_curvature)",
+        "Directional drilling practice for plan-vs-actual tolerance control"
+      ],
+      "input_units": {
+        "planned.stations[].md_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "planned.stations[].inclination_deg": {
+          "status": "declared",
+          "value_unit": "deg",
+          "dimension": "angle",
+          "canonical_unit": "rad",
+          "unknown_reason": null
+        },
+        "planned.stations[].azimuth_deg": {
+          "status": "declared",
+          "value_unit": "deg",
+          "dimension": "angle",
+          "canonical_unit": "rad",
+          "unknown_reason": null
+        },
+        "planned.stations[].grid_correction_deg": {
+          "status": "declared",
+          "value_unit": "deg",
+          "dimension": "angle",
+          "canonical_unit": "rad",
+          "unknown_reason": null
+        },
+        "planned.stations[].toolface_deg": {
+          "status": "declared",
+          "value_unit": "deg",
+          "dimension": "angle",
+          "canonical_unit": "rad",
+          "unknown_reason": null
+        },
+        "planned.kb_elevation_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "planned.vertical_section_azimuth_deg": {
+          "status": "declared",
+          "value_unit": "deg",
+          "dimension": "angle",
+          "canonical_unit": "rad",
+          "unknown_reason": null
+        },
+        "planned.tie_in.tvd_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "planned.tie_in.ns_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "planned.tie_in.ew_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "planned.max_dls_limit": {
+          "status": "declared",
+          "value_unit": "deg/30m",
+          "dimension": "angle_per_length",
+          "canonical_unit": "rad/m",
+          "unknown_reason": null
+        },
+        "planned.max_inc_limit": {
+          "status": "declared",
+          "value_unit": "deg",
+          "dimension": "angle",
+          "canonical_unit": "rad",
+          "unknown_reason": null
+        },
+        "actual.stations[].md_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "actual.stations[].inclination_deg": {
+          "status": "declared",
+          "value_unit": "deg",
+          "dimension": "angle",
+          "canonical_unit": "rad",
+          "unknown_reason": null
+        },
+        "actual.stations[].azimuth_deg": {
+          "status": "declared",
+          "value_unit": "deg",
+          "dimension": "angle",
+          "canonical_unit": "rad",
+          "unknown_reason": null
+        },
+        "actual.stations[].grid_correction_deg": {
+          "status": "declared",
+          "value_unit": "deg",
+          "dimension": "angle",
+          "canonical_unit": "rad",
+          "unknown_reason": null
+        },
+        "actual.stations[].toolface_deg": {
+          "status": "declared",
+          "value_unit": "deg",
+          "dimension": "angle",
+          "canonical_unit": "rad",
+          "unknown_reason": null
+        },
+        "actual.kb_elevation_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "actual.vertical_section_azimuth_deg": {
+          "status": "declared",
+          "value_unit": "deg",
+          "dimension": "angle",
+          "canonical_unit": "rad",
+          "unknown_reason": null
+        },
+        "actual.tie_in.tvd_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "actual.tie_in.ns_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "actual.tie_in.ew_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "actual.max_dls_limit": {
+          "status": "declared",
+          "value_unit": "deg/30m",
+          "dimension": "angle_per_length",
+          "canonical_unit": "rad/m",
+          "unknown_reason": null
+        },
+        "actual.max_inc_limit": {
+          "status": "declared",
+          "value_unit": "deg",
+          "dimension": "angle",
+          "canonical_unit": "rad",
+          "unknown_reason": null
+        },
+        "lateral_tolerance_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "vertical_tolerance_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "watch_fraction": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "compare_to_md_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        }
+      },
+      "output_units": {
+        "stations[].md_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "stations[].planned_tvd_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "stations[].planned_ns_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "stations[].planned_ew_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "stations[].actual_tvd_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "stations[].actual_ns_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "stations[].actual_ew_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "stations[].lateral_offset_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "stations[].vertical_offset_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "stations[].closure_offset_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "station_count": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "compared_station_count": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "max_lateral_offset_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "max_lateral_offset_md_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "max_vertical_offset_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "max_vertical_offset_md_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "mean_lateral_offset_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "final_lateral_offset_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "final_vertical_offset_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "stations_on_plan": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "stations_on_watch": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "stations_out_of_tolerance": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "interpolated_stations": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "actual_total_md_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "planned_total_md_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "progress_fraction": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "latest_actual_md_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "tolerance_used_lateral_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "tolerance_used_vertical_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        }
+      }
+    },
+    {
+      "key": "well_control.kill_sheet",
+      "version": "1.2.0",
+      "source": "backend/src/drillai/engines/wellcontrol.py",
+      "function": "compute_kill_sheet",
+      "input_model": "KillSheetInput",
+      "output_model": "KillSheetOutput",
+      "validation_status": "needs_field_validation",
+      "assumptions": [
+        "single influx, steady-state shut-in pressures",
+        "kill rate pressure (KRP) measured at the slow kill rate and dominated by drillstring/bit friction",
+        "no annular friction while shut in and negligible annular friction during kill circulation",
+        "volumetric_kick_tolerance_si (when computed) uses a preliminary single-bubble unmigrated balance at the casing shoe"
+      ],
+      "limitations": [
+        "does not model multi-phase gas expansion, real-gas Z-factor compressibility, or oil-based mud gas solubility",
+        "mud_weight_margin_si (and deprecated alias kick_tolerance_mud_weight_si) is a static shoe mud-weight margin (kg/m3), not a multi-phase volumetric kick tolerance",
+        "not a substitute for a certified well control procedure or IWCF/IADC WellSharp training"
+      ],
+      "declared_references_unverified": [
+        "IADC WellSharp / IWCF Well Control Manual (Wait-and-Weight & Driller's Method)",
+        "API RP 59 — Well Control Operations"
+      ],
+      "input_units": {
+        "tvd_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "current_mud_weight_si": {
+          "status": "declared",
+          "value_unit": "kg/m3",
+          "dimension": "density",
+          "canonical_unit": "kg/m3",
+          "unknown_reason": null
+        },
+        "sidpp_si": {
+          "status": "declared",
+          "value_unit": "Pa",
+          "dimension": "pressure",
+          "canonical_unit": "Pa",
+          "unknown_reason": null
+        },
+        "sicp_si": {
+          "status": "declared",
+          "value_unit": "Pa",
+          "dimension": "pressure",
+          "canonical_unit": "Pa",
+          "unknown_reason": null
+        },
+        "pit_gain_si": {
+          "status": "declared",
+          "value_unit": "m3",
+          "dimension": "volume",
+          "canonical_unit": "m3",
+          "unknown_reason": null
+        },
+        "slow_circulating_pressure_si": {
+          "status": "declared",
+          "value_unit": "Pa",
+          "dimension": "pressure",
+          "canonical_unit": "Pa",
+          "unknown_reason": null
+        },
+        "kill_rate_si": {
+          "status": "declared",
+          "value_unit": "m3/s",
+          "dimension": "volume_flow",
+          "canonical_unit": "m3/s",
+          "unknown_reason": null
+        },
+        "pump_output_per_stroke_si": {
+          "status": "declared",
+          "value_unit": "m3",
+          "dimension": "volume",
+          "canonical_unit": "m3",
+          "unknown_reason": null
+        },
+        "strokes_to_bit": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "strokes_surface_to_bit": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "annulus_strokes": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "casing_shoe_tvd_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "shoe_fracture_mud_weight_si": {
+          "status": "declared",
+          "value_unit": "kg/m3",
+          "dimension": "density",
+          "canonical_unit": "kg/m3",
+          "unknown_reason": null
+        },
+        "shoe_formation_integrity_si": {
+          "status": "declared",
+          "value_unit": "kg/m3",
+          "dimension": "density",
+          "canonical_unit": "kg/m3",
+          "unknown_reason": null
+        },
+        "influx_density_si": {
+          "status": "declared",
+          "value_unit": "kg/m3",
+          "dimension": "density",
+          "canonical_unit": "kg/m3",
+          "unknown_reason": null
+        },
+        "annulus_capacity_at_shoe_si": {
+          "status": "declared",
+          "value_unit": "m2",
+          "dimension": "area",
+          "canonical_unit": "m2",
+          "unknown_reason": null
+        },
+        "schedule_points": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        }
+      },
+      "output_units": {
+        "circulation_cycles": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "kill_mud_weight_si": {
+          "status": "declared",
+          "value_unit": "kg/m3",
+          "dimension": "density",
+          "canonical_unit": "kg/m3",
+          "unknown_reason": null
+        },
+        "kill_mud_weight_ppg": {
+          "status": "declared",
+          "value_unit": "ppg",
+          "dimension": "density",
+          "canonical_unit": "kg/m3",
+          "unknown_reason": null
+        },
+        "kill_mud_weight_increase_si": {
+          "status": "declared",
+          "value_unit": "kg/m3",
+          "dimension": "density",
+          "canonical_unit": "kg/m3",
+          "unknown_reason": null
+        },
+        "initial_circulating_pressure_si": {
+          "status": "declared",
+          "value_unit": "Pa",
+          "dimension": "pressure",
+          "canonical_unit": "Pa",
+          "unknown_reason": null
+        },
+        "final_circulating_pressure_si": {
+          "status": "declared",
+          "value_unit": "Pa",
+          "dimension": "pressure",
+          "canonical_unit": "Pa",
+          "unknown_reason": null
+        },
+        "initial_circulating_pressure_kpa": {
+          "status": "declared",
+          "value_unit": "kPa",
+          "dimension": "pressure",
+          "canonical_unit": "Pa",
+          "unknown_reason": null
+        },
+        "final_circulating_pressure_kpa": {
+          "status": "declared",
+          "value_unit": "kPa",
+          "dimension": "pressure",
+          "canonical_unit": "Pa",
+          "unknown_reason": null
+        },
+        "maasp_si": {
+          "status": "declared",
+          "value_unit": "Pa",
+          "dimension": "pressure",
+          "canonical_unit": "Pa",
+          "unknown_reason": null
+        },
+        "maasp_kpa": {
+          "status": "declared",
+          "value_unit": "kPa",
+          "dimension": "pressure",
+          "canonical_unit": "Pa",
+          "unknown_reason": null
+        },
+        "max_allowable_mud_weight_si": {
+          "status": "declared",
+          "value_unit": "kg/m3",
+          "dimension": "density",
+          "canonical_unit": "kg/m3",
+          "unknown_reason": null
+        },
+        "shoe_pressure_at_kick_si": {
+          "status": "declared",
+          "value_unit": "Pa",
+          "dimension": "pressure",
+          "canonical_unit": "Pa",
+          "unknown_reason": null
+        },
+        "shoe_margin_si": {
+          "status": "declared",
+          "value_unit": "Pa",
+          "dimension": "pressure",
+          "canonical_unit": "Pa",
+          "unknown_reason": null
+        },
+        "kill_rate_si": {
+          "status": "declared",
+          "value_unit": "m3/s",
+          "dimension": "volume_flow",
+          "canonical_unit": "m3/s",
+          "unknown_reason": null
+        },
+        "strokes_to_bit": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "annulus_strokes": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "total_kill_strokes": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "schedule[].strokes": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "schedule[].pressure_si": {
+          "status": "declared",
+          "value_unit": "Pa",
+          "dimension": "pressure",
+          "canonical_unit": "Pa",
+          "unknown_reason": null
+        },
+        "schedule[].pressure_kpa": {
+          "status": "declared",
+          "value_unit": "kPa",
+          "dimension": "pressure",
+          "canonical_unit": "Pa",
+          "unknown_reason": null
+        },
+        "schedule[].mud_weight_si": {
+          "status": "declared",
+          "value_unit": "kg/m3",
+          "dimension": "density",
+          "canonical_unit": "kg/m3",
+          "unknown_reason": null
+        },
+        "formation_pressure_equivalent_si": {
+          "status": "declared",
+          "value_unit": "kg/m3",
+          "dimension": "density",
+          "canonical_unit": "kg/m3",
+          "unknown_reason": null
+        },
+        "formation_pressure_si": {
+          "status": "declared",
+          "value_unit": "Pa",
+          "dimension": "pressure",
+          "canonical_unit": "Pa",
+          "unknown_reason": null
+        },
+        "mud_weight_margin_si": {
+          "status": "declared",
+          "value_unit": "kg/m3",
+          "dimension": "density",
+          "canonical_unit": "kg/m3",
+          "unknown_reason": null
+        },
+        "kick_tolerance_mud_weight_si": {
+          "status": "declared",
+          "value_unit": "kg/m3",
+          "dimension": "density",
+          "canonical_unit": "kg/m3",
+          "unknown_reason": null
+        },
+        "volumetric_kick_tolerance_si": {
+          "status": "declared",
+          "value_unit": "m3",
+          "dimension": "volume",
+          "canonical_unit": "m3",
+          "unknown_reason": null
+        },
+        "max_allowable_influx_height_at_shoe_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "time_to_kill_si": {
+          "status": "declared",
+          "value_unit": "s",
+          "dimension": "time",
+          "canonical_unit": "s",
+          "unknown_reason": null
+        }
+      }
+    },
+    {
+      "key": "wellbore.capacity",
+      "version": "1.1.0",
+      "source": "backend/src/drillai/engines/fluids.py",
+      "function": "compute_capacity",
+      "input_model": "CapacityEngineInput",
+      "output_model": "CapacityEngineOutput",
+      "validation_status": "formula_derived",
+      "assumptions": [
+        "nominal diameters, no tool-joint allowance",
+        "largest inner tubular OD per interval"
+      ],
+      "limitations": [
+        "no eccentricity or washout",
+        "does not resolve multiple nested strings beyond the largest OD"
+      ],
+      "declared_references_unverified": [
+        "standard volumetric capacity relations",
+        "API RP 13D (context)"
+      ],
+      "input_units": {
+        "elements[].from_depth_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "elements[].to_depth_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "elements[].od_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "elements[].id_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "elements[].linear_mass_si": {
+          "status": "declared",
+          "value_unit": "kg/m",
+          "dimension": "linear_density",
+          "canonical_unit": "kg/m",
+          "unknown_reason": null
+        },
+        "current_depth_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "pump.output_per_stroke_si": {
+          "status": "declared",
+          "value_unit": "m3",
+          "dimension": "volume",
+          "canonical_unit": "m3",
+          "unknown_reason": null
+        },
+        "pump.strokes_per_minute": {
+          "status": "declared",
+          "value_unit": "1/min",
+          "dimension": "frequency",
+          "canonical_unit": "1/s",
+          "unknown_reason": null
+        },
+        "pump.max_pressure_si": {
+          "status": "declared",
+          "value_unit": "Pa",
+          "dimension": "pressure",
+          "canonical_unit": "Pa",
+          "unknown_reason": null
+        },
+        "pump.count": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "flow_rate_si": {
+          "status": "declared",
+          "value_unit": "m3/s",
+          "dimension": "volume_flow",
+          "canonical_unit": "m3/s",
+          "unknown_reason": null
+        }
+      },
+      "output_units": {
+        "string_capacity_si": {
+          "status": "declared",
+          "value_unit": "m2",
+          "dimension": "area",
+          "canonical_unit": "m2",
+          "unknown_reason": null
+        },
+        "annulus_capacity_si": {
+          "status": "declared",
+          "value_unit": "m2",
+          "dimension": "area",
+          "canonical_unit": "m2",
+          "unknown_reason": null
+        },
+        "string_volume_si": {
+          "status": "declared",
+          "value_unit": "m3",
+          "dimension": "volume",
+          "canonical_unit": "m3",
+          "unknown_reason": null
+        },
+        "annulus_volume_si": {
+          "status": "declared",
+          "value_unit": "m3",
+          "dimension": "volume",
+          "canonical_unit": "m3",
+          "unknown_reason": null
+        },
+        "total_volume_si": {
+          "status": "declared",
+          "value_unit": "m3",
+          "dimension": "volume",
+          "canonical_unit": "m3",
+          "unknown_reason": null
+        },
+        "string_strokes": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "annulus_strokes": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "total_strokes": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "bottoms_up_strokes": {
+          "status": "declared",
+          "value_unit": "1",
+          "dimension": "dimensionless",
+          "canonical_unit": "1",
+          "unknown_reason": null
+        },
+        "bottoms_up_volume_si": {
+          "status": "declared",
+          "value_unit": "m3",
+          "dimension": "volume",
+          "canonical_unit": "m3",
+          "unknown_reason": null
+        },
+        "bottoms_up_time_si": {
+          "status": "declared",
+          "value_unit": "s",
+          "dimension": "time",
+          "canonical_unit": "s",
+          "unknown_reason": null
+        },
+        "circulation_time_si": {
+          "status": "declared",
+          "value_unit": "s",
+          "dimension": "time",
+          "canonical_unit": "s",
+          "unknown_reason": null
+        },
+        "intervals[].from_depth_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "intervals[].to_depth_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "intervals[].length_si": {
+          "status": "declared",
+          "value_unit": "m",
+          "dimension": "length",
+          "canonical_unit": "m",
+          "unknown_reason": null
+        },
+        "intervals[].string_capacity_si": {
+          "status": "declared",
+          "value_unit": "m2",
+          "dimension": "area",
+          "canonical_unit": "m2",
+          "unknown_reason": null
+        },
+        "intervals[].annulus_capacity_si": {
+          "status": "declared",
+          "value_unit": "m2",
+          "dimension": "area",
+          "canonical_unit": "m2",
+          "unknown_reason": null
+        },
+        "intervals[].string_volume_si": {
+          "status": "declared",
+          "value_unit": "m3",
+          "dimension": "volume",
+          "canonical_unit": "m3",
+          "unknown_reason": null
+        },
+        "intervals[].annulus_volume_si": {
+          "status": "declared",
+          "value_unit": "m3",
+          "dimension": "volume",
+          "canonical_unit": "m3",
+          "unknown_reason": null
+        },
+        "intervals[].annular_velocity_si": {
+          "status": "declared",
+          "value_unit": "m/s",
+          "dimension": "velocity",
+          "canonical_unit": "m/s",
+          "unknown_reason": null
+        }
+      }
+    }
+  ]
+}

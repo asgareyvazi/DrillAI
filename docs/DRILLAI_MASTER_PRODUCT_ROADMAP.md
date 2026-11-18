@@ -58,13 +58,13 @@ The runtime registry reports the following keys and versions. `formula_derived` 
 | 2. Engine assurance | `PARTIAL` | Complete per-engine equation/input/unit/error/source audit and independent comparisons without field-validation claims. |
 | 3. Data/DDR/OCR | `PARTIAL` | Expand audited formats and review lifecycle; meet unchanged OCR criteria on every stratum. |
 | 4. Program/procedure studio | `PARTIAL` | Complete source-backed design basis, governed calculation and exact-revision end-to-end workflow with real output evidence. |
-| 5. AI/knowledge | `PARTIAL` | Real embeddings and measured scoped hybrid retrieval, grounded tool invocation, abstention and authorized local/enterprise profiles. |
+| 5. AI/knowledge | `PARTIAL` | Real embeddings and measured scoped hybrid retrieval, grounded tool invocation, abstention and authorized local/enterprise profiles. [Public OGAI model scan](mission-reports/CONTINUOUS-OGAI-PUBLIC-MODEL-SCAN.md) is card/file-list inspection only; inference remains `NOT_MEASURED`. |
 | 6. Agents/studio | `PLANNED` | Actual useful governed specialist-agent workflows, not placeholder cards. |
 | 7. Live operations/twin | `PARTIAL` | Tested source-aware telemetry and reconciliation; external interop separately evidenced. |
 | 8–9. Lifecycle/reporting | `PARTIAL` | Domain-specific models, calculations, tests and reports rather than decorative pages. |
 | 10–11. UX/enterprise/deployment | `PARTIAL` | Complete bilingual accessibility and documented reproducible supported deployments, recovery and security. |
-| 12. Competitive benchmarking | `NOT_MEASURED` | Public-source comparison separating advertisements from independent verification. |
+| 12. Competitive benchmarking | `NOT_MEASURED` | [Initial public-source scan](mission-reports/CONTINUOUS-PUBLIC-COMPETITOR-SCAN.md) separates vendor claims from DrillAI source; controlled independent comparisons and comprehensive survey remain outstanding. |
 | 13. Integrated verification | `NOT_ACCEPTED` | Full backend, browser, security, deployment and same-SHA Linux/native Windows evidence. |
-| 14. Final capability catalogue | `PARTIAL` | Exhaustive historical/current/future evidence-indexed engineering inventory and release verdict. |
+| 14. Final capability catalogue | `PARTIAL` | [Runtime metadata snapshot](mission-reports/CONTINUOUS-ENGINE-METADATA-SNAPSHOT.md) records all 14 self-declared engine contracts; exhaustive historical/current/future evidence-indexed audit and release verdict remain outstanding. |
 
 Dependencies: Phase 1 safety gates precede final certification; field validation and external interoperability cannot be substituted by synthetic evidence. Phase 2 engineering assurance is prerequisite to claiming new calculations as validated. Later phases may progress independently when external dependencies block earlier ones, but their status cannot be promoted beyond demonstrated evidence.

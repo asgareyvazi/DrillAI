@@ -2,6 +2,8 @@
 
 **Status: NOT_ACCEPTED.** This is an exploratory alternative runtime comparison, not a production OCR adapter, an independent holdout, deployment-image measurement, field test or acceptance of CP135. The existing deployment-image quality gate and its thresholds are unchanged.
 
+Exact-SHA [CI run 44276998833](https://github.com/asgareyvazi/DrillAI/actions/runs/44276998833) for comparison commit `7037926fdb5b8b34a82e61022248a6bb9c11987c` was **cancelled** when the subsequent commit was pushed, consistent with the workflow's `cancel-in-progress` concurrency policy. Before cancellation both supply-chain gates and Linux deployment-image OCR had failed; Linux backend and Compose steps had passed, while the Linux browser and Windows backend were cancelled and later steps skipped. No complete browser/Windows result may be inferred from this run. This premature cancellation was caused by the continuation and is not a passing certification.
+
 ## Method
 
 The checked-in synthetic CP135 v3 corpus (`31aca80b4323fe470d34705e36038296ef620adb7525373f5196c9f561b6735d`, 64 cases) was rendered with the existing `_raster_pdf` fixture and PDFium 5.15.2 at 200 DPI. Tesseract.js 7.0.0 / tesseract.js-core 7.0.0 was run offline on Node 22.22.3 using a **single combined `eng+fas` recognition pass, PSM 6** for every case; fixture language was not used to select a model. This path consumes raw Tesseract.js text and does **not** use DrillAI's production PDF parser, TSV adapter, RTL routing or two-column ordering. Differences from the deployment-image benchmark include runtime, traineddata and extraction behavior, so direct claims of improvement are not warranted. The corpus has previously been used in tuning and is not a holdout.
