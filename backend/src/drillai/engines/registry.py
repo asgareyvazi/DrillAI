@@ -24,10 +24,18 @@ class EngineRegistry:
     # ------------------------------------------------------------------ registration
     def register(self, engine: Engine, *, aliases: Iterable[str] = ()) -> Engine:
         key = engine.spec.key
-        if key in self._engines:
+        # Validate the entire namespace before mutating it: an alias must never silently
+        # redirect another engine's canonical key or an existing alias to a different calculation.
+        if key in self._engines or key in self._aliases:
             raise ValueError(f"engine already registered: {key}")
+        pending_aliases = tuple(aliases)
+        seen = {key}
+        for alias in pending_aliases:
+            if alias in seen or alias in self._engines or alias in self._aliases:
+                raise ValueError(f"engine alias already registered: {alias}")
+            seen.add(alias)
         self._engines[key] = engine
-        for alias in aliases:
+        for alias in pending_aliases:
             self._aliases[alias] = key
         return engine
 

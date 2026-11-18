@@ -202,3 +202,27 @@ def register_engine_custom(registry: EngineRegistry, spec: EngineSpec, fn):
     from drillai.engines.contract import FunctionEngine
 
     return registry.register(FunctionEngine(spec, fn))
+
+
+def test_registration_rejects_namespace_collisions_atomically(empty_registry: EngineRegistry):
+    """Neither aliases nor later canonical keys may redirect a registered calculation."""
+    fn = lambda inputs: EngineResult(outputs=inputs)  # noqa: E731
+    first = empty_registry.register_function(MSE_SPEC, fn, aliases=("mse-short",))
+    second = MSE_SPEC.model_copy(update={"key": "other.engine"})
+
+    for aliases in (("safe", "mse-short"), ("drilling.mse",), ("other.engine",), ("repeat", "repeat")):
+        with pytest.raises(ValueError, match="alias already registered"):
+            empty_registry.register_function(second, fn, aliases=iter(aliases))
+        assert empty_registry.keys() == ["drilling.mse"]
+        assert empty_registry.get("mse-short") is first
+        assert not empty_registry.has("safe")
+        assert not empty_registry.has("other.engine")
+
+    canonical_collision = MSE_SPEC.model_copy(update={"key": "mse-short"})
+    with pytest.raises(ValueError, match="already registered"):
+        empty_registry.register_function(canonical_collision, fn)
+    assert empty_registry.keys() == ["drilling.mse"]
+    assert empty_registry.get("mse-short") is first
+    added = empty_registry.register_function(second, fn, aliases=("other-short",))
+    assert empty_registry.get("other-short") is added
+    assert empty_registry.get("drilling.mse") is first
