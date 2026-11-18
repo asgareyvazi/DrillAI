@@ -22,7 +22,7 @@ from drillai.db.models import (
     Wellbore,
     WellSection,
 )
-from drillai.rag.retriever import RetrievalQuery, RetrieveMode, expand_neighbours, retrieve
+from drillai.rag.retriever import RetrievalQuery, RetrieveMode, _tokens, expand_neighbours, retrieve
 
 
 @pytest.fixture
@@ -1270,3 +1270,90 @@ async def test_min_score_filters_weak_matches(corpus, session):
         ),
     )
     assert len(filtered.hits) < len(all_hits.hits)
+
+
+def test_lexical_tokens_support_persian_variants_without_changing_english_identifiers():
+    assert _tokens("وزن گل عمق ۱۲۳۴ متر") == ["وزن", "گل", "عمق", "1234", "متر"]
+    assert _tokens("عمق ١٢٣٤ متر") == ["عمق", "1234", "متر"]
+    assert _tokens("يک كيلومتر می\u200cشود") == ["یک", "کیلومتر", "می", "شود"]
+    assert _tokens("The 8-1/2 inch mud_weight is 12.4 ppg") == [
+        "8-1/2", "inch", "mud_weight", "is", "12", "ppg"
+    ]
+
+
+async def test_persian_lexical_retrieval_is_scoped_citable_and_never_rewrites_evidence(corpus, session):
+    source = "گزارش: يک كيلومتر عمق ۱۲۳۴ متر؛ وزن گل ثبت شد."
+    intermediate = corpus["documents"]["intermediate"]
+    surface = corpus["documents"]["surface"]
+    chunks = (await session.execute(select(DocumentChunk))).scalars().all()
+    target = next(chunk for chunk in chunks if chunk.document_id == intermediate.id and chunk.chunk_index == 0)
+    distractor = next(chunk for chunk in chunks if chunk.document_id == surface.id)
+    target.text = source
+    target.attributes = {"source_locator": {"page": 1}}
+    distractor.text = "گزارش سطحی: وزن گل در بخش دیگر ثبت شد."
+    await session.flush()
+
+    query = RetrievalQuery(
+        text="یک کیلومتر عمق 1234",
+        mode=RetrieveMode.LEXICAL,
+        well_id=corpus["well"].id,
+        section_id=corpus["intermediate"].id,
+    )
+    result = await retrieve(session, corpus["org"].id, query)
+    assert result.mode_used == "lexical"
+    assert len(result.hits) == 1
+    assert result.hits[0].chunk_id == target.id
+    assert result.hits[0].text == source
+    assert result.hits[0].page_number == 1
+    assert result.hits[0].source_locator == {"page": 1}
+    assert {target.id, intermediate.id} <= set(result.hits[0].citations)
+    assert result.hits[0].explain["bm25"] > 0
+
+    mixed = await retrieve(session, corpus["org"].id, replace(query, text="وزن گل mud weight"))
+    assert all(hit.section_id == corpus["intermediate"].id for hit in mixed.hits)
+    assert target.id in {hit.chunk_id for hit in mixed.hits}
+    assert distractor.id not in {hit.chunk_id for hit in mixed.hits}
+
+    unmatched = await retrieve(session, corpus["org"].id, replace(query, text="زرافه"))
+    assert unmatched.mode_used == "lexical"
+    assert unmatched.hits == []
+    assert any("no token matches" in note for note in unmatched.notes)
+
+    fallback = await retrieve(session, corpus["org"].id, replace(query, mode=RetrieveMode.HYBRID))
+    assert fallback.mode_used == "lexical"
+    assert fallback.hits[0].chunk_id == target.id
+    assert any("vector search unavailable" in note for note in fallback.notes)
+
+
+async def test_search_documents_tool_honors_project_and_operation_context(corpus, session):
+    from drillai.ai.tools import ToolContext, invoke_tool
+    from drillai.security.actions import ActionLevel, Principal
+
+    principal = Principal(
+        id="usr_rag_scope_test",
+        permissions=frozenset({"document.read"}),
+        max_action_level=ActionLevel.OBSERVE,
+    )
+    base = ToolContext(session=session, org_id=corpus["org"].id, principal=principal, project_id=corpus["project"].id)
+    payload = {"query": "plastic viscosity", "mode": "lexical"}
+    project_result = await invoke_tool("search_documents", base, payload)
+    assert project_result.status == "succeeded"
+    assert project_result.output["mode_used"] == "lexical"
+    assert project_result.output["hit_count"] == 1
+    assert project_result.output["filters_applied"]["project_id"] == corpus["project"].id
+
+    other_project = Project(org_id=corpus["org"].id, name="Other project")
+    session.add(other_project)
+    await session.flush()
+    wrong_project = replace(base, project_id=other_project.id, well_id=corpus["well"].id)
+    wrong_result = await invoke_tool("search_documents", wrong_project, payload)
+    assert wrong_result.output["hits"] == []
+    assert wrong_result.output["filters_applied"]["project_id"] == other_project.id
+    assert wrong_result.output["filters_applied"]["well_id"] == corpus["well"].id
+
+    # Missing operation attribution is not evidence that a source belongs to an operation.
+    operation_result = await invoke_tool(
+        "search_documents", replace(base, operation_id="op_not_attributed"), payload
+    )
+    assert operation_result.output["hits"] == []
+    assert operation_result.output["filters_applied"]["operation_id"] == "op_not_attributed"

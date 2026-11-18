@@ -24,6 +24,7 @@ import enum
 import hashlib
 import math
 import re
+import unicodedata
 from collections import Counter
 from dataclasses import dataclass, field
 from typing import Any
@@ -52,7 +53,14 @@ __all__ = [
     "retrieve",
 ]
 
-_TOKEN_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9\-_/]{1,}")
+# Unicode letters/digits, with the same minimum length and engineering-identifier punctuation
+# as the original ASCII tokenizer. Normalization is for matching only: source text and citations
+# are never rewritten.
+_TOKEN_RE = re.compile(r"[^\W_][\w\-\/]{1,}", re.UNICODE)
+_PERSIAN_SEARCH_TRANSLATION = str.maketrans(
+    "يك٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹\u200c",
+    "یک01234567890123456789 ",
+)
 MAX_RETRIEVAL_LIMIT = 100
 MAX_RETRIEVAL_CANDIDATES = 2000
 MIN_RETRIEVAL_CANDIDATES = 200
@@ -163,7 +171,11 @@ class RetrievalResult:
 
 
 def _tokens(text: str) -> list[str]:
-    return [token.lower() for token in _TOKEN_RE.findall(text) if token.lower() not in _STOPWORDS]
+    # Persian/Arabic yeh and kaf, common digit forms, presentation forms and the Persian
+    # half-space can differ between a source document and a query. This is a lexical equivalence,
+    # not translation, stemming, semantic inference or a change to stored evidence.
+    normalized = unicodedata.normalize("NFKC", text).translate(_PERSIAN_SEARCH_TRANSLATION).lower()
+    return [token for token in _TOKEN_RE.findall(normalized) if token not in _STOPWORDS]
 
 
 def _validate_query_scope(org_id: str, query: RetrievalQuery) -> None:
