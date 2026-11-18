@@ -221,6 +221,11 @@ def test_64_case_quality_harness_exercises_bilingual_strata_without_emitting_tra
     assert report["metrics"]["all_strata_thresholds_passed"] is True
     assert len(report["cases"]) == 64
     assert all(case["status"] == "evaluated" for case in report["cases"])
+    assert all(case["recognition_passes"] is None for case in report["cases"])
+    assert report["runtime"]["synthetic_routing"] == {
+        "eng": {"combined_only": 0, "fas_rerun": 0, "unknown": 32},
+        "fas": {"combined_only": 0, "fas_rerun": 0, "unknown": 32},
+    }
     assert all(
         row["thresholds_passed"]
         for rows in report["metrics"]["stratified_metrics"].values()
@@ -421,3 +426,79 @@ def test_deployment_quality_report_verifier_rejects_transcript_leak_and_digest_m
     )
     assert stale.returncode == 1
     assert "complete bilingual pass" in stale.stderr
+
+
+def test_synthetic_pass_observer_preserves_routing_and_restores_provider(monkeypatch):
+    import pytest
+
+    from drillai.ingestion import ocr
+
+    monkeypatch.setattr(ocr, "_detect_central_column_divider", lambda _image: None)
+    provider = ocr.TesseractOcrProvider(executable="tesseract", languages="eng+fas")
+    monkeypatch.setattr(provider, "_resolved_executable", lambda: "test-executable")
+    calls: list[str] = []
+    state = {"first_text": "عنوان فارسی", "fail": False}
+
+    def fake_recognize(_image, _executable, *, page_segmentation_mode, languages, deadline_monotonic):
+        calls.append(languages)
+        assert page_segmentation_mode == 6
+        assert deadline_monotonic > 0
+        if state["fail"] and languages == "fas":
+            raise ocr.OcrUnavailable("test failure")
+        return [OcrLine(state["first_text"] if languages == "eng+fas" else "فارسی", 0.9, (1, 2, 5, 6))]
+
+    monkeypatch.setattr(provider, "_recognize_acquired", fake_recognize)
+    timed = quality._TimedProvider(provider)
+    assert timed.recognize(b"synthetic-image")[0].text == "فارسی"
+    assert calls == ["eng+fas", "fas"]
+    assert timed.page_passes[-1] == ["eng+fas:6", "fas:6"]
+    assert provider._recognize_acquired is fake_recognize
+
+    state["first_text"] = "English text"
+    calls.clear()
+    assert timed.recognize(b"synthetic-image")[0].text == "English text"
+    assert calls == ["eng+fas"]
+    assert timed.page_passes[-1] == ["eng+fas:6"]
+    assert provider._recognize_acquired is fake_recognize
+
+    state.update({"first_text": "فارسی", "fail": True})
+    with pytest.raises(ocr.OcrUnavailable):
+        timed.recognize(b"synthetic-image")
+    assert timed.page_passes[-1] == ["eng+fas:6", "fas:6"]
+    assert provider._recognize_acquired is fake_recognize
+
+    # A class-level method is restored by deleting the temporary instance attribute,
+    # and concurrent callers cannot overlap the temporary patch.
+    import concurrent.futures
+    import time
+
+    class ClassMethodProvider:
+        name = "stub"
+        languages = "eng+fas"
+        max_concurrency = 2
+        active = 0
+        peak = 0
+
+        def _recognize_acquired(self, *, languages, page_segmentation_mode):
+            return "SECRET TRANSCRIPT"
+
+        def recognize(self, _image):
+            self.active += 1
+            self.peak = max(self.peak, self.active)
+            try:
+                time.sleep(0.01)
+                self._recognize_acquired(languages="eng+fas", page_segmentation_mode=6)
+                self._recognize_acquired(languages=["SECRET TRANSCRIPT"], page_segmentation_mode={})
+                self._recognize_acquired(languages="fas", page_segmentation_mode=6)
+                return []
+            finally:
+                self.active -= 1
+
+    class_provider = ClassMethodProvider()
+    observer = quality._TimedProvider(class_provider)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+        assert list(executor.map(observer.recognize, [b"one", b"two"])) == [[], []]
+    assert class_provider.peak == 1
+    assert "_recognize_acquired" not in vars(class_provider)
+    assert observer.page_passes == [["eng+fas:6", "unknown", "unknown"]] * 2
+    assert "SECRET TRANSCRIPT" not in repr(observer.page_passes)

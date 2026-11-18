@@ -70,6 +70,22 @@ def _escape_command(value: str) -> str:
     return value.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
 
 
+def _safe_synthetic_routing(runtime: dict[str, Any]) -> dict[str, dict[str, int]] | None:
+    raw = runtime.get("synthetic_routing")
+    names = ("combined_only", "fas_rerun", "unknown")
+    if not isinstance(raw, dict) or set(raw) != {"eng", "fas"}:
+        return None
+    result: dict[str, dict[str, int]] = {}
+    for language in ("eng", "fas"):
+        counts = raw[language]
+        if not isinstance(counts, dict) or set(counts) != set(names):
+            return None
+        if any(isinstance(counts[key], bool) or not isinstance(counts[key], int) or not 0 <= counts[key] <= 64 for key in names):
+            return None
+        result[language] = {key: counts[key] for key in names}
+    return result
+
+
 def _summary(report: dict[str, Any]) -> dict[str, Any]:
     dataset = report.get("dataset") if isinstance(report.get("dataset"), dict) else {}
     metrics = report.get("metrics") if isinstance(report.get("metrics"), dict) else {}
@@ -97,6 +113,9 @@ def _summary(report: dict[str, Any]) -> dict[str, Any]:
         "ocr_dpi": resource_limits.get("ocr_dpi"),
         "metrics": {key: metrics.get(key) for key in METRIC_FIELDS},
     }
+    synthetic_routing = _safe_synthetic_routing(runtime)
+    if synthetic_routing is not None:
+        summary["runtime"]["synthetic_routing"] = synthetic_routing
     strata_summary: dict[str, list[dict[str, Any]]] = {}
     for dimension, rows in stratified.items():
         if not isinstance(rows, list):

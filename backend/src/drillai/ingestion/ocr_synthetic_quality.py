@@ -20,6 +20,7 @@ import random
 import re
 import statistics
 import sys
+import threading
 import time
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
@@ -94,6 +95,12 @@ class _TimedProvider:
     def __init__(self, provider: TesseractOcrProvider) -> None:
         self._provider = provider
         self.recognition_ms: list[float] = []
+        # This provider is private to a sequential synthetic benchmark. Passes are recorded as
+        # bounded protocol identifiers only, never recognized text, image data, paths or values.
+        self.page_passes: list[list[str] | None] = []
+        # The benchmark owns this provider and processes one page at a time. Serialize calls
+        # defensively so temporary instrumentation cannot overlap if a caller changes that.
+        self._observation_lock = threading.Lock()
         self.name = provider.name
         self.languages = provider.languages
         self.max_concurrency = provider.max_concurrency
@@ -106,10 +113,39 @@ class _TimedProvider:
         return self._provider.availability()
 
     def recognize(self, image_png: bytes):
+        with self._observation_lock:
+            return self._recognize_serial(image_png)
+
+    def _recognize_serial(self, image_png: bytes):
         started = time.perf_counter()
+        original = getattr(self._provider, "_recognize_acquired", None)
+        instance_attributes = getattr(self._provider, "__dict__", None)
+        previously_overridden = isinstance(instance_attributes, dict) and "_recognize_acquired" in instance_attributes
+        previous_value = instance_attributes.get("_recognize_acquired") if previously_overridden else None
+        passes: list[str] | None = [] if callable(original) and isinstance(instance_attributes, dict) else None
+
+        if passes is not None:
+            def record_pass(*args, **kwargs):
+                languages, psm = kwargs.get("languages"), kwargs.get("page_segmentation_mode")
+                if len(passes) < 2:
+                    if isinstance(languages, str) and languages in {"eng+fas", "fas"} and type(psm) is int and psm in {6, 11}:
+                        passes.append(f"{languages}:{psm}")
+                    else:
+                        passes.append("unknown")
+                elif len(passes) == 2:
+                    passes.append("unknown")  # future extra passes cannot be mistaken for the two-pass path
+                return original(*args, **kwargs)
+
+            self._provider._recognize_acquired = record_pass
         try:
             return self._provider.recognize(image_png)
         finally:
+            if passes is not None:
+                if previously_overridden:
+                    self._provider._recognize_acquired = previous_value
+                else:
+                    delattr(self._provider, "_recognize_acquired")
+            self.page_passes.append(passes)
             self.recognition_ms.append((time.perf_counter() - started) * 1000.0)
 
 
@@ -590,6 +626,7 @@ def run_synthetic_quality_benchmark(settings: Settings | None = None) -> dict[st
     sample_exact = 0
     for case in corpus["cases"]:
         case_started = time.perf_counter()
+        previous_recognitions = len(timed_provider.page_passes)
         item: dict[str, Any] = {
             "id": case["case_id"],
             "language": case["language"],
@@ -661,6 +698,26 @@ def run_synthetic_quality_benchmark(settings: Settings | None = None) -> dict[st
             item.update({"status": "failed", "reason": f"synthetic OCR processing failed ({type(exc).__name__})"})
             item["processing_ms"] = round((time.perf_counter() - case_started) * 1000.0, 3)
             measured.append(item)
+        finally:
+            # Attribute only a single unambiguous page invocation; incomplete or unexpected
+            # traces remain explicitly unknown and cannot be inferred from the fixture language.
+            observed = timed_provider.page_passes[previous_recognitions:]
+            item["recognition_passes"] = observed[0] if len(observed) == 1 and observed[0] is not None else None
+
+    routing = {
+        language: {"combined_only": 0, "fas_rerun": 0, "unknown": 0}
+        for language in sorted(required_languages)
+    }
+    for item in measured:
+        passes = item.get("recognition_passes")
+        route = "unknown"
+        if item.get("status") == "evaluated":
+            if passes in (["eng+fas:6"], ["eng+fas:11"]):
+                route = "combined_only"
+            elif passes in (["eng+fas:6", "fas:6"], ["eng+fas:11", "fas:11"]):
+                route = "fas_rerun"
+        routing[item["language"]][route] += 1
+    report["runtime"]["synthetic_routing"] = routing
 
     total_ms = (time.perf_counter() - started_all) * 1000.0
     evaluated = [item for item in measured if item["status"] == "evaluated"]

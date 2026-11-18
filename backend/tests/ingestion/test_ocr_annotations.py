@@ -50,3 +50,23 @@ def test_ocr_failure_annotations_are_bounded_and_transcript_free() -> None:
     assert secret not in "\n".join(output)
     assert "traineddata_sha256" in output[0]
     assert "case-63" in "\n".join(output)
+
+
+def test_ocr_routing_annotation_is_bounded_and_does_not_echo_untrusted_values() -> None:
+    import json
+
+    evidence = Path(__file__).resolve().parents[3] / "docs" / "mission-reports" / "CONTINUOUS-TESSEROCR-SYNTHETIC-EVIDENCE.json"
+    report = json.loads(evidence.read_text(encoding="utf-8"))
+    report["runtime"]["synthetic_routing"] = {
+        "eng": {"combined_only": 32, "fas_rerun": 0, "unknown": 0},
+        "fas": {"combined_only": 0, "fas_rerun": 32, "unknown": 0},
+    }
+    rendered = ocr_annotations.annotations(report)
+    assert len(rendered) <= ocr_annotations.MAX_NOTICES
+    assert "synthetic_routing" in rendered[0]
+    assert "cp135-ddr-064" in "\n".join(rendered)
+
+    report["runtime"]["synthetic_routing"]["fas"]["unknown"] = "SENSITIVE TEXT"
+    rendered = ocr_annotations.annotations(report)
+    assert "synthetic_routing" not in rendered[0]
+    assert "SENSITIVE TEXT" not in "\n".join(rendered)

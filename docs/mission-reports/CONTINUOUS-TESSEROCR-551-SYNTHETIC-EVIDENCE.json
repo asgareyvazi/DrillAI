@@ -1,0 +1,3642 @@
+{
+  "cases": [
+    {
+      "cer": 0.003968253968253968,
+      "character_errors": 1,
+      "critical_fields_expected": 6,
+      "critical_fields_matched": 6,
+      "expected_characters": 252,
+      "expected_words": 36,
+      "id": "cp135-ddr-001",
+      "language": "eng",
+      "layout": "single_column",
+      "pdf_sha256": "752b167b350fc085db165d3bd30fd65d26c780fdbf8866ccbb7350955b2fc52d",
+      "processing_ms": 1470.869,
+      "recognition_ms": 906.075,
+      "scan_condition": "clean",
+      "status": "evaluated",
+      "synthetic_field_matches": [
+        {
+          "key": "sample_id",
+          "matched": true
+        },
+        {
+          "key": "report_date",
+          "matched": true
+        },
+        {
+          "key": "measured_depth_m",
+          "matched": true
+        },
+        {
+          "key": "rop_m_per_h",
+          "matched": true
+        },
+        {
+          "key": "mud_weight_ppg",
+          "matched": true
+        },
+        {
+          "key": "npt_h",
+          "matched": true
+        }
+      ],
+      "synthetic_passes": [
+        {
+          "languages": "eng+fas",
+          "psm": 6
+        }
+      ],
+      "wer": 0.027777777777777776,
+      "word_errors": 1
+    },
+    {
+      "cer": 0.0,
+      "character_errors": 0,
+      "critical_fields_expected": 6,
+      "critical_fields_matched": 6,
+      "expected_characters": 253,
+      "expected_words": 36,
+      "id": "cp135-ddr-002",
+      "language": "eng",
+      "layout": "single_column",
+      "pdf_sha256": "7b5877340b8e14a902da359b5d50bfeef82924e39265945950071aaf53e094f3",
+      "processing_ms": 1177.949,
+      "recognition_ms": 713.353,
+      "scan_condition": "clean",
+      "status": "evaluated",
+      "synthetic_field_matches": [
+        {
+          "key": "sample_id",
+          "matched": true
+        },
+        {
+          "key": "report_date",
+          "matched": true
+        },
+        {
+          "key": "measured_depth_m",
+          "matched": true
+        },
+        {
+          "key": "rop_m_per_h",
+          "matched": true
+        },
+        {
+          "key": "mud_weight_ppg",
+          "matched": true
+        },
+        {
+          "key": "npt_h",
+          "matched": true
+        }
+      ],
+      "synthetic_passes": [
+        {
+          "languages": "eng+fas",
+          "psm": 6
+        }
+      ],
+      "wer": 0.0,
+      "word_errors": 0
+    },
+    {
+      "cer": 0.0,
+      "character_errors": 0,
+      "critical_fields_expected": 6,
+      "critical_fields_matched": 6,
+      "expected_characters": 249,
+      "expected_words": 35,
+      "id": "cp135-ddr-003",
+      "language": "eng",
+      "layout": "single_column",
+      "pdf_sha256": "ba6e0019d507944cced7459f211ec820ff6d06714a09202060cc12e1f2a1d313",
+      "processing_ms": 1170.283,
+      "recognition_ms": 704.465,
+      "scan_condition": "low_contrast",
+      "status": "evaluated",
+      "synthetic_field_matches": [
+        {
+          "key": "sample_id",
+          "matched": true
+        },
+        {
+          "key": "report_date",
+          "matched": true
+        },
+        {
+          "key": "measured_depth_m",
+          "matched": true
+        },
+        {
+          "key": "rop_m_per_h",
+          "matched": true
+        },
+        {
+          "key": "mud_weight_ppg",
+          "matched": true
+        },
+        {
+          "key": "npt_h",
+          "matched": true
+        }
+      ],
+      "synthetic_passes": [
+        {
+          "languages": "eng+fas",
+          "psm": 6
+        }
+      ],
+      "wer": 0.0,
+      "word_errors": 0
+    },
+    {
+      "cer": 0.0,
+      "character_errors": 0,
+      "critical_fields_expected": 6,
+      "critical_fields_matched": 6,
+      "expected_characters": 268,
+      "expected_words": 37,
+      "id": "cp135-ddr-004",
+      "language": "eng",
+      "layout": "single_column",
+      "pdf_sha256": "67049dc8b0ad40154da43317aa498875ba28403aea6d572816da625d843206f6",
+      "processing_ms": 1158.196,
+      "recognition_ms": 710.711,
+      "scan_condition": "low_contrast",
+      "status": "evaluated",
+      "synthetic_field_matches": [
+        {
+          "key": "sample_id",
+          "matched": true
+        },
+        {
+          "key": "report_date",
+          "matched": true
+        },
+        {
+          "key": "measured_depth_m",
+          "matched": true
+        },
+        {
+          "key": "rop_m_per_h",
+          "matched": true
+        },
+        {
+          "key": "mud_weight_ppg",
+          "matched": true
+        },
+        {
+          "key": "npt_h",
+          "matched": true
+        }
+      ],
+      "synthetic_passes": [
+        {
+          "languages": "eng+fas",
+          "psm": 6
+        }
+      ],
+      "wer": 0.0,
+      "word_errors": 0
+    },
+    {
+      "cer": 0.0,
+      "character_errors": 0,
+      "critical_fields_expected": 6,
+      "critical_fields_matched": 6,
+      "expected_characters": 252,
+      "expected_words": 36,
+      "id": "cp135-ddr-005",
+      "language": "eng",
+      "layout": "single_column",
+      "pdf_sha256": "505da085d09406764bfbbef4ccead408c91909aca5b1b459d4d5e854f281baab",
+      "processing_ms": 1491.912,
+      "recognition_ms": 769.767,
+      "scan_condition": "light_skew",
+      "status": "evaluated",
+      "synthetic_field_matches": [
+        {
+          "key": "sample_id",
+          "matched": true
+        },
+        {
+          "key": "report_date",
+          "matched": true
+        },
+        {
+          "key": "measured_depth_m",
+          "matched": true
+        },
+        {
+          "key": "rop_m_per_h",
+          "matched": true
+        },
+        {
+          "key": "mud_weight_ppg",
+          "matched": true
+        },
+        {
+          "key": "npt_h",
+          "matched": true
+        }
+      ],
+      "synthetic_passes": [
+        {
+          "languages": "eng+fas",
+          "psm": 6
+        }
+      ],
+      "wer": 0.0,
+      "word_errors": 0
+    },
+    {
+      "cer": 0.0,
+      "character_errors": 0,
+      "critical_fields_expected": 6,
+      "critical_fields_matched": 6,
+      "expected_characters": 253,
+      "expected_words": 36,
+      "id": "cp135-ddr-006",
+      "language": "eng",
+      "layout": "single_column",
+      "pdf_sha256": "debc6c13821f66d9706d93f78ff83412bedd651680b41c8442255415009534e9",
+      "processing_ms": 1451.676,
+      "recognition_ms": 783.819,
+      "scan_condition": "light_skew",
+      "status": "evaluated",
+      "synthetic_field_matches": [
+        {
+          "key": "sample_id",
+          "matched": true
+        },
+        {
+          "key": "report_date",
+          "matched": true
+        },
+        {
+          "key": "measured_depth_m",
+          "matched": true
+        },
+        {
+          "key": "rop_m_per_h",
+          "matched": true
+        },
+        {
+          "key": "mud_weight_ppg",
+          "matched": true
+        },
+        {
+          "key": "npt_h",
+          "matched": true
+        }
+      ],
+      "synthetic_passes": [
+        {
+          "languages": "eng+fas",
+          "psm": 6
+        }
+      ],
+      "wer": 0.0,
+      "word_errors": 0
+    },
+    {
+      "cer": 0.004016064257028112,
+      "character_errors": 1,
+      "critical_fields_expected": 6,
+      "critical_fields_matched": 6,
+      "expected_characters": 249,
+      "expected_words": 35,
+      "id": "cp135-ddr-007",
+      "language": "eng",
+      "layout": "single_column",
+      "pdf_sha256": "0bebfbc1a1a7205863bc9392f1f3ef712a8be17d18829d267e6e5182d38520d5",
+      "processing_ms": 1133.955,
+      "recognition_ms": 721.789,
+      "scan_condition": "light_noise",
+      "status": "evaluated",
+      "synthetic_field_matches": [
+        {
+          "key": "sample_id",
+          "matched": true
+        },
+        {
+          "key": "report_date",
+          "matched": true
+        },
+        {
+          "key": "measured_depth_m",
+          "matched": true
+        },
+        {
+          "key": "rop_m_per_h",
+          "matched": true
+        },
+        {
+          "key": "mud_weight_ppg",
+          "matched": true
+        },
+        {
+          "key": "npt_h",
+          "matched": true
+        }
+      ],
+      "synthetic_passes": [
+        {
+          "languages": "eng+fas",
+          "psm": 6
+        }
+      ],
+      "wer": 0.02857142857142857,
+      "word_errors": 1
+    },
+    {
+      "cer": 0.0,
+      "character_errors": 0,
+      "critical_fields_expected": 6,
+      "critical_fields_matched": 6,
+      "expected_characters": 258,
+      "expected_words": 37,
+      "id": "cp135-ddr-008",
+      "language": "eng",
+      "layout": "single_column",
+      "pdf_sha256": "3ddd5568749f86030ffa56100f54b023aa19627408896c17c37c4bce18f319cc",
+      "processing_ms": 1224.858,
+      "recognition_ms": 702.064,
+      "scan_condition": "light_noise",
+      "status": "evaluated",
+      "synthetic_field_matches": [
+        {
+          "key": "sample_id",
+          "matched": true
+        },
+        {
+          "key": "report_date",
+          "matched": true
+        },
+        {
+          "key": "measured_depth_m",
+          "matched": true
+        },
+        {
+          "key": "rop_m_per_h",
+          "matched": true
+        },
+        {
+          "key": "mud_weight_ppg",
+          "matched": true
+        },
+        {
+          "key": "npt_h",
+          "matched": true
+        }
+      ],
+      "synthetic_passes": [
+        {
+          "languages": "eng+fas",
+          "psm": 6
+        }
+      ],
+      "wer": 0.0,
+      "word_errors": 0
+    },
+    {
+      "cer": 0.0,
+      "character_errors": 0,
+      "critical_fields_expected": 6,
+      "critical_fields_matched": 6,
+      "expected_characters": 255,
+      "expected_words": 36,
+      "id": "cp135-ddr-009",
+      "language": "eng",
+      "layout": "table",
+      "pdf_sha256": "943a902709dc5255b3509cd8cdd2fe8e63c46ad9c7a4485e1c668de5b65f555c",
+      "processing_ms": 1032.296,
+      "recognition_ms": 590.949,
+      "scan_condition": "clean",
+      "status": "evaluated",
+      "synthetic_field_matches": [
+        {
+          "key": "sample_id",
+          "matched": true
+        },
+        {
+          "key": "report_date",
+          "matched": true
+        },
+        {
+          "key": "measured_depth_m",
+          "matched": true
+        },
+        {
+          "key": "rop_m_per_h",
+          "matched": true
+        },
+        {
+          "key": "mud_weight_ppg",
+          "matched": true
+        },
+        {
+          "key": "npt_h",
+          "matched": true
+        }
+      ],
+      "synthetic_passes": [
+        {
+          "languages": "eng+fas",
+          "psm": 6
+        }
+      ],
+      "wer": 0.0,
+      "word_errors": 0
+    },
+    {
+      "cer": 0.003937007874015748,
+      "character_errors": 1,
+      "critical_fields_expected": 6,
+      "critical_fields_matched": 6,
+      "expected_characters": 254,
+      "expected_words": 36,
+      "id": "cp135-ddr-010",
+      "language": "eng",
+      "layout": "table",
+      "pdf_sha256": "ac95d422bdee3c17d882b3c255cc6a4b53fdebc5b1d46d5aa3465f03583f65a1",
+      "processing_ms": 1223.894,
+      "recognition_ms": 715.145,
+      "scan_condition": "clean",
+      "status": "evaluated",
+      "synthetic_field_matches": [
+        {
+          "key": "sample_id",
+          "matched": true
+        },
+        {
+          "key": "report_date",
+          "matched": true
+        },
+        {
+          "key": "measured_depth_m",
+          "matched": true
+        },
+        {
+          "key": "rop_m_per_h",
+          "matched": true
+        },
+        {
+          "key": "mud_weight_ppg",
+          "matched": true
+        },
+        {
+          "key": "npt_h",
+          "matched": true
+        }
+      ],
+      "synthetic_passes": [
+        {
+          "languages": "eng+fas",
+          "psm": 6
+        }
+      ],
+      "wer": 0.027777777777777776,
+      "word_errors": 1
+    },
+    {
+      "cer": 0.0,
+      "character_errors": 0,
+      "critical_fields_expected": 6,
+      "critical_fields_matched": 6,
+      "expected_characters": 249,
+      "expected_words": 35,
+      "id": "cp135-ddr-011",
+      "language": "eng",
+      "layout": "table",
+      "pdf_sha256": "91e98484442cbad39eda39778284ebdc963b7b53268455cdaa67c39f45fca917",
+      "processing_ms": 1026.645,
+      "recognition_ms": 637.209,
+      "scan_condition": "low_contrast",
+      "status": "evaluated",
+      "synthetic_field_matches": [
+        {
+          "key": "sample_id",
+          "matched": true
+        },
+        {
+          "key": "report_date",
+          "matched": true
+        },
+        {
+          "key": "measured_depth_m",
+          "matched": true
+        },
+        {
+          "key": "rop_m_per_h",
+          "matched": true
+        },
+        {
+          "key": "mud_weight_ppg",
+          "matched": true
+        },
+        {
+          "key": "npt_h",
+          "matched": true
+        }
+      ],
+      "synthetic_passes": [
+        {
+          "languages": "eng+fas",
+          "psm": 6
+        }
+      ],
+      "wer": 0.0,
+      "word_errors": 0
+    },
+    {
+      "cer": 0.0037174721189591076,
+      "character_errors": 1,
+      "critical_fields_expected": 6,
+      "critical_fields_matched": 6,
+      "expected_characters": 269,
+      "expected_words": 37,
+      "id": "cp135-ddr-012",
+      "language": "eng",
+      "layout": "table",
+      "pdf_sha256": "f0fbfa1619f2de2084d12060fe4b6894e0ac3f4ade2006567effadb2a32f72cf",
+      "processing_ms": 1245.015,
+      "recognition_ms": 770.899,
+      "scan_condition": "low_contrast",
+      "status": "evaluated",
+      "synthetic_field_matches": [
+        {
+          "key": "sample_id",
+          "matched": true
+        },
+        {
+          "key": "report_date",
+          "matched": true
+        },
+        {
+          "key": "measured_depth_m",
+          "matched": true
+        },
+        {
+          "key": "rop_m_per_h",
+          "matched": true
+        },
+        {
+          "key": "mud_weight_ppg",
+          "matched": true
+        },
+        {
+          "key": "npt_h",
+          "matched": true
+        }
+      ],
+      "synthetic_passes": [
+        {
+          "languages": "eng+fas",
+          "psm": 6
+        }
+      ],
+      "wer": 0.02702702702702703,
+      "word_errors": 1
+    },
+    {
+      "cer": 0.003952569169960474,
+      "character_errors": 1,
+      "critical_fields_expected": 6,
+      "critical_fields_matched": 6,
+      "expected_characters": 253,
+      "expected_words": 36,
+      "id": "cp135-ddr-013",
+      "language": "eng",
+      "layout": "table",
+      "pdf_sha256": "ed657955dbd91e4730871307255b55310426cfd500abc6fc88ce8b59e04cbfcf",
+      "processing_ms": 1599.822,
+      "recognition_ms": 844.846,
+      "scan_condition": "light_skew",
+      "status": "evaluated",
+      "synthetic_field_matches": [
+        {
+          "key": "sample_id",
+          "matched": true
+        },
+        {
+          "key": "report_date",
+          "matched": true
+        },
+        {
+          "key": "measured_depth_m",
+          "matched": true
+        },
+        {
+          "key": "rop_m_per_h",
+          "matched": true
+        },
+        {
+          "key": "mud_weight_ppg",
+          "matched": true
+        },
+        {
+          "key": "npt_h",
+          "matched": true
+        }
+      ],
+      "synthetic_passes": [
+        {
+          "languages": "eng+fas",
+          "psm": 6
+        }
+      ],
+      "wer": 0.027777777777777776,
+      "word_errors": 1
+    },
+    {
+      "cer": 0.007874015748031496,
+      "character_errors": 2,
+      "critical_fields_expected": 6,
+      "critical_fields_matched": 4,
+      "expected_characters": 254,
+      "expected_words": 36,
+      "id": "cp135-ddr-014",
+      "language": "eng",
+      "layout": "table",
+      "pdf_sha256": "c54c249b40d493072bf2d9e05596593941488560561b45197ba64c986f22cb54",
+      "processing_ms": 1264.772,
+      "recognition_ms": 654.89,
+      "scan_condition": "light_skew",
+      "status": "evaluated",
+      "synthetic_field_matches": [
+        {
+          "key": "sample_id",
+          "matched": true
+        },
+        {
+          "key": "report_date",
+          "matched": true
+        },
+        {
+          "key": "measured_depth_m",
+          "matched": false
+        },
+        {
+          "key": "rop_m_per_h",
+          "matched": true
+        },
+        {
+          "key": "mud_weight_ppg",
+          "matched": true
+        },
+        {
+          "key": "npt_h",
+          "matched": false
+        }
+      ],
+      "synthetic_passes": [
+        {
+          "languages": "eng+fas",
+          "psm": 6
+        }
+      ],
+      "wer": 0.1111111111111111,
+      "word_errors": 4
+    },
+    {
+      "cer": 0.0,
+      "character_errors": 0,
+      "critical_fields_expected": 6,
+      "critical_fields_matched": 6,
+      "expected_characters": 249,
+      "expected_words": 35,
+      "id": "cp135-ddr-015",
+      "language": "eng",
+      "layout": "table",
+      "pdf_sha256": "30695bd874c5b40e8bf54bd66815829b2375b796e49245b7d47d74eef96c79d9",
+      "processing_ms": 1384.009,
+      "recognition_ms": 870.464,
+      "scan_condition": "light_noise",
+      "status": "evaluated",
+      "synthetic_field_matches": [
+        {
+          "key": "sample_id",
+          "matched": true
+        },
+        {
+          "key": "report_date",
+          "matched": true
+        },
+        {
+          "key": "measured_depth_m",
+          "matched": true
+        },
+        {
+          "key": "rop_m_per_h",
+          "matched": true
+        },
+        {
+          "key": "mud_weight_ppg",
+          "matched": true
+        },
+        {
+          "key": "npt_h",
+          "matched": true
+        }
+      ],
+      "synthetic_passes": [
+        {
+          "languages": "eng+fas",
+          "psm": 6
+        }
+      ],
+      "wer": 0.0,
+      "word_errors": 0
+    },
+    {
+      "cer": 0.0,
+      "character_errors": 0,
+      "critical_fields_expected": 6,
+      "critical_fields_matched": 6,
+      "expected_characters": 258,
+      "expected_words": 37,
+      "id": "cp135-ddr-016",
+      "language": "eng",
+      "layout": "table",
+      "pdf_sha256": "60d40ef3a51e09066d97290c9fc9a80d4aaf4982d24823a9c8cca92c9589f155",
+      "processing_ms": 1266.817,
+      "recognition_ms": 765.897,
+      "scan_condition": "light_noise",
+      "status": "evaluated",
+      "synthetic_field_matches": [
+        {
+          "key": "sample_id",
+          "matched": true
+        },
+        {
+          "key": "report_date",
+          "matched": true
+        },
+        {
+          "key": "measured_depth_m",
+          "matched": true
+        },
+        {
+          "key": "rop_m_per_h",
+          "matched": true
+        },
+        {
+          "key": "mud_weight_ppg",
+          "matched": true
+        },
+        {
+          "key": "npt_h",
+          "matched": true
+        }
+      ],
+      "synthetic_passes": [
+        {
+          "languages": "eng+fas",
+          "psm": 6
+        }
+      ],
+      "wer": 0.0,
+      "word_errors": 0
+    },
+    {
+      "cer": 0.00392156862745098,
+      "character_errors": 1,
+      "critical_fields_expected": 6,
+      "critical_fields_matched": 6,
+      "expected_characters": 255,
+      "expected_words": 36,
+      "id": "cp135-ddr-017",
+      "language": "eng",
+      "layout": "two_column",
+      "pdf_sha256": "b1e1d8b97d58feb965155dd4af13f612018d73b3515a5119bde0f9dc65d2bb10",
+      "processing_ms": 1014.644,
+      "recognition_ms": 610.475,
+      "scan_condition": "clean",
+      "status": "evaluated",
+      "synthetic_field_matches": [
+        {
+          "key": "sample_id",
+          "matched": true
+        },
+        {
+          "key": "report_date",
+          "matched": true
+        },
+        {
+          "key": "measured_depth_m",
+          "matched": true
+        },
+        {
+          "key": "rop_m_per_h",
+          "matched": true
+        },
+        {
+          "key": "mud_weight_ppg",
+          "matched": true
+        },
+        {
+          "key": "npt_h",
+          "matched": true
+        }
+      ],
+      "synthetic_passes": [
+        {
+          "languages": "eng+fas",
+          "psm": 11
+        }
+      ],
+      "wer": 0.027777777777777776,
+      "word_errors": 1
+    },
+    {
+      "cer": 0.0,
+      "character_errors": 0,
+      "critical_fields_expected": 6,
+      "critical_fields_matched": 6,
+      "expected_characters": 253,
+      "expected_words": 36,
+      "id": "cp135-ddr-018",
+      "language": "eng",
+      "layout": "two_column",
+      "pdf_sha256": "f11faef50031a79bc6f4ac5ebbfdf3a94b8c4c827c7fa8d8e76730e4f150a57a",
+      "processing_ms": 1016.75,
+      "recognition_ms": 608.637,
+      "scan_condition": "clean",
+      "status": "evaluated",
+      "synthetic_field_matches": [
+        {
+          "key": "sample_id",
+          "matched": true
+        },
+        {
+          "key": "report_date",
+          "matched": true
+        },
+        {
+          "key": "measured_depth_m",
+          "matched": true
+        },
+        {
+          "key": "rop_m_per_h",
+          "matched": true
+        },
+        {
+          "key": "mud_weight_ppg",
+          "matched": true
+        },
+        {
+          "key": "npt_h",
+          "matched": true
+        }
+      ],
+      "synthetic_passes": [
+        {
+          "languages": "eng+fas",
+          "psm": 11
+        }
+      ],
+      "wer": 0.0,
+      "word_errors": 0
+    },
+    {
+      "cer": 0.0,
+      "character_errors": 0,
+      "critical_fields_expected": 6,
+      "critical_fields_matched": 6,
+      "expected_characters": 250,
+      "expected_words": 35,
+      "id": "cp135-ddr-019",
+      "language": "eng",
+      "layout": "two_column",
+      "pdf_sha256": "1ecf2e7f1e8410fcbd6b9ed7d98473b8bcf2139d14bdb92ee68d93f32776f0d2",
+      "processing_ms": 1033.981,
+      "recognition_ms": 560.853,
+      "scan_condition": "low_contrast",
+      "status": "evaluated",
+      "synthetic_field_matches": [
+        {
+          "key": "sample_id",
+          "matched": true
+        },
+        {
+          "key": "report_date",
+          "matched": true
+        },
+        {
+          "key": "measured_depth_m",
+          "matched": true
+        },
+        {
+          "key": "rop_m_per_h",
+          "matched": true
+        },
+        {
+          "key": "mud_weight_ppg",
+          "matched": true
+        },
+        {
+          "key": "npt_h",
+          "matched": true
+        }
+      ],
+      "synthetic_passes": [
+        {
+          "languages": "eng+fas",
+          "psm": 11
+        }
+      ],
+      "wer": 0.0,
+      "word_errors": 0
+    },
+    {
+      "cer": 0.01858736059479554,
+      "character_errors": 5,
+      "critical_fields_expected": 6,
+      "critical_fields_matched": 6,
+      "expected_characters": 269,
+      "expected_words": 37,
+      "id": "cp135-ddr-020",
+      "language": "eng",
+      "layout": "two_column",
+      "pdf_sha256": "a2948d89c83c4702f0616317e5732bce5f1e146d507620457334285495af8566",
+      "processing_ms": 1092.366,
+      "recognition_ms": 660.368,
+      "scan_condition": "low_contrast",
+      "status": "evaluated",
+      "synthetic_field_matches": [
+        {
+          "key": "sample_id",
+          "matched": true
+        },
+        {
+          "key": "report_date",
+          "matched": true
+        },
+        {
+          "key": "measured_depth_m",
+          "matched": true
+        },
+        {
+          "key": "rop_m_per_h",
+          "matched": true
+        },
+        {
+          "key": "mud_weight_ppg",
+          "matched": true
+        },
+        {
+          "key": "npt_h",
+          "matched": true
+        }
+      ],
+      "synthetic_passes": [
+        {
+          "languages": "eng+fas",
+          "psm": 11
+        }
+      ],
+      "wer": 0.02702702702702703,
+      "word_errors": 1
+    },
+    {
+      "cer": 0.0,
+      "character_errors": 0,
+      "critical_fields_expected": 6,
+      "critical_fields_matched": 6,
+      "expected_characters": 252,
+      "expected_words": 36,
+      "id": "cp135-ddr-021",
+      "language": "eng",
+      "layout": "two_column",
+      "pdf_sha256": "92b27f79d6c10dd3ce7b47e6f0382cf724b3bb5c0b9675b22f8c766ed41ddba5",
+      "processing_ms": 1465.899,
+      "recognition_ms": 721.355,
+      "scan_condition": "light_skew",
+      "status": "evaluated",
+      "synthetic_field_matches": [
+        {
+          "key": "sample_id",
+          "matched": true
+        },
+        {
+          "key": "report_date",
+          "matched": true
+        },
+        {
+          "key": "measured_depth_m",
+          "matched": true
+        },
+        {
+          "key": "rop_m_per_h",
+          "matched": true
+        },
+        {
+          "key": "mud_weight_ppg",
+          "matched": true
+        },
+        {
+          "key": "npt_h",
+          "matched": true
+        }
+      ],
+      "synthetic_passes": [
+        {
+          "languages": "eng+fas",
+          "psm": 11
+        }
+      ],
+      "wer": 0.0,
+      "word_errors": 0
+    },
+    {
+      "cer": 0.0,
+      "character_errors": 0,
+      "critical_fields_expected": 6,
+      "critical_fields_matched": 6,
+      "expected_characters": 254,
+      "expected_words": 36,
+      "id": "cp135-ddr-022",
+      "language": "eng",
+      "layout": "two_column",
+      "pdf_sha256": "12d4ef81f6fcee9f15eb171866aebe26ae780c1025c7f135c0c92378d5aed18c",
+      "processing_ms": 1396.34,
+      "recognition_ms": 758.721,
+      "scan_condition": "light_skew",
+      "status": "evaluated",
+      "synthetic_field_matches": [
+        {
+          "key": "sample_id",
+          "matched": true
+        },
+        {
+          "key": "report_date",
+          "matched": true
+        },
+        {
+          "key": "measured_depth_m",
+          "matched": true
+        },
+        {
+          "key": "rop_m_per_h",
+          "matched": true
+        },
+        {
+          "key": "mud_weight_ppg",
+          "matched": true
+        },
+        {
+          "key": "npt_h",
+          "matched": true
+        }
+      ],
+      "synthetic_passes": [
+        {
+          "languages": "eng+fas",
+          "psm": 11
+        }
+      ],
+      "wer": 0.0,
+      "word_errors": 0
+    },
+    {
+      "cer": 0.0,
+      "character_errors": 0,
+      "critical_fields_expected": 6,
+      "critical_fields_matched": 6,
+      "expected_characters": 249,
+      "expected_words": 35,
+      "id": "cp135-ddr-023",
+      "language": "eng",
+      "layout": "two_column",
+      "pdf_sha256": "943b6d5ccf711a294841a3cd3acaae6b2043fb2d38c560b14a8b4941c6371bb3",
+      "processing_ms": 1128.493,
+      "recognition_ms": 616.747,
+      "scan_condition": "light_noise",
+      "status": "evaluated",
+      "synthetic_field_matches": [
+        {
+          "key": "sample_id",
+          "matched": true
+        },
+        {
+          "key": "report_date",
+          "matched": true
+        },
+        {
+          "key": "measured_depth_m",
+          "matched": true
+        },
+        {
+          "key": "rop_m_per_h",
+          "matched": true
+        },
+        {
+          "key": "mud_weight_ppg",
+          "matched": true
+        },
+        {
+          "key": "npt_h",
+          "matched": true
+        }
+      ],
+      "synthetic_passes": [
+        {
+          "languages": "eng+fas",
+          "psm": 11
+        }
+      ],
+      "wer": 0.0,
+      "word_errors": 0
+    },
+    {
+      "cer": 0.0,
+      "character_errors": 0,
+      "critical_fields_expected": 6,
+      "critical_fields_matched": 6,
+      "expected_characters": 259,
+      "expected_words": 37,
+      "id": "cp135-ddr-024",
+      "language": "eng",
+      "layout": "two_column",
+      "pdf_sha256": "147a255039dc246d46a84de60214a13cb03dbc76c96f805fee73a99569f1c52f",
+      "processing_ms": 962.611,
+      "recognition_ms": 477.509,
+      "scan_condition": "light_noise",
+      "status": "evaluated",
+      "synthetic_field_matches": [
+        {
+          "key": "sample_id",
+          "matched": true
+        },
+        {
+          "key": "report_date",
+          "matched": true
+        },
+        {
+          "key": "measured_depth_m",
+          "matched": true
+        },
+        {
+          "key": "rop_m_per_h",
+          "matched": true
+        },
+        {
+          "key": "mud_weight_ppg",
+          "matched": true
+        },
+        {
+          "key": "npt_h",
+          "matched": true
+        }
+      ],
+      "synthetic_passes": [
+        {
+          "languages": "eng+fas",
+          "psm": 11
+        }
+      ],
+      "wer": 0.0,
+      "word_errors": 0
+    },
+    {
+      "cer": 0.0,
+      "character_errors": 0,
+      "critical_fields_expected": 6,
+      "critical_fields_matched": 6,
+      "expected_characters": 255,
+      "expected_words": 36,
+      "id": "cp135-ddr-025",
+      "language": "eng",
+      "layout": "compact",
+      "pdf_sha256": "7ad20a7bf3f91367f23d039f813c6f411ba2e82a311728fcc1f078e93c8168ea",
+      "processing_ms": 1116.427,
+      "recognition_ms": 672.665,
+      "scan_condition": "clean",
+      "status": "evaluated",
+      "synthetic_field_matches": [
+        {
+          "key": "sample_id",
+          "matched": true
+        },
+        {
+          "key": "report_date",
+          "matched": true
+        },
+        {
+          "key": "measured_depth_m",
+          "matched": true
+        },
+        {
+          "key": "rop_m_per_h",
+          "matched": true
+        },
+        {
+          "key": "mud_weight_ppg",
+          "matched": true
+        },
+        {
+          "key": "npt_h",
+          "matched": true
+        }
+      ],
+      "synthetic_passes": [
+        {
+          "languages": "eng+fas",
+          "psm": 6
+        }
+      ],
+      "wer": 0.0,
+      "word_errors": 0
+    },
+    {
+      "cer": 0.0,
+      "character_errors": 0,
+      "critical_fields_expected": 6,
+      "critical_fields_matched": 6,
+      "expected_characters": 254,
+      "expected_words": 36,
+      "id": "cp135-ddr-026",
+      "language": "eng",
+      "layout": "compact",
+      "pdf_sha256": "6f4e307639c047bf67f945ac1bc3aa98c96a063fe62a437674f8856884cf4ddb",
+      "processing_ms": 918.908,
+      "recognition_ms": 585.132,
+      "scan_condition": "clean",
+      "status": "evaluated",
+      "synthetic_field_matches": [
+        {
+          "key": "sample_id",
+          "matched": true
+        },
+        {
+          "key": "report_date",
+          "matched": true
+        },
+        {
+          "key": "measured_depth_m",
+          "matched": true
+        },
+        {
+          "key": "rop_m_per_h",
+          "matched": true
+        },
+        {
+          "key": "mud_weight_ppg",
+          "matched": true
+        },
+        {
+          "key": "npt_h",
+          "matched": true
+        }
+      ],
+      "synthetic_passes": [
+        {
+          "languages": "eng+fas",
+          "psm": 6
+        }
+      ],
+      "wer": 0.0,
+      "word_errors": 0
+    },
+    {
+      "cer": 0.0,
+      "character_errors": 0,
+      "critical_fields_expected": 6,
+      "critical_fields_matched": 6,
+      "expected_characters": 250,
+      "expected_words": 35,
+      "id": "cp135-ddr-027",
+      "language": "eng",
+      "layout": "compact",
+      "pdf_sha256": "ced455dbfc37ed57c7f2d56d1804fb6fd3ccd520dab1c8b5befb8264e9243e9f",
+      "processing_ms": 1085.611,
+      "recognition_ms": 665.357,
+      "scan_condition": "low_contrast",
+      "status": "evaluated",
+      "synthetic_field_matches": [
+        {
+          "key": "sample_id",
+          "matched": true
+        },
+        {
+          "key": "report_date",
+          "matched": true
+        },
+        {
+          "key": "measured_depth_m",
+          "matched": true
+        },
+        {
+          "key": "rop_m_per_h",
+          "matched": true
+        },
+        {
+          "key": "mud_weight_ppg",
+          "matched": true
+        },
+        {
+          "key": "npt_h",
+          "matched": true
+        }
+      ],
+      "synthetic_passes": [
+        {
+          "languages": "eng+fas",
+          "psm": 6
+        }
+      ],
+      "wer": 0.0,
+      "word_errors": 0
+    },
+    {
+      "cer": 0.0,
+      "character_errors": 0,
+      "critical_fields_expected": 6,
+      "critical_fields_matched": 6,
+      "expected_characters": 268,
+      "expected_words": 37,
+      "id": "cp135-ddr-028",
+      "language": "eng",
+      "layout": "compact",
+      "pdf_sha256": "4436ccb67340963021e3ddbe22ae9aa45d9e9de671da21175ead7fa7462c9ba3",
+      "processing_ms": 1102.352,
+      "recognition_ms": 670.447,
+      "scan_condition": "low_contrast",
+      "status": "evaluated",
+      "synthetic_field_matches": [
+        {
+          "key": "sample_id",
+          "matched": true
+        },
+        {
+          "key": "report_date",
+          "matched": true
+        },
+        {
+          "key": "measured_depth_m",
+          "matched": true
+        },
+        {
+          "key": "rop_m_per_h",
+          "matched": true
+        },
+        {
+          "key": "mud_weight_ppg",
+          "matched": true
+        },
+        {
+          "key": "npt_h",
+          "matched": true
+        }
+      ],
+      "synthetic_passes": [
+        {
+          "languages": "eng+fas",
+          "psm": 6
+        }
+      ],
+      "wer": 0.0,
+      "word_errors": 0
+    },
+    {
+      "cer": 0.0,
+      "character_errors": 0,
+      "critical_fields_expected": 6,
+      "critical_fields_matched": 6,
+      "expected_characters": 253,
+      "expected_words": 36,
+      "id": "cp135-ddr-029",
+      "language": "eng",
+      "layout": "compact",
+      "pdf_sha256": "112ad7d3628ad9f6dcd42c34a0832d50c155668c68b64cbf999e1eec8a3f952f",
+      "processing_ms": 1412.242,
+      "recognition_ms": 752.468,
+      "scan_condition": "light_skew",
+      "status": "evaluated",
+      "synthetic_field_matches": [
+        {
+          "key": "sample_id",
+          "matched": true
+        },
+        {
+          "key": "report_date",
+          "matched": true
+        },
+        {
+          "key": "measured_depth_m",
+          "matched": true
+        },
+        {
+          "key": "rop_m_per_h",
+          "matched": true
+        },
+        {
+          "key": "mud_weight_ppg",
+          "matched": true
+        },
+        {
+          "key": "npt_h",
+          "matched": true
+        }
+      ],
+      "synthetic_passes": [
+        {
+          "languages": "eng+fas",
+          "psm": 6
+        }
+      ],
+      "wer": 0.0,
+      "word_errors": 0
+    },
+    {
+      "cer": 0.0,
+      "character_errors": 0,
+      "critical_fields_expected": 6,
+      "critical_fields_matched": 6,
+      "expected_characters": 254,
+      "expected_words": 36,
+      "id": "cp135-ddr-030",
+      "language": "eng",
+      "layout": "compact",
+      "pdf_sha256": "3b32ef7dd0516961b0b759a17921b593532bc4a544a3e1963f9d3195dab71795",
+      "processing_ms": 1217.88,
+      "recognition_ms": 581.498,
+      "scan_condition": "light_skew",
+      "status": "evaluated",
+      "synthetic_field_matches": [
+        {
+          "key": "sample_id",
+          "matched": true
+        },
+        {
+          "key": "report_date",
+          "matched": true
+        },
+        {
+          "key": "measured_depth_m",
+          "matched": true
+        },
+        {
+          "key": "rop_m_per_h",
+          "matched": true
+        },
+        {
+          "key": "mud_weight_ppg",
+          "matched": true
+        },
+        {
+          "key": "npt_h",
+          "matched": true
+        }
+      ],
+      "synthetic_passes": [
+        {
+          "languages": "eng+fas",
+          "psm": 6
+        }
+      ],
+      "wer": 0.0,
+      "word_errors": 0
+    },
+    {
+      "cer": 0.0,
+      "character_errors": 0,
+      "critical_fields_expected": 6,
+      "critical_fields_matched": 6,
+      "expected_characters": 246,
+      "expected_words": 35,
+      "id": "cp135-ddr-031",
+      "language": "eng",
+      "layout": "compact",
+      "pdf_sha256": "6f4996e83fc5a48a697e0f9bb668eb41ecb58295c34bf6187a335aa5b2dd4f6b",
+      "processing_ms": 1180.692,
+      "recognition_ms": 683.277,
+      "scan_condition": "light_noise",
+      "status": "evaluated",
+      "synthetic_field_matches": [
+        {
+          "key": "sample_id",
+          "matched": true
+        },
+        {
+          "key": "report_date",
+          "matched": true
+        },
+        {
+          "key": "measured_depth_m",
+          "matched": true
+        },
+        {
+          "key": "rop_m_per_h",
+          "matched": true
+        },
+        {
+          "key": "mud_weight_ppg",
+          "matched": true
+        },
+        {
+          "key": "npt_h",
+          "matched": true
+        }
+      ],
+      "synthetic_passes": [
+        {
+          "languages": "eng+fas",
+          "psm": 6
+        }
+      ],
+      "wer": 0.0,
+      "word_errors": 0
+    },
+    {
+      "cer": 0.0,
+      "character_errors": 0,
+      "critical_fields_expected": 6,
+      "critical_fields_matched": 6,
+      "expected_characters": 258,
+      "expected_words": 37,
+      "id": "cp135-ddr-032",
+      "language": "eng",
+      "layout": "compact",
+      "pdf_sha256": "0a0db34bcde021b13e134ca8737ffed3251fe05c21319bb395377a3990616b08",
+      "processing_ms": 984.664,
+      "recognition_ms": 584.249,
+      "scan_condition": "light_noise",
+      "status": "evaluated",
+      "synthetic_field_matches": [
+        {
+          "key": "sample_id",
+          "matched": true
+        },
+        {
+          "key": "report_date",
+          "matched": true
+        },
+        {
+          "key": "measured_depth_m",
+          "matched": true
+        },
+        {
+          "key": "rop_m_per_h",
+          "matched": true
+        },
+        {
+          "key": "mud_weight_ppg",
+          "matched": true
+        },
+        {
+          "key": "npt_h",
+          "matched": true
+        }
+      ],
+      "synthetic_passes": [
+        {
+          "languages": "eng+fas",
+          "psm": 6
+        }
+      ],
+      "wer": 0.0,
+      "word_errors": 0
+    },
+    {
+      "cer": 0.23766816143497757,
+      "character_errors": 53,
+      "critical_fields_expected": 6,
+      "critical_fields_matched": 5,
+      "expected_characters": 223,
+      "expected_words": 37,
+      "id": "cp135-ddr-033",
+      "language": "fas",
+      "layout": "single_column",
+      "pdf_sha256": "b1a7ce7fd3a1f7296022475fddf66c7844c61c1dfc83943f6707fde3245d26f0",
+      "processing_ms": 1569.418,
+      "recognition_ms": 1118.53,
+      "scan_condition": "clean",
+      "status": "evaluated",
+      "synthetic_field_matches": [
+        {
+          "key": "sample_id",
+          "matched": false
+        },
+        {
+          "key": "report_date",
+          "matched": true
+        },
+        {
+          "key": "measured_depth_m",
+          "matched": true
+        },
+        {
+          "key": "rop_m_per_h",
+          "matched": true
+        },
+        {
+          "key": "mud_weight_ppg",
+          "matched": true
+        },
+        {
+          "key": "npt_h",
+          "matched": true
+        }
+      ],
+      "synthetic_passes": [
+        {
+          "languages": "eng+fas",
+          "psm": 6
+        },
+        {
+          "languages": "fas",
+          "psm": 6
+        }
+      ],
+      "wer": 0.2972972972972973,
+      "word_errors": 11
+    },
+    {
+      "cer": 0.2579185520361991,
+      "character_errors": 57,
+      "critical_fields_expected": 6,
+      "critical_fields_matched": 5,
+      "expected_characters": 221,
+      "expected_words": 36,
+      "id": "cp135-ddr-034",
+      "language": "fas",
+      "layout": "single_column",
+      "pdf_sha256": "f06f701453f797301e7bd4184ee88f07a71638cfdb9ea0d244c757a2d529a1bd",
+      "processing_ms": 1564.174,
+      "recognition_ms": 1124.789,
+      "scan_condition": "clean",
+      "status": "evaluated",
+      "synthetic_field_matches": [
+        {
+          "key": "sample_id",
+          "matched": false
+        },
+        {
+          "key": "report_date",
+          "matched": true
+        },
+        {
+          "key": "measured_depth_m",
+          "matched": true
+        },
+        {
+          "key": "rop_m_per_h",
+          "matched": true
+        },
+        {
+          "key": "mud_weight_ppg",
+          "matched": true
+        },
+        {
+          "key": "npt_h",
+          "matched": true
+        }
+      ],
+      "synthetic_passes": [
+        {
+          "languages": "eng+fas",
+          "psm": 6
+        },
+        {
+          "languages": "fas",
+          "psm": 6
+        }
+      ],
+      "wer": 0.2777777777777778,
+      "word_errors": 10
+    },
+    {
+      "cer": 0.25,
+      "character_errors": 55,
+      "critical_fields_expected": 6,
+      "critical_fields_matched": 5,
+      "expected_characters": 220,
+      "expected_words": 36,
+      "id": "cp135-ddr-035",
+      "language": "fas",
+      "layout": "single_column",
+      "pdf_sha256": "9c8e13d506a3741be44cf06d9e4f54a46408cdb0bacf8519f462dab53fe727cb",
+      "processing_ms": 1432.344,
+      "recognition_ms": 989.859,
+      "scan_condition": "low_contrast",
+      "status": "evaluated",
+      "synthetic_field_matches": [
+        {
+          "key": "sample_id",
+          "matched": false
+        },
+        {
+          "key": "report_date",
+          "matched": true
+        },
+        {
+          "key": "measured_depth_m",
+          "matched": true
+        },
+        {
+          "key": "rop_m_per_h",
+          "matched": true
+        },
+        {
+          "key": "mud_weight_ppg",
+          "matched": true
+        },
+        {
+          "key": "npt_h",
+          "matched": true
+        }
+      ],
+      "synthetic_passes": [
+        {
+          "languages": "eng+fas",
+          "psm": 6
+        },
+        {
+          "languages": "fas",
+          "psm": 6
+        }
+      ],
+      "wer": 0.2777777777777778,
+      "word_errors": 10
+    },
+    {
+      "cer": 0.14285714285714285,
+      "character_errors": 33,
+      "critical_fields_expected": 6,
+      "critical_fields_matched": 5,
+      "expected_characters": 231,
+      "expected_words": 39,
+      "id": "cp135-ddr-036",
+      "language": "fas",
+      "layout": "single_column",
+      "pdf_sha256": "1876a23f4b7b0f69db874ebb48e6215a815676db0031c6c08b74c04ce2cb7d31",
+      "processing_ms": 1633.894,
+      "recognition_ms": 1173.569,
+      "scan_condition": "low_contrast",
+      "status": "evaluated",
+      "synthetic_field_matches": [
+        {
+          "key": "sample_id",
+          "matched": false
+        },
+        {
+          "key": "report_date",
+          "matched": true
+        },
+        {
+          "key": "measured_depth_m",
+          "matched": true
+        },
+        {
+          "key": "rop_m_per_h",
+          "matched": true
+        },
+        {
+          "key": "mud_weight_ppg",
+          "matched": true
+        },
+        {
+          "key": "npt_h",
+          "matched": true
+        }
+      ],
+      "synthetic_passes": [
+        {
+          "languages": "eng+fas",
+          "psm": 6
+        },
+        {
+          "languages": "fas",
+          "psm": 6
+        }
+      ],
+      "wer": 0.20512820512820512,
+      "word_errors": 8
+    },
+    {
+      "cer": 0.15178571428571427,
+      "character_errors": 34,
+      "critical_fields_expected": 6,
+      "critical_fields_matched": 5,
+      "expected_characters": 224,
+      "expected_words": 37,
+      "id": "cp135-ddr-037",
+      "language": "fas",
+      "layout": "single_column",
+      "pdf_sha256": "a7461c8c45430aaca039c265a9b3e192cf723c8d6b6e1bf43f9e1475cb2e92d7",
+      "processing_ms": 1729.639,
+      "recognition_ms": 1154.469,
+      "scan_condition": "light_skew",
+      "status": "evaluated",
+      "synthetic_field_matches": [
+        {
+          "key": "sample_id",
+          "matched": false
+        },
+        {
+          "key": "report_date",
+          "matched": true
+        },
+        {
+          "key": "measured_depth_m",
+          "matched": true
+        },
+        {
+          "key": "rop_m_per_h",
+          "matched": true
+        },
+        {
+          "key": "mud_weight_ppg",
+          "matched": true
+        },
+        {
+          "key": "npt_h",
+          "matched": true
+        }
+      ],
+      "synthetic_passes": [
+        {
+          "languages": "eng+fas",
+          "psm": 6
+        },
+        {
+          "languages": "fas",
+          "psm": 6
+        }
+      ],
+      "wer": 0.1891891891891892,
+      "word_errors": 7
+    },
+    {
+      "cer": 0.22727272727272727,
+      "character_errors": 50,
+      "critical_fields_expected": 6,
+      "critical_fields_matched": 5,
+      "expected_characters": 220,
+      "expected_words": 36,
+      "id": "cp135-ddr-038",
+      "language": "fas",
+      "layout": "single_column",
+      "pdf_sha256": "2d0a24fb78860ead5be7d0e1b25cc55e3fbd56d3b137cc58e0523845edbf68ba",
+      "processing_ms": 1723.061,
+      "recognition_ms": 1066.014,
+      "scan_condition": "light_skew",
+      "status": "evaluated",
+      "synthetic_field_matches": [
+        {
+          "key": "sample_id",
+          "matched": false
+        },
+        {
+          "key": "report_date",
+          "matched": true
+        },
+        {
+          "key": "measured_depth_m",
+          "matched": true
+        },
+        {
+          "key": "rop_m_per_h",
+          "matched": true
+        },
+        {
+          "key": "mud_weight_ppg",
+          "matched": true
+        },
+        {
+          "key": "npt_h",
+          "matched": true
+        }
+      ],
+      "synthetic_passes": [
+        {
+          "languages": "eng+fas",
+          "psm": 6
+        },
+        {
+          "languages": "fas",
+          "psm": 6
+        }
+      ],
+      "wer": 0.2777777777777778,
+      "word_errors": 10
+    },
+    {
+      "cer": 0.1493212669683258,
+      "character_errors": 33,
+      "critical_fields_expected": 6,
+      "critical_fields_matched": 5,
+      "expected_characters": 221,
+      "expected_words": 36,
+      "id": "cp135-ddr-039",
+      "language": "fas",
+      "layout": "single_column",
+      "pdf_sha256": "0355b0454db96fb2bc74fed8b5ff747877da4556e72e228413a9993eb27b000f",
+      "processing_ms": 1578.588,
+      "recognition_ms": 1150.464,
+      "scan_condition": "light_noise",
+      "status": "evaluated",
+      "synthetic_field_matches": [
+        {
+          "key": "sample_id",
+          "matched": false
+        },
+        {
+          "key": "report_date",
+          "matched": true
+        },
+        {
+          "key": "measured_depth_m",
+          "matched": true
+        },
+        {
+          "key": "rop_m_per_h",
+          "matched": true
+        },
+        {
+          "key": "mud_weight_ppg",
+          "matched": true
+        },
+        {
+          "key": "npt_h",
+          "matched": true
+        }
+      ],
+      "synthetic_passes": [
+        {
+          "languages": "eng+fas",
+          "psm": 6
+        },
+        {
+          "languages": "fas",
+          "psm": 6
+        }
+      ],
+      "wer": 0.19444444444444445,
+      "word_errors": 7
+    },
+    {
+      "cer": 0.2643171806167401,
+      "character_errors": 60,
+      "critical_fields_expected": 6,
+      "critical_fields_matched": 5,
+      "expected_characters": 227,
+      "expected_words": 37,
+      "id": "cp135-ddr-040",
+      "language": "fas",
+      "layout": "single_column",
+      "pdf_sha256": "a94f297f8785fd06dbf9a2a6b1ff2884e7828ea43540537e399db72c189230d4",
+      "processing_ms": 1669.45,
+      "recognition_ms": 1162.427,
+      "scan_condition": "light_noise",
+      "status": "evaluated",
+      "synthetic_field_matches": [
+        {
+          "key": "sample_id",
+          "matched": false
+        },
+        {
+          "key": "report_date",
+          "matched": true
+        },
+        {
+          "key": "measured_depth_m",
+          "matched": true
+        },
+        {
+          "key": "rop_m_per_h",
+          "matched": true
+        },
+        {
+          "key": "mud_weight_ppg",
+          "matched": true
+        },
+        {
+          "key": "npt_h",
+          "matched": true
+        }
+      ],
+      "synthetic_passes": [
+        {
+          "languages": "eng+fas",
+          "psm": 6
+        },
+        {
+          "languages": "fas",
+          "psm": 6
+        }
+      ],
+      "wer": 0.32432432432432434,
+      "word_errors": 12
+    },
+    {
+      "cer": 0.2556053811659193,
+      "character_errors": 57,
+      "critical_fields_expected": 6,
+      "critical_fields_matched": 0,
+      "expected_characters": 223,
+      "expected_words": 37,
+      "id": "cp135-ddr-041",
+      "language": "fas",
+      "layout": "table",
+      "pdf_sha256": "2a6c7b0d70d5a9430ef7fd679c3792d56bd071a777bc74786759d222af807244",
+      "processing_ms": 1493.844,
+      "recognition_ms": 1138.034,
+      "scan_condition": "clean",
+      "status": "evaluated",
+      "synthetic_field_matches": [
+        {
+          "key": "sample_id",
+          "matched": false
+        },
+        {
+          "key": "report_date",
+          "matched": false
+        },
+        {
+          "key": "measured_depth_m",
+          "matched": false
+        },
+        {
+          "key": "rop_m_per_h",
+          "matched": false
+        },
+        {
+          "key": "mud_weight_ppg",
+          "matched": false
+        },
+        {
+          "key": "npt_h",
+          "matched": false
+        }
+      ],
+      "synthetic_passes": [
+        {
+          "languages": "eng+fas",
+          "psm": 6
+        },
+        {
+          "languages": "fas",
+          "psm": 6
+        }
+      ],
+      "wer": 0.43243243243243246,
+      "word_errors": 16
+    },
+    {
+      "cer": 0.28378378378378377,
+      "character_errors": 63,
+      "critical_fields_expected": 6,
+      "critical_fields_matched": 0,
+      "expected_characters": 222,
+      "expected_words": 36,
+      "id": "cp135-ddr-042",
+      "language": "fas",
+      "layout": "table",
+      "pdf_sha256": "d915f02a14906e199c516e726513e6366a67aba634df6855132836087171b8fb",
+      "processing_ms": 1492.505,
+      "recognition_ms": 1102.51,
+      "scan_condition": "clean",
+      "status": "evaluated",
+      "synthetic_field_matches": [
+        {
+          "key": "sample_id",
+          "matched": false
+        },
+        {
+          "key": "report_date",
+          "matched": false
+        },
+        {
+          "key": "measured_depth_m",
+          "matched": false
+        },
+        {
+          "key": "rop_m_per_h",
+          "matched": false
+        },
+        {
+          "key": "mud_weight_ppg",
+          "matched": false
+        },
+        {
+          "key": "npt_h",
+          "matched": false
+        }
+      ],
+      "synthetic_passes": [
+        {
+          "languages": "eng+fas",
+          "psm": 6
+        },
+        {
+          "languages": "fas",
+          "psm": 6
+        }
+      ],
+      "wer": 0.4166666666666667,
+      "word_errors": 15
+    },
+    {
+      "cer": 0.28054298642533937,
+      "character_errors": 62,
+      "critical_fields_expected": 6,
+      "critical_fields_matched": 0,
+      "expected_characters": 221,
+      "expected_words": 36,
+      "id": "cp135-ddr-043",
+      "language": "fas",
+      "layout": "table",
+      "pdf_sha256": "99f1f32c4dd90b3d6a7b6c51340318e7c339448512bad5cfb9470d934251a457",
+      "processing_ms": 1618.628,
+      "recognition_ms": 1212.945,
+      "scan_condition": "low_contrast",
+      "status": "evaluated",
+      "synthetic_field_matches": [
+        {
+          "key": "sample_id",
+          "matched": false
+        },
+        {
+          "key": "report_date",
+          "matched": false
+        },
+        {
+          "key": "measured_depth_m",
+          "matched": false
+        },
+        {
+          "key": "rop_m_per_h",
+          "matched": false
+        },
+        {
+          "key": "mud_weight_ppg",
+          "matched": false
+        },
+        {
+          "key": "npt_h",
+          "matched": false
+        }
+      ],
+      "synthetic_passes": [
+        {
+          "languages": "eng+fas",
+          "psm": 6
+        },
+        {
+          "languages": "fas",
+          "psm": 6
+        }
+      ],
+      "wer": 0.4166666666666667,
+      "word_errors": 15
+    },
+    {
+      "cer": 0.23275862068965517,
+      "character_errors": 54,
+      "critical_fields_expected": 6,
+      "critical_fields_matched": 0,
+      "expected_characters": 232,
+      "expected_words": 39,
+      "id": "cp135-ddr-044",
+      "language": "fas",
+      "layout": "table",
+      "pdf_sha256": "12fb90f4945ed91edaed7330f51f8a91eb28e632a6e50041d3c40e41a7aeff5c",
+      "processing_ms": 1614.062,
+      "recognition_ms": 1164.671,
+      "scan_condition": "low_contrast",
+      "status": "evaluated",
+      "synthetic_field_matches": [
+        {
+          "key": "sample_id",
+          "matched": false
+        },
+        {
+          "key": "report_date",
+          "matched": false
+        },
+        {
+          "key": "measured_depth_m",
+          "matched": false
+        },
+        {
+          "key": "rop_m_per_h",
+          "matched": false
+        },
+        {
+          "key": "mud_weight_ppg",
+          "matched": false
+        },
+        {
+          "key": "npt_h",
+          "matched": false
+        }
+      ],
+      "synthetic_passes": [
+        {
+          "languages": "eng+fas",
+          "psm": 6
+        },
+        {
+          "languages": "fas",
+          "psm": 6
+        }
+      ],
+      "wer": 0.41025641025641024,
+      "word_errors": 16
+    },
+    {
+      "cer": 0.19196428571428573,
+      "character_errors": 43,
+      "critical_fields_expected": 6,
+      "critical_fields_matched": 1,
+      "expected_characters": 224,
+      "expected_words": 37,
+      "id": "cp135-ddr-045",
+      "language": "fas",
+      "layout": "table",
+      "pdf_sha256": "012bb491705756d59170b18b5ed34fad027955c3ad05d28cd996d75952635413",
+      "processing_ms": 1730.201,
+      "recognition_ms": 1165.89,
+      "scan_condition": "light_skew",
+      "status": "evaluated",
+      "synthetic_field_matches": [
+        {
+          "key": "sample_id",
+          "matched": false
+        },
+        {
+          "key": "report_date",
+          "matched": false
+        },
+        {
+          "key": "measured_depth_m",
+          "matched": true
+        },
+        {
+          "key": "rop_m_per_h",
+          "matched": false
+        },
+        {
+          "key": "mud_weight_ppg",
+          "matched": false
+        },
+        {
+          "key": "npt_h",
+          "matched": false
+        }
+      ],
+      "synthetic_passes": [
+        {
+          "languages": "eng+fas",
+          "psm": 6
+        },
+        {
+          "languages": "fas",
+          "psm": 6
+        }
+      ],
+      "wer": 0.2972972972972973,
+      "word_errors": 11
+    },
+    {
+      "cer": 0.19090909090909092,
+      "character_errors": 42,
+      "critical_fields_expected": 6,
+      "critical_fields_matched": 1,
+      "expected_characters": 220,
+      "expected_words": 36,
+      "id": "cp135-ddr-046",
+      "language": "fas",
+      "layout": "table",
+      "pdf_sha256": "bc0b5bc35dcf830b20270d3b2b14165301d00f4d85360b7610eb4960c9010b73",
+      "processing_ms": 1707.771,
+      "recognition_ms": 1143.191,
+      "scan_condition": "light_skew",
+      "status": "evaluated",
+      "synthetic_field_matches": [
+        {
+          "key": "sample_id",
+          "matched": false
+        },
+        {
+          "key": "report_date",
+          "matched": false
+        },
+        {
+          "key": "measured_depth_m",
+          "matched": true
+        },
+        {
+          "key": "rop_m_per_h",
+          "matched": false
+        },
+        {
+          "key": "mud_weight_ppg",
+          "matched": false
+        },
+        {
+          "key": "npt_h",
+          "matched": false
+        }
+      ],
+      "synthetic_passes": [
+        {
+          "languages": "eng+fas",
+          "psm": 6
+        },
+        {
+          "languages": "fas",
+          "psm": 6
+        }
+      ],
+      "wer": 0.2777777777777778,
+      "word_errors": 10
+    },
+    {
+      "cer": 0.19909502262443438,
+      "character_errors": 44,
+      "critical_fields_expected": 6,
+      "critical_fields_matched": 0,
+      "expected_characters": 221,
+      "expected_words": 36,
+      "id": "cp135-ddr-047",
+      "language": "fas",
+      "layout": "table",
+      "pdf_sha256": "e9d5b68955a6b3fbc009859e9ddedee6669a8a6ea04e77d5ae60f233803fd691",
+      "processing_ms": 1851.341,
+      "recognition_ms": 1315.078,
+      "scan_condition": "light_noise",
+      "status": "evaluated",
+      "synthetic_field_matches": [
+        {
+          "key": "sample_id",
+          "matched": false
+        },
+        {
+          "key": "report_date",
+          "matched": false
+        },
+        {
+          "key": "measured_depth_m",
+          "matched": false
+        },
+        {
+          "key": "rop_m_per_h",
+          "matched": false
+        },
+        {
+          "key": "mud_weight_ppg",
+          "matched": false
+        },
+        {
+          "key": "npt_h",
+          "matched": false
+        }
+      ],
+      "synthetic_passes": [
+        {
+          "languages": "eng+fas",
+          "psm": 6
+        },
+        {
+          "languages": "fas",
+          "psm": 6
+        }
+      ],
+      "wer": 0.3333333333333333,
+      "word_errors": 12
+    },
+    {
+      "cer": 0.29646017699115046,
+      "character_errors": 67,
+      "critical_fields_expected": 6,
+      "critical_fields_matched": 1,
+      "expected_characters": 226,
+      "expected_words": 37,
+      "id": "cp135-ddr-048",
+      "language": "fas",
+      "layout": "table",
+      "pdf_sha256": "906ee46ee531c34b42c6e438355cdd9acf1b131cd46531d7af9a540c4ae65ddd",
+      "processing_ms": 1725.701,
+      "recognition_ms": 1263.779,
+      "scan_condition": "light_noise",
+      "status": "evaluated",
+      "synthetic_field_matches": [
+        {
+          "key": "sample_id",
+          "matched": false
+        },
+        {
+          "key": "report_date",
+          "matched": false
+        },
+        {
+          "key": "measured_depth_m",
+          "matched": true
+        },
+        {
+          "key": "rop_m_per_h",
+          "matched": false
+        },
+        {
+          "key": "mud_weight_ppg",
+          "matched": false
+        },
+        {
+          "key": "npt_h",
+          "matched": false
+        }
+      ],
+      "synthetic_passes": [
+        {
+          "languages": "eng+fas",
+          "psm": 6
+        },
+        {
+          "languages": "fas",
+          "psm": 6
+        }
+      ],
+      "wer": 0.43243243243243246,
+      "word_errors": 16
+    },
+    {
+      "cer": 0.4017857142857143,
+      "character_errors": 90,
+      "critical_fields_expected": 6,
+      "critical_fields_matched": 5,
+      "expected_characters": 224,
+      "expected_words": 37,
+      "id": "cp135-ddr-049",
+      "language": "fas",
+      "layout": "two_column",
+      "pdf_sha256": "bff8b5109ad78f5ea3e54920d8c59badd1e327356f46a812326e0e702c767a10",
+      "processing_ms": 1306.419,
+      "recognition_ms": 949.796,
+      "scan_condition": "clean",
+      "status": "evaluated",
+      "synthetic_field_matches": [
+        {
+          "key": "sample_id",
+          "matched": false
+        },
+        {
+          "key": "report_date",
+          "matched": true
+        },
+        {
+          "key": "measured_depth_m",
+          "matched": true
+        },
+        {
+          "key": "rop_m_per_h",
+          "matched": true
+        },
+        {
+          "key": "mud_weight_ppg",
+          "matched": true
+        },
+        {
+          "key": "npt_h",
+          "matched": true
+        }
+      ],
+      "synthetic_passes": [
+        {
+          "languages": "eng+fas",
+          "psm": 11
+        },
+        {
+          "languages": "fas",
+          "psm": 11
+        }
+      ],
+      "wer": 0.43243243243243246,
+      "word_errors": 16
+    },
+    {
+      "cer": 0.3918918918918919,
+      "character_errors": 87,
+      "critical_fields_expected": 6,
+      "critical_fields_matched": 5,
+      "expected_characters": 222,
+      "expected_words": 36,
+      "id": "cp135-ddr-050",
+      "language": "fas",
+      "layout": "two_column",
+      "pdf_sha256": "b8156255ea2f2c24bd9a6128b9dbc802c21dbc7568a0170a31c39a9b98c3fddb",
+      "processing_ms": 1387.108,
+      "recognition_ms": 1015.433,
+      "scan_condition": "clean",
+      "status": "evaluated",
+      "synthetic_field_matches": [
+        {
+          "key": "sample_id",
+          "matched": false
+        },
+        {
+          "key": "report_date",
+          "matched": true
+        },
+        {
+          "key": "measured_depth_m",
+          "matched": true
+        },
+        {
+          "key": "rop_m_per_h",
+          "matched": true
+        },
+        {
+          "key": "mud_weight_ppg",
+          "matched": true
+        },
+        {
+          "key": "npt_h",
+          "matched": true
+        }
+      ],
+      "synthetic_passes": [
+        {
+          "languages": "eng+fas",
+          "psm": 11
+        },
+        {
+          "languages": "fas",
+          "psm": 11
+        }
+      ],
+      "wer": 0.4166666666666667,
+      "word_errors": 15
+    },
+    {
+      "cer": 0.3090909090909091,
+      "character_errors": 68,
+      "critical_fields_expected": 6,
+      "critical_fields_matched": 5,
+      "expected_characters": 220,
+      "expected_words": 36,
+      "id": "cp135-ddr-051",
+      "language": "fas",
+      "layout": "two_column",
+      "pdf_sha256": "61fd187f721f01373d58fd3fb0e4f63f4c709a84bcaa37a1c58ad3d3846f7934",
+      "processing_ms": 1342.437,
+      "recognition_ms": 1011.476,
+      "scan_condition": "low_contrast",
+      "status": "evaluated",
+      "synthetic_field_matches": [
+        {
+          "key": "sample_id",
+          "matched": false
+        },
+        {
+          "key": "report_date",
+          "matched": true
+        },
+        {
+          "key": "measured_depth_m",
+          "matched": true
+        },
+        {
+          "key": "rop_m_per_h",
+          "matched": true
+        },
+        {
+          "key": "mud_weight_ppg",
+          "matched": true
+        },
+        {
+          "key": "npt_h",
+          "matched": true
+        }
+      ],
+      "synthetic_passes": [
+        {
+          "languages": "eng+fas",
+          "psm": 11
+        },
+        {
+          "languages": "fas",
+          "psm": 11
+        }
+      ],
+      "wer": 0.3333333333333333,
+      "word_errors": 12
+    },
+    {
+      "cer": 0.27155172413793105,
+      "character_errors": 63,
+      "critical_fields_expected": 6,
+      "critical_fields_matched": 5,
+      "expected_characters": 232,
+      "expected_words": 39,
+      "id": "cp135-ddr-052",
+      "language": "fas",
+      "layout": "two_column",
+      "pdf_sha256": "0ecd3eb248254af5dbe20441bec212f2cfc12ad9df559fc68f94d9af4304d83f",
+      "processing_ms": 1268.982,
+      "recognition_ms": 886.785,
+      "scan_condition": "low_contrast",
+      "status": "evaluated",
+      "synthetic_field_matches": [
+        {
+          "key": "sample_id",
+          "matched": false
+        },
+        {
+          "key": "report_date",
+          "matched": true
+        },
+        {
+          "key": "measured_depth_m",
+          "matched": true
+        },
+        {
+          "key": "rop_m_per_h",
+          "matched": true
+        },
+        {
+          "key": "mud_weight_ppg",
+          "matched": true
+        },
+        {
+          "key": "npt_h",
+          "matched": true
+        }
+      ],
+      "synthetic_passes": [
+        {
+          "languages": "eng+fas",
+          "psm": 11
+        },
+        {
+          "languages": "fas",
+          "psm": 11
+        }
+      ],
+      "wer": 0.3076923076923077,
+      "word_errors": 12
+    },
+    {
+      "cer": 0.15625,
+      "character_errors": 35,
+      "critical_fields_expected": 6,
+      "critical_fields_matched": 5,
+      "expected_characters": 224,
+      "expected_words": 37,
+      "id": "cp135-ddr-053",
+      "language": "fas",
+      "layout": "two_column",
+      "pdf_sha256": "f7453089fc0830a78885e0fe35a23146039785096e9cabad0161af4d8ec67797",
+      "processing_ms": 1661.057,
+      "recognition_ms": 1074.261,
+      "scan_condition": "light_skew",
+      "status": "evaluated",
+      "synthetic_field_matches": [
+        {
+          "key": "sample_id",
+          "matched": false
+        },
+        {
+          "key": "report_date",
+          "matched": true
+        },
+        {
+          "key": "measured_depth_m",
+          "matched": true
+        },
+        {
+          "key": "rop_m_per_h",
+          "matched": true
+        },
+        {
+          "key": "mud_weight_ppg",
+          "matched": true
+        },
+        {
+          "key": "npt_h",
+          "matched": true
+        }
+      ],
+      "synthetic_passes": [
+        {
+          "languages": "eng+fas",
+          "psm": 11
+        },
+        {
+          "languages": "fas",
+          "psm": 11
+        }
+      ],
+      "wer": 0.21621621621621623,
+      "word_errors": 8
+    },
+    {
+      "cer": 0.248868778280543,
+      "character_errors": 55,
+      "critical_fields_expected": 6,
+      "critical_fields_matched": 4,
+      "expected_characters": 221,
+      "expected_words": 36,
+      "id": "cp135-ddr-054",
+      "language": "fas",
+      "layout": "two_column",
+      "pdf_sha256": "c5030318469af94963d679234014304f0abed750c7c9ffffb819aacb95b642f1",
+      "processing_ms": 1925.972,
+      "recognition_ms": 1228.631,
+      "scan_condition": "light_skew",
+      "status": "evaluated",
+      "synthetic_field_matches": [
+        {
+          "key": "sample_id",
+          "matched": false
+        },
+        {
+          "key": "report_date",
+          "matched": true
+        },
+        {
+          "key": "measured_depth_m",
+          "matched": true
+        },
+        {
+          "key": "rop_m_per_h",
+          "matched": false
+        },
+        {
+          "key": "mud_weight_ppg",
+          "matched": true
+        },
+        {
+          "key": "npt_h",
+          "matched": true
+        }
+      ],
+      "synthetic_passes": [
+        {
+          "languages": "eng+fas",
+          "psm": 11
+        },
+        {
+          "languages": "fas",
+          "psm": 11
+        }
+      ],
+      "wer": 0.3333333333333333,
+      "word_errors": 12
+    },
+    {
+      "cer": 0.3891402714932127,
+      "character_errors": 86,
+      "critical_fields_expected": 6,
+      "critical_fields_matched": 5,
+      "expected_characters": 221,
+      "expected_words": 36,
+      "id": "cp135-ddr-055",
+      "language": "fas",
+      "layout": "two_column",
+      "pdf_sha256": "e0f34d0fbe8eb8945043f6338857cc74167d0a86ae91c5e588f99b72b0c45668",
+      "processing_ms": 1522.791,
+      "recognition_ms": 988.606,
+      "scan_condition": "light_noise",
+      "status": "evaluated",
+      "synthetic_field_matches": [
+        {
+          "key": "sample_id",
+          "matched": false
+        },
+        {
+          "key": "report_date",
+          "matched": true
+        },
+        {
+          "key": "measured_depth_m",
+          "matched": true
+        },
+        {
+          "key": "rop_m_per_h",
+          "matched": true
+        },
+        {
+          "key": "mud_weight_ppg",
+          "matched": true
+        },
+        {
+          "key": "npt_h",
+          "matched": true
+        }
+      ],
+      "synthetic_passes": [
+        {
+          "languages": "eng+fas",
+          "psm": 11
+        },
+        {
+          "languages": "fas",
+          "psm": 11
+        }
+      ],
+      "wer": 0.4166666666666667,
+      "word_errors": 15
+    },
+    {
+      "cer": 0.30837004405286345,
+      "character_errors": 70,
+      "critical_fields_expected": 6,
+      "critical_fields_matched": 4,
+      "expected_characters": 227,
+      "expected_words": 37,
+      "id": "cp135-ddr-056",
+      "language": "fas",
+      "layout": "two_column",
+      "pdf_sha256": "e4b80df80d675bcb64180a13bab308d7c0aceb017f4822c3ed1a2d1175632cc9",
+      "processing_ms": 1481.989,
+      "recognition_ms": 1020.215,
+      "scan_condition": "light_noise",
+      "status": "evaluated",
+      "synthetic_field_matches": [
+        {
+          "key": "sample_id",
+          "matched": false
+        },
+        {
+          "key": "report_date",
+          "matched": true
+        },
+        {
+          "key": "measured_depth_m",
+          "matched": true
+        },
+        {
+          "key": "rop_m_per_h",
+          "matched": false
+        },
+        {
+          "key": "mud_weight_ppg",
+          "matched": true
+        },
+        {
+          "key": "npt_h",
+          "matched": true
+        }
+      ],
+      "synthetic_passes": [
+        {
+          "languages": "eng+fas",
+          "psm": 11
+        },
+        {
+          "languages": "fas",
+          "psm": 11
+        }
+      ],
+      "wer": 0.35135135135135137,
+      "word_errors": 13
+    },
+    {
+      "cer": 0.125,
+      "character_errors": 28,
+      "critical_fields_expected": 6,
+      "critical_fields_matched": 5,
+      "expected_characters": 224,
+      "expected_words": 37,
+      "id": "cp135-ddr-057",
+      "language": "fas",
+      "layout": "compact",
+      "pdf_sha256": "566c578e5129e1fe8eb115b05921f81cc3ec6c6a64bfffa751eaea7cdbf73973",
+      "processing_ms": 1478.756,
+      "recognition_ms": 1085.201,
+      "scan_condition": "clean",
+      "status": "evaluated",
+      "synthetic_field_matches": [
+        {
+          "key": "sample_id",
+          "matched": false
+        },
+        {
+          "key": "report_date",
+          "matched": true
+        },
+        {
+          "key": "measured_depth_m",
+          "matched": true
+        },
+        {
+          "key": "rop_m_per_h",
+          "matched": true
+        },
+        {
+          "key": "mud_weight_ppg",
+          "matched": true
+        },
+        {
+          "key": "npt_h",
+          "matched": true
+        }
+      ],
+      "synthetic_passes": [
+        {
+          "languages": "eng+fas",
+          "psm": 6
+        },
+        {
+          "languages": "fas",
+          "psm": 6
+        }
+      ],
+      "wer": 0.1891891891891892,
+      "word_errors": 7
+    },
+    {
+      "cer": 0.12217194570135746,
+      "character_errors": 27,
+      "critical_fields_expected": 6,
+      "critical_fields_matched": 5,
+      "expected_characters": 221,
+      "expected_words": 36,
+      "id": "cp135-ddr-058",
+      "language": "fas",
+      "layout": "compact",
+      "pdf_sha256": "75911ca5c4a95668f6c885e76bb705c4c7cb61edb1205f1b78a037ba85ec4815",
+      "processing_ms": 1436.603,
+      "recognition_ms": 1028.457,
+      "scan_condition": "clean",
+      "status": "evaluated",
+      "synthetic_field_matches": [
+        {
+          "key": "sample_id",
+          "matched": false
+        },
+        {
+          "key": "report_date",
+          "matched": true
+        },
+        {
+          "key": "measured_depth_m",
+          "matched": true
+        },
+        {
+          "key": "rop_m_per_h",
+          "matched": true
+        },
+        {
+          "key": "mud_weight_ppg",
+          "matched": true
+        },
+        {
+          "key": "npt_h",
+          "matched": true
+        }
+      ],
+      "synthetic_passes": [
+        {
+          "languages": "eng+fas",
+          "psm": 6
+        },
+        {
+          "languages": "fas",
+          "psm": 6
+        }
+      ],
+      "wer": 0.19444444444444445,
+      "word_errors": 7
+    },
+    {
+      "cer": 0.11764705882352941,
+      "character_errors": 26,
+      "critical_fields_expected": 6,
+      "critical_fields_matched": 5,
+      "expected_characters": 221,
+      "expected_words": 36,
+      "id": "cp135-ddr-059",
+      "language": "fas",
+      "layout": "compact",
+      "pdf_sha256": "5114994b518dcfac21a037ce9b8ef4175709a354125e5d589d125df8d753d066",
+      "processing_ms": 1512.849,
+      "recognition_ms": 1094.597,
+      "scan_condition": "low_contrast",
+      "status": "evaluated",
+      "synthetic_field_matches": [
+        {
+          "key": "sample_id",
+          "matched": false
+        },
+        {
+          "key": "report_date",
+          "matched": true
+        },
+        {
+          "key": "measured_depth_m",
+          "matched": true
+        },
+        {
+          "key": "rop_m_per_h",
+          "matched": true
+        },
+        {
+          "key": "mud_weight_ppg",
+          "matched": true
+        },
+        {
+          "key": "npt_h",
+          "matched": true
+        }
+      ],
+      "synthetic_passes": [
+        {
+          "languages": "eng+fas",
+          "psm": 6
+        },
+        {
+          "languages": "fas",
+          "psm": 6
+        }
+      ],
+      "wer": 0.16666666666666666,
+      "word_errors": 6
+    },
+    {
+      "cer": 0.16017316017316016,
+      "character_errors": 37,
+      "critical_fields_expected": 6,
+      "critical_fields_matched": 5,
+      "expected_characters": 231,
+      "expected_words": 39,
+      "id": "cp135-ddr-060",
+      "language": "fas",
+      "layout": "compact",
+      "pdf_sha256": "31e42805e17242fd4dc59ba0cc7ca3b4fc06553be2bbfdded3d3c058e39a15a2",
+      "processing_ms": 1411.934,
+      "recognition_ms": 1069.352,
+      "scan_condition": "low_contrast",
+      "status": "evaluated",
+      "synthetic_field_matches": [
+        {
+          "key": "sample_id",
+          "matched": false
+        },
+        {
+          "key": "report_date",
+          "matched": true
+        },
+        {
+          "key": "measured_depth_m",
+          "matched": true
+        },
+        {
+          "key": "rop_m_per_h",
+          "matched": true
+        },
+        {
+          "key": "mud_weight_ppg",
+          "matched": true
+        },
+        {
+          "key": "npt_h",
+          "matched": true
+        }
+      ],
+      "synthetic_passes": [
+        {
+          "languages": "eng+fas",
+          "psm": 6
+        },
+        {
+          "languages": "fas",
+          "psm": 6
+        }
+      ],
+      "wer": 0.20512820512820512,
+      "word_errors": 8
+    },
+    {
+      "cer": 0.14027149321266968,
+      "character_errors": 31,
+      "critical_fields_expected": 6,
+      "critical_fields_matched": 5,
+      "expected_characters": 221,
+      "expected_words": 37,
+      "id": "cp135-ddr-061",
+      "language": "fas",
+      "layout": "compact",
+      "pdf_sha256": "95c0ae3bb1b7f608ec77110048958c9fd58b060468c7652ef0418bb9dc55ae60",
+      "processing_ms": 1689.25,
+      "recognition_ms": 1068.093,
+      "scan_condition": "light_skew",
+      "status": "evaluated",
+      "synthetic_field_matches": [
+        {
+          "key": "sample_id",
+          "matched": false
+        },
+        {
+          "key": "report_date",
+          "matched": true
+        },
+        {
+          "key": "measured_depth_m",
+          "matched": true
+        },
+        {
+          "key": "rop_m_per_h",
+          "matched": true
+        },
+        {
+          "key": "mud_weight_ppg",
+          "matched": true
+        },
+        {
+          "key": "npt_h",
+          "matched": true
+        }
+      ],
+      "synthetic_passes": [
+        {
+          "languages": "eng+fas",
+          "psm": 6
+        },
+        {
+          "languages": "fas",
+          "psm": 6
+        }
+      ],
+      "wer": 0.1891891891891892,
+      "word_errors": 7
+    },
+    {
+      "cer": 0.13636363636363635,
+      "character_errors": 30,
+      "critical_fields_expected": 6,
+      "critical_fields_matched": 5,
+      "expected_characters": 220,
+      "expected_words": 36,
+      "id": "cp135-ddr-062",
+      "language": "fas",
+      "layout": "compact",
+      "pdf_sha256": "411fe1d853f99e99ccabac28fa1072eeca44a5a3c716d6450f298384e09929a8",
+      "processing_ms": 1776.023,
+      "recognition_ms": 1120.015,
+      "scan_condition": "light_skew",
+      "status": "evaluated",
+      "synthetic_field_matches": [
+        {
+          "key": "sample_id",
+          "matched": false
+        },
+        {
+          "key": "report_date",
+          "matched": true
+        },
+        {
+          "key": "measured_depth_m",
+          "matched": true
+        },
+        {
+          "key": "rop_m_per_h",
+          "matched": true
+        },
+        {
+          "key": "mud_weight_ppg",
+          "matched": true
+        },
+        {
+          "key": "npt_h",
+          "matched": true
+        }
+      ],
+      "synthetic_passes": [
+        {
+          "languages": "eng+fas",
+          "psm": 6
+        },
+        {
+          "languages": "fas",
+          "psm": 6
+        }
+      ],
+      "wer": 0.19444444444444445,
+      "word_errors": 7
+    },
+    {
+      "cer": 0.1590909090909091,
+      "character_errors": 35,
+      "critical_fields_expected": 6,
+      "critical_fields_matched": 5,
+      "expected_characters": 220,
+      "expected_words": 36,
+      "id": "cp135-ddr-063",
+      "language": "fas",
+      "layout": "compact",
+      "pdf_sha256": "c626e7e721a91033571f0d6ac9ff36000a72c8e8b41c5bf0aa7c34a55a6cbe97",
+      "processing_ms": 1495.394,
+      "recognition_ms": 1106.872,
+      "scan_condition": "light_noise",
+      "status": "evaluated",
+      "synthetic_field_matches": [
+        {
+          "key": "sample_id",
+          "matched": false
+        },
+        {
+          "key": "report_date",
+          "matched": true
+        },
+        {
+          "key": "measured_depth_m",
+          "matched": true
+        },
+        {
+          "key": "rop_m_per_h",
+          "matched": true
+        },
+        {
+          "key": "mud_weight_ppg",
+          "matched": true
+        },
+        {
+          "key": "npt_h",
+          "matched": true
+        }
+      ],
+      "synthetic_passes": [
+        {
+          "languages": "eng+fas",
+          "psm": 6
+        },
+        {
+          "languages": "fas",
+          "psm": 6
+        }
+      ],
+      "wer": 0.19444444444444445,
+      "word_errors": 7
+    },
+    {
+      "cer": 0.22123893805309736,
+      "character_errors": 50,
+      "critical_fields_expected": 6,
+      "critical_fields_matched": 5,
+      "expected_characters": 226,
+      "expected_words": 37,
+      "id": "cp135-ddr-064",
+      "language": "fas",
+      "layout": "compact",
+      "pdf_sha256": "8a30fec9568e4e449503591e923eab148e3877f5b44571da424a6e8404114838",
+      "processing_ms": 1532.318,
+      "recognition_ms": 1040.958,
+      "scan_condition": "light_noise",
+      "status": "evaluated",
+      "synthetic_field_matches": [
+        {
+          "key": "sample_id",
+          "matched": false
+        },
+        {
+          "key": "report_date",
+          "matched": true
+        },
+        {
+          "key": "measured_depth_m",
+          "matched": true
+        },
+        {
+          "key": "rop_m_per_h",
+          "matched": true
+        },
+        {
+          "key": "mud_weight_ppg",
+          "matched": true
+        },
+        {
+          "key": "npt_h",
+          "matched": true
+        }
+      ],
+      "synthetic_passes": [
+        {
+          "languages": "eng+fas",
+          "psm": 6
+        },
+        {
+          "languages": "fas",
+          "psm": 6
+        }
+      ],
+      "wer": 0.2972972972972973,
+      "word_errors": 11
+    }
+  ],
+  "dataset": {
+    "case_count": 64,
+    "classification": "synthetic",
+    "ground_truth_protocol": "Generated from the same explicit synthetic values used to render each page; not independently adjudicated and not a holdout. Persian labels are Unicode source text, shaped only for raster display.",
+    "id": "cp135-synthetic-ddr-ocr",
+    "languages": [
+      "eng",
+      "fas"
+    ],
+    "sampling_method": "64 deterministic one-page image-only machine-generated DDR fixtures in a balanced full factorial: 2 languages x 4 page layouts x 4 controlled scan conditions x 2 independent value sets per cell. Every language/layout/scan-condition combination is represented exactly twice. No field or vendor documents are sampled.",
+    "sha256": "31aca80b4323fe470d34705e36038296ef620adb7525373f5196c9f561b6735d",
+    "stratification_dimensions": [
+      "language",
+      "layout",
+      "scan_condition"
+    ],
+    "version": "3.0.0"
+  },
+  "diagnostic": {
+    "classification": "synthetic development only; tesserocr CLI protocol emulator, not deployment CLI or holdout",
+    "field_attribution_complete": true,
+    "model_sha256": {
+      "eng": "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2",
+      "fas": "db1c0a91208aff00d3cf1ed2c1d23f76419afd5f024688b4f71adc3f2ce4a505"
+    },
+    "pass_attribution_complete": true,
+    "pass_events": 96,
+    "routes": [
+      {
+        "cases": 24,
+        "fixture_language": "eng",
+        "passes": 1,
+        "psm": 6
+      },
+      {
+        "cases": 8,
+        "fixture_language": "eng",
+        "passes": 1,
+        "psm": 11
+      },
+      {
+        "cases": 24,
+        "fixture_language": "fas",
+        "passes": 2,
+        "psm": 6
+      },
+      {
+        "cases": 8,
+        "fixture_language": "fas",
+        "passes": 2,
+        "psm": 11
+      }
+    ],
+    "tesserocr_version": "2.9.1"
+  },
+  "limitations": [
+    "All 64 pages are deterministic machine-generated synthetic English/Persian fixtures; none are sampled field or vendor DDRs.",
+    "Ground truth is generated from fixture fields, not independently adjudicated; metrics are development-only.",
+    "The cases cover printed text, four synthetic layouts and four controlled scan conditions; handwriting, real scanning pipelines and field variability are not represented.",
+    "CER/WER and fixture-token recovery do not establish semantic correctness, engineering acceptance, field performance, or production readiness.",
+    "No transcript, image, local path, uploaded data, provider request, or persistent output is included in this report."
+  ],
+  "metrics": {
+    "all_strata_thresholds_passed": false,
+    "case_count": 64,
+    "character_error_rate": 0.10702384841555047,
+    "character_errors": 1638,
+    "critical_field_exact_rate": 0.8098958333333334,
+    "critical_fields_expected": 384,
+    "critical_fields_matched": 311,
+    "evaluated_cases": 64,
+    "exact_case_rate": 0.375,
+    "expected_characters": 15305,
+    "expected_words": 2328,
+    "incomplete_or_failed_cases": 0,
+    "median_case_processing_ms": 1422.293,
+    "median_tesseract_ms": 896.43,
+    "p95_case_processing_ms": 1730.201,
+    "p95_tesseract_ms": 1212.945,
+    "stratified_metrics": {
+      "language": [
+        {
+          "case_count": 32,
+          "character_error_rate": 0.001594309541329409,
+          "character_errors": 13,
+          "critical_field_exact_rate": 0.9895833333333334,
+          "critical_fields_expected": 192,
+          "critical_fields_matched": 190,
+          "evaluated_cases": 32,
+          "expected_characters": 8154,
+          "expected_words": 1152,
+          "incomplete_or_failed_cases": 0,
+          "stratum": "eng",
+          "thresholds_passed": true,
+          "word_error_rate": 0.009548611111111112,
+          "word_errors": 11
+        },
+        {
+          "case_count": 32,
+          "character_error_rate": 0.22724094532233255,
+          "character_errors": 1625,
+          "critical_field_exact_rate": 0.6302083333333334,
+          "critical_fields_expected": 192,
+          "critical_fields_matched": 121,
+          "evaluated_cases": 32,
+          "expected_characters": 7151,
+          "expected_words": 1176,
+          "incomplete_or_failed_cases": 0,
+          "stratum": "fas",
+          "thresholds_passed": false,
+          "word_error_rate": 0.2967687074829932,
+          "word_errors": 349
+        }
+      ],
+      "layout": [
+        {
+          "case_count": 16,
+          "character_error_rate": 0.06907378335949764,
+          "character_errors": 264,
+          "critical_field_exact_rate": 0.9166666666666666,
+          "critical_fields_expected": 96,
+          "critical_fields_matched": 88,
+          "evaluated_cases": 16,
+          "expected_characters": 3822,
+          "expected_words": 582,
+          "incomplete_or_failed_cases": 0,
+          "stratum": "compact",
+          "thresholds_passed": true,
+          "word_error_rate": 0.10309278350515463,
+          "word_errors": 60
+        },
+        {
+          "case_count": 16,
+          "character_error_rate": 0.09866527087149961,
+          "character_errors": 377,
+          "critical_field_exact_rate": 0.9166666666666666,
+          "critical_fields_expected": 96,
+          "critical_fields_matched": 88,
+          "evaluated_cases": 16,
+          "expected_characters": 3821,
+          "expected_words": 582,
+          "incomplete_or_failed_cases": 0,
+          "stratum": "single_column",
+          "thresholds_passed": true,
+          "word_error_rate": 0.1323024054982818,
+          "word_errors": 77
+        },
+        {
+          "case_count": 16,
+          "character_error_rate": 0.11409921671018276,
+          "character_errors": 437,
+          "critical_field_exact_rate": 0.5104166666666666,
+          "critical_fields_expected": 96,
+          "critical_fields_matched": 49,
+          "evaluated_cases": 16,
+          "expected_characters": 3830,
+          "expected_words": 582,
+          "incomplete_or_failed_cases": 0,
+          "stratum": "table",
+          "thresholds_passed": false,
+          "word_error_rate": 0.2027491408934708,
+          "word_errors": 118
+        },
+        {
+          "case_count": 16,
+          "character_error_rate": 0.14613778705636743,
+          "character_errors": 560,
+          "critical_field_exact_rate": 0.8958333333333334,
+          "critical_fields_expected": 96,
+          "critical_fields_matched": 86,
+          "evaluated_cases": 16,
+          "expected_characters": 3832,
+          "expected_words": 582,
+          "incomplete_or_failed_cases": 0,
+          "stratum": "two_column",
+          "thresholds_passed": false,
+          "word_error_rate": 0.18041237113402062,
+          "word_errors": 105
+        }
+      ],
+      "scan_condition": [
+        {
+          "case_count": 16,
+          "character_error_rate": 0.12201521910259774,
+          "character_errors": 465,
+          "critical_field_exact_rate": 0.8125,
+          "critical_fields_expected": 96,
+          "critical_fields_matched": 78,
+          "evaluated_cases": 16,
+          "expected_characters": 3811,
+          "expected_words": 580,
+          "incomplete_or_failed_cases": 0,
+          "stratum": "clean",
+          "thresholds_passed": false,
+          "word_error_rate": 0.1724137931034483,
+          "word_errors": 100
+        },
+        {
+          "case_count": 16,
+          "character_error_rate": 0.11690694626474443,
+          "character_errors": 446,
+          "critical_field_exact_rate": 0.8125,
+          "critical_fields_expected": 96,
+          "critical_fields_matched": 78,
+          "evaluated_cases": 16,
+          "expected_characters": 3815,
+          "expected_words": 580,
+          "incomplete_or_failed_cases": 0,
+          "stratum": "light_noise",
+          "thresholds_passed": false,
+          "word_error_rate": 0.16206896551724137,
+          "word_errors": 94
+        },
+        {
+          "case_count": 16,
+          "character_error_rate": 0.08502237430902869,
+          "character_errors": 323,
+          "critical_field_exact_rate": 0.8020833333333334,
+          "critical_fields_expected": 96,
+          "critical_fields_matched": 77,
+          "evaluated_cases": 16,
+          "expected_characters": 3799,
+          "expected_words": 580,
+          "incomplete_or_failed_cases": 0,
+          "stratum": "light_skew",
+          "thresholds_passed": false,
+          "word_error_rate": 0.13275862068965516,
+          "word_errors": 77
+        },
+        {
+          "case_count": 16,
+          "character_error_rate": 0.10412371134020619,
+          "character_errors": 404,
+          "critical_field_exact_rate": 0.8125,
+          "critical_fields_expected": 96,
+          "critical_fields_matched": 78,
+          "evaluated_cases": 16,
+          "expected_characters": 3880,
+          "expected_words": 588,
+          "incomplete_or_failed_cases": 0,
+          "stratum": "low_contrast",
+          "thresholds_passed": false,
+          "word_error_rate": 0.15136054421768708,
+          "word_errors": 89
+        }
+      ]
+    },
+    "thresholds_passed": false,
+    "total_elapsed_ms": 88818.049,
+    "word_error_rate": 0.15463917525773196,
+    "word_errors": 360
+  },
+  "quality_evaluated": true,
+  "reason": "synthetic transcription metrics exceeded a global or stratified software threshold",
+  "runtime": {
+    "adapter_version": "tesseract-cli-tsv-v7",
+    "available_languages": [
+      "eng",
+      "fas"
+    ],
+    "configured_languages": [
+      "eng",
+      "fas"
+    ],
+    "fixture_rendering_policy": {
+      "rtl_left_to_right_runs": "U+200E-LRM-isolation-for-ISO-dates-only",
+      "version": "cp135-rtl-ltr-isolation-v3"
+    },
+    "language_routing_policy": "eng+fas-first-pass; predominantly-RTL-output-rerun-with-fas; shared-per-page-timeout",
+    "layout_policy": {
+      "central_divider_detection": "long_visible_centerline_with_small_skew_search",
+      "reading_order": "text-script-direction-from-ocr-lines",
+      "two_column_page_segmentation_mode": 11
+    },
+    "page_segmentation_mode": 6,
+    "pdf_renderer_version": "5.15.2",
+    "provider": "tesseract",
+    "python_version": "3.11.2",
+    "renderer_dependencies": {
+      "Pillow": "13.0.0",
+      "arabic-reshaper": "3.1.0",
+      "pypdfium2": "5.15.2",
+      "python-bidi": "0.6.12",
+      "reportlab": "4.5.1"
+    },
+    "required_languages": [
+      "eng",
+      "fas"
+    ],
+    "resource_limits": {
+      "max_generated_pdf_bytes": 8388608,
+      "ocr_dpi": 200,
+      "ocr_max_concurrency": 2,
+      "ocr_max_page_pixels": 12000000,
+      "ocr_max_pages": 20,
+      "ocr_timeout_seconds": 30.0
+    },
+    "runtime_version": "tesseract 5.5.1-emulated-cli",
+    "traineddata_sha256": {
+      "eng": "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2",
+      "fas": "db1c0a91208aff00d3cf1ed2c1d23f76419afd5f024688b4f71adc3f2ce4a505"
+    }
+  },
+  "status": "failed",
+  "thresholds": {
+    "max_character_error_rate": 0.15,
+    "max_word_error_rate": 0.2,
+    "min_critical_field_exact_rate": 0.9
+  },
+  "tool": "drillai-synthetic-ocr-quality-v3"
+}
