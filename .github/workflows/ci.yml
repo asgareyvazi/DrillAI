@@ -407,7 +407,7 @@ jobs:
                   collect(suite.get("suites", []))
 
           collect(report.get("suites", []))
-          expected_title = "creates and independently reads back one scoped synthetic daily-report draft per well"
+          expected_title = "creates scoped synthetic daily reports, versioned programs and controlled procedures across two wells"
           if len(found) != 1 or found[0][0] != expected_title:
               raise SystemExit("CP150 must execute exactly its reviewed two-well pilot journey")
           result_set = found[0][1]

@@ -284,7 +284,7 @@ function renderWorkspace(path = `/wells/${well.id}/engineering-products`) {
       </QueryClientProvider>
     )
   }
-  return render(<ProgramsProceduresWorkspace />, { wrapper: Wrapper })
+  return { ...render(<ProgramsProceduresWorkspace />, { wrapper: Wrapper }), client }
 }
 
 function configureCommonMocks() {
@@ -531,12 +531,12 @@ describe('ProgramsProceduresWorkspace', () => {
         escalation_role: 'synthetic_test_reviewer',
       }],
     })
-  })
+  }, 20_000)
 
   it('requires current validation, records independent review, decides an exact revision, creates a compare-and-swap revision and exports Markdown', async () => {
     const user = userEvent.setup()
     store = makeStore()
-    renderWorkspace()
+    const { client } = renderWorkspace()
     await user.click(await screen.findByRole('button', { name: 'Read grounded well context' }))
     expect(await screen.findByText('Synthetic source excerpt only.')).toBeInTheDocument()
     expect(screen.getByText('Measured value remains source-reported.')).toBeInTheDocument()
@@ -556,6 +556,10 @@ describe('ProgramsProceduresWorkspace', () => {
     await user.click(submit)
     await waitFor(() => expect(apiMock.submitEngineeringProduct).toHaveBeenCalledWith(store?.artifact.id, 'ver_ui_1'))
     await screen.findByText('Independent review and decision')
+    // Await the mutation's invalidation/refetch before typing: otherwise the review form can be
+    // replaced mid-keystroke on slower hosts, corrupting the exact notes being submitted.
+    await waitFor(() => expect(client.isMutating()).toBe(0))
+    await waitFor(() => expect(client.isFetching()).toBe(0))
     await user.type(screen.getByLabelText('Independent review notes'), 'Synthetic reviewer checked the exact version and hash.')
     await user.click(screen.getByRole('button', { name: 'Record independent review' }))
     await waitFor(() => expect(apiMock.reviewEngineeringProduct).toHaveBeenCalledWith(store?.artifact.id, 'ver_ui_1', 'Synthetic reviewer checked the exact version and hash.'))
@@ -604,7 +608,7 @@ describe('ProgramsProceduresWorkspace', () => {
       if (originalRevokeObjectURL) Object.defineProperty(URL, 'revokeObjectURL', originalRevokeObjectURL)
       else Reflect.deleteProperty(URL, 'revokeObjectURL')
     }
-  })
+  }, 20_000)
 
   it('renders the product-authoring route in Persian and applies right-to-left document direction', async () => {
     window.localStorage.setItem('drillai.locale', 'fa')
