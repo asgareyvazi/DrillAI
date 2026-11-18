@@ -27,3 +27,7 @@ Three new tests in `backend/tests/rag/test_retriever.py` exercise normalization 
 ## Remaining boundaries
 
 The historical browser 401, Windows `ERR_NO_BUFFER_SPACE` and Vite EPIPE are not root-caused. CP135 thresholds remain unchanged and unmet. The remainder of the 18-phase mission and complete historical/future catalogue remain open. Qualified field validation for `well_control.kill_sheet` and `tubulars.api_5c3`, authorized external vendor interoperability and customer acceptance remain separate requirements.
+
+## Exact-SHA CI for retrieval change
+
+[Run 44272892003](https://github.com/asgareyvazi/DrillAI/actions/runs/44272892003) on `6028dc47fa0e39624e68ed384ef32c6711277984` completed **failure**. Linux PostgreSQL backend passed **1,799/1,799**; native-Windows backend passed **1,783**, with one reviewed POSIX-only skip and 15 PostgreSQL deselections. Standard browser suites on both platforms passed **128/128 with zero retries**; Linux CP150 and independent Compose readiness/security checks passed. Both full supply-chain gates and deployment-image OCR failed. OCR evaluated 64/64 cases, global CER 0.318719, WER 0.457904 and critical exact 0.497396; Persian critical exact 0.0. These are the results for the cited implementation SHA, not automatically for later commits.
