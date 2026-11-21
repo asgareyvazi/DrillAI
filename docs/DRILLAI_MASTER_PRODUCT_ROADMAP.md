@@ -18,6 +18,10 @@ CP135 synthetic OCR remains `NOT_ACCEPTED`: unchanged global CER â‰¤0.15, WER â‰
 
 The latest continuation began at `db29fe22b78cd9af9939e19ff0f44f0c27686e95`. Explicit ref fetch and unshallowing resolved the earlier incomplete local ancestry: the main merge base is `bfa066b28e0071880cb9191a4f1d47fdaa143e04`, with the authorized branch 276 ahead and zero behind at that checkpoint. See the corrected [forensic inventory and audit](mission-reports/AUTONOMOUS-CONTINUATION-FORENSICS-AND-AUDIT.md). [Exact-SHA CI 44879534008](https://github.com/asgareyvazi/DrillAI/actions/runs/44879534008) passed security, Linux/Windows backend and browser sub-gates but failed deployment OCR; it did not establish release acceptance. A source-order hazard was repaired and verified, but the exact historical CP153 incident trigger remains unknown. Local audit success is not field acceptance.
 
+## Fluids and run-stream continuation
+
+[Fluids and stream evidence](mission-reports/AUTONOMOUS-CONTINUATION-FLUIDS-AND-STREAM.md) records independently reproduced numerical-boundary and incomplete-bottoms-up defects, versioned repairs to two existing engines, and an independently reproduced socket churn fix. It does not claim that socket churn caused the native Windows error, that two full engineering vertical slices are complete, or that the OCR/release gates passed. The [runtime self-declaration snapshot](mission-reports/AUTONOMOUS-ENGINE-REGISTRY-85396bc.json) describes implementation revision `85396bc` only; it is not the requested independent audit or complete catalogue. The final matrix must be rerun on the actual final SHA.
+
 ## Capability map (initial source inspection; further audit required)
 
 | Area | Observed implementation and evidence | Current boundary |
