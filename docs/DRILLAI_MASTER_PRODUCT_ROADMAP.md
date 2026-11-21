@@ -14,6 +14,8 @@ On baseline [CI run 44248737740](https://github.com/asgareyvazi/DrillAI/actions/
 
 CP135 synthetic OCR remains `NOT_ACCEPTED`: unchanged global CER ≤0.15, WER ≤0.20 and critical exact ≥0.90, with critical exact ≥0.90 in every language/layout/scan stratum and all cases evaluated. CP154's best documented local 150-DPI metrics are 0.097746/0.144330/0.809896 globally and 0.207663/0.275510/0.640625 for Persian. These are not deployment-image or field metrics. A separate [offline Tesseract.js exploratory comparison](mission-reports/CONTINUOUS-OCR-TESSERACTJS-COMPARISON.md) also failed, is not a holdout or production-adapter measurement, and was not adopted. A [native-library synthetic diagnostic](mission-reports/CONTINUOUS-TESSEROCR-SYNTHETIC-DIAGNOSIS.md) localized fixture-specific field and layout failures but is not deployment-image evidence. See [CP154](mission-reports/CP154-PERSIAN-OCR-AND-CI-GATES.md).
 
+The autonomous-continuation checkpoint is `62ec9c9f1325d81ac6a53b0587f8f9f6f91225c0`; its [forensic inventory and fresh local audit](mission-reports/AUTONOMOUS-CONTINUATION-FORENSICS-AND-AUDIT.md) records the preserved browser evidence, current live advisory response and clock discrepancy. The checkpoint exact-SHA CI remained failed; local audit success is not CI or field acceptance. CP153 ordering and deployment OCR remain unresolved.
+
 ## Capability map (initial source inspection; further audit required)
 
 | Area | Observed implementation and evidence | Current boundary |
@@ -26,7 +28,7 @@ CP135 synthetic OCR remains `NOT_ACCEPTED`: unchanged global CER ≤0.15, WER �
 | Retrieval and Advisor | `rag/retriever.py`, `rag/benchmark.py`, `ai/tools.py`, `drilling/advisor.py`, CP139/140 and [continuation retrieval assurance](mission-reports/CONTINUOUS-MISSION-BASELINE-AND-RETRIEVAL.md) | Scoped Unicode/Persian lexical search and project/operation tool filtering have focused tests. Real embeddings, independent semantic/hybrid and Persian holdout benchmark evidence remain necessary. |
 | Telemetry and workflows | `telemetry/`, `workflow/`, `ConnectorsPage.tsx`, `WorkflowStudio.tsx`, CP122–130/145–148 | Local harness coverage is not external commercial vendor interoperability or delivery evidence. |
 | Reporting | `drilling/structured_report_exports.py`, `drilling/daily_report_exports.py`, `engineering/exports.py`, `ReportsWorkspace.tsx` | Existing exports must be assessed individually; requested full lifecycle report coverage is incomplete. |
-| Security and operations | `security/`, `.github/workflows/ci.yml`, `scripts/verify_supply_chain_and_secrets.py` | Exact baseline CI is red; `picomatch` advisory currently blocks full-dependency audit. External customer, field and vendor acceptance are not measured. |
+| Security and operations | `security/`, `.github/workflows/ci.yml`, `scripts/verify_supply_chain_and_secrets.py` | Exact checkpoint CI is red. The later live advisory API reports the historical `picomatch` advisory withdrawn and a fresh full local audit passed; its external metadata dates conflict with the mission clock, and new exact-SHA Linux/Windows checks remain required. See [forensic and audit evidence](mission-reports/AUTONOMOUS-CONTINUATION-FORENSICS-AND-AUDIT.md). External customer, field and vendor acceptance are not measured. |
 
 ### Runtime engine registry at baseline
 
