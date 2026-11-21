@@ -25,7 +25,7 @@ No operational timestamps, station values, units, or source references were inve
 
 ## Source-order repair in progress
 
-A reproducible synthetic API/database test proved that reversed creation-time order or tied creation times with reversed IDs can cause the old promoter to reject increasing source rows. A [source-evidence ordering repair](AUTONOMOUS-SURVEY-SOURCE-ORDER.md) validates scoped table-row provenance and fails closed on ambiguity. It does not prove that those ties occurred in the historical Windows failure. Exact-SHA native Windows and complete regression verification remain required; the no-report-period-fallback rule is unchanged.
+A reproducible synthetic API/database test proved that reversed creation-time order or tied creation times with reversed IDs can cause the old promoter to reject increasing source rows. A [source-evidence ordering repair](AUTONOMOUS-SURVEY-SOURCE-ORDER.md) validates scoped table-row provenance and fails closed on ambiguity. It does not prove that those ties occurred in the historical Windows failure. [CI run 44877582728](https://github.com/asgareyvazi/DrillAI/actions/runs/44877582728) on fix SHA `8f013ebb6912d11fc45d5b948af2e7d781ae42e8` passed the full native Windows backend (1,807 passed, one skipped, 15 PostgreSQL deselections) and Linux PostgreSQL-enabled backend (1,823 passed). The run failed overall on the separate deployment OCR gate; these results do not certify later commits or prove the historical cause. The no-report-period-fallback rule is unchanged.
 
 ## Subsequent exact-SHA observation
 
