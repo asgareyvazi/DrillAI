@@ -23,6 +23,10 @@ No Windows-specific cause is inferred from that result. The source path accepts 
 
 No operational timestamps, station values, units, or source references were invented. No field/customer acceptance is implied.
 
+## Source-order repair in progress
+
+A reproducible synthetic API/database test proved that reversed creation-time order or tied creation times with reversed IDs can cause the old promoter to reject increasing source rows. A [source-evidence ordering repair](AUTONOMOUS-SURVEY-SOURCE-ORDER.md) validates scoped table-row provenance and fails closed on ambiguity. It does not prove that those ties occurred in the historical Windows failure. Exact-SHA native Windows and complete regression verification remain required; the no-report-period-fallback rule is unchanged.
+
 ## Subsequent exact-SHA observation
 
 [Run 44296549169](https://github.com/asgareyvazi/DrillAI/actions/runs/44296549169) on `bb97059abf1fb02850056b1844b66dfd6e2be023` reproduced the unchanged Windows failure. The diagnostic shows 500 m with `source_record` timestamp and 600 m with `unknown`/null time, but both stations were held as non-increasing in source order. Those diagnostic rows are independently sorted by depth and do not reveal the order processed. The promoter currently receives rows ordered by page, creation timestamp and ID rather than source-row position, a plausible tie-related hazard; actual timestamps and consumed ordering were not recorded, so this is a hypothesis, not a demonstrated root cause. Source row evidence is retained in evidence-link locators. Correcting and testing reliable, scoped row ordering and ambiguous/missing/descending cases remains open, as does a passing exact-SHA Windows run; the report period must never become a station time.

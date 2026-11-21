@@ -48,6 +48,7 @@ from drillai.core.errors import NotFound
 from drillai.db.models import (
     AuditLog,
     Document,
+    DocumentRegion,
     Event,
     EvidenceLink,
     ExtractedRecord,
@@ -1718,6 +1719,98 @@ class DdrProcessor:
             trajectory.total_tvd_si, deepest.tvd_si, rel_tol=0.0, abs_tol=1e-9
         )
 
+    async def _survey_source_order(
+        self, document: Document, rows: list[tuple[ExtractedRecord, dict[str, Any]]],
+    ) -> list[tuple[ExtractedRecord, dict[str, Any]]] | None:
+        """Order only by unique, scoped source table coordinates, not artifact creation times.
+
+        The evidence link and stored region must agree on document, region, page, region order,
+        and a real source row. Missing, duplicated, malformed or conflicting coordinates are
+        ambiguous, including for one row: callers must queue the batch for review.
+        """
+        records = {record.id: record for record, _ in rows}
+        if len(records) != len(rows):
+            return None
+        evidence: dict[str, list[tuple[EvidenceLink, DocumentRegion]]] = {key: [] for key in records}
+        ids = list(records)
+        for start in range(0, len(ids), 400):
+            links = (await self.session.execute(
+                select(EvidenceLink, DocumentRegion)
+                .join(DocumentRegion, DocumentRegion.id == EvidenceLink.region_id)
+                .where(
+                    EvidenceLink.org_id == self.org_id,
+                    EvidenceLink.document_id == document.id,
+                    EvidenceLink.subject_kind == "extracted_record.survey_station",
+                    EvidenceLink.subject_id.in_(ids[start:start + 400]),
+                    DocumentRegion.org_id == self.org_id,
+                    DocumentRegion.document_id == document.id,
+                )
+            )).all()
+            for link, region in links:
+                evidence[link.subject_id].append((link, region))
+        coordinates: dict[str, tuple[int, int, int]] = {}
+        # Build each region's source-row index once, rather than rescanning a whole table
+        # for every survey station in large batches.
+        region_rows: dict[str, dict[int, list[dict[str, Any]] | None]] = {}
+        regions_at_position: dict[tuple[int, int], str] = {}
+        for record_id, record in records.items():
+            if len(evidence[record_id]) != 1:
+                return None
+            link, region = evidence[record_id][0]
+            locator = link.locator if isinstance(link.locator, dict) else {}
+            source = locator.get("source")
+            if not isinstance(source, dict):
+                return None
+            page, region_order, source_row = record.page_number, region.order_index, source.get("row")
+            if (
+                record.document_id != document.id or record.org_id != self.org_id
+                or record.region_id != region.id or region.kind != "table"
+                or link.evidence_kind != "document_region" or link.evidence_id != region.id
+                or link.page_number != page or region.page_number != page or locator.get("page") != page
+                or locator.get("region_id") != region.id or locator.get("region_order") != region_order
+                or source.get("kind") != "table_row" or source.get("region_order") != region_order
+                or type(page) is not int or page < 1
+                or type(region_order) is not int or region_order < 0
+                or type(source_row) is not int or source_row < 1
+            ):
+                return None
+            position = (page, region_order)
+            if position in regions_at_position and regions_at_position[position] != region.id:
+                return None
+            regions_at_position[position] = region.id
+            table = region.table if isinstance(region.table, dict) else {}
+            table_rows = table.get("cells")
+            source_cells = source.get("source_cells")
+            if not isinstance(table_rows, list) or not isinstance(source_cells, list) or not source_cells:
+                return None
+            if any(
+                not isinstance(cell, dict) or cell.get("row") != source_row
+                or cell.get("region_order") != region_order
+                for cell in source_cells
+            ):
+                return None
+            if region.id not in region_rows:
+                indexed: dict[int, list[dict[str, Any]] | None] = {}
+                for row in table_rows:
+                    if not isinstance(row, list) or not row:
+                        continue
+                    if any(not isinstance(cell, dict) or not isinstance(cell.get("source_locator"), dict) for cell in row):
+                        continue
+                    row_number = row[0]["source_locator"].get("row")
+                    if type(row_number) is not int or row_number < 1 or any(
+                        cell["source_locator"].get("row") != row_number for cell in row
+                    ):
+                        continue
+                    expected = [{**cell["source_locator"], "region_order": region_order} for cell in row]
+                    indexed[row_number] = expected if row_number not in indexed else None
+                region_rows[region.id] = indexed
+            if source_cells != region_rows[region.id].get(source_row):
+                return None
+            coordinates[record_id] = (page, region_order, source_row)
+        if len(set(coordinates.values())) != len(rows):
+            return None
+        return sorted(rows, key=lambda item: coordinates[item[0].id])
+
     async def _promote_surveys(
         self,
         document: Document,
@@ -1820,6 +1913,20 @@ class DdrProcessor:
         if not valid_rows:
             return
 
+        ordered_rows = await self._survey_source_order(document, valid_rows)
+        if ordered_rows is None:
+            reason = "survey source row order is missing, conflicting, or ambiguous; queued for human review"
+            for record, _values in valid_rows:
+                report.records_needing_review.append(record.id)
+                report.not_promoted.append(
+                    {"record_id": record.id, "record_type": "survey_station", "reason": reason}
+                )
+            report.warnings.append(
+                f"did not promote {len(valid_rows)} survey station(s) from document {document.id}; "
+                "source row order must be reviewed against the source"
+            )
+            return
+        valid_rows = ordered_rows
         batch_depths = [values["md_si"] for _record, values in valid_rows]
         if len(set(batch_depths)) != len(batch_depths):
             order_issue = "survey batch contains duplicate measured depths"

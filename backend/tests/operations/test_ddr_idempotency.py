@@ -1785,3 +1785,178 @@ async def test_another_tenants_rows_are_not_consulted_when_looking_for_duplicate
         assert all(row["source_document_id"] == document["id"] for row in items)
     counts = await _counts(fabric)
     assert counts == (10, 4)
+
+
+@pytest.mark.parametrize("newline", [b"\n", b"\r\n"], ids=["lf", "crlf"])
+@pytest.mark.parametrize("equal_times", [False, True], ids=["reversed-times", "tied-times"])
+async def test_survey_source_rows_override_opposite_database_creation_order(
+    fabric: Fabric, newline: bytes, equal_times: bool, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Database artifact creation order is not source order or measurement time evidence."""
+    import itertools
+
+    from drillai.db import base as db_base
+
+    original_new_id = db_base.new_id
+    descending_ids = itertools.count(9999, -1)
+
+    def controlled_new_id(prefix: str, **kwargs):
+        if prefix == "rec":
+            return f"rec_synthetic_{next(descending_ids):04d}"
+        return original_new_id(prefix, **kwargs)
+
+    monkeypatch.setattr(db_base, "new_id", controlled_new_id)
+    rows = [
+        b"MD (m),Inclination (deg),Grid Azimuth (deg),Azimuth Reference ID,Vertical Datum,Station Timestamp",
+        b"500,12,180,EPSG:32631,RKB,2026-03-15T12:00:00+02:00",
+        b"600,13,181,EPSG:32631,RKB,",
+    ]
+    document = await _upload_report(
+        fabric, payload=newline.join(rows) + newline, filename="source-order.csv", doc_type="ddr",
+        period_start="2026-03-10T00:00:00+00:00",
+    )
+    async with fabric.session() as session:
+        records = (await session.execute(
+            select(ExtractedRecord).where(
+                ExtractedRecord.document_id == document["id"], ExtractedRecord.record_type == "survey_station"
+            ).order_by(ExtractedRecord.depth_md_si)
+        )).scalars().all()
+        assert len(records) == 2
+        assert records[0].id > records[1].id
+        # Force the lower-depth row to be retrieved later by timestamp or tied-time ID order.
+        records[0].created_at = dt.datetime(2026, 4, 1 if equal_times else 2, tzinfo=dt.UTC)
+        records[1].created_at = dt.datetime(2026, 4, 1, tzinfo=dt.UTC)
+        await session.commit()
+    report = await _process(fabric, document["id"])
+    assert report["counts"]["trajectory_stations"] == 2, report["not_promoted"]
+    async with fabric.session() as session:
+        stations = (await session.execute(
+            select(TrajectoryStation).where(TrajectoryStation.evidence_ref.in_([r.id for r in records]))
+            .order_by(TrajectoryStation.station_index)
+        )).scalars().all()
+    assert [station.md_si for station in stations] == [500.0, 600.0]
+    assert [station.measured_at for station in stations] == [dt.datetime(2026, 3, 15, 10, tzinfo=dt.UTC), None]
+    assert [station.measured_at_provenance for station in stations] == ["source_record", "unknown"]
+    retry = await _process(fabric, document["id"])
+    assert retry["counts"]["trajectory_stations"] == 0
+
+
+@pytest.mark.parametrize("defect", ["missing", "duplicate_coordinate", "missing_row", "forged_row", "forged_cell", "bad_region", "duplicate_link", "duplicate_region_order"])
+async def test_survey_ambiguous_source_coordinates_require_review(fabric: Fabric, defect: str) -> None:
+    from copy import deepcopy
+
+    from drillai.db.models import DocumentRegion, EvidenceLink
+
+    document = await _upload_report(
+        fabric,
+        payload=(b"MD (m),Inclination (deg),Grid Azimuth (deg),Azimuth Reference ID,Vertical Datum\n"
+                 b"500,12,180,EPSG:32631,RKB\n600,13,181,EPSG:32631,RKB\n"),
+        filename="ambiguous-survey.csv", doc_type="ddr",
+    )
+    async with fabric.session() as session:
+        records = (await session.execute(
+            select(ExtractedRecord).where(
+                ExtractedRecord.document_id == document["id"], ExtractedRecord.record_type == "survey_station"
+            ).order_by(ExtractedRecord.depth_md_si)
+        )).scalars().all()
+        links = (await session.execute(
+            select(EvidenceLink).where(
+                EvidenceLink.document_id == document["id"],
+                EvidenceLink.subject_kind == "extracted_record.survey_station",
+                EvidenceLink.subject_id.in_([r.id for r in records]),
+            )
+        )).scalars().all()
+        by_id = {link.subject_id: link for link in links}
+        assert len(records) == len(links) == 2
+        link = by_id[records[1].id]
+        if defect == "missing":
+            await session.delete(link)
+        elif defect == "duplicate_region_order":
+            region = await session.get(DocumentRegion, link.region_id)
+            assert region is not None
+            duplicate = DocumentRegion(
+                org_id=region.org_id, document_id=region.document_id, page_id=region.page_id,
+                page_number=region.page_number, kind=region.kind, order_index=region.order_index,
+                table=deepcopy(region.table),
+            )
+            session.add(duplicate)
+            await session.flush()
+            records[1].region_id = duplicate.id
+            link.region_id = duplicate.id
+            link.evidence_id = duplicate.id
+            locator = deepcopy(link.locator)
+            locator["region_id"] = duplicate.id
+            link.locator = locator
+        elif defect == "duplicate_link":
+            session.add(EvidenceLink(
+                org_id=link.org_id, document_id=link.document_id, region_id=link.region_id,
+                page_number=link.page_number, well_id=link.well_id, subject_kind=link.subject_kind,
+                subject_id=link.subject_id, evidence_kind=link.evidence_kind, evidence_id=link.evidence_id,
+                locator=deepcopy(link.locator),
+            ))
+        else:
+            locator = deepcopy(link.locator)
+            if defect == "duplicate_coordinate":
+                locator["source"] = deepcopy(by_id[records[0].id].locator["source"])
+            elif defect == "missing_row":
+                locator["source"].pop("row")
+            elif defect == "forged_row":
+                locator["source"]["row"] = 9999
+                for cell in locator["source"]["source_cells"]:
+                    cell["row"] = 9999
+            elif defect == "forged_cell":
+                locator["source"]["source_cells"][0]["column"] = 9999
+            elif defect == "bad_region":
+                locator["region_order"] = 9999
+            link.locator = locator
+        await session.commit()
+    report = await _process(fabric, document["id"])
+    assert report["counts"]["trajectory_stations"] == 0
+    assert sum("source row order" in item["reason"] for item in report["not_promoted"]) == 2
+    async with fabric.session() as session:
+        assert not (await session.execute(
+            select(TrajectoryStation).where(TrajectoryStation.evidence_ref.in_([r.id for r in records]))
+        )).scalars().all()
+
+
+@pytest.mark.parametrize("depths,reason", [((600, 500), "not strictly increasing"), ((500, 500), "duplicate measured depths")])
+async def test_survey_invalid_source_depth_order_is_not_repaired_by_sorting(fabric: Fabric, depths, reason) -> None:
+    document = await _upload_report(
+        fabric,
+        payload=("MD (m),Inclination (deg),Grid Azimuth (deg),Azimuth Reference ID,Vertical Datum\n"
+                 + "".join(f"{depth},12,180,EPSG:32631,RKB\n" for depth in depths)).encode(),
+        filename="invalid-survey-order.csv", doc_type="ddr",
+    )
+    report = await _process(fabric, document["id"])
+    assert report["counts"]["trajectory_stations"] == 0
+    assert sum(reason in item["reason"] for item in report["not_promoted"]) == 2
+
+
+async def test_survey_order_across_spreadsheet_pages_with_repeated_row_numbers(fabric: Fabric) -> None:
+    from io import BytesIO
+
+    from openpyxl import Workbook
+
+    workbook = Workbook()
+    workbook.remove(workbook.active)
+    for sheet_name, depth in [("First", 500), ("Second", 600)]:
+        sheet = workbook.create_sheet(sheet_name)
+        sheet.append(["MD (m)", "Inclination (deg)", "Grid Azimuth (deg)", "Azimuth Reference ID", "Vertical Datum"])
+        sheet.append([depth, 12, 180, "EPSG:32631", "RKB"])
+    buffer = BytesIO()
+    workbook.save(buffer)
+    document = await _upload_report(
+        fabric, payload=buffer.getvalue(), filename="multi-page-survey.xlsx",
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", doc_type="ddr",
+    )
+    report = await _process(fabric, document["id"])
+    assert report["counts"]["trajectory_stations"] == 2, report["not_promoted"]
+    async with fabric.session() as session:
+        records = (await session.execute(select(ExtractedRecord).where(
+            ExtractedRecord.document_id == document["id"], ExtractedRecord.record_type == "survey_station"
+        ))).scalars().all()
+        stations = (await session.execute(select(TrajectoryStation).where(
+            TrajectoryStation.evidence_ref.in_([r.id for r in records])
+        ).order_by(TrajectoryStation.station_index))).scalars().all()
+    assert [station.md_si for station in stations] == [500, 600]
+    assert [station.measured_at for station in stations] == [None, None]
