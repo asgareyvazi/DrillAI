@@ -288,6 +288,8 @@ def test_generated_roadmap_detects_registry_version_or_source_drift():
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
+    assert module.source_sha256(b"one\ntwo\n") == module.source_sha256(b"one\r\ntwo\r\n")
+    assert module.source_sha256(b"one\ntwo\n") != module.source_sha256(b"one\nthree\n")
     current = module.ROADMAP.read_text(encoding="utf-8")
     assert module.replace_table(current) == current
     mutated = current.replace("| `drilling.mse` | 1.1.1 |", "| `drilling.mse` | 0.0.0 |")

@@ -16,15 +16,20 @@ BEGIN = '<!-- BEGIN GENERATED ENGINE REGISTRY -->'
 END = '<!-- END GENERATED ENGINE REGISTRY -->'
 
 
+def source_sha256(source: bytes) -> str:
+    """Hash the source with checkout line endings normalized to LF, on Linux and Windows."""
+    return hashlib.sha256(source.replace(b"\r\n", b"\n")).hexdigest()
+
+
 def table() -> str:
     from drillai.engines.registry import load_default_engines
 
-    lines = [BEGIN, '| Key | Version | Registry declaration | Source | Source SHA-256 |',
+    lines = [BEGIN, '| Key | Version | Registry declaration | Source | Source SHA-256 (LF normalized) |',
              '|---|---|---|---|---|']
     for engine in sorted(load_default_engines().all(), key=lambda item: item.spec.key):
         source = Path(inspect.getsourcefile(engine._fn)).resolve()
         path = source.relative_to(ROOT).as_posix()
-        digest = hashlib.sha256(source.read_bytes()).hexdigest()
+        digest = source_sha256(source.read_bytes())
         spec = engine.spec
         lines.append(f'| `{spec.key}` | {spec.version} | {spec.validation_status} | `{path}` | `{digest}` |')
     return '\n'.join([*lines, END])

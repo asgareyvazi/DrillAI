@@ -38,10 +38,10 @@ The latest continuation began at `db29fe22b78cd9af9939e19ff0f44f0c27686e95`. Exp
 
 ### Runtime engine registry (generated declarations)
 
-The following table is generated from the runtime registry and source files by `scripts/verify_engine_roadmap.py`; CI checks for drift. A [full self-declaration snapshot at `85396bc`](mission-reports/AUTONOMOUS-ENGINE-REGISTRY-85396bc.json) records contracts, references and assumptions. Neither table nor snapshot is independent engineering validation. Last completed exact-SHA runs at the mission baseline were [44898691159](https://github.com/asgareyvazi/DrillAI/actions/runs/44898691159) and [44900279810](https://github.com/asgareyvazi/DrillAI/actions/runs/44900279810) on `b6175b6bea858ee5b86f1dac99ed94f41c23756e`; both failed OCR. Later source changes require new exact-SHA evidence. The full independent and historical/future catalogue remains open.
+The following table is generated from the runtime registry and source files by `scripts/verify_engine_roadmap.py`; CI checks for drift. Source SHA-256 normalizes CRLF to LF so checkout line endings do not masquerade as source changes. A [full self-declaration snapshot at `85396bc`](mission-reports/AUTONOMOUS-ENGINE-REGISTRY-85396bc.json) records contracts, references and assumptions. Neither table nor snapshot is independent engineering validation. Last completed exact-SHA runs at the mission baseline were [44898691159](https://github.com/asgareyvazi/DrillAI/actions/runs/44898691159) and [44900279810](https://github.com/asgareyvazi/DrillAI/actions/runs/44900279810) on `b6175b6bea858ee5b86f1dac99ed94f41c23756e`; both failed OCR. Later source changes require new exact-SHA evidence. The full independent and historical/future catalogue remains open.
 
 <!-- BEGIN GENERATED ENGINE REGISTRY -->
-| Key | Version | Registry declaration | Source | Source SHA-256 |
+| Key | Version | Registry declaration | Source | Source SHA-256 (LF normalized) |
 |---|---|---|---|---|
 | `drilling.mse` | 1.1.1 | formula_derived | `backend/src/drillai/engines/mechanics.py` | `9feee5be5f8602d92a0d407188d8eb1aabd7b6218b5cc3a3bdd7a7bbbd4c4b27` |
 | `hydraulics.laminar` | 1.4.0 | formula_derived | `backend/src/drillai/engines/fluids.py` | `8293ff5880b048fd315c91e850554723935e08eaf4e6da952ab7b621efd8e876` |
