@@ -91,7 +91,7 @@ def test_persian_fixture_preserves_iso_dates_and_mixed_ltr_tokens_visually() -> 
     assert f"{ltr_mark}{sample_id}{ltr_mark}" not in rendered
     assert case["ground_truth"].splitlines()[2].endswith(date)
     assert quality._base_report(corpus, corpus_bytes)["runtime"]["fixture_rendering_policy"] == {
-        "version": "cp135-rtl-ltr-isolation-v3",
+        "version": "cp135-rtl-ltr-isolation-basic-layout-v4",
         "rtl_left_to_right_runs": "U+200E-LRM-isolation-for-ISO-dates-only",
     }
 
@@ -122,6 +122,28 @@ def test_critical_field_metric_requires_language_specific_value_under_expected_l
         persian_fields,
         language="fas",
     ) == 2
+
+
+def test_fixture_fonts_use_basic_layout_even_when_raqm_is_available(monkeypatch) -> None:
+    # Fixture strings are already shaped and visually reordered, so Pillow must not apply
+    # another bidi pass. Exercise every layout and both languages, not just the default font.
+    from PIL import ImageFont
+
+    original = ImageFont.truetype
+    seen = []
+
+    def checked_truetype(*args, **kwargs):
+        seen.append(kwargs.get("layout_engine"))
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(ImageFont, "truetype", checked_truetype)
+    corpus, _ = quality._load_corpus()
+    for language in ("eng", "fas"):
+        for layout in quality._SUPPORTED_LAYOUTS:
+            case = next(c for c in corpus["cases"] if c["language"] == language and c["layout"] == layout)
+            assert quality._raster_pdf(case).startswith(b"%PDF-")
+    assert len(seen) >= 16
+    assert all(engine == ImageFont.Layout.BASIC for engine in seen)
 
 
 def test_generated_english_and_persian_pages_are_image_only_and_use_real_pdfium_ingestion() -> None:

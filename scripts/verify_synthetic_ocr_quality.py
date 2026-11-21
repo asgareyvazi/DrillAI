@@ -25,7 +25,7 @@ LAYOUT_POLICY = {
     "reading_order": "text-script-direction-from-ocr-lines",
 }
 FIXTURE_RENDERING_POLICY = {
-    "version": "cp135-rtl-ltr-isolation-v3",
+    "version": "cp135-rtl-ltr-isolation-basic-layout-v4",
     "rtl_left_to_right_runs": "U+200E-LRM-isolation-for-ISO-dates-only",
 }
 LANGUAGE_ROUTING_POLICY = (
@@ -184,7 +184,7 @@ def verify(report_path: Path, corpus_path: Path) -> dict[str, Any]:
         or dataset.get("languages") != languages
         or dataset.get("stratification_dimensions") != dimensions
         or not isinstance(runtime, dict)
-        or runtime.get("adapter_version") != "tesseract-cli-tsv-v7"
+        or runtime.get("adapter_version") != "tesseract-cli-tsv-v8"
         or runtime.get("page_segmentation_mode") != 6
         or runtime.get("language_routing_policy") != LANGUAGE_ROUTING_POLICY
         or runtime.get("layout_policy") != LAYOUT_POLICY

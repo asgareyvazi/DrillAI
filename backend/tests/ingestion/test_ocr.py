@@ -196,6 +196,30 @@ def test_tesseract_tsv_preserves_engine_word_order_and_calculates_line_evidence(
     assert lines[1].bbox == (50, 130, 45, 15)
 
 
+def test_tesseract_tsv_treats_quotes_as_literal_and_preserves_following_lines() -> None:
+    # Actual Tesseract TSV is not CSV-quoted: a leading quote is an ordinary recognized symbol.
+    header = "\t".join(_COLUMNS) + "\n"
+    first = _word(left=10, top=10, width=30, height=10, conf="90", text='"12')
+    second = _word(line=2, left=11, top=30, width=40, height=10, conf="80", text='13"')
+    tsv = (header + "\t".join(first) + "\n" + "\t".join(second) + "\n").encode()
+    lines = parse_tesseract_tsv(tsv)
+    assert [line.text for line in lines] == ['"12', '13"']
+    assert [line.bbox for line in lines] == [(10, 10, 30, 10), (11, 30, 40, 10)]
+    assert [line.confidence for line in lines] == pytest.approx([0.9, 0.8])
+    parsed = parse_bytes(_blank_pdf(), filename="synthetic.pdf", ocr_provider=ContractProvider(lines),
+                         ocr_max_page_pixels=1_000_000)
+    assert parsed.pages[0].text == '"12\n13"'
+    boxes = parsed.pages[0].regions[-1].source_locator["line_boxes"]
+    assert [box["bbox_px"] for box in boxes] == [
+        {"x0": 10, "y0": 10, "x1": 40, "y1": 20},
+        {"x0": 11, "y0": 30, "x1": 51, "y1": 40},
+    ]
+
+    # Ambiguous unescaped tab must not quietly truncate a recognized word.
+    with pytest.raises(OcrUnavailable, match="ambiguous columns"):
+        parse_tesseract_tsv(tsv + ("\t".join(second) + "\textra\n").encode())
+
+
 def test_tesseract_tsv_refuses_oversized_output_and_unknown_headers() -> None:
     with pytest.raises(OcrUnavailable, match="16 MiB"):
         parse_tesseract_tsv(b"x" * (16 * 1024 * 1024 + 1))
@@ -319,7 +343,7 @@ def test_tesseract_cli_adapter_uses_stdin_and_bounds_child_output(tmp_path: Path
         languages="eng,fas", executable=str(script), timeout_seconds=5, max_output_bytes=1024
     )
     assert provider.availability() == (True, None)
-    assert provider.version == "tesseract-cli-tsv-v7; tesseract 5.3.0"
+    assert provider.version == "tesseract-cli-tsv-v8; tesseract 5.3.0"
     lines = provider.recognize(b"png-contract")
     assert len(lines) == 1
     assert lines[0].text == "Drill"
@@ -453,7 +477,7 @@ def test_tesseract_diagnostics_verify_languages_and_capture_runtime_version(monk
     assert diagnostics["available_languages"] == ["eng"]
     assert diagnostics["missing_languages"] == ["fas"]
     assert diagnostics["reason"] == "Tesseract is missing configured language data: fas"
-    assert provider.version == "tesseract-cli-tsv-v7; tesseract 5.4.1"
+    assert provider.version == "tesseract-cli-tsv-v8; tesseract 5.4.1"
 
 
 def test_tesseract_diagnostic_version_rejects_path_or_untrusted_process_text(monkeypatch) -> None:
@@ -522,9 +546,9 @@ def test_tesseract_runtime_diagnostics_are_cached_across_provider_instances(monk
     second = second_provider.diagnostics()
     second["available_languages"].append("tampered")
 
-    assert first_version == "tesseract-cli-tsv-v7; tesseract 5.4.1"
+    assert first_version == "tesseract-cli-tsv-v8; tesseract 5.4.1"
     assert calls == ["--version", "--list-langs"]
-    assert second_provider.version == "tesseract-cli-tsv-v7; tesseract 5.4.1"
+    assert second_provider.version == "tesseract-cli-tsv-v8; tesseract 5.4.1"
     assert first["available_languages"] == ["eng", "fas"]
 
 

@@ -68,7 +68,7 @@ _FIELD_LABELS = {
 }
 _NUMERIC_FIELD_KEYS = {"measured_depth_m", "rop_m_per_h", "mud_weight_ppg", "npt_h"}
 _SYNTHETIC_FIXTURE_RENDERER_POLICY = {
-    "version": "cp135-rtl-ltr-isolation-v3",
+    "version": "cp135-rtl-ltr-isolation-basic-layout-v4",
     "rtl_left_to_right_runs": "U+200E-LRM-isolation-for-ISO-dates-only",
 }
 _ISO_DATE_RE = re.compile(r"(?<![0-9])20[0-9]{2}-[0-9]{2}-[0-9]{2}(?![0-9])")
@@ -308,8 +308,11 @@ def _raster_pdf(case: dict[str, Any]) -> bytes:
     ink = (74, 74, 74) if scan_condition == "low_contrast" else (20, 20, 20)
     image = Image.new("RGB", (1700, 2200), color=background)
     drawing = ImageDraw.Draw(image)
-    regular_path_obj = ImageFont.truetype(str(regular_path), 42)
-    bold_path_obj = ImageFont.truetype(str(bold_path), 50)
+    # Persian fixture text is already shaped and visually reordered by _visual_fixture_text.
+    # Pillow otherwise silently selects RAQM when available and applies bidi a second time,
+    # producing a different (incorrect) source image from the same pinned ground truth.
+    regular_path_obj = ImageFont.truetype(str(regular_path), 42, layout_engine=ImageFont.Layout.BASIC)
+    bold_path_obj = ImageFont.truetype(str(bold_path), 50, layout_engine=ImageFont.Layout.BASIC)
 
     def visual_text(text: str) -> str:
         return _visual_fixture_text(text, language)
@@ -356,7 +359,7 @@ def _raster_pdf(case: dict[str, Any]) -> bytes:
         if language == "fas":
             # Persian labels plus mixed-script values need a narrower type size to remain inside
             # the two independently read columns without colliding with the central gutter.
-            column_font = ImageFont.truetype(str(regular_path), 30)
+            column_font = ImageFont.truetype(str(regular_path), 30, layout_engine=ImageFont.Layout.BASIC)
         for index, line in enumerate(body[:split_at]):
             draw_text(
                 line,
@@ -380,7 +383,7 @@ def _raster_pdf(case: dict[str, Any]) -> bytes:
         font = regular_path_obj
         row_height = 132
         if layout == "compact":
-            font = ImageFont.truetype(str(regular_path), 34)
+            font = ImageFont.truetype(str(regular_path), 34, layout_engine=ImageFont.Layout.BASIC)
             row_height = 108
         for index, line in enumerate(body):
             draw_text(

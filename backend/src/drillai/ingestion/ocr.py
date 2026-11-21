@@ -39,7 +39,7 @@ __all__ = [
 MAX_TSV_BYTES = 16 * 1024 * 1024
 MAX_DIAGNOSTIC_OUTPUT_BYTES = 128 * 1024
 DIAGNOSTIC_TIMEOUT_SECONDS = 3.0
-TESSERACT_ADAPTER_VERSION = "tesseract-cli-tsv-v7"
+TESSERACT_ADAPTER_VERSION = "tesseract-cli-tsv-v8"
 TESSERACT_PAGE_SEGMENTATION_MODE = 6
 TESSERACT_TWO_COLUMN_PAGE_SEGMENTATION_MODE = 11
 TESSERACT_LANGUAGE_ROUTING_POLICY = (
@@ -294,11 +294,18 @@ def parse_tesseract_tsv(data: bytes) -> list[OcrLine]:
         raise OcrUnavailable("Tesseract TSV exceeded the 16 MiB parser limit")
     try:
         text = data.decode("utf-8-sig")
-        reader = csv.DictReader(io.StringIO(text, newline=""), delimiter="\t")
+        # Tesseract GetTSVText writes recognized symbols directly, without CSV quote escaping.
+        # The CSV default would treat a leading literal double quote as an opening quote and
+        # consume subsequent rows into the same text field, corrupting both text and provenance.
+        reader = csv.DictReader(io.StringIO(text, newline=""), delimiter="\t", quoting=csv.QUOTE_NONE)
         if reader.fieldnames is None or not set(_REQUIRED_TSV_COLUMNS).issubset(reader.fieldnames):
             raise OcrUnavailable("Tesseract returned an unrecognised TSV format")
         grouped: dict[tuple[int, int, int, int], list[tuple[str, float, int, int, int, int]]] = {}
         for row in reader:
+            # An unescaped tab makes the word boundary ambiguous. Do not attach a truncated
+            # token to a valid source box or silently omit an ambiguous word.
+            if None in row:
+                raise OcrUnavailable("Tesseract returned a TSV row with ambiguous columns")
             if row.get("level") != "5":
                 continue
             word = (row.get("text") or "").strip()

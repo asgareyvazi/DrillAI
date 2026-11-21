@@ -14,8 +14,8 @@ from drillai.ingestion.ocr import _traineddata_sha256
 
 class StubProvider:
     name = "tesseract"
-    adapter_version = "tesseract-cli-tsv-v7"
-    version = "tesseract-cli-tsv-v7; tesseract 5.4.1"
+    adapter_version = "tesseract-cli-tsv-v8"
+    version = "tesseract-cli-tsv-v8; tesseract 5.4.1"
 
     def __init__(self, **kwargs):
         self.kwargs = kwargs
