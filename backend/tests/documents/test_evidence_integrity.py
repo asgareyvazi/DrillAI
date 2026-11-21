@@ -487,19 +487,23 @@ async def test_document_detail_bounds_nested_summaries_attributes_and_job_text(f
         region = (
             await session.execute(
                 select(DocumentRegion).where(DocumentRegion.document_id == document_id)
+                .order_by(DocumentRegion.page_number, DocumentRegion.id)
             )
         ).scalars().first()
         job = (
             await session.execute(
                 select(IngestionJob).where(IngestionJob.document_id == document_id)
+                .order_by(IngestionJob.created_at.desc(), IngestionJob.id.desc())
             )
         ).scalars().first()
         record = (
             await session.execute(
                 select(ExtractedRecord).where(ExtractedRecord.document_id == document_id)
+                .order_by(ExtractedRecord.id)
             )
         ).scalars().first()
         assert region is not None and job is not None and record is not None
+        region_id, job_id, record_id = region.id, job.id, record.id
         document.extraction_summary = {"large": "s" * 50000}
         region.attributes = {"source_locator": "a" * 20000}
         job.warnings = ["w" * 5000 for _ in range(30)]
@@ -515,6 +519,9 @@ async def test_document_detail_bounds_nested_summaries_attributes_and_job_text(f
     )
     assert response.status_code == 200, response.text
     body = response.json()
+    assert body["regions"][0]["id"] == region_id
+    assert body["ingestion_jobs"][0]["id"] == job_id
+    assert body["records"][0]["id"] == record_id
     assert body["document"]["extraction_summary_truncated"] is True
     assert body["ingestion_jobs"][0]["warnings_truncated"] is True
     assert body["ingestion_jobs"][0]["error_truncated"] is True
