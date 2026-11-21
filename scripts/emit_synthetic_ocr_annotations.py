@@ -86,6 +86,22 @@ def _safe_synthetic_routing(runtime: dict[str, Any]) -> dict[str, dict[str, int]
     return result
 
 
+def _safe_synthetic_label_diagnostics(runtime: dict[str, Any]) -> dict[str, dict[str, int]] | None:
+    raw = runtime.get("synthetic_label_diagnostics")
+    fields = ("evaluated", "labels_anywhere", "labels_prefix", "labels_reversed", "pages_with_bidi_controls")
+    if not isinstance(raw, dict) or set(raw) != {"eng", "fas"}:
+        return None
+    result = {}
+    for language in ("eng", "fas"):
+        row = raw[language]
+        if not isinstance(row, dict) or set(row) != set(fields):
+            return None
+        if any(type(row[field]) is not int or not 0 <= row[field] <= 384 for field in fields):
+            return None
+        result[language] = {field: row[field] for field in fields}
+    return result
+
+
 def _summary(report: dict[str, Any]) -> dict[str, Any]:
     dataset = report.get("dataset") if isinstance(report.get("dataset"), dict) else {}
     metrics = report.get("metrics") if isinstance(report.get("metrics"), dict) else {}
@@ -116,6 +132,9 @@ def _summary(report: dict[str, Any]) -> dict[str, Any]:
     synthetic_routing = _safe_synthetic_routing(runtime)
     if synthetic_routing is not None:
         summary["runtime"]["synthetic_routing"] = synthetic_routing
+    label_diagnostics = _safe_synthetic_label_diagnostics(runtime)
+    if label_diagnostics is not None:
+        summary["runtime"]["synthetic_label_diagnostics"] = label_diagnostics
     strata_summary: dict[str, list[dict[str, Any]]] = {}
     for dimension, rows in stratified.items():
         if not isinstance(rows, list):

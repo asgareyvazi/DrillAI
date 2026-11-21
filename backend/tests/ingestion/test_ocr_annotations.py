@@ -70,3 +70,30 @@ def test_ocr_routing_annotation_is_bounded_and_does_not_echo_untrusted_values() 
     rendered = ocr_annotations.annotations(report)
     assert "synthetic_routing" not in rendered[0]
     assert "SENSITIVE TEXT" not in "\n".join(rendered)
+
+
+def test_synthetic_label_diagnostics_are_count_only_and_reject_untrusted_values() -> None:
+    import json
+
+    from drillai.ingestion.ocr_synthetic_quality import _synthetic_label_diagnostic
+
+    counts = _synthetic_label_diagnostic(
+        "تاریخ گزارش: SECRET-123\nگزارش تاریخ\n\u200f", language="fas"
+    )
+    assert counts == {
+        "labels_anywhere": 1,
+        "labels_prefix": 1,
+        "labels_reversed": 0,
+        "pages_with_bidi_controls": 1,
+    }
+    report = json.loads((Path(__file__).resolve().parents[3] / "docs" / "mission-reports" /
+                         "CONTINUOUS-TESSEROCR-SYNTHETIC-EVIDENCE.json").read_text(encoding="utf-8"))
+    row = {"evaluated": 1, **counts}
+    report["runtime"]["synthetic_label_diagnostics"] = {"eng": row, "fas": row.copy()}
+    output = "\n".join(ocr_annotations.annotations(report))
+    assert "synthetic_label_diagnostics" in output
+    assert "SECRET-123" not in output
+    report["runtime"]["synthetic_label_diagnostics"]["fas"]["labels_prefix"] = "SECRET-123"
+    output = "\n".join(ocr_annotations.annotations(report))
+    assert "synthetic_label_diagnostics" not in output
+    assert "SECRET-123" not in output

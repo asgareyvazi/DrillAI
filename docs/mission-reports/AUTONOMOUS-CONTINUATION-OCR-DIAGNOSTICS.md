@@ -1,0 +1,19 @@
+# Continuation: deployment OCR diagnostic and baseline
+
+**Status: NOT_ACCEPTED.** At starting commit `db29fe22b78cd9af9939e19ff0f44f0c27686e95`, [exact-SHA CI 44879534008](https://github.com/asgareyvazi/DrillAI/actions/runs/44879534008) evaluated all 64 CP135 cases in the deployment image: CER 0.318719372754002, WER 0.4579037800687285, critical exact 191/384; Persian critical exact was 0/192. The overall run failed. The English and Persian corpus remains synthetic and has been used during tuning, not an independent holdout or field evaluation. No acceptance threshold or scorer changed.
+
+## New instrumentation
+
+The existing synthetic benchmark now aggregates, separately for English and Persian, counts of expected fixed labels found anywhere in normalized page text, expected labels found as normalized colon-delimited prefixes, reversed-character label hits, and pages containing bidi control characters. Only numbers are retained; recognized text, expected field values, source images and individual token contents are not emitted. The reversed-character test is merely a heuristic, not proof of a particular RTL failure. Bounded, type-checked counters are exposed in the existing GitHub diagnostic annotations. This can help distinguish absent labels from label-position effects in a future deployment-image run without retaining transcripts. The unchanged score and failure gate remain authoritative. A focused test verifies the counts, annotation safety and rejection of untrusted values; it does not establish OCR accuracy. Diagnostics can be incomplete if processing fails, and their evaluated counts must be consulted.
+
+Inspection of upstream Tesseract 5.5.0 and 5.5.1 `src/api/baseapi.cpp` `GetTSVText` functions and the 5.5.0 TSV renderer did not identify a difference in those functions; the 5.5.4 version of that function was also identical. This narrowly scoped source comparison does not establish whole-runtime equivalence or a root cause. Previous native-library and JavaScript exploratory measurements were not the production CLI path and failed independent acceptance requirements. The present sandbox has neither Docker nor a native Tesseract executable; deployment-image and native Windows measurements require CI. The new instrumentation does not fix Persian OCR.
+
+## Local security and preservation baseline
+
+Starting refs were explicitly fetched; the checkout was shallow. Fetching missing history with `git fetch --unshallow` established the same merge base (`bfa066b28e0071880cb9191a4f1d47fdaa143e04`) and 0 behind / 276 ahead as GitHub's compare API, resolving the earlier apparent contradiction without changing branch contents or main. Four preexisting untracked browser evidence directories and ignored `frontend/node_modules` were preserved. Historical stash object `7f13981f35eebc39fb463f84b487fbfa79d0f54e` remains unavailable; prior deleted retry artifacts were not recovered.
+
+A fresh isolated `npm ci` from the unchanged lockfile installed 379 packages and `npm audit` reported zero vulnerabilities; lock SHA256 `fdaeb5ce24955439439d475b7b932c8c48e3c2ff89e0f222f2ac9e3a84bb3070`. The full local supply-chain/secret verifier passed with 12 pinned actions, 693 scanned workspace files, pip-audit and both npm audit modes. The live GitHub advisory API reports the earlier picomatch advisory withdrawn at 2026-11-18; that external metadata is later than the system mission date, 2026-10-20, and is not a verified present date. Historical red runs remain red. No dependencies or advisories were suppressed.
+
+## Remaining work
+
+Deployment OCR root cause and remediation, an independent controlled holdout, the complete historical/current/future capability catalogue, substantive engineering and end-to-end product phases, and full exact-final-SHA Linux/Windows certification remain open. Software gate success cannot substitute for field validation, vendor interoperability or operational authorization.

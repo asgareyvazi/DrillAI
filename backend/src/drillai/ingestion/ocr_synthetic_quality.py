@@ -259,6 +259,27 @@ def _critical_field_matches(
     return matches
 
 
+def _synthetic_label_diagnostic(actual_text: str, *, language: str) -> dict[str, int]:
+    """Count synthetic label structure, never retain text, field values or individual tokens.
+
+    These are diagnostic counts only; the benchmark's unchanged scorer remains authoritative.
+    A reverse-string hit is a heuristic, not proof of a particular RTL ordering defect.
+    """
+    labels = {normalize_for_scoring(label) for label in _FIELD_LABELS[language].values()}
+    normalized = normalize_for_scoring(actual_text)
+    prefixes = {
+        normalize_for_scoring(line.partition(":")[0])
+        for line in actual_text.splitlines() if ":" in line
+    }
+    bidi_controls = "\u061c\u200e\u200f\u202a\u202b\u202c\u202d\u202e\u2066\u2067\u2068\u2069"
+    return {
+        "labels_anywhere": sum(label in normalized for label in labels),
+        "labels_prefix": len(labels & prefixes),
+        "labels_reversed": sum(label[::-1] in normalized for label in labels),
+        "pages_with_bidi_controls": int(any(character in actual_text for character in bidi_controls)),
+    }
+
+
 def _raster_pdf(case: dict[str, Any]) -> bytes:
     """Create a deterministic, one-page, image-only DDR PDF entirely in memory."""
     try:
@@ -623,6 +644,11 @@ def run_synthetic_quality_benchmark(settings: Settings | None = None) -> dict[st
     total_expected_characters = total_character_errors = 0
     total_expected_words = total_word_errors = 0
     critical_expected = critical_matched = 0
+    label_diagnostics = {
+        language: {"evaluated": 0, "labels_anywhere": 0, "labels_prefix": 0,
+                   "labels_reversed": 0, "pages_with_bidi_controls": 0}
+        for language in sorted(required_languages)
+    }
     sample_exact = 0
     for case in corpus["cases"]:
         case_started = time.perf_counter()
@@ -658,6 +684,10 @@ def run_synthetic_quality_benchmark(settings: Settings | None = None) -> dict[st
                 continue
 
             actual_text = parsed.pages[0].text
+            label_structure = _synthetic_label_diagnostic(actual_text, language=case["language"])
+            label_diagnostics[case["language"]]["evaluated"] += 1
+            for name, count in label_structure.items():
+                label_diagnostics[case["language"]][name] += count
             metrics = error_rates(case["ground_truth"], actual_text)
             critical_fields = case["critical_fields"]
             matched_fields = _critical_field_matches(
@@ -718,6 +748,7 @@ def run_synthetic_quality_benchmark(settings: Settings | None = None) -> dict[st
                 route = "fas_rerun"
         routing[item["language"]][route] += 1
     report["runtime"]["synthetic_routing"] = routing
+    report["runtime"]["synthetic_label_diagnostics"] = label_diagnostics
 
     total_ms = (time.perf_counter() - started_all) * 1000.0
     evaluated = [item for item in measured if item["status"] == "evaluated"]
