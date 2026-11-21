@@ -196,6 +196,10 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Verify generated engine roadmap declarations
+        if: ${{ !cancelled() && steps.linux_backend_install.outcome == 'success' }}
+        run: backend/.venv/bin/python scripts/verify_engine_roadmap.py
+
       - name: Backend lint
         if: ${{ !cancelled() && steps.linux_backend_install.outcome == 'success' }}
         working-directory: backend
@@ -575,6 +579,13 @@ jobs:
         run: |
           .\backend\.venv\Scripts\python.exe scripts/verify_supply_chain_and_secrets.py
           if ($LASTEXITCODE -ne 0) { throw "verify_supply_chain_and_secrets.py failed on Windows" }
+
+      - name: Verify generated engine roadmap declarations (Windows)
+        if: ${{ !cancelled() && steps.windows_bootstrap.outcome == 'success' }}
+        shell: pwsh
+        run: |
+          .\backend\.venv\Scripts\python.exe scripts/verify_engine_roadmap.py
+          if ($LASTEXITCODE -ne 0) { throw "engine roadmap declarations differ from the runtime registry" }
 
       - name: Backend lint (Windows)
         if: ${{ !cancelled() && steps.windows_bootstrap.outcome == 'success' }}

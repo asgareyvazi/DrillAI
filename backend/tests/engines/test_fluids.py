@@ -240,8 +240,12 @@ def test_missing_tfa_disables_bit_metrics_with_a_warning(engines):
 
 
 def test_bit_tvd_fallback_is_flagged(engines):
-    _, result = engines.execute("hydraulics.laminar", _hydraulics_input(bit_tvd_si=None))
-    assert any("bit TVD" in warning for warning in result.warnings)
+    from drillai.core.errors import EngineInputInvalid
+
+    with pytest.raises(EngineInputInvalid):
+        engines.execute("hydraulics.laminar", _hydraulics_input(bit_tvd_si=None))
+    with pytest.raises(EngineInputInvalid):
+        engines.execute("hydraulics.laminar", _hydraulics_input(bit_tvd_si=DEPTH + 1))
 
 
 def test_hydraulic_specific_impact_uses_bit_area(engines):
@@ -352,3 +356,51 @@ def test_bottoms_up_contiguous_multiple_outer_segments_and_partial_depth(engines
     expected = math.pi / 4 * ((.20**2 - .10**2) * 400 + (.216**2 - .10**2) * 300)
     assert result.outputs.bottoms_up_volume_si == pytest.approx(expected, rel=1e-12)
     assert result.outputs.bottoms_up_time_si == pytest.approx(expected / .02, rel=1e-12)
+
+
+@pytest.mark.parametrize("elements,current_depth", [
+    # Full design is incomplete below current depth, despite a calculable clipped bottoms-up interval.
+    ([{"kind": "hole", "from_depth_si": 0, "to_depth_si": 500, "od_si": .216},
+      {"kind": "drillpipe", "from_depth_si": 0, "to_depth_si": 1000, "od_si": .1, "id_si": .08}], 400),
+    # A string without ID was previously reported as zero internal capacity.
+    ([{"kind": "hole", "from_depth_si": 0, "to_depth_si": 1000, "od_si": .216},
+      {"kind": "drillpipe", "from_depth_si": 0, "to_depth_si": 1000, "od_si": .1}], 400),
+    # Two inners active at the same depth are not a single string model.
+    ([{"kind": "hole", "from_depth_si": 0, "to_depth_si": 1000, "od_si": .216},
+      {"kind": "drillpipe", "from_depth_si": 0, "to_depth_si": 1000, "od_si": .1, "id_si": .08},
+      {"kind": "drillpipe", "from_depth_si": 100, "to_depth_si": 300, "od_si": .09, "id_si": .07}], 400),
+    # Absence of string data is not proof of a bare bore.
+    ([{"kind": "hole", "from_depth_si": 0, "to_depth_si": 1000, "od_si": .216}], 400),
+])
+def test_capacity_rejects_full_model_with_unknown_or_ambiguous_geometry(engines, elements, current_depth):
+    from drillai.core.errors import EngineInputInvalid
+
+    with pytest.raises(EngineInputInvalid):
+        engines.execute("wellbore.capacity", {"elements": elements, "current_depth_si": current_depth})
+
+
+def test_capacity_explicit_bare_bore_is_not_inferred(engines):
+    elements = [{"kind": "hole", "from_depth_si": 0, "to_depth_si": 1000, "od_si": .216}]
+    _, result = engines.execute("wellbore.capacity", {
+        "elements": elements, "current_depth_si": 500, "flow_rate_si": .02,
+        "verified_open_bore": True,
+    })
+    assert result.outputs.string_volume_si == 0
+    assert result.outputs.annulus_volume_si == pytest.approx(math.pi / 4 * .216**2 * 1000)
+    assert result.outputs.bottoms_up_volume_si == pytest.approx(math.pi / 4 * .216**2 * 500)
+    assert any("verified open bore" in assumption for assumption in result.assumptions_applied)
+
+
+@pytest.mark.parametrize("elements", [
+    [{"kind": "hole", "from_depth_si": 0, "to_depth_si": 1000, "od_si": .216},
+     {"kind": "drillpipe", "from_depth_si": 0, "to_depth_si": 2000, "od_si": .1, "id_si": .08}],
+    [{"kind": "hole", "from_depth_si": 0, "to_depth_si": 2000, "od_si": .216},
+     {"kind": "drillpipe", "from_depth_si": 0, "to_depth_si": 1000, "od_si": .1, "id_si": .08}],
+    [{"kind": "hole", "from_depth_si": 0, "to_depth_si": 2000, "od_si": .216},
+     {"kind": "drillpipe", "from_depth_si": 0, "to_depth_si": 2000, "od_si": .1}],
+])
+def test_hydraulics_rejects_incomplete_circulation_path(engines, elements):
+    from drillai.core.errors import EngineInputInvalid
+
+    with pytest.raises(EngineInputInvalid):
+        engines.execute("hydraulics.laminar", _hydraulics_input(elements=elements))

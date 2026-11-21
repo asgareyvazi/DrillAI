@@ -55,6 +55,7 @@ HYDRAULICS_ELEMENTS = [
 HYDRAULICS_INPUTS = {
     "elements": HYDRAULICS_ELEMENTS,
     "bit_depth_si": 2400.0,
+    "bit_tvd_si": 2400.0,
     "flow_rate_si": 0.035,
     "mud_weight_si": 1240.0,
     "plastic_viscosity_si": 0.018,

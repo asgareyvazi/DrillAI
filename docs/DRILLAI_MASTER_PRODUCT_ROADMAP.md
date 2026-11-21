@@ -36,26 +36,28 @@ The latest continuation began at `db29fe22b78cd9af9939e19ff0f44f0c27686e95`. Exp
 | Reporting | `drilling/structured_report_exports.py`, `drilling/daily_report_exports.py`, `engineering/exports.py`, `ReportsWorkspace.tsx` | Existing exports must be assessed individually; requested full lifecycle report coverage is incomplete. |
 | Security and operations | `security/`, `.github/workflows/ci.yml`, `scripts/verify_supply_chain_and_secrets.py` | Exact checkpoint CI is red. The later live advisory API reports the historical `picomatch` advisory withdrawn and a fresh full local audit passed; its external metadata dates conflict with the mission clock, and new exact-SHA Linux/Windows checks remain required. See [forensic and audit evidence](mission-reports/AUTONOMOUS-CONTINUATION-FORENSICS-AND-AUDIT.md). External customer, field and vendor acceptance are not measured. |
 
-### Runtime engine registry at baseline
+### Runtime engine registry (generated declarations)
 
-A refreshed [runtime snapshot at `11e6cd2`](mission-reports/AUTONOMOUS-ENGINE-REGISTRY-SNAPSHOT.md) contains 14 self-declared schemas and source hashes; the complete independent and historical/future catalogue remains open. The baseline table below retains its original versions. `formula_derived` refers to the registry's classification, not independent or field validation. Detailed equations, assumptions, independent examples and per-engine source/tests still require the Phase 2 audit. A registry namespace collision fix and its focused evidence are documented in [engine registry assurance](mission-reports/MASTER-MISSION-ENGINE-REGISTRY-ASSURANCE.md). A separate [non-finite execution boundary](mission-reports/CONTINUOUS-ENGINE-NONFINITE-BOUNDARY.md) rejects tested invalid input and output; [MSE 1.1.1 numerical guards](mission-reports/CONTINUOUS-MSE-NUMERICAL-FAIL-CLOSED.md) reject tested underflow and overflow. These changes do not constitute completion of the per-engine audit or field validation. The table below retains baseline versions, rather than claiming a new snapshot was audited.
+The following table is generated from the runtime registry and source files by `scripts/verify_engine_roadmap.py`; CI checks for drift. A [full self-declaration snapshot at `85396bc`](mission-reports/AUTONOMOUS-ENGINE-REGISTRY-85396bc.json) records contracts, references and assumptions. Neither table nor snapshot is independent engineering validation. Last completed exact-SHA runs at the mission baseline were [44898691159](https://github.com/asgareyvazi/DrillAI/actions/runs/44898691159) and [44900279810](https://github.com/asgareyvazi/DrillAI/actions/runs/44900279810) on `b6175b6bea858ee5b86f1dac99ed94f41c23756e`; both failed OCR. Later source changes require new exact-SHA evidence. The full independent and historical/future catalogue remains open.
 
-| Key | Version | Registry status | Source module |
-|---|---|---|---|
-| `drilling.mse` | 1.1.0 | formula_derived | `engines/mechanics.py` |
-| `hydraulics.laminar` | 1.2.0 | formula_derived | `engines/fluids.py` |
-| `integrity.barrier_envelope` | 1.1.0 | formula_derived | `engines/integrity.py` |
-| `offsets.similarity` | 1.1.0 | formula_derived | `engines/offsets.py` |
-| `optimization.pareto` | 1.1.0 | formula_derived | `engines/optimization.py` |
-| `optimization.sweep` | 1.1.0 | formula_derived | `engines/optimization.py` |
-| `readiness.assessment` | 1.1.0 | formula_derived | `engines/readiness.py` |
-| `schematic.well_model` | 1.1.0 | formula_derived | `engines/schematic.py` |
-| `torque_drag.soft_string` | 1.1.0 | formula_derived | `engines/mechanics.py` |
-| `trajectory.minimum_curvature` | 1.3.0 | formula_derived | `engines/trajectory.py` |
-| `tubulars.api_5c3` | 1.1.0 | needs_field_validation | `engines/tubulars.py` |
-| `twin.reconciliation` | 1.2.0 | formula_derived | `engines/twin.py` |
-| `well_control.kill_sheet` | 1.2.0 | needs_field_validation | `engines/wellcontrol.py` |
-| `wellbore.capacity` | 1.1.0 | formula_derived | `engines/fluids.py` |
+<!-- BEGIN GENERATED ENGINE REGISTRY -->
+| Key | Version | Registry declaration | Source | Source SHA-256 |
+|---|---|---|---|---|
+| `drilling.mse` | 1.1.1 | formula_derived | `backend/src/drillai/engines/mechanics.py` | `9feee5be5f8602d92a0d407188d8eb1aabd7b6218b5cc3a3bdd7a7bbbd4c4b27` |
+| `hydraulics.laminar` | 1.4.0 | formula_derived | `backend/src/drillai/engines/fluids.py` | `8293ff5880b048fd315c91e850554723935e08eaf4e6da952ab7b621efd8e876` |
+| `integrity.barrier_envelope` | 1.1.0 | formula_derived | `backend/src/drillai/engines/integrity.py` | `33c8ff117e649ac14a09aec8f10ceb6b25d2b5cdf1ae6396094c2310a0afbf2d` |
+| `offsets.similarity` | 1.1.0 | formula_derived | `backend/src/drillai/engines/offsets.py` | `e64e0d7f57bda6ffd680590d607a5d620d9945f1d455d933033c417474dbd06a` |
+| `optimization.pareto` | 1.1.0 | formula_derived | `backend/src/drillai/engines/optimization.py` | `aacf9a131edcc5e65896dbf82a3ebdb50f14d25baf5daa126c2617c0c76d84e8` |
+| `optimization.sweep` | 1.1.0 | formula_derived | `backend/src/drillai/engines/optimization.py` | `aacf9a131edcc5e65896dbf82a3ebdb50f14d25baf5daa126c2617c0c76d84e8` |
+| `readiness.assessment` | 1.1.0 | formula_derived | `backend/src/drillai/engines/readiness.py` | `25e60115f5ee24361b224b42fe7b332d2cc1d85c53e11c1f97a20e53533e2a8d` |
+| `schematic.well_model` | 1.1.0 | formula_derived | `backend/src/drillai/engines/schematic.py` | `b938f647de4b90ff989762a8565a22b9b6a6c9dd0f647c7e1e6a85260c751200` |
+| `torque_drag.soft_string` | 1.1.0 | formula_derived | `backend/src/drillai/engines/mechanics.py` | `9feee5be5f8602d92a0d407188d8eb1aabd7b6218b5cc3a3bdd7a7bbbd4c4b27` |
+| `trajectory.minimum_curvature` | 1.3.0 | formula_derived | `backend/src/drillai/engines/trajectory.py` | `c6a6fb1063b9d69b87f9d5d284f38eb25b431b6cfe3f5525378727befc2d493c` |
+| `tubulars.api_5c3` | 1.1.0 | needs_field_validation | `backend/src/drillai/engines/tubulars.py` | `3bdc50ef9b0b7044710ea49ffca1d3ad55dbd4759571b96219f9590bb61f5a36` |
+| `twin.reconciliation` | 1.2.0 | formula_derived | `backend/src/drillai/engines/twin.py` | `5c56256b8f813f531e4aa9e1f771679f93e9297f332d3054e00cda56dc464386` |
+| `well_control.kill_sheet` | 1.2.0 | needs_field_validation | `backend/src/drillai/engines/wellcontrol.py` | `00ad181423c078d74c72dac07a870aaecc2be5d7050f7f0993b86c5b6f560dc8` |
+| `wellbore.capacity` | 1.3.0 | formula_derived | `backend/src/drillai/engines/fluids.py` | `8293ff5880b048fd315c91e850554723935e08eaf4e6da952ab7b621efd8e876` |
+<!-- END GENERATED ENGINE REGISTRY -->
 
 ## Ordered mission plan and acceptance
 

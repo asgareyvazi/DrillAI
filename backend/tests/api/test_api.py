@@ -1232,20 +1232,26 @@ async def test_hydraulics_and_capacity_revisions_persist_reference_results_and_r
             expected = 128 * .02 * .02 * 100 / (math.pi * .005**4)
             assert body["result"]["string_pressure_loss_si"] == pytest.approx(expected, rel=1e-9)
             assert body["result"]["regime_validity"] == "non_certified_turbulent_exceedance"
-            assert body["engine_version"] == "1.3.0"
+            assert body["engine_version"] == "1.4.0"
         else:
             expected = math.pi / 4 * (.22**2 - .1**2) * 100
             assert body["result"]["bottoms_up_volume_si"] == pytest.approx(expected, rel=1e-12)
-            assert body["engine_version"] == "1.2.0"
+            assert body["engine_version"] == "1.3.0"
     bad_hyd = await client.post("/api/v1/registry/engines/hydraulics.laminar/run", headers=headers(), json={"well_id": well_id, "inputs": {**hyd, "plastic_viscosity_si": 0}})
     bad_cap = await client.post("/api/v1/registry/engines/wellbore.capacity/run", headers=headers(), json={"well_id": well_id, "inputs": {**capacity, "current_depth_si": 200}})
+    missing_tvd = await client.post("/api/v1/registry/engines/hydraulics.laminar/run", headers=headers(), json={"well_id": well_id, "inputs": {**hyd, "bit_tvd_si": None}})
+    assert missing_tvd.status_code == 422
+    assert missing_tvd.json()["error"]["code"] == "engine.input_invalid"
+    missing_path = await client.post("/api/v1/registry/engines/hydraulics.laminar/run", headers=headers(), json={"well_id": well_id, "inputs": {**hyd, "elements": elements[:1]}})
+    assert missing_path.status_code == 422
+    assert missing_path.json()["error"]["code"] == "engine.input_invalid"
     assert bad_hyd.status_code == bad_cap.status_code == 422
     assert bad_hyd.json()["error"]["code"] == bad_cap.json()["error"]["code"] == "engine.input_invalid"
     readback = await client.get(f"/api/v1/wells/{well_id}/engine-runs", headers=headers())
     assert readback.status_code == 200
     runs = {row["engine_key"]: row for row in readback.json()["items"]}
     assert set(runs) == {"hydraulics.laminar", "wellbore.capacity"}
-    assert runs["hydraulics.laminar"]["engine_version"] == "1.3.0"
+    assert runs["hydraulics.laminar"]["engine_version"] == "1.4.0"
     assert runs["wellbore.capacity"]["outputs"]["bottoms_up_volume_si"] == pytest.approx(expected)
     async with client._transport.app.state.database.session() as session:
         assert (await session.execute(select(func.count()).select_from(EngineRun))).scalar_one() == 2

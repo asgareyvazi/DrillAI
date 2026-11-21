@@ -276,3 +276,23 @@ def test_registry_rejects_nonfinite_output_even_from_finite_inputs(empty_registr
             "drilling.mse",
             {"wob_si": 42000.0, "torque_si": 2650.0, "rpm_si": 96.0, "rop_si": 18.0, "bit_diameter_si": 0.2032},
         )
+
+
+def test_generated_roadmap_detects_registry_version_or_source_drift():
+    """The canonical table is generated, and edited declarations cannot pass the guard."""
+    import importlib.util
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[3]
+    spec = importlib.util.spec_from_file_location("engine_roadmap_guard", root / "scripts/verify_engine_roadmap.py")
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    current = module.ROADMAP.read_text(encoding="utf-8")
+    assert module.replace_table(current) == current
+    mutated = current.replace("| `drilling.mse` | 1.1.1 |", "| `drilling.mse` | 0.0.0 |")
+    assert mutated != current
+    assert module.replace_table(mutated) == current
+    import pytest
+    with pytest.raises(ValueError):
+        module.replace_table(current.replace(module.END, ""))

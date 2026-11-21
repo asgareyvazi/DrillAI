@@ -96,6 +96,10 @@ class CapacityEngineInput(BaseModel):
     current_depth_si: float = quantity_field(0.0, "m", ge=0.0, description="bit depth (MD) for bottoms-up/lag")
     pump: PumpSpec | None = None
     flow_rate_si: float | None = quantity_field(None, "m3/s", gt=0.0)
+    verified_open_bore: bool = Field(
+        default=False,
+        description="Explicitly declare every interval without an inner tubular to be an unoccupied bore; not inferred from absence.",
+    )
 
 
 class IntervalVolumes(BaseModel):
@@ -140,7 +144,7 @@ class HydraulicsEngineInput(BaseModel):
     plastic_viscosity_si: float = quantity_field(..., "Pa.s", gt=0.0, description="PV (Fann 600 − 300 reading)")
     yield_point_si: float = quantity_field(0.0, "Pa.yp", ge=0.0, description="YP (Fann 300 − PV)")
     bit_depth_si: float = quantity_field(..., "m", gt=0.0)
-    bit_tvd_si: float | None = quantity_field(None, "m", gt=0.0, description="true vertical depth of the bit (ECD)")
+    bit_tvd_si: float = quantity_field(..., "m", gt=0.0, description="true vertical depth of the bit (ECD); must not exceed measured depth")
     bit_diameter_si: float | None = quantity_field(None, "m")
     tfa_si: float | None = quantity_field(None, "m2", gt=0.0, description="total flow area")
     nozzle_count: int | None = Field(default=None, ge=1, le=24, description="total number of bit nozzles", json_schema_extra={"unit": "1"})
@@ -211,8 +215,8 @@ _OUTER_KINDS = ("hole", "open_hole", "casing", "liner", "riser")
 def _boundaries(elements: list[TubularElement]) -> list[float]:
     points = {0.0}
     for element in elements:
-        points.add(round(element.from_depth_si, 9))
-        points.add(round(element.to_depth_si, 9))
+        points.add(element.from_depth_si)
+        points.add(element.to_depth_si)
     return sorted(points)
 
 
@@ -288,6 +292,7 @@ def _clip(elements: list[TubularElement], depth_si: float) -> list[TubularElemen
 
 # --------------------------------------------------------------------------- engine 1
 def compute_capacity(inputs: CapacityEngineInput) -> EngineResult:
+    _validate_capacity_geometry(inputs)
     intervals, string_volume, annulus_volume = _volumes(inputs.elements, inputs.flow_rate_si)
     warnings: list[str] = []
     span = _span(inputs.elements)
@@ -317,6 +322,10 @@ def compute_capacity(inputs: CapacityEngineInput) -> EngineResult:
             bottoms_up_time = bottoms_up_volume / inputs.flow_rate_si
         circulation_time = (string_volume + annulus_volume) / inputs.flow_rate_si
 
+    geometry_assumption = (
+        "intervals without a string are explicitly declared verified open bore"
+        if inputs.verified_open_bore else "a declared inner string covers the full model"
+    )
     outputs = CapacityEngineOutput(
         string_capacity_si=(string_volume / span) if span else 0.0,
         annulus_capacity_si=(annulus_volume / span) if span else 0.0,
@@ -332,6 +341,7 @@ def compute_capacity(inputs: CapacityEngineInput) -> EngineResult:
         circulation_time_si=circulation_time,
         intervals=intervals,
         assumptions=[
+            geometry_assumption,
             "volumes from nominal diameters (no tool-joint upset allowance)",
             "annulus = bore² − largest inner tubular OD² per interval",
             "hole enlargement/washout not included",
@@ -339,6 +349,36 @@ def compute_capacity(inputs: CapacityEngineInput) -> EngineResult:
         ],
     )
     return EngineResult(outputs=outputs, warnings=warnings, assumptions_applied=outputs.assumptions)
+
+
+def _validate_capacity_geometry(inputs: CapacityEngineInput, *, engine: str = "wellbore.capacity") -> None:
+    """Require an unambiguous bore and string basis over the whole model, not just to the bit."""
+    depth = max(max(e.to_depth_si for e in inputs.elements), inputs.current_depth_si)
+    boundaries = sorted({0.0, depth, *(p for e in inputs.elements for p in (e.from_depth_si, e.to_depth_si))})
+    for top, bottom in pairwise(boundaries):
+        outers = [e for e in inputs.elements if e.kind in _OUTER_KINDS and e.from_depth_si < bottom and e.to_depth_si > top]
+        inners = [e for e in inputs.elements if e.kind in _INNER_KINDS and e.from_depth_si < bottom and e.to_depth_si > top]
+        details = {"engine": engine, "from_depth_si": top, "to_depth_si": bottom}
+        if not outers or any(_outer_id(e) is None for e in outers):
+            raise EngineInputInvalid("a known bore is required across the full model and current depth", details=details)
+        if len(inners) > 1:
+            raise EngineInputInvalid("overlapping inner tubulars are not supported", details=details)
+        if not inners and not inputs.verified_open_bore:
+            raise EngineInputInvalid("missing inner geometry is unknown; explicitly declare a verified open bore if unoccupied", details=details)
+        if inners and inners[0].id_si is None:
+            raise EngineInputInvalid("a declared inner tubular requires an internal diameter", details=details)
+        # The smallest known bore is the active annulus. Duplicate holes are ambiguous; nested
+        # tubular conduits must fit into the next surrounding bore rather than silently overlap.
+        if sum(e.kind in ("hole", "open_hole") for e in outers) > 1:
+            raise EngineInputInvalid("overlapping hole segments are ambiguous", details=details)
+        outer_by_bore = sorted(outers, key=lambda e: _outer_id(e) or 0.0)
+        for inner_outer, outer_outer in pairwise(outer_by_bore):
+            outer_bore = _outer_id(outer_outer)
+            if outer_bore is None or inner_outer.od_si > outer_bore:
+                raise EngineInputInvalid("nested outer tubulars do not fit inside their enclosing bore", details=details)
+        bore = _outer_id(outer_by_bore[0])
+        if bore is None or (inners and inners[0].od_si >= bore):
+            raise EngineInputInvalid("inner tubular must fit inside the bore", details=details)
 
 
 def _annulus_volume_below(elements: list[TubularElement], depth_si: float) -> tuple[list[IntervalVolumes], float]:
@@ -457,9 +497,16 @@ def compute_hydraulics(inputs: HydraulicsEngineInput) -> EngineResult:
     bit_diameter = inputs.bit_diameter_si or _deepest_hole_diameter(inputs.elements, inputs.bit_depth_si)
     if bit_diameter is None:
         raise ValueError("bit diameter not supplied and no hole element is present in the geometry")
-    bit_tvd = inputs.bit_tvd_si or inputs.bit_depth_si
-    if inputs.bit_tvd_si is None:
-        warnings.append("bit TVD not supplied: ECD is referenced to MD and will be optimistic in inclined hole")
+    bit_tvd = inputs.bit_tvd_si
+    if bit_tvd > inputs.bit_depth_si:
+        raise EngineInputInvalid("bit TVD cannot exceed bit measured depth", details={"engine": "hydraulics.laminar"})
+    clipped = _clip(inputs.elements, inputs.bit_depth_si)
+    if not clipped:
+        raise EngineInputInvalid("circulation path is missing", details={"engine": "hydraulics.laminar"})
+    _validate_capacity_geometry(
+        CapacityEngineInput(elements=clipped, current_depth_si=inputs.bit_depth_si),
+        engine="hydraulics.laminar",
+    )
 
     stages: list[HydraulicsStage] = []
     string_loss = annulus_loss = 0.0
@@ -688,7 +735,7 @@ def compute_hydraulics(inputs: HydraulicsEngineInput) -> EngineResult:
             "annulus represented by the slot approximation with mean circumference",
             "bit modelled as an orifice with a declared discharge coefficient",
             "no surface line losses, no tool-joint upsets, no eccentricity",
-            "ECD referenced to the supplied bit TVD (MD fallback is flagged)",
+            "ECD referenced to the supplied bit TVD; no MD fallback",
             "cuttings settling uses a drag-balance settling velocity for the nominal cutting size",
         ],
     )
@@ -748,7 +795,7 @@ def _cuttings_concentration(
 CAPACITY_SPEC = EngineSpec(
     key="wellbore.capacity",
     name="Wellbore capacity, strokes and bottoms-up",
-    version="1.2.0",
+    version="1.3.0",
     domain_pack="Hydraulics Pack",
     category="hydraulics",
     summary="String and annulus volumes, pump strokes, bottoms-up volume/strokes/time and circulation time.",
@@ -758,7 +805,7 @@ CAPACITY_SPEC = EngineSpec(
     produces=("wellbore.volumes", "hydraulics.profile"),
     parameters={"annulus_model": {"value": "concentric_largest_od", "description": "annulus simplification"}},
     assumptions=("nominal diameters, no tool-joint allowance", "largest inner tubular OD per interval"),
-    limitations=("no eccentricity or washout", "does not resolve multiple nested strings beyond the largest OD", "full-model volumes may be incomplete if geometry is missing outside the bottoms-up interval"),
+    limitations=("no eccentricity or washout", "does not resolve multiple nested strings beyond the largest OD", "unoccupied intervals require an explicit user declaration, not independent verification"),
     references=("standard volumetric capacity relations", "API RP 13D (context)"),
     tags=("hydraulics", "volumes", "operations"),
     validation_status="formula_derived",
@@ -768,7 +815,7 @@ CAPACITY_SPEC = EngineSpec(
 HYDRAULICS_SPEC = EngineSpec(
     key="hydraulics.laminar",
     name="Circulation hydraulics (laminar Bingham plastic)",
-    version="1.3.0",
+    version="1.4.0",
     domain_pack="Hydraulics Pack",
     category="hydraulics",
     summary=(
