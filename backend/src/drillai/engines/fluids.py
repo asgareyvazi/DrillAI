@@ -37,10 +37,12 @@ is violated. That is what a defensible hydraulics result must do.
 from __future__ import annotations
 
 import math
+from itertools import pairwise
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from drillai.core.errors import EngineConvergenceError, EngineInputInvalid
 from drillai.engines.contract import ConstraintViolation, EngineResult, EngineSpec, FunctionEngine
 from drillai.engines.registry import register_engine
 from drillai.units.registry import quantity_field
@@ -135,7 +137,7 @@ class HydraulicsEngineInput(BaseModel):
     elements: list[TubularElement] = Field(min_length=1)
     flow_rate_si: float = quantity_field(..., "m3/s", gt=0.0)
     mud_weight_si: float = quantity_field(..., "kg/m3", gt=0.0)
-    plastic_viscosity_si: float = quantity_field(0.0, "Pa.s", ge=0.0, description="PV (Fann 600 − 300 reading)")
+    plastic_viscosity_si: float = quantity_field(..., "Pa.s", gt=0.0, description="PV (Fann 600 − 300 reading)")
     yield_point_si: float = quantity_field(0.0, "Pa.yp", ge=0.0, description="YP (Fann 300 − PV)")
     bit_depth_si: float = quantity_field(..., "m", gt=0.0)
     bit_tvd_si: float | None = quantity_field(None, "m", gt=0.0, description="true vertical depth of the bit (ECD)")
@@ -341,8 +343,17 @@ def compute_capacity(inputs: CapacityEngineInput) -> EngineResult:
 
 def _annulus_volume_below(elements: list[TubularElement], depth_si: float) -> tuple[list[IntervalVolumes], float]:
     clipped = _clip(elements, depth_si)
-    if not clipped:
-        return [], 0.0
+    # _intervals stops at the deepest supplied segment; include the requested bit depth so a
+    # missing bottom segment cannot silently become a shorter bottoms-up calculation.
+    boundaries = sorted({0.0, depth_si, *(p for e in clipped for p in (e.from_depth_si, e.to_depth_si))})
+    for top, bottom in pairwise(boundaries):
+        outers = [e for e in clipped if e.kind in _OUTER_KINDS and e.from_depth_si < bottom and e.to_depth_si > top]
+        inners = [e for e in clipped if e.kind in _INNER_KINDS and e.from_depth_si < bottom and e.to_depth_si > top]
+        if not outers or any(_outer_id(e) is None for e in outers):
+            raise EngineInputInvalid("bottoms-up requires a known bore over the entire surface-to-bit interval", details={"engine": "wellbore.capacity", "from_depth_si": top, "to_depth_si": bottom})
+        bore = min(_outer_id(e) for e in outers)  # type: ignore[type-var]
+        if inners and max(e.od_si for e in inners) >= bore:
+            raise EngineInputInvalid("inner tubular must fit inside the bore", details={"engine": "wellbore.capacity", "from_depth_si": top, "to_depth_si": bottom})
     intervals, _, annulus = _volumes(clipped, None)
     return intervals, annulus
 
@@ -357,23 +368,60 @@ def _bingham_pipe_flow_rate(dpdl: float, diameter: float, mu_p: float, tau_y: fl
         return 0.0
     x = tau_y / tau_w
     newtonian = math.pi * diameter**4 * dpdl / (128.0 * mu_p)
-    return newtonian * (1.0 - (4.0 / 3.0) * x + (1.0 / 3.0) * x**4)
+    return newtonian * (1.0 - x)**2 * (x*x + 2*x + 3) / 3.0
 
 
-def _bingham_pipe_dpdl(flow_rate: float, diameter: float, mu_p: float, tau_y: float) -> float:
-    """Solve the implicit Bingham-plastic pipe equation for dP/dL by bisection."""
-    if flow_rate <= 0:
-        return 0.0
-    if mu_p <= 0:
-        mu_p = 1e-4
-    low, high = 1e-6, 1e7
-    for _ in range(200):
-        mid = 0.5 * (low + high)
-        if _bingham_pipe_flow_rate(mid, diameter, mu_p, tau_y) < flow_rate:
+def _solve_gradient(flow_rate: float, flow_at_gradient, stage: str) -> float:
+    """Bracket on both sides before bisection; fail closed if floating point cannot solve it."""
+    def evaluate(gradient: float) -> float:
+        try:
+            value = flow_at_gradient(gradient)
+        except (OverflowError, ZeroDivisionError) as exc:
+            raise EngineConvergenceError("hydraulics gradient is numerically unrepresentable", details={"engine": "hydraulics.laminar", "stage": stage}) from exc
+        if not math.isfinite(value) or value < 0:
+            raise EngineConvergenceError("hydraulics gradient is numerically unrepresentable", details={"engine": "hydraulics.laminar", "stage": stage})
+        return value
+
+    low, high = 0.0, 1.0
+    if evaluate(high) < flow_rate:
+        for _ in range(1075):
+            low = high
+            high *= 2.0
+            if not math.isfinite(high):
+                break
+            if evaluate(high) >= flow_rate:
+                break
+        else:
+            high = float("inf")
+        if not math.isfinite(high) or evaluate(high) < flow_rate:
+            raise EngineConvergenceError("hydraulics gradient could not be bracketed", details={"engine": "hydraulics.laminar", "stage": stage})
+    else:
+        for _ in range(1075):
+            candidate = high / 2.0
+            if candidate == 0.0 or evaluate(candidate) < flow_rate:
+                low = candidate
+                break
+            high = candidate
+        else:
+            raise EngineConvergenceError("hydraulics gradient could not be bracketed", details={"engine": "hydraulics.laminar", "stage": stage})
+
+    for _ in range(100):
+        mid = low + (high - low) / 2.0
+        if mid in (low, high):
+            break
+        if evaluate(mid) < flow_rate:
             low = mid
         else:
             high = mid
-    return 0.5 * (low + high)
+    result = low + (high - low) / 2.0
+    actual = evaluate(result)
+    if result <= 0 or abs(actual / flow_rate - 1.0) > 1e-9:
+        raise EngineConvergenceError("hydraulics gradient did not converge", details={"engine": "hydraulics.laminar", "stage": stage})
+    return result
+
+
+def _bingham_pipe_dpdl(flow_rate: float, diameter: float, mu_p: float, tau_y: float) -> float:
+    return _solve_gradient(flow_rate, lambda gradient: _bingham_pipe_flow_rate(gradient, diameter, mu_p, tau_y), "pipe")
 
 
 def _bingham_slot_flow_rate(dpdl: float, gap: float, width: float, mu_p: float, tau_y: float) -> float:
@@ -384,22 +432,11 @@ def _bingham_slot_flow_rate(dpdl: float, gap: float, width: float, mu_p: float, 
     if shear_ratio >= 1.0:
         return 0.0
     newtonian = width * gap**3 * dpdl / (12.0 * mu_p)
-    return newtonian * (1.0 - 1.5 * shear_ratio + 0.5 * shear_ratio**3)
+    return newtonian * (1.0 - shear_ratio)**2 * (shear_ratio + 2.0) / 2.0
 
 
 def _bingham_slot_dpdl(flow_rate: float, gap: float, width: float, mu_p: float, tau_y: float) -> float:
-    if flow_rate <= 0:
-        return 0.0
-    if mu_p <= 0:
-        mu_p = 1e-4
-    low, high = 1e-6, 1e7
-    for _ in range(200):
-        mid = 0.5 * (low + high)
-        if _bingham_slot_flow_rate(mid, gap, width, mu_p, tau_y) < flow_rate:
-            low = mid
-        else:
-            high = mid
-    return 0.5 * (low + high)
+    return _solve_gradient(flow_rate, lambda gradient: _bingham_slot_flow_rate(gradient, gap, width, mu_p, tau_y), "annulus")
 
 
 def _reynolds(velocity: float, hydraulic_diameter: float, density: float, mu_p: float) -> float:
@@ -414,7 +451,7 @@ def compute_hydraulics(inputs: HydraulicsEngineInput) -> EngineResult:
     turbulent_intervals: list[str] = []
 
     flow = inputs.flow_rate_si
-    mu_p = max(inputs.plastic_viscosity_si, 1e-6)
+    mu_p = inputs.plastic_viscosity_si
     tau_y = inputs.yield_point_si
 
     bit_diameter = inputs.bit_diameter_si or _deepest_hole_diameter(inputs.elements, inputs.bit_depth_si)
@@ -711,7 +748,7 @@ def _cuttings_concentration(
 CAPACITY_SPEC = EngineSpec(
     key="wellbore.capacity",
     name="Wellbore capacity, strokes and bottoms-up",
-    version="1.1.0",
+    version="1.2.0",
     domain_pack="Hydraulics Pack",
     category="hydraulics",
     summary="String and annulus volumes, pump strokes, bottoms-up volume/strokes/time and circulation time.",
@@ -721,7 +758,7 @@ CAPACITY_SPEC = EngineSpec(
     produces=("wellbore.volumes", "hydraulics.profile"),
     parameters={"annulus_model": {"value": "concentric_largest_od", "description": "annulus simplification"}},
     assumptions=("nominal diameters, no tool-joint allowance", "largest inner tubular OD per interval"),
-    limitations=("no eccentricity or washout", "does not resolve multiple nested strings beyond the largest OD"),
+    limitations=("no eccentricity or washout", "does not resolve multiple nested strings beyond the largest OD", "full-model volumes may be incomplete if geometry is missing outside the bottoms-up interval"),
     references=("standard volumetric capacity relations", "API RP 13D (context)"),
     tags=("hydraulics", "volumes", "operations"),
     validation_status="formula_derived",
@@ -731,7 +768,7 @@ CAPACITY_SPEC = EngineSpec(
 HYDRAULICS_SPEC = EngineSpec(
     key="hydraulics.laminar",
     name="Circulation hydraulics (laminar Bingham plastic)",
-    version="1.2.0",
+    version="1.3.0",
     domain_pack="Hydraulics Pack",
     category="hydraulics",
     summary=(

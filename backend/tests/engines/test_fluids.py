@@ -263,3 +263,92 @@ def test_low_annular_velocity_triggers_hole_cleaning_warning(engines):
     """Halving the hole size with the same flow must raise velocity; shrinking flow must warn."""
     _, result = engines.execute("hydraulics.laminar", _hydraulics_input(flow_rate_si=0.004, rop_si=30.0))
     assert any(violation.name == "hole_cleaning_transport_ratio" for violation in result.violations)
+
+
+def test_hydraulics_high_gradient_newtonian_solution_is_not_silently_capped(engines):
+    """The exact closed form exceeds the previous fixed 10 MPa/m search bound."""
+    elements = [
+        {"kind": "hole", "from_depth_si": 0.0, "to_depth_si": 100.0, "od_si": 0.22},
+        {"kind": "drillpipe", "from_depth_si": 0.0, "to_depth_si": 100.0, "od_si": 0.1, "id_si": 0.005},
+    ]
+    _, result = engines.execute("hydraulics.laminar", _hydraulics_input(
+        elements=elements, bit_depth_si=100.0, bit_tvd_si=100.0,
+        yield_point_si=0.0, tfa_si=None, nozzle_count=None,
+    ))
+    expected_gradient = 128 * PV * FLOW / (math.pi * 0.005**4)
+    assert expected_gradient > 1e7
+    assert result.outputs.string_pressure_loss_si / 100 == pytest.approx(expected_gradient, rel=1e-9)
+    assert result.outputs.regime_validity == "non_certified_turbulent_exceedance"
+
+
+def test_hydraulics_requires_positive_explicit_plastic_viscosity(engines):
+    from drillai.core.errors import EngineInputInvalid
+
+    for value in (0.0, -1.0):
+        with pytest.raises(EngineInputInvalid):
+            engines.execute("hydraulics.laminar", _hydraulics_input(plastic_viscosity_si=value))
+    missing = _hydraulics_input()
+    del missing["plastic_viscosity_si"]
+    with pytest.raises(EngineInputInvalid):
+        engines.execute("hydraulics.laminar", missing)
+
+
+@pytest.mark.parametrize("geometry", [
+    # A bottom segment is missing, or there is an internal gap.
+    [{"kind": "hole", "from_depth_si": 0, "to_depth_si": 500, "od_si": .216}],
+    [{"kind": "hole", "from_depth_si": 0, "to_depth_si": 200, "od_si": .216},
+     {"kind": "hole", "from_depth_si": 300, "to_depth_si": 1000, "od_si": .216}],
+    # A casing without its bore ID or a drillstring larger than the bore is not a known annulus.
+    [{"kind": "casing", "from_depth_si": 0, "to_depth_si": 1000, "od_si": .216}],
+    [{"kind": "hole", "from_depth_si": 0, "to_depth_si": 1000, "od_si": .10},
+     {"kind": "drillpipe", "from_depth_si": 0, "to_depth_si": 1000, "od_si": .127, "id_si": .10}],
+])
+def test_bottoms_up_refuses_unknown_or_impossible_geometry(engines, geometry):
+    from drillai.core.errors import EngineInputInvalid
+
+    with pytest.raises(EngineInputInvalid):
+        engines.execute("wellbore.capacity", {
+            "elements": geometry, "current_depth_si": 1000.0, "flow_rate_si": .02,
+        })
+
+
+@pytest.mark.parametrize("flow", [1e-20, 0.02])
+def test_bingham_solvers_expand_both_bounds_and_obey_independent_relations(flow):
+    from drillai.engines.fluids import _bingham_pipe_dpdl, _bingham_slot_dpdl
+
+    # No yield stress permits an independent exact Newtonian check even in the small-flow limit.
+    diameter, gap, width, mu = .005, .0001, .4, .02
+    pipe = _bingham_pipe_dpdl(flow, diameter, mu, 0)
+    slot = _bingham_slot_dpdl(flow, gap, width, mu, 0)
+    assert pipe == pytest.approx(128 * mu * flow / (math.pi * diameter**4), rel=1e-9)
+    assert slot == pytest.approx(12 * mu * flow / (width * gap**3), rel=1e-9)
+    # Extremely small flows near the yield threshold may be unresolvable in float64.
+    # Check the nonzero-yield branch independently at the larger flow.
+    if flow < 1e-10:
+        return
+    pipe = _bingham_pipe_dpdl(flow, diameter, mu, 4.0)
+    slot = _bingham_slot_dpdl(flow, gap, width, mu, 4.0)
+    assert _bingham_pipe_flow_rate(pipe, diameter, mu, 4.0) == pytest.approx(flow, rel=2e-5)
+    assert _bingham_slot_flow_rate(slot, gap, width, mu, 4.0) == pytest.approx(flow, rel=2e-5)
+
+
+def test_bingham_solver_unrepresentable_flow_fails_closed():
+    from drillai.core.errors import EngineConvergenceError
+    from drillai.engines.fluids import _bingham_pipe_dpdl
+
+    with pytest.raises(EngineConvergenceError):
+        _bingham_pipe_dpdl(0.02, 1e-200, 0.02, 0.0)
+
+
+def test_bottoms_up_contiguous_multiple_outer_segments_and_partial_depth(engines):
+    elements = [
+        {"kind": "casing", "from_depth_si": 0, "to_depth_si": 400, "od_si": .25, "id_si": .20},
+        {"kind": "hole", "from_depth_si": 400, "to_depth_si": 1000, "od_si": .216},
+        {"kind": "drillpipe", "from_depth_si": 0, "to_depth_si": 1000, "od_si": .10, "id_si": .08},
+    ]
+    _, result = engines.execute("wellbore.capacity", {
+        "elements": elements, "current_depth_si": 700, "flow_rate_si": .02,
+    })
+    expected = math.pi / 4 * ((.20**2 - .10**2) * 400 + (.216**2 - .10**2) * 300)
+    assert result.outputs.bottoms_up_volume_si == pytest.approx(expected, rel=1e-12)
+    assert result.outputs.bottoms_up_time_si == pytest.approx(expected / .02, rel=1e-12)

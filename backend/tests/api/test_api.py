@@ -1204,3 +1204,48 @@ async def test_engine_api_rejects_mse_numerical_exception_and_underflow_without_
     async with client._transport.app.state.database.session() as session:
         count = (await session.execute(select(func.count()).select_from(EngineRun))).scalar_one()
     assert count == 0
+
+
+async def test_hydraulics_and_capacity_revisions_persist_reference_results_and_reject_unknowns(client):
+    """Public API, audit readback, and failure paths use the same versioned calculations as the UI."""
+    import math
+
+    from sqlalchemy import func, select
+
+    from drillai.db.models import EngineRun
+
+    _, well_id = await _create_project_and_well(client)
+    elements = [
+        {"kind": "hole", "from_depth_si": 0, "to_depth_si": 100, "od_si": .22},
+        {"kind": "drillpipe", "from_depth_si": 0, "to_depth_si": 100, "od_si": .1, "id_si": .005},
+    ]
+    hyd = {"elements": elements, "flow_rate_si": .02, "mud_weight_si": 1200,
+           "plastic_viscosity_si": .02, "yield_point_si": 0, "bit_depth_si": 100,
+           "bit_tvd_si": 100, "bit_diameter_si": .22}
+    capacity = {"elements": elements, "current_depth_si": 100, "flow_rate_si": .02}
+    for key, inputs in (("hydraulics.laminar", hyd), ("wellbore.capacity", capacity)):
+        response = await client.post(f"/api/v1/registry/engines/{key}/run", headers=headers(), json={"well_id": well_id, "inputs": inputs})
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["engine_run_id"] and body["inputs_hash"] and body["outputs_hash"]
+        if key == "hydraulics.laminar":
+            expected = 128 * .02 * .02 * 100 / (math.pi * .005**4)
+            assert body["result"]["string_pressure_loss_si"] == pytest.approx(expected, rel=1e-9)
+            assert body["result"]["regime_validity"] == "non_certified_turbulent_exceedance"
+            assert body["engine_version"] == "1.3.0"
+        else:
+            expected = math.pi / 4 * (.22**2 - .1**2) * 100
+            assert body["result"]["bottoms_up_volume_si"] == pytest.approx(expected, rel=1e-12)
+            assert body["engine_version"] == "1.2.0"
+    bad_hyd = await client.post("/api/v1/registry/engines/hydraulics.laminar/run", headers=headers(), json={"well_id": well_id, "inputs": {**hyd, "plastic_viscosity_si": 0}})
+    bad_cap = await client.post("/api/v1/registry/engines/wellbore.capacity/run", headers=headers(), json={"well_id": well_id, "inputs": {**capacity, "current_depth_si": 200}})
+    assert bad_hyd.status_code == bad_cap.status_code == 422
+    assert bad_hyd.json()["error"]["code"] == bad_cap.json()["error"]["code"] == "engine.input_invalid"
+    readback = await client.get(f"/api/v1/wells/{well_id}/engine-runs", headers=headers())
+    assert readback.status_code == 200
+    runs = {row["engine_key"]: row for row in readback.json()["items"]}
+    assert set(runs) == {"hydraulics.laminar", "wellbore.capacity"}
+    assert runs["hydraulics.laminar"]["engine_version"] == "1.3.0"
+    assert runs["wellbore.capacity"]["outputs"]["bottoms_up_volume_si"] == pytest.approx(expected)
+    async with client._transport.app.state.database.session() as session:
+        assert (await session.execute(select(func.count()).select_from(EngineRun))).scalar_one() == 2
