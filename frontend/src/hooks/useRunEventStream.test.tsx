@@ -181,6 +181,11 @@ function setup(options: {
         />,
       )
     },
+    /** A REST reconciliation advanced the same run without changing its identity. */
+    rerenderEvents: (events: RunEvent[]) => {
+      queryClient.setQueryData<RunDetail>(['run', currentRunId], (previous) => previous && { ...previous, events })
+      view.rerender(<Harness {...renderProps} restEvents={events} onHandle={(next) => (handle = next)} />)
+    },
     /** The same screen after REST reported a different run status — a reconciliation, not a remount. */
     rerenderStatus: (status: string) => view.rerender(<Harness {...renderProps} status={status} onHandle={(next) => (handle = next)} />),
     events: () => queryClient.getQueryData<RunDetail>(['run', currentRunId])?.events ?? [],
@@ -211,6 +216,19 @@ describe('useRunEventStream: REST is the base, the socket is the increment', () 
     const h = setup({ restEvents: [event(1), event(2), event(3)] })
     await waitFor(() => expect(h.sockets).toHaveLength(1))
     expect(h.sockets[0]?.url).toContain('after_seq=3')
+    h.unmount()
+  })
+
+  it('keeps one socket when REST advances the cursor for the same run', async () => {
+    const h = setup({ restEvents: [event(1)] })
+    await waitFor(() => expect(h.sockets).toHaveLength(1))
+    h.server.open('running', 1)
+    h.rerenderEvents([event(1), event(2)])
+    expect(h.sockets).toHaveLength(1)
+    expect(h.sockets[0]?.closed).toBe(false)
+    h.server.push(2) // already included in REST, so it must not be added again
+    h.server.push(3)
+    await waitFor(() => expect(h.events().map((row) => row.seq)).toEqual([1, 2, 3]))
     h.unmount()
   })
 
