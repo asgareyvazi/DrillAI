@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 
 MAX_ANNOTATION_BYTES = 3800
-MAX_NOTICES = 9
+MAX_NOTICES = 10
 CASE_FIELDS = (
     "id",
     "language",
@@ -132,9 +132,6 @@ def _summary(report: dict[str, Any]) -> dict[str, Any]:
     synthetic_routing = _safe_synthetic_routing(runtime)
     if synthetic_routing is not None:
         summary["runtime"]["synthetic_routing"] = synthetic_routing
-    label_diagnostics = _safe_synthetic_label_diagnostics(runtime)
-    if label_diagnostics is not None:
-        summary["runtime"]["synthetic_label_diagnostics"] = label_diagnostics
     strata_summary: dict[str, list[dict[str, Any]]] = {}
     for dimension, rows in stratified.items():
         if not isinstance(rows, list):
@@ -186,6 +183,10 @@ def annotations(report: dict[str, Any]) -> list[str]:
         notices.append(f"::notice title={title}::{_escape_command(encoded.decode('utf-8'))}")
 
     emit("CP135 OCR runtime, global and stratified metrics", _summary(report))
+    runtime = report.get("runtime") if isinstance(report.get("runtime"), dict) else {}
+    label_diagnostics = _safe_synthetic_label_diagnostics(runtime)
+    if label_diagnostics is not None:
+        emit("CP135 OCR synthetic label diagnostics", {"synthetic_label_diagnostics": label_diagnostics})
     cases = report.get("cases")
     if isinstance(cases, list):
         for first, last, rows in _case_batches(cases):

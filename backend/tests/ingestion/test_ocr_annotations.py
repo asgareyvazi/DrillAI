@@ -90,7 +90,14 @@ def test_synthetic_label_diagnostics_are_count_only_and_reject_untrusted_values(
                          "CONTINUOUS-TESSEROCR-SYNTHETIC-EVIDENCE.json").read_text(encoding="utf-8"))
     row = {"evaluated": 1, **counts}
     report["runtime"]["synthetic_label_diagnostics"] = {"eng": row, "fas": row.copy()}
-    output = "\n".join(ocr_annotations.annotations(report))
+    report["runtime"]["synthetic_routing"] = {
+        "eng": {"combined_only": 32, "fas_rerun": 0, "unknown": 0},
+        "fas": {"combined_only": 0, "fas_rerun": 32, "unknown": 0},
+    }
+    notices = ocr_annotations.annotations(report)
+    assert len(notices) <= ocr_annotations.MAX_NOTICES
+    assert all(len(item.encode("utf-8")) <= ocr_annotations.MAX_ANNOTATION_BYTES + 200 for item in notices)
+    output = "\n".join(notices)
     assert "synthetic_label_diagnostics" in output
     assert "SECRET-123" not in output
     report["runtime"]["synthetic_label_diagnostics"]["fas"]["labels_prefix"] = "SECRET-123"
