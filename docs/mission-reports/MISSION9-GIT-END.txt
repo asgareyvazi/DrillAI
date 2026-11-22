@@ -1,0 +1,60 @@
+### Pre-evidence-commit snapshot; final checkout and refs are recorded by CI artifact
+
+### git rev-parse --show-toplevel
+/home/user/DrillAI
+
+### git branch --show-current
+arena/9d8f5568-drillai
+
+### git rev-parse HEAD
+7af6ce562163fde01e409ca056126592cfd5b4ae
+
+### git status --porcelain=v2 --untracked-files=all
+1 M. N... 100644 100644 100644 878e208b92c05589f87323af01a9d4c233a85de1 7ee2233e78218333c5e304a9472f1ee08889c199 .github/workflows/ci.yml
+1 A. N... 000000 100644 100644 0000000000000000000000000000000000000000 da6f75a50306bcd210cd0ade6ff6c8c0bb1a08bb docs/mission-reports/MISSION9-ENGINE-ASSURANCE.json
+1 A. N... 000000 100644 100644 0000000000000000000000000000000000000000 5f054640f15c9f113052a2c863db9629c69bc8eb docs/mission-reports/MISSION9-HISTORICAL-CAPABILITY-MATRIX.json
+1 A. N... 000000 100644 100644 0000000000000000000000000000000000000000 fd5bc927f65f83da23a37665d0c41a2bbd00fc61 docs/mission-reports/MISSION9-HISTORICAL-CAPABILITY-REPORT-EN.md
+1 A. N... 000000 100644 100644 0000000000000000000000000000000000000000 2e813f1cac6ef0bc239fc33a230d12165385f636 docs/mission-reports/MISSION9-HISTORICAL-CAPABILITY-REPORT-FA.md
+1 A. N... 000000 100644 100644 0000000000000000000000000000000000000000 df12e4ccf1f16514b35eda8c365d461e3d2d2b0c docs/mission-reports/MISSION9-RECOVERY-MATRIX.json
+1 A. N... 000000 100644 100644 0000000000000000000000000000000000000000 9eb2d859c299ee049dc2ffea012ca69d3a4c45c1 docs/mission-reports/MISSION9-REPORT-EN.md
+1 A. N... 000000 100644 100644 0000000000000000000000000000000000000000 5ed64eee9842d1a428049cf2ff3bc7e10d79af80 docs/mission-reports/MISSION9-REPORT-FA.md
+1 A. N... 000000 100644 100644 0000000000000000000000000000000000000000 c1d3202c5bcdeb0be8eb235ddef8e39478b7a35c docs/mission-reports/MISSION9-ROADMAP.md
+? docs/mission-reports/MISSION9-GIT-END.txt
+? docs/mission-reports/MISSION9-WORKSPACE-END.jsonl
+? frontend/.playwright-report-cp151-71aae4f7f3364cd8bef9f4748c4283fb/index.html
+? frontend/playwright-report-master-full-7d42a1/index.html
+? frontend/test-results-master-auth-c4a891de/.last-run.json
+? frontend/test-results-master-full-7d42a1/.last-run.json
+? frontend/test-results-master-full-7d42a1/e2e-results.json
+
+### git status --porcelain=v2 --ignored=matching --untracked-files=all
+1 M. N... 100644 100644 100644 878e208b92c05589f87323af01a9d4c233a85de1 7ee2233e78218333c5e304a9472f1ee08889c199 .github/workflows/ci.yml
+1 A. N... 000000 100644 100644 0000000000000000000000000000000000000000 da6f75a50306bcd210cd0ade6ff6c8c0bb1a08bb docs/mission-reports/MISSION9-ENGINE-ASSURANCE.json
+1 A. N... 000000 100644 100644 0000000000000000000000000000000000000000 5f054640f15c9f113052a2c863db9629c69bc8eb docs/mission-reports/MISSION9-HISTORICAL-CAPABILITY-MATRIX.json
+1 A. N... 000000 100644 100644 0000000000000000000000000000000000000000 fd5bc927f65f83da23a37665d0c41a2bbd00fc61 docs/mission-reports/MISSION9-HISTORICAL-CAPABILITY-REPORT-EN.md
+1 A. N... 000000 100644 100644 0000000000000000000000000000000000000000 2e813f1cac6ef0bc239fc33a230d12165385f636 docs/mission-reports/MISSION9-HISTORICAL-CAPABILITY-REPORT-FA.md
+1 A. N... 000000 100644 100644 0000000000000000000000000000000000000000 df12e4ccf1f16514b35eda8c365d461e3d2d2b0c docs/mission-reports/MISSION9-RECOVERY-MATRIX.json
+1 A. N... 000000 100644 100644 0000000000000000000000000000000000000000 9eb2d859c299ee049dc2ffea012ca69d3a4c45c1 docs/mission-reports/MISSION9-REPORT-EN.md
+1 A. N... 000000 100644 100644 0000000000000000000000000000000000000000 5ed64eee9842d1a428049cf2ff3bc7e10d79af80 docs/mission-reports/MISSION9-REPORT-FA.md
+1 A. N... 000000 100644 100644 0000000000000000000000000000000000000000 c1d3202c5bcdeb0be8eb235ddef8e39478b7a35c docs/mission-reports/MISSION9-ROADMAP.md
+? docs/mission-reports/MISSION9-GIT-END.txt
+? docs/mission-reports/MISSION9-WORKSPACE-END.jsonl
+? frontend/.playwright-report-cp151-71aae4f7f3364cd8bef9f4748c4283fb/index.html
+? frontend/playwright-report-master-full-7d42a1/index.html
+? frontend/test-results-master-auth-c4a891de/.last-run.json
+? frontend/test-results-master-full-7d42a1/.last-run.json
+? frontend/test-results-master-full-7d42a1/e2e-results.json
+! backend/.data/
+
+### git worktree list
+/home/user/DrillAI  7af6ce5 [arena/9d8f5568-drillai]
+
+### git stash list
+
+### git tag --list
+
+### git submodule status
+
+### git ls-remote origin refs/heads/arena/9d8f5568-drillai refs/heads/main
+7af6ce562163fde01e409ca056126592cfd5b4ae	refs/heads/arena/9d8f5568-drillai
+bfa066b28e0071880cb9191a4f1d47fdaa143e04	refs/heads/main

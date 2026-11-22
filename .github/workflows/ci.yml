@@ -74,6 +74,24 @@ jobs:
           echo "dirty:"
           git status --porcelain
 
+      # A commit cannot contain its own final SHA. Retain the checked-out Git state separately.
+      - name: Capture exact checkout Git evidence
+        run: |
+          {
+            echo '### HEAD'; git rev-parse HEAD
+            echo '### branch'; git branch --show-current
+            echo '### status including ignored'; git status --porcelain=v2 --branch --untracked-files=all --ignored=matching
+            echo '### worktrees'; git worktree list
+            echo '### remote refs'; git ls-remote origin refs/heads/arena/9d8f5568-drillai refs/heads/main
+          } | tee "$RUNNER_TEMP/mission9-git-checkout.txt"
+      - name: Retain exact checkout Git evidence
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: mission9-git-checkout-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/mission9-git-checkout.txt
+          if-no-files-found: error
+          retention-days: 90
+
       - name: Set up Python ${{ env.PYTHON_VERSION }}
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:

@@ -1,0 +1,279 @@
+{
+  "status": "PARTIAL",
+  "scope": "30 inherited requirements; no claim of comprehensive historical or engineering re-audit.",
+  "requirements": [
+    {
+      "id": 1,
+      "requirement": "Persian deployment OCR",
+      "mission8_status": "NOT_ACCEPTED",
+      "mission9_status": "NOT_ACCEPTED",
+      "source": "backend/src/drillai/ingestion/ocr.py",
+      "outstanding": "Restore actual accuracy and pass all unchanged deployed strata",
+      "note": "Mission 8 status retained as historical context; this is not a complete independent Mission 9 re-audit."
+    },
+    {
+      "id": 2,
+      "requirement": "Bounded page OCR",
+      "mission8_status": "PARTIAL",
+      "mission9_status": "NOT_ACCEPTED",
+      "source": "backend/src/drillai/ingestion/parsers.py",
+      "outstanding": "Queue/render/layout/OCR/parsing/publication deadline and Windows process-tree termination remain missing.",
+      "note": "Mission 8 status retained as historical context; this is not a complete independent Mission 9 re-audit."
+    },
+    {
+      "id": 3,
+      "requirement": "Authorized holdout",
+      "mission8_status": "BLOCKED_BY_MISSING_AUTHORIZED_EVIDENCE",
+      "mission9_status": "PARTIAL",
+      "source": "backend/src/drillai/ingestion/ocr_benchmark.py",
+      "outstanding": "Obtain approved authentic DDRs, freeze independently adjudicated labels and split",
+      "note": "Mission 8 status retained as historical context; this is not a complete independent Mission 9 re-audit."
+    },
+    {
+      "id": 4,
+      "requirement": "Full capacity geometry",
+      "mission8_status": "PARTIAL",
+      "mission9_status": "PARTIAL",
+      "source": "backend/src/drillai/engines/fluids.py",
+      "outstanding": "Tool joints, washout, nesting and measured/design distinction",
+      "note": "Mission 8 status retained as historical context; this is not a complete independent Mission 9 re-audit."
+    },
+    {
+      "id": 5,
+      "requirement": "Authenticated bore evidence",
+      "mission8_status": "PARTIAL",
+      "mission9_status": "PARTIAL",
+      "source": "backend/src/drillai/engines/fluids.py",
+      "outstanding": "Caller text is not authenticated evidence; build review and identity linkage",
+      "note": "Mission 8 status retained as historical context; this is not a complete independent Mission 9 re-audit."
+    },
+    {
+      "id": 6,
+      "requirement": "Versioned capacity design",
+      "mission8_status": "PARTIAL",
+      "mission9_status": "PARTIAL",
+      "source": "frontend/src/pages/engineering/CirculationWorkspace.tsx",
+      "outstanding": "No governed capacity revision/approval/export journey",
+      "note": "Mission 8 status retained as historical context; this is not a complete independent Mission 9 re-audit."
+    },
+    {
+      "id": 7,
+      "requirement": "Hydraulics/ECD slice",
+      "mission8_status": "PARTIAL",
+      "mission9_status": "PARTIAL",
+      "source": "backend/src/drillai/engines/fluids.py",
+      "outstanding": "Full surveyed depth profile, components, review and reports missing",
+      "note": "Mission 8 status retained as historical context; this is not a complete independent Mission 9 re-audit."
+    },
+    {
+      "id": 8,
+      "requirement": "Survey-linked depths",
+      "mission8_status": "PARTIAL",
+      "mission9_status": "PARTIAL",
+      "source": "backend/src/drillai/drilling/surveys.py",
+      "outstanding": "Connect persisted revision and validated datum to hydraulics",
+      "note": "Mission 8 status retained as historical context; this is not a complete independent Mission 9 re-audit."
+    },
+    {
+      "id": 9,
+      "requirement": "New rheology",
+      "mission8_status": "PARTIAL",
+      "mission9_status": "PARTIAL",
+      "source": "backend/src/drillai/engines/power_law.py",
+      "outstanding": "Pipe math only; annular/full-well design and report still missing",
+      "note": "Mission 8 status retained as historical context; this is not a complete independent Mission 9 re-audit."
+    },
+    {
+      "id": 10,
+      "requirement": "Survey geometric proximity",
+      "mission8_status": "PARTIAL",
+      "mission9_status": "PARTIAL",
+      "source": "backend/src/drillai/engines/proximity.py",
+      "outstanding": "Select persisted surveys, datum validation and dedicated workflow",
+      "note": "Mission 8 status retained as historical context; this is not a complete independent Mission 9 re-audit."
+    },
+    {
+      "id": 11,
+      "requirement": "Anti-collision uncertainty",
+      "mission8_status": "PLANNED",
+      "mission9_status": "PARTIAL",
+      "source": "backend/src/drillai/engines/proximity.py",
+      "outstanding": "Covariance/error model/SF not implemented; select source and implement",
+      "note": "Mission 8 status retained as historical context; this is not a complete independent Mission 9 re-audit."
+    },
+    {
+      "id": 12,
+      "requirement": "Engine assurance",
+      "mission8_status": "PARTIAL",
+      "mission9_status": "PARTIAL",
+      "source": "backend/src/drillai/engines/registry.py",
+      "outstanding": "Full independent source-to-report audit of all 16 not done",
+      "note": "Mission 8 status retained as historical context; this is not a complete independent Mission 9 re-audit."
+    },
+    {
+      "id": 13,
+      "requirement": "Manual DDR",
+      "mission8_status": "PARTIAL",
+      "mission9_status": "PARTIAL",
+      "source": "backend/src/drillai/drilling/daily_reports.py",
+      "outstanding": "Complete authored engineering data/review journey",
+      "note": "Mission 8 status retained as historical context; this is not a complete independent Mission 9 re-audit."
+    },
+    {
+      "id": 14,
+      "requirement": "DDR batch/correction",
+      "mission8_status": "PARTIAL",
+      "mission9_status": "PARTIAL",
+      "source": "backend/src/drillai/ingestion/pipeline.py",
+      "outstanding": "Batch lifecycle and immutable corrections not fully verified",
+      "note": "Mission 8 status retained as historical context; this is not a complete independent Mission 9 re-audit."
+    },
+    {
+      "id": 15,
+      "requirement": "Chronology",
+      "mission8_status": "PARTIAL",
+      "mission9_status": "PARTIAL",
+      "source": "backend/src/drillai/drilling/timeline.py",
+      "outstanding": "Reconcile overlaps and missing timestamps; no comprehensive journey",
+      "note": "Mission 8 status retained as historical context; this is not a complete independent Mission 9 re-audit."
+    },
+    {
+      "id": 16,
+      "requirement": "NPT",
+      "mission8_status": "PARTIAL",
+      "mission9_status": "PARTIAL",
+      "source": "backend/src/drillai/drilling/npt.py",
+      "outstanding": "Explicit Event/Operation identity, cause allocation, independent approval, immutable revisions and export remain unimplemented; union covers scoped Event rows only.",
+      "note": "Mission 8 status retained as historical context; this is not a complete independent Mission 9 re-audit.",
+      "mission9_implementation": "Non-temporal scoped query prevents unassignable-time events from disappearing; no-evidence returns unavailable; bilingual counts and tests."
+    },
+    {
+      "id": 17,
+      "requirement": "Well Design",
+      "mission8_status": "PARTIAL",
+      "mission9_status": "PARTIAL",
+      "source": "backend/src/drillai/engineering/products.py",
+      "outstanding": "Cross-domain linked design and E2E not complete",
+      "note": "Mission 8 status retained as historical context; this is not a complete independent Mission 9 re-audit."
+    },
+    {
+      "id": 18,
+      "requirement": "Programs/Procedures",
+      "mission8_status": "PARTIAL",
+      "mission9_status": "PARTIAL",
+      "source": "backend/src/drillai/engineering/service.py",
+      "outstanding": "Existing lifecycle; full acceptance/export journey not reverified",
+      "note": "Mission 8 status retained as historical context; this is not a complete independent Mission 9 re-audit."
+    },
+    {
+      "id": 19,
+      "requirement": "Advisor/RAG",
+      "mission8_status": "PARTIAL",
+      "mission9_status": "PARTIAL",
+      "source": "backend/src/drillai/drilling/advisor.py",
+      "outstanding": "Retrieval metrics, scope and full citation E2E remain",
+      "note": "Mission 8 status retained as historical context; this is not a complete independent Mission 9 re-audit."
+    },
+    {
+      "id": 20,
+      "requirement": "Specialist agents",
+      "mission8_status": "PARTIAL",
+      "mission9_status": "PARTIAL",
+      "source": "backend/src/drillai/workflow/graph.py",
+      "outstanding": "Dedicated bounded domain agents and human review incomplete",
+      "note": "Mission 8 status retained as historical context; this is not a complete independent Mission 9 re-audit."
+    },
+    {
+      "id": 21,
+      "requirement": "Telemetry/Twin",
+      "mission8_status": "PARTIAL",
+      "mission9_status": "PARTIAL",
+      "source": "backend/src/drillai/telemetry/service.py",
+      "outstanding": "End-to-end reconciliation and external interop unverified",
+      "note": "Mission 8 status retained as historical context; this is not a complete independent Mission 9 re-audit."
+    },
+    {
+      "id": 22,
+      "requirement": "Reports/exports",
+      "mission8_status": "PARTIAL",
+      "mission9_status": "PARTIAL",
+      "source": "backend/src/drillai/engineering/exports.py",
+      "outstanding": "Exact design/approval provenance and requested end-to-end journeys incomplete",
+      "note": "Mission 8 status retained as historical context; this is not a complete independent Mission 9 re-audit."
+    },
+    {
+      "id": 23,
+      "requirement": "RBAC/deployment",
+      "mission8_status": "PARTIAL",
+      "mission9_status": "PARTIAL",
+      "source": "backend/src/drillai/security/rbac.py",
+      "outstanding": "New flows and deployment assurance not independently complete",
+      "note": "Mission 8 status retained as historical context; this is not a complete independent Mission 9 re-audit."
+    },
+    {
+      "id": 24,
+      "requirement": "Catalogue",
+      "mission8_status": "PARTIAL",
+      "mission9_status": "PARTIAL",
+      "source": "docs/ENGINEERING_CAPABILITY_CATALOGUE.json",
+      "outstanding": "Regenerated inventory only; comprehensive historical audit/schema/roadmap incomplete",
+      "note": "Mission 8 status retained as historical context; this is not a complete independent Mission 9 re-audit."
+    },
+    {
+      "id": 25,
+      "requirement": "Windows history",
+      "mission8_status": "PARTIAL",
+      "mission9_status": "NOT_ACCEPTED",
+      "source": "scripts/verify_stack.py",
+      "outstanding": "Three repeated native full-suite diagnostic runs on the final SHA and full native CI must complete; root cause beyond measured budget not established.",
+      "note": "Mission 8 status retained as historical context; this is not a complete independent Mission 9 re-audit.",
+      "mission9_implementation": "Measure Windows setup/render/all interactions and three independent full suites. Stage timings near 5 seconds justified per-test 12-second timeout; assertions/interactions retained."
+    },
+    {
+      "id": 26,
+      "requirement": "Full E2E",
+      "mission8_status": "PARTIAL",
+      "mission9_status": "PARTIAL",
+      "source": "frontend/e2e/well-cockpit.spec.ts",
+      "outstanding": "Historical 129 do not substitute for requested new journeys",
+      "note": "Mission 8 status retained as historical context; this is not a complete independent Mission 9 re-audit."
+    },
+    {
+      "id": 27,
+      "requirement": "Exact-SHA CI",
+      "mission8_status": "PARTIAL",
+      "mission9_status": "NOT_ACCEPTED",
+      "source": ".github/workflows/ci.yml",
+      "outstanding": "Exact-final-SHA CI must be observed on both platforms; old runs cannot certify this mission.",
+      "note": "Mission 8 status retained as historical context; this is not a complete independent Mission 9 re-audit."
+    },
+    {
+      "id": 28,
+      "requirement": "Workspace",
+      "mission8_status": "PARTIAL",
+      "mission9_status": "PARTIAL",
+      "source": "docs/mission-reports/MISSION7-WORKSPACE-START.jsonl",
+      "outstanding": "Retain protected untracked artifacts and compare start/end metadata; exact final CI checkout artifact is separately named by run ID; historical original mtimes and missing bytes remain unavailable.",
+      "note": "Mission 8 status retained as historical context; this is not a complete independent Mission 9 re-audit."
+    },
+    {
+      "id": 29,
+      "requirement": "Mission 7 Windows frontend authoring timeout",
+      "mission8_status": "NOT_ACCEPTED",
+      "mission9_status": "NOT_ACCEPTED",
+      "source": "CI 45010161009 and Mission 8 timing instrumentation",
+      "outstanding": "Three repeated native full-suite diagnostic runs on the final SHA and full native CI must complete; root cause beyond measured budget not established.",
+      "note": "Mission 8 status retained as historical context; this is not a complete independent Mission 9 re-audit.",
+      "mission9_implementation": "Measure Windows setup/render/all interactions and three independent full suites. Stage timings near 5 seconds justified per-test 12-second timeout; assertions/interactions retained."
+    },
+    {
+      "id": 30,
+      "requirement": "Mission 7 deployed OCR accuracy regression",
+      "mission8_status": "NOT_ACCEPTED",
+      "mission9_status": "NOT_ACCEPTED",
+      "source": "MISSION8-HISTORICAL-OCR-CASES.json",
+      "outstanding": "Restore all unchanged 64-case global and stratum gates.",
+      "note": "Mission 8 status retained as historical context; this is not a complete independent Mission 9 re-audit."
+    }
+  ]
+}
