@@ -495,7 +495,10 @@ describe('ProgramsProceduresWorkspace', () => {
         planned_md_to: { state: 'unknown', value: null, unit: null, reason: 'No bottom depth was supplied for this synthetic test.' },
       }],
     })
-  })
+  // Native Windows full-suite timing: 15 real interactions reached save at ~5 seconds,
+  // while independent complete executions finished correctly. This test-specific budget
+  // leaves headroom for the measured multi-field journey; no global timeout or retry changes.
+  }, 12_000)
   it('authors controlled prerequisites, ordered steps, verification and stop-work response without turning the procedure into a free-text canvas', async () => {
     const user = userEvent.setup()
     renderWorkspace()

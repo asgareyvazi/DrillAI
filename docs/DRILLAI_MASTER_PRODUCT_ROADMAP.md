@@ -52,7 +52,7 @@ The following table is generated from the runtime registry and source files by `
 | Key | Version | Registry declaration | Source | Source SHA-256 (LF normalized) |
 |---|---|---|---|---|
 | `drilling.mse` | 1.1.1 | formula_derived | `backend/src/drillai/engines/mechanics.py` | `9feee5be5f8602d92a0d407188d8eb1aabd7b6218b5cc3a3bdd7a7bbbd4c4b27` |
-| `hydraulics.laminar` | 1.6.0 | formula_derived | `backend/src/drillai/engines/fluids.py` | `f6be6cb2d37f56a063d3710c78b21ab031fe7b6659e31e06b80116ca3afac0fc` |
+| `hydraulics.laminar` | 1.7.0 | formula_derived | `backend/src/drillai/engines/fluids.py` | `ca7ee68be98a7c81a433746330ee0c99e3d759de83410d9ec791deff0e445363` |
 | `hydraulics.power_law_pipe` | 1.0.0 | formula_derived | `backend/src/drillai/engines/power_law.py` | `4490e147e39c3ea2417a2d6821e2610d5194bbceb97a9a8b3570ef4d4f049364` |
 | `integrity.barrier_envelope` | 1.1.0 | formula_derived | `backend/src/drillai/engines/integrity.py` | `33c8ff117e649ac14a09aec8f10ceb6b25d2b5cdf1ae6396094c2310a0afbf2d` |
 | `offsets.similarity` | 1.1.0 | formula_derived | `backend/src/drillai/engines/offsets.py` | `e64e0d7f57bda6ffd680590d607a5d620d9945f1d455d933033c417474dbd06a` |
@@ -66,7 +66,7 @@ The following table is generated from the runtime registry and source files by `
 | `tubulars.api_5c3` | 1.1.0 | needs_field_validation | `backend/src/drillai/engines/tubulars.py` | `3bdc50ef9b0b7044710ea49ffca1d3ad55dbd4759571b96219f9590bb61f5a36` |
 | `twin.reconciliation` | 1.2.0 | formula_derived | `backend/src/drillai/engines/twin.py` | `5c56256b8f813f531e4aa9e1f771679f93e9297f332d3054e00cda56dc464386` |
 | `well_control.kill_sheet` | 1.2.0 | needs_field_validation | `backend/src/drillai/engines/wellcontrol.py` | `00ad181423c078d74c72dac07a870aaecc2be5d7050f7f0993b86c5b6f560dc8` |
-| `wellbore.capacity` | 1.4.0 | formula_derived | `backend/src/drillai/engines/fluids.py` | `f6be6cb2d37f56a063d3710c78b21ab031fe7b6659e31e06b80116ca3afac0fc` |
+| `wellbore.capacity` | 1.4.0 | formula_derived | `backend/src/drillai/engines/fluids.py` | `ca7ee68be98a7c81a433746330ee0c99e3d759de83410d9ec791deff0e445363` |
 <!-- END GENERATED ENGINE REGISTRY -->
 
 ## Ordered mission plan and acceptance

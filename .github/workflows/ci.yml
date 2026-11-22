@@ -767,9 +767,9 @@ jobs:
             $log = Join-Path $env:RUNNER_TEMP "authoring-repeat-$run.log"
             $clock = [System.Diagnostics.Stopwatch]::StartNew()
             if ($run -eq 'file') {
-              npm test -- --run src/pages/engineering/ProgramsProceduresWorkspace.test.tsx 2>&1 | Tee-Object -FilePath $log
+              npm test -- --run src/pages/engineering/ProgramsProceduresWorkspace.test.tsx 2>&1 | Out-File -FilePath $log -Encoding utf8
             } else {
-              npm test 2>&1 | Tee-Object -FilePath $log
+              npm test 2>&1 | Out-File -FilePath $log -Encoding utf8
             }
             $exit = $LASTEXITCODE
             $clock.Stop()
