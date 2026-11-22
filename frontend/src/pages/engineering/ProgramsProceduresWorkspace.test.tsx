@@ -446,8 +446,12 @@ async function timedProgramInteraction<T>(stage: number, action: () => Promise<T
 
 describe('ProgramsProceduresWorkspace', () => {
   it('authors a structured, wellbore-scoped drilling program and keeps required values explicitly unknown', async () => {
+    const setupStart = performance.now()
     const user = userEvent.setup()
+    console.log(`::notice title=Program test timing::stage=0 setup_ms=${Math.round(performance.now() - setupStart)}`)
+    const renderStart = performance.now()
     renderWorkspace()
+    console.log(`::notice title=Program test timing::stage=0 render_ms=${Math.round(performance.now() - renderStart)}`)
     await timedProgramInteraction(1, async () => user.click(await screen.findByRole('button', { name: 'Create product' })))
     await timedProgramInteraction(2, () => user.type(screen.getByTestId('product-title'), 'Synthetic program from UI'))
     await timedProgramInteraction(3, () => user.type(screen.getByTestId('product-code'), 'SYN-UI-PROGRAM-1'))

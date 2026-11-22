@@ -739,3 +739,54 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+  windows-authoring-repeats:
+    name: Windows independent frontend reliability measurements
+    runs-on: windows-latest
+    timeout-minutes: 35
+    steps:
+      - name: Check out the commit under test
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up Node 22
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend dependencies
+        working-directory: frontend
+        shell: pwsh
+        run: npm ci --no-audit --no-fund
+      - name: Measure full authoring file and three independent full suites
+        working-directory: frontend
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $failed = 0
+          $runs = @('file', 'suite-1', 'suite-2', 'suite-3')
+          foreach ($run in $runs) {
+            $log = Join-Path $env:RUNNER_TEMP "authoring-repeat-$run.log"
+            $clock = [System.Diagnostics.Stopwatch]::StartNew()
+            if ($run -eq 'file') {
+              npm test -- --run src/pages/engineering/ProgramsProceduresWorkspace.test.tsx 2>&1 | Tee-Object -FilePath $log
+            } else {
+              npm test 2>&1 | Tee-Object -FilePath $log
+            }
+            $exit = $LASTEXITCODE
+            $clock.Stop()
+            $plain = (Get-Content $log -Raw) -replace '\x1b\[[0-9;]*[a-zA-Z]', ''
+            $summary = [regex]::Match($plain, '(?m)^\s*Tests\s+\d+\s+passed[^\r\n]*')
+            $stages = [regex]::Matches($plain, 'stage=\d+ (?:elapsed_ms=\d+|setup_ms=\d+|render_ms=\d+|state=start)') | ForEach-Object { $_.Value }
+            $detail = "run=$run exit=$exit wall_ms=$($clock.ElapsedMilliseconds) summary=$($summary.Value.Trim()) stages=$($stages -join ',')"
+            Write-Output "::notice title=Windows frontend independent run::$detail"
+            Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "- $detail"
+            if ($exit -ne 0 -or -not $summary.Success -or $summary.Value -match '\bskipped\b') { $failed++ }
+          }
+          if ($failed -ne 0) { throw "$failed independent Windows frontend run(s) failed or skipped tests" }
+      - name: Retain Windows timing logs
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: windows-authoring-timings-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/authoring-repeat-*.log
+          if-no-files-found: error
+          retention-days: 14
