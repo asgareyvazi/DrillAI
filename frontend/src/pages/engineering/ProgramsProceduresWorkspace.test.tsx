@@ -433,29 +433,40 @@ afterEach(() => {
   window.localStorage.removeItem('drillai.locale')
 })
 
+// Fixed stage IDs record only synthetic test timing, not user-entered content.
+async function timedProgramInteraction<T>(stage: number, action: () => Promise<T>): Promise<T> {
+  const start = performance.now()
+  console.log(`::notice title=Program test timing::stage=${stage} state=start`)
+  try {
+    return await action()
+  } finally {
+    console.log(`::notice title=Program test timing::stage=${stage} elapsed_ms=${Math.round(performance.now() - start)}`)
+  }
+}
+
 describe('ProgramsProceduresWorkspace', () => {
   it('authors a structured, wellbore-scoped drilling program and keeps required values explicitly unknown', async () => {
     const user = userEvent.setup()
     renderWorkspace()
-    await user.click(await screen.findByRole('button', { name: 'Create product' }))
-    await user.type(screen.getByTestId('product-title'), 'Synthetic program from UI')
-    await user.type(screen.getByTestId('product-code'), 'SYN-UI-PROGRAM-1')
-    await user.selectOptions(screen.getByTestId('product-wellbore'), wellbore.id)
-    await user.type(screen.getByLabelText('Purpose'), 'Synthetic UI fixture; not a field design.')
+    await timedProgramInteraction(1, async () => user.click(await screen.findByRole('button', { name: 'Create product' })))
+    await timedProgramInteraction(2, () => user.type(screen.getByTestId('product-title'), 'Synthetic program from UI'))
+    await timedProgramInteraction(3, () => user.type(screen.getByTestId('product-code'), 'SYN-UI-PROGRAM-1'))
+    await timedProgramInteraction(4, () => user.selectOptions(screen.getByTestId('product-wellbore'), wellbore.id))
+    await timedProgramInteraction(5, () => user.type(screen.getByLabelText('Purpose'), 'Synthetic UI fixture; not a field design.'))
 
-    await user.click(screen.getByRole('button', { name: 'Add objective' }))
-    await user.type(screen.getByLabelText('Objective statement'), 'Retain this explicitly authored synthetic objective.')
-    await user.click(screen.getByRole('button', { name: 'Add section' }))
-    await user.type(screen.getByLabelText('Program section name'), 'Synthetic section from the browser')
-    await user.selectOptions(screen.getByLabelText(/Linked master-data well section/), section.id)
+    await timedProgramInteraction(6, () => user.click(screen.getByRole('button', { name: 'Add objective' })))
+    await timedProgramInteraction(7, () => user.type(screen.getByLabelText('Objective statement'), 'Retain this explicitly authored synthetic objective.'))
+    await timedProgramInteraction(8, () => user.click(screen.getByRole('button', { name: 'Add section' })))
+    await timedProgramInteraction(9, () => user.type(screen.getByLabelText('Program section name'), 'Synthetic section from the browser'))
+    await timedProgramInteraction(10, () => user.selectOptions(screen.getByLabelText(/Linked master-data well section/), section.id))
     const unknownReasons = screen.getAllByLabelText('Why is this value unknown?')
     expect(unknownReasons).toHaveLength(3)
-    await user.type(unknownReasons[0]!, 'No source value was supplied for this synthetic test.')
-    await user.type(unknownReasons[1]!, 'No top depth was supplied for this synthetic test.')
-    await user.type(unknownReasons[2]!, 'No bottom depth was supplied for this synthetic test.')
+    await timedProgramInteraction(11, () => user.type(unknownReasons[0]!, 'No source value was supplied for this synthetic test.'))
+    await timedProgramInteraction(12, () => user.type(unknownReasons[1]!, 'No top depth was supplied for this synthetic test.'))
+    await timedProgramInteraction(13, () => user.type(unknownReasons[2]!, 'No bottom depth was supplied for this synthetic test.'))
 
-    await user.click(screen.getByTestId('product-save'))
-    await waitFor(() => expect(apiMock.createEngineeringProduct).toHaveBeenCalledTimes(1))
+    await timedProgramInteraction(14, () => user.click(screen.getByTestId('product-save')))
+    await timedProgramInteraction(15, () => waitFor(() => expect(apiMock.createEngineeringProduct).toHaveBeenCalledTimes(1)))
     const [wellId, body] = apiMock.createEngineeringProduct.mock.calls[0] as [string, Record<string, unknown>]
     expect(wellId).toBe(well.id)
     expect(body).toMatchObject({
@@ -481,7 +492,6 @@ describe('ProgramsProceduresWorkspace', () => {
       }],
     })
   })
-
   it('authors controlled prerequisites, ordered steps, verification and stop-work response without turning the procedure into a free-text canvas', async () => {
     const user = userEvent.setup()
     renderWorkspace()

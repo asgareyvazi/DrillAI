@@ -551,6 +551,28 @@ jobs:
         shell: pwsh
         run: npm run lint
 
+      # Three independent diagnostic executions, not retries: any single failure fails this step.
+      # The full unchanged frontend suite below is still mandatory.
+      - name: Program authoring timing investigation (Windows)
+        if: ${{ !cancelled() && steps.windows_bootstrap.outcome == 'success' }}
+        working-directory: frontend
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Continue"
+          $failures = 0
+          foreach ($iteration in 1..3) {
+            Write-Output "::notice title=Program authoring diagnostic::independent invocation $iteration"
+            $diagnosticLog = Join-Path $env:RUNNER_TEMP "program-authoring-$iteration.log"
+            npm test -- --run src/pages/engineering/ProgramsProceduresWorkspace.test.tsx -t "authors a structured, wellbore-scoped drilling program" 2>&1 | Tee-Object -FilePath $diagnosticLog
+            $result = $LASTEXITCODE
+            $plain = (Get-Content $diagnosticLog -Raw) -replace "\x1b\[[0-9;]*[a-zA-Z]", ""
+            foreach ($match in [regex]::Matches($plain, 'stage=(\d+) (?:elapsed_ms=(\d+)|state=(start))')) {
+              Write-Output "::notice title=Program authoring timing::invocation=$iteration $($match.Value)"
+            }
+            if ($result -ne 0) { $failures++ }
+          }
+          if ($failures -ne 0) { throw "$failures independent program authoring diagnostic invocation(s) failed" }
+
       - name: Frontend unit and component tests (Windows)
         if: ${{ !cancelled() && steps.windows_bootstrap.outcome == 'success' }}
         working-directory: frontend
