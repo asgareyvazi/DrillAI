@@ -147,6 +147,22 @@ test.describe('well cockpit built from the real well context', () => {
     await page.getByText('Inspect selected source rows').click()
     await expect(page.getByText(/Generic event duration \(legacy row sum only; not interval evidence\)/)).toBeVisible()
     await expect(page.getByText(generic.id, { exact: true })).toBeVisible()
+
+    // A record with unknown time must not disappear from a narrowed interval reconciliation.
+    await apiPost(request, '/events', {
+      well_id: well.id, title: 'Unassignable time', kind: 'stuck_pipe', is_npt: true,
+      npt_category: 'stuck_pipe', npt_hours: 1, npt_hours_basis: 'reported',
+    })
+    const filtered = await apiGet<Reconciliation & { npt: { interval_reconciliation: {
+      unassignable_time_count: number; scoped_event_count: number; outside_window_count: number
+    } } }>(request, `/wells/${well.id}/npt?since=2026-03-15T00%3A00%3A00Z&until=2026-03-15T03%3A00%3A00Z`)
+    expect(filtered.npt.interval_reconciliation).toMatchObject({
+      status: 'unavailable_incomplete', union_hours: null, unassignable_time_count: 1,
+      scoped_event_count: 5, outside_window_count: 1,
+    })
+    await page.reload()
+    await page.getByRole('tab', { name: /NPT|Non-productive time/i }).click()
+    await expect(page.getByText(/unassignable time: 1/)).toBeVisible()
     expectNoFailures(consoleErrors, failedResponses)
   })
 

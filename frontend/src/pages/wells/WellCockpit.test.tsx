@@ -109,6 +109,20 @@ describe('NPT interval reconciliation', () => {
     expect(screen.getByText('record_test')).toBeInTheDocument()
   })
 
+  it('explains unassignable window evidence and no-evidence results', () => {
+    const base = { union_hours: null, overlap_hours: null, invalid_event_count: 1,
+      scoped_event_count: 3, overlapping_window_count: 1, outside_window_count: 1, unassignable_time_count: 1 }
+    const { rerender } = render(<I18nProvider><NptCard npt={{ ...npt.npt, interval_reconciliation: {
+      ...base, status: 'unavailable_incomplete',
+    } }} onSelectCause={() => {}} /></I18nProvider>)
+    expect(screen.getByText(/Scoped events: 3; overlapping window: 1; outside window: 1; unassignable time: 1/)).toBeInTheDocument()
+    expect(screen.queryByText(/Union:/)).not.toBeInTheDocument()
+    rerender(<I18nProvider><NptCard npt={{ ...npt.npt, interval_reconciliation: {
+      ...base, status: 'unavailable_no_evidence',
+    } }} onSelectCause={() => {}} /></I18nProvider>)
+    expect(screen.getByText(/not proof of zero physical NPT/)).toBeInTheDocument()
+  })
+
   it('does not render missing reconciliation as zero in Persian', () => {
     window.localStorage.setItem('drillai.locale', 'fa')
     render(<I18nProvider><NptCard npt={{ ...npt.npt, interval_reconciliation: {

@@ -877,17 +877,15 @@ class NptService:
         self, well_id: str, *, section_id: str | None, operation_id: str | None,
         since: dt.datetime | None, until: dt.datetime | None,
     ) -> dict[str, Any]:
-        """Read an independently bounded scope; never use the truncated display cases."""
+        """Read the bounded non-temporal scope, including events unassignable to a window.
+
+        The legacy totals intentionally retain their existing SQL time-filter semantics. The
+        interval calculation must not silently omit unknown timestamps before assessing completeness.
+        """
         stmt = select(Event).where(*self._event_filters(
-            well_id, section_id=section_id, operation_id=operation_id, since=since, until=until,
+            well_id, section_id=section_id, operation_id=operation_id,
         )).limit(MAX_RECONCILIATION_EVENTS + 1)
         rows = (await self.session.execute(stmt)).scalars().all()
-        if len(rows) > MAX_RECONCILIATION_EVENTS:
-            # Do not publish an apparently complete union of a truncated prefix.
-            return {"status": "unavailable_limit", "union_hours": None,
-                    "recorded_interval_hours": None, "overlap_hours": None,
-                    "overlap_event_count": None, "invalid_event_count": None,
-                    "missing_npt_hours_count": None, "event_count": None}
         return reconcile_event_intervals([
             IntervalEvidence(
                 start=row.occurred_at, end=row.ended_at,

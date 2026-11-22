@@ -406,7 +406,18 @@ export function NptCard({ npt, onSelectCause }: { npt: NptSummary; onSelectCause
               union: formatDuration(npt.interval_reconciliation.union_hours),
               overlap: formatDuration(npt.interval_reconciliation.overlap_hours),
             })}</p>
-          ) : <p>{t('cockpit.nptIntervalUnavailable')}</p>}
+          ) : <p>{t(npt.interval_reconciliation.status === 'unavailable_no_evidence' ? 'cockpit.nptIntervalNoEvidence' : 'cockpit.nptIntervalUnavailable')}</p>}
+          {npt.interval_reconciliation.scoped_event_count != null &&
+            npt.interval_reconciliation.overlapping_window_count != null &&
+            npt.interval_reconciliation.outside_window_count != null &&
+            npt.interval_reconciliation.unassignable_time_count != null && (
+              <p>{t('cockpit.nptIntervalScope', {
+                scoped: npt.interval_reconciliation.scoped_event_count,
+                overlapping: npt.interval_reconciliation.overlapping_window_count,
+                outside: npt.interval_reconciliation.outside_window_count,
+                unknown: npt.interval_reconciliation.unassignable_time_count,
+              })}</p>
+            )}
           {npt.interval_reconciliation.missing_npt_hours_count != null &&
             npt.interval_reconciliation.missing_npt_hours_count > 0 && (
               <p>{t('cockpit.nptIntervalMissingHours', { count: npt.interval_reconciliation.missing_npt_hours_count })}</p>

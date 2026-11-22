@@ -36,10 +36,10 @@ def reconcile_event_intervals(
 ) -> dict[str, Any]:
     """Union complete, explicitly timed, full-NPT intervals within the requested UTC window.
 
-    The result is elapsed time of matching recorded intervals across the selected well, not
-    evidence of unique physical rig downtime. Overlapping causes remain unresolved. A narrow
-    query's source filter can exclude events with unknown timestamps; completeness only refers
-    to rows returned for the requested scope, not to unseen physical events.
+    ``rows`` must include the entire non-temporal scope, including rows whose times cannot be
+    assigned to a window. A row is outside only when both qualified endpoints form an ordered
+    interval wholly outside the window. Otherwise unknown time prevents a complete union.
+    This remains a recorded-event calculation, not evidence of physical downtime or attribution.
     """
     since = ensure_utc(since) if since is not None else None
     until = ensure_utc(until) if until is not None else None
@@ -48,37 +48,49 @@ def reconcile_event_intervals(
     if len(rows) > MAX_RECONCILIATION_EVENTS:
         return {"status": "unavailable_limit", "union_hours": None, "recorded_interval_hours": None,
                 "overlap_hours": None, "overlap_event_count": None, "invalid_event_count": None,
-                "missing_npt_hours_count": None, "event_count": len(rows)}
+                "missing_npt_hours_count": None, "event_count": None, "scoped_event_count": None,
+                "unassignable_time_count": None, "outside_window_count": None, "overlapping_window_count": None}
     intervals: list[tuple[dt.datetime, dt.datetime]] = []
-    invalid = 0
-    missing_npt_hours = 0
+    invalid = missing_npt_hours = unassignable = outside = overlapping = 0
     for row in rows:
+        start = end = None
+        if (row.start_basis in TIME_WINDOW_BASES and row.end_basis in TIME_WINDOW_BASES
+                and row.start is not None and row.end is not None):
+            try:
+                start, end = ensure_utc(row.start), ensure_utc(row.end)
+            except ValueError:
+                start = end = None
+        if start is None or end is None or end <= start:
+            unassignable += 1
+            invalid += 1
+            if row.npt_hours is None:
+                missing_npt_hours += 1
+            continue
+        # A qualified interval ending or starting exactly at the boundary has no duration
+        # in the half-open reporting window. Its NPT quantity is irrelevant to this window.
+        if (since is not None and end <= since) or (until is not None and start >= until):
+            outside += 1
+            continue
+        overlapping += 1
         if row.npt_hours is None:
             missing_npt_hours += 1
-        if (row.start_basis not in TIME_WINDOW_BASES or row.end_basis not in TIME_WINDOW_BASES
-                or row.hours_basis not in ("observed", "reported")
-                or row.start is None or row.end is None or row.npt_hours is None
+        if (row.hours_basis not in ("observed", "reported") or row.npt_hours is None
                 or isinstance(row.npt_hours, bool) or not isinstance(row.npt_hours, (int, float))
-                or not math.isfinite(row.npt_hours) or row.npt_hours <= 0):
-            invalid += 1
-            continue
-        try:
-            start, end = ensure_utc(row.start), ensure_utc(row.end)
-        except ValueError:
-            invalid += 1
-            continue
-        elapsed = (end - start).total_seconds()
-        if elapsed <= 0 or abs(elapsed - row.npt_hours * 3600) > MAX_DURATION_DIFFERENCE_SECONDS:
+                or not math.isfinite(row.npt_hours) or row.npt_hours <= 0
+                or abs((end - start).total_seconds() - row.npt_hours * 3600) > MAX_DURATION_DIFFERENCE_SECONDS):
             invalid += 1
             continue
         low = max(start, since) if since else start
         high = min(end, until) if until else end
-        if high > low:
-            intervals.append((low, high))
-    if invalid:
-        return {"status": "unavailable_incomplete", "union_hours": None, "recorded_interval_hours": None,
-                "overlap_hours": None, "overlap_event_count": None, "invalid_event_count": invalid,
-                "missing_npt_hours_count": missing_npt_hours, "event_count": len(rows)}
+        intervals.append((low, high))
+    counts = {"scoped_event_count": len(rows), "unassignable_time_count": unassignable,
+              "outside_window_count": outside, "overlapping_window_count": overlapping,
+              "event_count": overlapping + unassignable, "invalid_event_count": invalid,
+              "missing_npt_hours_count": missing_npt_hours}
+    if invalid or not intervals:
+        return {"status": "unavailable_incomplete" if invalid else "unavailable_no_evidence",
+                "union_hours": None, "recorded_interval_hours": None, "overlap_hours": None,
+                "overlap_event_count": None, **counts}
     intervals.sort()
     union_seconds = recorded_seconds = 0.0
     overlap_events = 0
@@ -99,6 +111,5 @@ def reconcile_event_intervals(
         "status": "complete_for_matching_events", "union_hours": round(union_seconds / 3600, 6),
         "recorded_interval_hours": round(recorded_seconds / 3600, 6),
         "overlap_hours": round((recorded_seconds - union_seconds) / 3600, 6),
-        "overlap_event_count": overlap_events, "invalid_event_count": 0,
-        "missing_npt_hours_count": 0, "event_count": len(rows),
+        "overlap_event_count": overlap_events, **counts,
     }

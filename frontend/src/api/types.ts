@@ -441,11 +441,15 @@ export interface NptSummary {
   by_month: Array<{ month: string; hours: number }>
   offset_comparison: Record<string, unknown> | null
   interval_reconciliation?: {
-    status: 'complete_for_matching_events' | 'unavailable_incomplete' | 'unavailable_limit'
+    status: 'complete_for_matching_events' | 'unavailable_incomplete' | 'unavailable_limit' | 'unavailable_no_evidence'
     union_hours: number | null
     overlap_hours: number | null
     invalid_event_count: number | null
     missing_npt_hours_count?: number | null
+    scoped_event_count?: number | null
+    unassignable_time_count?: number | null
+    outside_window_count?: number | null
+    overlapping_window_count?: number | null
   }
   notes: string[]
 }

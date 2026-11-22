@@ -92,3 +92,47 @@ async def test_generic_event_duration_is_not_explicit_npt_interval_evidence(sess
     assert missing["hours_source"] == "missing"
     assert missing["hours"] is None
     assert incomplete["interval_reconciliation"]["union_hours"] is None
+
+
+async def test_time_filtered_union_retains_unassignable_events_in_same_scope(session):
+    org = Organization(slug="m9-scope", name="Window scope")
+    other_org = Organization(slug="m9-other", name="Other tenant")
+    session.add_all([org, other_org])
+    await session.flush()
+    project = Project(org_id=org.id, name="Project")
+    session.add(project)
+    await session.flush()
+    well = Well(org_id=org.id, project_id=project.id, name="Well")
+    other_well = Well(org_id=org.id, project_id=project.id, name="Other well")
+    session.add_all([well, other_well])
+    await session.flush()
+    start = dt.datetime(2026, 3, 15, tzinfo=dt.UTC)
+    def row(tenant, well_id, title, beginning, ending, basis="source_record"):
+        return Event(org_id=tenant.id, well_id=well_id, kind="npt", is_npt=True, title=title,
+                     occurred_at=beginning, occurred_at_basis=basis, ended_at=ending,
+                     ended_at_basis="source_record" if ending else "unknown",
+                     npt_hours=1, npt_hours_basis="reported", source="manual")
+    known = row(org, well.id, "Inside", start, start + dt.timedelta(hours=1))
+    unknown = row(org, well.id, "Unknown", None, None, "unknown")
+    outside = row(org, well.id, "Outside", start + dt.timedelta(days=2), start + dt.timedelta(days=2, hours=1))
+    session.add_all([known, unknown, outside, row(other_org, well.id, "Other tenant", None, None, "unknown"),
+                     row(org, other_well.id, "Other well", None, None, "unknown")])
+    await session.commit()
+    service = NptService(session, org_id=org.id)
+    result = (await service.summarise(well.id, since=start, until=start + dt.timedelta(hours=2), include_offsets=False)).to_dict()
+    # The legacy aggregate has its documented time-filter semantics, while the interval calculation
+    # must account for the unassignable event rather than declaring the visible one complete.
+    assert result["total_hours"] == 1
+    rec = result["interval_reconciliation"]
+    assert rec["status"] == "unavailable_incomplete"
+    assert rec["union_hours"] is None
+    assert (rec["scoped_event_count"], rec["overlapping_window_count"], rec["outside_window_count"], rec["unassignable_time_count"]) == (3, 1, 1, 1)
+    unknown.occurred_at = start + dt.timedelta(hours=3)
+    unknown.occurred_at_basis = "source_record"
+    unknown.ended_at = start + dt.timedelta(hours=4)
+    unknown.ended_at_basis = "source_record"
+    await session.commit()
+    rec = (await service.summarise(well.id, since=start, until=start + dt.timedelta(hours=2), include_offsets=False)).to_dict()["interval_reconciliation"]
+    assert rec["status"] == "complete_for_matching_events"
+    assert rec["union_hours"] == 1
+    assert (rec["outside_window_count"], rec["unassignable_time_count"]) == (2, 0)

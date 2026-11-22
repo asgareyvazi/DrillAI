@@ -47,7 +47,9 @@ def test_incomplete_evidence_prevents_any_partial_union(change):
 
 
 def test_empty_and_bounded_scope():
-    assert reconcile_event_intervals([])["union_hours"] == 0
+    empty = reconcile_event_intervals([])
+    assert empty["status"] == "unavailable_no_evidence"
+    assert empty["union_hours"] is None  # No recorded evidence does not establish physical zero.
     result = reconcile_event_intervals([event(0, 1)] * (MAX_RECONCILIATION_EVENTS + 1))
     assert result["status"] == "unavailable_limit"
     assert result["union_hours"] is None
@@ -78,3 +80,25 @@ def test_interval_window_rejects_naive_equal_and_reversed_bounds():
         reconcile_event_intervals([event(0, 1)], since=START, until=START)
     with pytest.raises(ValueError, match="earlier"):
         reconcile_event_intervals([event(0, 1)], since=START + dt.timedelta(hours=1), until=START)
+
+
+def test_window_classifies_outside_overlap_and_unassignable_without_hiding_unknowns():
+    rows = [event(0, 2), event(2, 4), replace(event(10, 11), npt_hours=None),
+            replace(event(20, 21), start_basis="legacy_unverified")]
+    result = reconcile_event_intervals(rows, since=START + dt.timedelta(hours=1), until=START + dt.timedelta(hours=3))
+    assert result["status"] == "unavailable_incomplete"
+    assert result["union_hours"] is None
+    assert result["scoped_event_count"] == 4
+    assert result["overlapping_window_count"] == 2
+    assert result["outside_window_count"] == 1
+    assert result["unassignable_time_count"] == 1
+    assert result["missing_npt_hours_count"] == 0  # The qualified outside interval cannot overlap.
+    assert result["invalid_event_count"] == 1
+
+
+def test_window_with_only_qualified_outside_events_is_not_measured_zero():
+    result = reconcile_event_intervals([event(0, 1), event(4, 5)], since=START + dt.timedelta(hours=1), until=START + dt.timedelta(hours=4))
+    assert result["status"] == "unavailable_no_evidence"
+    assert result["union_hours"] is None
+    assert result["outside_window_count"] == 2
+    assert result["overlapping_window_count"] == 0
