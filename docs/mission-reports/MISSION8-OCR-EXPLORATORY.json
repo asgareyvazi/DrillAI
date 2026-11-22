@@ -1,0 +1,1388 @@
+{
+  "description": "32-case exploratory native Tesseract library 5.5.1, not deployed CLI nor 64-case quality certification",
+  "rows": [
+    {
+      "id": "cp135-ddr-001",
+      "language": "eng",
+      "layout": "single_column",
+      "scan": "clean",
+      "detector": null,
+      "results": {
+        "eng+fas-psm3": {
+          "cer": 0.003968253968253968,
+          "wer": 0.027777777777777776,
+          "critical_matched": 6
+        },
+        "eng+fas-psm6": {
+          "cer": 0.003968253968253968,
+          "wer": 0.027777777777777776,
+          "critical_matched": 6
+        },
+        "eng+fas-psm11": {
+          "cer": 0.003968253968253968,
+          "wer": 0.027777777777777776,
+          "critical_matched": 6
+        },
+        "fas-psm3": {
+          "cer": 0.8253968253968254,
+          "wer": 0.9722222222222222,
+          "critical_matched": 0
+        },
+        "fas-psm6": {
+          "cer": 0.8253968253968254,
+          "wer": 0.9722222222222222,
+          "critical_matched": 0
+        },
+        "fas-psm11": {
+          "cer": 0.8253968253968254,
+          "wer": 0.9722222222222222,
+          "critical_matched": 0
+        }
+      }
+    },
+    {
+      "id": "cp135-ddr-003",
+      "language": "eng",
+      "layout": "single_column",
+      "scan": "low_contrast",
+      "detector": null,
+      "results": {
+        "eng+fas-psm3": {
+          "cer": 0.0,
+          "wer": 0.0,
+          "critical_matched": 6
+        },
+        "eng+fas-psm6": {
+          "cer": 0.0,
+          "wer": 0.0,
+          "critical_matched": 6
+        },
+        "eng+fas-psm11": {
+          "cer": 0.0,
+          "wer": 0.0,
+          "critical_matched": 6
+        },
+        "fas-psm3": {
+          "cer": 0.8112449799196787,
+          "wer": 0.9428571428571428,
+          "critical_matched": 0
+        },
+        "fas-psm6": {
+          "cer": 0.8112449799196787,
+          "wer": 0.9428571428571428,
+          "critical_matched": 0
+        },
+        "fas-psm11": {
+          "cer": 0.8112449799196787,
+          "wer": 0.9428571428571428,
+          "critical_matched": 0
+        }
+      }
+    },
+    {
+      "id": "cp135-ddr-005",
+      "language": "eng",
+      "layout": "single_column",
+      "scan": "light_skew",
+      "detector": null,
+      "results": {
+        "eng+fas-psm3": {
+          "cer": 0.0,
+          "wer": 0.0,
+          "critical_matched": 6
+        },
+        "eng+fas-psm6": {
+          "cer": 0.0,
+          "wer": 0.0,
+          "critical_matched": 6
+        },
+        "eng+fas-psm11": {
+          "cer": 0.0,
+          "wer": 0.0,
+          "critical_matched": 6
+        },
+        "fas-psm3": {
+          "cer": 0.8134920634920635,
+          "wer": 0.9166666666666666,
+          "critical_matched": 0
+        },
+        "fas-psm6": {
+          "cer": 0.8134920634920635,
+          "wer": 0.9166666666666666,
+          "critical_matched": 0
+        },
+        "fas-psm11": {
+          "cer": 0.8134920634920635,
+          "wer": 0.9166666666666666,
+          "critical_matched": 0
+        }
+      }
+    },
+    {
+      "id": "cp135-ddr-007",
+      "language": "eng",
+      "layout": "single_column",
+      "scan": "light_noise",
+      "detector": null,
+      "results": {
+        "eng+fas-psm3": {
+          "cer": 0.004016064257028112,
+          "wer": 0.02857142857142857,
+          "critical_matched": 6
+        },
+        "eng+fas-psm6": {
+          "cer": 0.004016064257028112,
+          "wer": 0.02857142857142857,
+          "critical_matched": 6
+        },
+        "eng+fas-psm11": {
+          "cer": 0.004016064257028112,
+          "wer": 0.02857142857142857,
+          "critical_matched": 6
+        },
+        "fas-psm3": {
+          "cer": 0.8112449799196787,
+          "wer": 0.9428571428571428,
+          "critical_matched": 0
+        },
+        "fas-psm6": {
+          "cer": 0.8112449799196787,
+          "wer": 0.9428571428571428,
+          "critical_matched": 0
+        },
+        "fas-psm11": {
+          "cer": 0.8112449799196787,
+          "wer": 0.9428571428571428,
+          "critical_matched": 0
+        }
+      }
+    },
+    {
+      "id": "cp135-ddr-009",
+      "language": "eng",
+      "layout": "table",
+      "scan": "clean",
+      "detector": null,
+      "results": {
+        "eng+fas-psm3": {
+          "cer": 0.6745098039215687,
+          "wer": 0.7222222222222222,
+          "critical_matched": 0
+        },
+        "eng+fas-psm6": {
+          "cer": 0.0,
+          "wer": 0.0,
+          "critical_matched": 6
+        },
+        "eng+fas-psm11": {
+          "cer": 0.00784313725490196,
+          "wer": 0.05555555555555555,
+          "critical_matched": 0
+        },
+        "fas-psm3": {
+          "cer": 0.8470588235294118,
+          "wer": 1.0833333333333333,
+          "critical_matched": 0
+        },
+        "fas-psm6": {
+          "cer": 0.7254901960784313,
+          "wer": 0.9722222222222222,
+          "critical_matched": 0
+        },
+        "fas-psm11": {
+          "cer": 0.7803921568627451,
+          "wer": 1.0,
+          "critical_matched": 0
+        }
+      }
+    },
+    {
+      "id": "cp135-ddr-011",
+      "language": "eng",
+      "layout": "table",
+      "scan": "low_contrast",
+      "detector": null,
+      "results": {
+        "eng+fas-psm3": {
+          "cer": 0.6827309236947792,
+          "wer": 0.7428571428571429,
+          "critical_matched": 0
+        },
+        "eng+fas-psm6": {
+          "cer": 0.0,
+          "wer": 0.0,
+          "critical_matched": 6
+        },
+        "eng+fas-psm11": {
+          "cer": 0.008032128514056224,
+          "wer": 0.05714285714285714,
+          "critical_matched": 0
+        },
+        "fas-psm3": {
+          "cer": 0.8393574297188755,
+          "wer": 1.0,
+          "critical_matched": 0
+        },
+        "fas-psm6": {
+          "cer": 0.7309236947791165,
+          "wer": 0.8857142857142857,
+          "critical_matched": 0
+        },
+        "fas-psm11": {
+          "cer": 0.7871485943775101,
+          "wer": 1.0,
+          "critical_matched": 0
+        }
+      }
+    },
+    {
+      "id": "cp135-ddr-013",
+      "language": "eng",
+      "layout": "table",
+      "scan": "light_skew",
+      "detector": null,
+      "results": {
+        "eng+fas-psm3": {
+          "cer": 0.6798418972332015,
+          "wer": 0.7222222222222222,
+          "critical_matched": 0
+        },
+        "eng+fas-psm6": {
+          "cer": 0.003952569169960474,
+          "wer": 0.027777777777777776,
+          "critical_matched": 6
+        },
+        "eng+fas-psm11": {
+          "cer": 0.09881422924901186,
+          "wer": 0.1388888888888889,
+          "critical_matched": 0
+        },
+        "fas-psm3": {
+          "cer": 0.8458498023715415,
+          "wer": 1.0,
+          "critical_matched": 0
+        },
+        "fas-psm6": {
+          "cer": 0.7470355731225297,
+          "wer": 0.8611111111111112,
+          "critical_matched": 0
+        },
+        "fas-psm11": {
+          "cer": 0.782608695652174,
+          "wer": 0.9166666666666666,
+          "critical_matched": 0
+        }
+      }
+    },
+    {
+      "id": "cp135-ddr-015",
+      "language": "eng",
+      "layout": "table",
+      "scan": "light_noise",
+      "detector": null,
+      "results": {
+        "eng+fas-psm3": {
+          "cer": 0.6867469879518072,
+          "wer": 0.7428571428571429,
+          "critical_matched": 0
+        },
+        "eng+fas-psm6": {
+          "cer": 0.0,
+          "wer": 0.0,
+          "critical_matched": 6
+        },
+        "eng+fas-psm11": {
+          "cer": 0.008032128514056224,
+          "wer": 0.05714285714285714,
+          "critical_matched": 0
+        },
+        "fas-psm3": {
+          "cer": 0.8393574297188755,
+          "wer": 1.0571428571428572,
+          "critical_matched": 0
+        },
+        "fas-psm6": {
+          "cer": 0.7228915662650602,
+          "wer": 1.0285714285714285,
+          "critical_matched": 0
+        },
+        "fas-psm11": {
+          "cer": 0.7630522088353414,
+          "wer": 0.9428571428571428,
+          "critical_matched": 0
+        }
+      }
+    },
+    {
+      "id": "cp135-ddr-017",
+      "language": "eng",
+      "layout": "two_column",
+      "scan": "clean",
+      "detector": [
+        840,
+        1700,
+        2200
+      ],
+      "results": {
+        "eng+fas-psm3": {
+          "cer": 0.00392156862745098,
+          "wer": 0.027777777777777776,
+          "critical_matched": 6
+        },
+        "eng+fas-psm6": {
+          "cer": 0.6196078431372549,
+          "wer": 0.7222222222222222,
+          "critical_matched": 1
+        },
+        "eng+fas-psm11": {
+          "cer": 0.00392156862745098,
+          "wer": 0.027777777777777776,
+          "critical_matched": 6
+        },
+        "fas-psm3": {
+          "cer": 0.9372549019607843,
+          "wer": 1.0,
+          "critical_matched": 0
+        },
+        "fas-psm6": {
+          "cer": 0.9372549019607843,
+          "wer": 1.0,
+          "critical_matched": 0
+        },
+        "fas-psm11": {
+          "cer": 0.9372549019607843,
+          "wer": 1.0,
+          "critical_matched": 0
+        }
+      }
+    },
+    {
+      "id": "cp135-ddr-019",
+      "language": "eng",
+      "layout": "two_column",
+      "scan": "low_contrast",
+      "detector": [
+        840,
+        1700,
+        2200
+      ],
+      "results": {
+        "eng+fas-psm3": {
+          "cer": 0.0,
+          "wer": 0.0,
+          "critical_matched": 6
+        },
+        "eng+fas-psm6": {
+          "cer": 0.62,
+          "wer": 0.7428571428571429,
+          "critical_matched": 1
+        },
+        "eng+fas-psm11": {
+          "cer": 0.0,
+          "wer": 0.0,
+          "critical_matched": 6
+        },
+        "fas-psm3": {
+          "cer": 0.932,
+          "wer": 1.0,
+          "critical_matched": 0
+        },
+        "fas-psm6": {
+          "cer": 0.936,
+          "wer": 1.0,
+          "critical_matched": 0
+        },
+        "fas-psm11": {
+          "cer": 0.932,
+          "wer": 1.0,
+          "critical_matched": 0
+        }
+      }
+    },
+    {
+      "id": "cp135-ddr-021",
+      "language": "eng",
+      "layout": "two_column",
+      "scan": "light_skew",
+      "detector": [
+        839,
+        1700,
+        2200
+      ],
+      "results": {
+        "eng+fas-psm3": {
+          "cer": 0.0,
+          "wer": 0.0,
+          "critical_matched": 6
+        },
+        "eng+fas-psm6": {
+          "cer": 0.626984126984127,
+          "wer": 0.7222222222222222,
+          "critical_matched": 1
+        },
+        "eng+fas-psm11": {
+          "cer": 0.0,
+          "wer": 0.0,
+          "critical_matched": 6
+        },
+        "fas-psm3": {
+          "cer": 0.7817460317460317,
+          "wer": 0.9166666666666666,
+          "critical_matched": 0
+        },
+        "fas-psm6": {
+          "cer": 0.9166666666666666,
+          "wer": 1.0,
+          "critical_matched": 0
+        },
+        "fas-psm11": {
+          "cer": 0.7817460317460317,
+          "wer": 0.9166666666666666,
+          "critical_matched": 0
+        }
+      }
+    },
+    {
+      "id": "cp135-ddr-023",
+      "language": "eng",
+      "layout": "two_column",
+      "scan": "light_noise",
+      "detector": [
+        840,
+        1700,
+        2200
+      ],
+      "results": {
+        "eng+fas-psm3": {
+          "cer": 0.0,
+          "wer": 0.0,
+          "critical_matched": 6
+        },
+        "eng+fas-psm6": {
+          "cer": 0.6345381526104418,
+          "wer": 0.7428571428571429,
+          "critical_matched": 1
+        },
+        "eng+fas-psm11": {
+          "cer": 0.0,
+          "wer": 0.0,
+          "critical_matched": 6
+        },
+        "fas-psm3": {
+          "cer": 0.9196787148594378,
+          "wer": 1.0,
+          "critical_matched": 0
+        },
+        "fas-psm6": {
+          "cer": 0.9116465863453815,
+          "wer": 1.0,
+          "critical_matched": 0
+        },
+        "fas-psm11": {
+          "cer": 0.9196787148594378,
+          "wer": 1.0,
+          "critical_matched": 0
+        }
+      }
+    },
+    {
+      "id": "cp135-ddr-025",
+      "language": "eng",
+      "layout": "compact",
+      "scan": "clean",
+      "detector": null,
+      "results": {
+        "eng+fas-psm3": {
+          "cer": 0.00392156862745098,
+          "wer": 0.027777777777777776,
+          "critical_matched": 6
+        },
+        "eng+fas-psm6": {
+          "cer": 0.0,
+          "wer": 0.0,
+          "critical_matched": 6
+        },
+        "eng+fas-psm11": {
+          "cer": 0.00392156862745098,
+          "wer": 0.027777777777777776,
+          "critical_matched": 6
+        },
+        "fas-psm3": {
+          "cer": 0.8117647058823529,
+          "wer": 0.8888888888888888,
+          "critical_matched": 0
+        },
+        "fas-psm6": {
+          "cer": 0.7686274509803922,
+          "wer": 0.8611111111111112,
+          "critical_matched": 0
+        },
+        "fas-psm11": {
+          "cer": 0.8117647058823529,
+          "wer": 0.8888888888888888,
+          "critical_matched": 0
+        }
+      }
+    },
+    {
+      "id": "cp135-ddr-027",
+      "language": "eng",
+      "layout": "compact",
+      "scan": "low_contrast",
+      "detector": null,
+      "results": {
+        "eng+fas-psm3": {
+          "cer": 0.004,
+          "wer": 0.02857142857142857,
+          "critical_matched": 6
+        },
+        "eng+fas-psm6": {
+          "cer": 0.0,
+          "wer": 0.0,
+          "critical_matched": 6
+        },
+        "eng+fas-psm11": {
+          "cer": 0.004,
+          "wer": 0.02857142857142857,
+          "critical_matched": 6
+        },
+        "fas-psm3": {
+          "cer": 0.788,
+          "wer": 0.8857142857142857,
+          "critical_matched": 0
+        },
+        "fas-psm6": {
+          "cer": 0.752,
+          "wer": 0.8571428571428571,
+          "critical_matched": 0
+        },
+        "fas-psm11": {
+          "cer": 0.804,
+          "wer": 0.9142857142857143,
+          "critical_matched": 0
+        }
+      }
+    },
+    {
+      "id": "cp135-ddr-029",
+      "language": "eng",
+      "layout": "compact",
+      "scan": "light_skew",
+      "detector": null,
+      "results": {
+        "eng+fas-psm3": {
+          "cer": 0.003952569169960474,
+          "wer": 0.027777777777777776,
+          "critical_matched": 6
+        },
+        "eng+fas-psm6": {
+          "cer": 0.0,
+          "wer": 0.0,
+          "critical_matched": 6
+        },
+        "eng+fas-psm11": {
+          "cer": 0.0,
+          "wer": 0.0,
+          "critical_matched": 6
+        },
+        "fas-psm3": {
+          "cer": 0.7865612648221344,
+          "wer": 0.8888888888888888,
+          "critical_matched": 0
+        },
+        "fas-psm6": {
+          "cer": 0.7470355731225297,
+          "wer": 0.8611111111111112,
+          "critical_matched": 0
+        },
+        "fas-psm11": {
+          "cer": 0.7944664031620553,
+          "wer": 0.8888888888888888,
+          "critical_matched": 0
+        }
+      }
+    },
+    {
+      "id": "cp135-ddr-031",
+      "language": "eng",
+      "layout": "compact",
+      "scan": "light_noise",
+      "detector": null,
+      "results": {
+        "eng+fas-psm3": {
+          "cer": 0.0,
+          "wer": 0.0,
+          "critical_matched": 6
+        },
+        "eng+fas-psm6": {
+          "cer": 0.0,
+          "wer": 0.0,
+          "critical_matched": 6
+        },
+        "eng+fas-psm11": {
+          "cer": 0.0,
+          "wer": 0.0,
+          "critical_matched": 6
+        },
+        "fas-psm3": {
+          "cer": 0.7845528455284553,
+          "wer": 0.8857142857142857,
+          "critical_matched": 0
+        },
+        "fas-psm6": {
+          "cer": 0.7439024390243902,
+          "wer": 0.8285714285714286,
+          "critical_matched": 0
+        },
+        "fas-psm11": {
+          "cer": 0.7886178861788617,
+          "wer": 0.9142857142857143,
+          "critical_matched": 0
+        }
+      }
+    },
+    {
+      "id": "cp135-ddr-033",
+      "language": "fas",
+      "layout": "single_column",
+      "scan": "clean",
+      "detector": null,
+      "results": {
+        "eng+fas-psm3": {
+          "cer": 0.17937219730941703,
+          "wer": 0.3783783783783784,
+          "critical_matched": 2
+        },
+        "eng+fas-psm6": {
+          "cer": 0.336322869955157,
+          "wer": 0.5675675675675675,
+          "critical_matched": 3
+        },
+        "eng+fas-psm11": {
+          "cer": 0.4080717488789238,
+          "wer": 0.5675675675675675,
+          "critical_matched": 4
+        },
+        "fas-psm3": {
+          "cer": 0.12556053811659193,
+          "wer": 0.16216216216216217,
+          "critical_matched": 5
+        },
+        "fas-psm6": {
+          "cer": 0.23766816143497757,
+          "wer": 0.2972972972972973,
+          "critical_matched": 5
+        },
+        "fas-psm11": {
+          "cer": 0.4618834080717489,
+          "wer": 0.5405405405405406,
+          "critical_matched": 3
+        }
+      }
+    },
+    {
+      "id": "cp135-ddr-035",
+      "language": "fas",
+      "layout": "single_column",
+      "scan": "low_contrast",
+      "detector": null,
+      "results": {
+        "eng+fas-psm3": {
+          "cer": 0.2409090909090909,
+          "wer": 0.4722222222222222,
+          "critical_matched": 3
+        },
+        "eng+fas-psm6": {
+          "cer": 0.32272727272727275,
+          "wer": 0.5555555555555556,
+          "critical_matched": 3
+        },
+        "eng+fas-psm11": {
+          "cer": 0.22727272727272727,
+          "wer": 0.3888888888888889,
+          "critical_matched": 5
+        },
+        "fas-psm3": {
+          "cer": 0.16818181818181818,
+          "wer": 0.19444444444444445,
+          "critical_matched": 5
+        },
+        "fas-psm6": {
+          "cer": 0.25,
+          "wer": 0.2777777777777778,
+          "critical_matched": 5
+        },
+        "fas-psm11": {
+          "cer": 0.29545454545454547,
+          "wer": 0.3611111111111111,
+          "critical_matched": 4
+        }
+      }
+    },
+    {
+      "id": "cp135-ddr-037",
+      "language": "fas",
+      "layout": "single_column",
+      "scan": "light_skew",
+      "detector": null,
+      "results": {
+        "eng+fas-psm3": {
+          "cer": 0.29017857142857145,
+          "wer": 0.4594594594594595,
+          "critical_matched": 4
+        },
+        "eng+fas-psm6": {
+          "cer": 0.11607142857142858,
+          "wer": 0.2972972972972973,
+          "critical_matched": 5
+        },
+        "eng+fas-psm11": {
+          "cer": 0.32142857142857145,
+          "wer": 0.4864864864864865,
+          "critical_matched": 4
+        },
+        "fas-psm3": {
+          "cer": 0.24553571428571427,
+          "wer": 0.2702702702702703,
+          "critical_matched": 5
+        },
+        "fas-psm6": {
+          "cer": 0.15178571428571427,
+          "wer": 0.1891891891891892,
+          "critical_matched": 5
+        },
+        "fas-psm11": {
+          "cer": 0.35267857142857145,
+          "wer": 0.40540540540540543,
+          "critical_matched": 4
+        }
+      }
+    },
+    {
+      "id": "cp135-ddr-039",
+      "language": "fas",
+      "layout": "single_column",
+      "scan": "light_noise",
+      "detector": null,
+      "results": {
+        "eng+fas-psm3": {
+          "cer": 0.19457013574660634,
+          "wer": 0.4166666666666667,
+          "critical_matched": 3
+        },
+        "eng+fas-psm6": {
+          "cer": 0.2398190045248869,
+          "wer": 0.4722222222222222,
+          "critical_matched": 3
+        },
+        "eng+fas-psm11": {
+          "cer": 0.4343891402714932,
+          "wer": 0.6111111111111112,
+          "critical_matched": 3
+        },
+        "fas-psm3": {
+          "cer": 0.19909502262443438,
+          "wer": 0.2777777777777778,
+          "critical_matched": 5
+        },
+        "fas-psm6": {
+          "cer": 0.1493212669683258,
+          "wer": 0.19444444444444445,
+          "critical_matched": 5
+        },
+        "fas-psm11": {
+          "cer": 0.45701357466063347,
+          "wer": 0.5,
+          "critical_matched": 3
+        }
+      }
+    },
+    {
+      "id": "cp135-ddr-041",
+      "language": "fas",
+      "layout": "table",
+      "scan": "clean",
+      "detector": null,
+      "results": {
+        "eng+fas-psm3": {
+          "cer": 0.7085201793721974,
+          "wer": 0.8918918918918919,
+          "critical_matched": 0
+        },
+        "eng+fas-psm6": {
+          "cer": 0.16143497757847533,
+          "wer": 0.40540540540540543,
+          "critical_matched": 0
+        },
+        "eng+fas-psm11": {
+          "cer": 0.600896860986547,
+          "wer": 0.6486486486486487,
+          "critical_matched": 0
+        },
+        "fas-psm3": {
+          "cer": 0.6143497757847534,
+          "wer": 0.7027027027027027,
+          "critical_matched": 0
+        },
+        "fas-psm6": {
+          "cer": 0.2556053811659193,
+          "wer": 0.43243243243243246,
+          "critical_matched": 0
+        },
+        "fas-psm11": {
+          "cer": 0.4977578475336323,
+          "wer": 0.6216216216216216,
+          "critical_matched": 0
+        }
+      }
+    },
+    {
+      "id": "cp135-ddr-043",
+      "language": "fas",
+      "layout": "table",
+      "scan": "low_contrast",
+      "detector": null,
+      "results": {
+        "eng+fas-psm3": {
+          "cer": 0.2081447963800905,
+          "wer": 0.4166666666666667,
+          "critical_matched": 0
+        },
+        "eng+fas-psm6": {
+          "cer": 0.2895927601809955,
+          "wer": 0.5,
+          "critical_matched": 0
+        },
+        "eng+fas-psm11": {
+          "cer": 0.5972850678733032,
+          "wer": 0.6944444444444444,
+          "critical_matched": 0
+        },
+        "fas-psm3": {
+          "cer": 0.27601809954751133,
+          "wer": 0.4166666666666667,
+          "critical_matched": 0
+        },
+        "fas-psm6": {
+          "cer": 0.28054298642533937,
+          "wer": 0.4166666666666667,
+          "critical_matched": 0
+        },
+        "fas-psm11": {
+          "cer": 0.497737556561086,
+          "wer": 0.6388888888888888,
+          "critical_matched": 0
+        }
+      }
+    },
+    {
+      "id": "cp135-ddr-045",
+      "language": "fas",
+      "layout": "table",
+      "scan": "light_skew",
+      "detector": null,
+      "results": {
+        "eng+fas-psm3": {
+          "cer": 0.26785714285714285,
+          "wer": 0.43243243243243246,
+          "critical_matched": 1
+        },
+        "eng+fas-psm6": {
+          "cer": 0.15625,
+          "wer": 0.35135135135135137,
+          "critical_matched": 0
+        },
+        "eng+fas-psm11": {
+          "cer": 0.42410714285714285,
+          "wer": 0.5405405405405406,
+          "critical_matched": 0
+        },
+        "fas-psm3": {
+          "cer": 0.6696428571428571,
+          "wer": 0.7837837837837838,
+          "critical_matched": 0
+        },
+        "fas-psm6": {
+          "cer": 0.19196428571428573,
+          "wer": 0.2972972972972973,
+          "critical_matched": 1
+        },
+        "fas-psm11": {
+          "cer": 0.36160714285714285,
+          "wer": 0.5675675675675675,
+          "critical_matched": 0
+        }
+      }
+    },
+    {
+      "id": "cp135-ddr-047",
+      "language": "fas",
+      "layout": "table",
+      "scan": "light_noise",
+      "detector": null,
+      "results": {
+        "eng+fas-psm3": {
+          "cer": 0.24434389140271492,
+          "wer": 0.4722222222222222,
+          "critical_matched": 0
+        },
+        "eng+fas-psm6": {
+          "cer": 0.2171945701357466,
+          "wer": 0.4166666666666667,
+          "critical_matched": 0
+        },
+        "eng+fas-psm11": {
+          "cer": 0.5927601809954751,
+          "wer": 0.6666666666666666,
+          "critical_matched": 0
+        },
+        "fas-psm3": {
+          "cer": 0.27149321266968324,
+          "wer": 0.4166666666666667,
+          "critical_matched": 0
+        },
+        "fas-psm6": {
+          "cer": 0.19909502262443438,
+          "wer": 0.3333333333333333,
+          "critical_matched": 0
+        },
+        "fas-psm11": {
+          "cer": 0.497737556561086,
+          "wer": 0.6388888888888888,
+          "critical_matched": 0
+        }
+      }
+    },
+    {
+      "id": "cp135-ddr-049",
+      "language": "fas",
+      "layout": "two_column",
+      "scan": "clean",
+      "detector": [
+        840,
+        1700,
+        2200
+      ],
+      "results": {
+        "eng+fas-psm3": {
+          "cer": 0.6116071428571429,
+          "wer": 0.8378378378378378,
+          "critical_matched": 0
+        },
+        "eng+fas-psm6": {
+          "cer": 0.65625,
+          "wer": 0.8378378378378378,
+          "critical_matched": 1
+        },
+        "eng+fas-psm11": {
+          "cer": 0.44642857142857145,
+          "wer": 0.6756756756756757,
+          "critical_matched": 3
+        },
+        "fas-psm3": {
+          "cer": 0.6517857142857143,
+          "wer": 0.8648648648648649,
+          "critical_matched": 1
+        },
+        "fas-psm6": {
+          "cer": 0.6741071428571429,
+          "wer": 0.8648648648648649,
+          "critical_matched": 1
+        },
+        "fas-psm11": {
+          "cer": 0.39732142857142855,
+          "wer": 0.40540540540540543,
+          "critical_matched": 5
+        }
+      }
+    },
+    {
+      "id": "cp135-ddr-051",
+      "language": "fas",
+      "layout": "two_column",
+      "scan": "low_contrast",
+      "detector": [
+        840,
+        1700,
+        2200
+      ],
+      "results": {
+        "eng+fas-psm3": {
+          "cer": 0.6181818181818182,
+          "wer": 0.8333333333333334,
+          "critical_matched": 0
+        },
+        "eng+fas-psm6": {
+          "cer": 0.6545454545454545,
+          "wer": 0.8333333333333334,
+          "critical_matched": 1
+        },
+        "eng+fas-psm11": {
+          "cer": 0.35909090909090907,
+          "wer": 0.5833333333333334,
+          "critical_matched": 3
+        },
+        "fas-psm3": {
+          "cer": 0.65,
+          "wer": 0.8333333333333334,
+          "critical_matched": 1
+        },
+        "fas-psm6": {
+          "cer": 0.6681818181818182,
+          "wer": 0.8611111111111112,
+          "critical_matched": 1
+        },
+        "fas-psm11": {
+          "cer": 0.30454545454545456,
+          "wer": 0.3055555555555556,
+          "critical_matched": 5
+        }
+      }
+    },
+    {
+      "id": "cp135-ddr-053",
+      "language": "fas",
+      "layout": "two_column",
+      "scan": "light_skew",
+      "detector": [
+        839,
+        1700,
+        2200
+      ],
+      "results": {
+        "eng+fas-psm3": {
+          "cer": 0.71875,
+          "wer": 0.918918918918919,
+          "critical_matched": 1
+        },
+        "eng+fas-psm6": {
+          "cer": 0.625,
+          "wer": 0.8918918918918919,
+          "critical_matched": 1
+        },
+        "eng+fas-psm11": {
+          "cer": 0.21428571428571427,
+          "wer": 0.40540540540540543,
+          "critical_matched": 3
+        },
+        "fas-psm3": {
+          "cer": 0.7366071428571429,
+          "wer": 0.918918918918919,
+          "critical_matched": 1
+        },
+        "fas-psm6": {
+          "cer": 0.6651785714285714,
+          "wer": 0.918918918918919,
+          "critical_matched": 1
+        },
+        "fas-psm11": {
+          "cer": 0.15625,
+          "wer": 0.21621621621621623,
+          "critical_matched": 5
+        }
+      }
+    },
+    {
+      "id": "cp135-ddr-055",
+      "language": "fas",
+      "layout": "two_column",
+      "scan": "light_noise",
+      "detector": [
+        840,
+        1700,
+        2200
+      ],
+      "results": {
+        "eng+fas-psm3": {
+          "cer": 0.6063348416289592,
+          "wer": 0.8333333333333334,
+          "critical_matched": 0
+        },
+        "eng+fas-psm6": {
+          "cer": 0.6289592760180995,
+          "wer": 0.8333333333333334,
+          "critical_matched": 1
+        },
+        "eng+fas-psm11": {
+          "cer": 0.3438914027149321,
+          "wer": 0.5,
+          "critical_matched": 4
+        },
+        "fas-psm3": {
+          "cer": 0.6606334841628959,
+          "wer": 0.8611111111111112,
+          "critical_matched": 1
+        },
+        "fas-psm6": {
+          "cer": 0.6515837104072398,
+          "wer": 0.8333333333333334,
+          "critical_matched": 1
+        },
+        "fas-psm11": {
+          "cer": 0.38461538461538464,
+          "wer": 0.3888888888888889,
+          "critical_matched": 5
+        }
+      }
+    },
+    {
+      "id": "cp135-ddr-057",
+      "language": "fas",
+      "layout": "compact",
+      "scan": "clean",
+      "detector": null,
+      "results": {
+        "eng+fas-psm3": {
+          "cer": 0.03571428571428571,
+          "wer": 0.1891891891891892,
+          "critical_matched": 5
+        },
+        "eng+fas-psm6": {
+          "cer": 0.15178571428571427,
+          "wer": 0.2972972972972973,
+          "critical_matched": 4
+        },
+        "eng+fas-psm11": {
+          "cer": 0.45089285714285715,
+          "wer": 0.6756756756756757,
+          "critical_matched": 3
+        },
+        "fas-psm3": {
+          "cer": 0.16964285714285715,
+          "wer": 0.21621621621621623,
+          "critical_matched": 5
+        },
+        "fas-psm6": {
+          "cer": 0.125,
+          "wer": 0.1891891891891892,
+          "critical_matched": 5
+        },
+        "fas-psm11": {
+          "cer": 0.3705357142857143,
+          "wer": 0.40540540540540543,
+          "critical_matched": 5
+        }
+      }
+    },
+    {
+      "id": "cp135-ddr-059",
+      "language": "fas",
+      "layout": "compact",
+      "scan": "low_contrast",
+      "detector": null,
+      "results": {
+        "eng+fas-psm3": {
+          "cer": 0.11312217194570136,
+          "wer": 0.3055555555555556,
+          "critical_matched": 4
+        },
+        "eng+fas-psm6": {
+          "cer": 0.1493212669683258,
+          "wer": 0.3055555555555556,
+          "critical_matched": 5
+        },
+        "eng+fas-psm11": {
+          "cer": 0.2895927601809955,
+          "wer": 0.5,
+          "critical_matched": 4
+        },
+        "fas-psm3": {
+          "cer": 0.22171945701357465,
+          "wer": 0.2777777777777778,
+          "critical_matched": 5
+        },
+        "fas-psm6": {
+          "cer": 0.11764705882352941,
+          "wer": 0.16666666666666666,
+          "critical_matched": 5
+        },
+        "fas-psm11": {
+          "cer": 0.3031674208144796,
+          "wer": 0.3055555555555556,
+          "critical_matched": 5
+        }
+      }
+    },
+    {
+      "id": "cp135-ddr-061",
+      "language": "fas",
+      "layout": "compact",
+      "scan": "light_skew",
+      "detector": null,
+      "results": {
+        "eng+fas-psm3": {
+          "cer": 0.24434389140271492,
+          "wer": 0.35135135135135137,
+          "critical_matched": 5
+        },
+        "eng+fas-psm6": {
+          "cer": 0.10407239819004525,
+          "wer": 0.21621621621621623,
+          "critical_matched": 5
+        },
+        "eng+fas-psm11": {
+          "cer": 0.2895927601809955,
+          "wer": 0.4864864864864865,
+          "critical_matched": 4
+        },
+        "fas-psm3": {
+          "cer": 0.3031674208144796,
+          "wer": 0.32432432432432434,
+          "critical_matched": 5
+        },
+        "fas-psm6": {
+          "cer": 0.14027149321266968,
+          "wer": 0.1891891891891892,
+          "critical_matched": 5
+        },
+        "fas-psm11": {
+          "cer": 0.29411764705882354,
+          "wer": 0.2972972972972973,
+          "critical_matched": 5
+        }
+      }
+    },
+    {
+      "id": "cp135-ddr-063",
+      "language": "fas",
+      "layout": "compact",
+      "scan": "light_noise",
+      "detector": null,
+      "results": {
+        "eng+fas-psm3": {
+          "cer": 0.11363636363636363,
+          "wer": 0.3055555555555556,
+          "critical_matched": 5
+        },
+        "eng+fas-psm6": {
+          "cer": 0.17272727272727273,
+          "wer": 0.3888888888888889,
+          "critical_matched": 4
+        },
+        "eng+fas-psm11": {
+          "cer": 0.43636363636363634,
+          "wer": 0.6666666666666666,
+          "critical_matched": 3
+        },
+        "fas-psm3": {
+          "cer": 0.1590909090909091,
+          "wer": 0.19444444444444445,
+          "critical_matched": 5
+        },
+        "fas-psm6": {
+          "cer": 0.1590909090909091,
+          "wer": 0.19444444444444445,
+          "critical_matched": 5
+        },
+        "fas-psm11": {
+          "cer": 0.36818181818181817,
+          "wer": 0.3888888888888889,
+          "critical_matched": 5
+        }
+      }
+    }
+  ],
+  "summary": {
+    "eng+fas-psm3": {
+      "eng": {
+        "cases": 16,
+        "mean_cer": 0.17172560234071882,
+        "mean_wer": 0.19365079365079363,
+        "critical_matched": 72,
+        "critical_expected": 96
+      },
+      "fas": {
+        "cases": 16,
+        "mean_cer": 0.33722415754830104,
+        "mean_wer": 0.5321884384384384,
+        "critical_matched": 33,
+        "critical_expected": 96
+      }
+    },
+    "eng+fas-psm6": {
+      "eng": {
+        "cases": 16,
+        "mean_cer": 0.15706668813294164,
+        "mean_wer": 0.18839285714285714,
+        "critical_matched": 76,
+        "critical_expected": 96
+      },
+      "fas": {
+        "cases": 16,
+        "mean_cer": 0.3113796416505547,
+        "mean_wer": 0.5106512762762763,
+        "critical_matched": 36,
+        "critical_expected": 96
+      }
+    },
+    "eng+fas-psm11": {
+      "eng": {
+        "cases": 16,
+        "mean_cer": 0.008909317438263144,
+        "mean_wer": 0.02807539682539683,
+        "critical_matched": 72,
+        "critical_expected": 96
+      },
+      "fas": {
+        "cases": 16,
+        "mean_cer": 0.4022718782470497,
+        "mean_wer": 0.5685998498498498,
+        "critical_matched": 43,
+        "critical_expected": 96
+      }
+    },
+    "fas-psm3": {
+      "eng": {
+        "cases": 16,
+        "mean_cer": 0.8359100499291343,
+        "mean_wer": 0.9613095238095238,
+        "critical_matched": 0,
+        "critical_expected": 96
+      },
+      "fas": {
+        "cases": 16,
+        "mean_cer": 0.3826577514825586,
+        "mean_wer": 0.48221659159159164,
+        "critical_matched": 44,
+        "critical_expected": 96
+      }
+    },
+    "fas-psm6": {
+      "eng": {
+        "cases": 16,
+        "mean_cer": 0.8063033435670957,
+        "mean_wer": 0.9331349206349207,
+        "critical_matched": 0,
+        "critical_expected": 96
+      },
+      "fas": {
+        "cases": 16,
+        "mean_cer": 0.3073152201638048,
+        "mean_wer": 0.41600975975975985,
+        "critical_matched": 45,
+        "critical_expected": 96
+      }
+    },
+    "fas-psm11": {
+      "eng": {
+        "cases": 16,
+        "mean_cer": 0.8215068217653464,
+        "mean_wer": 0.9473214285714286,
+        "critical_matched": 0,
+        "critical_expected": 96
+      },
+      "fas": {
+        "cases": 16,
+        "mean_cer": 0.37503781695009686,
+        "mean_wer": 0.43670232732732733,
+        "critical_matched": 54,
+        "critical_expected": 96
+      }
+    }
+  },
+  "limitations": "32 cases: one per language/layout/scan cell; native Tesseract 5.5.1 forced language/PSM, clear adaptive classifier per image, 200 DPI; unweighted mean case CER/WER with unchanged critical matcher. Does not reproduce deployed CLI 5.5.0, the complete 64-case benchmark, production RTL-rerun routing or an authentic holdout; no candidate integrated.",
+  "models": {
+    "eng": "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2",
+    "fas": "db1c0a91208aff00d3cf1ed2c1d23f76419afd5f024688b4f71adc3f2ce4a505"
+  }
+}
