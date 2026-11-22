@@ -51,3 +51,30 @@ def test_empty_and_bounded_scope():
     result = reconcile_event_intervals([event(0, 1)] * (MAX_RECONCILIATION_EVENTS + 1))
     assert result["status"] == "unavailable_limit"
     assert result["union_hours"] is None
+
+
+def test_timezone_offsets_touching_and_partial_window_clipping():
+    offset = dt.timezone(dt.timedelta(hours=3, minutes=30))
+    first = event(0, 2)
+    shifted = replace(event(2, 4), start=event(2, 4).start.astimezone(offset), end=event(2, 4).end.astimezone(offset))
+    summary = reconcile_event_intervals([shifted, first], since=START + dt.timedelta(minutes=30), until=START + dt.timedelta(hours=3))
+    assert summary["union_hours"] == 2.5
+    assert summary["recorded_interval_hours"] == 2.5
+    assert summary["overlap_hours"] == 0
+    assert summary["overlap_event_count"] == 0
+
+
+def test_missing_explicit_npt_hours_are_counted_without_publishing_partial_union():
+    summary = reconcile_event_intervals([event(0, 1), replace(event(2, 3), npt_hours=None, hours_basis="unknown")])
+    assert summary["invalid_event_count"] == 1
+    assert summary["missing_npt_hours_count"] == 1
+    assert summary["union_hours"] is None
+
+
+def test_interval_window_rejects_naive_equal_and_reversed_bounds():
+    with pytest.raises(ValueError, match="naive"):
+        reconcile_event_intervals([event(0, 1)], since=START.replace(tzinfo=None))
+    with pytest.raises(ValueError, match="earlier"):
+        reconcile_event_intervals([event(0, 1)], since=START, until=START)
+    with pytest.raises(ValueError, match="earlier"):
+        reconcile_event_intervals([event(0, 1)], since=START + dt.timedelta(hours=1), until=START)

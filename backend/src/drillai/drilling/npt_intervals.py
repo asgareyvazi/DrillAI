@@ -41,13 +41,20 @@ def reconcile_event_intervals(
     query's source filter can exclude events with unknown timestamps; completeness only refers
     to rows returned for the requested scope, not to unseen physical events.
     """
+    since = ensure_utc(since) if since is not None else None
+    until = ensure_utc(until) if until is not None else None
+    if since is not None and until is not None and since >= until:
+        raise ValueError("the interval window must have since earlier than until")
     if len(rows) > MAX_RECONCILIATION_EVENTS:
         return {"status": "unavailable_limit", "union_hours": None, "recorded_interval_hours": None,
                 "overlap_hours": None, "overlap_event_count": None, "invalid_event_count": None,
-                "event_count": len(rows)}
+                "missing_npt_hours_count": None, "event_count": len(rows)}
     intervals: list[tuple[dt.datetime, dt.datetime]] = []
     invalid = 0
+    missing_npt_hours = 0
     for row in rows:
+        if row.npt_hours is None:
+            missing_npt_hours += 1
         if (row.start_basis not in TIME_WINDOW_BASES or row.end_basis not in TIME_WINDOW_BASES
                 or row.hours_basis not in ("observed", "reported")
                 or row.start is None or row.end is None or row.npt_hours is None
@@ -71,7 +78,7 @@ def reconcile_event_intervals(
     if invalid:
         return {"status": "unavailable_incomplete", "union_hours": None, "recorded_interval_hours": None,
                 "overlap_hours": None, "overlap_event_count": None, "invalid_event_count": invalid,
-                "event_count": len(rows)}
+                "missing_npt_hours_count": missing_npt_hours, "event_count": len(rows)}
     intervals.sort()
     union_seconds = recorded_seconds = 0.0
     overlap_events = 0
@@ -92,5 +99,6 @@ def reconcile_event_intervals(
         "status": "complete_for_matching_events", "union_hours": round(union_seconds / 3600, 6),
         "recorded_interval_hours": round(recorded_seconds / 3600, 6),
         "overlap_hours": round((recorded_seconds - union_seconds) / 3600, 6),
-        "overlap_event_count": overlap_events, "invalid_event_count": 0, "event_count": len(rows),
+        "overlap_event_count": overlap_events, "invalid_event_count": 0,
+        "missing_npt_hours_count": 0, "event_count": len(rows),
     }

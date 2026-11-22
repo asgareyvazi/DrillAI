@@ -407,8 +407,32 @@ export function NptCard({ npt, onSelectCause }: { npt: NptSummary; onSelectCause
               overlap: formatDuration(npt.interval_reconciliation.overlap_hours),
             })}</p>
           ) : <p>{t('cockpit.nptIntervalUnavailable')}</p>}
+          {npt.interval_reconciliation.missing_npt_hours_count != null &&
+            npt.interval_reconciliation.missing_npt_hours_count > 0 && (
+              <p>{t('cockpit.nptIntervalMissingHours', { count: npt.interval_reconciliation.missing_npt_hours_count })}</p>
+            )}
           <p>{t('cockpit.nptIntervalCaveat')}</p>
         </div>
+      )}
+      {npt.cases.length > 0 && (
+        <details className="rounded border border-graphite-200 p-2 text-xs dark:border-graphite-700">
+          <summary className="cursor-pointer font-medium">{t('cockpit.nptEvidenceRows')}</summary>
+          {npt.cases_truncated && <p>{t('cockpit.nptEvidenceLimited')}</p>}
+          <ul className="mt-2 space-y-2">
+            {npt.cases.map((item) => (
+              <li key={`${item.source}-${item.id}`} className="border-b border-graphite-200 pb-2 dark:border-graphite-700">
+                <p>{item.title} · <bdi dir="ltr">{item.id}</bdi> · {item.category}</p>
+                <p>{t('cockpit.nptEvidenceSource')}: {t(
+                  item.hours_source === 'explicit_npt_hours' ? 'cockpit.nptExplicitHours' :
+                    item.hours_source === 'generic_event_duration' ? 'cockpit.nptGenericDuration' :
+                      item.hours_source === 'operation_npt_hours' ? 'cockpit.nptOperationHours' : 'cockpit.nptMissingHours',
+                )} · {item.hours_source && !['missing', 'unknown'].includes(item.hours_source) ? formatDuration(item.hours) : '—'} · <bdi dir="ltr">{item.hours_basis}</bdi></p>
+                <p>{t('cockpit.nptEvidenceTime')}: <bdi dir="ltr">{item.started_at ?? '—'} ({item.started_at_basis}) / {item.ended_at ?? '—'} ({item.ended_at_basis})</bdi></p>
+                <p>{t('cockpit.nptEvidenceDocument')}: <bdi dir="ltr">{item.document_id ?? '—'}</bdi> · {t('cockpit.nptEvidenceRecord')}: <bdi dir="ltr">{item.source_record_id ?? '—'}</bdi> · {t('cockpit.nptEvidenceReference')}: <bdi dir="ltr">{item.evidence_ref ?? '—'}</bdi></p>
+              </li>
+            ))}
+          </ul>
+        </details>
       )}
       {npt.offset_comparison && (
         <div>

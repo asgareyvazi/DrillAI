@@ -97,12 +97,26 @@ describe('NPT interval reconciliation', () => {
     expect(screen.getByText(/Overlapping causes are not attributed/)).toBeInTheDocument()
   })
 
+  it('exposes generic duration as a legacy row-sum fallback, not interval evidence', async () => {
+    const first = npt.npt.cases[0]!
+    render(<I18nProvider><NptCard npt={{ ...npt.npt, cases: [{ ...first,
+      hours_source: 'generic_event_duration', document_id: 'doc_test', source_record_id: 'record_test',
+    }], cases_truncated: true }} onSelectCause={() => {}} /></I18nProvider>)
+    await userEvent.setup().click(screen.getByText('Inspect selected source rows'))
+    expect(screen.getByText(/Generic event duration \(legacy row sum only; not interval evidence\)/)).toBeInTheDocument()
+    expect(screen.getByText(/evidence list is truncated/)).toBeInTheDocument()
+    expect(screen.getByText('doc_test')).toBeInTheDocument()
+    expect(screen.getByText('record_test')).toBeInTheDocument()
+  })
+
   it('does not render missing reconciliation as zero in Persian', () => {
     window.localStorage.setItem('drillai.locale', 'fa')
     render(<I18nProvider><NptCard npt={{ ...npt.npt, interval_reconciliation: {
       status: 'unavailable_incomplete', union_hours: null, overlap_hours: null, invalid_event_count: 1,
+      missing_npt_hours_count: 1,
     } }} onSelectCause={() => {}} /></I18nProvider>)
     expect(screen.getByText(/در دسترس نیست: حداقل یک بازه/)).toBeInTheDocument()
+    expect(screen.getByText(/۱ رویداد منطبق فاقد ساعت صریح NPT|1 رویداد منطبق فاقد ساعت صریح NPT/)).toBeInTheDocument()
     expect(screen.queryByText(/اجتماع:/)).not.toBeInTheDocument()
   })
 })

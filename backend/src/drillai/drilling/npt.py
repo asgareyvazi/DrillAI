@@ -52,7 +52,10 @@ from drillai.operations.time_windows import (
 NPT_BASES = ("events", "operations")
 NPT_METRIC_CONTRACT: dict[str, Any] = {
     "unit": "hours",
-    "numerator": "sum of recorded NPT hours from the explicitly selected events or operations basis",
+    "numerator": (
+        "sum of the selected recorded rows; event rows fall back to generic duration when explicit NPT "
+        "hours are missing, and may overlap; operation rows use their NPT hours. This is not interval union."
+    ),
     "denominator": (
         "matching actual productive operation hours plus the selected NPT numerator, using the same "
         "well/section/operation/time scope. The operations basis includes only operation_class=actual "
@@ -123,6 +126,7 @@ class NptEvent:
     started_at_basis: str = "unknown"
     ended_at_basis: str = "unknown"
     hours_basis: str = "unknown"
+    hours_source: str = "unknown"
     note: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
@@ -134,12 +138,15 @@ class NptEvent:
             "subcategory": self.subcategory,
             "code": self.code,
             "cause": self.cause,
-            "hours": round(self.hours, 3),
+            # The legacy aggregate still sums absent inputs as no recorded contribution, but an
+            # individual case with no duration must not claim a measured zero.
+            "hours": None if self.hours_source == "missing" else round(self.hours, 3),
             "started_at": self.started_at.isoformat() if self.started_at else None,
             "started_at_basis": self.started_at_basis,
             "ended_at": self.ended_at.isoformat() if self.ended_at else None,
             "ended_at_basis": self.ended_at_basis,
             "hours_basis": self.hours_basis,
+            "hours_source": self.hours_source,
             "depth_md_si": self.depth_md_si,
             "section_id": self.section_id,
             "operation_id": self.operation_id,
@@ -368,6 +375,8 @@ class NptService:
                     started_at_basis=row.occurred_at_basis,
                     ended_at_basis=row.ended_at_basis,
                     hours_basis=hours_basis,
+                    hours_source=("explicit_npt_hours" if row.npt_hours is not None else
+                                  "generic_event_duration" if row.duration_hours is not None else "missing"),
                     depth_md_si=row.depth_md_si,
                     section_id=row.section_id,
                     operation_id=row.operation_id,
@@ -468,6 +477,7 @@ class NptService:
                     started_at_basis=started_at_basis,
                     ended_at_basis=ended_at_basis,
                     hours_basis=row.npt_hours_basis,
+                    hours_source="operation_npt_hours",
                     depth_md_si=row.depth_to_md_si if row.depth_to_md_si is not None else row.depth_from_md_si,
                     section_id=row.section_id,
                     operation_id=row.id,
@@ -814,6 +824,11 @@ class NptService:
             notes.append(
                 "part of the recorded NPT carries no NPT code; categories are therefore a lower bound"
             )
+        if basis == "events":
+            notes.append(
+                "The legacy event row sum uses generic event duration when explicit NPT hours are "
+                "missing; it may include non-NPT time and overlapping rows. It is not interval union."
+            )
         notes.append(
             "NPT hours come from recorded events/operations only. Absent records mean absent hours, "
             "never an assumed zero."
@@ -872,13 +887,16 @@ class NptService:
             return {"status": "unavailable_limit", "union_hours": None,
                     "recorded_interval_hours": None, "overlap_hours": None,
                     "overlap_event_count": None, "invalid_event_count": None,
-                    "event_count": None}
+                    "missing_npt_hours_count": None, "event_count": None}
         return reconcile_event_intervals([
             IntervalEvidence(
                 start=row.occurred_at, end=row.ended_at,
                 start_basis=row.occurred_at_basis, end_basis=row.ended_at_basis,
-                npt_hours=row.npt_hours if row.npt_hours is not None else row.duration_hours,
-                hours_basis=row.npt_hours_basis if row.npt_hours is not None else row.duration_basis,
+                # The generic event duration can include productive time even when is_npt=True.
+                # Only the explicit NPT quantity establishes a full NPT interval; the legacy
+                # row-summed KPI deliberately retains its separate fallback for compatibility.
+                npt_hours=row.npt_hours,
+                hours_basis=row.npt_hours_basis,
             ) for row in rows
         ], since=since, until=until)
 

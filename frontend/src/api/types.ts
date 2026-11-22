@@ -388,12 +388,13 @@ export interface NptCase {
   subcategory: string | null
   code: string | null
   cause: string | null
-  hours: number
+  hours: number | null
   started_at: string | null
   started_at_basis: string
   ended_at: string | null
   ended_at_basis: string
   hours_basis: string
+  hours_source?: 'explicit_npt_hours' | 'generic_event_duration' | 'operation_npt_hours' | 'missing' | 'unknown'
   depth_md_si: number | null
   section_id: string | null
   operation_id: string | null
@@ -431,6 +432,8 @@ export interface NptSummary {
   uncontrollable_hours: number
   unknown_controllability_hours: number
   cases: NptCase[]
+  cases_truncated?: boolean
+  case_limit?: number
   by_category: NptCategoryRow[]
   by_code: NptCategoryRow[]
   by_section: NptCategoryRow[]
@@ -442,6 +445,7 @@ export interface NptSummary {
     union_hours: number | null
     overlap_hours: number | null
     invalid_event_count: number | null
+    missing_npt_hours_count?: number | null
   }
   notes: string[]
 }
