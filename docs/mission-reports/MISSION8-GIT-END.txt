@@ -1,0 +1,22 @@
+### HEAD
+e9ab5dfc2523837d33ef468048ab0b108fedba6e
+### branch and upstream
+* arena/9d8f5568-drillai e9ab5df [origin/arena/9d8f5568-drillai] Document mission 8 forensic evidence and open release blockers
+  main                   bfa066b [origin/main] Initial commit
+### status
+# branch.oid e9ab5dfc2523837d33ef468048ab0b108fedba6e
+# branch.head arena/9d8f5568-drillai
+# branch.upstream origin/arena/9d8f5568-drillai
+# branch.ab +0 -0
+? docs/mission-reports/MISSION8-FINAL-CI.json
+? docs/mission-reports/MISSION8-GIT-END.txt
+? docs/mission-reports/MISSION8-WORKSPACE-END.jsonl
+? frontend/.playwright-report-cp151-71aae4f7f3364cd8bef9f4748c4283fb/index.html
+? frontend/playwright-report-master-full-7d42a1/index.html
+? frontend/test-results-master-auth-c4a891de/.last-run.json
+? frontend/test-results-master-full-7d42a1/.last-run.json
+? frontend/test-results-master-full-7d42a1/e2e-results.json
+! backend/.data/
+### remote refs
+e9ab5dfc2523837d33ef468048ab0b108fedba6e	refs/heads/arena/9d8f5568-drillai
+bfa066b28e0071880cb9191a4f1d47fdaa143e04	refs/heads/main
