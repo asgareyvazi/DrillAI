@@ -198,6 +198,7 @@ def test_cp23_hydraulics_turbulent_regime_validity_and_tubulars_scope(engines: E
             "bit_diameter_si": 0.2159,
             "bit_depth_si": 2000.0,
             "bit_tvd_si": 2000.0,
+            "depth_reference": {"md_origin": "synthetic-rig-floor", "tvd_origin": "synthetic-rig-floor", "vertical_datum": "synthetic-datum", "coordinate_reference": "synthetic-grid", "survey_reference": "synthetic-survey", "source_reference": "synthetic-example", "depth_positive": "down"},
         },
     )
     assert lam_res.outputs.turbulent_intervals == []
@@ -216,6 +217,7 @@ def test_cp23_hydraulics_turbulent_regime_validity_and_tubulars_scope(engines: E
             "bit_diameter_si": 0.2159,
             "bit_depth_si": 2000.0,
             "bit_tvd_si": 2000.0,
+            "depth_reference": {"md_origin": "synthetic-rig-floor", "tvd_origin": "synthetic-rig-floor", "vertical_datum": "synthetic-datum", "coordinate_reference": "synthetic-grid", "survey_reference": "synthetic-survey", "source_reference": "synthetic-example", "depth_positive": "down"},
         },
     )
     assert len(turb_res.outputs.turbulent_intervals) >= 1

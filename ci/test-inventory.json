@@ -1,7 +1,7 @@
 {
   "version": 1,
   "backend": {
-    "collected": 1846,
+    "collected": 1859,
     "postgres_files": 12,
     "postgres": [
       "tests/db/test_cp18_postgres_backup_restore.py::test_cp18_01_postgres_logical_backup_restore_and_migration_recovery_drill",
@@ -21,17 +21,17 @@
       "tests/workflow/test_notification_worker.py::test_competing_notification_worker_claims_skip_locked_rows_on_postgres"
     ],
     "default": {
-      "passed": 1831,
+      "passed": 1844,
       "skipped": 15,
       "deselected": 0
     },
     "linux": {
-      "passed": 1846,
+      "passed": 1859,
       "skipped": 0,
       "deselected": 0
     },
     "windows": {
-      "passed": 1830,
+      "passed": 1843,
       "skipped": 1,
       "deselected": 15,
       "expected_skip_path": "tests/ingestion/test_ocr.py",
@@ -39,7 +39,7 @@
     }
   },
   "e2e": {
-    "total": 128,
+    "total": 129,
     "files": 20,
     "spec_files": [
       "a11y.spec.ts",
@@ -64,7 +64,7 @@
       "workflow-studio.spec.ts"
     ],
     "projects": {
-      "chromium": 121,
+      "chromium": 122,
       "chromium-faults": 4,
       "chromium-auth": 3
     }

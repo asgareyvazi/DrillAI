@@ -32,6 +32,7 @@ export const NAV_ITEMS: NavItem[] = [
   { to: '/wells/:wellId/surveys', labelKey: 'nav.surveys', scope: 'well' },
   { to: '/wells/:wellId/operations', labelKey: 'nav.operations', scope: 'well' },
   { to: '/wells/:wellId/engineering', labelKey: 'nav.engineering', scope: 'well' },
+  { to: '/wells/:wellId/circulation', labelKey: 'nav.circulation', scope: 'well' },
   { to: '/wells/:wellId/engineering-products', labelKey: 'nav.engineeringProducts', scope: 'well' },
   { to: '/wells/:wellId/optimisation', labelKey: 'nav.optimisation', scope: 'well' },
   { to: '/wells/:wellId/advisor', labelKey: 'nav.advisor', scope: 'well' },

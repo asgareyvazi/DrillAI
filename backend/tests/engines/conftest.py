@@ -13,6 +13,7 @@ from drillai.engines.registry import ENGINE_REGISTRY, load_default_engines
 #: Engines that must exist for the platform's core drilling workflows to run.
 REQUIRED_ENGINE_KEYS = {
     "trajectory.minimum_curvature",
+    "trajectory.geometric_proximity",
     "wellbore.capacity",
     "hydraulics.laminar",
     "torque_drag.soft_string",

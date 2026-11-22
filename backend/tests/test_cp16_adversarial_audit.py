@@ -763,6 +763,7 @@ def test_f_cp16_06_independent_physics_reference_benchmarks():
             "mud_weight_si": rho,
             "bit_depth_si": length,
             "bit_tvd_si": length,
+            "depth_reference": {"md_origin": "synthetic-rig-floor", "tvd_origin": "synthetic-rig-floor", "vertical_datum": "synthetic-datum", "coordinate_reference": "synthetic-grid", "survey_reference": "synthetic-survey", "source_reference": "synthetic-example", "depth_positive": "down"},
             "plastic_viscosity_si": pv,
             "yield_point_si": yp,
             "tfa_si": 0.0005,

@@ -22,6 +22,7 @@ export const fa = {
     surveys: 'جهت‌یابی و مسیر چاه',
     operations: 'عملیات و رویدادها',
     engineering: 'کارگاه مهندسی',
+    circulation: 'ظرفیت و هیدرولیک',
     engineeringProducts: 'برنامه‌ها و رویه‌ها',
     optimisation: 'بهینه‌سازی پارامترها',
     advisor: 'مشاور عملیات',

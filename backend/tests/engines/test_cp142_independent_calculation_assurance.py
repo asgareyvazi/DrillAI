@@ -83,6 +83,7 @@ def test_newtonian_pipe_pressure_loss_matches_hagen_poiseuille(engines):
             "yield_point_si": 0.0,
             "bit_depth_si": length_m,
             "bit_tvd_si": length_m,
+            "depth_reference": {"md_origin": "synthetic-rig-floor", "tvd_origin": "synthetic-rig-floor", "vertical_datum": "synthetic-datum", "coordinate_reference": "synthetic-grid", "survey_reference": "synthetic-survey", "source_reference": "synthetic-example", "depth_positive": "down"},
             "bit_diameter_si": 0.2159,
             "tfa_si": None,
             "nozzle_count": None,

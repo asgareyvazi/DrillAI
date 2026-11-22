@@ -23,6 +23,7 @@ export const en = {
     surveys: 'Surveys & Trajectories',
     operations: 'Operations & Events',
     engineering: 'Engineering Workspace',
+    circulation: 'Capacity & Hydraulics',
     engineeringProducts: 'Programs & Procedures',
     optimisation: 'Parameter Optimisation',
     advisor: 'Operations Advisor',

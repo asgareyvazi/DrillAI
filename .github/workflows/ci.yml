@@ -198,7 +198,9 @@ jobs:
 
       - name: Verify generated engine roadmap declarations
         if: ${{ !cancelled() && steps.linux_backend_install.outcome == 'success' }}
-        run: backend/.venv/bin/python scripts/verify_engine_roadmap.py
+        run: |
+          backend/.venv/bin/python scripts/verify_engine_roadmap.py
+          backend/.venv/bin/python scripts/verify_engineering_catalogue.py
 
       - name: Backend lint
         if: ${{ !cancelled() && steps.linux_backend_install.outcome == 'success' }}
@@ -586,6 +588,8 @@ jobs:
         run: |
           .\backend\.venv\Scripts\python.exe scripts/verify_engine_roadmap.py
           if ($LASTEXITCODE -ne 0) { throw "engine roadmap declarations differ from the runtime registry" }
+          .\backend\.venv\Scripts\python.exe scripts/verify_engineering_catalogue.py
+          if ($LASTEXITCODE -ne 0) { throw "engineering catalogue differs from the runtime registry" }
 
       - name: Backend lint (Windows)
         if: ${{ !cancelled() && steps.windows_bootstrap.outcome == 'success' }}

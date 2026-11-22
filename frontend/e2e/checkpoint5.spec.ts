@@ -255,3 +255,54 @@ test.describe('checkpoint 5, integrated', () => {
     })
   })
 })
+
+test('structured circulation inputs persist capacity and laminar hydraulic runs', async ({ page, request, wellId, consoleErrors, failedResponses }) => {
+  await page.goto(`/wells/${wellId}/circulation`)
+  await waitForLoaded(page)
+  await selectRole(page, 'engineer')
+  await page.getByLabel('Wellbore').selectOption(fixtures().wellbore_id)
+  await page.getByLabel('Top MD 1 (m)').fill('0')
+  await page.getByLabel('Bottom MD 1 (m)').fill('1000')
+  await page.getByLabel('OD / bore 1 (m)').fill('0.216')
+  await page.getByRole('button', { name: 'Add section' }).click()
+  await page.getByLabel('Kind 2').selectOption('drillpipe')
+  await page.getByLabel('Top MD 2 (m)').fill('0')
+  await page.getByLabel('Bottom MD 2 (m)').fill('1000')
+  await page.getByLabel('OD / bore 2 (m)').fill('0.1')
+  await page.getByLabel('ID 2 (m)').fill('0.08')
+  await page.getByLabel('Current bit MD (m)').fill('1000')
+  const calculate = page.getByRole('button', { name: 'Calculate and save run' })
+  await expect(calculate).toBeEnabled()
+  const capacityResponse = page.waitForResponse((response) => response.url().includes('/registry/engines/wellbore.capacity/run') && response.request().method() === 'POST')
+  await calculate.click()
+  const capacity = await capacityResponse
+  expect(capacity.status()).toBe(200)
+  const capacityBody = await capacity.json() as { engine_run_id: string; result: { annulus_volume_si: number }; inputs_hash: string }
+  expect(capacityBody.result.annulus_volume_si).toBeCloseTo(Math.PI / 4 * (0.216 ** 2 - 0.1 ** 2) * 1000, 8)
+  await expect(page.getByText(`input SHA: ${capacityBody.inputs_hash}`, { exact: false })).toBeVisible()
+
+  await page.getByLabel('Calculation').selectOption('hydraulics')
+  await page.getByLabel('Flow (m³/s)').fill('0.001')
+  await page.getByLabel('Bit TVD from same origin (m)').fill('900')
+  await page.getByLabel('Density (kg/m³)').fill('1200')
+  await page.getByLabel('Plastic viscosity (Pa·s)').fill('0.03')
+  await page.getByLabel('Yield point (Pa)').fill('0')
+  await page.getByLabel('Common MD/TVD origin ID').fill('synthetic-rig-floor')
+  await page.getByLabel('Vertical datum').fill('synthetic-datum')
+  await page.getByLabel('Coordinate reference').fill('synthetic-grid')
+  await page.getByLabel('Survey revision reference').fill('synthetic-survey-rev')
+  await page.getByLabel('Source / provenance').fill('synthetic-browser-example')
+  const hydraulicsResponse = page.waitForResponse((response) => response.url().includes('/registry/engines/hydraulics.laminar/run') && response.request().method() === 'POST')
+  await calculate.click()
+  const hydraulics = await hydraulicsResponse
+  expect(hydraulics.status()).toBe(200)
+  const hydraulicBody = await hydraulics.json() as { engine_run_id: string; inputs_hash: string; result: { bit_tvd_si: number } }
+  expect(hydraulicBody.result.bit_tvd_si).toBe(900)
+  await expect(page.getByText(`input SHA: ${hydraulicBody.inputs_hash}`, { exact: false })).toBeVisible()
+  const saved = await apiGet<{ items: Array<{ id: string; engine_key: string; wellbore_id: string }> }>(request, `/wells/${wellId}/engine-runs?limit=50`, 'engineer')
+  expect(saved.items).toEqual(expect.arrayContaining([
+    expect.objectContaining({ id: capacityBody.engine_run_id, engine_key: 'wellbore.capacity', wellbore_id: fixtures().wellbore_id }),
+    expect.objectContaining({ id: hydraulicBody.engine_run_id, engine_key: 'hydraulics.laminar', wellbore_id: fixtures().wellbore_id }),
+  ]))
+  expectNoFailures(consoleErrors, failedResponses)
+})

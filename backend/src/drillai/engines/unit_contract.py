@@ -57,6 +57,10 @@ def _units(unit: str, *paths: str, semantic: str | None = None) -> dict[str, Uni
 # dictionary paths use ``*``. Dynamic unit-bearing result objects are resolved from their explicit
 # sibling/input declaration at runtime, not from the field name.
 _OUTPUT_FIELD_UNITS: dict[str, dict[str, UnitSpec]] = {
+    "trajectory.geometric_proximity": {
+        **_units("m", "reference_md_si", "offset_md_si", "distance_si", "horizontal_separation_si", "vertical_separation_si", "north_difference_si", "east_difference_si", "tvd_difference_si"),
+        **_units("1", "reference_segment_index", "offset_segment_index", semantic="count"),
+    },
     "drilling.mse": {
         **_units("m2", "bit_area_si"),
         **_units("J/m3", "mse_si", "mse_axial_component_si", "mse_torsional_component_si"),

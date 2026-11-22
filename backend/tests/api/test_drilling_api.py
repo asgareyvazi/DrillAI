@@ -56,6 +56,7 @@ HYDRAULICS_INPUTS = {
     "elements": HYDRAULICS_ELEMENTS,
     "bit_depth_si": 2400.0,
     "bit_tvd_si": 2400.0,
+    "depth_reference": {"md_origin": "synthetic-rig-floor", "tvd_origin": "synthetic-rig-floor", "vertical_datum": "synthetic-datum", "coordinate_reference": "synthetic-grid", "survey_reference": "synthetic-survey", "source_reference": "synthetic-example", "depth_positive": "down"},
     "flow_rate_si": 0.035,
     "mud_weight_si": 1240.0,
     "plastic_viscosity_si": 0.018,

@@ -50,6 +50,7 @@ const DEFAULT_HYDRAULICS = `{
   ],
   "bit_depth_si": 2400.0,
   "bit_tvd_si": 2400.0,
+  "depth_reference": {"md_origin": "synthetic-rig-floor", "tvd_origin": "synthetic-rig-floor", "vertical_datum": "synthetic-datum", "coordinate_reference": "synthetic-grid", "survey_reference": "synthetic-survey", "source_reference": "synthetic-example", "depth_positive": "down"},
   "flow_rate_si": 0.035,
   "mud_weight_si": 1240.0,
   "plastic_viscosity_si": 0.018,
@@ -370,8 +371,8 @@ export default function OptimisationWorkspace() {
             </Field>
             <div className="mt-3">
               <Field label="Hydraulics base inputs (SI)" hint={locale === 'fa'
-                ? 'مقادیر اولیه نمونه مصنوعی برای چاه عمودی هستند؛ پیش از اجرا هندسه و عمق قائم واقعی مته (TVD) را وارد کنید.'
-                : 'The initial values are a synthetic vertical-well example; enter the actual geometry and bit true vertical depth (TVD) before running.'}>
+                ? 'مقادیر اولیه نمونه مصنوعی برای چاه عمودی هستند؛ پیش از اجرا هندسه، عمق قائم واقعی مته (TVD) و مراجع مبنا و برداشت را وارد کنید.'
+                : 'The initial values are a synthetic vertical-well example; enter the actual geometry, bit true vertical depth (TVD), and matching datum and survey references before running.'}>
                 <textarea
                   value={hydraulicsRaw}
                   onChange={(event) => setHydraulicsRaw(event.target.value)}

@@ -83,7 +83,9 @@ def test_cp19_01_all_units_and_dimensions_round_trip_and_reference_accuracy() ->
 def test_cp19_02_independent_analytical_benchmarks_for_all_14_engines() -> None:
     """Check all 14 engines against analytical test vectors, not field certification, and enforce strict JSON safety."""
     reg = load_default_engines()
-    assert len(reg.keys()) == 14
+    # CP19 retains its original 14 vector checks; geometric proximity has separate vectors.
+    assert len(reg.keys()) == 15
+    assert reg.has("trajectory.geometric_proximity")
     field_validation_required = {"tubulars.api_5c3", "well_control.kill_sheet"}
 
     def numeric_paths(value: Any, path: str = "") -> list[str]:
@@ -226,6 +228,7 @@ def test_cp19_02_independent_analytical_benchmarks_for_all_14_engines() -> None:
             "yield_point_si": 8.0,
             "bit_depth_si": 2000.0,
             "bit_tvd_si": 2000.0,
+            "depth_reference": {"md_origin": "synthetic-rig-floor", "tvd_origin": "synthetic-rig-floor", "vertical_datum": "synthetic-datum", "coordinate_reference": "synthetic-grid", "survey_reference": "synthetic-survey", "source_reference": "synthetic-example", "depth_positive": "down"},
             "bit_diameter_si": 0.2159,
             "tfa_si": tfa_h,
             "discharge_coefficient": cd_h,
@@ -608,6 +611,7 @@ def test_cp19_03_metamorphic_monotonicity_and_invalid_input_rejection() -> None:
         "yield_point_si": 7.0,
         "bit_depth_si": 2000.0,
         "bit_tvd_si": 2000.0,
+        "depth_reference": {"md_origin": "synthetic-rig-floor", "tvd_origin": "synthetic-rig-floor", "vertical_datum": "synthetic-datum", "coordinate_reference": "synthetic-grid", "survey_reference": "synthetic-survey", "source_reference": "synthetic-example", "depth_positive": "down"},
         "bit_diameter_si": 0.2159,
         "tfa_si": 0.00045,
     }

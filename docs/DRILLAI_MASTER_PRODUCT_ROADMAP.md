@@ -44,7 +44,7 @@ The following table is generated from the runtime registry and source files by `
 | Key | Version | Registry declaration | Source | Source SHA-256 (LF normalized) |
 |---|---|---|---|---|
 | `drilling.mse` | 1.1.1 | formula_derived | `backend/src/drillai/engines/mechanics.py` | `9feee5be5f8602d92a0d407188d8eb1aabd7b6218b5cc3a3bdd7a7bbbd4c4b27` |
-| `hydraulics.laminar` | 1.4.0 | formula_derived | `backend/src/drillai/engines/fluids.py` | `8293ff5880b048fd315c91e850554723935e08eaf4e6da952ab7b621efd8e876` |
+| `hydraulics.laminar` | 1.5.0 | formula_derived | `backend/src/drillai/engines/fluids.py` | `53d8c0ace1b7c8dbd5aa65ba7d65cffcba592f4c3898ef512ee1cbc0118e164a` |
 | `integrity.barrier_envelope` | 1.1.0 | formula_derived | `backend/src/drillai/engines/integrity.py` | `33c8ff117e649ac14a09aec8f10ceb6b25d2b5cdf1ae6396094c2310a0afbf2d` |
 | `offsets.similarity` | 1.1.0 | formula_derived | `backend/src/drillai/engines/offsets.py` | `e64e0d7f57bda6ffd680590d607a5d620d9945f1d455d933033c417474dbd06a` |
 | `optimization.pareto` | 1.1.0 | formula_derived | `backend/src/drillai/engines/optimization.py` | `aacf9a131edcc5e65896dbf82a3ebdb50f14d25baf5daa126c2617c0c76d84e8` |
@@ -52,11 +52,12 @@ The following table is generated from the runtime registry and source files by `
 | `readiness.assessment` | 1.1.0 | formula_derived | `backend/src/drillai/engines/readiness.py` | `25e60115f5ee24361b224b42fe7b332d2cc1d85c53e11c1f97a20e53533e2a8d` |
 | `schematic.well_model` | 1.1.0 | formula_derived | `backend/src/drillai/engines/schematic.py` | `b938f647de4b90ff989762a8565a22b9b6a6c9dd0f647c7e1e6a85260c751200` |
 | `torque_drag.soft_string` | 1.1.0 | formula_derived | `backend/src/drillai/engines/mechanics.py` | `9feee5be5f8602d92a0d407188d8eb1aabd7b6218b5cc3a3bdd7a7bbbd4c4b27` |
+| `trajectory.geometric_proximity` | 1.0.0 | formula_derived | `backend/src/drillai/engines/proximity.py` | `5a74d30345800db19f354b4b74b438e6fabac50124542e79d6b9f9d61a0d57f5` |
 | `trajectory.minimum_curvature` | 1.3.0 | formula_derived | `backend/src/drillai/engines/trajectory.py` | `c6a6fb1063b9d69b87f9d5d284f38eb25b431b6cfe3f5525378727befc2d493c` |
 | `tubulars.api_5c3` | 1.1.0 | needs_field_validation | `backend/src/drillai/engines/tubulars.py` | `3bdc50ef9b0b7044710ea49ffca1d3ad55dbd4759571b96219f9590bb61f5a36` |
 | `twin.reconciliation` | 1.2.0 | formula_derived | `backend/src/drillai/engines/twin.py` | `5c56256b8f813f531e4aa9e1f771679f93e9297f332d3054e00cda56dc464386` |
 | `well_control.kill_sheet` | 1.2.0 | needs_field_validation | `backend/src/drillai/engines/wellcontrol.py` | `00ad181423c078d74c72dac07a870aaecc2be5d7050f7f0993b86c5b6f560dc8` |
-| `wellbore.capacity` | 1.3.0 | formula_derived | `backend/src/drillai/engines/fluids.py` | `8293ff5880b048fd315c91e850554723935e08eaf4e6da952ab7b621efd8e876` |
+| `wellbore.capacity` | 1.4.0 | formula_derived | `backend/src/drillai/engines/fluids.py` | `53d8c0ace1b7c8dbd5aa65ba7d65cffcba592f4c3898ef512ee1cbc0118e164a` |
 <!-- END GENERATED ENGINE REGISTRY -->
 
 ## Ordered mission plan and acceptance

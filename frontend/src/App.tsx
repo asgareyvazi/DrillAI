@@ -16,6 +16,7 @@ import WellCockpit from './pages/wells/WellCockpit'
 import DocumentWorkspace from './pages/wells/DocumentWorkspace'
 import OperationsWorkspace from './pages/wells/OperationsWorkspace'
 import EngineeringWorkspace from './pages/engineering/EngineeringWorkspace'
+import CirculationWorkspace from './pages/engineering/CirculationWorkspace'
 import ProgramsProceduresWorkspace from './pages/engineering/ProgramsProceduresWorkspace'
 import OptimisationWorkspace from './pages/engineering/OptimisationWorkspace'
 import AdvisorWorkspace from './pages/engineering/AdvisorWorkspace'
@@ -113,6 +114,7 @@ export function App() {
         <Route path="/wells/:wellId/documents" element={<WellScoped><DocumentWorkspace /></WellScoped>} />
         <Route path="/wells/:wellId/surveys" element={<WellScoped><SurveysWorkspace /></WellScoped>} />
         <Route path="/wells/:wellId/operations" element={<WellScoped><OperationsWorkspace /></WellScoped>} />
+        <Route path="/wells/:wellId/circulation" element={<WellScoped><CirculationWorkspace /></WellScoped>} />
         <Route path="/wells/:wellId/engineering" element={<WellScoped><EngineeringWorkspace /></WellScoped>} />
         <Route path="/wells/:wellId/engineering-products" element={<WellScoped><ProgramsProceduresWorkspace /></WellScoped>} />
         <Route path="/wells/:wellId/optimisation" element={<WellScoped><OptimisationWorkspace /></WellScoped>} />

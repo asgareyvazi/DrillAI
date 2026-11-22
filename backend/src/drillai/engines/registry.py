@@ -144,7 +144,9 @@ class EngineRegistry:
             except ValidationError as exc:
                 raise EngineInputInvalid(
                     f"invalid inputs for engine {key!r}",
-                    details={"engine": key, "errors": exc.errors(include_url=False)},
+                    # Pydantic custom-validator ctx can contain an exception object, and input can
+                    # contain non-JSON data. Preserve actionable type/location/message, not raw input.
+                    details={"engine": key, "errors": exc.errors(include_url=False, include_context=False, include_input=False)},
                 ) from exc
         if _has_nonfinite_float(payload):
             raise EngineInputInvalid(f"non-finite numeric inputs for engine {key!r}", details={"engine": key})
@@ -168,6 +170,7 @@ def register_engine(engine: Engine, *, aliases: Iterable[str] = ()) -> Engine:
 #: plus one line here (or a plugin entry point) — no core file changes.
 ENGINE_MODULES = (
     "trajectory",
+    "proximity",
     "fluids",
     "mechanics",
     "wellcontrol",

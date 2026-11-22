@@ -40,6 +40,7 @@ def _hydraulics_input(**overrides) -> dict:
         "yield_point_si": YP,
         "bit_depth_si": DEPTH,
         "bit_tvd_si": DEPTH,
+        "depth_reference": {"md_origin": "synthetic-rig-floor", "tvd_origin": "synthetic-rig-floor", "vertical_datum": "synthetic-datum", "coordinate_reference": "synthetic-grid", "survey_reference": "synthetic-survey", "source_reference": "synthetic-example", "depth_positive": "down"},
         "bit_diameter_si": HOLE_OD,
         "tfa_si": TFA,
         "nozzle_count": 6,
@@ -383,12 +384,12 @@ def test_capacity_explicit_bare_bore_is_not_inferred(engines):
     elements = [{"kind": "hole", "from_depth_si": 0, "to_depth_si": 1000, "od_si": .216}]
     _, result = engines.execute("wellbore.capacity", {
         "elements": elements, "current_depth_si": 500, "flow_rate_si": .02,
-        "verified_open_bore": True,
+        "open_bore_declarations": [{"from_depth_si": 0, "to_depth_si": 1000, "declared_by": "operator", "declared_at": "2026-10-20T00:00:00Z", "basis": "reviewed design"}],
     })
     assert result.outputs.string_volume_si == 0
     assert result.outputs.annulus_volume_si == pytest.approx(math.pi / 4 * .216**2 * 1000)
     assert result.outputs.bottoms_up_volume_si == pytest.approx(math.pi / 4 * .216**2 * 500)
-    assert any("verified open bore" in assumption for assumption in result.assumptions_applied)
+    assert any("declarations" in assumption for assumption in result.assumptions_applied)
 
 
 @pytest.mark.parametrize("elements", [
@@ -404,3 +405,87 @@ def test_hydraulics_rejects_incomplete_circulation_path(engines, elements):
 
     with pytest.raises(EngineInputInvalid):
         engines.execute("hydraulics.laminar", _hydraulics_input(elements=elements))
+
+
+def test_capacity_bottoms_up_volume_available_without_pump_or_flow(engines):
+    _, result = engines.execute("wellbore.capacity", {"elements": _geometry(), "current_depth_si": 1000})
+    expected = math.pi / 4 * (HOLE_OD**2 - DP_OD**2) * 1000
+    assert result.outputs.bottoms_up_volume_si == pytest.approx(expected)
+    assert result.outputs.bottoms_up_time_si is None
+    assert result.outputs.bottoms_up_strokes is None
+
+
+def test_capacity_rejects_conflicting_pump_and_flow(engines):
+    from drillai.core.errors import EngineInputInvalid
+
+    with pytest.raises(EngineInputInvalid):
+        engines.execute("wellbore.capacity", {"elements": _geometry(), "current_depth_si": 1000,
+            "flow_rate_si": .10, "pump": {"output_per_stroke_si": .02, "strokes_per_minute": 60}})
+
+
+def test_capacity_scoped_human_open_bore_declarations(engines):
+    from drillai.core.errors import EngineInputInvalid
+
+    elements = [{"kind": "hole", "from_depth_si": 0, "to_depth_si": 1000, "od_si": .216},
+                {"kind": "drillpipe", "from_depth_si": 0, "to_depth_si": 500, "od_si": .1, "id_si": .08}]
+    declaration = {"from_depth_si": 500, "to_depth_si": 1000,
+                   "declared_by": "operator-1", "declared_at": "2026-10-20T00:00:00Z",
+                   "basis": "Manual review of design revision A"}
+    data = {"elements": elements, "current_depth_si": 750, "open_bore_declarations": [declaration]}
+    _, result = engines.execute("wellbore.capacity", data)
+    expected = math.pi / 4 * ((.216**2 - .1**2) * 500 + .216**2 * 250)
+    assert result.outputs.bottoms_up_volume_si == pytest.approx(expected)
+    assert any("declaration" in item.lower() for item in result.assumptions_applied)
+    for bad in [
+        {**declaration, "from_depth_si": 501},
+        {**declaration, "from_depth_si": 499},
+        {**declaration, "to_depth_si": 999},
+        {**declaration, "declared_by": ""},
+        {**declaration, "declared_at": "2026-10-20T00:00:00"},
+        {**declaration, "basis": ""},
+    ]:
+        with pytest.raises(EngineInputInvalid):
+            engines.execute("wellbore.capacity", {**data, "open_bore_declarations": [bad]})
+    with pytest.raises(EngineInputInvalid):
+        engines.execute("wellbore.capacity", {**data, "open_bore_declarations": [declaration, declaration]})
+    with pytest.raises(EngineInputInvalid):
+        engines.execute("wellbore.capacity", {"elements": elements, "current_depth_si": 750, "verified_open_bore": True})
+
+
+def test_hydraulics_requires_compatible_declared_depth_reference(engines):
+    from drillai.core.errors import EngineInputInvalid
+
+    reference = {"md_origin": "rig-floor-A", "tvd_origin": "rig-floor-A", "vertical_datum": "MSL",
+                 "coordinate_reference": "synthetic-grid-A", "survey_reference": "synthetic-survey-rev-1",
+                 "source_reference": "synthetic test declaration", "depth_positive": "down"}
+    _, result = engines.execute("hydraulics.laminar", _hydraulics_input(depth_reference=reference))
+    assert result.outputs.ecd_bottom_si > MUD_WEIGHT
+    for bad in [None, {**reference, "tvd_origin": "sea-level"}, {**reference, "vertical_datum": ""},
+                {**reference, "depth_positive": "up"}, {**reference, "survey_reference": ""}]:
+        with pytest.raises(EngineInputInvalid):
+            engines.execute("hydraulics.laminar", _hydraulics_input(depth_reference=bad))
+
+
+def test_capacity_independent_casing_liner_and_string_transitions(engines):
+    # Independent cylindrical sums; all dimensions in m. Liner is nested inside casing.
+    elements = [
+        {"kind": "hole", "from_depth_si": 0, "to_depth_si": 1000, "od_si": .40},
+        {"kind": "casing", "from_depth_si": 0, "to_depth_si": 600, "od_si": .30, "id_si": .28},
+        {"kind": "liner", "from_depth_si": 400, "to_depth_si": 800, "od_si": .24, "id_si": .22},
+        {"kind": "drillpipe", "from_depth_si": 0, "to_depth_si": 500, "od_si": .12, "id_si": .10},
+        {"kind": "hwdp", "from_depth_si": 500, "to_depth_si": 1000, "od_si": .16, "id_si": .08},
+    ]
+    _, result = engines.execute("wellbore.capacity", {"elements": elements, "current_depth_si": 700,
+        "pump": {"output_per_stroke_si": .01, "strokes_per_minute": 30, "count": 2}})
+    out = result.outputs
+    string = math.pi / 4 * (.10**2 * 500 + .08**2 * 500)
+    annulus = math.pi / 4 * ((.28**2 - .12**2) * 400 + (.22**2 - .12**2) * 100
+        + (.22**2 - .16**2) * 300 + (.40**2 - .16**2) * 200)
+    bottom = math.pi / 4 * ((.28**2 - .12**2) * 400 + (.22**2 - .12**2) * 100
+        + (.22**2 - .16**2) * 200)
+    assert out.string_volume_si == pytest.approx(string, rel=1e-12)
+    assert out.annulus_volume_si == pytest.approx(annulus, rel=1e-12)
+    assert out.bottoms_up_volume_si == pytest.approx(bottom, rel=1e-12)
+    assert out.total_strokes == pytest.approx((string + annulus) / .01, rel=1e-12)
+    assert out.bottoms_up_time_si == pytest.approx(bottom / .01 / 60 * 60, rel=1e-12)
+    assert out.circulation_time_si == pytest.approx((string + annulus) / .01 / 60 * 60, rel=1e-12)
