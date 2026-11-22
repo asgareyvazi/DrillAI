@@ -184,7 +184,7 @@ def verify(report_path: Path, corpus_path: Path) -> dict[str, Any]:
         or dataset.get("languages") != languages
         or dataset.get("stratification_dimensions") != dimensions
         or not isinstance(runtime, dict)
-        or runtime.get("adapter_version") != "tesseract-cli-tsv-v8"
+        or runtime.get("adapter_version") != "tesseract-cli-tsv-v9"
         or runtime.get("page_segmentation_mode") != 6
         or runtime.get("language_routing_policy") != LANGUAGE_ROUTING_POLICY
         or runtime.get("layout_policy") != LAYOUT_POLICY

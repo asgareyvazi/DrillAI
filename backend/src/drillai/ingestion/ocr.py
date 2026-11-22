@@ -39,7 +39,7 @@ __all__ = [
 MAX_TSV_BYTES = 16 * 1024 * 1024
 MAX_DIAGNOSTIC_OUTPUT_BYTES = 128 * 1024
 DIAGNOSTIC_TIMEOUT_SECONDS = 3.0
-TESSERACT_ADAPTER_VERSION = "tesseract-cli-tsv-v8"
+TESSERACT_ADAPTER_VERSION = "tesseract-cli-tsv-v9"
 TESSERACT_PAGE_SEGMENTATION_MODE = 6
 TESSERACT_TWO_COLUMN_PAGE_SEGMENTATION_MODE = 11
 TESSERACT_LANGUAGE_ROUTING_POLICY = (
@@ -641,6 +641,9 @@ class TesseractOcrProvider:
                 f"OCR concurrency limit ({self.max_concurrency}) is reached; retry when capacity is available"
             )
         try:
+            # Layout analysis consumes the same page budget as recognition. It is synchronous and
+            # cannot be interrupted mid-analysis, but an exhausted budget must not start a child.
+            deadline_monotonic = time.monotonic() + self.timeout_seconds
             divider = (
                 _detect_central_column_divider(image_png)
                 if self.page_segmentation_mode in {
@@ -652,7 +655,6 @@ class TesseractOcrProvider:
             page_segmentation_mode = self.page_segmentation_mode
             if divider is not None and page_segmentation_mode == TESSERACT_PAGE_SEGMENTATION_MODE:
                 page_segmentation_mode = TESSERACT_TWO_COLUMN_PAGE_SEGMENTATION_MODE
-            deadline_monotonic = time.monotonic() + self.timeout_seconds
             lines = self._recognize_acquired(
                 image_png,
                 executable,

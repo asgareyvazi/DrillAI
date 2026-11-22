@@ -343,7 +343,7 @@ def test_tesseract_cli_adapter_uses_stdin_and_bounds_child_output(tmp_path: Path
         languages="eng,fas", executable=str(script), timeout_seconds=5, max_output_bytes=1024
     )
     assert provider.availability() == (True, None)
-    assert provider.version == "tesseract-cli-tsv-v8; tesseract 5.3.0"
+    assert provider.version == "tesseract-cli-tsv-v9; tesseract 5.3.0"
     lines = provider.recognize(b"png-contract")
     assert len(lines) == 1
     assert lines[0].text == "Drill"
@@ -404,6 +404,22 @@ def test_tesseract_cli_adapter_uses_stdin_and_bounds_child_output(tmp_path: Path
 
 
 def test_tesseract_rtl_language_routing_shares_the_original_page_deadline(monkeypatch) -> None:
+    # Layout detection is charged to the same budget, and no Tesseract child may start
+    # if synchronous analysis has already consumed it.
+    budget_provider = TesseractOcrProvider(languages="eng+fas", timeout_seconds=7)
+    monkeypatch.setattr(budget_provider, "_resolved_executable", lambda: "/opt/tesseract")
+    clock = [100.0]
+    monkeypatch.setattr(ocr_module.time, "monotonic", lambda: clock[0])
+
+    def slow_detector(_png):
+        clock[0] = 108.0
+        return None
+
+    monkeypatch.setattr(ocr_module, "_detect_central_column_divider", slow_detector)
+    monkeypatch.setattr(ocr_module.subprocess, "Popen", lambda *args, **kwargs: pytest.fail("child started"))
+    with pytest.raises(OcrUnavailable, match="per-page timeout"):
+        budget_provider.recognize(b"png")
+
     provider = TesseractOcrProvider(languages="eng+fas", timeout_seconds=7)
     monkeypatch.setattr(provider, "_resolved_executable", lambda: "/opt/tesseract")
     monkeypatch.setattr(ocr_module, "_detect_central_column_divider", lambda _png: None)
@@ -477,7 +493,7 @@ def test_tesseract_diagnostics_verify_languages_and_capture_runtime_version(monk
     assert diagnostics["available_languages"] == ["eng"]
     assert diagnostics["missing_languages"] == ["fas"]
     assert diagnostics["reason"] == "Tesseract is missing configured language data: fas"
-    assert provider.version == "tesseract-cli-tsv-v8; tesseract 5.4.1"
+    assert provider.version == "tesseract-cli-tsv-v9; tesseract 5.4.1"
 
 
 def test_tesseract_diagnostic_version_rejects_path_or_untrusted_process_text(monkeypatch) -> None:
@@ -546,9 +562,9 @@ def test_tesseract_runtime_diagnostics_are_cached_across_provider_instances(monk
     second = second_provider.diagnostics()
     second["available_languages"].append("tampered")
 
-    assert first_version == "tesseract-cli-tsv-v8; tesseract 5.4.1"
+    assert first_version == "tesseract-cli-tsv-v9; tesseract 5.4.1"
     assert calls == ["--version", "--list-langs"]
-    assert second_provider.version == "tesseract-cli-tsv-v8; tesseract 5.4.1"
+    assert second_provider.version == "tesseract-cli-tsv-v9; tesseract 5.4.1"
     assert first["available_languages"] == ["eng", "fas"]
 
 
