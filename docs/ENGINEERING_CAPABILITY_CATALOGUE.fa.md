@@ -6,6 +6,7 @@
 |---|---|---|---|
 | `drilling.mse` | 1.1.1 | `IMPLEMENTED_NOT_INDEPENDENTLY_VALIDATED` | `backend/src/drillai/engines/mechanics.py` |
 | `hydraulics.laminar` | 1.6.0 | `IMPLEMENTED_NOT_INDEPENDENTLY_VALIDATED` | `backend/src/drillai/engines/fluids.py` |
+| `hydraulics.power_law_pipe` | 1.0.0 | `INDEPENDENT_SOFTWARE_REFERENCE_CHECKED` | `backend/src/drillai/engines/power_law.py` |
 | `integrity.barrier_envelope` | 1.1.0 | `IMPLEMENTED_NOT_INDEPENDENTLY_VALIDATED` | `backend/src/drillai/engines/integrity.py` |
 | `offsets.similarity` | 1.1.0 | `IMPLEMENTED_NOT_INDEPENDENTLY_VALIDATED` | `backend/src/drillai/engines/offsets.py` |
 | `optimization.pareto` | 1.1.0 | `IMPLEMENTED_NOT_INDEPENDENTLY_VALIDATED` | `backend/src/drillai/engines/optimization.py` |

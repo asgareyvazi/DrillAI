@@ -16,6 +16,7 @@ REQUIRED_ENGINE_KEYS = {
     "trajectory.geometric_proximity",
     "wellbore.capacity",
     "hydraulics.laminar",
+    "hydraulics.power_law_pipe",
     "torque_drag.soft_string",
     "drilling.mse",
     "well_control.kill_sheet",

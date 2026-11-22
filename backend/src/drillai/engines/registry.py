@@ -172,6 +172,7 @@ ENGINE_MODULES = (
     "trajectory",
     "proximity",
     "fluids",
+    "power_law",
     "mechanics",
     "wellcontrol",
     "tubulars",

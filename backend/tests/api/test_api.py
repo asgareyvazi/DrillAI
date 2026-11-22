@@ -1306,3 +1306,40 @@ async def test_geometric_proximity_api_persists_unqualified_result_and_frames(cl
     rejected = await client.post("/api/v1/registry/engines/trajectory.geometric_proximity/run", headers=headers(), json={"well_id": well_id, "inputs": mismatch})
     assert rejected.status_code == 422
     assert rejected.json()["error"]["code"] == "engine.input_invalid"
+
+
+async def test_power_law_pipe_api_persists_scoped_run_and_rejects_out_of_range(client):
+    """The generic engine API persists the pipe-only model; this is not a design workflow."""
+    import math
+
+    from sqlalchemy import func, select
+
+    from drillai.db.models import EngineRun
+
+    _, well_id = await _create_project_and_well(client, "Synthetic power-law test")
+    inputs = {"diameter_si": .1, "length_si": 100, "flow_rate_si": .00001, "density_si": 1000,
+              "consistency_si": .02, "flow_index": 1, "measured_shear_min_per_s": 0,
+              "measured_shear_max_per_s": 1000}
+    response = await client.post(
+        "/api/v1/registry/engines/hydraulics.power_law_pipe/run", headers=headers(),
+        json={"well_id": well_id, "inputs": inputs},
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["engine_version"] == "1.0.0"
+    assert body["result"]["pressure_loss_si"] == pytest.approx(128 * .02 * 100 * .00001 / (math.pi * .1**4))
+    assert body["inputs_hash"] and body["outputs_hash"] and body["engine_run_id"]
+    assert any("not proof" in warning for warning in body["warnings"])
+    invalid = await client.post(
+        "/api/v1/registry/engines/hydraulics.power_law_pipe/run", headers=headers(),
+        json={"well_id": well_id, "inputs": {**inputs, "flow_rate_si": 0.1}},
+    )
+    assert invalid.status_code == 422
+    readback = await client.get(f"/api/v1/wells/{well_id}/engine-runs", headers=headers())
+    assert readback.status_code == 200
+    matches = [row for row in readback.json()["items"] if row["id"] == body["engine_run_id"]]
+    assert len(matches) == 1
+    assert matches[0]["inputs"] == inputs
+    assert matches[0]["outputs"] == body["result"]
+    async with client._transport.app.state.database.session() as session:
+        assert (await session.execute(select(func.count()).select_from(EngineRun))).scalar_one() == 1

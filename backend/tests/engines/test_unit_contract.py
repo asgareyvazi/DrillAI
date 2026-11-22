@@ -34,7 +34,7 @@ def test_added_units_keep_pressure_mse_and_force_per_length_dimensions_distinct(
 
 
 def test_all_fourteen_engines_have_schema_contracts_and_explicit_unknown_policy(engines) -> None:
-    assert len(engines.keys()) == 15
+    assert len(engines.keys()) == 16
     for engine in engines:
         spec = engine.spec
         contract = schema_unit_contract(spec.key, spec.inputs_model, spec.outputs_model)

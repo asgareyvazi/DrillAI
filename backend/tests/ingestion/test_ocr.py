@@ -343,7 +343,7 @@ def test_tesseract_cli_adapter_uses_stdin_and_bounds_child_output(tmp_path: Path
         languages="eng,fas", executable=str(script), timeout_seconds=5, max_output_bytes=1024
     )
     assert provider.availability() == (True, None)
-    assert provider.version == "tesseract-cli-tsv-v9; tesseract 5.3.0"
+    assert provider.version == "tesseract-cli-tsv-v10; tesseract 5.3.0"
     lines = provider.recognize(b"png-contract")
     assert len(lines) == 1
     assert lines[0].text == "Drill"
@@ -493,7 +493,7 @@ def test_tesseract_diagnostics_verify_languages_and_capture_runtime_version(monk
     assert diagnostics["available_languages"] == ["eng"]
     assert diagnostics["missing_languages"] == ["fas"]
     assert diagnostics["reason"] == "Tesseract is missing configured language data: fas"
-    assert provider.version == "tesseract-cli-tsv-v9; tesseract 5.4.1"
+    assert provider.version == "tesseract-cli-tsv-v10; tesseract 5.4.1"
 
 
 def test_tesseract_diagnostic_version_rejects_path_or_untrusted_process_text(monkeypatch) -> None:
@@ -562,9 +562,9 @@ def test_tesseract_runtime_diagnostics_are_cached_across_provider_instances(monk
     second = second_provider.diagnostics()
     second["available_languages"].append("tampered")
 
-    assert first_version == "tesseract-cli-tsv-v9; tesseract 5.4.1"
+    assert first_version == "tesseract-cli-tsv-v10; tesseract 5.4.1"
     assert calls == ["--version", "--list-langs"]
-    assert second_provider.version == "tesseract-cli-tsv-v9; tesseract 5.4.1"
+    assert second_provider.version == "tesseract-cli-tsv-v10; tesseract 5.4.1"
     assert first["available_languages"] == ["eng", "fas"]
 
 
@@ -637,3 +637,30 @@ def test_tesseract_process_concurrency_limit_fails_fast(monkeypatch) -> None:
             provider.recognize(b"rendered-png")
     finally:
         semaphore.release()
+
+
+def test_tesseract_refuses_successful_child_output_after_incomplete_input(monkeypatch) -> None:
+    """A child returning success cannot certify a page whose stdin write failed."""
+    class BrokenInput(io.BytesIO):
+        def write(self, _data):
+            raise BrokenPipeError("private path and partial page must not be exposed")
+
+    class SuccessfulChild:
+        def __init__(self):
+            self.stdin = BrokenInput()
+            self.stdout = io.BytesIO(_tsv([_word(left=1, top=2, width=30, height=10, conf="88", text="partial")]))
+            self.returncode = 0
+
+        def wait(self, timeout=None):
+            return 0
+
+        def poll(self):
+            return 0
+
+    monkeypatch.setattr(ocr_module.subprocess, "Popen", lambda *_args, **_kwargs: SuccessfulChild())
+    provider = TesseractOcrProvider(executable="tesseract", timeout_seconds=5)
+    monkeypatch.setattr(provider, "_resolved_executable", lambda: "/synthetic/tesseract")
+    monkeypatch.setattr(ocr_module, "_detect_central_column_divider", lambda _png: None)
+    with pytest.raises(OcrUnavailable, match="complete rendered page") as exc:
+        provider.recognize(b"synthetic-page")
+    assert "private" not in str(exc.value)

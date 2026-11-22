@@ -49,6 +49,7 @@ The following table is generated from the runtime registry and source files by `
 |---|---|---|---|---|
 | `drilling.mse` | 1.1.1 | formula_derived | `backend/src/drillai/engines/mechanics.py` | `9feee5be5f8602d92a0d407188d8eb1aabd7b6218b5cc3a3bdd7a7bbbd4c4b27` |
 | `hydraulics.laminar` | 1.6.0 | formula_derived | `backend/src/drillai/engines/fluids.py` | `f6be6cb2d37f56a063d3710c78b21ab031fe7b6659e31e06b80116ca3afac0fc` |
+| `hydraulics.power_law_pipe` | 1.0.0 | formula_derived | `backend/src/drillai/engines/power_law.py` | `4490e147e39c3ea2417a2d6821e2610d5194bbceb97a9a8b3570ef4d4f049364` |
 | `integrity.barrier_envelope` | 1.1.0 | formula_derived | `backend/src/drillai/engines/integrity.py` | `33c8ff117e649ac14a09aec8f10ceb6b25d2b5cdf1ae6396094c2310a0afbf2d` |
 | `offsets.similarity` | 1.1.0 | formula_derived | `backend/src/drillai/engines/offsets.py` | `e64e0d7f57bda6ffd680590d607a5d620d9945f1d455d933033c417474dbd06a` |
 | `optimization.pareto` | 1.1.0 | formula_derived | `backend/src/drillai/engines/optimization.py` | `aacf9a131edcc5e65896dbf82a3ebdb50f14d25baf5daa126c2617c0c76d84e8` |

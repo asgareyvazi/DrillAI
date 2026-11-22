@@ -15,6 +15,7 @@ FA_PATH = ROOT / 'docs/ENGINEERING_CAPABILITY_CATALOGUE.fa.md'
 TESTS = {
     'drilling.mse': 'backend/tests/engines/test_mechanics.py',
     'hydraulics.laminar': 'backend/tests/engines/test_fluids.py',
+    'hydraulics.power_law_pipe': 'backend/tests/engines/test_mission6_power_law.py',
     'integrity.barrier_envelope': 'backend/tests/engines/test_safety_engines.py',
     'offsets.similarity': 'backend/tests/engines/test_planning_engines.py',
     'optimization.pareto': 'backend/tests/engines/test_twin_optimization_engines.py',
@@ -29,7 +30,7 @@ TESTS = {
     'well_control.kill_sheet': 'backend/tests/engines/test_safety_engines.py',
     'wellbore.capacity': 'backend/tests/engines/test_fluids.py',
 }
-PLANNED = ['turbulent hydraulics', 'Power Law rheology', 'Herschel-Bulkley rheology', 'hole cleaning',
+PLANNED = ['turbulent hydraulics', 'Power Law full-well and annular hydraulics', 'Herschel-Bulkley rheology', 'hole cleaning',
            'cuttings transport', 'uncertainty-based anti-collision', 'advanced torque and drag', 'surge/swab',
            'casing design', 'tubular connection capacity', 'cementing', 'wellbore stability', 'kick tolerance',
            'MAASP', 'managed pressure drilling', 'drillstring design', 'casing-seat planning', 'pressure management',
@@ -61,7 +62,7 @@ def build() -> tuple[str, str, str]:
             raise ValueError(f'missing reviewed primary test association for {key}')
         engines.append({
             'id': key, 'version': spec['version'], 'source': path, 'source_function': engine._fn.__name__,
-            'source_sha256_lf': sha, 'status': 'NEEDS_FIELD_VALIDATION' if key in {'well_control.kill_sheet', 'tubulars.api_5c3'} else 'IMPLEMENTED_NOT_INDEPENDENTLY_VALIDATED',
+            'source_sha256_lf': sha, 'status': ('NEEDS_FIELD_VALIDATION' if key in {'well_control.kill_sheet', 'tubulars.api_5c3'} else 'INDEPENDENT_SOFTWARE_REFERENCE_CHECKED' if key == 'hydraulics.power_law_pipe' else 'IMPLEMENTED_NOT_INDEPENDENTLY_VALIDATED'),
             'registry_self_declaration': spec['validation_status'], 'summary': spec['summary'],
             'api': '/api/v1/registry/engines/{engine_key}/run', 'persistence': 'backend/src/drillai/db/models/engines.py:EngineRun',
             'ui': 'frontend/src/pages/engineering/CirculationWorkspace.tsx (partial)' if key in {'wellbore.capacity', 'hydraulics.laminar'} else 'frontend/src/pages/engineering/EngineeringWorkspace.tsx (generic runner)',

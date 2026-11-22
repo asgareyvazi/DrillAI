@@ -39,7 +39,7 @@ __all__ = [
 MAX_TSV_BYTES = 16 * 1024 * 1024
 MAX_DIAGNOSTIC_OUTPUT_BYTES = 128 * 1024
 DIAGNOSTIC_TIMEOUT_SECONDS = 3.0
-TESSERACT_ADAPTER_VERSION = "tesseract-cli-tsv-v9"
+TESSERACT_ADAPTER_VERSION = "tesseract-cli-tsv-v10"
 TESSERACT_PAGE_SEGMENTATION_MODE = 6
 TESSERACT_TWO_COLUMN_PAGE_SEGMENTATION_MODE = 11
 TESSERACT_LANGUAGE_ROUTING_POLICY = (
@@ -723,6 +723,7 @@ class TesseractOcrProvider:
         output = bytearray()
         output_overflow = threading.Event()
         reader_errors: list[OSError] = []
+        writer_errors: list[Exception] = []
 
         def read_bounded_stdout() -> None:
             try:
@@ -750,8 +751,10 @@ class TesseractOcrProvider:
                         raise BrokenPipeError("Tesseract stopped reading its input")
                     remaining = remaining[written:]
                 process.stdin.close()
-            except (BrokenPipeError, OSError, ValueError):
-                # The main thread reports the child's bounded failure/exit status.
+            except (BrokenPipeError, OSError, ValueError) as exc:
+                # A zero-exit child can still have consumed only part of the page. Never publish
+                # its output as a completed recognition if any input write failed.
+                writer_errors.append(exc)
                 with suppress(OSError, ValueError):
                     process.stdin.close()
 
@@ -797,4 +800,6 @@ class TesseractOcrProvider:
             raise OcrUnavailable("Tesseract output could not be read") from reader_errors[0]
         if process.returncode != 0:
             raise OcrUnavailable(f"Tesseract exited with status {process.returncode}")
+        if writer_errors:
+            raise OcrUnavailable("Tesseract did not receive the complete rendered page") from writer_errors[0]
         return parse_tesseract_tsv(bytes(output))

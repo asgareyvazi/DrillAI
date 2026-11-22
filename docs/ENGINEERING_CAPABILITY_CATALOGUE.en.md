@@ -6,6 +6,7 @@ This source-linked inventory is not the requested comprehensive historical/produ
 |---|---|---|---|
 | `drilling.mse` | 1.1.1 | `IMPLEMENTED_NOT_INDEPENDENTLY_VALIDATED` | `backend/src/drillai/engines/mechanics.py` |
 | `hydraulics.laminar` | 1.6.0 | `IMPLEMENTED_NOT_INDEPENDENTLY_VALIDATED` | `backend/src/drillai/engines/fluids.py` |
+| `hydraulics.power_law_pipe` | 1.0.0 | `INDEPENDENT_SOFTWARE_REFERENCE_CHECKED` | `backend/src/drillai/engines/power_law.py` |
 | `integrity.barrier_envelope` | 1.1.0 | `IMPLEMENTED_NOT_INDEPENDENTLY_VALIDATED` | `backend/src/drillai/engines/integrity.py` |
 | `offsets.similarity` | 1.1.0 | `IMPLEMENTED_NOT_INDEPENDENTLY_VALIDATED` | `backend/src/drillai/engines/offsets.py` |
 | `optimization.pareto` | 1.1.0 | `IMPLEMENTED_NOT_INDEPENDENTLY_VALIDATED` | `backend/src/drillai/engines/optimization.py` |
@@ -38,6 +39,6 @@ This source-linked inventory is not the requested comprehensive historical/produ
 - Persian OCR: NOT ACCEPTED on the unchanged deployed gate; independent holdout absent.
 
 ## Future / incomplete advanced scopes
-turbulent hydraulics, Power Law rheology, Herschel-Bulkley rheology, hole cleaning, cuttings transport, uncertainty-based anti-collision, advanced torque and drag, surge/swab, casing design, tubular connection capacity, cementing, wellbore stability, kick tolerance, MAASP, managed pressure drilling, drillstring design, casing-seat planning, pressure management, well integrity, well economics, lifecycle performance, advanced optimization.
+turbulent hydraulics, Power Law full-well and annular hydraulics, Herschel-Bulkley rheology, hole cleaning, cuttings transport, uncertainty-based anti-collision, advanced torque and drag, surge/swab, casing design, tubular connection capacity, cementing, wellbore stability, kick tolerance, MAASP, managed pressure drilling, drillstring design, casing-seat planning, pressure management, well integrity, well economics, lifecycle performance, advanced optimization.
 
 See the JSON catalogue for input/output schemas, units, assumptions, limitations and self-declared references. The source SHA normalizes CRLF to LF.

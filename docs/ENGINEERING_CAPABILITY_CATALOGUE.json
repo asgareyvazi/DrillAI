@@ -4547,6 +4547,766 @@
     {
       "api": "/api/v1/registry/engines/{engine_key}/run",
       "assumptions": [
+        "steady fully developed laminar pipe flow",
+        "time-independent power-law rheology"
+      ],
+      "dependencies": [
+        "mud.properties"
+      ],
+      "field_vendor_customer_validation": "NOT_MEASURED",
+      "id": "hydraulics.power_law_pipe",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "consistency_si": {
+            "description": "Power-law consistency K in Pa·s^n; its physical dimension depends on flow_index. No automatic conversion.",
+            "maximum": 100000000.0,
+            "minimum": 1e-08,
+            "title": "Consistency Si",
+            "type": "number",
+            "unit": "Pa.s^n"
+          },
+          "density_si": {
+            "dimension": "density",
+            "maximum": 10000.0,
+            "minimum": 1.0,
+            "title": "Density Si",
+            "type": "number",
+            "unit": "kg/m3"
+          },
+          "diameter_si": {
+            "description": "Straight circular pipe inside diameter",
+            "dimension": "length",
+            "maximum": 10.0,
+            "minimum": 0.0001,
+            "title": "Diameter Si",
+            "type": "number",
+            "unit": "m"
+          },
+          "flow_index": {
+            "description": "Dimensionless power-law index n",
+            "dimension": "dimensionless",
+            "maximum": 1.5,
+            "minimum": 0.2,
+            "title": "Flow Index",
+            "type": "number",
+            "unit": "1"
+          },
+          "flow_rate_si": {
+            "dimension": "volume_flow",
+            "maximum": 100.0,
+            "minimum": 1e-09,
+            "title": "Flow Rate Si",
+            "type": "number",
+            "unit": "m3/s"
+          },
+          "length_si": {
+            "dimension": "length",
+            "exclusiveMinimum": 0.0,
+            "maximum": 100000.0,
+            "title": "Length Si",
+            "type": "number",
+            "unit": "m"
+          },
+          "measured_shear_max_per_s": {
+            "description": "Upper bound of caller-declared fit's shear-rate range",
+            "dimension": "frequency",
+            "exclusiveMinimum": 0.0,
+            "maximum": 100000000.0,
+            "title": "Measured Shear Max Per S",
+            "type": "number",
+            "unit": "1/s"
+          },
+          "measured_shear_min_per_s": {
+            "description": "Lower bound of caller-declared fit's shear-rate range",
+            "dimension": "frequency",
+            "maximum": 100000000.0,
+            "minimum": 0.0,
+            "title": "Measured Shear Min Per S",
+            "type": "number",
+            "unit": "1/s"
+          }
+        },
+        "required": [
+          "diameter_si",
+          "length_si",
+          "flow_rate_si",
+          "density_si",
+          "consistency_si",
+          "flow_index",
+          "measured_shear_min_per_s",
+          "measured_shear_max_per_s"
+        ],
+        "title": "PowerLawPipeInput",
+        "type": "object"
+      },
+      "latest_exact_sha_assurance": "NOT_MEASURED_FOR_CURRENT_TREE",
+      "limitations": [
+        "single pipe only; no annulus, ECD, nozzle, fittings, surface network or total well pressure",
+        "transition screen does not establish actual flow regime; no turbulent calculation",
+        "rheology and range are caller declarations; no sample, temperature or field validation",
+        "K has index-dependent units Pa·s^n and is not automatically unit-converted"
+      ],
+      "output_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "generalized_reynolds": {
+            "dimension": "dimensionless",
+            "title": "Generalized Reynolds",
+            "type": "number",
+            "unit": "1"
+          },
+          "pressure_gradient_si": {
+            "dimension": "pressure_gradient",
+            "title": "Pressure Gradient Si",
+            "type": "number",
+            "unit": "Pa/m"
+          },
+          "pressure_loss_si": {
+            "dimension": "pressure",
+            "title": "Pressure Loss Si",
+            "type": "number",
+            "unit": "Pa"
+          },
+          "velocity_si": {
+            "dimension": "velocity",
+            "title": "Velocity Si",
+            "type": "number",
+            "unit": "m/s"
+          },
+          "wall_shear_rate_per_s": {
+            "description": "True wall shear rate",
+            "dimension": "frequency",
+            "title": "Wall Shear Rate Per S",
+            "type": "number",
+            "unit": "1/s"
+          },
+          "wall_shear_stress_si": {
+            "dimension": "pressure",
+            "title": "Wall Shear Stress Si",
+            "type": "number",
+            "unit": "Pa"
+          }
+        },
+        "required": [
+          "velocity_si",
+          "wall_shear_rate_per_s",
+          "wall_shear_stress_si",
+          "generalized_reynolds",
+          "pressure_gradient_si",
+          "pressure_loss_si"
+        ],
+        "title": "PowerLawPipeOutput",
+        "type": "object"
+      },
+      "persistence": "backend/src/drillai/db/models/engines.py:EngineRun",
+      "primary_tests": [
+        "backend/tests/engines/test_mission6_power_law.py"
+      ],
+      "produces": [
+        "engine.result"
+      ],
+      "references_as_declared": [
+        "BYU Chemical Engineering Class 33, More On Non-Newtonian Laminar Flow, equations 1 and 3–4, https://uolab.groups.et.byu.net/files/pipevisco/hints/374_Class_33.pdf (edition unstated)",
+        "Metzner-Reed generalized Reynolds number as presented by CheCalc, https://www.checalc.com/fluid_flow_power_law.html (edition unstated)"
+      ],
+      "registry_self_declaration": "formula_derived",
+      "source": "backend/src/drillai/engines/power_law.py",
+      "source_function": "compute_power_law_pipe",
+      "source_sha256_lf": "4490e147e39c3ea2417a2d6821e2610d5194bbceb97a9a8b3570ef4d4f049364",
+      "status": "INDEPENDENT_SOFTWARE_REFERENCE_CHECKED",
+      "summary": "Distributed laminar loss in one circular pipe with declared power-law fit range.",
+      "ui": "frontend/src/pages/engineering/EngineeringWorkspace.tsx (generic runner)",
+      "units": {
+        "contract_version": "drillai.engine-units.v1",
+        "input_fields": {
+          "consistency_si": {
+            "canonical_unit": null,
+            "description": "Power-law consistency K in Pa·s^n; its physical dimension depends on flow_index. No automatic conversion.",
+            "description_status": "declared",
+            "dimension": null,
+            "display_units": {
+              "field_us": {
+                "behavior": "unknown",
+                "factor": null,
+                "offset": null,
+                "registry_symbol": null,
+                "supported": false,
+                "unit_symbol": null
+              },
+              "metric_engineering": {
+                "behavior": "unknown",
+                "factor": null,
+                "offset": null,
+                "registry_symbol": null,
+                "supported": false,
+                "unit_symbol": null
+              },
+              "si": {
+                "behavior": "unknown",
+                "factor": null,
+                "offset": null,
+                "registry_symbol": null,
+                "supported": false,
+                "unit_symbol": null
+              }
+            },
+            "precision": 3,
+            "registry_unit": null,
+            "requested_display_unit": null,
+            "semantic": null,
+            "source": "schema",
+            "status": "unknown",
+            "unit_system_basis": "unknown",
+            "unknown_reason": "The declared unit is not registered or dimensionally usable: unknown unit 'Pa.s^n'",
+            "value_unit": null
+          },
+          "density_si": {
+            "canonical_unit": "kg/m3",
+            "description": null,
+            "description_status": "not_declared",
+            "dimension": "density",
+            "display_units": {
+              "field_us": {
+                "behavior": "linear",
+                "factor": 0.008345404452019332,
+                "offset": 0.0,
+                "registry_symbol": "ppg",
+                "supported": true,
+                "unit_symbol": "ppg"
+              },
+              "metric_engineering": {
+                "behavior": "linear",
+                "factor": 0.001,
+                "offset": 0.0,
+                "registry_symbol": "g/cm3",
+                "supported": true,
+                "unit_symbol": "g/cm3"
+              },
+              "si": {
+                "behavior": "linear",
+                "factor": 1.0,
+                "offset": 0.0,
+                "registry_symbol": "kg/m3",
+                "supported": true,
+                "unit_symbol": "kg/m³"
+              }
+            },
+            "precision": 3,
+            "registry_unit": "kg/m3",
+            "requested_display_unit": null,
+            "semantic": null,
+            "source": "schema",
+            "status": "declared",
+            "unit_system_basis": "explicit_unit",
+            "unknown_reason": null,
+            "value_unit": "kg/m3"
+          },
+          "diameter_si": {
+            "canonical_unit": "m",
+            "description": "Straight circular pipe inside diameter",
+            "description_status": "declared",
+            "dimension": "length",
+            "display_units": {
+              "field_us": {
+                "behavior": "linear",
+                "factor": 3.280839895013123,
+                "offset": 0.0,
+                "registry_symbol": "ft",
+                "supported": true,
+                "unit_symbol": "ft"
+              },
+              "metric_engineering": {
+                "behavior": "linear",
+                "factor": 1.0,
+                "offset": 0.0,
+                "registry_symbol": "m",
+                "supported": true,
+                "unit_symbol": "m"
+              },
+              "si": {
+                "behavior": "linear",
+                "factor": 1.0,
+                "offset": 0.0,
+                "registry_symbol": "m",
+                "supported": true,
+                "unit_symbol": "m"
+              }
+            },
+            "precision": 3,
+            "registry_unit": "m",
+            "requested_display_unit": null,
+            "semantic": null,
+            "source": "schema",
+            "status": "declared",
+            "unit_system_basis": "explicit_unit",
+            "unknown_reason": null,
+            "value_unit": "m"
+          },
+          "flow_index": {
+            "canonical_unit": "1",
+            "description": "Dimensionless power-law index n",
+            "description_status": "declared",
+            "dimension": "dimensionless",
+            "display_units": {
+              "field_us": {
+                "behavior": "linear",
+                "factor": 1.0,
+                "offset": 0.0,
+                "registry_symbol": "1",
+                "supported": true,
+                "unit_symbol": "1"
+              },
+              "metric_engineering": {
+                "behavior": "linear",
+                "factor": 1.0,
+                "offset": 0.0,
+                "registry_symbol": "1",
+                "supported": true,
+                "unit_symbol": "1"
+              },
+              "si": {
+                "behavior": "linear",
+                "factor": 1.0,
+                "offset": 0.0,
+                "registry_symbol": "1",
+                "supported": true,
+                "unit_symbol": "1"
+              }
+            },
+            "precision": 3,
+            "registry_unit": "1",
+            "requested_display_unit": null,
+            "semantic": null,
+            "source": "schema",
+            "status": "declared",
+            "unit_system_basis": "explicit_unit",
+            "unknown_reason": null,
+            "value_unit": "1"
+          },
+          "flow_rate_si": {
+            "canonical_unit": "m3/s",
+            "description": null,
+            "description_status": "not_declared",
+            "dimension": "volume_flow",
+            "display_units": {
+              "field_us": {
+                "behavior": "linear",
+                "factor": 15850.323141488903,
+                "offset": 0.0,
+                "registry_symbol": "gpm",
+                "supported": true,
+                "unit_symbol": "gpm"
+              },
+              "metric_engineering": {
+                "behavior": "linear",
+                "factor": 60000.0,
+                "offset": 0.0,
+                "registry_symbol": "L/min",
+                "supported": true,
+                "unit_symbol": "L/min"
+              },
+              "si": {
+                "behavior": "linear",
+                "factor": 60000.0,
+                "offset": 0.0,
+                "registry_symbol": "L/min",
+                "supported": true,
+                "unit_symbol": "L/min"
+              }
+            },
+            "precision": 3,
+            "registry_unit": "m3/s",
+            "requested_display_unit": null,
+            "semantic": null,
+            "source": "schema",
+            "status": "declared",
+            "unit_system_basis": "explicit_unit",
+            "unknown_reason": null,
+            "value_unit": "m3/s"
+          },
+          "length_si": {
+            "canonical_unit": "m",
+            "description": null,
+            "description_status": "not_declared",
+            "dimension": "length",
+            "display_units": {
+              "field_us": {
+                "behavior": "linear",
+                "factor": 3.280839895013123,
+                "offset": 0.0,
+                "registry_symbol": "ft",
+                "supported": true,
+                "unit_symbol": "ft"
+              },
+              "metric_engineering": {
+                "behavior": "linear",
+                "factor": 1.0,
+                "offset": 0.0,
+                "registry_symbol": "m",
+                "supported": true,
+                "unit_symbol": "m"
+              },
+              "si": {
+                "behavior": "linear",
+                "factor": 1.0,
+                "offset": 0.0,
+                "registry_symbol": "m",
+                "supported": true,
+                "unit_symbol": "m"
+              }
+            },
+            "precision": 3,
+            "registry_unit": "m",
+            "requested_display_unit": null,
+            "semantic": null,
+            "source": "schema",
+            "status": "declared",
+            "unit_system_basis": "explicit_unit",
+            "unknown_reason": null,
+            "value_unit": "m"
+          },
+          "measured_shear_max_per_s": {
+            "canonical_unit": "1/s",
+            "description": "Upper bound of caller-declared fit's shear-rate range",
+            "description_status": "declared",
+            "dimension": "frequency",
+            "display_units": {
+              "field_us": {
+                "behavior": "linear",
+                "factor": 1.0,
+                "offset": 0.0,
+                "registry_symbol": "1/s",
+                "supported": true,
+                "unit_symbol": "1/s"
+              },
+              "metric_engineering": {
+                "behavior": "linear",
+                "factor": 1.0,
+                "offset": 0.0,
+                "registry_symbol": "1/s",
+                "supported": true,
+                "unit_symbol": "1/s"
+              },
+              "si": {
+                "behavior": "linear",
+                "factor": 1.0,
+                "offset": 0.0,
+                "registry_symbol": "1/s",
+                "supported": true,
+                "unit_symbol": "1/s"
+              }
+            },
+            "precision": 3,
+            "registry_unit": "1/s",
+            "requested_display_unit": null,
+            "semantic": null,
+            "source": "schema",
+            "status": "declared",
+            "unit_system_basis": "explicit_unit",
+            "unknown_reason": null,
+            "value_unit": "1/s"
+          },
+          "measured_shear_min_per_s": {
+            "canonical_unit": "1/s",
+            "description": "Lower bound of caller-declared fit's shear-rate range",
+            "description_status": "declared",
+            "dimension": "frequency",
+            "display_units": {
+              "field_us": {
+                "behavior": "linear",
+                "factor": 1.0,
+                "offset": 0.0,
+                "registry_symbol": "1/s",
+                "supported": true,
+                "unit_symbol": "1/s"
+              },
+              "metric_engineering": {
+                "behavior": "linear",
+                "factor": 1.0,
+                "offset": 0.0,
+                "registry_symbol": "1/s",
+                "supported": true,
+                "unit_symbol": "1/s"
+              },
+              "si": {
+                "behavior": "linear",
+                "factor": 1.0,
+                "offset": 0.0,
+                "registry_symbol": "1/s",
+                "supported": true,
+                "unit_symbol": "1/s"
+              }
+            },
+            "precision": 3,
+            "registry_unit": "1/s",
+            "requested_display_unit": null,
+            "semantic": null,
+            "source": "schema",
+            "status": "declared",
+            "unit_system_basis": "explicit_unit",
+            "unknown_reason": null,
+            "value_unit": "1/s"
+          }
+        },
+        "output_fields": {
+          "generalized_reynolds": {
+            "canonical_unit": "1",
+            "description": null,
+            "description_status": "not_declared",
+            "dimension": "dimensionless",
+            "display_units": {
+              "field_us": {
+                "behavior": "linear",
+                "factor": 1.0,
+                "offset": 0.0,
+                "registry_symbol": "1",
+                "supported": true,
+                "unit_symbol": "1"
+              },
+              "metric_engineering": {
+                "behavior": "linear",
+                "factor": 1.0,
+                "offset": 0.0,
+                "registry_symbol": "1",
+                "supported": true,
+                "unit_symbol": "1"
+              },
+              "si": {
+                "behavior": "linear",
+                "factor": 1.0,
+                "offset": 0.0,
+                "registry_symbol": "1",
+                "supported": true,
+                "unit_symbol": "1"
+              }
+            },
+            "precision": 3,
+            "registry_unit": "1",
+            "requested_display_unit": null,
+            "semantic": null,
+            "source": "schema",
+            "status": "declared",
+            "unit_system_basis": "explicit_unit",
+            "unknown_reason": null,
+            "value_unit": "1"
+          },
+          "pressure_gradient_si": {
+            "canonical_unit": "Pa/m",
+            "description": null,
+            "description_status": "not_declared",
+            "dimension": "pressure_gradient",
+            "display_units": {
+              "field_us": {
+                "behavior": "linear",
+                "factor": 4.420750246016777e-05,
+                "offset": 0.0,
+                "registry_symbol": "psi/ft",
+                "supported": true,
+                "unit_symbol": "psi/ft"
+              },
+              "metric_engineering": {
+                "behavior": "linear",
+                "factor": 0.001,
+                "offset": 0.0,
+                "registry_symbol": "kPa/m",
+                "supported": true,
+                "unit_symbol": "kPa/m"
+              },
+              "si": {
+                "behavior": "linear",
+                "factor": 0.001,
+                "offset": 0.0,
+                "registry_symbol": "kPa/m",
+                "supported": true,
+                "unit_symbol": "kPa/m"
+              }
+            },
+            "precision": 3,
+            "registry_unit": "Pa/m",
+            "requested_display_unit": null,
+            "semantic": null,
+            "source": "schema",
+            "status": "declared",
+            "unit_system_basis": "explicit_unit",
+            "unknown_reason": null,
+            "value_unit": "Pa/m"
+          },
+          "pressure_loss_si": {
+            "canonical_unit": "Pa",
+            "description": null,
+            "description_status": "not_declared",
+            "dimension": "pressure",
+            "display_units": {
+              "field_us": {
+                "behavior": "linear",
+                "factor": 0.00014503773773020924,
+                "offset": 0.0,
+                "registry_symbol": "psi",
+                "supported": true,
+                "unit_symbol": "psi"
+              },
+              "metric_engineering": {
+                "behavior": "linear",
+                "factor": 1e-05,
+                "offset": 0.0,
+                "registry_symbol": "bar",
+                "supported": true,
+                "unit_symbol": "bar"
+              },
+              "si": {
+                "behavior": "linear",
+                "factor": 0.001,
+                "offset": 0.0,
+                "registry_symbol": "kPa",
+                "supported": true,
+                "unit_symbol": "kPa"
+              }
+            },
+            "precision": 3,
+            "registry_unit": "Pa",
+            "requested_display_unit": null,
+            "semantic": null,
+            "source": "schema",
+            "status": "declared",
+            "unit_system_basis": "explicit_unit",
+            "unknown_reason": null,
+            "value_unit": "Pa"
+          },
+          "velocity_si": {
+            "canonical_unit": "m/s",
+            "description": null,
+            "description_status": "not_declared",
+            "dimension": "velocity",
+            "display_units": {
+              "field_us": {
+                "behavior": "linear",
+                "factor": 11811.023622047243,
+                "offset": 0.0,
+                "registry_symbol": "ft/h",
+                "supported": true,
+                "unit_symbol": "ft/h"
+              },
+              "metric_engineering": {
+                "behavior": "linear",
+                "factor": 3600.0,
+                "offset": 0.0,
+                "registry_symbol": "m/h",
+                "supported": true,
+                "unit_symbol": "m/h"
+              },
+              "si": {
+                "behavior": "linear",
+                "factor": 3600.0,
+                "offset": 0.0,
+                "registry_symbol": "m/h",
+                "supported": true,
+                "unit_symbol": "m/h"
+              }
+            },
+            "precision": 3,
+            "registry_unit": "m/s",
+            "requested_display_unit": null,
+            "semantic": null,
+            "source": "schema",
+            "status": "declared",
+            "unit_system_basis": "explicit_unit",
+            "unknown_reason": null,
+            "value_unit": "m/s"
+          },
+          "wall_shear_rate_per_s": {
+            "canonical_unit": "1/s",
+            "description": "True wall shear rate",
+            "description_status": "declared",
+            "dimension": "frequency",
+            "display_units": {
+              "field_us": {
+                "behavior": "linear",
+                "factor": 1.0,
+                "offset": 0.0,
+                "registry_symbol": "1/s",
+                "supported": true,
+                "unit_symbol": "1/s"
+              },
+              "metric_engineering": {
+                "behavior": "linear",
+                "factor": 1.0,
+                "offset": 0.0,
+                "registry_symbol": "1/s",
+                "supported": true,
+                "unit_symbol": "1/s"
+              },
+              "si": {
+                "behavior": "linear",
+                "factor": 1.0,
+                "offset": 0.0,
+                "registry_symbol": "1/s",
+                "supported": true,
+                "unit_symbol": "1/s"
+              }
+            },
+            "precision": 3,
+            "registry_unit": "1/s",
+            "requested_display_unit": null,
+            "semantic": null,
+            "source": "schema",
+            "status": "declared",
+            "unit_system_basis": "explicit_unit",
+            "unknown_reason": null,
+            "value_unit": "1/s"
+          },
+          "wall_shear_stress_si": {
+            "canonical_unit": "Pa",
+            "description": null,
+            "description_status": "not_declared",
+            "dimension": "pressure",
+            "display_units": {
+              "field_us": {
+                "behavior": "linear",
+                "factor": 0.00014503773773020924,
+                "offset": 0.0,
+                "registry_symbol": "psi",
+                "supported": true,
+                "unit_symbol": "psi"
+              },
+              "metric_engineering": {
+                "behavior": "linear",
+                "factor": 1e-05,
+                "offset": 0.0,
+                "registry_symbol": "bar",
+                "supported": true,
+                "unit_symbol": "bar"
+              },
+              "si": {
+                "behavior": "linear",
+                "factor": 0.001,
+                "offset": 0.0,
+                "registry_symbol": "kPa",
+                "supported": true,
+                "unit_symbol": "kPa"
+              }
+            },
+            "precision": 3,
+            "registry_unit": "Pa",
+            "requested_display_unit": null,
+            "semantic": null,
+            "source": "schema",
+            "status": "declared",
+            "unit_system_basis": "explicit_unit",
+            "unknown_reason": null,
+            "value_unit": "Pa"
+          }
+        },
+        "unit_system": "SI",
+        "unit_system_basis": "per_numeric_field; outputs are never relabelled from field names",
+        "unknown_unit_policy": "unknown values are shown without conversion; no unit is inferred",
+        "violation_fields": {}
+      },
+      "version": "1.0.0"
+    },
+    {
+      "api": "/api/v1/registry/engines/{engine_key}/run",
+      "assumptions": [
         "the declared barrier elements and their depth intervals are accurate",
         "independence is expressed through the independence group",
         "a verified element without an evidence reference is treated as unverified"
@@ -28926,8 +29686,8 @@
       "validation": "NOT_MEASURED"
     },
     {
-      "id": "Power_Law_rheology",
-      "name": "Power Law rheology",
+      "id": "Power_Law_full-well_and_annular_hydraulics",
+      "name": "Power Law full-well and annular hydraulics",
       "required_reference": "NOT_SELECTED",
       "status": "PLANNED",
       "validation": "NOT_MEASURED"

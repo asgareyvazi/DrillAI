@@ -84,7 +84,7 @@ def test_cp19_02_independent_analytical_benchmarks_for_all_14_engines() -> None:
     """Check all 14 engines against analytical test vectors, not field certification, and enforce strict JSON safety."""
     reg = load_default_engines()
     # CP19 retains its original 14 vector checks; geometric proximity has separate vectors.
-    assert len(reg.keys()) == 15
+    assert len(reg.keys()) == 16  # the original vectors still cover their original engines
     assert reg.has("trajectory.geometric_proximity")
     field_validation_required = {"tubulars.api_5c3", "well_control.kill_sheet"}
 
