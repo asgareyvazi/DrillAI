@@ -327,7 +327,7 @@ function controllabilitySuffix(controllable: boolean | null): string {
   return controllable ? ' (operator-controllable)' : ' (not controllable)'
 }
 
-function NptCard({ npt, onSelectCause }: { npt: NptSummary; onSelectCause: (key: string) => void }) {
+export function NptCard({ npt, onSelectCause }: { npt: NptSummary; onSelectCause: (key: string) => void }) {
   const { t, locale } = useI18n()
   return (
     <div className="space-y-3">
@@ -397,6 +397,19 @@ function NptCard({ npt, onSelectCause }: { npt: NptSummary; onSelectCause: (key:
           <p className="text-xs text-graphite-500">{t('cockpit.nptNoRecordedEvents')}</p>
         )}
       </div>
+      {npt.interval_reconciliation && (
+        <div className="rounded border border-graphite-200 p-2 text-xs dark:border-graphite-700">
+          <p className="font-medium">{t('cockpit.nptIntervalTitle')}</p>
+          {npt.interval_reconciliation.status === 'complete_for_matching_events' &&
+            npt.interval_reconciliation.union_hours !== null && npt.interval_reconciliation.overlap_hours !== null ? (
+            <p>{t('cockpit.nptIntervalValues', {
+              union: formatDuration(npt.interval_reconciliation.union_hours),
+              overlap: formatDuration(npt.interval_reconciliation.overlap_hours),
+            })}</p>
+          ) : <p>{t('cockpit.nptIntervalUnavailable')}</p>}
+          <p>{t('cockpit.nptIntervalCaveat')}</p>
+        </div>
+      )}
       {npt.offset_comparison && (
         <div>
           <p className="mb-1 text-xs font-medium">Offset comparison</p>

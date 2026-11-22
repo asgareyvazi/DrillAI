@@ -1,0 +1,407 @@
+{
+  "scope": "Partial historical inventory copied from existing self-declared catalogue; this is not the requested full historical/source/product audit or independent re-audit. No new engineering assurance inferred.",
+  "engines": [
+    {
+      "id": "drilling.mse",
+      "version": "1.1.1",
+      "source": "backend/src/drillai/engines/mechanics.py",
+      "source_function": "compute_mse",
+      "primary_tests": [
+        "backend/tests/engines/test_mechanics.py"
+      ],
+      "references_as_declared": [
+        "Teale (1965) — The Concept of Specific Energy in Rock Drilling",
+        "Pessier & Fear (1992) — MSE drilling dysfunction"
+      ],
+      "limitations": [
+        "surface-measured values include friction losses and vibration effects",
+        "no bit wear or dull-grading correction",
+        "requires a reference MSE or rock strength for absolute judgements"
+      ],
+      "status": "IMPLEMENTED_NOT_INDEPENDENTLY_VALIDATED",
+      "field_vendor_customer_validation": "NOT_MEASURED"
+    },
+    {
+      "id": "hydraulics.laminar",
+      "version": "1.6.0",
+      "source": "backend/src/drillai/engines/fluids.py",
+      "source_function": "compute_hydraulics",
+      "primary_tests": [
+        "backend/tests/engines/test_fluids.py"
+      ],
+      "references_as_declared": [
+        "Bourgoyne et al., Applied Drilling Engineering (laminar Bingham-plastic relations)",
+        "API RP 13D — Rheology and Hydraulics of Oil-Well Drilling Fluids (framework)"
+      ],
+      "limitations": [
+        "turbulent flow is detected (Reynolds) but not modelled: results are optimistic in that regime",
+        "Herschel-Bulkley / power-law fluids are not supported yet",
+        "no temperature/pressure-dependent density, no eccentricity, no surge/swab",
+        "motor/BHA and tool joint pressure losses and surface losses must be explicitly declared; eccentricity is not modeled",
+        "total/standpipe unavailable without nozzle and additional downhole-loss input; standpipe also requires surface-loss input; declarations are not verified"
+      ],
+      "status": "IMPLEMENTED_NOT_INDEPENDENTLY_VALIDATED",
+      "field_vendor_customer_validation": "NOT_MEASURED"
+    },
+    {
+      "id": "hydraulics.power_law_pipe",
+      "version": "1.0.0",
+      "source": "backend/src/drillai/engines/power_law.py",
+      "source_function": "compute_power_law_pipe",
+      "primary_tests": [
+        "backend/tests/engines/test_mission6_power_law.py"
+      ],
+      "references_as_declared": [
+        "BYU Chemical Engineering Class 33, More On Non-Newtonian Laminar Flow, equations 1 and 3–4, https://uolab.groups.et.byu.net/files/pipevisco/hints/374_Class_33.pdf (edition unstated)",
+        "Metzner-Reed generalized Reynolds number as presented by CheCalc, https://www.checalc.com/fluid_flow_power_law.html (edition unstated)"
+      ],
+      "limitations": [
+        "single pipe only; no annulus, ECD, nozzle, fittings, surface network or total well pressure",
+        "transition screen does not establish actual flow regime; no turbulent calculation",
+        "rheology and range are caller declarations; no sample, temperature or field validation",
+        "K has index-dependent units Pa·s^n and is not automatically unit-converted"
+      ],
+      "status": "INDEPENDENT_SOFTWARE_REFERENCE_CHECKED",
+      "field_vendor_customer_validation": "NOT_MEASURED"
+    },
+    {
+      "id": "integrity.barrier_envelope",
+      "version": "1.1.0",
+      "source": "backend/src/drillai/engines/integrity.py",
+      "source_function": "compute_integrity",
+      "primary_tests": [
+        "backend/tests/engines/test_safety_engines.py"
+      ],
+      "references_as_declared": [
+        "NORSOK D-010 — Well integrity in drilling and well operations",
+        "API RP 96 — Deepwater well design and integrity (barrier concepts)"
+      ],
+      "limitations": [
+        "does not size barriers against actual pressure loads (use the tubular/cement design engines)",
+        "no annular pressure or sustained-casing-pressure diagnostics",
+        "no risk-based anomaly trending"
+      ],
+      "status": "IMPLEMENTED_NOT_INDEPENDENTLY_VALIDATED",
+      "field_vendor_customer_validation": "NOT_MEASURED"
+    },
+    {
+      "id": "offsets.similarity",
+      "version": "1.1.0",
+      "source": "backend/src/drillai/engines/offsets.py",
+      "source_function": "compute_offsets",
+      "primary_tests": [
+        "backend/tests/engines/test_planning_engines.py"
+      ],
+      "references_as_declared": [
+        "SPE ATCE 2020 — Smart Custom Well Design Based On Automated Offset Well Analysis",
+        "IADC/SPE offset-analysis workflows (candidate selection, hazard compilation by depth)"
+      ],
+      "limitations": [
+        "no learned similarity (geological or trajectory embedding) — factors are declared and inspectable",
+        "no automatic outlier removal beyond the explicit exclusions and coverage rule",
+        "hazard aggregation is descriptive; it does not compute probabilities"
+      ],
+      "status": "IMPLEMENTED_NOT_INDEPENDENTLY_VALIDATED",
+      "field_vendor_customer_validation": "NOT_MEASURED"
+    },
+    {
+      "id": "optimization.pareto",
+      "version": "1.1.0",
+      "source": "backend/src/drillai/engines/optimization.py",
+      "source_function": "compute_pareto",
+      "primary_tests": [
+        "backend/tests/engines/test_twin_optimization_engines.py"
+      ],
+      "references_as_declared": [
+        "Pareto dominance; Spearman rank correlation"
+      ],
+      "limitations": [
+        "no surrogate or gradient-based search",
+        "no interaction terms between parameters"
+      ],
+      "status": "IMPLEMENTED_NOT_INDEPENDENTLY_VALIDATED",
+      "field_vendor_customer_validation": "NOT_MEASURED"
+    },
+    {
+      "id": "optimization.sweep",
+      "version": "1.1.0",
+      "source": "backend/src/drillai/engines/optimization.py",
+      "source_function": "compute_sweep",
+      "primary_tests": [
+        "backend/tests/engines/test_twin_optimization_engines.py"
+      ],
+      "references_as_declared": [
+        "Halton low-discrepancy sequences (deterministic design of experiments)"
+      ],
+      "limitations": [
+        "no surrogate modelling",
+        "no adaptive sampling"
+      ],
+      "status": "IMPLEMENTED_NOT_INDEPENDENTLY_VALIDATED",
+      "field_vendor_customer_validation": "NOT_MEASURED"
+    },
+    {
+      "id": "readiness.assessment",
+      "version": "1.1.0",
+      "source": "backend/src/drillai/engines/readiness.py",
+      "source_function": "compute_readiness",
+      "primary_tests": [
+        "backend/tests/engines/test_planning_engines.py"
+      ],
+      "references_as_declared": [
+        "Well construction readiness practice (BOM availability, lead-time feasibility)"
+      ],
+      "limitations": [
+        "no probabilistic lead-time modelling",
+        "no cost or vendor-priority optimisation",
+        "personnel competency matrices are out of scope for this engine"
+      ],
+      "status": "IMPLEMENTED_NOT_INDEPENDENTLY_VALIDATED",
+      "field_vendor_customer_validation": "NOT_MEASURED"
+    },
+    {
+      "id": "schematic.well_model",
+      "version": "1.1.0",
+      "source": "backend/src/drillai/engines/schematic.py",
+      "source_function": "compute_schematic",
+      "primary_tests": [
+        "backend/tests/engines/test_planning_engines.py"
+      ],
+      "references_as_declared": [
+        "Well schematic presentation practice (ISO 13628 / operator standards)"
+      ],
+      "limitations": [
+        "no deviated-schematic projection (a TVD view requires the trajectory)",
+        "no centraliser, coupling or accessory detail",
+        "cement quality and channeling are not represented"
+      ],
+      "status": "IMPLEMENTED_NOT_INDEPENDENTLY_VALIDATED",
+      "field_vendor_customer_validation": "NOT_MEASURED"
+    },
+    {
+      "id": "torque_drag.soft_string",
+      "version": "1.1.0",
+      "source": "backend/src/drillai/engines/mechanics.py",
+      "source_function": "compute_torque_drag",
+      "primary_tests": [
+        "backend/tests/engines/test_mechanics.py"
+      ],
+      "references_as_declared": [
+        "Johancsik, Friesen & Dawson, SPE 11380 (1984) — Torque and Drag in Directional Wells",
+        "Aadnoy et al. — Petroleum Rock Mechanics (soft-string treatment)"
+      ],
+      "limitations": [
+        "no buckling (sinusoidal/helical) or lock-up analysis",
+        "no temperature/curvature-dependent friction, no tool-joint local effects",
+        "stretch is linear-elastic only"
+      ],
+      "status": "IMPLEMENTED_NOT_INDEPENDENTLY_VALIDATED",
+      "field_vendor_customer_validation": "NOT_MEASURED"
+    },
+    {
+      "id": "trajectory.geometric_proximity",
+      "version": "1.0.0",
+      "source": "backend/src/drillai/engines/proximity.py",
+      "source_function": "calculate_proximity",
+      "primary_tests": [
+        "backend/tests/engines/test_proximity.py"
+      ],
+      "references_as_declared": [
+        "Euclidean closest points on two line segments (constrained quadratic minimization)"
+      ],
+      "limitations": [
+        "GEOMETRIC_PROXIMITY_ONLY",
+        "no uncertainty covariance, separation factor or ISCWSA model",
+        "survey curvature between stations is not modeled",
+        "caller-provided coordinates and references are not independently verified"
+      ],
+      "status": "IMPLEMENTED_NOT_INDEPENDENTLY_VALIDATED",
+      "field_vendor_customer_validation": "NOT_MEASURED"
+    },
+    {
+      "id": "trajectory.minimum_curvature",
+      "version": "1.3.0",
+      "source": "backend/src/drillai/engines/trajectory.py",
+      "source_function": "minimum_curvature",
+      "primary_tests": [
+        "backend/tests/engines/test_trajectory.py"
+      ],
+      "references_as_declared": [
+        "API RP 7G — Drill Stem Design and Operating Limits (survey calculation practice)",
+        "SPE 84246 / standard minimum-curvature formulation"
+      ],
+      "limitations": [
+        "does not model bending moments, toolface history or BHA sag",
+        "tight-radius and high-dogleg rotary-steerable behaviour is only as accurate as station spacing",
+        "does not derive magnetic declination/grid convergence; caller-supplied corrections are not independently verified",
+        "does not perform anti-collision or error-model (ISCWSA) uncertainty analysis"
+      ],
+      "status": "IMPLEMENTED_NOT_INDEPENDENTLY_VALIDATED",
+      "field_vendor_customer_validation": "NOT_MEASURED"
+    },
+    {
+      "id": "tubulars.api_5c3",
+      "version": "1.1.0",
+      "source": "backend/src/drillai/engines/tubulars.py",
+      "source_function": "compute_tubular_design",
+      "primary_tests": [
+        "backend/tests/engines/test_safety_engines.py"
+      ],
+      "references_as_declared": [
+        "API TR 5C3 (2018) — Calculating Performance Properties of Pipe Used as Casing or Tubing",
+        "API Bull 5C3 / equivalent TR equations for collapse domains"
+      ],
+      "limitations": [
+        "pipe body only: no connection, coupling or thread rating",
+        "no buckling or bending stress from doglegs",
+        "bending, thermal and dynamic loads must be added by a dedicated design workflow"
+      ],
+      "status": "NEEDS_FIELD_VALIDATION",
+      "field_vendor_customer_validation": "NOT_MEASURED"
+    },
+    {
+      "id": "twin.reconciliation",
+      "version": "1.2.0",
+      "source": "backend/src/drillai/engines/twin.py",
+      "source_function": "compute_reconciliation",
+      "primary_tests": [
+        "backend/tests/engines/test_twin_optimization_engines.py"
+      ],
+      "references_as_declared": [
+        "Minimum-curvature survey computation (same implementation as trajectory.minimum_curvature)",
+        "Directional drilling practice for plan-vs-actual tolerance control"
+      ],
+      "limitations": [
+        "no positional uncertainty (ISCWSA) model",
+        "no automatic detection of a wrong tie-in or datum shift beyond the anchor statement",
+        "predicted rather than surveyed positions must be passed as `actual` deliberately"
+      ],
+      "status": "IMPLEMENTED_NOT_INDEPENDENTLY_VALIDATED",
+      "field_vendor_customer_validation": "NOT_MEASURED"
+    },
+    {
+      "id": "well_control.kill_sheet",
+      "version": "1.2.0",
+      "source": "backend/src/drillai/engines/wellcontrol.py",
+      "source_function": "compute_kill_sheet",
+      "primary_tests": [
+        "backend/tests/engines/test_safety_engines.py"
+      ],
+      "references_as_declared": [
+        "IADC WellSharp / IWCF Well Control Manual (Wait-and-Weight & Driller's Method)",
+        "API RP 59 — Well Control Operations"
+      ],
+      "limitations": [
+        "does not model multi-phase gas expansion, real-gas Z-factor compressibility, or oil-based mud gas solubility",
+        "mud_weight_margin_si (and deprecated alias kick_tolerance_mud_weight_si) is a static shoe mud-weight margin (kg/m3), not a multi-phase volumetric kick tolerance",
+        "not a substitute for a certified well control procedure or IWCF/IADC WellSharp training"
+      ],
+      "status": "NEEDS_FIELD_VALIDATION",
+      "field_vendor_customer_validation": "NOT_MEASURED"
+    },
+    {
+      "id": "wellbore.capacity",
+      "version": "1.4.0",
+      "source": "backend/src/drillai/engines/fluids.py",
+      "source_function": "compute_capacity",
+      "primary_tests": [
+        "backend/tests/engines/test_fluids.py"
+      ],
+      "references_as_declared": [
+        "standard volumetric capacity relations",
+        "API RP 13D (context)"
+      ],
+      "limitations": [
+        "no eccentricity or washout",
+        "does not resolve multiple nested strings beyond the largest OD",
+        "unoccupied intervals require an explicit user declaration, not independent verification"
+      ],
+      "status": "IMPLEMENTED_NOT_INDEPENDENTLY_VALIDATED",
+      "field_vendor_customer_validation": "NOT_MEASURED"
+    }
+  ],
+  "product_workflows": [
+    {
+      "id": "wellbore.capacity.workspace",
+      "missing": [
+        "authenticated source-linked declaration review",
+        "design revisions",
+        "review",
+        "comparison",
+        "report"
+      ],
+      "status": "PARTIAL",
+      "ui": "frontend/src/pages/engineering/CirculationWorkspace.tsx"
+    },
+    {
+      "id": "hydraulics.ecd.workspace",
+      "missing": [
+        "verified survey linkage",
+        "profile by TVD",
+        "scenario comparison",
+        "review",
+        "report"
+      ],
+      "status": "PARTIAL",
+      "ui": "frontend/src/pages/engineering/CirculationWorkspace.tsx"
+    },
+    {
+      "id": "anti_collision",
+      "missing": [
+        "uncertainty model",
+        "survey database integration",
+        "dedicated UI",
+        "review",
+        "report"
+      ],
+      "status": "PARTIAL"
+    },
+    {
+      "id": "ocr.persian",
+      "missing": [
+        "passing deployed CP135 gate",
+        "independent holdout"
+      ],
+      "status": "PARTIAL"
+    }
+  ],
+  "history_selected_events": [
+    {
+      "event": "Initial repository commit; not current product capability evidence.",
+      "revision": "bfa066b"
+    },
+    {
+      "event": "Early engine pack, including trajectory and fluid calculations.",
+      "revision": "09bef03"
+    },
+    {
+      "event": "CP19 analytical software vectors; not field validation.",
+      "revision": "80aee9f"
+    },
+    {
+      "event": "Survey datum and station-time provenance.",
+      "revision": "658c4f0"
+    },
+    {
+      "event": "Governed engineering products and OCR evidence.",
+      "revision": "d7526a1"
+    },
+    {
+      "event": "OCR TSV quote and synthetic renderer correction; OCR acceptance remained open.",
+      "revision": "11e6cd2"
+    },
+    {
+      "event": "Hydraulics bracketing and bottoms-up geometry safeguards.",
+      "revision": "85396bc"
+    },
+    {
+      "event": "Capacity full-path validation and explicit TVD; incomplete design workflows.",
+      "revision": "e212fa1"
+    },
+    {
+      "event": "Evidence pagination test setup matches API ordering.",
+      "revision": "0735fc1"
+    }
+  ],
+  "unreviewed": "Broader history, end-to-end acceptance and independent audit of all engines remain open."
+}

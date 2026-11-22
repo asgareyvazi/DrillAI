@@ -1,0 +1,711 @@
+{
+  "evaluated": 64,
+  "equal": 64,
+  "results": [
+    {
+      "id": "cp135-ddr-001",
+      "old": null,
+      "new": null,
+      "equal": true,
+      "language": "eng",
+      "layout": "single_column",
+      "scan_condition": "clean"
+    },
+    {
+      "id": "cp135-ddr-002",
+      "old": null,
+      "new": null,
+      "equal": true,
+      "language": "eng",
+      "layout": "single_column",
+      "scan_condition": "clean"
+    },
+    {
+      "id": "cp135-ddr-003",
+      "old": null,
+      "new": null,
+      "equal": true,
+      "language": "eng",
+      "layout": "single_column",
+      "scan_condition": "low_contrast"
+    },
+    {
+      "id": "cp135-ddr-004",
+      "old": null,
+      "new": null,
+      "equal": true,
+      "language": "eng",
+      "layout": "single_column",
+      "scan_condition": "low_contrast"
+    },
+    {
+      "id": "cp135-ddr-005",
+      "old": null,
+      "new": null,
+      "equal": true,
+      "language": "eng",
+      "layout": "single_column",
+      "scan_condition": "light_skew"
+    },
+    {
+      "id": "cp135-ddr-006",
+      "old": null,
+      "new": null,
+      "equal": true,
+      "language": "eng",
+      "layout": "single_column",
+      "scan_condition": "light_skew"
+    },
+    {
+      "id": "cp135-ddr-007",
+      "old": null,
+      "new": null,
+      "equal": true,
+      "language": "eng",
+      "layout": "single_column",
+      "scan_condition": "light_noise"
+    },
+    {
+      "id": "cp135-ddr-008",
+      "old": null,
+      "new": null,
+      "equal": true,
+      "language": "eng",
+      "layout": "single_column",
+      "scan_condition": "light_noise"
+    },
+    {
+      "id": "cp135-ddr-009",
+      "old": null,
+      "new": null,
+      "equal": true,
+      "language": "eng",
+      "layout": "table",
+      "scan_condition": "clean"
+    },
+    {
+      "id": "cp135-ddr-010",
+      "old": null,
+      "new": null,
+      "equal": true,
+      "language": "eng",
+      "layout": "table",
+      "scan_condition": "clean"
+    },
+    {
+      "id": "cp135-ddr-011",
+      "old": null,
+      "new": null,
+      "equal": true,
+      "language": "eng",
+      "layout": "table",
+      "scan_condition": "low_contrast"
+    },
+    {
+      "id": "cp135-ddr-012",
+      "old": null,
+      "new": null,
+      "equal": true,
+      "language": "eng",
+      "layout": "table",
+      "scan_condition": "low_contrast"
+    },
+    {
+      "id": "cp135-ddr-013",
+      "old": null,
+      "new": null,
+      "equal": true,
+      "language": "eng",
+      "layout": "table",
+      "scan_condition": "light_skew"
+    },
+    {
+      "id": "cp135-ddr-014",
+      "old": null,
+      "new": null,
+      "equal": true,
+      "language": "eng",
+      "layout": "table",
+      "scan_condition": "light_skew"
+    },
+    {
+      "id": "cp135-ddr-015",
+      "old": null,
+      "new": null,
+      "equal": true,
+      "language": "eng",
+      "layout": "table",
+      "scan_condition": "light_noise"
+    },
+    {
+      "id": "cp135-ddr-016",
+      "old": null,
+      "new": null,
+      "equal": true,
+      "language": "eng",
+      "layout": "table",
+      "scan_condition": "light_noise"
+    },
+    {
+      "id": "cp135-ddr-017",
+      "old": [
+        630,
+        1275,
+        1651
+      ],
+      "new": [
+        630,
+        1275,
+        1651
+      ],
+      "equal": true,
+      "language": "eng",
+      "layout": "two_column",
+      "scan_condition": "clean"
+    },
+    {
+      "id": "cp135-ddr-018",
+      "old": [
+        630,
+        1275,
+        1651
+      ],
+      "new": [
+        630,
+        1275,
+        1651
+      ],
+      "equal": true,
+      "language": "eng",
+      "layout": "two_column",
+      "scan_condition": "clean"
+    },
+    {
+      "id": "cp135-ddr-019",
+      "old": [
+        630,
+        1275,
+        1651
+      ],
+      "new": [
+        630,
+        1275,
+        1651
+      ],
+      "equal": true,
+      "language": "eng",
+      "layout": "two_column",
+      "scan_condition": "low_contrast"
+    },
+    {
+      "id": "cp135-ddr-020",
+      "old": [
+        630,
+        1275,
+        1651
+      ],
+      "new": [
+        630,
+        1275,
+        1651
+      ],
+      "equal": true,
+      "language": "eng",
+      "layout": "two_column",
+      "scan_condition": "low_contrast"
+    },
+    {
+      "id": "cp135-ddr-021",
+      "old": [
+        629,
+        1275,
+        1651
+      ],
+      "new": [
+        629,
+        1275,
+        1651
+      ],
+      "equal": true,
+      "language": "eng",
+      "layout": "two_column",
+      "scan_condition": "light_skew"
+    },
+    {
+      "id": "cp135-ddr-022",
+      "old": [
+        629,
+        1275,
+        1651
+      ],
+      "new": [
+        629,
+        1275,
+        1651
+      ],
+      "equal": true,
+      "language": "eng",
+      "layout": "two_column",
+      "scan_condition": "light_skew"
+    },
+    {
+      "id": "cp135-ddr-023",
+      "old": [
+        630,
+        1275,
+        1651
+      ],
+      "new": [
+        630,
+        1275,
+        1651
+      ],
+      "equal": true,
+      "language": "eng",
+      "layout": "two_column",
+      "scan_condition": "light_noise"
+    },
+    {
+      "id": "cp135-ddr-024",
+      "old": [
+        630,
+        1275,
+        1651
+      ],
+      "new": [
+        630,
+        1275,
+        1651
+      ],
+      "equal": true,
+      "language": "eng",
+      "layout": "two_column",
+      "scan_condition": "light_noise"
+    },
+    {
+      "id": "cp135-ddr-025",
+      "old": null,
+      "new": null,
+      "equal": true,
+      "language": "eng",
+      "layout": "compact",
+      "scan_condition": "clean"
+    },
+    {
+      "id": "cp135-ddr-026",
+      "old": null,
+      "new": null,
+      "equal": true,
+      "language": "eng",
+      "layout": "compact",
+      "scan_condition": "clean"
+    },
+    {
+      "id": "cp135-ddr-027",
+      "old": null,
+      "new": null,
+      "equal": true,
+      "language": "eng",
+      "layout": "compact",
+      "scan_condition": "low_contrast"
+    },
+    {
+      "id": "cp135-ddr-028",
+      "old": null,
+      "new": null,
+      "equal": true,
+      "language": "eng",
+      "layout": "compact",
+      "scan_condition": "low_contrast"
+    },
+    {
+      "id": "cp135-ddr-029",
+      "old": null,
+      "new": null,
+      "equal": true,
+      "language": "eng",
+      "layout": "compact",
+      "scan_condition": "light_skew"
+    },
+    {
+      "id": "cp135-ddr-030",
+      "old": null,
+      "new": null,
+      "equal": true,
+      "language": "eng",
+      "layout": "compact",
+      "scan_condition": "light_skew"
+    },
+    {
+      "id": "cp135-ddr-031",
+      "old": null,
+      "new": null,
+      "equal": true,
+      "language": "eng",
+      "layout": "compact",
+      "scan_condition": "light_noise"
+    },
+    {
+      "id": "cp135-ddr-032",
+      "old": null,
+      "new": null,
+      "equal": true,
+      "language": "eng",
+      "layout": "compact",
+      "scan_condition": "light_noise"
+    },
+    {
+      "id": "cp135-ddr-033",
+      "old": null,
+      "new": null,
+      "equal": true,
+      "language": "fas",
+      "layout": "single_column",
+      "scan_condition": "clean"
+    },
+    {
+      "id": "cp135-ddr-034",
+      "old": null,
+      "new": null,
+      "equal": true,
+      "language": "fas",
+      "layout": "single_column",
+      "scan_condition": "clean"
+    },
+    {
+      "id": "cp135-ddr-035",
+      "old": null,
+      "new": null,
+      "equal": true,
+      "language": "fas",
+      "layout": "single_column",
+      "scan_condition": "low_contrast"
+    },
+    {
+      "id": "cp135-ddr-036",
+      "old": null,
+      "new": null,
+      "equal": true,
+      "language": "fas",
+      "layout": "single_column",
+      "scan_condition": "low_contrast"
+    },
+    {
+      "id": "cp135-ddr-037",
+      "old": null,
+      "new": null,
+      "equal": true,
+      "language": "fas",
+      "layout": "single_column",
+      "scan_condition": "light_skew"
+    },
+    {
+      "id": "cp135-ddr-038",
+      "old": null,
+      "new": null,
+      "equal": true,
+      "language": "fas",
+      "layout": "single_column",
+      "scan_condition": "light_skew"
+    },
+    {
+      "id": "cp135-ddr-039",
+      "old": null,
+      "new": null,
+      "equal": true,
+      "language": "fas",
+      "layout": "single_column",
+      "scan_condition": "light_noise"
+    },
+    {
+      "id": "cp135-ddr-040",
+      "old": null,
+      "new": null,
+      "equal": true,
+      "language": "fas",
+      "layout": "single_column",
+      "scan_condition": "light_noise"
+    },
+    {
+      "id": "cp135-ddr-041",
+      "old": null,
+      "new": null,
+      "equal": true,
+      "language": "fas",
+      "layout": "table",
+      "scan_condition": "clean"
+    },
+    {
+      "id": "cp135-ddr-042",
+      "old": null,
+      "new": null,
+      "equal": true,
+      "language": "fas",
+      "layout": "table",
+      "scan_condition": "clean"
+    },
+    {
+      "id": "cp135-ddr-043",
+      "old": null,
+      "new": null,
+      "equal": true,
+      "language": "fas",
+      "layout": "table",
+      "scan_condition": "low_contrast"
+    },
+    {
+      "id": "cp135-ddr-044",
+      "old": null,
+      "new": null,
+      "equal": true,
+      "language": "fas",
+      "layout": "table",
+      "scan_condition": "low_contrast"
+    },
+    {
+      "id": "cp135-ddr-045",
+      "old": null,
+      "new": null,
+      "equal": true,
+      "language": "fas",
+      "layout": "table",
+      "scan_condition": "light_skew"
+    },
+    {
+      "id": "cp135-ddr-046",
+      "old": null,
+      "new": null,
+      "equal": true,
+      "language": "fas",
+      "layout": "table",
+      "scan_condition": "light_skew"
+    },
+    {
+      "id": "cp135-ddr-047",
+      "old": null,
+      "new": null,
+      "equal": true,
+      "language": "fas",
+      "layout": "table",
+      "scan_condition": "light_noise"
+    },
+    {
+      "id": "cp135-ddr-048",
+      "old": null,
+      "new": null,
+      "equal": true,
+      "language": "fas",
+      "layout": "table",
+      "scan_condition": "light_noise"
+    },
+    {
+      "id": "cp135-ddr-049",
+      "old": [
+        630,
+        1275,
+        1651
+      ],
+      "new": [
+        630,
+        1275,
+        1651
+      ],
+      "equal": true,
+      "language": "fas",
+      "layout": "two_column",
+      "scan_condition": "clean"
+    },
+    {
+      "id": "cp135-ddr-050",
+      "old": [
+        630,
+        1275,
+        1651
+      ],
+      "new": [
+        630,
+        1275,
+        1651
+      ],
+      "equal": true,
+      "language": "fas",
+      "layout": "two_column",
+      "scan_condition": "clean"
+    },
+    {
+      "id": "cp135-ddr-051",
+      "old": [
+        630,
+        1275,
+        1651
+      ],
+      "new": [
+        630,
+        1275,
+        1651
+      ],
+      "equal": true,
+      "language": "fas",
+      "layout": "two_column",
+      "scan_condition": "low_contrast"
+    },
+    {
+      "id": "cp135-ddr-052",
+      "old": [
+        630,
+        1275,
+        1651
+      ],
+      "new": [
+        630,
+        1275,
+        1651
+      ],
+      "equal": true,
+      "language": "fas",
+      "layout": "two_column",
+      "scan_condition": "low_contrast"
+    },
+    {
+      "id": "cp135-ddr-053",
+      "old": [
+        629,
+        1275,
+        1651
+      ],
+      "new": [
+        629,
+        1275,
+        1651
+      ],
+      "equal": true,
+      "language": "fas",
+      "layout": "two_column",
+      "scan_condition": "light_skew"
+    },
+    {
+      "id": "cp135-ddr-054",
+      "old": [
+        629,
+        1275,
+        1651
+      ],
+      "new": [
+        629,
+        1275,
+        1651
+      ],
+      "equal": true,
+      "language": "fas",
+      "layout": "two_column",
+      "scan_condition": "light_skew"
+    },
+    {
+      "id": "cp135-ddr-055",
+      "old": [
+        630,
+        1275,
+        1651
+      ],
+      "new": [
+        630,
+        1275,
+        1651
+      ],
+      "equal": true,
+      "language": "fas",
+      "layout": "two_column",
+      "scan_condition": "light_noise"
+    },
+    {
+      "id": "cp135-ddr-056",
+      "old": [
+        630,
+        1275,
+        1651
+      ],
+      "new": [
+        630,
+        1275,
+        1651
+      ],
+      "equal": true,
+      "language": "fas",
+      "layout": "two_column",
+      "scan_condition": "light_noise"
+    },
+    {
+      "id": "cp135-ddr-057",
+      "old": null,
+      "new": null,
+      "equal": true,
+      "language": "fas",
+      "layout": "compact",
+      "scan_condition": "clean"
+    },
+    {
+      "id": "cp135-ddr-058",
+      "old": null,
+      "new": null,
+      "equal": true,
+      "language": "fas",
+      "layout": "compact",
+      "scan_condition": "clean"
+    },
+    {
+      "id": "cp135-ddr-059",
+      "old": null,
+      "new": null,
+      "equal": true,
+      "language": "fas",
+      "layout": "compact",
+      "scan_condition": "low_contrast"
+    },
+    {
+      "id": "cp135-ddr-060",
+      "old": null,
+      "new": null,
+      "equal": true,
+      "language": "fas",
+      "layout": "compact",
+      "scan_condition": "low_contrast"
+    },
+    {
+      "id": "cp135-ddr-061",
+      "old": null,
+      "new": null,
+      "equal": true,
+      "language": "fas",
+      "layout": "compact",
+      "scan_condition": "light_skew"
+    },
+    {
+      "id": "cp135-ddr-062",
+      "old": null,
+      "new": null,
+      "equal": true,
+      "language": "fas",
+      "layout": "compact",
+      "scan_condition": "light_skew"
+    },
+    {
+      "id": "cp135-ddr-063",
+      "old": null,
+      "new": null,
+      "equal": true,
+      "language": "fas",
+      "layout": "compact",
+      "scan_condition": "light_noise"
+    },
+    {
+      "id": "cp135-ddr-064",
+      "old": null,
+      "new": null,
+      "equal": true,
+      "language": "fas",
+      "layout": "compact",
+      "scan_condition": "light_noise"
+    }
+  ],
+  "description": "Synthetic 150-DPI layout detector routing equivalence against f48ca35; not OCR accuracy or deployed CLI. Rasterized with local renderer."
+}

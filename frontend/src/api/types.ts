@@ -437,6 +437,12 @@ export interface NptSummary {
   by_operation: NptCategoryRow[]
   by_month: Array<{ month: string; hours: number }>
   offset_comparison: Record<string, unknown> | null
+  interval_reconciliation?: {
+    status: 'complete_for_matching_events' | 'unavailable_incomplete' | 'unavailable_limit'
+    union_hours: number | null
+    overlap_hours: number | null
+    invalid_event_count: number | null
+  }
   notes: string[]
 }
 

@@ -36,6 +36,11 @@ from drillai.db.models import (
 )
 from drillai.db.models.operations import NPT_CATEGORIES
 from drillai.documents.access import operational_source_conditions
+from drillai.drilling.npt_intervals import (
+    MAX_RECONCILIATION_EVENTS,
+    IntervalEvidence,
+    reconcile_event_intervals,
+)
 from drillai.operations.time_windows import (
     TIME_WINDOW_BASES,
     event_time_expressions,
@@ -193,6 +198,7 @@ class NptSummary:
     uncontrollable_hours: float = 0.0
     unknown_controllability_hours: float = 0.0
     offset_comparison: dict[str, Any] | None = None
+    interval_reconciliation: dict[str, Any] = field(default_factory=dict)
     notes: list[str] = field(default_factory=list)
     #: Whether ``cases`` is a bounded prefix of everything that matched, rather than all of it.
     cases_truncated: bool = False
@@ -232,6 +238,7 @@ class NptSummary:
             "by_operation": [row.to_dict() for row in self.by_operation],
             "by_month": self.by_month,
             "offset_comparison": self.offset_comparison,
+            "interval_reconciliation": self.interval_reconciliation,
             "notes": self.notes,
         }
 
@@ -843,10 +850,37 @@ class NptService:
             offset_comparison=(
                 await self._offset_comparison(well, total) if include_offsets and well is not None else None
             ),
+            interval_reconciliation=await self.reconcile_event_intervals(
+                well_id, section_id=section_id, operation_id=operation_id, since=since, until=until,
+            ),
             notes=notes,
             cases_truncated=truncated,
             case_limit=case_limit,
         )
+
+    async def reconcile_event_intervals(
+        self, well_id: str, *, section_id: str | None, operation_id: str | None,
+        since: dt.datetime | None, until: dt.datetime | None,
+    ) -> dict[str, Any]:
+        """Read an independently bounded scope; never use the truncated display cases."""
+        stmt = select(Event).where(*self._event_filters(
+            well_id, section_id=section_id, operation_id=operation_id, since=since, until=until,
+        )).limit(MAX_RECONCILIATION_EVENTS + 1)
+        rows = (await self.session.execute(stmt)).scalars().all()
+        if len(rows) > MAX_RECONCILIATION_EVENTS:
+            # Do not publish an apparently complete union of a truncated prefix.
+            return {"status": "unavailable_limit", "union_hours": None,
+                    "recorded_interval_hours": None, "overlap_hours": None,
+                    "overlap_event_count": None, "invalid_event_count": None,
+                    "event_count": None}
+        return reconcile_event_intervals([
+            IntervalEvidence(
+                start=row.occurred_at, end=row.ended_at,
+                start_basis=row.occurred_at_basis, end_basis=row.ended_at_basis,
+                npt_hours=row.npt_hours if row.npt_hours is not None else row.duration_hours,
+                hours_basis=row.npt_hours_basis if row.npt_hours is not None else row.duration_basis,
+            ) for row in rows
+        ], since=since, until=until)
 
     async def well_ids_with_npt(self, *, limit: int = 200) -> list[str]:
         rows = (

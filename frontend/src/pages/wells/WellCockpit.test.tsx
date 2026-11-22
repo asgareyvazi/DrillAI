@@ -15,7 +15,7 @@ import type { ReactNode } from 'react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { I18nProvider } from '../../i18n'
-import WellCockpit from './WellCockpit'
+import WellCockpit, { NptCard } from './WellCockpit'
 import auditFixture from '../../test/fixtures/well-audit.json'
 import nptFixture from '../../test/fixtures/well-npt.json'
 import stateFixture from '../../test/fixtures/well-state.json'
@@ -85,6 +85,26 @@ function renderCockpit() {
 
 beforeEach(() => {
   window.localStorage.clear()
+})
+
+describe('NPT interval reconciliation', () => {
+  it('shows overlap separately from recorded totals and explains the limitations', () => {
+    render(<I18nProvider><NptCard npt={{ ...npt.npt, interval_reconciliation: {
+      status: 'complete_for_matching_events', union_hours: 3, overlap_hours: 1, invalid_event_count: 0,
+    } }} onSelectCause={() => {}} /></I18nProvider>)
+    expect(screen.getByText('Recorded event interval reconciliation')).toBeInTheDocument()
+    expect(screen.getByText(/Union:.*overlap in recorded intervals:/)).toBeInTheDocument()
+    expect(screen.getByText(/Overlapping causes are not attributed/)).toBeInTheDocument()
+  })
+
+  it('does not render missing reconciliation as zero in Persian', () => {
+    window.localStorage.setItem('drillai.locale', 'fa')
+    render(<I18nProvider><NptCard npt={{ ...npt.npt, interval_reconciliation: {
+      status: 'unavailable_incomplete', union_hours: null, overlap_hours: null, invalid_event_count: 1,
+    } }} onSelectCause={() => {}} /></I18nProvider>)
+    expect(screen.getByText(/در دسترس نیست: حداقل یک بازه/)).toBeInTheDocument()
+    expect(screen.queryByText(/اجتماع:/)).not.toBeInTheDocument()
+  })
 })
 
 describe('WellCockpit: renders the payload the API serves', () => {

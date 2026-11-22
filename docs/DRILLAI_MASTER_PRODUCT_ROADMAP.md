@@ -26,6 +26,10 @@ The latest continuation began at `db29fe22b78cd9af9939e19ff0f44f0c27686e95`. Exp
 
 [Mission 4 evidence and reopening matrix](mission-reports/AUTONOMOUS-MISSION4-PARTIAL.md) documents versioned hydraulic unknown handling, explicitly declared pressure terms, fail-closed optimisation applicability, and unverified interval declaration entry. These do not complete the governed capacity or hydraulics workflows. The [15-engine inventory](mission-reports/AUTONOMOUS-MISSION4-ENGINE-INVENTORY.md) is not the requested independent full audit. Persian deployment OCR, a real holdout, and the historical Windows root cause remain open.
 
+## Mission 7 incremental NPT reconciliation (not accepted)
+
+The NPT API now reports a separate, conservative union of matching, source-qualified full NPT event intervals and observed overlap, with bilingual cockpit disclosure. Existing reported-hour totals and Pareto are unchanged and may double-count. Unknown, inconsistent, partial or unqualified intervals make the union unavailable; this is not cause attribution or proof of physical downtime. The authenticated, scoped API uses a 10,000-event cap, and time filters can exclude unknown timestamps. The 28-item [recovery matrix](mission-reports/MISSION7-RECOVERY-MATRIX.json) and [historical capability inventory](mission-reports/MISSION7-HISTORICAL-CAPABILITY-MATRIX.json) explicitly remain incomplete. Deployed OCR, end-to-end deadline, engineering vertical slices, field validation and final cross-platform CI are not accepted.
+
 ## Capability map (initial source inspection; further audit required)
 
 | Area | Observed implementation and evidence | Current boundary |

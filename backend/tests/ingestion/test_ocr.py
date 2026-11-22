@@ -115,6 +115,28 @@ def test_tesseract_provider_validates_explicit_ocr_page_segmentation_mode() -> N
             TesseractOcrProvider(page_segmentation_mode=mode)
 
 
+def test_skew_fallback_limits_temporary_candidate_width(monkeypatch) -> None:
+    import numpy as np
+    from PIL import Image
+
+    # A blank page enters the skew fallback and has a central band wider than one chunk.
+    page = Image.new("L", (1600, 800), 255)
+    encoded = io.BytesIO()
+    page.save(encoded, format="PNG")
+    widths: list[int] = []
+    original = np.zeros
+
+    def observed_zeros(shape, *args, **kwargs):
+        if isinstance(shape, tuple) and len(shape) == 2:
+            widths.append(shape[1])
+        return original(shape, *args, **kwargs)
+
+    monkeypatch.setattr(np, "zeros", observed_zeros)
+    assert ocr_module._detect_central_column_divider(encoded.getvalue()) is None
+    assert len(widths) > 21
+    assert max(widths) <= 64
+
+
 def test_page_layout_detector_requires_a_long_central_separator_and_orders_columns(monkeypatch) -> None:
     from PIL import Image, ImageDraw
 
@@ -343,7 +365,7 @@ def test_tesseract_cli_adapter_uses_stdin_and_bounds_child_output(tmp_path: Path
         languages="eng,fas", executable=str(script), timeout_seconds=5, max_output_bytes=1024
     )
     assert provider.availability() == (True, None)
-    assert provider.version == "tesseract-cli-tsv-v10; tesseract 5.3.0"
+    assert provider.version == "tesseract-cli-tsv-v11; tesseract 5.3.0"
     lines = provider.recognize(b"png-contract")
     assert len(lines) == 1
     assert lines[0].text == "Drill"
@@ -493,7 +515,7 @@ def test_tesseract_diagnostics_verify_languages_and_capture_runtime_version(monk
     assert diagnostics["available_languages"] == ["eng"]
     assert diagnostics["missing_languages"] == ["fas"]
     assert diagnostics["reason"] == "Tesseract is missing configured language data: fas"
-    assert provider.version == "tesseract-cli-tsv-v10; tesseract 5.4.1"
+    assert provider.version == "tesseract-cli-tsv-v11; tesseract 5.4.1"
 
 
 def test_tesseract_diagnostic_version_rejects_path_or_untrusted_process_text(monkeypatch) -> None:
@@ -562,9 +584,9 @@ def test_tesseract_runtime_diagnostics_are_cached_across_provider_instances(monk
     second = second_provider.diagnostics()
     second["available_languages"].append("tampered")
 
-    assert first_version == "tesseract-cli-tsv-v10; tesseract 5.4.1"
+    assert first_version == "tesseract-cli-tsv-v11; tesseract 5.4.1"
     assert calls == ["--version", "--list-langs"]
-    assert second_provider.version == "tesseract-cli-tsv-v10; tesseract 5.4.1"
+    assert second_provider.version == "tesseract-cli-tsv-v11; tesseract 5.4.1"
     assert first["available_languages"] == ["eng", "fas"]
 
 

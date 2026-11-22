@@ -1,0 +1,230 @@
+{
+  "result": "NOT_ACCEPTED",
+  "source": "AUTONOMOUS-MISSION6-PARTIAL.md with Mission 7 incremental update",
+  "items": [
+    {
+      "id": 1,
+      "requirement": "Persian deployment OCR",
+      "evidence": "`ingestion/ocr.py`, `ocr_synthetic_quality.py`; Mission 5 CI",
+      "remaining": "Restore actual accuracy and pass all unchanged deployed strata",
+      "status": "NOT_ACCEPTED",
+      "scope": "Not a complete Mission 7 audit; non-Mission-7 claims are inherited from Mission 6."
+    },
+    {
+      "id": 2,
+      "requirement": "Bounded page OCR",
+      "evidence": "ingestion/ocr.py v11: chunked skew layout temporary arrays; test_ocr.py; 64-case synthetic routing equivalence MISSION7-LAYOUT-EQUIVALENCE.json",
+      "remaining": "This reduces one allocation dimension only; rendering, detection, parsing and publication are not hard-deadlined or process-tree isolated; Linux/Windows deadline stress still required.",
+      "status": "PARTIAL",
+      "scope": "Not a complete Mission 7 audit; non-Mission-7 claims are inherited from Mission 6."
+    },
+    {
+      "id": 3,
+      "requirement": "Authorized holdout",
+      "evidence": "`ingestion/ocr_benchmark.py`; `test_ocr_benchmark.py`",
+      "remaining": "Obtain approved authentic DDRs, freeze independently adjudicated labels and split",
+      "status": "BLOCKED_BY_MISSING_AUTHORIZED_EVIDENCE",
+      "scope": "Not a complete Mission 7 audit; non-Mission-7 claims are inherited from Mission 6."
+    },
+    {
+      "id": 4,
+      "requirement": "Full capacity geometry",
+      "evidence": "`engines/fluids.py`; `tests/engines/test_fluids.py`",
+      "remaining": "Tool joints, washout, nesting and measured/design distinction",
+      "status": "PARTIAL",
+      "scope": "Not a complete Mission 7 audit; non-Mission-7 claims are inherited from Mission 6."
+    },
+    {
+      "id": 5,
+      "requirement": "Authenticated bore evidence",
+      "evidence": "`engines/fluids.py:OpenBoreDeclaration`",
+      "remaining": "Caller text is not authenticated evidence; build review and identity linkage",
+      "status": "PARTIAL",
+      "scope": "Not a complete Mission 7 audit; non-Mission-7 claims are inherited from Mission 6."
+    },
+    {
+      "id": 6,
+      "requirement": "Versioned capacity design",
+      "evidence": "`CirculationWorkspace.tsx`, `engines/service.py`",
+      "remaining": "No governed capacity revision/approval/export journey",
+      "status": "PARTIAL",
+      "scope": "Not a complete Mission 7 audit; non-Mission-7 claims are inherited from Mission 6."
+    },
+    {
+      "id": 7,
+      "requirement": "Hydraulics/ECD slice",
+      "evidence": "`engines/fluids.py`; `test_mission4_hydraulics_safety.py`",
+      "remaining": "Full surveyed depth profile, components, review and reports missing",
+      "status": "PARTIAL",
+      "scope": "Not a complete Mission 7 audit; non-Mission-7 claims are inherited from Mission 6."
+    },
+    {
+      "id": 8,
+      "requirement": "Survey-linked depths",
+      "evidence": "`drilling/surveys.py`, `engines/trajectory.py`",
+      "remaining": "Connect persisted revision and validated datum to hydraulics",
+      "status": "PARTIAL",
+      "scope": "Not a complete Mission 7 audit; non-Mission-7 claims are inherited from Mission 6."
+    },
+    {
+      "id": 9,
+      "requirement": "New rheology",
+      "evidence": "`engines/power_law.py`; `test_mission6_power_law.py`",
+      "remaining": "Pipe math only; annular/full-well design and report still missing",
+      "status": "PARTIAL",
+      "scope": "Not a complete Mission 7 audit; non-Mission-7 claims are inherited from Mission 6."
+    },
+    {
+      "id": 10,
+      "requirement": "Survey geometric proximity",
+      "evidence": "`engines/proximity.py`; `test_proximity.py`",
+      "remaining": "Select persisted surveys, datum validation and dedicated workflow",
+      "status": "PARTIAL",
+      "scope": "Not a complete Mission 7 audit; non-Mission-7 claims are inherited from Mission 6."
+    },
+    {
+      "id": 11,
+      "requirement": "Anti-collision uncertainty",
+      "evidence": "`engines/proximity.py`",
+      "remaining": "Covariance/error model/SF not implemented; select source and implement",
+      "status": "PLANNED",
+      "scope": "Not a complete Mission 7 audit; non-Mission-7 claims are inherited from Mission 6."
+    },
+    {
+      "id": 12,
+      "requirement": "Engine assurance",
+      "evidence": "`engines/registry.py`; Mission 4 inventory; new pipe tests",
+      "remaining": "Full independent source-to-report audit of all 16 not done",
+      "status": "PARTIAL",
+      "scope": "Not a complete Mission 7 audit; non-Mission-7 claims are inherited from Mission 6."
+    },
+    {
+      "id": 13,
+      "requirement": "Manual DDR",
+      "evidence": "`drilling/daily_reports.py`; `test_daily_report_domain.py`",
+      "remaining": "Complete authored engineering data/review journey",
+      "status": "PARTIAL",
+      "scope": "Not a complete Mission 7 audit; non-Mission-7 claims are inherited from Mission 6."
+    },
+    {
+      "id": 14,
+      "requirement": "DDR batch/correction",
+      "evidence": "`ingestion/pipeline.py`, `drilling/ddr.py`",
+      "remaining": "Batch lifecycle and immutable corrections not fully verified",
+      "status": "PARTIAL",
+      "scope": "Not a complete Mission 7 audit; non-Mission-7 claims are inherited from Mission 6."
+    },
+    {
+      "id": 15,
+      "requirement": "Chronology",
+      "evidence": "`drilling/timeline.py`, `operations/time_windows.py`",
+      "remaining": "Reconcile overlaps and missing timestamps; no comprehensive journey",
+      "status": "PARTIAL",
+      "scope": "Not a complete Mission 7 audit; non-Mission-7 claims are inherited from Mission 6."
+    },
+    {
+      "id": 16,
+      "requirement": "NPT",
+      "evidence": "Mission 7 npt_intervals.py, NptService API and bilingual WellCockpit; tests test_npt_interval_reconciliation.py, test_mission7_npt_service.py, test_drilling_api.py, WellCockpit.test.tsx",
+      "remaining": "Conservative event interval union added separately; existing totals and categories still sum recorded rows, no cause attribution, operator review, cross-source deduplication or full chronology.",
+      "status": "PARTIAL",
+      "scope": "Not a complete Mission 7 audit; non-Mission-7 claims are inherited from Mission 6."
+    },
+    {
+      "id": 17,
+      "requirement": "Well Design",
+      "evidence": "`engineering/products.py`, `db/models/design.py`",
+      "remaining": "Cross-domain linked design and E2E not complete",
+      "status": "PARTIAL",
+      "scope": "Not a complete Mission 7 audit; non-Mission-7 claims are inherited from Mission 6."
+    },
+    {
+      "id": 18,
+      "requirement": "Programs/Procedures",
+      "evidence": "`engineering/service.py`, `engineering/exports.py`, `ProgramsProceduresWorkspace.tsx`",
+      "remaining": "Existing lifecycle; full acceptance/export journey not reverified",
+      "status": "PARTIAL",
+      "scope": "Not a complete Mission 7 audit; non-Mission-7 claims are inherited from Mission 6."
+    },
+    {
+      "id": 19,
+      "requirement": "Advisor/RAG",
+      "evidence": "`drilling/advisor.py`, `rag/retriever.py`; `test_advisor.py`",
+      "remaining": "Retrieval metrics, scope and full citation E2E remain",
+      "status": "PARTIAL",
+      "scope": "Not a complete Mission 7 audit; non-Mission-7 claims are inherited from Mission 6."
+    },
+    {
+      "id": 20,
+      "requirement": "Specialist agents",
+      "evidence": "`workflow/nodes.py`, `workflow/graph.py`",
+      "remaining": "Dedicated bounded domain agents and human review incomplete",
+      "status": "PARTIAL",
+      "scope": "Not a complete Mission 7 audit; non-Mission-7 claims are inherited from Mission 6."
+    },
+    {
+      "id": 21,
+      "requirement": "Telemetry/Twin",
+      "evidence": "`telemetry/service.py`, `engines/twin.py`; `tests/telemetry/`",
+      "remaining": "End-to-end reconciliation and external interop unverified",
+      "status": "PARTIAL",
+      "scope": "Not a complete Mission 7 audit; non-Mission-7 claims are inherited from Mission 6."
+    },
+    {
+      "id": 22,
+      "requirement": "Reports/exports",
+      "evidence": "`engineering/exports.py`, `drilling/reporting.py`",
+      "remaining": "Exact design/approval provenance and requested end-to-end journeys incomplete",
+      "status": "PARTIAL",
+      "scope": "Not a complete Mission 7 audit; non-Mission-7 claims are inherited from Mission 6."
+    },
+    {
+      "id": 23,
+      "requirement": "RBAC/deployment",
+      "evidence": "`security/rbac.py`, `backend/Dockerfile`; CI",
+      "remaining": "New flows and deployment assurance not independently complete",
+      "status": "PARTIAL",
+      "scope": "Not a complete Mission 7 audit; non-Mission-7 claims are inherited from Mission 6."
+    },
+    {
+      "id": 24,
+      "requirement": "Catalogue",
+      "evidence": "`scripts/verify_engineering_catalogue.py`, `docs/ENGINEERING_CAPABILITY_CATALOGUE.*`",
+      "remaining": "Regenerated inventory only; comprehensive historical audit/schema/roadmap incomplete",
+      "status": "PARTIAL",
+      "scope": "Not a complete Mission 7 audit; non-Mission-7 claims are inherited from Mission 6."
+    },
+    {
+      "id": 25,
+      "requirement": "Windows history",
+      "evidence": "`scripts/verify_stack.py`; historical CI",
+      "remaining": "Socket root cause NOT_PROVEN; repeated native diagnostics needed",
+      "status": "PARTIAL",
+      "scope": "Not a complete Mission 7 audit; non-Mission-7 claims are inherited from Mission 6."
+    },
+    {
+      "id": 26,
+      "requirement": "Full E2E",
+      "evidence": "`frontend/e2e/`, `ci/test-inventory.json`",
+      "remaining": "Historical 129 do not substitute for requested new journeys",
+      "status": "PARTIAL",
+      "scope": "Not a complete Mission 7 audit; non-Mission-7 claims are inherited from Mission 6."
+    },
+    {
+      "id": 27,
+      "requirement": "Exact-SHA CI",
+      "evidence": "`.github/workflows/ci.yml`",
+      "remaining": "Prior exact SHA failed deployed OCR, current final SHA needs Linux and Windows CI.",
+      "status": "PARTIAL",
+      "scope": "Not a complete Mission 7 audit; non-Mission-7 claims are inherited from Mission 6."
+    },
+    {
+      "id": 28,
+      "requirement": "Workspace",
+      "evidence": "baseline and start manifest",
+      "remaining": "Guarded reconciliation and starting manifest completed; final inventory and protected comparison required.",
+      "status": "PARTIAL",
+      "scope": "Not a complete Mission 7 audit; non-Mission-7 claims are inherited from Mission 6."
+    }
+  ]
+}

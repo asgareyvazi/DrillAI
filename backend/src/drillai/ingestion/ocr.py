@@ -39,7 +39,7 @@ __all__ = [
 MAX_TSV_BYTES = 16 * 1024 * 1024
 MAX_DIAGNOSTIC_OUTPUT_BYTES = 128 * 1024
 DIAGNOSTIC_TIMEOUT_SECONDS = 3.0
-TESSERACT_ADAPTER_VERSION = "tesseract-cli-tsv-v10"
+TESSERACT_ADAPTER_VERSION = "tesseract-cli-tsv-v11"
 TESSERACT_PAGE_SEGMENTATION_MODE = 6
 TESSERACT_TWO_COLUMN_PAGE_SEGMENTATION_MODE = 11
 TESSERACT_LANGUAGE_ROUTING_POLICY = (
@@ -216,10 +216,10 @@ def _detect_central_column_divider(image_png: bytes) -> tuple[int, int, int] | N
     # A skewed separator drifts across adjacent x positions, so no single vertical projection
     # contains enough ink. Test a fixed 0.1-degree angle grid in a ±1-degree envelope. Each candidate
     # is a three-pixel-wide line sample to tolerate rasterization/anti-aliasing without treating a
-    # single crossing text row as a divider. The central band and per-page pixel ceiling bound the
-    # work and temporary arrays.
+    # single crossing text row as a divider. Chunk candidate columns to avoid several simultaneous
+    # height-by-entire-band temporary arrays. Iterating left-to-right with a strict greater-than
+    # comparison preserves the original first-maximum tie-breaking for each angle.
     y_positions = np.arange(y0, y1)
-    candidate_centers = np.arange(x0, x1)
     center_y = (y0 + y1 - 1) / 2.0
     best_count = 0
     best_split_x = 0
@@ -227,20 +227,22 @@ def _detect_central_column_divider(image_png: bytes) -> tuple[int, int, int] | N
     for angle_tenths in range(-10, 11):
         slope = math.tan(math.radians(angle_tenths / 10.0))
         x_offsets = np.rint(slope * (y_positions - center_y)).astype(np.int32)
-        x_positions = candidate_centers[None, :] + x_offsets[:, None]
-        valid_positions = (x_positions > 0) & (x_positions < width - 1)
-        supported_rows = np.zeros(x_positions.shape, dtype=bool)
-        for neighbor in (-1, 0, 1):
-            sample_x = np.clip(x_positions + neighbor, 0, width - 1)
-            supported_rows |= gray[y_positions[:, None], sample_x] < 235
-        supported_rows &= valid_positions
-        angle_counts = np.count_nonzero(supported_rows, axis=0)
-        candidate_index = int(np.argmax(angle_counts))
-        candidate_count = int(angle_counts[candidate_index])
-        if candidate_count > best_count:
-            best_count = candidate_count
-            best_split_x = int(candidate_centers[candidate_index])
-            best_supported_rows = supported_rows[:, candidate_index].copy()
+        for first in range(x0, x1, 64):
+            candidate_centers = np.arange(first, min(first + 64, x1))
+            x_positions = candidate_centers[None, :] + x_offsets[:, None]
+            valid_positions = (x_positions > 0) & (x_positions < width - 1)
+            supported_rows = np.zeros(x_positions.shape, dtype=bool)
+            for neighbor in (-1, 0, 1):
+                sample_x = np.clip(x_positions + neighbor, 0, width - 1)
+                supported_rows |= gray[y_positions[:, None], sample_x] < 235
+            supported_rows &= valid_positions
+            angle_counts = np.count_nonzero(supported_rows, axis=0)
+            candidate_index = int(np.argmax(angle_counts))
+            candidate_count = int(angle_counts[candidate_index])
+            if candidate_count > best_count:
+                best_count = candidate_count
+                best_split_x = int(candidate_centers[candidate_index])
+                best_supported_rows = supported_rows[:, candidate_index].copy()
 
     if best_supported_rows is None or not supports_two_columns(best_split_x, best_supported_rows):
         return None
