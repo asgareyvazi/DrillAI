@@ -27,6 +27,7 @@ a computed objective. This is stated in the returned ``assumptions`` and in ``no
 from __future__ import annotations
 
 import datetime as dt
+import math
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -254,7 +255,46 @@ class DrillingOptimisationService:
         )
         hydraulics_inputs = {**hydraulics_base}
         if "flow_rate_si" in values:
-            hydraulics_inputs["flow_rate_si"] = values["flow_rate_si"]
+            candidate_flow = values["flow_rate_si"]
+            base_flow = hydraulics_base.get("flow_rate_si")
+            lower = hydraulics_base.get("surface_loss_valid_flow_min_si")
+            upper = hydraulics_base.get("surface_loss_valid_flow_max_si")
+            if ("surface_pressure_loss_si" in hydraulics_base and
+                (not isinstance(base_flow, (int, float)) or not math.isclose(candidate_flow, base_flow, rel_tol=1e-12)) and
+                not (isinstance(lower, (int, float)) and isinstance(upper, (int, float)) and lower <= candidate_flow <= upper)):
+                # A point declaration cannot be extrapolated to another flow. Also remove a
+                # declared range outside its bounds so the engine can compute other outputs.
+                hydraulics_inputs.pop("surface_pressure_loss_si", None)
+                hydraulics_inputs.pop("surface_loss_valid_flow_min_si", None)
+                hydraulics_inputs.pop("surface_loss_valid_flow_max_si", None)
+                result.warnings.append("surface loss declaration does not cover the candidate flow; standpipe is unavailable")
+            extra_low = hydraulics_base.get("additional_loss_valid_flow_min_si")
+            extra_high = hydraulics_base.get("additional_loss_valid_flow_max_si")
+            if ("additional_downhole_pressure_loss_si" in hydraulics_base and
+                (not isinstance(base_flow, (int, float)) or not math.isclose(candidate_flow, base_flow, rel_tol=1e-12)) and
+                not (isinstance(extra_low, (int, float)) and isinstance(extra_high, (int, float)) and extra_low <= candidate_flow <= extra_high)):
+                hydraulics_inputs.pop("additional_downhole_pressure_loss_si", None)
+                hydraulics_inputs.pop("additional_loss_valid_flow_min_si", None)
+                hydraulics_inputs.pop("additional_loss_valid_flow_max_si", None)
+                result.warnings.append("additional downhole loss is declared at another flow; standpipe is unavailable")
+            hydraulics_inputs["flow_rate_si"] = candidate_flow
+        if "mud_weight_si" in values:
+            candidate_weight = values["mud_weight_si"]
+            base_weight = hydraulics_base.get("mud_weight_si")
+            if ("surface_pressure_loss_si" in hydraulics_inputs and
+                (not isinstance(base_weight, (int, float)) or not math.isclose(candidate_weight, base_weight, rel_tol=1e-12))):
+                # The optional range only qualifies flow, not changes in density or rheology.
+                hydraulics_inputs.pop("surface_pressure_loss_si", None)
+                hydraulics_inputs.pop("surface_loss_valid_flow_min_si", None)
+                hydraulics_inputs.pop("surface_loss_valid_flow_max_si", None)
+                result.warnings.append("surface loss declaration does not cover the candidate mud density; standpipe is unavailable")
+            if ("additional_downhole_pressure_loss_si" in hydraulics_inputs and
+                (not isinstance(base_weight, (int, float)) or not math.isclose(candidate_weight, base_weight, rel_tol=1e-12))):
+                hydraulics_inputs.pop("additional_downhole_pressure_loss_si", None)
+                hydraulics_inputs.pop("additional_loss_valid_flow_min_si", None)
+                hydraulics_inputs.pop("additional_loss_valid_flow_max_si", None)
+                result.warnings.append("additional downhole loss is declared for another mud density; standpipe is unavailable")
+            hydraulics_inputs["mud_weight_si"] = candidate_weight
         if section is not None and section.current_md_si is not None:
             hydraulics_inputs.setdefault("bit_depth_si", float(section.current_md_si))
         if section is not None and section.fracture_gradient_si is not None:
@@ -297,6 +337,13 @@ class DrillingOptimisationService:
                 result.engine_run_ids.append(execution.engine_run_id or "")
             for warning in engine_result.warnings or []:
                 result.warnings.append(f"hydraulics: {warning}")
+            if hydraulics_output.get("regime_validity") != "laminar_valid":
+                result.feasible = False
+                result.constraints.append(ConstraintOutcome(
+                    name="hydraulics_model_applicability", satisfied=False, limit=None, actual=None,
+                    unit=None, margin=None,
+                    note="laminar hydraulics is outside its declared regime; candidate cannot be certified",
+                ))
             if engine_result.is_feasible is False:
                 result.feasible = False
                 result.constraints.append(
@@ -331,7 +378,7 @@ class DrillingOptimisationService:
 
         # --- torque & drag ---------------------------------------------------------------
         torque_inputs = {**torque_base}
-        for key in ("wob_si", "rpm"):
+        for key in ("wob_si",):
             if key in values:
                 torque_inputs[key] = values[key]
         if torque_inputs.get("survey") and torque_inputs.get("string"):
@@ -368,7 +415,11 @@ class DrillingOptimisationService:
                 result.warnings.append(f"torque & drag could not evaluate this candidate: {exc}")
 
         # --- objectives + constraint thresholds ------------------------------------------
-        for objective in objectives:
+        evaluation_objectives = list(objectives)
+        # A declared safety limit is a constraint even when it was not selected as an objective.
+        if "spp_si" in limits and not any(item["key"] == "spp_utilisation" for item in objectives):
+            evaluation_objectives.append({"key": "spp_utilisation"})
+        for objective in evaluation_objectives:
             key = objective["key"]
             if key == "ecd_margin_si":
                 margin = result.hydraulics.get("ecd_margin_si")
@@ -392,6 +443,13 @@ class DrillingOptimisationService:
                 spp = result.hydraulics.get("standpipe_pressure_expected_si")
                 limit = limits.get("spp_si")
                 if spp is None or not limit:
+                    result.warnings.append("standpipe utilisation unavailable: supply nozzle and surface-loss inputs and a pump limit")
+                    result.feasible = False
+                    result.constraints.append(ConstraintOutcome(
+                        name="standpipe_pressure_within_pump_limit", satisfied=False,
+                        limit=limit, actual=None, unit="Pa", margin=None,
+                        note="standpipe pressure or pump limit is unavailable; constraint cannot be verified",
+                    ))
                     continue
                 utilisation = round(float(spp) / float(limit), 4)
                 result.objectives[key] = utilisation
@@ -493,6 +551,14 @@ class DrillingOptimisationService:
             raise ValidationFailed("well not found", details={"well_id": well_id})
         if not parameters:
             raise ValidationFailed("at least one decision variable is required")
+        names = [item.get("name") for item in parameters]
+        unsupported = sorted({str(name) for name in names if name not in {"flow_rate_si", "mud_weight_si", "wob_si"}})
+        if unsupported:
+            raise ValidationFailed("decision variables have no supported engine mapping", details={"variables": unsupported})
+        if len(set(names)) != len(names):
+            raise ValidationFailed("decision variable names must be unique")
+        if "wob_si" in names and not (torque_drag_inputs and torque_drag_inputs.get("survey") and torque_drag_inputs.get("string")):
+            raise ValidationFailed("WOB optimisation requires a complete torque and drag model")
 
         section = await self._section(well_id, section_id)
         limits = limits or {}

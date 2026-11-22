@@ -1232,7 +1232,7 @@ async def test_hydraulics_and_capacity_revisions_persist_reference_results_and_r
             expected = 128 * .02 * .02 * 100 / (math.pi * .005**4)
             assert body["result"]["string_pressure_loss_si"] == pytest.approx(expected, rel=1e-9)
             assert body["result"]["regime_validity"] == "non_certified_turbulent_exceedance"
-            assert body["engine_version"] == "1.5.0"
+            assert body["engine_version"] == "1.6.0"
         else:
             expected = math.pi / 4 * (.22**2 - .1**2) * 100
             assert body["result"]["bottoms_up_volume_si"] == pytest.approx(expected, rel=1e-12)
@@ -1255,7 +1255,7 @@ async def test_hydraulics_and_capacity_revisions_persist_reference_results_and_r
     assert readback.status_code == 200
     runs = {row["engine_key"]: row for row in readback.json()["items"]}
     assert set(runs) == {"hydraulics.laminar", "wellbore.capacity"}
-    assert runs["hydraulics.laminar"]["engine_version"] == "1.5.0"
+    assert runs["hydraulics.laminar"]["engine_version"] == "1.6.0"
     assert runs["wellbore.capacity"]["outputs"]["bottoms_up_volume_si"] == pytest.approx(expected)
     async with client._transport.app.state.database.session() as session:
         assert (await session.execute(select(func.count()).select_from(EngineRun))).scalar_one() == 2

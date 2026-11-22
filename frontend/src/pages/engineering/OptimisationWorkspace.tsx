@@ -39,8 +39,8 @@ import { formatDateTime, formatUnitContractValue, humanise } from '../../lib/for
 import { useSession } from '../../stores/session'
 
 const DEFAULT_PARAMETERS = `[
-  { "name": "flow_rate_si", "min_si": 0.025, "max_si": 0.045, "steps": 5, "unit": "m3/s" },
-  { "name": "mud_weight_si", "min_si": 1220.0, "max_si": 1300.0, "steps": 3, "unit": "kg/m3" }
+  { "name": "flow_rate_si", "min_si": 0.0005, "max_si": 0.002, "steps": 5, "unit": "m3/s" },
+  { "name": "mud_weight_si", "min_si": 1220.0, "max_si": 1260.0, "steps": 3, "unit": "kg/m3" }
 ]`
 
 const DEFAULT_HYDRAULICS = `{
@@ -51,14 +51,21 @@ const DEFAULT_HYDRAULICS = `{
   "bit_depth_si": 2400.0,
   "bit_tvd_si": 2400.0,
   "depth_reference": {"md_origin": "synthetic-rig-floor", "tvd_origin": "synthetic-rig-floor", "vertical_datum": "synthetic-datum", "coordinate_reference": "synthetic-grid", "survey_reference": "synthetic-survey", "source_reference": "synthetic-example", "depth_positive": "down"},
-  "flow_rate_si": 0.035,
+  "flow_rate_si": 0.001,
   "mud_weight_si": 1240.0,
-  "plastic_viscosity_si": 0.018,
+  "plastic_viscosity_si": 0.08,
   "yield_point_si": 8.0,
   "bit_diameter_si": 0.2159,
   "tfa_si": 0.00045,
+  "discharge_coefficient": 0.95,
+  "surface_pressure_loss_si": 10000.0,
+  "additional_downhole_pressure_loss_si": 0.0,
+  "additional_loss_valid_flow_min_si": 0.0005,
+  "additional_loss_valid_flow_max_si": 0.002,
+  "surface_loss_valid_flow_min_si": 0.0005,
+  "surface_loss_valid_flow_max_si": 0.002,
   "nozzle_count": 3,
-  "pore_pressure_gradient_si": 12500.0,
+  "pore_pressure_gradient_si": 11000.0,
   "fracture_gradient_si": 15500.0
 }`
 

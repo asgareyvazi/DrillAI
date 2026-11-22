@@ -1093,7 +1093,7 @@
       "assumptions": [
         "laminar Bingham-plastic rheology (PV/YP)",
         "slot approximation for the annulus",
-        "clean concentric geometry, no surface line losses",
+        "clean concentric geometry; surface pressure loss is caller-declared at the specified flow rate",
         "cuttings are spherical with the declared density and diameter"
       ],
       "dependencies": [
@@ -1263,6 +1263,54 @@
         },
         "additionalProperties": false,
         "properties": {
+          "additional_downhole_pressure_loss_si": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "caller-declared aggregate pressure loss for unmodeled BHA, motor and tool joints at this flow; zero must be explicit",
+            "dimension": "pressure",
+            "title": "Additional Downhole Pressure Loss Si",
+            "unit": "Pa"
+          },
+          "additional_loss_valid_flow_max_si": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "optional upper flow bound for declared constant additional downhole loss",
+            "dimension": "volume_flow",
+            "title": "Additional Loss Valid Flow Max Si",
+            "unit": "m3/s"
+          },
+          "additional_loss_valid_flow_min_si": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "optional lower flow bound for declared constant additional downhole loss",
+            "dimension": "volume_flow",
+            "title": "Additional Loss Valid Flow Min Si",
+            "unit": "m3/s"
+          },
           "bit_depth_si": {
             "dimension": "length",
             "exclusiveMinimum": 0.0,
@@ -1273,6 +1321,7 @@
           "bit_diameter_si": {
             "anyOf": [
               {
+                "exclusiveMinimum": 0.0,
                 "type": "number"
               },
               {
@@ -1327,12 +1376,20 @@
             "description": "Caller-declared common MD/TVD origin, datum, frame, survey and source; no conversion is inferred"
           },
           "discharge_coefficient": {
-            "default": 0.95,
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 1.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "explicit nozzle orifice coefficient, required with TFA",
             "dimension": "dimensionless",
-            "exclusiveMinimum": 0.0,
-            "maximum": 1.0,
             "title": "Discharge Coefficient",
-            "type": "number",
             "unit": "1"
           },
           "ecd_limit_si": {
@@ -1438,6 +1495,54 @@
             "title": "Rop Si",
             "unit": "m/h"
           },
+          "surface_loss_valid_flow_max_si": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "optional upper flow bound for a caller-declared constant surface loss",
+            "dimension": "volume_flow",
+            "title": "Surface Loss Valid Flow Max Si",
+            "unit": "m3/s"
+          },
+          "surface_loss_valid_flow_min_si": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "optional lower flow bound for a caller-declared constant surface loss",
+            "dimension": "volume_flow",
+            "title": "Surface Loss Valid Flow Min Si",
+            "unit": "m3/s"
+          },
+          "surface_pressure_loss_si": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "caller-declared surface circuit pressure loss or conservative bound; not independently verified",
+            "dimension": "pressure",
+            "title": "Surface Pressure Loss Si",
+            "unit": "Pa"
+          },
           "tfa_si": {
             "anyOf": [
               {
@@ -1481,7 +1586,8 @@
         "turbulent flow is detected (Reynolds) but not modelled: results are optimistic in that regime",
         "Herschel-Bulkley / power-law fluids are not supported yet",
         "no temperature/pressure-dependent density, no eccentricity, no surge/swab",
-        "no motor/BHA pressure drop unless supplied as an element"
+        "motor/BHA and tool joint pressure losses and surface losses must be explicitly declared; eccentricity is not modeled",
+        "total/standpipe unavailable without nozzle and additional downhole-loss input; standpipe also requires surface-loss input; declarations are not verified"
       ],
       "output_schema": {
         "$defs": {
@@ -1593,12 +1699,26 @@
             "type": "number"
           },
           "bit_hydraulic_horsepower_si": {
-            "title": "Bit Hydraulic Horsepower Si",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bit Hydraulic Horsepower Si"
           },
           "bit_pressure_drop_si": {
-            "title": "Bit Pressure Drop Si",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bit Pressure Drop Si"
           },
           "bit_tvd_si": {
             "title": "Bit Tvd Si",
@@ -1661,16 +1781,37 @@
             "type": "number"
           },
           "hydraulic_horsepower_per_area_si": {
-            "title": "Hydraulic Horsepower Per Area Si",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hydraulic Horsepower Per Area Si"
           },
           "jet_impact_force_si": {
-            "title": "Jet Impact Force Si",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Jet Impact Force Si"
           },
           "jet_velocity_si": {
-            "title": "Jet Velocity Si",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Jet Velocity Si"
           },
           "mud_weight_si": {
             "title": "Mud Weight Si",
@@ -1719,20 +1860,41 @@
             "type": "array"
           },
           "standpipe_pressure_expected_si": {
-            "title": "Standpipe Pressure Expected Si",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Standpipe Pressure Expected Si"
           },
           "string_pressure_loss_si": {
             "title": "String Pressure Loss Si",
             "type": "number"
           },
           "tfa_si": {
-            "title": "Tfa Si",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tfa Si"
           },
           "total_pressure_loss_si": {
-            "title": "Total Pressure Loss Si",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Pressure Loss Si"
           },
           "turbulent_intervals": {
             "items": {
@@ -1782,13 +1944,136 @@
       "registry_self_declaration": "formula_derived",
       "source": "backend/src/drillai/engines/fluids.py",
       "source_function": "compute_hydraulics",
-      "source_sha256_lf": "53d8c0ace1b7c8dbd5aa65ba7d65cffcba592f4c3898ef512ee1cbc0118e164a",
+      "source_sha256_lf": "f6be6cb2d37f56a063d3710c78b21ab031fe7b6659e31e06b80116ca3afac0fc",
       "status": "IMPLEMENTED_NOT_INDEPENDENTLY_VALIDATED",
       "summary": "Exact laminar Bingham-plastic pressure losses, orifice-based bit pressure drop, jet impact force, bit HHP, ECD, annular velocities, cuttings settling/transport with pore-pressure and fracture checks.",
       "ui": "frontend/src/pages/engineering/CirculationWorkspace.tsx (partial)",
       "units": {
         "contract_version": "drillai.engine-units.v1",
         "input_fields": {
+          "additional_downhole_pressure_loss_si": {
+            "canonical_unit": "Pa",
+            "description": "caller-declared aggregate pressure loss for unmodeled BHA, motor and tool joints at this flow; zero must be explicit",
+            "description_status": "declared",
+            "dimension": "pressure",
+            "display_units": {
+              "field_us": {
+                "behavior": "linear",
+                "factor": 0.00014503773773020924,
+                "offset": 0.0,
+                "registry_symbol": "psi",
+                "supported": true,
+                "unit_symbol": "psi"
+              },
+              "metric_engineering": {
+                "behavior": "linear",
+                "factor": 1e-05,
+                "offset": 0.0,
+                "registry_symbol": "bar",
+                "supported": true,
+                "unit_symbol": "bar"
+              },
+              "si": {
+                "behavior": "linear",
+                "factor": 0.001,
+                "offset": 0.0,
+                "registry_symbol": "kPa",
+                "supported": true,
+                "unit_symbol": "kPa"
+              }
+            },
+            "precision": 3,
+            "registry_unit": "Pa",
+            "requested_display_unit": null,
+            "semantic": null,
+            "source": "schema",
+            "status": "declared",
+            "unit_system_basis": "explicit_unit",
+            "unknown_reason": null,
+            "value_unit": "Pa"
+          },
+          "additional_loss_valid_flow_max_si": {
+            "canonical_unit": "m3/s",
+            "description": "optional upper flow bound for declared constant additional downhole loss",
+            "description_status": "declared",
+            "dimension": "volume_flow",
+            "display_units": {
+              "field_us": {
+                "behavior": "linear",
+                "factor": 15850.323141488903,
+                "offset": 0.0,
+                "registry_symbol": "gpm",
+                "supported": true,
+                "unit_symbol": "gpm"
+              },
+              "metric_engineering": {
+                "behavior": "linear",
+                "factor": 60000.0,
+                "offset": 0.0,
+                "registry_symbol": "L/min",
+                "supported": true,
+                "unit_symbol": "L/min"
+              },
+              "si": {
+                "behavior": "linear",
+                "factor": 60000.0,
+                "offset": 0.0,
+                "registry_symbol": "L/min",
+                "supported": true,
+                "unit_symbol": "L/min"
+              }
+            },
+            "precision": 3,
+            "registry_unit": "m3/s",
+            "requested_display_unit": null,
+            "semantic": null,
+            "source": "schema",
+            "status": "declared",
+            "unit_system_basis": "explicit_unit",
+            "unknown_reason": null,
+            "value_unit": "m3/s"
+          },
+          "additional_loss_valid_flow_min_si": {
+            "canonical_unit": "m3/s",
+            "description": "optional lower flow bound for declared constant additional downhole loss",
+            "description_status": "declared",
+            "dimension": "volume_flow",
+            "display_units": {
+              "field_us": {
+                "behavior": "linear",
+                "factor": 15850.323141488903,
+                "offset": 0.0,
+                "registry_symbol": "gpm",
+                "supported": true,
+                "unit_symbol": "gpm"
+              },
+              "metric_engineering": {
+                "behavior": "linear",
+                "factor": 60000.0,
+                "offset": 0.0,
+                "registry_symbol": "L/min",
+                "supported": true,
+                "unit_symbol": "L/min"
+              },
+              "si": {
+                "behavior": "linear",
+                "factor": 60000.0,
+                "offset": 0.0,
+                "registry_symbol": "L/min",
+                "supported": true,
+                "unit_symbol": "L/min"
+              }
+            },
+            "precision": 3,
+            "registry_unit": "m3/s",
+            "requested_display_unit": null,
+            "semantic": null,
+            "source": "schema",
+            "status": "declared",
+            "unit_system_basis": "explicit_unit",
+            "unknown_reason": null,
+            "value_unit": "m3/s"
+          },
           "bit_depth_si": {
             "canonical_unit": "m",
             "description": null,
@@ -1996,8 +2281,8 @@
           },
           "discharge_coefficient": {
             "canonical_unit": "1",
-            "description": null,
-            "description_status": "not_declared",
+            "description": "explicit nozzle orifice coefficient, required with TFA",
+            "description_status": "declared",
             "dimension": "dimensionless",
             "display_units": {
               "field_us": {
@@ -2567,6 +2852,129 @@
             "unit_system_basis": "explicit_unit",
             "unknown_reason": null,
             "value_unit": "m/h"
+          },
+          "surface_loss_valid_flow_max_si": {
+            "canonical_unit": "m3/s",
+            "description": "optional upper flow bound for a caller-declared constant surface loss",
+            "description_status": "declared",
+            "dimension": "volume_flow",
+            "display_units": {
+              "field_us": {
+                "behavior": "linear",
+                "factor": 15850.323141488903,
+                "offset": 0.0,
+                "registry_symbol": "gpm",
+                "supported": true,
+                "unit_symbol": "gpm"
+              },
+              "metric_engineering": {
+                "behavior": "linear",
+                "factor": 60000.0,
+                "offset": 0.0,
+                "registry_symbol": "L/min",
+                "supported": true,
+                "unit_symbol": "L/min"
+              },
+              "si": {
+                "behavior": "linear",
+                "factor": 60000.0,
+                "offset": 0.0,
+                "registry_symbol": "L/min",
+                "supported": true,
+                "unit_symbol": "L/min"
+              }
+            },
+            "precision": 3,
+            "registry_unit": "m3/s",
+            "requested_display_unit": null,
+            "semantic": null,
+            "source": "schema",
+            "status": "declared",
+            "unit_system_basis": "explicit_unit",
+            "unknown_reason": null,
+            "value_unit": "m3/s"
+          },
+          "surface_loss_valid_flow_min_si": {
+            "canonical_unit": "m3/s",
+            "description": "optional lower flow bound for a caller-declared constant surface loss",
+            "description_status": "declared",
+            "dimension": "volume_flow",
+            "display_units": {
+              "field_us": {
+                "behavior": "linear",
+                "factor": 15850.323141488903,
+                "offset": 0.0,
+                "registry_symbol": "gpm",
+                "supported": true,
+                "unit_symbol": "gpm"
+              },
+              "metric_engineering": {
+                "behavior": "linear",
+                "factor": 60000.0,
+                "offset": 0.0,
+                "registry_symbol": "L/min",
+                "supported": true,
+                "unit_symbol": "L/min"
+              },
+              "si": {
+                "behavior": "linear",
+                "factor": 60000.0,
+                "offset": 0.0,
+                "registry_symbol": "L/min",
+                "supported": true,
+                "unit_symbol": "L/min"
+              }
+            },
+            "precision": 3,
+            "registry_unit": "m3/s",
+            "requested_display_unit": null,
+            "semantic": null,
+            "source": "schema",
+            "status": "declared",
+            "unit_system_basis": "explicit_unit",
+            "unknown_reason": null,
+            "value_unit": "m3/s"
+          },
+          "surface_pressure_loss_si": {
+            "canonical_unit": "Pa",
+            "description": "caller-declared surface circuit pressure loss or conservative bound; not independently verified",
+            "description_status": "declared",
+            "dimension": "pressure",
+            "display_units": {
+              "field_us": {
+                "behavior": "linear",
+                "factor": 0.00014503773773020924,
+                "offset": 0.0,
+                "registry_symbol": "psi",
+                "supported": true,
+                "unit_symbol": "psi"
+              },
+              "metric_engineering": {
+                "behavior": "linear",
+                "factor": 1e-05,
+                "offset": 0.0,
+                "registry_symbol": "bar",
+                "supported": true,
+                "unit_symbol": "bar"
+              },
+              "si": {
+                "behavior": "linear",
+                "factor": 0.001,
+                "offset": 0.0,
+                "registry_symbol": "kPa",
+                "supported": true,
+                "unit_symbol": "kPa"
+              }
+            },
+            "precision": 3,
+            "registry_unit": "Pa",
+            "requested_display_unit": null,
+            "semantic": null,
+            "source": "schema",
+            "status": "declared",
+            "unit_system_basis": "explicit_unit",
+            "unknown_reason": null,
+            "value_unit": "Pa"
           },
           "tfa_si": {
             "canonical_unit": "m2",
@@ -4134,7 +4542,7 @@
         "unknown_unit_policy": "unknown values are shown without conversion; no unit is inferred",
         "violation_fields": {}
       },
-      "version": "1.5.0"
+      "version": "1.6.0"
     },
     {
       "api": "/api/v1/registry/engines/{engine_key}/run",
@@ -27138,7 +27546,7 @@
       "registry_self_declaration": "formula_derived",
       "source": "backend/src/drillai/engines/fluids.py",
       "source_function": "compute_capacity",
-      "source_sha256_lf": "53d8c0ace1b7c8dbd5aa65ba7d65cffcba592f4c3898ef512ee1cbc0118e164a",
+      "source_sha256_lf": "f6be6cb2d37f56a063d3710c78b21ab031fe7b6659e31e06b80116ca3afac0fc",
       "status": "IMPLEMENTED_NOT_INDEPENDENTLY_VALIDATED",
       "summary": "String and annulus volumes, pump strokes, bottoms-up volume/strokes/time and circulation time.",
       "ui": "frontend/src/pages/engineering/CirculationWorkspace.tsx (partial)",
@@ -28712,12 +29120,11 @@
     {
       "id": "wellbore.capacity.workspace",
       "missing": [
+        "authenticated source-linked declaration review",
         "design revisions",
-        "scoped declarations UI",
         "review",
         "comparison",
-        "report",
-        "browser journey"
+        "report"
       ],
       "status": "PARTIAL",
       "ui": "frontend/src/pages/engineering/CirculationWorkspace.tsx"
@@ -28729,8 +29136,7 @@
         "profile by TVD",
         "scenario comparison",
         "review",
-        "report",
-        "browser journey"
+        "report"
       ],
       "status": "PARTIAL",
       "ui": "frontend/src/pages/engineering/CirculationWorkspace.tsx"

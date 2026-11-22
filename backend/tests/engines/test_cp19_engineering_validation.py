@@ -614,6 +614,9 @@ def test_cp19_03_metamorphic_monotonicity_and_invalid_input_rejection() -> None:
         "depth_reference": {"md_origin": "synthetic-rig-floor", "tvd_origin": "synthetic-rig-floor", "vertical_datum": "synthetic-datum", "coordinate_reference": "synthetic-grid", "survey_reference": "synthetic-survey", "source_reference": "synthetic-example", "depth_positive": "down"},
         "bit_diameter_si": 0.2159,
         "tfa_si": 0.00045,
+        "discharge_coefficient": 0.95,
+        "surface_pressure_loss_si": 10000.0,
+        "additional_downhole_pressure_loss_si": 0.0,
     }
     _, h_low = reg.execute("hydraulics.laminar", base_hyd)
     _, h_high_q = reg.execute("hydraulics.laminar", {**base_hyd, "flow_rate_si": 0.035})

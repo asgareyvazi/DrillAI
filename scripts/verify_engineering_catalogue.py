@@ -74,8 +74,8 @@ def build() -> tuple[str, str, str]:
     data = {'schema': 'drillai.capability-catalogue.v1', 'scope': 'initial source-linked inventory; independent per-engine audit, full history and product catalogue remain incomplete',
             'history_selected_events': HISTORY, 'engines': engines,
             'product_workflows': [
-                {'id': 'wellbore.capacity.workspace', 'status': 'PARTIAL', 'ui': 'frontend/src/pages/engineering/CirculationWorkspace.tsx', 'missing': ['design revisions', 'scoped declarations UI', 'review', 'comparison', 'report', 'browser journey']},
-                {'id': 'hydraulics.ecd.workspace', 'status': 'PARTIAL', 'ui': 'frontend/src/pages/engineering/CirculationWorkspace.tsx', 'missing': ['verified survey linkage', 'profile by TVD', 'scenario comparison', 'review', 'report', 'browser journey']},
+                {'id': 'wellbore.capacity.workspace', 'status': 'PARTIAL', 'ui': 'frontend/src/pages/engineering/CirculationWorkspace.tsx', 'missing': ['authenticated source-linked declaration review', 'design revisions', 'review', 'comparison', 'report']},
+                {'id': 'hydraulics.ecd.workspace', 'status': 'PARTIAL', 'ui': 'frontend/src/pages/engineering/CirculationWorkspace.tsx', 'missing': ['verified survey linkage', 'profile by TVD', 'scenario comparison', 'review', 'report']},
                 {'id': 'anti_collision', 'status': 'PARTIAL', 'missing': ['uncertainty model', 'survey database integration', 'dedicated UI', 'review', 'report']},
                 {'id': 'ocr.persian', 'status': 'PARTIAL', 'missing': ['passing deployed CP135 gate', 'independent holdout']},
             ],

@@ -767,6 +767,7 @@ def test_f_cp16_06_independent_physics_reference_benchmarks():
             "plastic_viscosity_si": pv,
             "yield_point_si": yp,
             "tfa_si": 0.0005,
+            "discharge_coefficient": 0.95,
         },
     )
     dp_pipe = hyd_res.outputs.string_pressure_loss_si

@@ -12,6 +12,8 @@ import { useActionGate } from '../../hooks/useActionGate'
 import { useI18n } from '../../i18n'
 
 type Row = { kind: string; top: string; bottom: string; od: string; id: string }
+type Declaration = { top: string; bottom: string; by: string; at: string; basis: string }
+const blankDeclaration = (): Declaration => ({ top: '', bottom: '', by: '', at: '', basis: '' })
 const blank = (): Row => ({ kind: 'hole', top: '', bottom: '', od: '', id: '' })
 const kinds = ['hole', 'open_hole', 'casing', 'liner', 'riser', 'drillpipe', 'hwdp', 'drillcollar', 'tubing', 'bha']
 const cls = 'w-full rounded border border-graphite-300 bg-white p-1 text-sm dark:border-graphite-700 dark:bg-graphite-900'
@@ -31,6 +33,7 @@ export default function CirculationWorkspace() {
   const [wellbore, setWellbore] = useState('')
   const [mode, setMode] = useState<'capacity' | 'hydraulics'>('capacity')
   const [rows, setRows] = useState<Row[]>([blank()])
+  const [declarations, setDeclarations] = useState<Declaration[]>([])
   const [values, setValues] = useState<Record<string, string>>({})
   const [error, setError] = useState('')
   const [selected, setSelected] = useState('')
@@ -55,6 +58,12 @@ export default function CirculationWorkspace() {
       const payload: Record<string, unknown> = { elements }
       if (mode === 'capacity') {
         payload.current_depth_si = num('depth')
+        if (declarations.length) payload.open_bore_declarations = declarations.map((item) => {
+          if (!item.by.trim() || !item.basis.trim() || !/(Z|[+-]\d{2}:\d{2})$/i.test(item.at.trim()) || !Number.isFinite(Date.parse(item.at))) {
+            throw new Error(tr('Each declaration requires a name, basis and ISO timestamp with timezone.', 'هر اظهار به نام، مبنا و زمان ISO با منطقه زمانی نیاز دارد.'))
+          }
+          return { from_depth_si: requiredNumber(item.top), to_depth_si: requiredNumber(item.bottom), declared_by: item.by.trim(), declared_at: item.at.trim(), basis: item.basis.trim() }
+        })
         if (values.flow?.trim()) payload.flow_rate_si = num('flow')
         if (values.pump?.trim() || values.spm?.trim() || values.count?.trim()) payload.pump = {
           output_per_stroke_si: num('pump'), ...(values.spm?.trim() ? { strokes_per_minute: num('spm') } : {}),
@@ -65,7 +74,9 @@ export default function CirculationWorkspace() {
         Object.assign(payload, { bit_depth_si: num('depth'), bit_tvd_si: num('tvd'), flow_rate_si: num('flow'),
           mud_weight_si: num('density'), plastic_viscosity_si: num('pv'), yield_point_si: num('yp'),
           depth_reference: { md_origin: values.origin, tvd_origin: values.origin, vertical_datum: values.datum, coordinate_reference: values.frame, survey_reference: values.survey, source_reference: values.source, depth_positive: 'down' },
-          ...(values.tfa?.trim() ? { tfa_si: num('tfa'), discharge_coefficient: num('discharge') } : {}) })
+          ...(values.tfa?.trim() ? { tfa_si: num('tfa'), discharge_coefficient: num('discharge') } : {}),
+          ...(values.surface?.trim() ? { surface_pressure_loss_si: num('surface') } : {}),
+          ...(values.extra?.trim() ? { additional_downhole_pressure_loss_si: num('extra') } : {}) })
       }
       setError(''); setSelected(''); run.mutate(payload)
     } catch (e) { setError(e instanceof Error ? e.message : String(e)) }
@@ -76,7 +87,7 @@ export default function CirculationWorkspace() {
     : current ? { id: current.engine_run_id, version: current.engine.version, outputs: current.outputs, units: current.units, warnings: current.warnings, assumptions: current.assumptions, limitations: current.limitations, violations: current.constraint_violations, inputsHash: current.inputs_hash, outputsHash: current.outputs_hash } : null
   return <div className="space-y-4">
     <PageHeader title={tr('Capacity, circulation & laminar hydraulics', 'ظرفیت، گردش و هیدرولیک لایه‌ای')} description={tr('Structured calculation entry; saved runs are not approved design revisions.', 'ورود ساخت‌یافته محاسبه؛ اجراهای ذخیره‌شده نسخه طراحی تأییدشده نیستند.')} />
-    <p className="text-sm text-warning" role="note">{tr('Nominal concentric geometry only; no washout or tool joints. Hydraulics uses laminar Bingham pipe flow and an annular slot approximation; turbulent results are not certified. Depth references are caller declarations, not verified surveys. This is not a complete design, report or approval workflow.', 'فقط هندسه اسمی هم‌مرکز؛ بدون شستگی یا اتصالات. هیدرولیک از جریان لایه‌ای بینگهام و تقریب شکاف حلقوی استفاده می‌کند؛ نتایج آشفته معتبرسازی نشده‌اند. مراجع عمق اظهار کاربرند و برداشت تأییدشده نیستند. این صفحه گردش‌کار کامل طراحی، گزارش یا تأیید نیست.')}</p>
+    <p className="text-sm text-warning" role="note">{tr('Nominal concentric geometry only; no washout or tool joints. Hydraulics uses laminar Bingham pipe flow and an annular slot approximation; turbulent results are not certified. Standpipe pressure requires nozzle data and declared additional downhole and surface losses at the specified flow; declarations are not verified. Depth references are caller declarations, not verified surveys. This is not a complete design, report or approval workflow.', 'فقط هندسه اسمی هم‌مرکز؛ بدون شستگی یا اتصالات. هیدرولیک از جریان لایه‌ای بینگهام و تقریب شکاف حلقوی استفاده می‌کند؛ نتایج آشفته معتبرسازی نشده‌اند. فشار لوله ایستاده به داده نازل و افت اضافی درون‌چاهی و سطحی اظهارشده در همین دبی نیاز دارد و تأیید نشده است. مراجع عمق اظهار کاربرند و برداشت تأییدشده نیستند. این صفحه گردش‌کار کامل طراحی، گزارش یا تأیید نیست.')}</p>
     <Card title={tr('Scope and model', 'محدوده و مدل')}>
       {wellbores.isPending && <Loading />}{wellbores.isError && <ErrorState error={wellbores.error} />}
       <div className="grid gap-3 sm:grid-cols-2">
@@ -84,7 +95,7 @@ export default function CirculationWorkspace() {
         <Field label={tr('Calculation', 'محاسبه')}><select disabled={run.isPending} className={cls} value={mode} onChange={(e) => { changed(); setMode(e.target.value as 'capacity' | 'hydraulics') }}><option value="capacity">{tr('Capacity & circulation', 'ظرفیت و گردش')}</option><option value="hydraulics">{tr('Laminar hydraulics & bit ECD', 'هیدرولیک لایه‌ای و ECD مته')}</option></select></Field>
       </div>
     </Card>
-    <Card title={tr('Geometry sections (SI)', 'بخش‌های هندسه (SI)')} subtitle={tr('Every interval must be explicit. Missing inner geometry is not assumed to be empty; scoped open-bore declarations are not yet supported in this form.', 'هر بازه باید صریح باشد. هندسه داخلی ناموجود خالی فرض نمی‌شود؛ اظهار بازه چاه خالی در این فرم هنوز پشتیبانی نمی‌شود.')}>
+    <Card title={tr('Geometry sections (SI)', 'بخش‌های هندسه (SI)')} subtitle={tr('Every interval must be explicit. Missing inner geometry is not assumed empty.', 'هر بازه باید صریح باشد. هندسه داخلی ناموجود خالی فرض نمی‌شود.')}>
       <fieldset disabled={run.isPending} className="space-y-3">
         {rows.map((row, i) => <div key={i} className="grid gap-2 rounded border p-2 sm:grid-cols-6">
           <Field label={`${tr('Kind', 'نوع')} ${i + 1}`}><select className={cls} value={row.kind} onChange={(e) => setRow(i, 'kind', e.target.value)}>{kinds.map((kind) => <option key={kind} value={kind}>{kind}</option>)}</select></Field>
@@ -94,11 +105,20 @@ export default function CirculationWorkspace() {
         <Button onClick={() => { changed(); setRows([...rows, blank()]) }}>{tr('Add section', 'افزودن بخش')}</Button>
       </fieldset>
     </Card>
+    {mode === 'capacity' && <Card title={tr('Declared unoccupied intervals', 'بازه‌های اظهارشده بدون رشته')} subtitle={tr('Optional. A declaration is a user assertion, not authenticated evidence or an approved geometry revision. Do not declare unknown geometry as empty.', 'اختیاری. این اظهار ادعای کاربر است، نه مدرک احراز هویت‌شده یا نسخه هندسه تأییدشده. هندسه نامعلوم را خالی اظهار نکنید.')}>
+      <fieldset disabled={run.isPending} className="space-y-3">
+        {declarations.map((item, i) => <div key={i} className="grid gap-2 rounded border p-2 sm:grid-cols-3">
+          {(['top', 'bottom', 'by', 'at', 'basis'] as const).map((name) => <Field key={name} label={`${({ top: tr('Declaration top MD (m)', 'عمق بالای اظهار (m)'), bottom: tr('Declaration bottom MD (m)', 'عمق پایین اظهار (m)'), by: tr('Declared by (unverified)', 'اظهارکننده (تأییدنشده)'), at: tr('Declared at ISO with timezone', 'زمان اظهار ISO با منطقه زمانی'), basis: tr('Evidence basis (unverified)', 'مبنای مدرک (تأییدنشده)') })[name]} ${i + 1}`}><input className={cls} type={name === 'top' || name === 'bottom' ? 'number' : 'text'} step={name === 'top' || name === 'bottom' ? 'any' : undefined} value={item[name]} onChange={(e) => { changed(); setDeclarations(declarations.map((row, index) => index === i ? { ...row, [name]: e.target.value } : row)) }} /></Field>)}
+          <Button onClick={() => { changed(); setDeclarations(declarations.filter((_, index) => index !== i)) }}>{tr('Remove declaration', 'حذف اظهار')}</Button>
+        </div>)}
+        <Button onClick={() => { changed(); setDeclarations([...declarations, blankDeclaration()]) }}>{tr('Add unoccupied interval declaration', 'افزودن اظهار بازه بدون رشته')}</Button>
+      </fieldset>
+    </Card>}
     <Card title={tr('Operating inputs (SI)', 'ورودی‌های عملیاتی (SI)')}>
       <fieldset disabled={run.isPending} className="grid gap-3 sm:grid-cols-3">
         {field('depth', 'Current bit MD (m)', 'عمق اندازه‌گیری مته (m)', true)}{field('flow', 'Flow (m³/s)', 'دبی (m³/s)', true)}
         {mode === 'capacity' ? <>{field('pump', 'Pump output (m³/stroke)', 'خروجی پمپ (m³/stroke)', true)}{field('spm', 'Strokes/minute per pump', 'ضربه در دقیقه هر پمپ', true)}{field('count', 'Active pump count (required with pump)', 'تعداد پمپ فعال (الزامی با پمپ)', true)}</> : <>
-          {field('tvd', 'Bit TVD from same origin (m)', 'عمق قائم مته از همان مبدأ (m)', true)}{field('density', 'Density (kg/m³)', 'چگالی (kg/m³)', true)}{field('pv', 'Plastic viscosity (Pa·s)', 'گرانروی پلاستیک (Pa·s)', true)}{field('yp', 'Yield point (Pa)', 'نقطه تسلیم (Pa)', true)}{field('tfa', 'TFA (m²; optional)', 'سطح نازل (m²؛ اختیاری)', true)}{field('discharge', 'Discharge coefficient (required with TFA)', 'ضریب تخلیه (الزامی با TFA)', true)}
+          {field('tvd', 'Bit TVD from same origin (m)', 'عمق قائم مته از همان مبدأ (m)', true)}{field('density', 'Density (kg/m³)', 'چگالی (kg/m³)', true)}{field('pv', 'Plastic viscosity (Pa·s)', 'گرانروی پلاستیک (Pa·s)', true)}{field('yp', 'Yield point (Pa)', 'نقطه تسلیم (Pa)', true)}{field('tfa', 'TFA (m²; optional)', 'سطح نازل (m²؛ اختیاری)', true)}{field('discharge', 'Discharge coefficient (required with TFA)', 'ضریب تخلیه (الزامی با TFA)', true)}{field('surface', 'Declared surface pressure loss at this flow (Pa; optional)', 'افت فشار سطحی اظهارشده در این دبی (Pa؛ اختیاری)', true)}{field('extra', 'Declared additional downhole loss at this flow (Pa; optional)', 'افت فشار اضافی درون‌چاهی اظهارشده در این دبی (Pa؛ اختیاری)', true)}
           {field('origin', 'Common MD/TVD origin ID', 'شناسه مبدأ مشترک MD/TVD')}{field('datum', 'Vertical datum', 'مبنای قائم')}{field('frame', 'Coordinate reference', 'مرجع مختصات')}{field('survey', 'Survey revision reference', 'مرجع نسخه برداشت')}{field('source', 'Source / provenance', 'منبع / منشأ')}
         </>}
       </fieldset>

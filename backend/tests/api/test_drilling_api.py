@@ -63,6 +63,13 @@ HYDRAULICS_INPUTS = {
     "yield_point_si": 8.0,
     "bit_diameter_si": 0.2159,
     "tfa_si": 0.00045,
+    "discharge_coefficient": 0.95,
+    "surface_pressure_loss_si": 10000.0,
+    "additional_downhole_pressure_loss_si": 0.0,
+    "additional_loss_valid_flow_min_si": 0.025,
+    "additional_loss_valid_flow_max_si": 0.045,
+    "surface_loss_valid_flow_min_si": 0.025,
+    "surface_loss_valid_flow_max_si": 0.045,
     "nozzle_count": 3,
     "pore_pressure_gradient_si": 12500.0,
     "fracture_gradient_si": 15500.0,
@@ -866,9 +873,9 @@ async def test_optimisation_returns_constrained_candidates_and_a_reasoned_recomm
         json={
             "section_id": ids["section_id"],
             "parameters": [
-                {"name": "flow_rate_si", "min_si": 0.025, "max_si": 0.045, "steps": 4, "unit": "m3/s"}
+                {"name": "flow_rate_si", "min_si": 0.0005, "max_si": 0.002, "steps": 4, "unit": "m3/s"}
             ],
-            "hydraulics_inputs": HYDRAULICS_INPUTS,
+            "hydraulics_inputs": {**HYDRAULICS_INPUTS, "plastic_viscosity_si": 0.08, "surface_loss_valid_flow_min_si": 0.0005, "surface_loss_valid_flow_max_si": 0.002, "additional_loss_valid_flow_min_si": 0.0005, "additional_loss_valid_flow_max_si": 0.002},
             "limits": {"spp_si": 25.0e6},
             "objectives": [
                 {"key": "ecd_margin_si", "sense": "maximize"},
@@ -1067,3 +1074,16 @@ async def test_identity_refuses_an_unknown_role(client):
         "/api/v1/platform/identity", headers={"X-Dev-Roles": "not_a_catalogued_role"}
     )
     assert response.status_code in (401, 403)
+
+
+async def test_optimisation_rejects_unmapped_and_unscoped_decision_variables(client):
+    ids = await _well_with_report(client)
+    common = {"hydraulics_inputs": HYDRAULICS_INPUTS, "objectives": [{"key": "annular_velocity_m_s"}], "samples": 2}
+    for parameter, expected in (
+        ({"name": "rpm", "min_si": 30, "max_si": 60, "steps": 2, "unit": "rpm"}, "no supported engine mapping"),
+        ({"name": "wob_si", "min_si": 1000, "max_si": 2000, "steps": 2, "unit": "N"}, "complete torque and drag"),
+    ):
+        response = await client.post(f"/api/v1/wells/{ids['well_id']}/engineering/optimise",
+                                     json={**common, "parameters": [parameter]}, headers=headers())
+        assert response.status_code == 422, response.text
+        assert expected in response.json()["error"]["message"]

@@ -22,6 +22,10 @@ The latest continuation began at `db29fe22b78cd9af9939e19ff0f44f0c27686e95`. Exp
 
 [Fluids and stream evidence](mission-reports/AUTONOMOUS-CONTINUATION-FLUIDS-AND-STREAM.md) records independently reproduced numerical-boundary and incomplete-bottoms-up defects, versioned repairs to two existing engines, and an independently reproduced socket churn fix. It does not claim that socket churn caused the native Windows error, that two full engineering vertical slices are complete, or that the OCR/release gates passed. The [runtime self-declaration snapshot](mission-reports/AUTONOMOUS-ENGINE-REGISTRY-85396bc.json) describes implementation revision `85396bc` only; it is not the requested independent audit or complete catalogue. The final matrix must be rerun on the actual final SHA.
 
+## Mission 4 partial pressure and provenance safeguards
+
+[Mission 4 evidence and reopening matrix](mission-reports/AUTONOMOUS-MISSION4-PARTIAL.md) documents versioned hydraulic unknown handling, explicitly declared pressure terms, fail-closed optimisation applicability, and unverified interval declaration entry. These do not complete the governed capacity or hydraulics workflows. The [15-engine inventory](mission-reports/AUTONOMOUS-MISSION4-ENGINE-INVENTORY.md) is not the requested independent full audit. Persian deployment OCR, a real holdout, and the historical Windows root cause remain open.
+
 ## Capability map (initial source inspection; further audit required)
 
 | Area | Observed implementation and evidence | Current boundary |
@@ -44,7 +48,7 @@ The following table is generated from the runtime registry and source files by `
 | Key | Version | Registry declaration | Source | Source SHA-256 (LF normalized) |
 |---|---|---|---|---|
 | `drilling.mse` | 1.1.1 | formula_derived | `backend/src/drillai/engines/mechanics.py` | `9feee5be5f8602d92a0d407188d8eb1aabd7b6218b5cc3a3bdd7a7bbbd4c4b27` |
-| `hydraulics.laminar` | 1.5.0 | formula_derived | `backend/src/drillai/engines/fluids.py` | `53d8c0ace1b7c8dbd5aa65ba7d65cffcba592f4c3898ef512ee1cbc0118e164a` |
+| `hydraulics.laminar` | 1.6.0 | formula_derived | `backend/src/drillai/engines/fluids.py` | `f6be6cb2d37f56a063d3710c78b21ab031fe7b6659e31e06b80116ca3afac0fc` |
 | `integrity.barrier_envelope` | 1.1.0 | formula_derived | `backend/src/drillai/engines/integrity.py` | `33c8ff117e649ac14a09aec8f10ceb6b25d2b5cdf1ae6396094c2310a0afbf2d` |
 | `offsets.similarity` | 1.1.0 | formula_derived | `backend/src/drillai/engines/offsets.py` | `e64e0d7f57bda6ffd680590d607a5d620d9945f1d455d933033c417474dbd06a` |
 | `optimization.pareto` | 1.1.0 | formula_derived | `backend/src/drillai/engines/optimization.py` | `aacf9a131edcc5e65896dbf82a3ebdb50f14d25baf5daa126c2617c0c76d84e8` |
@@ -57,7 +61,7 @@ The following table is generated from the runtime registry and source files by `
 | `tubulars.api_5c3` | 1.1.0 | needs_field_validation | `backend/src/drillai/engines/tubulars.py` | `3bdc50ef9b0b7044710ea49ffca1d3ad55dbd4759571b96219f9590bb61f5a36` |
 | `twin.reconciliation` | 1.2.0 | formula_derived | `backend/src/drillai/engines/twin.py` | `5c56256b8f813f531e4aa9e1f771679f93e9297f332d3054e00cda56dc464386` |
 | `well_control.kill_sheet` | 1.2.0 | needs_field_validation | `backend/src/drillai/engines/wellcontrol.py` | `00ad181423c078d74c72dac07a870aaecc2be5d7050f7f0993b86c5b6f560dc8` |
-| `wellbore.capacity` | 1.4.0 | formula_derived | `backend/src/drillai/engines/fluids.py` | `53d8c0ace1b7c8dbd5aa65ba7d65cffcba592f4c3898ef512ee1cbc0118e164a` |
+| `wellbore.capacity` | 1.4.0 | formula_derived | `backend/src/drillai/engines/fluids.py` | `f6be6cb2d37f56a063d3710c78b21ab031fe7b6659e31e06b80116ca3afac0fc` |
 <!-- END GENERATED ENGINE REGISTRY -->
 
 ## Ordered mission plan and acceptance

@@ -5,7 +5,7 @@ This source-linked inventory is not the requested comprehensive historical/produ
 | Engine | Version | Status | Source |
 |---|---|---|---|
 | `drilling.mse` | 1.1.1 | `IMPLEMENTED_NOT_INDEPENDENTLY_VALIDATED` | `backend/src/drillai/engines/mechanics.py` |
-| `hydraulics.laminar` | 1.5.0 | `IMPLEMENTED_NOT_INDEPENDENTLY_VALIDATED` | `backend/src/drillai/engines/fluids.py` |
+| `hydraulics.laminar` | 1.6.0 | `IMPLEMENTED_NOT_INDEPENDENTLY_VALIDATED` | `backend/src/drillai/engines/fluids.py` |
 | `integrity.barrier_envelope` | 1.1.0 | `IMPLEMENTED_NOT_INDEPENDENTLY_VALIDATED` | `backend/src/drillai/engines/integrity.py` |
 | `offsets.similarity` | 1.1.0 | `IMPLEMENTED_NOT_INDEPENDENTLY_VALIDATED` | `backend/src/drillai/engines/offsets.py` |
 | `optimization.pareto` | 1.1.0 | `IMPLEMENTED_NOT_INDEPENDENTLY_VALIDATED` | `backend/src/drillai/engines/optimization.py` |

@@ -296,13 +296,33 @@ test('structured circulation inputs persist capacity and laminar hydraulic runs'
   await calculate.click()
   const hydraulics = await hydraulicsResponse
   expect(hydraulics.status()).toBe(200)
-  const hydraulicBody = await hydraulics.json() as { engine_run_id: string; inputs_hash: string; result: { bit_tvd_si: number } }
+  const hydraulicBody = await hydraulics.json() as { engine_run_id: string; inputs_hash: string; result: { bit_tvd_si: number; bit_pressure_drop_si: number | null; standpipe_pressure_expected_si: number | null } }
   expect(hydraulicBody.result.bit_tvd_si).toBe(900)
+  expect(hydraulicBody.result.bit_pressure_drop_si).toBeNull()
+  expect(hydraulicBody.result.standpipe_pressure_expected_si).toBeNull()
   await expect(page.getByText(`input SHA: ${hydraulicBody.inputs_hash}`, { exact: false })).toBeVisible()
   const saved = await apiGet<{ items: Array<{ id: string; engine_key: string; wellbore_id: string }> }>(request, `/wells/${wellId}/engine-runs?limit=50`, 'engineer')
   expect(saved.items).toEqual(expect.arrayContaining([
     expect.objectContaining({ id: capacityBody.engine_run_id, engine_key: 'wellbore.capacity', wellbore_id: fixtures().wellbore_id }),
     expect.objectContaining({ id: hydraulicBody.engine_run_id, engine_key: 'hydraulics.laminar', wellbore_id: fixtures().wellbore_id }),
   ]))
+  await page.getByLabel('Calculation').selectOption('capacity')
+  await page.getByRole('button', { name: 'Remove', exact: true }).last().click()
+  await page.getByRole('button', { name: 'Add unoccupied interval declaration' }).click()
+  await expect(page.getByText(/user assertion, not authenticated evidence/)).toBeVisible()
+  await page.getByLabel('Declaration top MD (m) 1').fill('0')
+  await page.getByLabel('Declaration bottom MD (m) 1').fill('1000')
+  await page.getByLabel('Declared by (unverified) 1').fill('synthetic operator')
+  await page.getByLabel('Declared at ISO with timezone 1').fill('2026-01-01T12:00:00Z')
+  await page.getByLabel('Evidence basis (unverified) 1').fill('synthetic source')
+  const declaredResponse = page.waitForResponse((response) => response.url().includes('/registry/engines/wellbore.capacity/run') && response.request().method() === 'POST')
+  await calculate.click()
+  const declared = await declaredResponse
+  expect(declared.status()).toBe(200)
+  const declaredBody = await declared.json() as { engine_run_id: string; result: { annulus_volume_si: number } }
+  expect(declaredBody.result.annulus_volume_si).toBeCloseTo(Math.PI / 4 * 0.216 ** 2 * 1000, 8)
+  const declaredSaved = await apiGet<{ items: Array<{ id: string; inputs: { open_bore_declarations: Array<{ declared_by: string; basis: string }> } }> }>(request, `/wells/${wellId}/engine-runs?limit=50`, 'engineer')
+  expect(declaredSaved.items).toEqual(expect.arrayContaining([expect.objectContaining({ id: declaredBody.engine_run_id,
+    inputs: expect.objectContaining({ open_bore_declarations: expect.arrayContaining([expect.objectContaining({ declared_by: 'synthetic operator', basis: 'synthetic source' })]) }) })]))
   expectNoFailures(consoleErrors, failedResponses)
 })

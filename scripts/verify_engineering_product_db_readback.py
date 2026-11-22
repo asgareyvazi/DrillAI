@@ -110,15 +110,16 @@ def read_snapshot(
                 (version_row["approval_request_id"], artifact_row["org_id"], version_id),
             ).fetchone()
 
-    artifact = {key: artifact_row[key] for key in artifact_row.keys()}
-    version = {key: version_row[key] for key in version_row.keys()}
+    artifact = dict(artifact_row)
+    version = dict(version_row)
     version["payload"] = _json_object(version["payload"])
     version["validation_summary"] = _json_object(version["validation_summary"])
     version["engine_run_ids"] = json.loads(version["engine_run_ids"] or "[]")
-    revisions = [{key: row[key] for key in row.keys()} for row in version_rows]
+    revisions = [dict(row) for row in version_rows]
     approval = None
     if approval_row is not None:
-        approval = {key: approval_row[key] for key in approval_row.keys() if key != "request_payload"}
+        approval = dict(approval_row)
+        approval.pop("request_payload")
         request_payload = _json_object(approval_row["request_payload"])
         review = request_payload.get("review")
         approval["reviewed_by"] = review.get("reviewed_by") if isinstance(review, dict) else None

@@ -50,10 +50,7 @@ from drillai.units.registry import quantity_field
 
 WATER_DENSITY_SI = 1000.0
 GRAVITY = 9.80665
-DEFAULT_DISCHARGE_COEFFICIENT = 0.95
 CRITICAL_REYNOLDS = 2100.0
-CUTTING_DENSITY_SI = 2600.0  # kg/m3, sandstone/shale average
-DEFAULT_CUTTING_DIAMETER_SI = 0.006  # 6 mm
 
 
 class TubularElement(BaseModel):
@@ -191,16 +188,38 @@ class HydraulicsEngineInput(BaseModel):
     bit_depth_si: float = quantity_field(..., "m", gt=0.0)
     bit_tvd_si: float = quantity_field(..., "m", gt=0.0, description="true vertical depth from the declared origin (ECD); must not exceed measured depth")
     depth_reference: DepthReference = Field(description="Caller-declared common MD/TVD origin, datum, frame, survey and source; no conversion is inferred")
-    bit_diameter_si: float | None = quantity_field(None, "m")
+    bit_diameter_si: float | None = quantity_field(None, "m", gt=0.0)
     tfa_si: float | None = quantity_field(None, "m2", gt=0.0, description="total flow area")
     nozzle_count: int | None = Field(default=None, ge=1, le=24, description="total number of bit nozzles", json_schema_extra={"unit": "1"})
-    discharge_coefficient: float = quantity_field(DEFAULT_DISCHARGE_COEFFICIENT, "1", gt=0.0, le=1.0)
+    discharge_coefficient: float | None = quantity_field(None, "1", gt=0.0, le=1.0, description="explicit nozzle orifice coefficient, required with TFA")
+    additional_downhole_pressure_loss_si: float | None = quantity_field(None, "Pa", ge=0.0, description="caller-declared aggregate pressure loss for unmodeled BHA, motor and tool joints at this flow; zero must be explicit")
+    additional_loss_valid_flow_min_si: float | None = quantity_field(None, "m3/s", gt=0.0, description="optional lower flow bound for declared constant additional downhole loss")
+    additional_loss_valid_flow_max_si: float | None = quantity_field(None, "m3/s", gt=0.0, description="optional upper flow bound for declared constant additional downhole loss")
+    surface_pressure_loss_si: float | None = quantity_field(None, "Pa", ge=0.0, description="caller-declared surface circuit pressure loss or conservative bound; not independently verified")
+    surface_loss_valid_flow_min_si: float | None = quantity_field(None, "m3/s", gt=0.0, description="optional lower flow bound for a caller-declared constant surface loss")
+    surface_loss_valid_flow_max_si: float | None = quantity_field(None, "m3/s", gt=0.0, description="optional upper flow bound for a caller-declared constant surface loss")
     rop_si: float | None = quantity_field(None, "m/h", gt=0.0)
     cutting_diameter_si: float | None = quantity_field(None, "m", gt=0.0)
     cutting_density_si: float | None = quantity_field(None, "kg/m3", gt=0.0)
     ecd_limit_si: float | None = quantity_field(None, "kg/m3")
     fracture_gradient_si: float | None = quantity_field(None, "Pa/m")
     pore_pressure_gradient_si: float | None = quantity_field(None, "Pa/m")
+
+    @model_validator(mode="after")
+    def _require_nozzle_coefficient(self) -> HydraulicsEngineInput:
+        if self.tfa_si is not None and self.discharge_coefficient is None:
+            raise ValueError("TFA requires an explicit discharge coefficient")
+        low, high = self.surface_loss_valid_flow_min_si, self.surface_loss_valid_flow_max_si
+        if (low is None) != (high is None) or (low is not None and self.surface_pressure_loss_si is None):
+            raise ValueError("surface loss flow bounds require both bounds and a surface loss")
+        if low is not None and high is not None and (low > high or not low <= self.flow_rate_si <= high):
+            raise ValueError("flow rate must lie within the declared surface loss flow range")
+        low, high = self.additional_loss_valid_flow_min_si, self.additional_loss_valid_flow_max_si
+        if (low is None) != (high is None) or (low is not None and self.additional_downhole_pressure_loss_si is None):
+            raise ValueError("additional downhole loss flow bounds require both bounds and a loss")
+        if low is not None and high is not None and (low > high or not low <= self.flow_rate_si <= high):
+            raise ValueError("flow rate must lie within the declared additional downhole loss flow range")
+        return self
 
 
 class HydraulicsStage(BaseModel):
@@ -227,17 +246,17 @@ class HydraulicsEngineOutput(BaseModel):
     mud_weight_si: float
     bit_diameter_si: float
     bit_tvd_si: float
-    tfa_si: float
+    tfa_si: float | None
     nozzle_equivalent_diameter_si: float | None = None
-    bit_pressure_drop_si: float
+    bit_pressure_drop_si: float | None
     string_pressure_loss_si: float
     annulus_pressure_loss_si: float
-    total_pressure_loss_si: float
-    standpipe_pressure_expected_si: float
-    bit_hydraulic_horsepower_si: float
-    hydraulic_horsepower_per_area_si: float
-    jet_velocity_si: float
-    jet_impact_force_si: float
+    total_pressure_loss_si: float | None
+    standpipe_pressure_expected_si: float | None
+    bit_hydraulic_horsepower_si: float | None
+    hydraulic_horsepower_per_area_si: float | None
+    jet_velocity_si: float | None
+    jet_impact_force_si: float | None
     ecd_bottom_si: float
     ecd_margin_si: float | None = None
     ecd_profile: list[dict]
@@ -555,7 +574,9 @@ def compute_hydraulics(inputs: HydraulicsEngineInput) -> EngineResult:
 
     bit_diameter = inputs.bit_diameter_si or _deepest_hole_diameter(inputs.elements, inputs.bit_depth_si)
     if bit_diameter is None:
-        raise ValueError("bit diameter not supplied and no hole element is present in the geometry")
+        raise EngineInputInvalid("bit diameter is missing and no hole segment covers the bit depth", details={"engine": "hydraulics.laminar"})
+    if inputs.bit_diameter_si is None:
+        warnings.append("bit diameter assumed equal to the nominal hole diameter at bit depth; actual bit diameter is unverified")
     bit_tvd = inputs.bit_tvd_si
     if bit_tvd > inputs.bit_depth_si:
         raise EngineInputInvalid("bit TVD cannot exceed bit measured depth", details={"engine": "hydraulics.laminar"})
@@ -658,9 +679,10 @@ def compute_hydraulics(inputs: HydraulicsEngineInput) -> EngineResult:
                     }
                 )
 
-    tfa = inputs.tfa_si or 0.0
+    tfa = inputs.tfa_si
     discharge = inputs.discharge_coefficient
-    if tfa > 0:
+    if tfa is not None:
+        assert discharge is not None  # enforced by input validation
         bit_pressure_drop = inputs.mud_weight_si * flow**2 / (2.0 * (discharge * tfa) ** 2)
         jet_velocity = flow / tfa
         jet_impact_force = inputs.mud_weight_si * flow * jet_velocity
@@ -673,18 +695,35 @@ def compute_hydraulics(inputs: HydraulicsEngineInput) -> EngineResult:
             math.sqrt(4.0 * tfa / (math.pi * inputs.nozzle_count)) if inputs.nozzle_count else None
         )
     else:
-        bit_pressure_drop = jet_velocity = jet_impact_force = bit_hhp = hhp_per_area = 0.0
+        bit_pressure_drop = jet_velocity = jet_impact_force = bit_hhp = hhp_per_area = None
         equivalent_nozzle_diameter = None
         warnings.append("no TFA supplied: bit pressure drop, jet velocity, impact force and bit HHP not computed")
 
-    total_loss = string_loss + annulus_loss + bit_pressure_drop
+    # The downhole total includes modeled pipe/annular/nozzle losses and a caller-declared
+    # aggregate for unmodeled downhole components. Missing values are not treated as zero.
+    # Standpipe additionally needs a declared surface loss; declarations are not verified.
+    extra_loss = inputs.additional_downhole_pressure_loss_si
+    total_loss = string_loss + annulus_loss + bit_pressure_drop + extra_loss if bit_pressure_drop is not None and extra_loss is not None else None
+    if extra_loss is None:
+        warnings.append("additional downhole pressure loss not supplied: total loss and standpipe pressure are unavailable")
+    else:
+        warnings.append("additional downhole pressure loss and any declared flow range are caller assertions, not independently verified")
+    surface_loss = inputs.surface_pressure_loss_si
+    standpipe = total_loss + surface_loss if total_loss is not None and surface_loss is not None else None
+    if surface_loss is None:
+        warnings.append("surface circuit pressure loss not supplied: standpipe pressure is unavailable")
+    else:
+        warnings.append("surface circuit loss is caller-declared and is not independently verified; any flow-range bound is a caller assertion")
+    warnings.append("bit ECD uses modeled annular loss only; additional declared downhole loss is not apportioned to the annulus")
     ecd_si = inputs.mud_weight_si + (annulus_loss / (GRAVITY * bit_tvd)) if bit_tvd else inputs.mud_weight_si
 
     transport_ratio = cuttings_concentration = slip_velocity = None
-    if inputs.rop_si and annular_velocities:
+    if inputs.rop_si and (inputs.cutting_diameter_si is None or inputs.cutting_density_si is None):
+        warnings.append("cuttings transport unavailable: cutting diameter and density must both be declared")
+    if inputs.rop_si and annular_velocities and inputs.cutting_diameter_si is not None and inputs.cutting_density_si is not None:
         minimum_velocity = min(annular_velocities)
-        cutting_diameter = inputs.cutting_diameter_si or DEFAULT_CUTTING_DIAMETER_SI
-        cutting_density = inputs.cutting_density_si or CUTTING_DENSITY_SI
+        cutting_diameter = inputs.cutting_diameter_si
+        cutting_density = inputs.cutting_density_si
         slip_velocity = _settling_velocity(cutting_diameter, cutting_density, inputs.mud_weight_si, mu_p)
         transport_ratio = max(0.0, min(1.0, (minimum_velocity - slip_velocity) / minimum_velocity))
         cuttings_concentration = _cuttings_concentration(
@@ -773,7 +812,7 @@ def compute_hydraulics(inputs: HydraulicsEngineInput) -> EngineResult:
         string_pressure_loss_si=string_loss,
         annulus_pressure_loss_si=annulus_loss,
         total_pressure_loss_si=total_loss,
-        standpipe_pressure_expected_si=total_loss,
+        standpipe_pressure_expected_si=standpipe,
         bit_hydraulic_horsepower_si=bit_hhp,
         hydraulic_horsepower_per_area_si=hhp_per_area,
         jet_velocity_si=jet_velocity,
@@ -793,7 +832,9 @@ def compute_hydraulics(inputs: HydraulicsEngineInput) -> EngineResult:
             "laminar Bingham-plastic flow solved exactly (implicit equation, bisection)",
             "annulus represented by the slot approximation with mean circumference",
             "bit modelled as an orifice with a declared discharge coefficient",
-            "no surface line losses, no tool-joint upsets, no eccentricity",
+            "downhole total requires declared additional downhole losses and excludes surface losses; standpipe requires a declared surface loss",
+            "no tool-joint upsets, no eccentricity",
+            "ECD uses modeled annular loss only; additional downhole loss is not apportioned to the annulus",
             "ECD referenced to the supplied bit TVD and caller-declared common origin; depth reference is not independently verified",
             "cuttings settling uses a drag-balance settling velocity for the nominal cutting size",
         ],
@@ -803,8 +844,6 @@ def compute_hydraulics(inputs: HydraulicsEngineInput) -> EngineResult:
 
 def _deepest_hole_diameter(elements: list[TubularElement], depth_si: float) -> float | None:
     holes = [e for e in elements if e.kind in ("hole", "open_hole") and e.from_depth_si < depth_si <= e.to_depth_si]
-    if not holes:
-        holes = [e for e in elements if e.kind in ("hole", "open_hole")]
     if not holes:
         return None
     return max(holes, key=lambda e: e.to_depth_si).od_si
@@ -874,7 +913,7 @@ CAPACITY_SPEC = EngineSpec(
 HYDRAULICS_SPEC = EngineSpec(
     key="hydraulics.laminar",
     name="Circulation hydraulics (laminar Bingham plastic)",
-    version="1.5.0",
+    version="1.6.0",
     domain_pack="Hydraulics Pack",
     category="hydraulics",
     summary=(
@@ -887,20 +926,20 @@ HYDRAULICS_SPEC = EngineSpec(
     produces=("hydraulics.profile",),
     parameters={
         "rheology": {"value": "bingham_plastic", "description": "PV/YP rheology model"},
-        "discharge_coefficient": {"value": DEFAULT_DISCHARGE_COEFFICIENT, "description": "nozzle orifice coefficient"},
         "critical_reynolds": {"value": CRITICAL_REYNOLDS, "description": "laminar/turbulent boundary used for warnings"},
     },
     assumptions=(
         "laminar Bingham-plastic rheology (PV/YP)",
         "slot approximation for the annulus",
-        "clean concentric geometry, no surface line losses",
+        "clean concentric geometry; surface pressure loss is caller-declared at the specified flow rate",
         "cuttings are spherical with the declared density and diameter",
     ),
     limitations=(
         "turbulent flow is detected (Reynolds) but not modelled: results are optimistic in that regime",
         "Herschel-Bulkley / power-law fluids are not supported yet",
         "no temperature/pressure-dependent density, no eccentricity, no surge/swab",
-        "no motor/BHA pressure drop unless supplied as an element",
+        "motor/BHA and tool joint pressure losses and surface losses must be explicitly declared; eccentricity is not modeled",
+        "total/standpipe unavailable without nozzle and additional downhole-loss input; standpipe also requires surface-loss input; declarations are not verified",
     ),
     references=(
         "Bourgoyne et al., Applied Drilling Engineering (laminar Bingham-plastic relations)",

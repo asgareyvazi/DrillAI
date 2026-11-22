@@ -43,6 +43,9 @@ def _hydraulics_input(**overrides) -> dict:
         "depth_reference": {"md_origin": "synthetic-rig-floor", "tvd_origin": "synthetic-rig-floor", "vertical_datum": "synthetic-datum", "coordinate_reference": "synthetic-grid", "survey_reference": "synthetic-survey", "source_reference": "synthetic-example", "depth_positive": "down"},
         "bit_diameter_si": HOLE_OD,
         "tfa_si": TFA,
+        "discharge_coefficient": 0.95,
+        "surface_pressure_loss_si": 12500.0,
+        "additional_downhole_pressure_loss_si": 0.0,
         "nozzle_count": 6,
     }
     payload.update(overrides)
@@ -187,7 +190,7 @@ def test_total_loss_and_standpipe_pressure(engines):
     output = result.outputs
     total = output.string_pressure_loss_si + output.annulus_pressure_loss_si + output.bit_pressure_drop_si
     assert output.total_pressure_loss_si == pytest.approx(total)
-    assert output.standpipe_pressure_expected_si == pytest.approx(total)
+    assert output.standpipe_pressure_expected_si == pytest.approx(total + 12500.0)
     assert output.flow_rate_lpm == pytest.approx(FLOW * 60_000.0)
 
 
@@ -235,8 +238,10 @@ def test_turbulent_intervals_are_flagged_not_hidden(engines):
 def test_missing_tfa_disables_bit_metrics_with_a_warning(engines):
     _, result = engines.execute("hydraulics.laminar", _hydraulics_input(tfa_si=None, nozzle_count=None))
     output = result.outputs
-    assert output.bit_pressure_drop_si == 0.0
-    assert output.jet_velocity_si == 0.0
+    assert output.bit_pressure_drop_si is None
+    assert output.jet_velocity_si is None
+    assert output.total_pressure_loss_si is None
+    assert output.standpipe_pressure_expected_si is None
     assert any("TFA" in warning for warning in result.warnings)
 
 
@@ -257,7 +262,7 @@ def test_hydraulic_specific_impact_uses_bit_area(engines):
 
 
 def test_cuttings_transport_indicators_are_reported(engines):
-    _, result = engines.execute("hydraulics.laminar", _hydraulics_input(rop_si=20.0))
+    _, result = engines.execute("hydraulics.laminar", _hydraulics_input(rop_si=20.0, cutting_diameter_si=0.006, cutting_density_si=2600.0))
     output = result.outputs
     assert output.slip_velocity_si is not None and output.slip_velocity_si > 0
     assert 0.0 <= output.cutting_transport_ratio <= 1.0
@@ -266,7 +271,7 @@ def test_cuttings_transport_indicators_are_reported(engines):
 
 def test_low_annular_velocity_triggers_hole_cleaning_warning(engines):
     """Halving the hole size with the same flow must raise velocity; shrinking flow must warn."""
-    _, result = engines.execute("hydraulics.laminar", _hydraulics_input(flow_rate_si=0.004, rop_si=30.0))
+    _, result = engines.execute("hydraulics.laminar", _hydraulics_input(flow_rate_si=0.004, rop_si=30.0, cutting_diameter_si=0.006, cutting_density_si=2600.0))
     assert any(violation.name == "hole_cleaning_transport_ratio" for violation in result.violations)
 
 

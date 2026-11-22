@@ -53,6 +53,30 @@ describe('structured circulation entry', () => {
         discharge_coefficient: .95, depth_reference: { md_origin: 'floor-A', tvd_origin: 'floor-A', vertical_datum: 'MSL', coordinate_reference: 'grid-A', survey_reference: 'rev-1', source_reference: 'operator declaration', depth_positive: 'down' } }),
     })))
   })
+  it('submits scoped human assertions without presenting them as verified', async () => {
+    renderPage(); await screen.findByRole('option', { name: 'Main bore' }); change('Wellbore', 'wb1')
+    change('Top MD 1 (m)', '0'); change('Bottom MD 1 (m)', '1000'); change('OD / bore 1 (m)', '.216')
+    change('Current bit MD (m)', '1000')
+    fireEvent.click(screen.getByRole('button', { name: 'Add unoccupied interval declaration' }))
+    expect(screen.getByText(/user assertion, not authenticated evidence/)).toBeInTheDocument()
+    change('Declaration top MD (m) 1', '0'); change('Declaration bottom MD (m) 1', '1000')
+    change('Declared by (unverified) 1', 'synthetic operator'); change('Declared at ISO with timezone 1', '2026-01-01T12:00:00Z')
+    change('Evidence basis (unverified) 1', 'synthetic source')
+    fireEvent.click(screen.getByRole('button', { name: 'Calculate and save run' }))
+    await waitFor(() => expect(api.runEngine).toHaveBeenCalledWith('wellbore.capacity', expect.objectContaining({ inputs: expect.objectContaining({
+      open_bore_declarations: [{ from_depth_si: 0, to_depth_si: 1000, declared_by: 'synthetic operator', declared_at: '2026-01-01T12:00:00Z', basis: 'synthetic source' }],
+    }) })))
+  })
+  it('does not submit an unzoned declaration timestamp', async () => {
+    renderPage(); await screen.findByRole('option', { name: 'Main bore' }); change('Wellbore', 'wb1')
+    change('Top MD 1 (m)', '0'); change('Bottom MD 1 (m)', '100'); change('OD / bore 1 (m)', '.216'); change('Current bit MD (m)', '100')
+    fireEvent.click(screen.getByRole('button', { name: 'Add unoccupied interval declaration' }))
+    change('Declaration top MD (m) 1', '0'); change('Declaration bottom MD (m) 1', '100')
+    change('Declared by (unverified) 1', 'operator'); change('Declared at ISO with timezone 1', '2026-01-01T12:00:00'); change('Evidence basis (unverified) 1', 'source')
+    fireEvent.click(screen.getByRole('button', { name: 'Calculate and save run' }))
+    expect(screen.getByRole('alert')).toHaveTextContent('ISO timestamp with timezone')
+    expect(api.runEngine).not.toHaveBeenCalled()
+  })
   it('does not submit hydraulics without a declared depth reference', async () => {
     renderPage(); await screen.findByRole('option', { name: 'Main bore' }); change('Wellbore', 'wb1'); geometry(); change('Calculation', 'hydraulics')
     fireEvent.click(screen.getByRole('button', { name: 'Calculate and save run' }))
