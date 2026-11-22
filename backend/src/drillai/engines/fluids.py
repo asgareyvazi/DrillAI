@@ -725,14 +725,22 @@ def compute_hydraulics(inputs: HydraulicsEngineInput) -> EngineResult:
         cutting_diameter = inputs.cutting_diameter_si
         cutting_density = inputs.cutting_density_si
         slip_velocity = _settling_velocity(cutting_diameter, cutting_density, inputs.mud_weight_si, mu_p)
-        transport_ratio = max(0.0, min(1.0, (minimum_velocity - slip_velocity) / minimum_velocity))
+        if slip_velocity is None:
+            warnings.append("cuttings transport unavailable: density contrast or particle Reynolds number is outside the settling model")
+        else:
+            transport_ratio = max(0.0, min(1.0, (minimum_velocity - slip_velocity) / minimum_velocity))
+            warnings.append(
+                "cuttings transport is a screening approximation using isolated spheres in a Newtonian fluid "
+                "at plastic viscosity; it ignores yield stress, inclination, eccentricity and beds; not a validated hole-cleaning design"
+            )
         cuttings_concentration = _cuttings_concentration(
-            hole_diameter_si=bit_diameter,
-            pipe_od_si=(max((e.od_si for e in inputs.elements if e.kind in _INNER_KINDS), default=0.0)),
-            rop_m_per_h=inputs.rop_si,
-            annular_velocity_si=minimum_velocity,
+            hole_diameter_si=bit_diameter, rop_m_per_h=inputs.rop_si, flow_rate_si=flow,
         )
-        if transport_ratio < 0.5:
+        if cuttings_concentration is None:
+            warnings.append("no-slip cuttings volume fraction is unavailable: generated cuttings volume meets or exceeds flow volume")
+        else:
+            warnings.append("cuttings volume fraction assumes no slip, no washout and nominal bit diameter; not a bed concentration")
+        if transport_ratio is not None and transport_ratio < 0.5:
             violations.append(
                 ConstraintViolation(
                     name="hole_cleaning_transport_ratio",
@@ -851,43 +859,39 @@ def _deepest_hole_diameter(elements: list[TubularElement], depth_si: float) -> f
 
 def _settling_velocity(
     particle_diameter: float, particle_density: float, fluid_density: float, mu_p: float
-) -> float:
-    """Drag-balance settling velocity (Stokes for Re<1, intermediate otherwise)."""
-    if fluid_density <= 0:
-        return 0.0
-    density_difference = max(particle_density - fluid_density, 0.0)
-    if density_difference <= 0:
-        return 0.0
-    # Iterate on the drag coefficient: C_d = 24/Re for Re<1, else Schiller-Naumann approximation.
-    velocity = particle_diameter**2 * density_difference * GRAVITY / (18.0 * mu_p)
-    for _ in range(50):
-        reynolds = fluid_density * velocity * particle_diameter / mu_p
-        if reynolds <= 0:
-            break
-        if reynolds < 1.0:
-            drag = 24.0 / reynolds
+) -> float | None:
+    """Newtonian isolated-sphere Schiller–Naumann force balance for 0 < Re <= 1000.
+
+    Hagemeier et al., *Settling of spherical particles in the transitional regime*,
+    https://arxiv.org/pdf/2009.02250, equations 5, 8 and 9. This is not a Bingham
+    particle-settling model: using plastic viscosity is only an explicitly warned screen.
+    Bisection of Re*(1+0.15*Re**0.687)=Ar/18 avoids an unconverged fixed-point result.
+    """
+    if (not all(math.isfinite(x) and x > 0 for x in (particle_diameter, particle_density, fluid_density, mu_p))
+            or particle_density <= fluid_density):
+        return None
+    try:
+        ar_over_18 = fluid_density * (particle_density - fluid_density) * GRAVITY * particle_diameter**3 / (18 * mu_p**2)
+    except (OverflowError, ZeroDivisionError):
+        return None
+    if not math.isfinite(ar_over_18) or ar_over_18 <= 0 or ar_over_18 > 1000 * (1 + 0.15 * 1000**0.687):
+        return None
+    low, high = 0.0, 1000.0
+    for _ in range(100):
+        mid = (low + high) / 2
+        if mid * (1 + 0.15 * mid**0.687) < ar_over_18:
+            low = mid
         else:
-            drag = (24.0 / reynolds) * (1.0 + 0.15 * reynolds**0.687)
-        new_velocity = math.sqrt(
-            max(4.0 * particle_diameter * density_difference * GRAVITY / (3.0 * drag * fluid_density), 0.0)
-        )
-        if abs(new_velocity - velocity) < 1e-6:
-            velocity = new_velocity
-            break
-        velocity = 0.5 * velocity + 0.5 * new_velocity
-    return velocity
+            high = mid
+    velocity = (low + high) / 2 * mu_p / (fluid_density * particle_diameter)
+    return velocity if math.isfinite(velocity) and velocity > 0 else None
 
 
-def _cuttings_concentration(
-    *, hole_diameter_si: float, pipe_od_si: float, rop_m_per_h: float, annular_velocity_si: float
-) -> float:
-    if annular_velocity_si <= 0 or pipe_od_si <= 0:
-        return 0.0
-    annulus_area = math.pi / 4.0 * (hole_diameter_si**2 - pipe_od_si**2)
-    if annulus_area <= 0:
-        return 0.0
+def _cuttings_concentration(*, hole_diameter_si: float, rop_m_per_h: float, flow_rate_si: float) -> float | None:
+    """Ideal no-slip generated solids volume / flow volume, not bed concentration."""
     cuttings_rate = (rop_m_per_h / 3600.0) * math.pi / 4.0 * hole_diameter_si**2
-    return max(0.0, min(1.0, cuttings_rate / (annular_velocity_si * annulus_area)))
+    fraction = cuttings_rate / flow_rate_si
+    return fraction if math.isfinite(fraction) and 0 <= fraction < 1 else None
 
 
 CAPACITY_SPEC = EngineSpec(
@@ -913,7 +917,7 @@ CAPACITY_SPEC = EngineSpec(
 HYDRAULICS_SPEC = EngineSpec(
     key="hydraulics.laminar",
     name="Circulation hydraulics (laminar Bingham plastic)",
-    version="1.6.0",
+    version="1.7.0",
     domain_pack="Hydraulics Pack",
     category="hydraulics",
     summary=(
@@ -938,12 +942,15 @@ HYDRAULICS_SPEC = EngineSpec(
         "turbulent flow is detected (Reynolds) but not modelled: results are optimistic in that regime",
         "Herschel-Bulkley / power-law fluids are not supported yet",
         "no temperature/pressure-dependent density, no eccentricity, no surge/swab",
+        "cuttings screening assumes an isolated sphere in Newtonian fluid at plastic viscosity; no yield stress, inclination, eccentricity or beds; particle Re <= 1000",
+        "cuttings volume fraction assumes no slip and is not a bed concentration or validated hole-cleaning design",
         "motor/BHA and tool joint pressure losses and surface losses must be explicitly declared; eccentricity is not modeled",
         "total/standpipe unavailable without nozzle and additional downhole-loss input; standpipe also requires surface-loss input; declarations are not verified",
     ),
     references=(
         "Bourgoyne et al., Applied Drilling Engineering (laminar Bingham-plastic relations)",
         "API RP 13D — Rheology and Hydraulics of Oil-Well Drilling Fluids (framework)",
+        "Hagemeier et al., Settling of spherical particles in the transitional regime, equations 5, 8 and 9, https://arxiv.org/pdf/2009.02250 (Newtonian isolated-sphere correlation only)",
     ),
     tags=("hydraulics", "ecd", "hole-cleaning", "nozzles"),
     action_level="L1",

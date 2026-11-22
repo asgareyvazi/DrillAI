@@ -473,12 +473,14 @@ class DrillingOptimisationService:
             elif key == "cutting_transport_ratio":
                 ratio = result.hydraulics.get("cutting_transport_ratio")
                 if ratio is None:
-                    # The engine could not evaluate transport for this candidate; saying so is
-                    # better than omitting the objective silently.
-                    result.warnings.append(
-                        "cutting transport ratio was not computed for this candidate "
-                        "(insufficient cuttings data); the objective is skipped"
-                    )
+                    # A candidate cannot be ranked against one that has a requested objective
+                    # when that objective was not evaluated for it.
+                    result.warnings.append("cutting transport ratio unavailable; requested objective cannot be evaluated")
+                    result.constraints.append(ConstraintOutcome(
+                        name="cutting_transport_objective_available", satisfied=False,
+                        limit=None, actual=None, unit="1", margin=None,
+                        note="cuttings input or settling model applicability is insufficient",
+                    ))
                     continue
                 result.objectives[key] = round(float(ratio), 4)
             elif key == "torque_utilisation":

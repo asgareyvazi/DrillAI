@@ -1586,6 +1586,8 @@
         "turbulent flow is detected (Reynolds) but not modelled: results are optimistic in that regime",
         "Herschel-Bulkley / power-law fluids are not supported yet",
         "no temperature/pressure-dependent density, no eccentricity, no surge/swab",
+        "cuttings screening assumes an isolated sphere in Newtonian fluid at plastic viscosity; no yield stress, inclination, eccentricity or beds; particle Re <= 1000",
+        "cuttings volume fraction assumes no slip and is not a bed concentration or validated hole-cleaning design",
         "motor/BHA and tool joint pressure losses and surface losses must be explicitly declared; eccentricity is not modeled",
         "total/standpipe unavailable without nozzle and additional downhole-loss input; standpipe also requires surface-loss input; declarations are not verified"
       ],
@@ -1939,12 +1941,13 @@
       ],
       "references_as_declared": [
         "Bourgoyne et al., Applied Drilling Engineering (laminar Bingham-plastic relations)",
-        "API RP 13D — Rheology and Hydraulics of Oil-Well Drilling Fluids (framework)"
+        "API RP 13D — Rheology and Hydraulics of Oil-Well Drilling Fluids (framework)",
+        "Hagemeier et al., Settling of spherical particles in the transitional regime, equations 5, 8 and 9, https://arxiv.org/pdf/2009.02250 (Newtonian isolated-sphere correlation only)"
       ],
       "registry_self_declaration": "formula_derived",
       "source": "backend/src/drillai/engines/fluids.py",
       "source_function": "compute_hydraulics",
-      "source_sha256_lf": "f6be6cb2d37f56a063d3710c78b21ab031fe7b6659e31e06b80116ca3afac0fc",
+      "source_sha256_lf": "ca7ee68be98a7c81a433746330ee0c99e3d759de83410d9ec791deff0e445363",
       "status": "IMPLEMENTED_NOT_INDEPENDENTLY_VALIDATED",
       "summary": "Exact laminar Bingham-plastic pressure losses, orifice-based bit pressure drop, jet impact force, bit HHP, ECD, annular velocities, cuttings settling/transport with pore-pressure and fracture checks.",
       "ui": "frontend/src/pages/engineering/CirculationWorkspace.tsx (partial)",
@@ -4542,7 +4545,7 @@
         "unknown_unit_policy": "unknown values are shown without conversion; no unit is inferred",
         "violation_fields": {}
       },
-      "version": "1.6.0"
+      "version": "1.7.0"
     },
     {
       "api": "/api/v1/registry/engines/{engine_key}/run",
@@ -28306,7 +28309,7 @@
       "registry_self_declaration": "formula_derived",
       "source": "backend/src/drillai/engines/fluids.py",
       "source_function": "compute_capacity",
-      "source_sha256_lf": "f6be6cb2d37f56a063d3710c78b21ab031fe7b6659e31e06b80116ca3afac0fc",
+      "source_sha256_lf": "ca7ee68be98a7c81a433746330ee0c99e3d759de83410d9ec791deff0e445363",
       "status": "IMPLEMENTED_NOT_INDEPENDENTLY_VALIDATED",
       "summary": "String and annulus volumes, pump strokes, bottoms-up volume/strokes/time and circulation time.",
       "ui": "frontend/src/pages/engineering/CirculationWorkspace.tsx (partial)",

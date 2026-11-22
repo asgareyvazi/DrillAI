@@ -192,3 +192,63 @@ def test_missing_bit_diameter_never_extrapolates_from_unrelated_hole(engines):
     assert any("bit diameter assumed" in warning for warning in inferred.warnings)
     with pytest.raises(EngineInputInvalid):
         engines.execute("hydraulics.laminar", inputs(bit_diameter_si=-.1))
+
+
+def test_settling_force_balance_against_independently_chosen_reynolds():
+    from drillai.engines.fluids import _settling_velocity
+
+    # Choose Re, independently calculate the required buoyancy from the published drag law,
+    # and compare the inverse solver with the prescribed terminal speed.
+    rho, mu, diameter, re = 1200.0, 0.03, 0.006, 100.0
+    drag = 24 / re * (1 + 0.15 * re**0.687)
+    velocity = re * mu / (rho * diameter)
+    delta_rho = 3 * drag * rho * velocity**2 / (4 * diameter * 9.80665)
+    assert _settling_velocity(diameter, rho + delta_rho, rho, mu) == pytest.approx(velocity, rel=1e-12)
+    assert _settling_velocity(.006, rho, rho, mu) is None
+    assert _settling_velocity(.006, rho - 1, rho, mu) is None
+    assert _settling_velocity(.1, 3000, rho, mu) is None  # above particle Re limit
+
+
+def test_cuttings_screen_fails_closed_outside_buoyancy_and_drag_domain(engines):
+    for density, diameter in ((1200, .006), (1000, .006), (3000, .1)):
+        _, result = engines.execute("hydraulics.laminar", inputs(rop_si=10, cutting_diameter_si=diameter, cutting_density_si=density))
+        assert result.outputs.slip_velocity_si is None
+        assert result.outputs.cutting_transport_ratio is None
+        assert any("density contrast or particle Reynolds" in warning for warning in result.warnings)
+        assert not any(v.name == "hole_cleaning_transport_ratio" for v in result.violations)
+
+
+def test_no_slip_cuttings_fraction_uses_generated_volume_and_flow_not_remote_pipe_size(engines):
+    elements = [
+        {"kind": "hole", "from_depth_si": 0, "to_depth_si": 500, "od_si": .30},
+        {"kind": "hole", "from_depth_si": 500, "to_depth_si": 1000, "od_si": .216},
+        {"kind": "drillpipe", "from_depth_si": 0, "to_depth_si": 500, "od_si": .24, "id_si": .08},
+        {"kind": "drillpipe", "from_depth_si": 500, "to_depth_si": 1000, "od_si": .1, "id_si": .08},
+    ]
+    flow, rop, bit = .001, 10, .216
+    _, result = engines.execute("hydraulics.laminar", inputs(elements=elements, flow_rate_si=flow, bit_diameter_si=bit,
+        rop_si=rop, cutting_diameter_si=.006, cutting_density_si=2600))
+    assert result.outputs.cuttings_concentration_volume_fraction == pytest.approx((rop / 3600) * math.pi * bit**2 / 4 / flow)
+    assert any("not a bed concentration" in warning for warning in result.warnings)
+
+
+def test_overflowing_generated_cuttings_fraction_is_not_clamped_to_one(engines):
+    _, result = engines.execute("hydraulics.laminar", inputs(rop_si=10000, cutting_diameter_si=.006, cutting_density_si=2600))
+    assert result.outputs.cuttings_concentration_volume_fraction is None
+    assert any("meets or exceeds flow" in warning for warning in result.warnings)
+
+
+@pytest.mark.asyncio
+async def test_optimisation_does_not_rank_candidate_without_requested_transport_objective(engines):
+    from drillai.drilling.optimisation import DrillingOptimisationService
+
+    service = DrillingOptimisationService(None, "synthetic", registry=engines)
+    result = await service._evaluate(
+        well_id="synthetic", section=None, candidate_values={"flow_rate_si": .001},
+        hydraulics_base=inputs(rop_si=10, cutting_diameter_si=.006, cutting_density_si=1000),
+        torque_base={}, limits={}, objectives=[{"key": "cutting_transport_ratio"}], persist_runs=False,
+    )
+    assert result.hydraulics["cutting_transport_ratio"] is None
+    assert "cutting_transport_ratio" not in result.objectives
+    assert result.feasible is False
+    assert any(x.name == "cutting_transport_objective_available" and not x.satisfied for x in result.constraints)
