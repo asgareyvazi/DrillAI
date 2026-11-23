@@ -1,0 +1,9 @@
+Local real-browser synthetic regression, Playwright retries=0:
+First full run: 128 passed, 2 failed (25.2m).
+- connectors-platform.spec.ts Journey 21: expected LIVE, got stale_data, 15s assertion timeout.
+- live-operations.spec.ts Journeys F/G/I: 90s test timeout, waiting for resync click.
+The first run overlapped full backend and other browser workloads; contention is plausible, not established.
+After adding an explicit fresh synthetic harness point and preserving assertions, a targeted Journey 21 run passed.
+An independent full rerun after concurrent workloads stopped: 130 passed (23.5m).
+The initial targeted NPT journey failed on a duplicate ID locator; after scoping both locators an isolated rerun passed.
+Raw local browser traces and databases remain in their respective untracked/ignored directories; not committed due to unreviewed request context.
