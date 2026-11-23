@@ -1131,11 +1131,17 @@ test.describe('CP11 telemetry connectors, WITSML/ETP protocols, worker & operati
     await expect(page.getByTestId('detail-runtime-status')).toHaveText('backing_off')
     await expect(page.getByTestId('detail-error-remediation')).toBeVisible()
 
-    // Restore ETP harness and poll via UI
-    await apiPost(request, '/connectors/harness/configure', { protocol: 'etp', fault_mode: 'ok' }, 'engineer')
+    // LIVE requires fresh observed telemetry, not merely a successful poll. The shared harness
+    // points are seeded once at server startup and may be older than the 30-second freshness
+    // threshold by this journey. Explicitly add a fresh synthetic point before the recovery poll.
+    await apiPost(request, '/connectors/harness/configure', {
+      protocol: 'etp', fault_mode: 'ok', append_values: { SPP: 2850 }, quality: 'good',
+    }, 'engineer')
     await page.getByTestId('connector-poll-now-btn').click()
     await expect(page.getByTestId('detail-runtime-status')).toHaveText('running')
     await expect(page.getByTestId('detail-health-state')).toHaveText('LIVE')
+    await expect(page.getByTestId('detail-watermark-cursor')).toContainText('cursor_timestamp')
+    await expect(page.getByTestId('connector-runs-table')).toContainText('succeeded')
 
     expectNoFailures(consoleErrors, failedResponses)
   })
