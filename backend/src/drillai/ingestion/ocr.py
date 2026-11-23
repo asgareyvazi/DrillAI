@@ -705,12 +705,15 @@ class TesseractOcrProvider:
                 )
             if divider is not None:
                 split_x, image_width, image_height = divider
-                return _order_column_lines(
+                lines = _order_column_lines(
                     lines,
                     split_x=split_x,
                     image_width=image_width,
                     image_height=image_height,
                 )
+            # This rejects late results, but does not interrupt synchronous layout or sorting.
+            if time.monotonic() >= deadline_monotonic:
+                raise OcrUnavailable("Tesseract exceeded the configured per-page timeout")
             return lines
         finally:
             semaphore.release()
@@ -822,7 +825,9 @@ class TesseractOcrProvider:
             with suppress(OSError):
                 process.stdout.close()
 
-        if timed_out:
+        # wait(timeout=0) can still return success for a child that already exited after the
+        # deadline, and teardown/pipe draining also consumes time. Do not publish late output.
+        if timed_out or time.monotonic() >= deadline_monotonic:
             raise OcrUnavailable("Tesseract exceeded the configured per-page timeout")
         if output_overflow.is_set() or len(output) > self.max_output_bytes:
             raise OcrUnavailable("Tesseract output exceeded the configured page limit")
@@ -834,4 +839,7 @@ class TesseractOcrProvider:
             raise OcrUnavailable(f"Tesseract exited with status {process.returncode}")
         if writer_errors:
             raise OcrUnavailable("Tesseract did not receive the complete rendered page") from writer_errors[0]
-        return parse_tesseract_tsv(bytes(output))
+        lines = parse_tesseract_tsv(bytes(output))
+        if time.monotonic() >= deadline_monotonic:
+            raise OcrUnavailable("Tesseract exceeded the configured per-page timeout")
+        return lines

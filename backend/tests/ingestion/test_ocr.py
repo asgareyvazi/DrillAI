@@ -528,6 +528,44 @@ def test_tesseract_rtl_language_routing_shares_the_original_page_deadline(monkey
             b"page", "/synthetic", page_segmentation_mode=6, languages="eng", deadline_monotonic=107.0
         )
 
+    class FinishedChild(SlowSpawnChild):
+        def __init__(self):
+            super().__init__()
+            self.stdout = io.BytesIO(_tsv([_word(left=1, top=2, width=30, height=10, conf="88", text="late")]))
+            self.returncode = 0
+
+    # An already-finished child can return success from wait(0), even after slow spawn.
+    def late_success(*args, **kwargs):
+        clock[0] = 108.0
+        return FinishedChild()
+
+    clock[0] = 100.0
+    monkeypatch.setattr(ocr_module.subprocess, "Popen", late_success)
+    with pytest.raises(OcrUnavailable, match="per-page timeout"):
+        budget_provider._recognize_acquired(
+            b"page", "/synthetic", page_segmentation_mode=6, languages="eng", deadline_monotonic=107.0
+        )
+
+    # A completed child whose TSV parsing crosses the deadline must not publish lines either.
+    clock[0] = 100.0
+    monkeypatch.setattr(ocr_module.subprocess, "Popen", lambda *args, **kwargs: FinishedChild())
+
+    def slow_parse(_output):
+        clock[0] = 108.0
+        return [OcrLine("late", 0.8, (1, 2, 30, 10))]
+
+    monkeypatch.setattr(ocr_module, "parse_tesseract_tsv", slow_parse)
+    with pytest.raises(OcrUnavailable, match="per-page timeout"):
+        budget_provider._recognize_acquired(
+            b"page", "/synthetic", page_segmentation_mode=6, languages="eng", deadline_monotonic=107.0
+        )
+
+    # Layout/ordering remains synchronous, but even a late completed route cannot be published.
+    clock[0] = 100.0
+    monkeypatch.setattr(budget_provider, "_recognize_acquired", lambda *args, **kwargs: slow_parse(b""))
+    with pytest.raises(OcrUnavailable, match="per-page timeout"):
+        budget_provider.recognize(b"page")
+
 
 def test_tesseract_provider_availability_is_explicit_for_missing_executable() -> None:
     provider = TesseractOcrProvider(executable="drillai-missing-tesseract-executable")
