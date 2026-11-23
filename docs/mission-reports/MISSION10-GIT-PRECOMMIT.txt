@@ -1,0 +1,97 @@
+PRECOMMIT ONLY: this file and commit do not yet exist in the index when this command is run. Not a final workspace or CI result.
+
+1 M. N... 100644 100644 100644 9145aff3c5bac4fe12bcbf28367e729f8aceb56c a9b5fbe581db8de787eed0f52c9b3394bf49dafa README.md
+1 M. N... 100644 100644 100644 aa32b5d632212f692632288bf13a3d46181a81fa 44a035e028afff0c14dde54f5c4c337e9a52cc17 backend/src/drillai/ingestion/parsers.py
+1 M. N... 100644 100644 100644 70f5acda635838eff3b43d7ae088e5b5bfc381a5 3497e40e5023a77b7406b27db41a8bb2f53c7cb5 backend/tests/ingestion/test_ocr.py
+1 M. N... 100644 100644 100644 ff3506c303ffe84e39a82bc74474df734116ca34 ccfd42edaa100afa301c5d0db305ea302b41a9d0 ci/test-inventory.json
+1 A. N... 000000 100644 100644 0000000000000000000000000000000000000000 eb4a1be7e867960ab7e50d59327dca2f8359b1ac docs/DRILLAI-ENGINEERING-CAPABILITY-REGISTER.json
+1 A. N... 000000 100644 100644 0000000000000000000000000000000000000000 b5910ef372cfe20c477780bac158da5a75f9d21b docs/mission-reports/MISSION10-BACKEND-QUIET-REGRESSION.txt
+1 A. N... 000000 100644 100644 0000000000000000000000000000000000000000 5fc153ba6a578ceabb4ebd4a5ffe14c7dea84d23 docs/mission-reports/MISSION10-BASELINE.md
+1 A. N... 000000 100644 100644 0000000000000000000000000000000000000000 38ff2d04e02eae666b85852fbbfd0eb14aa77ecf docs/mission-reports/MISSION10-CAPABILITY-REPORT-EN.md
+1 A. N... 000000 100644 100644 0000000000000000000000000000000000000000 3526aa5e2a09fcadc726b251f753585975b91a7b docs/mission-reports/MISSION10-CAPABILITY-REPORT-FA.md
+1 A. N... 000000 100644 100644 0000000000000000000000000000000000000000 f9da30d72d6ac8660e63130536da0c6c641a6ed3 docs/mission-reports/MISSION10-ENGINE-ASSURANCE-EN.md
+1 A. N... 000000 100644 100644 0000000000000000000000000000000000000000 b1665ba92474a1887047bdf22c5255b2c1b73411 docs/mission-reports/MISSION10-ENGINE-ASSURANCE-FA.md
+1 A. N... 000000 100644 100644 0000000000000000000000000000000000000000 ab33adc92a51ce51ede35e0738e4d8bacab5369f docs/mission-reports/MISSION10-ENGINE-ASSURANCE.json
+1 A. N... 000000 100644 100644 0000000000000000000000000000000000000000 351ff80fe683e973c9040a2df2e71f1d0c361dc5 docs/mission-reports/MISSION10-GIT-START.txt
+1 A. N... 000000 100644 100644 0000000000000000000000000000000000000000 519d8b446da3e7d1892a347c85a5bfa32987709e docs/mission-reports/MISSION10-HISTORICAL-CAPABILITY-MATRIX.json
+1 A. N... 000000 100644 100644 0000000000000000000000000000000000000000 b1145803edee2d1ec0b6685019ce9048a4ab7a14 docs/mission-reports/MISSION10-HISTORICAL-CAPABILITY-REPORT-EN.md
+1 A. N... 000000 100644 100644 0000000000000000000000000000000000000000 b0bc6dba8d3092e83bd6a5658f974dc574023d7f docs/mission-reports/MISSION10-HISTORICAL-CAPABILITY-REPORT-FA.md
+1 A. N... 000000 100644 100644 0000000000000000000000000000000000000000 f0d55fbba83792557c240f5cce87716488cbe3e9 docs/mission-reports/MISSION10-IGNORED-PRECOMMIT.nul
+1 A. N... 000000 100644 100644 0000000000000000000000000000000000000000 e69de29bb2d1d6434b8b29ae775ad8c2e48c5391 docs/mission-reports/MISSION10-IGNORED-START.nul
+1 A. N... 000000 100644 100644 0000000000000000000000000000000000000000 b5085529164df56018bc4c3273af0589a7a944d4 docs/mission-reports/MISSION10-INDEX-START.nul
+1 A. N... 000000 100644 100644 0000000000000000000000000000000000000000 89535ed7786f890137bb1ac83bf9e69d6669f350 docs/mission-reports/MISSION10-OCR-MODEL-DIAGNOSTIC.json
+1 A. N... 000000 100644 100644 0000000000000000000000000000000000000000 b36d88c1fcb0439deae66b3d4a606665e8d91138 docs/mission-reports/MISSION10-OCR-REPORT-EN.md
+1 A. N... 000000 100644 100644 0000000000000000000000000000000000000000 34c829ea37c080284cb3d4170adecf4b6f1d4ae3 docs/mission-reports/MISSION10-OCR-REPORT-FA.md
+1 A. N... 000000 100644 100644 0000000000000000000000000000000000000000 a72ea2cf88df9bc598c1a7321275abab66f2e090 docs/mission-reports/MISSION10-PHASE-LEDGER.json
+1 A. N... 000000 100644 100644 0000000000000000000000000000000000000000 62f6ff0f2a103be809bd333de536cbdf46826fe7 docs/mission-reports/MISSION10-PRIOR-TEST-ARTIFACT-DISPOSITION.json
+1 A. N... 000000 100644 100644 0000000000000000000000000000000000000000 0581a80037eef4823e9a1367f8de7c6052fd3738 docs/mission-reports/MISSION10-PROTECTED-END.json
+1 A. N... 000000 100644 100644 0000000000000000000000000000000000000000 0581a80037eef4823e9a1367f8de7c6052fd3738 docs/mission-reports/MISSION10-PROTECTED-START.json
+1 A. N... 000000 100644 100644 0000000000000000000000000000000000000000 dc5196ef86fe5562d0cfe1351082727cebc6d1e3 docs/mission-reports/MISSION10-RECONCILIATION-START.json
+1 A. N... 000000 100644 100644 0000000000000000000000000000000000000000 85747b422995049f403cb00487d306d600e98908 docs/mission-reports/MISSION10-RECOVERY-MATRIX.json
+1 A. N... 000000 100644 100644 0000000000000000000000000000000000000000 62699b9c6e3156dbb3b616e2b386a9c3267cef2d docs/mission-reports/MISSION10-ROADMAP-EN.md
+1 A. N... 000000 100644 100644 0000000000000000000000000000000000000000 46ed902aef42d77921d717fa4a54862d8efdcdf0 docs/mission-reports/MISSION10-ROADMAP-FA.md
+1 A. N... 000000 100644 100644 0000000000000000000000000000000000000000 a68216c2402b36b391101393a6097f5a0c28d189 docs/mission-reports/MISSION10-UNTRACKED-START.nul
+1 A. N... 000000 100644 100644 0000000000000000000000000000000000000000 9b44049cbb862630b04c46b1b26f31cc4336933e docs/mission-reports/MISSION10-WORKSPACE-PRECOMMIT.jsonl
+1 A. N... 000000 100644 100644 0000000000000000000000000000000000000000 f81cb46cc56ab56bd49de37dd24412624e604bc3 docs/mission-reports/MISSION10-WORKSPACE-START.jsonl
+? docs/mission-reports/MISSION10-GIT-PRECOMMIT.txt
+? frontend/.playwright-report-cp151-71aae4f7f3364cd8bef9f4748c4283fb/index.html
+? frontend/playwright-report-master-full-7d42a1/index.html
+? frontend/test-results-continue2/.last-run.json
+? frontend/test-results-continue2/well-cockpit-well-cockpit--82af4-om-a-generic-event-duration-chromium/error-context.md
+? frontend/test-results-continue2/well-cockpit-well-cockpit--82af4-om-a-generic-event-duration-chromium/test-failed-1.png
+? frontend/test-results-continue2/well-cockpit-well-cockpit--82af4-om-a-generic-event-duration-chromium/trace.zip
+? frontend/test-results-continue2b/.last-run.json
+? frontend/test-results-continue2connector/.last-run.json
+? frontend/test-results-continue2final/.last-run.json
+? frontend/test-results-continue2full/.last-run.json
+? frontend/test-results-continue2full/connectors-platform-CP11-t-e1520-dance-then-recovers-cleanly-chromium/error-context.md
+? frontend/test-results-continue2full/connectors-platform-CP11-t-e1520-dance-then-recovers-cleanly-chromium/test-failed-1.png
+? frontend/test-results-continue2full/connectors-platform-CP11-t-e1520-dance-then-recovers-cleanly-chromium/trace.zip
+? frontend/test-results-continue2full/live-operations-CP10-live--719a9-Persian-RTL-token-isolation-chromium/error-context.md
+? frontend/test-results-continue2full/live-operations-CP10-live--719a9-Persian-RTL-token-isolation-chromium/trace.zip
+? frontend/test-results-master-auth-c4a891de/.last-run.json
+? frontend/test-results-master-full-7d42a1/.last-run.json
+? frontend/test-results-master-full-7d42a1/e2e-results.json
+
+STAGED SUMMARY
+ README.md                                          |    2 +-
+ backend/src/drillai/ingestion/parsers.py           |    4 +-
+ backend/tests/ingestion/test_ocr.py                |   23 +
+ ci/test-inventory.json                             |    8 +-
+ docs/DRILLAI-ENGINEERING-CAPABILITY-REGISTER.json  |  764 ++++
+ .../MISSION10-BACKEND-QUIET-REGRESSION.txt         |   27 +
+ docs/mission-reports/MISSION10-BASELINE.md         |    7 +
+ .../MISSION10-CAPABILITY-REPORT-EN.md              |    3 +
+ .../MISSION10-CAPABILITY-REPORT-FA.md              |    3 +
+ .../MISSION10-ENGINE-ASSURANCE-EN.md               |    3 +
+ .../MISSION10-ENGINE-ASSURANCE-FA.md               |    3 +
+ .../MISSION10-ENGINE-ASSURANCE.json                |  491 +++
+ docs/mission-reports/MISSION10-GIT-START.txt       | 1212 ++++++
+ .../MISSION10-HISTORICAL-CAPABILITY-MATRIX.json    |  661 ++++
+ .../MISSION10-HISTORICAL-CAPABILITY-REPORT-EN.md   |    3 +
+ .../MISSION10-HISTORICAL-CAPABILITY-REPORT-FA.md   |    3 +
+ .../MISSION10-IGNORED-PRECOMMIT.nul                |  Bin 0 -> 797397 bytes
+ docs/mission-reports/MISSION10-IGNORED-START.nul   |    0
+ docs/mission-reports/MISSION10-INDEX-START.nul     |  Bin 0 -> 39867 bytes
+ .../MISSION10-OCR-MODEL-DIAGNOSTIC.json            | 3894 ++++++++++++++++++++
+ docs/mission-reports/MISSION10-OCR-REPORT-EN.md    |   11 +
+ docs/mission-reports/MISSION10-OCR-REPORT-FA.md    |    7 +
+ docs/mission-reports/MISSION10-PHASE-LEDGER.json   |  461 +++
+ .../MISSION10-PRIOR-TEST-ARTIFACT-DISPOSITION.json |   83 +
+ docs/mission-reports/MISSION10-PROTECTED-END.json  |   70 +
+ .../mission-reports/MISSION10-PROTECTED-START.json |   70 +
+ .../MISSION10-RECONCILIATION-START.json            |   26 +
+ .../mission-reports/MISSION10-RECOVERY-MATRIX.json |  632 ++++
+ docs/mission-reports/MISSION10-ROADMAP-EN.md       |    8 +
+ docs/mission-reports/MISSION10-ROADMAP-FA.md       |    8 +
+ docs/mission-reports/MISSION10-UNTRACKED-START.nul |  Bin 0 -> 20742 bytes
+ .../MISSION10-WORKSPACE-PRECOMMIT.jsonl            | 1349 +++++++
+ .../MISSION10-WORKSPACE-START.jsonl                |  904 +++++
+ 33 files changed, 10734 insertions(+), 6 deletions(-)
+
+REFERENCES
+829c931ddbbd04f14a435ab3e9eef3ba30eefba3
+arena/9d8f5568-drillai
+worktree /home/user/DrillAI
+HEAD 829c931ddbbd04f14a435ab3e9eef3ba30eefba3
+branch refs/heads/arena/9d8f5568-drillai

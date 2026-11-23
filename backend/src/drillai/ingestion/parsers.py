@@ -1320,7 +1320,9 @@ class PdfParser:
             if len(line_text) < len(line.text):
                 truncated = True
             text_parts.append(line_text)
-            included_lines.append(line)
+            # The source locator must describe the text actually published on the page, not the
+            # unbounded provider line when the page character budget cuts through that line.
+            included_lines.append(OcrLine(line_text, line.confidence, line.bbox))
             char_count += len(line_text) + 1
             if truncated and char_count >= self.MAX_OCR_TEXT_CHARS_PER_PAGE:
                 break

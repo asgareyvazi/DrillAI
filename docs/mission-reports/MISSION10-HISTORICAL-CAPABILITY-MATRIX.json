@@ -1,0 +1,661 @@
+{
+  "status": "PARTIAL",
+  "scope": "18 inherited areas (12 representative paths, 6 without a path) and 16 engine pointers; earliest observed path history only, not full historical audit or proof of functionality.",
+  "areas": [
+    {
+      "area": "DDR",
+      "representative_source": "backend/src/drillai/drilling/daily_reports.py",
+      "ui": "frontend/src/pages/wells/DailyReportsWorkspace.tsx",
+      "status": "PARTIAL",
+      "first_confirmed_implementation_commit": null,
+      "history": "NOT_COMPLETED; path history is not proof of first working implementation",
+      "source_to_report_independent_audit": "NOT_COMPLETED",
+      "earliest_path_commit_observed": "699a551b6fd9ce7fa098012ed8e4f4b656f5fb3f\t2026-11-01\tfeat(reports): add manual daily report lifecycle API",
+      "first_functional_implementation": "UNKNOWN",
+      "mission10_status": "UNKNOWN",
+      "history_caveat": "Earliest path commit does not establish first implementation, pre-rename equivalence, functionality, or historical regression."
+    },
+    {
+      "area": "NPT",
+      "representative_source": "backend/src/drillai/drilling/npt.py",
+      "ui": "frontend/src/pages/wells/WellCockpit.tsx",
+      "status": "PARTIAL",
+      "first_confirmed_implementation_commit": null,
+      "history": "NOT_COMPLETED; path history is not proof of first working implementation",
+      "source_to_report_independent_audit": "NOT_COMPLETED",
+      "earliest_path_commit_observed": "b9810172979d076a247c680df63646de272d8501\t2026-09-27\tfeat(backend): drilling intelligence domain with NPT, timeline and reporting APIs",
+      "first_functional_implementation": "UNKNOWN",
+      "mission10_status": "UNKNOWN",
+      "history_caveat": "Earliest path commit does not establish first implementation, pre-rename equivalence, functionality, or historical regression."
+    },
+    {
+      "area": "OCR",
+      "representative_source": "backend/src/drillai/ingestion/ocr.py",
+      "ui": "frontend/src/pages/wells/DocumentWorkspace.tsx",
+      "status": "PARTIAL",
+      "first_confirmed_implementation_commit": null,
+      "history": "NOT_COMPLETED; path history is not proof of first working implementation",
+      "source_to_report_independent_audit": "NOT_COMPLETED",
+      "earliest_path_commit_observed": "aa64c161bf79d31f93a054773a184e2d687bb9d8\t2026-11-01\tfeat(cp59-cp75): close verified lifecycle and export gaps",
+      "first_functional_implementation": "UNKNOWN",
+      "mission10_status": "UNKNOWN",
+      "history_caveat": "Earliest path commit does not establish first implementation, pre-rename equivalence, functionality, or historical regression."
+    },
+    {
+      "area": "operations and chronology",
+      "representative_source": "backend/src/drillai/drilling/timeline.py",
+      "ui": "frontend/src/pages/wells/OperationsWorkspace.tsx",
+      "status": "PARTIAL",
+      "first_confirmed_implementation_commit": null,
+      "history": "NOT_COMPLETED; path history is not proof of first working implementation",
+      "source_to_report_independent_audit": "NOT_COMPLETED",
+      "earliest_path_commit_observed": "b9810172979d076a247c680df63646de272d8501\t2026-09-27\tfeat(backend): drilling intelligence domain with NPT, timeline and reporting APIs",
+      "first_functional_implementation": "UNKNOWN",
+      "mission10_status": "UNKNOWN",
+      "history_caveat": "Earliest path commit does not establish first implementation, pre-rename equivalence, functionality, or historical regression."
+    },
+    {
+      "area": "survey and trajectory",
+      "representative_source": "backend/src/drillai/drilling/surveys.py",
+      "ui": "frontend/src/pages/wells/SurveysWorkspace.tsx",
+      "status": "PARTIAL",
+      "first_confirmed_implementation_commit": null,
+      "history": "NOT_COMPLETED; path history is not proof of first working implementation",
+      "source_to_report_independent_audit": "NOT_COMPLETED",
+      "earliest_path_commit_observed": "160bcc0b10d1cfbf139c79038cf3a0034f44ce64\t2026-11-07\tfeat(surveys): add reviewed trajectory revision workflow",
+      "first_functional_implementation": "UNKNOWN",
+      "mission10_status": "UNKNOWN",
+      "history_caveat": "Earliest path commit does not establish first implementation, pre-rename equivalence, functionality, or historical regression."
+    },
+    {
+      "area": "geometric proximity",
+      "representative_source": "backend/src/drillai/engines/proximity.py",
+      "ui": null,
+      "status": "PARTIAL",
+      "first_confirmed_implementation_commit": null,
+      "history": "NOT_COMPLETED; path history is not proof of first working implementation",
+      "source_to_report_independent_audit": "NOT_COMPLETED",
+      "earliest_path_commit_observed": "2be1f7bffab0fbca0a49f9b9a08c5efceea51814\t2026-11-22\tAdvance circulation and geometric proximity with explicit evidence limits",
+      "first_functional_implementation": "UNKNOWN",
+      "mission10_status": "UNKNOWN",
+      "history_caveat": "Earliest path commit does not establish first implementation, pre-rename equivalence, functionality, or historical regression."
+    },
+    {
+      "area": "capacity hydraulics rheology ECD and cuttings screen",
+      "representative_source": "backend/src/drillai/engines/fluids.py",
+      "ui": "frontend/src/pages/engineering/CirculationWorkspace.tsx",
+      "status": "PARTIAL",
+      "first_confirmed_implementation_commit": null,
+      "history": "NOT_COMPLETED; path history is not proof of first working implementation",
+      "source_to_report_independent_audit": "NOT_COMPLETED",
+      "earliest_path_commit_observed": "aa7ff9d236082db93342d3f0e892430778126a11\t2026-09-26\tfeat: establish drilling AI platform foundation",
+      "first_functional_implementation": "UNKNOWN",
+      "mission10_status": "UNKNOWN",
+      "history_caveat": "Earliest path commit does not establish first implementation, pre-rename equivalence, functionality, or historical regression."
+    },
+    {
+      "area": "well design and programs/procedures",
+      "representative_source": "backend/src/drillai/engineering/products.py",
+      "ui": "frontend/src/pages/engineering/ProgramsProceduresWorkspace.tsx",
+      "status": "PARTIAL",
+      "first_confirmed_implementation_commit": null,
+      "history": "NOT_COMPLETED; path history is not proof of first working implementation",
+      "source_to_report_independent_audit": "NOT_COMPLETED",
+      "earliest_path_commit_observed": "d7526a1120e28d3255dfdb702e14e89e4b2b42f7\t2026-11-18\tfeat: add governed engineering products and OCR evidence",
+      "first_functional_implementation": "UNKNOWN",
+      "mission10_status": "UNKNOWN",
+      "history_caveat": "Earliest path commit does not establish first implementation, pre-rename equivalence, functionality, or historical regression."
+    },
+    {
+      "area": "AI advisor",
+      "representative_source": "backend/src/drillai/drilling/advisor.py",
+      "ui": null,
+      "status": "PARTIAL",
+      "first_confirmed_implementation_commit": null,
+      "history": "NOT_COMPLETED; path history is not proof of first working implementation",
+      "source_to_report_independent_audit": "NOT_COMPLETED",
+      "earliest_path_commit_observed": "b9810172979d076a247c680df63646de272d8501\t2026-09-27\tfeat(backend): drilling intelligence domain with NPT, timeline and reporting APIs",
+      "first_functional_implementation": "UNKNOWN",
+      "mission10_status": "UNKNOWN",
+      "history_caveat": "Earliest path commit does not establish first implementation, pre-rename equivalence, functionality, or historical regression."
+    },
+    {
+      "area": "RAG",
+      "representative_source": "backend/src/drillai/rag/retriever.py",
+      "ui": null,
+      "status": "PARTIAL",
+      "first_confirmed_implementation_commit": null,
+      "history": "NOT_COMPLETED; path history is not proof of first working implementation",
+      "source_to_report_independent_audit": "NOT_COMPLETED",
+      "earliest_path_commit_observed": "aa7ff9d236082db93342d3f0e892430778126a11\t2026-09-26\tfeat: establish drilling AI platform foundation",
+      "first_functional_implementation": "UNKNOWN",
+      "mission10_status": "UNKNOWN",
+      "history_caveat": "Earliest path commit does not establish first implementation, pre-rename equivalence, functionality, or historical regression."
+    },
+    {
+      "area": "telemetry connectors and twin",
+      "representative_source": "backend/src/drillai/telemetry/service.py",
+      "ui": "frontend/src/pages/wells/OperationalMonitor.tsx",
+      "status": "PARTIAL",
+      "first_confirmed_implementation_commit": null,
+      "history": "NOT_COMPLETED; path history is not proof of first working implementation",
+      "source_to_report_independent_audit": "NOT_COMPLETED",
+      "earliest_path_commit_observed": "978df6133788a887b3841ed1978114e6e7a8f0de\t2026-10-06\tCP9 checkpoint B part 1: telemetry ingestion, windows, latest values and their tests",
+      "first_functional_implementation": "UNKNOWN",
+      "mission10_status": "UNKNOWN",
+      "history_caveat": "Earliest path commit does not establish first implementation, pre-rename equivalence, functionality, or historical regression."
+    },
+    {
+      "area": "reports",
+      "representative_source": "backend/src/drillai/drilling/reporting.py",
+      "ui": null,
+      "status": "PARTIAL",
+      "first_confirmed_implementation_commit": null,
+      "history": "NOT_COMPLETED; path history is not proof of first working implementation",
+      "source_to_report_independent_audit": "NOT_COMPLETED",
+      "earliest_path_commit_observed": "b9810172979d076a247c680df63646de272d8501\t2026-09-27\tfeat(backend): drilling intelligence domain with NPT, timeline and reporting APIs",
+      "first_functional_implementation": "UNKNOWN",
+      "mission10_status": "UNKNOWN",
+      "history_caveat": "Earliest path commit does not establish first implementation, pre-rename equivalence, functionality, or historical regression."
+    },
+    {
+      "area": "hole cleaning",
+      "status": "PARTIAL",
+      "first_confirmed_implementation_commit": null,
+      "source_to_report_independent_audit": "NOT_COMPLETED",
+      "earliest_path_commit_observed": null,
+      "first_functional_implementation": "UNKNOWN",
+      "mission10_status": "UNKNOWN",
+      "history_caveat": "Earliest path commit does not establish first implementation, pre-rename equivalence, functionality, or historical regression."
+    },
+    {
+      "area": "surge and swab",
+      "status": "PLANNED",
+      "first_confirmed_implementation_commit": null,
+      "source_to_report_independent_audit": "NOT_COMPLETED",
+      "earliest_path_commit_observed": null,
+      "first_functional_implementation": "UNKNOWN",
+      "mission10_status": "UNKNOWN",
+      "history_caveat": "Earliest path commit does not establish first implementation, pre-rename equivalence, functionality, or historical regression."
+    },
+    {
+      "area": "drillstring buckling",
+      "status": "PLANNED",
+      "first_confirmed_implementation_commit": null,
+      "source_to_report_independent_audit": "NOT_COMPLETED",
+      "earliest_path_commit_observed": null,
+      "first_functional_implementation": "UNKNOWN",
+      "mission10_status": "UNKNOWN",
+      "history_caveat": "Earliest path commit does not establish first implementation, pre-rename equivalence, functionality, or historical regression."
+    },
+    {
+      "area": "cementing design",
+      "status": "PLANNED",
+      "first_confirmed_implementation_commit": null,
+      "source_to_report_independent_audit": "NOT_COMPLETED",
+      "earliest_path_commit_observed": null,
+      "first_functional_implementation": "UNKNOWN",
+      "mission10_status": "UNKNOWN",
+      "history_caveat": "Earliest path commit does not establish first implementation, pre-rename equivalence, functionality, or historical regression."
+    },
+    {
+      "area": "wellbore stability",
+      "status": "PLANNED",
+      "first_confirmed_implementation_commit": null,
+      "source_to_report_independent_audit": "NOT_COMPLETED",
+      "earliest_path_commit_observed": null,
+      "first_functional_implementation": "UNKNOWN",
+      "mission10_status": "UNKNOWN",
+      "history_caveat": "Earliest path commit does not establish first implementation, pre-rename equivalence, functionality, or historical regression."
+    },
+    {
+      "area": "full uncertainty-based anti-collision",
+      "status": "PLANNED",
+      "first_confirmed_implementation_commit": null,
+      "source_to_report_independent_audit": "NOT_COMPLETED",
+      "earliest_path_commit_observed": null,
+      "first_functional_implementation": "UNKNOWN",
+      "mission10_status": "UNKNOWN",
+      "history_caveat": "Earliest path commit does not establish first implementation, pre-rename equivalence, functionality, or historical regression."
+    }
+  ],
+  "engines": [
+    {
+      "id": "drilling.mse",
+      "version": "1.1.1",
+      "source": "backend/src/drillai/engines/mechanics.py",
+      "status": "IMPLEMENTED_NOT_INDEPENDENTLY_VALIDATED",
+      "assumptions": [
+        "MSE from surface parameters (no downhole WOB/torque correction)",
+        "constant ROP/WOB/torque within the interval"
+      ],
+      "limitations": [
+        "surface-measured values include friction losses and vibration effects",
+        "no bit wear or dull-grading correction",
+        "requires a reference MSE or rock strength for absolute judgements"
+      ],
+      "primary_tests": [
+        "backend/tests/engines/test_mechanics.py"
+      ],
+      "api": "/api/v1/registry/engines/{engine_key}/run",
+      "ui": "frontend/src/pages/engineering/EngineeringWorkspace.tsx (generic runner)",
+      "field_vendor_customer_validation": "NOT_MEASURED",
+      "source_sha256_lf": "9feee5be5f8602d92a0d407188d8eb1aabd7b6218b5cc3a3bdd7a7bbbd4c4b27",
+      "independent_mission9_source_to_report_reaudit": "NOT_COMPLETED",
+      "first_key_occurrence_commit": "09bef033cd4f55e92e3aa1f41c0a1f9142ed9e57",
+      "history_caveat": "First textual occurrence only, not first confirmed functional implementation.",
+      "exact_final_sha_ci": "NOT_MEASURED_IN_THIS_FILE"
+    },
+    {
+      "id": "hydraulics.laminar",
+      "version": "1.7.0",
+      "source": "backend/src/drillai/engines/fluids.py",
+      "status": "IMPLEMENTED_NOT_INDEPENDENTLY_VALIDATED",
+      "assumptions": [
+        "laminar Bingham-plastic rheology (PV/YP)",
+        "slot approximation for the annulus",
+        "clean concentric geometry; surface pressure loss is caller-declared at the specified flow rate",
+        "cuttings are spherical with the declared density and diameter"
+      ],
+      "limitations": [
+        "turbulent flow is detected (Reynolds) but not modelled: results are optimistic in that regime",
+        "Herschel-Bulkley / power-law fluids are not supported yet",
+        "no temperature/pressure-dependent density, no eccentricity, no surge/swab",
+        "cuttings screening assumes an isolated sphere in Newtonian fluid at plastic viscosity; no yield stress, inclination, eccentricity or beds; particle Re <= 1000",
+        "cuttings volume fraction assumes no slip and is not a bed concentration or validated hole-cleaning design",
+        "motor/BHA and tool joint pressure losses and surface losses must be explicitly declared; eccentricity is not modeled",
+        "total/standpipe unavailable without nozzle and additional downhole-loss input; standpipe also requires surface-loss input; declarations are not verified"
+      ],
+      "primary_tests": [
+        "backend/tests/engines/test_fluids.py"
+      ],
+      "api": "/api/v1/registry/engines/{engine_key}/run",
+      "ui": "frontend/src/pages/engineering/CirculationWorkspace.tsx (partial)",
+      "field_vendor_customer_validation": "NOT_MEASURED",
+      "source_sha256_lf": "ca7ee68be98a7c81a433746330ee0c99e3d759de83410d9ec791deff0e445363",
+      "independent_mission9_source_to_report_reaudit": "NOT_COMPLETED",
+      "first_key_occurrence_commit": "09bef033cd4f55e92e3aa1f41c0a1f9142ed9e57",
+      "history_caveat": "First textual occurrence only, not first confirmed functional implementation.",
+      "exact_final_sha_ci": "NOT_MEASURED_IN_THIS_FILE",
+      "mission9_change": "Version 1.7.0 corrects no-slip generated cuttings fraction and bounds isolated-sphere settling; adds independent drag-balance inverse vector and fail-closed cases. Not a validated Bingham/inclined-hole cleaning model."
+    },
+    {
+      "id": "hydraulics.power_law_pipe",
+      "version": "1.0.0",
+      "source": "backend/src/drillai/engines/power_law.py",
+      "status": "INDEPENDENT_SOFTWARE_REFERENCE_CHECKED",
+      "assumptions": [
+        "steady fully developed laminar pipe flow",
+        "time-independent power-law rheology"
+      ],
+      "limitations": [
+        "single pipe only; no annulus, ECD, nozzle, fittings, surface network or total well pressure",
+        "transition screen does not establish actual flow regime; no turbulent calculation",
+        "rheology and range are caller declarations; no sample, temperature or field validation",
+        "K has index-dependent units Pa·s^n and is not automatically unit-converted"
+      ],
+      "primary_tests": [
+        "backend/tests/engines/test_mission6_power_law.py"
+      ],
+      "api": "/api/v1/registry/engines/{engine_key}/run",
+      "ui": "frontend/src/pages/engineering/EngineeringWorkspace.tsx (generic runner)",
+      "field_vendor_customer_validation": "NOT_MEASURED",
+      "source_sha256_lf": "4490e147e39c3ea2417a2d6821e2610d5194bbceb97a9a8b3570ef4d4f049364",
+      "independent_mission9_source_to_report_reaudit": "NOT_COMPLETED",
+      "first_key_occurrence_commit": "f48ca35c17877316b9276f5ba534793d48a68ad5",
+      "history_caveat": "First textual occurrence only, not first confirmed functional implementation.",
+      "exact_final_sha_ci": "NOT_MEASURED_IN_THIS_FILE",
+      "status_scope": "Prior independent mathematical software references cover the narrowly declared laminar pipe case only, not field fluid or total well hydraulics."
+    },
+    {
+      "id": "integrity.barrier_envelope",
+      "version": "1.1.0",
+      "source": "backend/src/drillai/engines/integrity.py",
+      "status": "IMPLEMENTED_NOT_INDEPENDENTLY_VALIDATED",
+      "assumptions": [
+        "the declared barrier elements and their depth intervals are accurate",
+        "independence is expressed through the independence group",
+        "a verified element without an evidence reference is treated as unverified"
+      ],
+      "limitations": [
+        "does not size barriers against actual pressure loads (use the tubular/cement design engines)",
+        "no annular pressure or sustained-casing-pressure diagnostics",
+        "no risk-based anomaly trending"
+      ],
+      "primary_tests": [
+        "backend/tests/engines/test_safety_engines.py"
+      ],
+      "api": "/api/v1/registry/engines/{engine_key}/run",
+      "ui": "frontend/src/pages/engineering/EngineeringWorkspace.tsx (generic runner)",
+      "field_vendor_customer_validation": "NOT_MEASURED",
+      "source_sha256_lf": "33c8ff117e649ac14a09aec8f10ceb6b25d2b5cdf1ae6396094c2310a0afbf2d",
+      "independent_mission9_source_to_report_reaudit": "NOT_COMPLETED",
+      "first_key_occurrence_commit": "09bef033cd4f55e92e3aa1f41c0a1f9142ed9e57",
+      "history_caveat": "First textual occurrence only, not first confirmed functional implementation.",
+      "exact_final_sha_ci": "NOT_MEASURED_IN_THIS_FILE"
+    },
+    {
+      "id": "offsets.similarity",
+      "version": "1.1.0",
+      "source": "backend/src/drillai/engines/offsets.py",
+      "status": "IMPLEMENTED_NOT_INDEPENDENTLY_VALIDATED",
+      "assumptions": [
+        "well attributes are comparable and consistently reported (same datum and definitions)",
+        "the analyst choose the weights, tolerances and the minimum coverage",
+        "formation names refer to the same stratigraphic nomenclature across wells"
+      ],
+      "limitations": [
+        "no learned similarity (geological or trajectory embedding) — factors are declared and inspectable",
+        "no automatic outlier removal beyond the explicit exclusions and coverage rule",
+        "hazard aggregation is descriptive; it does not compute probabilities"
+      ],
+      "primary_tests": [
+        "backend/tests/engines/test_planning_engines.py"
+      ],
+      "api": "/api/v1/registry/engines/{engine_key}/run",
+      "ui": "frontend/src/pages/engineering/EngineeringWorkspace.tsx (generic runner)",
+      "field_vendor_customer_validation": "NOT_MEASURED",
+      "source_sha256_lf": "e64e0d7f57bda6ffd680590d607a5d620d9945f1d455d933033c417474dbd06a",
+      "independent_mission9_source_to_report_reaudit": "NOT_COMPLETED",
+      "first_key_occurrence_commit": "09bef033cd4f55e92e3aa1f41c0a1f9142ed9e57",
+      "history_caveat": "First textual occurrence only, not first confirmed functional implementation.",
+      "exact_final_sha_ci": "NOT_MEASURED_IN_THIS_FILE"
+    },
+    {
+      "id": "optimization.pareto",
+      "version": "1.1.0",
+      "source": "backend/src/drillai/engines/optimization.py",
+      "status": "IMPLEMENTED_NOT_INDEPENDENTLY_VALIDATED",
+      "assumptions": [
+        "candidate objective values are trusted as produced by the engines",
+        "the caller declares direction and weight of each objective"
+      ],
+      "limitations": [
+        "no surrogate or gradient-based search",
+        "no interaction terms between parameters"
+      ],
+      "primary_tests": [
+        "backend/tests/engines/test_twin_optimization_engines.py"
+      ],
+      "api": "/api/v1/registry/engines/{engine_key}/run",
+      "ui": "frontend/src/pages/engineering/EngineeringWorkspace.tsx (generic runner)",
+      "field_vendor_customer_validation": "NOT_MEASURED",
+      "source_sha256_lf": "aacf9a131edcc5e65896dbf82a3ebdb50f14d25baf5daa126c2617c0c76d84e8",
+      "independent_mission9_source_to_report_reaudit": "NOT_COMPLETED",
+      "first_key_occurrence_commit": "09bef033cd4f55e92e3aa1f41c0a1f9142ed9e57",
+      "history_caveat": "First textual occurrence only, not first confirmed functional implementation.",
+      "exact_final_sha_ci": "NOT_MEASURED_IN_THIS_FILE"
+    },
+    {
+      "id": "optimization.sweep",
+      "version": "1.1.0",
+      "source": "backend/src/drillai/engines/optimization.py",
+      "status": "IMPLEMENTED_NOT_INDEPENDENTLY_VALIDATED",
+      "assumptions": [
+        "parameters are independent",
+        "ranges are physically admissible as supplied"
+      ],
+      "limitations": [
+        "no surrogate modelling",
+        "no adaptive sampling"
+      ],
+      "primary_tests": [
+        "backend/tests/engines/test_twin_optimization_engines.py"
+      ],
+      "api": "/api/v1/registry/engines/{engine_key}/run",
+      "ui": "frontend/src/pages/engineering/EngineeringWorkspace.tsx (generic runner)",
+      "field_vendor_customer_validation": "NOT_MEASURED",
+      "source_sha256_lf": "aacf9a131edcc5e65896dbf82a3ebdb50f14d25baf5daa126c2617c0c76d84e8",
+      "independent_mission9_source_to_report_reaudit": "NOT_COMPLETED",
+      "first_key_occurrence_commit": "09bef033cd4f55e92e3aa1f41c0a1f9142ed9e57",
+      "history_caveat": "First textual occurrence only, not first confirmed functional implementation.",
+      "exact_final_sha_ci": "NOT_MEASURED_IN_THIS_FILE"
+    },
+    {
+      "id": "readiness.assessment",
+      "version": "1.1.0",
+      "source": "backend/src/drillai/engines/readiness.py",
+      "status": "IMPLEMENTED_NOT_INDEPENDENTLY_VALIDATED",
+      "assumptions": [
+        "quantity available reflects the inventory at the as-of date",
+        "lead times are calendar days and do not model partial shipments",
+        "certification validity covers the whole operation window"
+      ],
+      "limitations": [
+        "no probabilistic lead-time modelling",
+        "no cost or vendor-priority optimisation",
+        "personnel competency matrices are out of scope for this engine"
+      ],
+      "primary_tests": [
+        "backend/tests/engines/test_planning_engines.py"
+      ],
+      "api": "/api/v1/registry/engines/{engine_key}/run",
+      "ui": "frontend/src/pages/engineering/EngineeringWorkspace.tsx (generic runner)",
+      "field_vendor_customer_validation": "NOT_MEASURED",
+      "source_sha256_lf": "25e60115f5ee24361b224b42fe7b332d2cc1d85c53e11c1f97a20e53533e2a8d",
+      "independent_mission9_source_to_report_reaudit": "NOT_COMPLETED",
+      "first_key_occurrence_commit": "09bef033cd4f55e92e3aa1f41c0a1f9142ed9e57",
+      "history_caveat": "First textual occurrence only, not first confirmed functional implementation.",
+      "exact_final_sha_ci": "NOT_MEASURED_IN_THIS_FILE"
+    },
+    {
+      "id": "schematic.well_model",
+      "version": "1.1.0",
+      "source": "backend/src/drillai/engines/schematic.py",
+      "status": "IMPLEMENTED_NOT_INDEPENDENTLY_VALIDATED",
+      "assumptions": [
+        "depths are measured depth in the declared datum",
+        "strings are concentric and vertical for the purpose of annulus capacity derivation",
+        "cement is shown as a top-to-shoe interval without internal displacement detail"
+      ],
+      "limitations": [
+        "no deviated-schematic projection (a TVD view requires the trajectory)",
+        "no centraliser, coupling or accessory detail",
+        "cement quality and channeling are not represented"
+      ],
+      "primary_tests": [
+        "backend/tests/engines/test_planning_engines.py"
+      ],
+      "api": "/api/v1/registry/engines/{engine_key}/run",
+      "ui": "frontend/src/pages/engineering/EngineeringWorkspace.tsx (generic runner)",
+      "field_vendor_customer_validation": "NOT_MEASURED",
+      "source_sha256_lf": "b938f647de4b90ff989762a8565a22b9b6a6c9dd0f647c7e1e6a85260c751200",
+      "independent_mission9_source_to_report_reaudit": "NOT_COMPLETED",
+      "first_key_occurrence_commit": "09bef033cd4f55e92e3aa1f41c0a1f9142ed9e57",
+      "history_caveat": "First textual occurrence only, not first confirmed functional implementation.",
+      "exact_final_sha_ci": "NOT_MEASURED_IN_THIS_FILE"
+    },
+    {
+      "id": "torque_drag.soft_string",
+      "version": "1.1.0",
+      "source": "backend/src/drillai/engines/mechanics.py",
+      "status": "IMPLEMENTED_NOT_INDEPENDENTLY_VALIDATED",
+      "assumptions": [
+        "soft string: bending stiffness is neglected",
+        "constant Coulomb friction coefficients over the whole string",
+        "buoyancy via density ratio"
+      ],
+      "limitations": [
+        "no buckling (sinusoidal/helical) or lock-up analysis",
+        "no temperature/curvature-dependent friction, no tool-joint local effects",
+        "stretch is linear-elastic only"
+      ],
+      "primary_tests": [
+        "backend/tests/engines/test_mechanics.py"
+      ],
+      "api": "/api/v1/registry/engines/{engine_key}/run",
+      "ui": "frontend/src/pages/engineering/EngineeringWorkspace.tsx (generic runner)",
+      "field_vendor_customer_validation": "NOT_MEASURED",
+      "source_sha256_lf": "9feee5be5f8602d92a0d407188d8eb1aabd7b6218b5cc3a3bdd7a7bbbd4c4b27",
+      "independent_mission9_source_to_report_reaudit": "NOT_COMPLETED",
+      "first_key_occurrence_commit": "09bef033cd4f55e92e3aa1f41c0a1f9142ed9e57",
+      "history_caveat": "First textual occurrence only, not first confirmed functional implementation.",
+      "exact_final_sha_ci": "NOT_MEASURED_IN_THIS_FILE"
+    },
+    {
+      "id": "trajectory.geometric_proximity",
+      "version": "1.0.0",
+      "source": "backend/src/drillai/engines/proximity.py",
+      "status": "IMPLEMENTED_NOT_INDEPENDENTLY_VALIDATED",
+      "assumptions": [
+        "straight line between supplied positions",
+        "common absolute coordinate frame and vertical datum declared by caller"
+      ],
+      "limitations": [
+        "GEOMETRIC_PROXIMITY_ONLY",
+        "no uncertainty covariance, separation factor or ISCWSA model",
+        "survey curvature between stations is not modeled",
+        "caller-provided coordinates and references are not independently verified"
+      ],
+      "primary_tests": [
+        "backend/tests/engines/test_proximity.py"
+      ],
+      "api": "/api/v1/registry/engines/{engine_key}/run",
+      "ui": "frontend/src/pages/engineering/EngineeringWorkspace.tsx (generic runner)",
+      "field_vendor_customer_validation": "NOT_MEASURED",
+      "source_sha256_lf": "5a74d30345800db19f354b4b74b438e6fabac50124542e79d6b9f9d61a0d57f5",
+      "independent_mission9_source_to_report_reaudit": "NOT_COMPLETED",
+      "first_key_occurrence_commit": "2be1f7bffab0fbca0a49f9b9a08c5efceea51814",
+      "history_caveat": "First textual occurrence only, not first confirmed functional implementation.",
+      "exact_final_sha_ci": "NOT_MEASURED_IN_THIS_FILE"
+    },
+    {
+      "id": "trajectory.minimum_curvature",
+      "version": "1.3.0",
+      "source": "backend/src/drillai/engines/trajectory.py",
+      "status": "IMPLEMENTED_NOT_INDEPENDENTLY_VALIDATED",
+      "assumptions": [
+        "minimum curvature between stations",
+        "constant inclination/azimuth rate within an interval",
+        "station and vertical-section azimuth references must be explicit and compatible with the common output reference",
+        "no azimuth-reference conversion or vertical-datum compatibility is inferred",
+        "an explicit signed correction is required for conversion into a named grid frame"
+      ],
+      "limitations": [
+        "does not model bending moments, toolface history or BHA sag",
+        "tight-radius and high-dogleg rotary-steerable behaviour is only as accurate as station spacing",
+        "does not derive magnetic declination/grid convergence; caller-supplied corrections are not independently verified",
+        "does not perform anti-collision or error-model (ISCWSA) uncertainty analysis"
+      ],
+      "primary_tests": [
+        "backend/tests/engines/test_trajectory.py"
+      ],
+      "api": "/api/v1/registry/engines/{engine_key}/run",
+      "ui": "frontend/src/pages/engineering/EngineeringWorkspace.tsx (generic runner)",
+      "field_vendor_customer_validation": "NOT_MEASURED",
+      "source_sha256_lf": "c6a6fb1063b9d69b87f9d5d284f38eb25b431b6cfe3f5525378727befc2d493c",
+      "independent_mission9_source_to_report_reaudit": "NOT_COMPLETED",
+      "first_key_occurrence_commit": "09bef033cd4f55e92e3aa1f41c0a1f9142ed9e57",
+      "history_caveat": "First textual occurrence only, not first confirmed functional implementation.",
+      "exact_final_sha_ci": "NOT_MEASURED_IN_THIS_FILE"
+    },
+    {
+      "id": "tubulars.api_5c3",
+      "version": "1.1.0",
+      "source": "backend/src/drillai/engines/tubulars.py",
+      "status": "NEEDS_FIELD_VALIDATION",
+      "assumptions": [
+        "nominal wall thickness (manufacturer tolerances other than the API 0.875 burst factor are not applied)",
+        "yield strength is the specified minimum for the grade",
+        "pressure loads are static, no thermal or bending stresses beyond the axial term"
+      ],
+      "limitations": [
+        "pipe body only: no connection, coupling or thread rating",
+        "no buckling or bending stress from doglegs",
+        "bending, thermal and dynamic loads must be added by a dedicated design workflow"
+      ],
+      "primary_tests": [
+        "backend/tests/engines/test_safety_engines.py"
+      ],
+      "api": "/api/v1/registry/engines/{engine_key}/run",
+      "ui": "frontend/src/pages/engineering/EngineeringWorkspace.tsx (generic runner)",
+      "field_vendor_customer_validation": "NOT_MEASURED",
+      "source_sha256_lf": "3bdc50ef9b0b7044710ea49ffca1d3ad55dbd4759571b96219f9590bb61f5a36",
+      "independent_mission9_source_to_report_reaudit": "NOT_COMPLETED",
+      "first_key_occurrence_commit": "09bef033cd4f55e92e3aa1f41c0a1f9142ed9e57",
+      "history_caveat": "First textual occurrence only, not first confirmed functional implementation.",
+      "exact_final_sha_ci": "NOT_MEASURED_IN_THIS_FILE"
+    },
+    {
+      "id": "twin.reconciliation",
+      "version": "1.2.0",
+      "source": "backend/src/drillai/engines/twin.py",
+      "status": "IMPLEMENTED_NOT_INDEPENDENTLY_VALIDATED",
+      "assumptions": [
+        "both surveys are processed with minimum curvature using their own tie-in",
+        "actual position between survey stations is interpolated linearly in MD",
+        "the actual survey is anchored to the planned first station by default"
+      ],
+      "limitations": [
+        "no positional uncertainty (ISCWSA) model",
+        "no automatic detection of a wrong tie-in or datum shift beyond the anchor statement",
+        "predicted rather than surveyed positions must be passed as `actual` deliberately"
+      ],
+      "primary_tests": [
+        "backend/tests/engines/test_twin_optimization_engines.py"
+      ],
+      "api": "/api/v1/registry/engines/{engine_key}/run",
+      "ui": "frontend/src/pages/engineering/EngineeringWorkspace.tsx (generic runner)",
+      "field_vendor_customer_validation": "NOT_MEASURED",
+      "source_sha256_lf": "5c56256b8f813f531e4aa9e1f771679f93e9297f332d3054e00cda56dc464386",
+      "independent_mission9_source_to_report_reaudit": "NOT_COMPLETED",
+      "first_key_occurrence_commit": "09bef033cd4f55e92e3aa1f41c0a1f9142ed9e57",
+      "history_caveat": "First textual occurrence only, not first confirmed functional implementation.",
+      "exact_final_sha_ci": "NOT_MEASURED_IN_THIS_FILE"
+    },
+    {
+      "id": "well_control.kill_sheet",
+      "version": "1.2.0",
+      "source": "backend/src/drillai/engines/wellcontrol.py",
+      "status": "NEEDS_FIELD_VALIDATION",
+      "assumptions": [
+        "single influx, steady-state shut-in pressures",
+        "kill rate pressure (KRP) measured at the slow kill rate and dominated by drillstring/bit friction",
+        "no annular friction while shut in and negligible annular friction during kill circulation",
+        "volumetric_kick_tolerance_si (when computed) uses a preliminary single-bubble unmigrated balance at the casing shoe"
+      ],
+      "limitations": [
+        "does not model multi-phase gas expansion, real-gas Z-factor compressibility, or oil-based mud gas solubility",
+        "mud_weight_margin_si (and deprecated alias kick_tolerance_mud_weight_si) is a static shoe mud-weight margin (kg/m3), not a multi-phase volumetric kick tolerance",
+        "not a substitute for a certified well control procedure or IWCF/IADC WellSharp training"
+      ],
+      "primary_tests": [
+        "backend/tests/engines/test_safety_engines.py"
+      ],
+      "api": "/api/v1/registry/engines/{engine_key}/run",
+      "ui": "frontend/src/pages/engineering/EngineeringWorkspace.tsx (generic runner)",
+      "field_vendor_customer_validation": "NOT_MEASURED",
+      "source_sha256_lf": "00ad181423c078d74c72dac07a870aaecc2be5d7050f7f0993b86c5b6f560dc8",
+      "independent_mission9_source_to_report_reaudit": "NOT_COMPLETED",
+      "first_key_occurrence_commit": "09bef033cd4f55e92e3aa1f41c0a1f9142ed9e57",
+      "history_caveat": "First textual occurrence only, not first confirmed functional implementation.",
+      "exact_final_sha_ci": "NOT_MEASURED_IN_THIS_FILE"
+    },
+    {
+      "id": "wellbore.capacity",
+      "version": "1.4.0",
+      "source": "backend/src/drillai/engines/fluids.py",
+      "status": "IMPLEMENTED_NOT_INDEPENDENTLY_VALIDATED",
+      "assumptions": [
+        "nominal diameters, no tool-joint allowance",
+        "largest inner tubular OD per interval"
+      ],
+      "limitations": [
+        "no eccentricity or washout",
+        "does not resolve multiple nested strings beyond the largest OD",
+        "unoccupied intervals require an explicit user declaration, not independent verification"
+      ],
+      "primary_tests": [
+        "backend/tests/engines/test_fluids.py"
+      ],
+      "api": "/api/v1/registry/engines/{engine_key}/run",
+      "ui": "frontend/src/pages/engineering/CirculationWorkspace.tsx (partial)",
+      "field_vendor_customer_validation": "NOT_MEASURED",
+      "source_sha256_lf": "ca7ee68be98a7c81a433746330ee0c99e3d759de83410d9ec791deff0e445363",
+      "independent_mission9_source_to_report_reaudit": "NOT_COMPLETED",
+      "first_key_occurrence_commit": "09bef033cd4f55e92e3aa1f41c0a1f9142ed9e57",
+      "history_caveat": "First textual occurrence only, not first confirmed functional implementation.",
+      "exact_final_sha_ci": "NOT_MEASURED_IN_THIS_FILE"
+    }
+  ]
+}

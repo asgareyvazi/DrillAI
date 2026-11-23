@@ -282,6 +282,29 @@ def test_pdfium_path_records_text_boxes_confidence_and_page_status() -> None:
     assert parsed.metadata["ocr_status_by_page"] == {"1": "applied"}
 
 
+def test_page_character_limit_does_not_publish_discarded_ocr_text_in_line_locator(monkeypatch) -> None:
+    from drillai.ingestion.parsers import PdfParser
+
+    monkeypatch.setattr(PdfParser, "MAX_OCR_TEXT_CHARS_PER_PAGE", 10)
+    provider = ContractProvider([
+        OcrLine("first", 0.9, (10, 20, 50, 10)),
+        OcrLine("second line has discarded text", 0.4, (10, 40, 100, 10)),
+    ])
+    parsed = parse_bytes(_blank_pdf(), filename="scan.pdf", ocr_provider=provider,
+                         ocr_max_page_pixels=1_000_000)
+    page = parsed.pages[0]
+    assert page.text == "first\nseco"
+    assert page.ocr_status == "truncated"
+    assert parsed.metadata["ocr_required_pages"] == [1]
+    region = page.regions[-1]
+    assert region.text == page.text
+    boxes = region.source_locator["line_boxes"]
+    assert [box["text"] for box in boxes] == ["first", "seco"]
+    assert boxes[1]["bbox_px"] == {"x0": 10, "y0": 40, "x1": 110, "y1": 50}
+    assert region.source_locator["line_boxes_truncated"] is True
+    assert region.confidence == pytest.approx((0.9 * 5 + 0.4 * 4) / 9)
+
+
 def test_rotated_pdf_retains_display_dimensions_and_maps_ocr_boxes_to_page_points() -> None:
     provider = ContractProvider([OcrLine("Rotated", 0.9, (10, 20, 40, 20))])
 

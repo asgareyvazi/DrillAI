@@ -1,0 +1,26 @@
+{
+  "remote_sha": "829c931ddbbd04f14a435ab3e9eef3ba30eefba3",
+  "remote_entries": 789,
+  "worktree_mismatches": [],
+  "old_tracked_missing_remote": [],
+  "additional_files": [
+    "frontend/.playwright-report-cp151-71aae4f7f3364cd8bef9f4748c4283fb/index.html",
+    "frontend/playwright-report-master-full-7d42a1/index.html",
+    "frontend/test-results-continue2/.last-run.json",
+    "frontend/test-results-continue2/well-cockpit-well-cockpit--82af4-om-a-generic-event-duration-chromium/error-context.md",
+    "frontend/test-results-continue2/well-cockpit-well-cockpit--82af4-om-a-generic-event-duration-chromium/test-failed-1.png",
+    "frontend/test-results-continue2/well-cockpit-well-cockpit--82af4-om-a-generic-event-duration-chromium/trace.zip",
+    "frontend/test-results-continue2b/.last-run.json",
+    "frontend/test-results-continue2connector/.last-run.json",
+    "frontend/test-results-continue2final/.last-run.json",
+    "frontend/test-results-continue2full/.last-run.json",
+    "frontend/test-results-continue2full/connectors-platform-CP11-t-e1520-dance-then-recovers-cleanly-chromium/error-context.md",
+    "frontend/test-results-continue2full/connectors-platform-CP11-t-e1520-dance-then-recovers-cleanly-chromium/test-failed-1.png",
+    "frontend/test-results-continue2full/connectors-platform-CP11-t-e1520-dance-then-recovers-cleanly-chromium/trace.zip",
+    "frontend/test-results-continue2full/live-operations-CP10-live--719a9-Persian-RTL-token-isolation-chromium/error-context.md",
+    "frontend/test-results-continue2full/live-operations-CP10-live--719a9-Persian-RTL-token-isolation-chromium/trace.zip",
+    "frontend/test-results-master-auth-c4a891de/.last-run.json",
+    "frontend/test-results-master-full-7d42a1/.last-run.json",
+    "frontend/test-results-master-full-7d42a1/e2e-results.json"
+  ]
+}

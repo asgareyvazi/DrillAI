@@ -1,0 +1,3 @@
+# Engine assurance — PARTIAL inventory, no acceptance
+
+`MISSION10-ENGINE-ASSURANCE.json` inventories the 16 registered engines and inherited source/test pointers. No independent Mission 10 reference calculation or end-to-end source-to-report audit of all engines has been performed. Registry membership, implementation and existing unit tests are not independent assurance. Missing coverage includes boundary checks, units, numerical methods, standards applicability, negative tests, workflow provenance and separate field/vendor validation. Kill sheet and API 5C3 require field validation. Geometric proximity is not uncertainty-aware anti-collision. The register does not cover every non-registry calculation.

@@ -1,0 +1,632 @@
+{
+  "status": "PARTIAL",
+  "scope": "30 inherited items inventoried, not a completed independent re-audit; UNKNOWN denotes insufficient fresh evidence.",
+  "requirements": [
+    {
+      "id": 1,
+      "requirement": "Persian deployment OCR",
+      "previous_mission8_status": "NOT_ACCEPTED",
+      "previous_mission9_status": "NOT_ACCEPTED",
+      "current_status": "NOT_ACCEPTED",
+      "status_basis": "Exact-SHA CI / direct source boundary",
+      "existing_source_paths": [
+        "backend/src/drillai/ingestion/ocr.py"
+      ],
+      "historical_source_pointer": "backend/src/drillai/ingestion/ocr.py",
+      "candidate_test_paths": [
+        "backend/tests/api/test_ocr_runtime_api.py",
+        "backend/tests/ingestion/test_ocr.py",
+        "backend/tests/ingestion/test_ocr_annotations.py",
+        "backend/tests/ingestion/test_ocr_benchmark.py",
+        "backend/tests/ingestion/test_ocr_runtime.py",
+        "backend/tests/ingestion/test_ocr_synthetic_quality.py",
+        "backend/tests/ingestion/test_tesserocr_diagnostic.py"
+      ],
+      "observed_evidence": [
+        "https://github.com/asgareyvazi/DrillAI/actions/runs/45145138950"
+      ],
+      "failed_or_incomplete_evidence": "Restore actual accuracy and pass all unchanged deployed strata",
+      "corrective_actions": "Restore actual accuracy and pass all unchanged deployed strata",
+      "acceptance_criteria": "Full corresponding Mission 10 phase exit gate including persistence, review, UI, independent tests and final-SHA CI; field evidence separately classified.",
+      "disposition": "open; not yet independently re-audited"
+    },
+    {
+      "id": 2,
+      "requirement": "Bounded page OCR",
+      "previous_mission8_status": "PARTIAL",
+      "previous_mission9_status": "NOT_ACCEPTED",
+      "current_status": "PARTIAL",
+      "status_basis": "Exact-SHA CI / direct source boundary",
+      "existing_source_paths": [
+        "backend/src/drillai/ingestion/parsers.py"
+      ],
+      "historical_source_pointer": "backend/src/drillai/ingestion/parsers.py",
+      "candidate_test_paths": [],
+      "observed_evidence": [
+        "backend/src/drillai/ingestion/ocr.py",
+        "backend/src/drillai/ingestion/parsers.py"
+      ],
+      "failed_or_incomplete_evidence": "Queue/render/layout/OCR/parsing/publication deadline and Windows process-tree termination remain missing.",
+      "corrective_actions": "Queue/render/layout/OCR/parsing/publication deadline and Windows process-tree termination remain missing.",
+      "acceptance_criteria": "Full corresponding Mission 10 phase exit gate including persistence, review, UI, independent tests and final-SHA CI; field evidence separately classified.",
+      "disposition": "open; not yet independently re-audited"
+    },
+    {
+      "id": 3,
+      "requirement": "Authorized holdout",
+      "previous_mission8_status": "BLOCKED_BY_MISSING_AUTHORIZED_EVIDENCE",
+      "previous_mission9_status": "PARTIAL",
+      "current_status": "BLOCKED_BY_MISSING_AUTHORIZED_EVIDENCE",
+      "status_basis": "Exact-SHA CI / direct source boundary",
+      "existing_source_paths": [
+        "backend/src/drillai/ingestion/ocr_benchmark.py"
+      ],
+      "historical_source_pointer": "backend/src/drillai/ingestion/ocr_benchmark.py",
+      "candidate_test_paths": [
+        "backend/tests/ingestion/test_ocr_benchmark.py"
+      ],
+      "observed_evidence": [
+        "docs/mission-reports/CONTINUOUS-TESSEROCR-SYNTHETIC-DIAGNOSIS.md"
+      ],
+      "failed_or_incomplete_evidence": "Obtain approved authentic DDRs, freeze independently adjudicated labels and split",
+      "corrective_actions": "Obtain approved authentic DDRs, freeze independently adjudicated labels and split",
+      "acceptance_criteria": "Full corresponding Mission 10 phase exit gate including persistence, review, UI, independent tests and final-SHA CI; field evidence separately classified.",
+      "disposition": "open; not yet independently re-audited"
+    },
+    {
+      "id": 4,
+      "requirement": "Full capacity geometry",
+      "previous_mission8_status": "PARTIAL",
+      "previous_mission9_status": "PARTIAL",
+      "current_status": "UNKNOWN",
+      "status_basis": "UNKNOWN: source presence alone is not independent workflow validation",
+      "existing_source_paths": [
+        "backend/src/drillai/engines/fluids.py"
+      ],
+      "historical_source_pointer": "backend/src/drillai/engines/fluids.py",
+      "candidate_test_paths": [
+        "backend/tests/engines/test_fluids.py"
+      ],
+      "observed_evidence": [],
+      "failed_or_incomplete_evidence": "Tool joints, washout, nesting and measured/design distinction",
+      "corrective_actions": "Tool joints, washout, nesting and measured/design distinction",
+      "acceptance_criteria": "Full corresponding Mission 10 phase exit gate including persistence, review, UI, independent tests and final-SHA CI; field evidence separately classified.",
+      "disposition": "open; not yet independently re-audited"
+    },
+    {
+      "id": 5,
+      "requirement": "Authenticated bore evidence",
+      "previous_mission8_status": "PARTIAL",
+      "previous_mission9_status": "PARTIAL",
+      "current_status": "UNKNOWN",
+      "status_basis": "UNKNOWN: source presence alone is not independent workflow validation",
+      "existing_source_paths": [
+        "backend/src/drillai/engines/fluids.py"
+      ],
+      "historical_source_pointer": "backend/src/drillai/engines/fluids.py",
+      "candidate_test_paths": [
+        "backend/tests/engines/test_fluids.py"
+      ],
+      "observed_evidence": [],
+      "failed_or_incomplete_evidence": "Caller text is not authenticated evidence; build review and identity linkage",
+      "corrective_actions": "Caller text is not authenticated evidence; build review and identity linkage",
+      "acceptance_criteria": "Full corresponding Mission 10 phase exit gate including persistence, review, UI, independent tests and final-SHA CI; field evidence separately classified.",
+      "disposition": "open; not yet independently re-audited"
+    },
+    {
+      "id": 6,
+      "requirement": "Versioned capacity design",
+      "previous_mission8_status": "PARTIAL",
+      "previous_mission9_status": "PARTIAL",
+      "current_status": "UNKNOWN",
+      "status_basis": "UNKNOWN: source presence alone is not independent workflow validation",
+      "existing_source_paths": [
+        "frontend/src/pages/engineering/CirculationWorkspace.tsx"
+      ],
+      "historical_source_pointer": "frontend/src/pages/engineering/CirculationWorkspace.tsx",
+      "candidate_test_paths": [
+        "frontend/src/pages/engineering/CirculationWorkspace.test.tsx"
+      ],
+      "observed_evidence": [],
+      "failed_or_incomplete_evidence": "No governed capacity revision/approval/export journey",
+      "corrective_actions": "No governed capacity revision/approval/export journey",
+      "acceptance_criteria": "Full corresponding Mission 10 phase exit gate including persistence, review, UI, independent tests and final-SHA CI; field evidence separately classified.",
+      "disposition": "open; not yet independently re-audited"
+    },
+    {
+      "id": 7,
+      "requirement": "Hydraulics/ECD slice",
+      "previous_mission8_status": "PARTIAL",
+      "previous_mission9_status": "PARTIAL",
+      "current_status": "UNKNOWN",
+      "status_basis": "UNKNOWN: source presence alone is not independent workflow validation",
+      "existing_source_paths": [
+        "backend/src/drillai/engines/fluids.py"
+      ],
+      "historical_source_pointer": "backend/src/drillai/engines/fluids.py",
+      "candidate_test_paths": [
+        "backend/tests/engines/test_fluids.py"
+      ],
+      "observed_evidence": [],
+      "failed_or_incomplete_evidence": "Full surveyed depth profile, components, review and reports missing",
+      "corrective_actions": "Full surveyed depth profile, components, review and reports missing",
+      "acceptance_criteria": "Full corresponding Mission 10 phase exit gate including persistence, review, UI, independent tests and final-SHA CI; field evidence separately classified.",
+      "disposition": "open; not yet independently re-audited"
+    },
+    {
+      "id": 8,
+      "requirement": "Survey-linked depths",
+      "previous_mission8_status": "PARTIAL",
+      "previous_mission9_status": "PARTIAL",
+      "current_status": "UNKNOWN",
+      "status_basis": "UNKNOWN: source presence alone is not independent workflow validation",
+      "existing_source_paths": [
+        "backend/src/drillai/drilling/surveys.py"
+      ],
+      "historical_source_pointer": "backend/src/drillai/drilling/surveys.py",
+      "candidate_test_paths": [
+        "backend/tests/api/test_surveys_api.py"
+      ],
+      "observed_evidence": [],
+      "failed_or_incomplete_evidence": "Connect persisted revision and validated datum to hydraulics",
+      "corrective_actions": "Connect persisted revision and validated datum to hydraulics",
+      "acceptance_criteria": "Full corresponding Mission 10 phase exit gate including persistence, review, UI, independent tests and final-SHA CI; field evidence separately classified.",
+      "disposition": "open; not yet independently re-audited"
+    },
+    {
+      "id": 9,
+      "requirement": "New rheology",
+      "previous_mission8_status": "PARTIAL",
+      "previous_mission9_status": "PARTIAL",
+      "current_status": "UNKNOWN",
+      "status_basis": "UNKNOWN: source presence alone is not independent workflow validation",
+      "existing_source_paths": [
+        "backend/src/drillai/engines/power_law.py"
+      ],
+      "historical_source_pointer": "backend/src/drillai/engines/power_law.py",
+      "candidate_test_paths": [
+        "backend/tests/engines/test_mission6_power_law.py"
+      ],
+      "observed_evidence": [],
+      "failed_or_incomplete_evidence": "Pipe math only; annular/full-well design and report still missing",
+      "corrective_actions": "Pipe math only; annular/full-well design and report still missing",
+      "acceptance_criteria": "Full corresponding Mission 10 phase exit gate including persistence, review, UI, independent tests and final-SHA CI; field evidence separately classified.",
+      "disposition": "open; not yet independently re-audited"
+    },
+    {
+      "id": 10,
+      "requirement": "Survey geometric proximity",
+      "previous_mission8_status": "PARTIAL",
+      "previous_mission9_status": "PARTIAL",
+      "current_status": "UNKNOWN",
+      "status_basis": "UNKNOWN: source presence alone is not independent workflow validation",
+      "existing_source_paths": [
+        "backend/src/drillai/engines/proximity.py"
+      ],
+      "historical_source_pointer": "backend/src/drillai/engines/proximity.py",
+      "candidate_test_paths": [
+        "backend/tests/engines/test_proximity.py"
+      ],
+      "observed_evidence": [],
+      "failed_or_incomplete_evidence": "Select persisted surveys, datum validation and dedicated workflow",
+      "corrective_actions": "Select persisted surveys, datum validation and dedicated workflow",
+      "acceptance_criteria": "Full corresponding Mission 10 phase exit gate including persistence, review, UI, independent tests and final-SHA CI; field evidence separately classified.",
+      "disposition": "open; not yet independently re-audited"
+    },
+    {
+      "id": 11,
+      "requirement": "Anti-collision uncertainty",
+      "previous_mission8_status": "PLANNED",
+      "previous_mission9_status": "PARTIAL",
+      "current_status": "UNKNOWN",
+      "status_basis": "UNKNOWN: source presence alone is not independent workflow validation",
+      "existing_source_paths": [
+        "backend/src/drillai/engines/proximity.py"
+      ],
+      "historical_source_pointer": "backend/src/drillai/engines/proximity.py",
+      "candidate_test_paths": [
+        "backend/tests/engines/test_proximity.py"
+      ],
+      "observed_evidence": [],
+      "failed_or_incomplete_evidence": "Covariance/error model/SF not implemented; select source and implement",
+      "corrective_actions": "Covariance/error model/SF not implemented; select source and implement",
+      "acceptance_criteria": "Full corresponding Mission 10 phase exit gate including persistence, review, UI, independent tests and final-SHA CI; field evidence separately classified.",
+      "disposition": "open; not yet independently re-audited"
+    },
+    {
+      "id": 12,
+      "requirement": "Engine assurance",
+      "previous_mission8_status": "PARTIAL",
+      "previous_mission9_status": "PARTIAL",
+      "current_status": "UNKNOWN",
+      "status_basis": "UNKNOWN: source presence alone is not independent workflow validation",
+      "existing_source_paths": [
+        "backend/src/drillai/engines/registry.py"
+      ],
+      "historical_source_pointer": "backend/src/drillai/engines/registry.py",
+      "candidate_test_paths": [
+        "backend/tests/engines/test_registry_contracts.py",
+        "backend/tests/telemetry/test_connectors_registry.py",
+        "backend/tests/units/test_registry.py"
+      ],
+      "observed_evidence": [],
+      "failed_or_incomplete_evidence": "Full independent source-to-report audit of all 16 not done",
+      "corrective_actions": "Full independent source-to-report audit of all 16 not done",
+      "acceptance_criteria": "Full corresponding Mission 10 phase exit gate including persistence, review, UI, independent tests and final-SHA CI; field evidence separately classified.",
+      "disposition": "open; not yet independently re-audited"
+    },
+    {
+      "id": 13,
+      "requirement": "Manual DDR",
+      "previous_mission8_status": "PARTIAL",
+      "previous_mission9_status": "PARTIAL",
+      "current_status": "UNKNOWN",
+      "status_basis": "UNKNOWN: source presence alone is not independent workflow validation",
+      "existing_source_paths": [
+        "backend/src/drillai/drilling/daily_reports.py"
+      ],
+      "historical_source_pointer": "backend/src/drillai/drilling/daily_reports.py",
+      "candidate_test_paths": [
+        "backend/tests/api/test_daily_reports_api.py",
+        "backend/tests/api/test_daily_reports_tenant.py"
+      ],
+      "observed_evidence": [],
+      "failed_or_incomplete_evidence": "Complete authored engineering data/review journey",
+      "corrective_actions": "Complete authored engineering data/review journey",
+      "acceptance_criteria": "Full corresponding Mission 10 phase exit gate including persistence, review, UI, independent tests and final-SHA CI; field evidence separately classified.",
+      "disposition": "open; not yet independently re-audited"
+    },
+    {
+      "id": 14,
+      "requirement": "DDR batch/correction",
+      "previous_mission8_status": "PARTIAL",
+      "previous_mission9_status": "PARTIAL",
+      "current_status": "UNKNOWN",
+      "status_basis": "UNKNOWN: source presence alone is not independent workflow validation",
+      "existing_source_paths": [
+        "backend/src/drillai/ingestion/pipeline.py"
+      ],
+      "historical_source_pointer": "backend/src/drillai/ingestion/pipeline.py",
+      "candidate_test_paths": [
+        "backend/tests/ingestion/test_pipeline.py"
+      ],
+      "observed_evidence": [],
+      "failed_or_incomplete_evidence": "Batch lifecycle and immutable corrections not fully verified",
+      "corrective_actions": "Batch lifecycle and immutable corrections not fully verified",
+      "acceptance_criteria": "Full corresponding Mission 10 phase exit gate including persistence, review, UI, independent tests and final-SHA CI; field evidence separately classified.",
+      "disposition": "open; not yet independently re-audited"
+    },
+    {
+      "id": 15,
+      "requirement": "Chronology",
+      "previous_mission8_status": "PARTIAL",
+      "previous_mission9_status": "PARTIAL",
+      "current_status": "UNKNOWN",
+      "status_basis": "UNKNOWN: source presence alone is not independent workflow validation",
+      "existing_source_paths": [
+        "backend/src/drillai/drilling/timeline.py"
+      ],
+      "historical_source_pointer": "backend/src/drillai/drilling/timeline.py",
+      "candidate_test_paths": [
+        "backend/tests/operations/test_timeline_scaling.py"
+      ],
+      "observed_evidence": [],
+      "failed_or_incomplete_evidence": "Reconcile overlaps and missing timestamps; no comprehensive journey",
+      "corrective_actions": "Reconcile overlaps and missing timestamps; no comprehensive journey",
+      "acceptance_criteria": "Full corresponding Mission 10 phase exit gate including persistence, review, UI, independent tests and final-SHA CI; field evidence separately classified.",
+      "disposition": "open; not yet independently re-audited"
+    },
+    {
+      "id": 16,
+      "requirement": "NPT",
+      "previous_mission8_status": "PARTIAL",
+      "previous_mission9_status": "PARTIAL",
+      "current_status": "UNKNOWN",
+      "status_basis": "UNKNOWN: source presence alone is not independent workflow validation",
+      "existing_source_paths": [
+        "backend/src/drillai/drilling/npt.py"
+      ],
+      "historical_source_pointer": "backend/src/drillai/drilling/npt.py",
+      "candidate_test_paths": [
+        "backend/tests/db/test_npt_category_migration.py",
+        "backend/tests/drilling/test_classifiers_and_npt.py",
+        "backend/tests/drilling/test_mission7_npt_service.py",
+        "backend/tests/drilling/test_npt_interval_reconciliation.py",
+        "backend/tests/drilling/test_npt_summary.py",
+        "backend/tests/drilling/test_npt_taxonomy.py",
+        "backend/tests/operations/test_npt_accounting.py"
+      ],
+      "observed_evidence": [],
+      "failed_or_incomplete_evidence": "Explicit Event/Operation identity, cause allocation, independent approval, immutable revisions and export remain unimplemented; union covers scoped Event rows only.",
+      "corrective_actions": "Explicit Event/Operation identity, cause allocation, independent approval, immutable revisions and export remain unimplemented; union covers scoped Event rows only.",
+      "acceptance_criteria": "Full corresponding Mission 10 phase exit gate including persistence, review, UI, independent tests and final-SHA CI; field evidence separately classified.",
+      "disposition": "open; not yet independently re-audited"
+    },
+    {
+      "id": 17,
+      "requirement": "Well Design",
+      "previous_mission8_status": "PARTIAL",
+      "previous_mission9_status": "PARTIAL",
+      "current_status": "UNKNOWN",
+      "status_basis": "UNKNOWN: source presence alone is not independent workflow validation",
+      "existing_source_paths": [
+        "backend/src/drillai/engineering/products.py"
+      ],
+      "historical_source_pointer": "backend/src/drillai/engineering/products.py",
+      "candidate_test_paths": [
+        "backend/tests/api/test_engineering_products_api.py",
+        "backend/tests/engineering/test_products.py"
+      ],
+      "observed_evidence": [],
+      "failed_or_incomplete_evidence": "Cross-domain linked design and E2E not complete",
+      "corrective_actions": "Cross-domain linked design and E2E not complete",
+      "acceptance_criteria": "Full corresponding Mission 10 phase exit gate including persistence, review, UI, independent tests and final-SHA CI; field evidence separately classified.",
+      "disposition": "open; not yet independently re-audited"
+    },
+    {
+      "id": 18,
+      "requirement": "Programs/Procedures",
+      "previous_mission8_status": "PARTIAL",
+      "previous_mission9_status": "PARTIAL",
+      "current_status": "UNKNOWN",
+      "status_basis": "UNKNOWN: source presence alone is not independent workflow validation",
+      "existing_source_paths": [
+        "backend/src/drillai/engineering/service.py"
+      ],
+      "historical_source_pointer": "backend/src/drillai/engineering/service.py",
+      "candidate_test_paths": [
+        "backend/tests/assets/test_asset_service.py",
+        "backend/tests/drilling/test_mission7_npt_service.py",
+        "backend/tests/operations/test_event_service.py",
+        "backend/tests/operations/test_operation_service.py",
+        "backend/tests/twin/test_twin_service.py"
+      ],
+      "observed_evidence": [],
+      "failed_or_incomplete_evidence": "Existing lifecycle; full acceptance/export journey not reverified",
+      "corrective_actions": "Existing lifecycle; full acceptance/export journey not reverified",
+      "acceptance_criteria": "Full corresponding Mission 10 phase exit gate including persistence, review, UI, independent tests and final-SHA CI; field evidence separately classified.",
+      "disposition": "open; not yet independently re-audited"
+    },
+    {
+      "id": 19,
+      "requirement": "Advisor/RAG",
+      "previous_mission8_status": "PARTIAL",
+      "previous_mission9_status": "PARTIAL",
+      "current_status": "UNKNOWN",
+      "status_basis": "UNKNOWN: source presence alone is not independent workflow validation",
+      "existing_source_paths": [
+        "backend/src/drillai/drilling/advisor.py"
+      ],
+      "historical_source_pointer": "backend/src/drillai/drilling/advisor.py",
+      "candidate_test_paths": [
+        "backend/tests/drilling/test_advisor.py",
+        "backend/tests/drilling/test_advisor_cp130_grounding.py",
+        "backend/tests/drilling/test_advisor_cp140_grounding.py"
+      ],
+      "observed_evidence": [],
+      "failed_or_incomplete_evidence": "Retrieval metrics, scope and full citation E2E remain",
+      "corrective_actions": "Retrieval metrics, scope and full citation E2E remain",
+      "acceptance_criteria": "Full corresponding Mission 10 phase exit gate including persistence, review, UI, independent tests and final-SHA CI; field evidence separately classified.",
+      "disposition": "open; not yet independently re-audited"
+    },
+    {
+      "id": 20,
+      "requirement": "Specialist agents",
+      "previous_mission8_status": "PARTIAL",
+      "previous_mission9_status": "PARTIAL",
+      "current_status": "UNKNOWN",
+      "status_basis": "UNKNOWN: source presence alone is not independent workflow validation",
+      "existing_source_paths": [
+        "backend/src/drillai/workflow/graph.py"
+      ],
+      "historical_source_pointer": "backend/src/drillai/workflow/graph.py",
+      "candidate_test_paths": [
+        "backend/tests/workflow/test_graph_and_expressions.py"
+      ],
+      "observed_evidence": [],
+      "failed_or_incomplete_evidence": "Dedicated bounded domain agents and human review incomplete",
+      "corrective_actions": "Dedicated bounded domain agents and human review incomplete",
+      "acceptance_criteria": "Full corresponding Mission 10 phase exit gate including persistence, review, UI, independent tests and final-SHA CI; field evidence separately classified.",
+      "disposition": "open; not yet independently re-audited"
+    },
+    {
+      "id": 21,
+      "requirement": "Telemetry/Twin",
+      "previous_mission8_status": "PARTIAL",
+      "previous_mission9_status": "PARTIAL",
+      "current_status": "UNKNOWN",
+      "status_basis": "UNKNOWN: source presence alone is not independent workflow validation",
+      "existing_source_paths": [
+        "backend/src/drillai/telemetry/service.py"
+      ],
+      "historical_source_pointer": "backend/src/drillai/telemetry/service.py",
+      "candidate_test_paths": [
+        "backend/tests/assets/test_asset_service.py",
+        "backend/tests/drilling/test_mission7_npt_service.py",
+        "backend/tests/operations/test_event_service.py",
+        "backend/tests/operations/test_operation_service.py",
+        "backend/tests/twin/test_twin_service.py"
+      ],
+      "observed_evidence": [],
+      "failed_or_incomplete_evidence": "End-to-end reconciliation and external interop unverified",
+      "corrective_actions": "End-to-end reconciliation and external interop unverified",
+      "acceptance_criteria": "Full corresponding Mission 10 phase exit gate including persistence, review, UI, independent tests and final-SHA CI; field evidence separately classified.",
+      "disposition": "open; not yet independently re-audited"
+    },
+    {
+      "id": 22,
+      "requirement": "Reports/exports",
+      "previous_mission8_status": "PARTIAL",
+      "previous_mission9_status": "PARTIAL",
+      "current_status": "UNKNOWN",
+      "status_basis": "UNKNOWN: source presence alone is not independent workflow validation",
+      "existing_source_paths": [
+        "backend/src/drillai/engineering/exports.py"
+      ],
+      "historical_source_pointer": "backend/src/drillai/engineering/exports.py",
+      "candidate_test_paths": [
+        "backend/tests/drilling/test_structured_report_exports.py"
+      ],
+      "observed_evidence": [],
+      "failed_or_incomplete_evidence": "Exact design/approval provenance and requested end-to-end journeys incomplete",
+      "corrective_actions": "Exact design/approval provenance and requested end-to-end journeys incomplete",
+      "acceptance_criteria": "Full corresponding Mission 10 phase exit gate including persistence, review, UI, independent tests and final-SHA CI; field evidence separately classified.",
+      "disposition": "open; not yet independently re-audited"
+    },
+    {
+      "id": 23,
+      "requirement": "RBAC/deployment",
+      "previous_mission8_status": "PARTIAL",
+      "previous_mission9_status": "PARTIAL",
+      "current_status": "UNKNOWN",
+      "status_basis": "UNKNOWN: source presence alone is not independent workflow validation",
+      "existing_source_paths": [
+        "backend/src/drillai/security/rbac.py"
+      ],
+      "historical_source_pointer": "backend/src/drillai/security/rbac.py",
+      "candidate_test_paths": [
+        "backend/tests/api/test_alerts_rbac.py",
+        "backend/tests/api/test_timeseries_rbac.py",
+        "backend/tests/telemetry/test_rbac_telemetry.py"
+      ],
+      "observed_evidence": [],
+      "failed_or_incomplete_evidence": "New flows and deployment assurance not independently complete",
+      "corrective_actions": "New flows and deployment assurance not independently complete",
+      "acceptance_criteria": "Full corresponding Mission 10 phase exit gate including persistence, review, UI, independent tests and final-SHA CI; field evidence separately classified.",
+      "disposition": "open; not yet independently re-audited"
+    },
+    {
+      "id": 24,
+      "requirement": "Catalogue",
+      "previous_mission8_status": "PARTIAL",
+      "previous_mission9_status": "PARTIAL",
+      "current_status": "UNKNOWN",
+      "status_basis": "UNKNOWN: source presence alone is not independent workflow validation",
+      "existing_source_paths": [
+        "docs/ENGINEERING_CAPABILITY_CATALOGUE.json"
+      ],
+      "historical_source_pointer": "docs/ENGINEERING_CAPABILITY_CATALOGUE.json",
+      "candidate_test_paths": [],
+      "observed_evidence": [],
+      "failed_or_incomplete_evidence": "Regenerated inventory only; comprehensive historical audit/schema/roadmap incomplete",
+      "corrective_actions": "Regenerated inventory only; comprehensive historical audit/schema/roadmap incomplete",
+      "acceptance_criteria": "Full corresponding Mission 10 phase exit gate including persistence, review, UI, independent tests and final-SHA CI; field evidence separately classified.",
+      "disposition": "open; not yet independently re-audited"
+    },
+    {
+      "id": 25,
+      "requirement": "Windows history",
+      "previous_mission8_status": "PARTIAL",
+      "previous_mission9_status": "NOT_ACCEPTED",
+      "current_status": "UNKNOWN",
+      "status_basis": "UNKNOWN: source presence alone is not independent workflow validation",
+      "existing_source_paths": [
+        "scripts/verify_stack.py"
+      ],
+      "historical_source_pointer": "scripts/verify_stack.py",
+      "candidate_test_paths": [],
+      "observed_evidence": [],
+      "failed_or_incomplete_evidence": "Three repeated native full-suite diagnostic runs on the final SHA and full native CI must complete; root cause beyond measured budget not established.",
+      "corrective_actions": "Three repeated native full-suite diagnostic runs on the final SHA and full native CI must complete; root cause beyond measured budget not established.",
+      "acceptance_criteria": "Full corresponding Mission 10 phase exit gate including persistence, review, UI, independent tests and final-SHA CI; field evidence separately classified.",
+      "disposition": "open; not yet independently re-audited"
+    },
+    {
+      "id": 26,
+      "requirement": "Full E2E",
+      "previous_mission8_status": "PARTIAL",
+      "previous_mission9_status": "PARTIAL",
+      "current_status": "UNKNOWN",
+      "status_basis": "UNKNOWN: source presence alone is not independent workflow validation",
+      "existing_source_paths": [
+        "frontend/e2e/well-cockpit.spec.ts"
+      ],
+      "historical_source_pointer": "frontend/e2e/well-cockpit.spec.ts",
+      "candidate_test_paths": [],
+      "observed_evidence": [],
+      "failed_or_incomplete_evidence": "Historical 129 do not substitute for requested new journeys",
+      "corrective_actions": "Historical 129 do not substitute for requested new journeys",
+      "acceptance_criteria": "Full corresponding Mission 10 phase exit gate including persistence, review, UI, independent tests and final-SHA CI; field evidence separately classified.",
+      "disposition": "open; not yet independently re-audited"
+    },
+    {
+      "id": 27,
+      "requirement": "Exact-SHA CI",
+      "previous_mission8_status": "PARTIAL",
+      "previous_mission9_status": "NOT_ACCEPTED",
+      "current_status": "NOT_ACCEPTED",
+      "status_basis": "Exact-SHA CI / direct source boundary",
+      "existing_source_paths": [
+        ".github/workflows/ci.yml"
+      ],
+      "historical_source_pointer": ".github/workflows/ci.yml",
+      "candidate_test_paths": [
+        "backend/tests/db/test_daily_report_identity_reconciliation_migration.py",
+        "backend/tests/db/test_daily_report_reconciliation_migration.py",
+        "backend/tests/drilling/test_npt_interval_reconciliation.py",
+        "backend/tests/security/test_cp31_ci_deployment_probe_contract.py",
+        "backend/tests/telemetry/test_cp15_reconciliation_and_outcomes.py",
+        "backend/tests/telemetry/test_cp15_system_auth_and_worker_fencing.py"
+      ],
+      "observed_evidence": [
+        "https://github.com/asgareyvazi/DrillAI/actions/runs/45145138950"
+      ],
+      "failed_or_incomplete_evidence": "Exact-final-SHA CI must be observed on both platforms; old runs cannot certify this mission.",
+      "corrective_actions": "Exact-final-SHA CI must be observed on both platforms; old runs cannot certify this mission.",
+      "acceptance_criteria": "Full corresponding Mission 10 phase exit gate including persistence, review, UI, independent tests and final-SHA CI; field evidence separately classified.",
+      "disposition": "open; not yet independently re-audited"
+    },
+    {
+      "id": 28,
+      "requirement": "Workspace",
+      "previous_mission8_status": "PARTIAL",
+      "previous_mission9_status": "PARTIAL",
+      "current_status": "UNKNOWN",
+      "status_basis": "UNKNOWN: source presence alone is not independent workflow validation",
+      "existing_source_paths": [
+        "docs/mission-reports/MISSION7-WORKSPACE-START.jsonl"
+      ],
+      "historical_source_pointer": "docs/mission-reports/MISSION7-WORKSPACE-START.jsonl",
+      "candidate_test_paths": [],
+      "observed_evidence": [],
+      "failed_or_incomplete_evidence": "Retain protected untracked artifacts and compare start/end metadata; exact final CI checkout artifact is separately named by run ID; historical original mtimes and missing bytes remain unavailable.",
+      "corrective_actions": "Retain protected untracked artifacts and compare start/end metadata; exact final CI checkout artifact is separately named by run ID; historical original mtimes and missing bytes remain unavailable.",
+      "acceptance_criteria": "Full corresponding Mission 10 phase exit gate including persistence, review, UI, independent tests and final-SHA CI; field evidence separately classified.",
+      "disposition": "open; not yet independently re-audited"
+    },
+    {
+      "id": 29,
+      "requirement": "Mission 7 Windows frontend authoring timeout",
+      "previous_mission8_status": "NOT_ACCEPTED",
+      "previous_mission9_status": "NOT_ACCEPTED",
+      "current_status": "UNKNOWN",
+      "status_basis": "UNKNOWN: source presence alone is not independent workflow validation",
+      "existing_source_paths": [],
+      "historical_source_pointer": "CI 45010161009 and Mission 8 timing instrumentation",
+      "candidate_test_paths": [],
+      "observed_evidence": [],
+      "failed_or_incomplete_evidence": "Three repeated native full-suite diagnostic runs on the final SHA and full native CI must complete; root cause beyond measured budget not established.",
+      "corrective_actions": "Three repeated native full-suite diagnostic runs on the final SHA and full native CI must complete; root cause beyond measured budget not established.",
+      "acceptance_criteria": "Full corresponding Mission 10 phase exit gate including persistence, review, UI, independent tests and final-SHA CI; field evidence separately classified.",
+      "disposition": "open; not yet independently re-audited"
+    },
+    {
+      "id": 30,
+      "requirement": "Mission 7 deployed OCR accuracy regression",
+      "previous_mission8_status": "NOT_ACCEPTED",
+      "previous_mission9_status": "NOT_ACCEPTED",
+      "current_status": "NOT_ACCEPTED",
+      "status_basis": "Exact-SHA CI / direct source boundary",
+      "existing_source_paths": [],
+      "historical_source_pointer": "MISSION8-HISTORICAL-OCR-CASES.json",
+      "candidate_test_paths": [],
+      "observed_evidence": [
+        "https://github.com/asgareyvazi/DrillAI/actions/runs/45145138950"
+      ],
+      "failed_or_incomplete_evidence": "Restore all unchanged 64-case global and stratum gates.",
+      "corrective_actions": "Restore all unchanged 64-case global and stratum gates.",
+      "acceptance_criteria": "Full corresponding Mission 10 phase exit gate including persistence, review, UI, independent tests and final-SHA CI; field evidence separately classified.",
+      "disposition": "open; not yet independently re-audited"
+    }
+  ]
+}

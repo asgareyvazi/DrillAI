@@ -1,0 +1,461 @@
+{
+  "overall": "NOT_ACCEPTED",
+  "starting_sha": "829c931ddbbd04f14a435ab3e9eef3ba30eefba3",
+  "phases": [
+    {
+      "phase": 0,
+      "status": "PARTIAL",
+      "start_sha": "829c931ddbbd04f14a435ab3e9eef3ba30eefba3",
+      "changed_files": [
+        "docs/mission-reports/MISSION10-BASELINE.md",
+        "docs/mission-reports/MISSION10-RECOVERY-MATRIX.json",
+        "docs/mission-reports/MISSION10-RECONCILIATION-START.json",
+        "docs/mission-reports/MISSION10-WORKSPACE-START.jsonl",
+        "docs/mission-reports/MISSION10-PROTECTED-START.json"
+      ],
+      "implementation_commits": [],
+      "commands": [
+        "git fetch --unshallow origin arena/9d8f5568-drillai",
+        "git hash-object --no-filters on 789 remote tracked paths",
+        "git merge-base --is-ancestor; git read-tree; git update-ref"
+      ],
+      "test_results": [
+        "789 of 789 remote blob/mode entries matched worktree",
+        "five protected file hashes matched prior record; nine protected mtimes differed from previous mission start"
+      ],
+      "failures": [
+        "restored checkout initially had stale HEAD/index versus remote; prior historical metadata unavailable"
+      ],
+      "unresolved_items": [
+        "complete independent 30-row re-audit; exact-final-SHA CI; comprehensive workspace closure"
+      ],
+      "evidence": []
+    },
+    {
+      "phase": 1,
+      "status": "UNKNOWN",
+      "start_sha": null,
+      "changed_files": [],
+      "implementation_commits": [],
+      "commands": [],
+      "test_results": [],
+      "failures": [],
+      "unresolved_items": [
+        "Not yet assessed or completed in Mission 10"
+      ],
+      "evidence": []
+    },
+    {
+      "phase": 2,
+      "status": "UNKNOWN",
+      "start_sha": null,
+      "changed_files": [],
+      "implementation_commits": [],
+      "commands": [],
+      "test_results": [],
+      "failures": [],
+      "unresolved_items": [
+        "Not yet assessed or completed in Mission 10"
+      ],
+      "evidence": []
+    },
+    {
+      "phase": 3,
+      "status": "UNKNOWN",
+      "start_sha": null,
+      "changed_files": [],
+      "implementation_commits": [],
+      "commands": [],
+      "test_results": [],
+      "failures": [],
+      "unresolved_items": [
+        "Not yet assessed or completed in Mission 10"
+      ],
+      "evidence": []
+    },
+    {
+      "phase": 4,
+      "status": "UNKNOWN",
+      "start_sha": null,
+      "changed_files": [],
+      "implementation_commits": [],
+      "commands": [],
+      "test_results": [],
+      "failures": [],
+      "unresolved_items": [
+        "Not yet assessed or completed in Mission 10"
+      ],
+      "evidence": []
+    },
+    {
+      "phase": 5,
+      "status": "UNKNOWN",
+      "start_sha": null,
+      "changed_files": [],
+      "implementation_commits": [],
+      "commands": [],
+      "test_results": [],
+      "failures": [],
+      "unresolved_items": [
+        "Not yet assessed or completed in Mission 10"
+      ],
+      "evidence": []
+    },
+    {
+      "phase": 6,
+      "status": "UNKNOWN",
+      "start_sha": null,
+      "changed_files": [],
+      "implementation_commits": [],
+      "commands": [],
+      "test_results": [],
+      "failures": [],
+      "unresolved_items": [
+        "Not yet assessed or completed in Mission 10"
+      ],
+      "evidence": []
+    },
+    {
+      "phase": 7,
+      "status": "UNKNOWN",
+      "start_sha": null,
+      "changed_files": [],
+      "implementation_commits": [],
+      "commands": [],
+      "test_results": [],
+      "failures": [],
+      "unresolved_items": [
+        "Not yet assessed or completed in Mission 10"
+      ],
+      "evidence": []
+    },
+    {
+      "phase": 8,
+      "status": "UNKNOWN",
+      "start_sha": null,
+      "changed_files": [],
+      "implementation_commits": [],
+      "commands": [],
+      "test_results": [],
+      "failures": [],
+      "unresolved_items": [
+        "Not yet assessed or completed in Mission 10"
+      ],
+      "evidence": []
+    },
+    {
+      "phase": 9,
+      "status": "UNKNOWN",
+      "start_sha": null,
+      "changed_files": [],
+      "implementation_commits": [],
+      "commands": [],
+      "test_results": [],
+      "failures": [],
+      "unresolved_items": [
+        "Not yet assessed or completed in Mission 10"
+      ],
+      "evidence": []
+    },
+    {
+      "phase": 10,
+      "status": "UNKNOWN",
+      "start_sha": null,
+      "changed_files": [],
+      "implementation_commits": [],
+      "commands": [],
+      "test_results": [],
+      "failures": [],
+      "unresolved_items": [
+        "Not yet assessed or completed in Mission 10"
+      ],
+      "evidence": []
+    },
+    {
+      "phase": 11,
+      "status": "UNKNOWN",
+      "start_sha": null,
+      "changed_files": [],
+      "implementation_commits": [],
+      "commands": [],
+      "test_results": [],
+      "failures": [],
+      "unresolved_items": [
+        "Not yet assessed or completed in Mission 10"
+      ],
+      "evidence": []
+    },
+    {
+      "phase": 12,
+      "status": "UNKNOWN",
+      "start_sha": null,
+      "changed_files": [],
+      "implementation_commits": [],
+      "commands": [],
+      "test_results": [],
+      "failures": [],
+      "unresolved_items": [
+        "Not yet assessed or completed in Mission 10"
+      ],
+      "evidence": []
+    },
+    {
+      "phase": 13,
+      "status": "UNKNOWN",
+      "start_sha": null,
+      "changed_files": [],
+      "implementation_commits": [],
+      "commands": [],
+      "test_results": [],
+      "failures": [],
+      "unresolved_items": [
+        "Not yet assessed or completed in Mission 10"
+      ],
+      "evidence": []
+    },
+    {
+      "phase": 14,
+      "status": "UNKNOWN",
+      "start_sha": null,
+      "changed_files": [],
+      "implementation_commits": [],
+      "commands": [],
+      "test_results": [],
+      "failures": [],
+      "unresolved_items": [
+        "Not yet assessed or completed in Mission 10"
+      ],
+      "evidence": []
+    },
+    {
+      "phase": 15,
+      "status": "UNKNOWN",
+      "start_sha": null,
+      "changed_files": [],
+      "implementation_commits": [],
+      "commands": [],
+      "test_results": [],
+      "failures": [],
+      "unresolved_items": [
+        "Not yet assessed or completed in Mission 10"
+      ],
+      "evidence": []
+    },
+    {
+      "phase": 16,
+      "status": "UNKNOWN",
+      "start_sha": null,
+      "changed_files": [],
+      "implementation_commits": [],
+      "commands": [],
+      "test_results": [],
+      "failures": [],
+      "unresolved_items": [
+        "Not yet assessed or completed in Mission 10"
+      ],
+      "evidence": []
+    },
+    {
+      "phase": 17,
+      "status": "UNKNOWN",
+      "start_sha": null,
+      "changed_files": [],
+      "implementation_commits": [],
+      "commands": [],
+      "test_results": [],
+      "failures": [],
+      "unresolved_items": [
+        "Not yet assessed or completed in Mission 10"
+      ],
+      "evidence": []
+    },
+    {
+      "phase": 18,
+      "status": "UNKNOWN",
+      "start_sha": null,
+      "changed_files": [],
+      "implementation_commits": [],
+      "commands": [],
+      "test_results": [],
+      "failures": [],
+      "unresolved_items": [
+        "Not yet assessed or completed in Mission 10"
+      ],
+      "evidence": []
+    },
+    {
+      "phase": 19,
+      "status": "UNKNOWN",
+      "start_sha": null,
+      "changed_files": [],
+      "implementation_commits": [],
+      "commands": [],
+      "test_results": [],
+      "failures": [],
+      "unresolved_items": [
+        "Not yet assessed or completed in Mission 10"
+      ],
+      "evidence": []
+    },
+    {
+      "phase": 20,
+      "status": "UNKNOWN",
+      "start_sha": null,
+      "changed_files": [],
+      "implementation_commits": [],
+      "commands": [],
+      "test_results": [],
+      "failures": [],
+      "unresolved_items": [
+        "Not yet assessed or completed in Mission 10"
+      ],
+      "evidence": []
+    },
+    {
+      "phase": 21,
+      "status": "UNKNOWN",
+      "start_sha": null,
+      "changed_files": [],
+      "implementation_commits": [],
+      "commands": [],
+      "test_results": [],
+      "failures": [],
+      "unresolved_items": [
+        "Not yet assessed or completed in Mission 10"
+      ],
+      "evidence": []
+    },
+    {
+      "phase": 22,
+      "status": "UNKNOWN",
+      "start_sha": null,
+      "changed_files": [],
+      "implementation_commits": [],
+      "commands": [],
+      "test_results": [],
+      "failures": [],
+      "unresolved_items": [
+        "Not yet assessed or completed in Mission 10"
+      ],
+      "evidence": []
+    },
+    {
+      "phase": 23,
+      "status": "UNKNOWN",
+      "start_sha": null,
+      "changed_files": [],
+      "implementation_commits": [],
+      "commands": [],
+      "test_results": [],
+      "failures": [],
+      "unresolved_items": [
+        "Not yet assessed or completed in Mission 10"
+      ],
+      "evidence": []
+    },
+    {
+      "phase": 24,
+      "status": "UNKNOWN",
+      "start_sha": null,
+      "changed_files": [],
+      "implementation_commits": [],
+      "commands": [],
+      "test_results": [],
+      "failures": [],
+      "unresolved_items": [
+        "Not yet assessed or completed in Mission 10"
+      ],
+      "evidence": []
+    },
+    {
+      "phase": 25,
+      "status": "UNKNOWN",
+      "start_sha": null,
+      "changed_files": [],
+      "implementation_commits": [],
+      "commands": [],
+      "test_results": [],
+      "failures": [],
+      "unresolved_items": [
+        "Not yet assessed or completed in Mission 10"
+      ],
+      "evidence": []
+    }
+  ],
+  "scope_note": "Phase numbering beyond Phase 0 is not independently reconstructed from the available condensed request; UNKNOWN is not a claim of completion. Work proceeded where feasible; final acceptance remains open.",
+  "additional_work": [
+    {
+      "area": "OCR accuracy",
+      "status": "NOT_ACCEPTED",
+      "commands": [
+        "python scripts/diagnose_synthetic_ocr_tesserocr.py --language-dir /tmp/drillai-m10/models-best --output /tmp/drillai-m10/best-report.json"
+      ],
+      "test_results": [
+        "64/64 evaluated, 309/384 critical; failed, exit 2; tesserocr emulator not deployment CLI"
+      ],
+      "failures": [
+        "Persian and multiple layout and scan strata below thresholds"
+      ],
+      "evidence": [
+        "docs/mission-reports/MISSION10-OCR-MODEL-DIAGNOSTIC.json",
+        "docs/mission-reports/MISSION10-OCR-REPORT-EN.md"
+      ]
+    },
+    {
+      "area": "OCR provenance correction",
+      "status": "PARTIAL",
+      "changed_files": [
+        "backend/src/drillai/ingestion/parsers.py",
+        "backend/tests/ingestion/test_ocr.py",
+        "ci/test-inventory.json",
+        "README.md"
+      ],
+      "commands": [
+        "pytest -q backend/tests/ingestion/test_ocr.py",
+        "ruff check backend/src/drillai/ingestion/parsers.py backend/tests/ingestion/test_ocr.py"
+      ],
+      "test_results": [
+        "29 focused OCR passed",
+        "ruff passed"
+      ],
+      "unresolved_items": [
+        "no accuracy or hard deadline claim"
+      ]
+    },
+    {
+      "area": "Regression",
+      "status": "PARTIAL",
+      "commands": [
+        "pytest -q backend/tests",
+        "npm ci --no-audit --no-fund && npm run lint && npm run typecheck && npm test",
+        "pytest -q backend/tests/test_cp16_adversarial_audit.py::test_cp16_10_documentation_and_contract_consistency_guard"
+      ],
+      "test_results": [
+        "SQLite 1891 pass and 15 skip counted from quiet output; process exit 0",
+        "frontend lint, typecheck, 421 tests passed",
+        "CP16 guard passed after README updated"
+      ],
+      "failures": [
+        "inventory verifier rejected quiet log for missing pytest final summary with duration",
+        "temporary CP16 guard failure when manifest was updated before README; corrected and rerun passed"
+      ],
+      "unresolved_items": [
+        "post-manifest full run and verifier pending at time of ledger creation; native Windows and PostgreSQL are CI-only in this sandbox"
+      ]
+    },
+    {
+      "area": "Engineering and history",
+      "status": "PARTIAL",
+      "evidence": [
+        "docs/mission-reports/MISSION10-ENGINE-ASSURANCE.json",
+        "docs/mission-reports/MISSION10-HISTORICAL-CAPABILITY-MATRIX.json",
+        "docs/DRILLAI-ENGINEERING-CAPABILITY-REGISTER.json"
+      ],
+      "unresolved_items": [
+        "all 16 engines lack fresh independent source-to-report assurance",
+        "path history is not first confirmed functional implementation",
+        "complete non-registry calculation inventory, field validation and golden-well journey"
+      ]
+    }
+  ]
+}

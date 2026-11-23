@@ -1,0 +1,1212 @@
+
+>>> git rev-parse --show-toplevel
+/home/user/DrillAI
+exit=0
+
+>>> git branch --show-current
+arena/9d8f5568-drillai
+exit=0
+
+>>> git rev-parse HEAD
+bfea530602a23bcc08efca85a136240f61c44a0d
+exit=0
+
+>>> git status --porcelain=v2 --branch --untracked-files=all
+# branch.oid bfea530602a23bcc08efca85a136240f61c44a0d
+# branch.head arena/9d8f5568-drillai
+1 .M N... 100644 100644 100644 34077296cbfd35fba9f6cb4a762802e73f95ae45 34077296cbfd35fba9f6cb4a762802e73f95ae45 .env.example
+1 .M N... 100644 100644 100644 ace0694ad1e4c192998ff2b5bbfb46d0a8ddddef ace0694ad1e4c192998ff2b5bbfb46d0a8ddddef .github/workflows/ci.yml
+1 .M N... 100644 100644 100644 43fdcc484916946560b92dbd0047852836ddae68 43fdcc484916946560b92dbd0047852836ddae68 README.md
+1 .M N... 100644 100644 100644 968c35584cbd907d0d335d30fce8d43807ba88c6 968c35584cbd907d0d335d30fce8d43807ba88c6 backend/Dockerfile
+1 .M N... 100644 100644 100644 a37a8dab760c8940cdd90832efc25bba0fc75ae4 a37a8dab760c8940cdd90832efc25bba0fc75ae4 backend/pyproject.toml
+1 .M N... 100644 100644 100644 09582420f99322ab98611a788b42efc44e16f5f4 09582420f99322ab98611a788b42efc44e16f5f4 backend/src/drillai/ai/guardrails.py
+1 .M N... 100644 100644 100644 5417acdbf2102a5883b4ba3f11ef70acf5f2bbfd 5417acdbf2102a5883b4ba3f11ef70acf5f2bbfd backend/src/drillai/ai/providers.py
+1 .M N... 100644 100644 100644 53735485cba6a0a628455cff01f29f867ce2e5dd 53735485cba6a0a628455cff01f29f867ce2e5dd backend/src/drillai/ai/router.py
+1 .M N... 100644 100644 100644 a42968d4a9697856b5f0f8767a3a0151156aa478 a42968d4a9697856b5f0f8767a3a0151156aa478 backend/src/drillai/ai/tools.py
+1 .M N... 100644 100644 100644 d0c267892e1a8d41039657e46e708aceb03e4b73 d0c267892e1a8d41039657e46e708aceb03e4b73 backend/src/drillai/api/app.py
+1 .M N... 100644 100644 100644 25773b77fe1ba3ffa3df3dd38544709c8b0f8ea1 25773b77fe1ba3ffa3df3dd38544709c8b0f8ea1 backend/src/drillai/api/deps.py
+1 .M N... 100644 100644 100644 0b77689cd0b8b2d5d2baeecfc111bb39d31cd6a2 0b77689cd0b8b2d5d2baeecfc111bb39d31cd6a2 backend/src/drillai/api/routers/__init__.py
+1 .M N... 100644 100644 100644 ba57caba71ff97230b5e4ee69f698422d78fb810 ba57caba71ff97230b5e4ee69f698422d78fb810 backend/src/drillai/api/routers/auth.py
+1 .M N... 100644 100644 100644 b1d7fc3a1f7faec5b6a7608eb35cea9a9d9a8705 b1d7fc3a1f7faec5b6a7608eb35cea9a9d9a8705 backend/src/drillai/api/routers/context.py
+1 .M N... 100644 100644 100644 4f94a6e7a735c987de95a54c6f79f4726db1c3bb 4f94a6e7a735c987de95a54c6f79f4726db1c3bb backend/src/drillai/api/routers/documents.py
+1 .M N... 100644 100644 100644 d5b6dbac29e0c16d8a837320989140ea3aaae6d2 d5b6dbac29e0c16d8a837320989140ea3aaae6d2 backend/src/drillai/api/routers/drilling.py
+1 .M N... 100644 100644 100644 bd9cc9ffb247dd26fef68c7d6174321d0e3bca64 bd9cc9ffb247dd26fef68c7d6174321d0e3bca64 backend/src/drillai/api/routers/evidence.py
+1 .M N... 100644 100644 100644 9739710092455353dcb84116cac580f948296ac4 9739710092455353dcb84116cac580f948296ac4 backend/src/drillai/api/routers/health.py
+1 .M N... 100644 100644 100644 45a837e11fd0b690a336a89d97719b2761bc2243 45a837e11fd0b690a336a89d97719b2761bc2243 backend/src/drillai/api/routers/operations.py
+1 .M N... 100644 100644 100644 676ccc47a90c8542798aaeaa47f9693cc303f03b 676ccc47a90c8542798aaeaa47f9693cc303f03b backend/src/drillai/api/routers/platform.py
+1 .M N... 100644 100644 100644 a13cde0ec03a44f388f291cf71b52633b4d55681 a13cde0ec03a44f388f291cf71b52633b4d55681 backend/src/drillai/api/routers/runs.py
+1 .M N... 100644 100644 100644 0c463ec11d8e2a802115f07a6bdc7e80fb042704 0c463ec11d8e2a802115f07a6bdc7e80fb042704 backend/src/drillai/api/routers/timeseries.py
+1 .M N... 100644 100644 100644 186ee4ac3264672514d55900756d7b922bf614c2 186ee4ac3264672514d55900756d7b922bf614c2 backend/src/drillai/api/serializers.py
+1 .M N... 100644 100644 100644 2e016e3fc0cc1a68d55e208fa8a7c19e6ffda855 2e016e3fc0cc1a68d55e208fa8a7c19e6ffda855 backend/src/drillai/context/builder.py
+1 .M N... 100644 100644 100644 e3c46d5bfb999f5cb5d8ffba3fb4135a0038ee72 e3c46d5bfb999f5cb5d8ffba3fb4135a0038ee72 backend/src/drillai/context/live_providers.py
+1 .M N... 100644 100644 100644 b1e68925d50c437f58fba2df168393f1942547fe b1e68925d50c437f58fba2df168393f1942547fe backend/src/drillai/context/model.py
+1 .M N... 100644 100644 100644 f2e5a3dd7b89852da29f9a95eb9f1832ba4e4dc7 f2e5a3dd7b89852da29f9a95eb9f1832ba4e4dc7 backend/src/drillai/core/clock.py
+1 .M N... 100644 100644 100644 5e889ec1f762db12534d1c9ae8c1100b54b18bb8 5e889ec1f762db12534d1c9ae8c1100b54b18bb8 backend/src/drillai/core/config.py
+1 .M N... 100644 100644 100644 0eda2b46155f8c3b32ac91c20ff1e1420b98b677 0eda2b46155f8c3b32ac91c20ff1e1420b98b677 backend/src/drillai/db/models/__init__.py
+1 .M N... 100644 100644 100644 9a8477f1ab6cffd6ecc29f847fedcbe4db019185 9a8477f1ab6cffd6ecc29f847fedcbe4db019185 backend/src/drillai/db/models/asset.py
+1 .M N... 100644 100644 100644 f697b99fe6fb5ae277bc8aa15f8a16a6bab4e4d7 f697b99fe6fb5ae277bc8aa15f8a16a6bab4e4d7 backend/src/drillai/db/models/documents.py
+1 .M N... 100644 100644 100644 68bdf474c1380efa739610c18c0b270ec0251844 68bdf474c1380efa739610c18c0b270ec0251844 backend/src/drillai/db/models/identity.py
+1 .M N... 100644 100644 100644 8bc7a9d0d511434815a667f43110fd42949da581 8bc7a9d0d511434815a667f43110fd42949da581 backend/src/drillai/db/models/operations.py
+1 .M N... 100644 100644 100644 5cc7963120a608fb9f317b4a46109b2118970c53 5cc7963120a608fb9f317b4a46109b2118970c53 backend/src/drillai/db/models/platform.py
+1 .M N... 100644 100644 100644 2a0fac126478fdff21b623cfaf770d75a3783837 2a0fac126478fdff21b623cfaf770d75a3783837 backend/src/drillai/documents/identity.py
+1 .M N... 100644 100644 100644 f3f45ce528c84684ed169e91f62bc50164fc48e1 f3f45ce528c84684ed169e91f62bc50164fc48e1 backend/src/drillai/documents/lifecycle.py
+1 .M N... 100644 100644 100644 3ae8153598073b501445d83a80e47e95739f433e 3ae8153598073b501445d83a80e47e95739f433e backend/src/drillai/documents/quotes.py
+1 .M N... 100644 100644 100644 a87e18f887506b4557c65d0d158edeada1e09b10 a87e18f887506b4557c65d0d158edeada1e09b10 backend/src/drillai/documents/scope.py
+1 .M N... 100644 100644 100644 76e692098458d4f0e96f86284f1871651e65ba74 76e692098458d4f0e96f86284f1871651e65ba74 backend/src/drillai/drilling/advisor.py
+1 .M N... 100644 100644 100644 b8103c3ea2eb8a371d2fc605dd3ef4529eb34d47 b8103c3ea2eb8a371d2fc605dd3ef4529eb34d47 backend/src/drillai/drilling/ddr.py
+1 .M N... 100644 100644 100644 f10f83ac35355b72c16fac76449212555d0d17d8 f10f83ac35355b72c16fac76449212555d0d17d8 backend/src/drillai/drilling/npt.py
+1 .M N... 100644 100644 100644 fd652c12819600ac69ac370bc3bc2ce3bccb047e fd652c12819600ac69ac370bc3bc2ce3bccb047e backend/src/drillai/drilling/optimisation.py
+1 .M N... 100644 100644 100644 793d514a2e1c2313bbc4177cf5f910591e452472 793d514a2e1c2313bbc4177cf5f910591e452472 backend/src/drillai/drilling/reporting.py
+1 .M N... 100644 100644 100644 c13436b0ea6a521579395933017cb600ba09ef9a c13436b0ea6a521579395933017cb600ba09ef9a backend/src/drillai/drilling/state.py
+1 .M N... 100644 100644 100644 467c9abbdb3cf3218c00082b8652ac5f60b1d15b 467c9abbdb3cf3218c00082b8652ac5f60b1d15b backend/src/drillai/drilling/timeline.py
+1 .M N... 100644 100644 100644 8da065080cd8e76bb037f46badad0b587134249b 8da065080cd8e76bb037f46badad0b587134249b backend/src/drillai/engines/contract.py
+1 .M N... 100644 100644 100644 b6e58c39d1e29070335c3b9a460b265655492215 b6e58c39d1e29070335c3b9a460b265655492215 backend/src/drillai/engines/fluids.py
+1 .M N... 100644 100644 100644 4f6801928ac9d745f9b5f631dac07056cd7d7008 4f6801928ac9d745f9b5f631dac07056cd7d7008 backend/src/drillai/engines/integrity.py
+1 .M N... 100644 100644 100644 04e34a3093e3e1cef3a950a721d0284f3315c5c7 04e34a3093e3e1cef3a950a721d0284f3315c5c7 backend/src/drillai/engines/mechanics.py
+1 .M N... 100644 100644 100644 bbb8395bad69517d3da64c06fcdff41237dbf926 bbb8395bad69517d3da64c06fcdff41237dbf926 backend/src/drillai/engines/offsets.py
+1 .M N... 100644 100644 100644 963b1ef71563d82f7fd573c050fc4a0fa4a76c94 963b1ef71563d82f7fd573c050fc4a0fa4a76c94 backend/src/drillai/engines/optimization.py
+1 .M N... 100644 100644 100644 76703cb84303ce5db463e76787a34865570fc5ae 76703cb84303ce5db463e76787a34865570fc5ae backend/src/drillai/engines/registry.py
+1 .M N... 100644 100644 100644 3e5e036a002621ebdfeac0707bca14a8bc06c2f6 3e5e036a002621ebdfeac0707bca14a8bc06c2f6 backend/src/drillai/engines/service.py
+1 .M N... 100644 100644 100644 62ffceb5bfe93e32fe9d8eeb9b51fb501087ef36 62ffceb5bfe93e32fe9d8eeb9b51fb501087ef36 backend/src/drillai/engines/trajectory.py
+1 .M N... 100644 100644 100644 ddbc7e7dd07411479868e46de58244ccdc8e973f ddbc7e7dd07411479868e46de58244ccdc8e973f backend/src/drillai/engines/tubulars.py
+1 .M N... 100644 100644 100644 1d555864e38dd38d1ac84ac6eca733ab1afb2a23 1d555864e38dd38d1ac84ac6eca733ab1afb2a23 backend/src/drillai/engines/twin.py
+1 .M N... 100644 100644 100644 e1023586b4e07378487278122db01041bfe1e047 e1023586b4e07378487278122db01041bfe1e047 backend/src/drillai/engines/wellcontrol.py
+1 .M N... 100644 100644 100644 49e75ea8e47e116afce8238a026bd87007fbf59c 49e75ea8e47e116afce8238a026bd87007fbf59c backend/src/drillai/ingestion/extractors.py
+1 .M N... 100644 100644 100644 e5eda2044c74d2f2fe36e9131e22fbcf61ad3458 e5eda2044c74d2f2fe36e9131e22fbcf61ad3458 backend/src/drillai/ingestion/parsers.py
+1 .M N... 100644 100644 100644 c08c8dc8665808c015c3cdade806f6ffbc5b770d c08c8dc8665808c015c3cdade806f6ffbc5b770d backend/src/drillai/ingestion/pipeline.py
+1 .M N... 100644 100644 100644 ee84639b6bc913b095a3f06664fc958630c06daf ee84639b6bc913b095a3f06664fc958630c06daf backend/src/drillai/operations/events.py
+1 .M N... 100644 100644 100644 33aefb3d0d09fec25a94bd87115d2f2d0cfe040d 33aefb3d0d09fec25a94bd87115d2f2d0cfe040d backend/src/drillai/operations/service.py
+1 .M N... 100644 100644 100644 5d2560cf25470ae748a0e54d8c46f1f85c03931e 5d2560cf25470ae748a0e54d8c46f1f85c03931e backend/src/drillai/rag/retriever.py
+1 .M N... 100644 100644 100644 86fb6e2aed65dcca4eff51f30655c0cb7093f3ce 86fb6e2aed65dcca4eff51f30655c0cb7093f3ce backend/src/drillai/security/catalog.py
+1 .M N... 100644 100644 100644 4dd461871051199a704125b67399149334ba3f59 4dd461871051199a704125b67399149334ba3f59 backend/src/drillai/security/rbac.py
+1 .M N... 100644 100644 100644 160a3702948957a29c0ac631a6549ee91ff0e404 160a3702948957a29c0ac631a6549ee91ff0e404 backend/src/drillai/security/secrets.py
+1 .M N... 100644 100644 100644 4d53d893e8c68085f064ac7fe61bca8bd5be9aac 4d53d893e8c68085f064ac7fe61bca8bd5be9aac backend/src/drillai/telemetry/adapters.py
+1 .M N... 100644 100644 100644 92078de77f9ff4be607d85a6d3cf99779a76fdf2 92078de77f9ff4be607d85a6d3cf99779a76fdf2 backend/src/drillai/telemetry/alerts.py
+1 .M N... 100644 100644 100644 ace72dca90476b825acce59879e7ce8e028641a0 ace72dca90476b825acce59879e7ce8e028641a0 backend/src/drillai/telemetry/connectors.py
+1 .M N... 100644 100644 100644 9851156f079334f3df06e355742ea6f58da552c9 9851156f079334f3df06e355742ea6f58da552c9 backend/src/drillai/telemetry/protocols/etp_binary.py
+1 .M N... 100644 100644 100644 62e0861404abff72585c80695da5b3a1a886cbbb 62e0861404abff72585c80695da5b3a1a886cbbb backend/src/drillai/telemetry/service.py
+1 .M N... 100644 100644 100644 40605581468df8ddf539aeb200e9c3f1f31f2ec1 40605581468df8ddf539aeb200e9c3f1f31f2ec1 backend/src/drillai/telemetry/vocabulary.py
+1 .M N... 100644 100644 100644 61aaf035f7f798913d585d1ca70633e501a526da 61aaf035f7f798913d585d1ca70633e501a526da backend/src/drillai/telemetry/worker.py
+1 .M N... 100644 100644 100644 430d9df879d3c8b7ae6d0c6b63bea6945e1de7ba 430d9df879d3c8b7ae6d0c6b63bea6945e1de7ba backend/src/drillai/units/registry.py
+1 .M N... 100644 100644 100644 4ca85f9f2416afcf5600f15b4dccac3a61648ff0 4ca85f9f2416afcf5600f15b4dccac3a61648ff0 backend/src/drillai/workflow/graph.py
+1 .M N... 100644 100644 100644 aabc58c8f5af54861532224ef9310a399f90d69c aabc58c8f5af54861532224ef9310a399f90d69c backend/src/drillai/workflow/nodes.py
+1 .M N... 100644 100644 100644 ff941d608b0f2a8b3ff9ebb582c08bbd1a14ae3e ff941d608b0f2a8b3ff9ebb582c08bbd1a14ae3e backend/src/drillai/workflow/notifications.py
+1 .M N... 100644 100644 100644 f2ae4680f368e6bd022d85e3f01a26ab3ad7ea79 f2ae4680f368e6bd022d85e3f01a26ab3ad7ea79 backend/src/drillai/workflow/runtime.py
+1 .M N... 100644 100644 100644 1d9cdabb90745c1f83b51bd98d4ec16b9b593465 1d9cdabb90745c1f83b51bd98d4ec16b9b593465 backend/src/drillai/workflow/service.py
+1 .M N... 100644 100644 100644 d816191f45f22d564f4a03810d8f5c252f260066 d816191f45f22d564f4a03810d8f5c252f260066 backend/tests/ai/test_ai_layer.py
+1 .M N... 100644 100644 100644 83ba80c65ee02cbecd611aad7387848d2b85231a 83ba80c65ee02cbecd611aad7387848d2b85231a backend/tests/api/conftest.py
+1 .M N... 100644 100644 100644 d0cfc27bb5222531d59856967b7f29c90dac2025 d0cfc27bb5222531d59856967b7f29c90dac2025 backend/tests/api/test_api.py
+1 .M N... 100644 100644 100644 66b1c275e7536039883adf1a74a8a667875a03a0 66b1c275e7536039883adf1a74a8a667875a03a0 backend/tests/api/test_assets_api.py
+1 .M N... 100644 100644 100644 c7713d82e97a0e9e429da2cd321195b230806c65 c7713d82e97a0e9e429da2cd321195b230806c65 backend/tests/api/test_drilling_api.py
+1 .M N... 100644 100644 100644 74442e9ab1a2b1583db53cf15affd68c19cc2c95 74442e9ab1a2b1583db53cf15affd68c19cc2c95 backend/tests/api/test_live_stream.py
+1 .M N... 100644 100644 100644 05883351b2f518169894512a28036d4993b20d41 05883351b2f518169894512a28036d4993b20d41 backend/tests/api/test_run_event_stream.py
+1 .M N... 100644 100644 100644 fbac1ef73daa82327aeba8b1ac11ce795eac3e71 fbac1ef73daa82327aeba8b1ac11ce795eac3e71 backend/tests/context/test_engineering_context.py
+1 .M N... 100644 100644 100644 4ea1acd6011833d68c2e80672e5ac2507fc6fda8 4ea1acd6011833d68c2e80672e5ac2507fc6fda8 backend/tests/db/test_migrations_postgres.py
+1 .M N... 100644 100644 100644 c5003995e4f7a72a1b5d416a1645e7a4e7e4bdf0 c5003995e4f7a72a1b5d416a1645e7a4e7e4bdf0 backend/tests/db/test_persistence.py
+1 .M N... 100644 100644 100644 5b72ca430ebfbbea9638fda20de75045ff01119f 5b72ca430ebfbbea9638fda20de75045ff01119f backend/tests/documents/test_document_identity.py
+1 .M N... 100644 100644 100644 abcf146f7243a93fc8e759bef3fdb57d38b5d2b7 abcf146f7243a93fc8e759bef3fdb57d38b5d2b7 backend/tests/documents/test_document_lifecycle.py
+1 .M N... 100644 100644 100644 529b31d6b0df1c55c666e2c9c1e9e63bb9bc5baa 529b31d6b0df1c55c666e2c9c1e9e63bb9bc5baa backend/tests/documents/test_document_provenance.py
+1 .M N... 100644 100644 100644 63e0dbaf87eb1ed7087a4f8b8c3933b422252d05 63e0dbaf87eb1ed7087a4f8b8c3933b422252d05 backend/tests/documents/test_evidence_integrity.py
+1 .M N... 100644 100644 100644 d874df40033a825b3dd1b66bac6c5c3107260d56 d874df40033a825b3dd1b66bac6c5c3107260d56 backend/tests/drilling/test_npt_summary.py
+1 .M N... 100644 100644 100644 8188cd137ab4ca369882713817d6ad7547797556 8188cd137ab4ca369882713817d6ad7547797556 backend/tests/drilling/test_npt_taxonomy.py
+1 .M N... 100644 100644 100644 637b2f280d31797e80a8d3ff0ca1696bc8777862 637b2f280d31797e80a8d3ff0ca1696bc8777862 backend/tests/engines/conftest.py
+1 .M N... 100644 100644 100644 3484c364b9a9cb8fcf3024b36e9091f9838555de 3484c364b9a9cb8fcf3024b36e9091f9838555de backend/tests/engines/test_cp19_engineering_validation.py
+1 .M N... 100644 100644 100644 2d0a5538226c70c1c55bb50d34a0aef33a316f82 2d0a5538226c70c1c55bb50d34a0aef33a316f82 backend/tests/engines/test_cp23_wellcontrol_and_engineering_audit.py
+1 .M N... 100644 100644 100644 ee0772e580db48f5c8fc0d6700f1bb10523da20e ee0772e580db48f5c8fc0d6700f1bb10523da20e backend/tests/engines/test_fluids.py
+1 .M N... 100644 100644 100644 68dcdeb566961aaa4e7be735b1c25d50c3263dce 68dcdeb566961aaa4e7be735b1c25d50c3263dce backend/tests/engines/test_mechanics.py
+1 .M N... 100644 100644 100644 5949954853f91fc48fef7b83146012db125cc6d7 5949954853f91fc48fef7b83146012db125cc6d7 backend/tests/engines/test_registry_contracts.py
+1 .M N... 100644 100644 100644 908eda6c31ecb061be26ab9b26391f15ac0628a4 908eda6c31ecb061be26ab9b26391f15ac0628a4 backend/tests/engines/test_trajectory.py
+1 .M N... 100644 100644 100644 1656c2f31ee02cc077223a4c907d0d033d464529 1656c2f31ee02cc077223a4c907d0d033d464529 backend/tests/engines/test_twin_optimization_engines.py
+1 .M N... 100644 100644 100644 0306ea631e995138189ea1b9aaab56c7677df39e 0306ea631e995138189ea1b9aaab56c7677df39e backend/tests/fixtures/documents_bytes.py
+1 .M N... 100644 100644 100644 e7486fbffa4a077e66aeb8f6ef32bddc21cfee6e e7486fbffa4a077e66aeb8f6ef32bddc21cfee6e backend/tests/fixtures/fabric.py
+1 .M N... 100644 100644 100644 d7be1850219e6628ef0f71d5844c58e541d881f0 d7be1850219e6628ef0f71d5844c58e541d881f0 backend/tests/fixtures/synthetic_ddr.py
+1 .M N... 100644 100644 100644 5004e1be8911076db88b22b083540591667e8a67 5004e1be8911076db88b22b083540591667e8a67 backend/tests/ingestion/test_pipeline.py
+1 .M N... 100644 100644 100644 6af07123540d5708609f2ce65f0d3f4187f8afce 6af07123540d5708609f2ce65f0d3f4187f8afce backend/tests/operations/test_ddr_idempotency.py
+1 .M N... 100644 100644 100644 2a5b26e1ef7cafac82b478d192a9faff1ef9487e 2a5b26e1ef7cafac82b478d192a9faff1ef9487e backend/tests/operations/test_event_service.py
+1 .M N... 100644 100644 100644 ee504d1e42f561de7cf9b075148a6fc4013ea99a ee504d1e42f561de7cf9b075148a6fc4013ea99a backend/tests/operations/test_npt_accounting.py
+1 .M N... 100644 100644 100644 2e9de6edf21051ec04c2435a7383cd0e214b6f03 2e9de6edf21051ec04c2435a7383cd0e214b6f03 backend/tests/operations/test_operation_service.py
+1 .M N... 100644 100644 100644 65a003b36a9966a473f3a4e00b949aba738d09da 65a003b36a9966a473f3a4e00b949aba738d09da backend/tests/operations/test_timeline_scaling.py
+1 .M N... 100644 100644 100644 f77cb051d88eb6b8f45e9263800a90189b6fec14 f77cb051d88eb6b8f45e9263800a90189b6fec14 backend/tests/rag/test_retriever.py
+1 .M N... 100644 100644 100644 042dc051a0a84dbc2cd72cec28a08532edb8aae8 042dc051a0a84dbc2cd72cec28a08532edb8aae8 backend/tests/security/test_cp21_auth_and_sessions.py
+1 .M N... 100644 100644 100644 dc2ade5db48522708689a7df9af2b84916889b30 dc2ade5db48522708689a7df9af2b84916889b30 backend/tests/security/test_cp22_secrets_and_crypto.py
+1 .M N... 100644 100644 100644 283ff60c2b8944caacaceb39a23e7d1c54ec525d 283ff60c2b8944caacaceb39a23e7d1c54ec525d backend/tests/telemetry/test_adapters.py
+1 .M N... 100644 100644 100644 c011c350e3f4e8fc908b41ff665af907e4843bbc c011c350e3f4e8fc908b41ff665af907e4843bbc backend/tests/telemetry/test_connector_worker.py
+1 .M N... 100644 100644 100644 b0a67572a616e29e2746967b39fdb9141d238748 b0a67572a616e29e2746967b39fdb9141d238748 backend/tests/telemetry/test_connectors_registry.py
+1 .M N... 100644 100644 100644 db2968e8f416f0a7fe43492b4fdd99f9f473c1d0 db2968e8f416f0a7fe43492b4fdd99f9f473c1d0 backend/tests/telemetry/test_cp12_protocol_conformance_and_security.py
+1 .M N... 100644 100644 100644 9443c3157a063ad4c43831a6fb25363a037a0c6a 9443c3157a063ad4c43831a6fb25363a037a0c6a backend/tests/telemetry/test_cp13_ssrf_and_egress.py
+1 .M N... 100644 100644 100644 518733005bdddb965bb1ad2dd898c85d43e49b97 518733005bdddb965bb1ad2dd898c85d43e49b97 backend/tests/telemetry/test_cp14_dns_and_transport_ssrf.py
+1 .M N... 100644 100644 100644 26ceefca0652c2652c58b0818456ecd6cd3100d2 26ceefca0652c2652c58b0818456ecd6cd3100d2 backend/tests/telemetry/test_queries_api.py
+1 .M N... 100644 100644 100644 05b98039821b7ced8c03c61292ef23a96d75c445 05b98039821b7ced8c03c61292ef23a96d75c445 backend/tests/telemetry/test_well_state_freshness.py
+1 .M N... 100644 100644 100644 7d00b1f404134865181e89d2f89a3aca67ce9d92 7d00b1f404134865181e89d2f89a3aca67ce9d92 backend/tests/test_cp16_adversarial_audit.py
+1 .M N... 100644 100644 100644 3bfd36bd6085d16ced7f52f50e70f9622f622998 3bfd36bd6085d16ced7f52f50e70f9622f622998 backend/tests/test_cp20_integration_completeness.py
+1 .M N... 100644 100644 100644 914536fd41299bf830f5752585f7fa07969f63e3 914536fd41299bf830f5752585f7fa07969f63e3 backend/tests/workflow/test_graph_and_expressions.py
+1 .M N... 100644 100644 100644 0c592be2d81d8f2d5cc3bbc5c2703be916331cca 0c592be2d81d8f2d5cc3bbc5c2703be916331cca backend/tests/workflow/test_runtime_execution.py
+1 .M N... 100644 100644 100644 da9b129a8d6d0bf757d19ace7f1bb3342bb87ceb da9b129a8d6d0bf757d19ace7f1bb3342bb87ceb docker-compose.yml
+1 .M N... 100644 100644 100644 a7d953da9f396ee44223f240725b4f5c20e933f5 a7d953da9f396ee44223f240725b4f5c20e933f5 docs/CONNECTORS_AND_OPERATIONS.md
+1 .M N... 100644 100644 100644 3243cdbe00629a3567df9cb9cdd87ca49c340bfc 3243cdbe00629a3567df9cb9cdd87ca49c340bfc docs/FRONTEND.md
+1 .M N... 100644 100644 100644 5abb65631938f7a4cd31e584a09b807468c3733c 5abb65631938f7a4cd31e584a09b807468c3733c docs/FRONTEND_TESTING.md
+1 .M N... 100644 100644 100644 d16d6d9635e0485316aeae587a4ef857d2e95e17 d16d6d9635e0485316aeae587a4ef857d2e95e17 docs/SECURITY_MODEL.md
+1 .M N... 100644 100644 100644 910d20e46112043c8069263be0c8e1982dabee46 910d20e46112043c8069263be0c8e1982dabee46 docs/WINDOWS-SETUP.md
+1 .M N... 100644 100644 100644 1c853a7fb0f407f6e68e8efb258298d3a9aa909c 1c853a7fb0f407f6e68e8efb258298d3a9aa909c docs/mission-reports/CP19-ENGINEERING-VALIDATION.md
+1 .M N... 100644 100644 100644 e73ba8faf6cbf960652e0f146ef00552dc1d7f8f e73ba8faf6cbf960652e0f146ef00552dc1d7f8f docs/mission-reports/CP23-ENGINEERING-CORRECTNESS-AUDIT.md
+1 .M N... 100644 100644 100644 10497fe33a0cb05b6a663f97e43a61449d328cad 10497fe33a0cb05b6a663f97e43a61449d328cad docs/mission-reports/FRONTEND-MISSION.md
+1 .M N... 100644 100644 100644 e6a6a3352d7d6498b4c8bc4ed193df76b4d5108b e6a6a3352d7d6498b4c8bc4ed193df76b4d5108b docs/mission-reports/PRODUCTION-READINESS-MATRIX.md
+1 .M N... 100644 100644 100644 2a2e37ffb6c815b68774ecb01c68603f615b40ce 2a2e37ffb6c815b68774ecb01c68603f615b40ce docs/mission-reports/REMAINING-GAPS-ROADMAP.md
+1 .M N... 100644 100644 100644 5e23c7bf931cb880e5b45b8ea7ea1444e977cda2 5e23c7bf931cb880e5b45b8ea7ea1444e977cda2 frontend/e2e/checkpoint5.spec.ts
+1 .M N... 100644 100644 100644 c51c43fbc225752c6928f4548695eb0e85a0b87d c51c43fbc225752c6928f4548695eb0e85a0b87d frontend/e2e/connectors-platform.spec.ts
+1 .M N... 100644 100644 100644 4970b9411b13f4f3a3a245bbe5f8efa04cb598a1 4970b9411b13f4f3a3a245bbe5f8efa04cb598a1 frontend/e2e/context-deeplinks.spec.ts
+1 .M N... 100644 100644 100644 6324d816ce11481271a12c566954eb624c2d1f07 6324d816ce11481271a12c566954eb624c2d1f07 frontend/e2e/documents-evidence.spec.ts
+1 .M N... 100644 100644 100644 aaca72c088493b3a47b2881064d7386a506b9fe4 aaca72c088493b3a47b2881064d7386a506b9fe4 frontend/e2e/error-auth.spec.ts
+1 .M N... 100644 100644 100644 bd4e4e03f2b02f535cd49c25615b752ca3a3bb3a bd4e4e03f2b02f535cd49c25615b752ca3a3bb3a frontend/e2e/error-faults.spec.ts
+1 .M N... 100644 100644 100644 331a6f32e1c596d3e12191a31d7964c33c90520e 331a6f32e1c596d3e12191a31d7964c33c90520e frontend/e2e/error-matrix.spec.ts
+1 .M N... 100644 100644 100644 a82e656114ad7ca3ec726ee443d48c670b08fb9c a82e656114ad7ca3ec726ee443d48c670b08fb9c frontend/e2e/fixtures.ts
+1 .M N... 100644 100644 100644 4afd4b220a02d9758eb32b02f5dd639e74ca54d8 4afd4b220a02d9758eb32b02f5dd639e74ca54d8 frontend/e2e/global-setup.ts
+1 .M N... 100644 100644 100644 8e1a1bc22c1e2d050ffda348b2ee47ebd704f625 8e1a1bc22c1e2d050ffda348b2ee47ebd704f625 frontend/e2e/identity-permissions.spec.ts
+1 .M N... 100644 100644 100644 dc0da67e1d135a8388a2d64673fda7ba8e0adae5 dc0da67e1d135a8388a2d64673fda7ba8e0adae5 frontend/e2e/live-operations.spec.ts
+1 .M N... 100644 100644 100644 84e393a2528d9f5b73713bb95db1ecfa809d337c 84e393a2528d9f5b73713bb95db1ecfa809d337c frontend/e2e/master-data.spec.ts
+1 .M N... 100644 100644 100644 b365de226e614acbd1a553bd1dc94199c6c62e6c b365de226e614acbd1a553bd1dc94199c6c62e6c frontend/e2e/operations-workspace.spec.ts
+1 .M N... 100644 100644 100644 dbc77f4e831843aac9695782c36882236bb58dbc dbc77f4e831843aac9695782c36882236bb58dbc frontend/e2e/rtl.spec.ts
+1 .M N... 100644 100644 100644 9439fb5dc63fcb03bdca48d938e4d4cc66d1c484 9439fb5dc63fcb03bdca48d938e4d4cc66d1c484 frontend/e2e/run-events.spec.ts
+1 .M N... 100644 100644 100644 63da2eae7c461e49a474667ce06ee440761e8d91 63da2eae7c461e49a474667ce06ee440761e8d91 frontend/e2e/run-monitor.spec.ts
+1 .M N... 100644 100644 100644 f8bc6514556e06ccdfc5bc44c91d7845a57a8138 f8bc6514556e06ccdfc5bc44c91d7845a57a8138 frontend/e2e/start-api.mjs
+1 .M N... 100644 100644 100644 3997ea27688885a93612372463046008373dbb68 3997ea27688885a93612372463046008373dbb68 frontend/e2e/well-cockpit.spec.ts
+1 .M N... 100644 100644 100644 b23651b1e2b844e4f155d8a34cafef41a5eecfb5 b23651b1e2b844e4f155d8a34cafef41a5eecfb5 frontend/e2e/workflow-studio.spec.ts
+1 .M N... 100644 100644 100644 ee3c6932204a8ec03976aaf4fb4e5d4215045cb6 ee3c6932204a8ec03976aaf4fb4e5d4215045cb6 frontend/nginx.conf
+1 .M N... 100644 100644 100644 aafd4e2811141d164331daee83d632b37928aa8b aafd4e2811141d164331daee83d632b37928aa8b frontend/package-lock.json
+1 .M N... 100644 100644 100644 cbb2c6e6d9573bc9041a0a9261dc9fd5c928ddb6 cbb2c6e6d9573bc9041a0a9261dc9fd5c928ddb6 frontend/package.json
+1 .M N... 100644 100644 100644 4426eed230b0e1c567e896e1bcc31bb7a0cc570a 4426eed230b0e1c567e896e1bcc31bb7a0cc570a frontend/playwright.config.ts
+1 .M N... 100644 100644 100644 39de3bc019ade77c5ae0f38629fb541cad1a7ec8 39de3bc019ade77c5ae0f38629fb541cad1a7ec8 frontend/src/App.tsx
+1 .M N... 100644 100644 100644 7588c64561e79ae0cafb637808c5845c27fd37e3 7588c64561e79ae0cafb637808c5845c27fd37e3 frontend/src/api/client.test.ts
+1 .M N... 100644 100644 100644 caaf727ac9349f2ddc12f84f1640b0fcebcf4536 caaf727ac9349f2ddc12f84f1640b0fcebcf4536 frontend/src/api/client.ts
+1 .M N... 100644 100644 100644 b13d0a6f26dd7bc8c0732b6267bbd8c9a4acbd23 b13d0a6f26dd7bc8c0732b6267bbd8c9a4acbd23 frontend/src/api/endpoints.ts
+1 .M N... 100644 100644 100644 8da9cf2a673a6c82e68ad8a1bd822c83474fe8c0 8da9cf2a673a6c82e68ad8a1bd822c83474fe8c0 frontend/src/api/engineRun.test.ts
+1 .M N... 100644 100644 100644 79ab6de5a2d0d45447e8e1a2b444ccf2dea19d4f 79ab6de5a2d0d45447e8e1a2b444ccf2dea19d4f frontend/src/api/engineRun.ts
+1 .M N... 100644 100644 100644 6f7d707b872488eb65ce1f0ba8c908c76da58f67 6f7d707b872488eb65ce1f0ba8c908c76da58f67 frontend/src/api/queryCancellation.test.tsx
+1 .M N... 100644 100644 100644 5de6c92c0d6f4995f063805c03f7b541f2fa9037 5de6c92c0d6f4995f063805c03f7b541f2fa9037 frontend/src/api/queryClient.test.ts
+1 .M N... 100644 100644 100644 3aa80dcd400ba7d7a211ee2935c4af81ed4baae4 3aa80dcd400ba7d7a211ee2935c4af81ed4baae4 frontend/src/api/queryClient.ts
+1 .M N... 100644 100644 100644 f1f87b68f70b15e9bf2d300e2fc6fef5eee09bbf f1f87b68f70b15e9bf2d300e2fc6fef5eee09bbf frontend/src/api/types.ts
+1 .M N... 100644 100644 100644 fe2cd12df3b6e230b9dceb3e80fc059c55df3e76 fe2cd12df3b6e230b9dceb3e80fc059c55df3e76 frontend/src/components/common/index.tsx
+1 .M N... 100644 100644 100644 8f62d63d3473bd7fb32a7c04e85faf54ccc0c665 8f62d63d3473bd7fb32a7c04e85faf54ccc0c665 frontend/src/components/evidence/EvidencePanel.test.tsx
+1 .M N... 100644 100644 100644 1344cba12d9bfd47db8c0af513aef19a911f32ed 1344cba12d9bfd47db8c0af513aef19a911f32ed frontend/src/components/evidence/EvidencePanel.tsx
+1 .M N... 100644 100644 100644 2db7518b15d83bc30500273731d0705e58c0d8fd 2db7518b15d83bc30500273731d0705e58c0d8fd frontend/src/components/layout/AppShell.tsx
+1 .M N... 100644 100644 100644 f398ed7f481d332e1938809d06bcd19114f6ac13 f398ed7f481d332e1938809d06bcd19114f6ac13 frontend/src/hooks/useRunEventStream.test.tsx
+1 .M N... 100644 100644 100644 2a7fd07a7521e74f748d88931480baf9961a0f84 2a7fd07a7521e74f748d88931480baf9961a0f84 frontend/src/hooks/useRunEventStream.ts
+1 .M N... 100644 100644 100644 731895b7f5009430c95b4c13b1a8c0326bb678e6 731895b7f5009430c95b4c13b1a8c0326bb678e6 frontend/src/hooks/useWellLiveStream.test.tsx
+1 .M N... 100644 100644 100644 3b567d022809639d6c66374ab887b2509fd4254c 3b567d022809639d6c66374ab887b2509fd4254c frontend/src/i18n/en.ts
+1 .M N... 100644 100644 100644 8371b46f10b08dd0764a0617550f7111700eda11 8371b46f10b08dd0764a0617550f7111700eda11 frontend/src/i18n/fa.ts
+1 .M N... 100644 100644 100644 31c08a5829bbc5728fd35e5885933065055ad4a5 31c08a5829bbc5728fd35e5885933065055ad4a5 frontend/src/i18n/usage.test.ts
+1 .M N... 100644 100644 100644 91b657d35c59e6073512bad729ac6a0e2fa67779 91b657d35c59e6073512bad729ac6a0e2fa67779 frontend/src/lib/format.test.ts
+1 .M N... 100644 100644 100644 68be3562aaf4e5a91cfef7fa5757600e792e4154 68be3562aaf4e5a91cfef7fa5757600e792e4154 frontend/src/lib/format.ts
+1 .M N... 100644 100644 100644 a79923df597841b2ebd36d7f411c705a1e0b0f39 a79923df597841b2ebd36d7f411c705a1e0b0f39 frontend/src/lib/workflowGraph.ts
+1 .M N... 100644 100644 100644 d896fa024cf1932fd4830b33a2e6d9b9a2620f8b d896fa024cf1932fd4830b33a2e6d9b9a2620f8b frontend/src/pages/engineering/AdvisorWorkspace.tsx
+1 .M N... 100644 100644 100644 b8272ecf1fdd76f79ab20ce01f36054cb976df5f b8272ecf1fdd76f79ab20ce01f36054cb976df5f frontend/src/pages/engineering/EngineeringWorkspace.test.tsx
+1 .M N... 100644 100644 100644 98924044c6866ff71c749c2528406d841cddefe2 98924044c6866ff71c749c2528406d841cddefe2 frontend/src/pages/engineering/EngineeringWorkspace.tsx
+1 .M N... 100644 100644 100644 6d163cc656ae016b6aaf518972cf8fc1e10c6cb6 6d163cc656ae016b6aaf518972cf8fc1e10c6cb6 frontend/src/pages/engineering/OptimisationWorkspace.test.tsx
+1 .M N... 100644 100644 100644 1f9f6a35ce90988b372c1b397ca0ff05e099e84f 1f9f6a35ce90988b372c1b397ca0ff05e099e84f frontend/src/pages/engineering/OptimisationWorkspace.tsx
+1 .M N... 100644 100644 100644 730c1855592db80c3d02079635a9208abe1c6235 730c1855592db80c3d02079635a9208abe1c6235 frontend/src/pages/engineering/ReportsWorkspace.tsx
+1 .M N... 100644 100644 100644 0eb823f07ab60585c93992df81b36daf71f116d1 0eb823f07ab60585c93992df81b36daf71f116d1 frontend/src/pages/library/ConnectorsPage.test.tsx
+1 .M N... 100644 100644 100644 a999396aa00cc31d980edee72f7ec4af89b4c191 a999396aa00cc31d980edee72f7ec4af89b4c191 frontend/src/pages/library/ConnectorsPage.tsx
+1 .M N... 100644 100644 100644 112807ea525acbaec65443f583ff88baf96d2ea8 112807ea525acbaec65443f583ff88baf96d2ea8 frontend/src/pages/library/LibraryPage.tsx
+1 .M N... 100644 100644 100644 23ca0c72bd2ae20bff6a2b361d3707dc7fdf93c3 23ca0c72bd2ae20bff6a2b361d3707dc7fdf93c3 frontend/src/pages/library/PlatformPage.tsx
+1 .M N... 100644 100644 100644 35a5044a4c34ad9823abc1942bd576270744994a 35a5044a4c34ad9823abc1942bd576270744994a frontend/src/pages/wells/DocumentWorkspace.tsx
+1 .M N... 100644 100644 100644 98ec14bf678056e9f374552211a49baa031e2439 98ec14bf678056e9f374552211a49baa031e2439 frontend/src/pages/wells/OperationalMonitor.test.tsx
+1 .M N... 100644 100644 100644 9fbfc47d749b058bcec7ae9793475291ff292d52 9fbfc47d749b058bcec7ae9793475291ff292d52 frontend/src/pages/wells/OperationsWorkspace.test.tsx
+1 .M N... 100644 100644 100644 503a9725705fe0c1c594dd30208ab03a52ee9ced 503a9725705fe0c1c594dd30208ab03a52ee9ced frontend/src/pages/wells/OperationsWorkspace.tsx
+1 .M N... 100644 100644 100644 fbe3471ac829e5a1e94bae3038680df09ad3cced fbe3471ac829e5a1e94bae3038680df09ad3cced frontend/src/pages/wells/WellCockpit.test.tsx
+1 .M N... 100644 100644 100644 206a8f0e1ec85af52664a9c64d5b73a1c4ff3e6c 206a8f0e1ec85af52664a9c64d5b73a1c4ff3e6c frontend/src/pages/wells/WellCockpit.tsx
+1 .M N... 100644 100644 100644 358c1e2504ae790c1b405e3606227b3bd2e3d177 358c1e2504ae790c1b405e3606227b3bd2e3d177 frontend/src/pages/workflow/RunMonitor.test.tsx
+1 .M N... 100644 100644 100644 6163c192a03c46000ba041d0efad17dbd0d1035e 6163c192a03c46000ba041d0efad17dbd0d1035e frontend/src/pages/workflow/RunMonitor.tsx
+1 .M N... 100644 100644 100644 37ebf457b1e631781e9192162ce2c9d22820b4a6 37ebf457b1e631781e9192162ce2c9d22820b4a6 frontend/src/pages/workflow/WorkflowStudio.tsx
+1 .M N... 100644 100644 100644 d32ff682003e0ff5d8a6e6bb3663d4c35a45b116 d32ff682003e0ff5d8a6e6bb3663d4c35a45b116 frontend/tsconfig.json
+1 .M N... 100644 100644 100644 a0cc8f0d71eb5ed4080208bb80183269955d89b7 a0cc8f0d71eb5ed4080208bb80183269955d89b7 frontend/tsconfig.node.json
+1 .M N... 100644 100644 100644 5741b4db902848a79a78fdab52d7b23561d092c7 5741b4db902848a79a78fdab52d7b23561d092c7 frontend/vite.config.ts
+1 .M N... 100644 100644 100644 0ec5f4da7fa21781fa77a813c6421e5321801963 0ec5f4da7fa21781fa77a813c6421e5321801963 frontend/vitest.config.ts
+1 .M N... 100644 100644 100644 a01015711370f7db6e17a49e0c3c124c3651f5da a01015711370f7db6e17a49e0c3c124c3651f5da scripts/bootstrap.ps1
+1 .M N... 100755 100755 100755 11e079b5c1bbce94401b8e7f1cfcec3a058eeb1a 11e079b5c1bbce94401b8e7f1cfcec3a058eeb1a scripts/bootstrap.sh
+1 .M N... 100644 100644 100644 621d994da92254646db5aa6db42f3c3b8e9f839f 621d994da92254646db5aa6db42f3c3b8e9f839f scripts/seed_demo.py
+1 .M N... 100644 100644 100644 dfff2a0ac2e8964b388654d3645c81f129dec717 dfff2a0ac2e8964b388654d3645c81f129dec717 scripts/verify_supply_chain_and_secrets.py
+? .gitattributes
+? backend/alembic/versions/a6f4c2d8e901_wellbore_report_scope_constraints.py
+? backend/alembic/versions/b83e4a6d1c29_survey_azimuth_frame_identity.py
+? backend/alembic/versions/c0f6d8a9b271_document_operation_identity.py
+? backend/alembic/versions/c2e7a1b9d608_daily_report_reconciliation_target_scope.py
+? backend/alembic/versions/c5ca12bb7b5d_daily_drilling_report_domain.py
+? backend/alembic/versions/c79f2a61d5b3_trajectory_datum_and_time_provenance.py
+? backend/alembic/versions/d2a4f6c8b109_event_depth_and_value_provenance.py
+? backend/alembic/versions/d8f3b4c2a917_daily_report_evidence_scope.py
+? backend/alembic/versions/da0881aa121d_version_extracted_record_reviews.py
+? backend/alembic/versions/e13acb7d4f20_daily_report_reconciliation.py
+? backend/alembic/versions/e2b4c6d8f013_daily_report_revision_lineage.py
+? backend/alembic/versions/e90f1c8a2b64_notification_acceptance_evidence.py
+? backend/alembic/versions/f0a4b8c1d2e3_daily_report_identity_reconciliation.py
+? backend/alembic/versions/f19a6d4c82b0_unique_document_promotion_identity.py
+? backend/alembic/versions/f29a3c8d7e10_trajectory_revision_governance.py
+? backend/src/drillai/api/routers/daily_reports.py
+? backend/src/drillai/api/routers/engineering_products.py
+? backend/src/drillai/api/routers/surveys.py
+? backend/src/drillai/assets/fonts/DejaVuSans-Bold.ttf
+? backend/src/drillai/assets/fonts/DejaVuSans.ttf
+? backend/src/drillai/assets/fonts/LICENSE-DejaVu.txt
+? backend/src/drillai/db/models/daily_reports.py
+? backend/src/drillai/documents/access.py
+? backend/src/drillai/documents/unit_review.py
+? backend/src/drillai/drilling/daily_report_exports.py
+? backend/src/drillai/drilling/daily_reports.py
+? backend/src/drillai/drilling/npt_intervals.py
+? backend/src/drillai/drilling/structured_report_exports.py
+? backend/src/drillai/drilling/surveys.py
+? backend/src/drillai/engineering/__init__.py
+? backend/src/drillai/engineering/exports.py
+? backend/src/drillai/engineering/products.py
+? backend/src/drillai/engineering/service.py
+? backend/src/drillai/engines/power_law.py
+? backend/src/drillai/engines/proximity.py
+? backend/src/drillai/engines/unit_contract.py
+? backend/src/drillai/ingestion/data/synthetic_ddr_ocr_quality_v1.json
+? backend/src/drillai/ingestion/data/synthetic_ddr_ocr_quality_v2.json
+? backend/src/drillai/ingestion/data/synthetic_ddr_ocr_quality_v3.json
+? backend/src/drillai/ingestion/ocr.py
+? backend/src/drillai/ingestion/ocr_benchmark.py
+? backend/src/drillai/ingestion/ocr_runtime.py
+? backend/src/drillai/ingestion/ocr_synthetic_quality.py
+? backend/src/drillai/operations/time_windows.py
+? backend/src/drillai/rag/benchmark.py
+? backend/src/drillai/workflow/notification_worker.py
+? backend/tessdata/LICENSE
+? backend/tessdata/README.md
+? backend/tessdata/fas.traineddata
+? backend/tests/api/test_daily_reports_api.py
+? backend/tests/api/test_daily_reports_tenant.py
+? backend/tests/api/test_document_record_review.py
+? backend/tests/api/test_document_upload_limits.py
+? backend/tests/api/test_engineering_products_api.py
+? backend/tests/api/test_notifications_api.py
+? backend/tests/api/test_ocr_runtime_api.py
+? backend/tests/api/test_reports_tenant.py
+? backend/tests/api/test_serializers.py
+? backend/tests/api/test_surveys_api.py
+? backend/tests/db/test_daily_report_domain_migration.py
+? backend/tests/db/test_daily_report_evidence_scope_migration.py
+? backend/tests/db/test_daily_report_identity_reconciliation_migration.py
+? backend/tests/db/test_daily_report_reconciliation_migration.py
+? backend/tests/db/test_daily_report_revision_lineage_migration.py
+? backend/tests/db/test_event_time_provenance_migration.py
+? backend/tests/db/test_notification_acceptance_migration.py
+? backend/tests/db/test_promotion_identity_migration.py
+? backend/tests/db/test_review_version_migration.py
+? backend/tests/db/test_trajectory_frame_migration.py
+? backend/tests/db/test_trajectory_provenance_migration.py
+? backend/tests/db/test_trajectory_revision_governance_migration.py
+? backend/tests/documents/test_access_predicates.py
+? backend/tests/documents/test_unit_review.py
+? backend/tests/drilling/test_advisor.py
+? backend/tests/drilling/test_advisor_cp130_grounding.py
+? backend/tests/drilling/test_advisor_cp140_grounding.py
+? backend/tests/drilling/test_daily_report_domain.py
+? backend/tests/drilling/test_ddr_time.py
+? backend/tests/drilling/test_mission7_npt_service.py
+? backend/tests/drilling/test_npt_interval_reconciliation.py
+? backend/tests/drilling/test_structured_report_exports.py
+? backend/tests/engineering/test_products.py
+? backend/tests/engines/test_cp142_independent_calculation_assurance.py
+? backend/tests/engines/test_mission4_hydraulics_safety.py
+? backend/tests/engines/test_mission6_power_law.py
+? backend/tests/engines/test_proximity.py
+? backend/tests/engines/test_unit_contract.py
+? backend/tests/fixtures/synthetic_ddr_corpus/README.md
+? backend/tests/fixtures/synthetic_ddr_corpus/corpus.json
+? backend/tests/fixtures/synthetic_ddr_corpus/ocr/manifest.json
+? backend/tests/fixtures/synthetic_ddr_corpus/ocr/scan_017_ground_truth.txt
+? backend/tests/fixtures/synthetic_ddr_corpus/ocr/scan_017_image_only.pdf
+? backend/tests/fixtures/synthetic_ddr_corpus/records/ddr_014_structured.csv
+? backend/tests/fixtures/synthetic_ddr_corpus/records/ddr_015_narrative.txt
+? backend/tests/fixtures/synthetic_ddr_corpus/records/program_negative.txt
+? backend/tests/ingestion/test_ocr.py
+? backend/tests/ingestion/test_ocr_annotations.py
+? backend/tests/ingestion/test_ocr_benchmark.py
+? backend/tests/ingestion/test_ocr_runtime.py
+? backend/tests/ingestion/test_ocr_synthetic_quality.py
+? backend/tests/ingestion/test_synthetic_ddr_corpus.py
+? backend/tests/ingestion/test_tesserocr_diagnostic.py
+? backend/tests/operations/test_daily_report_db_readback.py
+? backend/tests/operations/test_frontend_manual_vocabularies.py
+? backend/tests/operations/test_operational_source_reads.py
+? backend/tests/operations/test_operational_time_filters.py
+? backend/tests/rag/test_benchmark.py
+? backend/tests/security/test_cp148_authorization_boundaries.py
+? backend/tests/security/test_cp26_auth_proxy_and_tenant_boundaries.py
+? backend/tests/security/test_cp31_ci_deployment_probe_contract.py
+? backend/tests/security/test_cp32_e2e_console_error_contract.py
+? backend/tests/security/test_cp33_e2e_response_oracle_coverage.py
+? backend/tests/telemetry/test_cp130_independent_connector_workers.py
+? backend/tests/test_clock.py
+? backend/tests/workflow/test_ai_context_injection.py
+? backend/tests/workflow/test_cp130_failure_state_matrix.py
+? backend/tests/workflow/test_notification_worker.py
+? backend/tests/workflow/test_rag_search_node.py
+? backend/tests/workflow/test_workflow_http_egress.py
+? ci/test-inventory.json
+? docs/DAILY-DRILLING-REPORT-DATA-GOVERNANCE.md
+? docs/DRILLAI_MASTER_PRODUCT_ROADMAP.md
+? docs/ENGINEERING_CAPABILITY_CATALOGUE.en.md
+? docs/ENGINEERING_CAPABILITY_CATALOGUE.fa.md
+? docs/ENGINEERING_CAPABILITY_CATALOGUE.json
+? docs/OPERATIONS-DASHBOARD-METRICS.md
+? docs/mission-reports/AUTONOMOUS-CONTINUATION-FLUIDS-AND-STREAM.md
+? docs/mission-reports/AUTONOMOUS-CONTINUATION-FORENSICS-AND-AUDIT.md
+? docs/mission-reports/AUTONOMOUS-CONTINUATION-OCR-DIAGNOSTICS.md
+? docs/mission-reports/AUTONOMOUS-ENGINE-REGISTRY-11e6cd2.json
+? docs/mission-reports/AUTONOMOUS-ENGINE-REGISTRY-85396bc.json
+? docs/mission-reports/AUTONOMOUS-ENGINE-REGISTRY-8f013.json
+? docs/mission-reports/AUTONOMOUS-ENGINE-REGISTRY-SNAPSHOT.md
+? docs/mission-reports/AUTONOMOUS-MISSION2-ENGINE-GEOMETRY-AND-OCR.md
+? docs/mission-reports/AUTONOMOUS-MISSION3-FA.md
+? docs/mission-reports/AUTONOMOUS-MISSION3-PARTIAL.md
+? docs/mission-reports/AUTONOMOUS-MISSION4-ENGINE-INVENTORY.md
+? docs/mission-reports/AUTONOMOUS-MISSION4-FA.md
+? docs/mission-reports/AUTONOMOUS-MISSION4-PARTIAL.md
+? docs/mission-reports/AUTONOMOUS-MISSION4-WORKSPACE.md
+? docs/mission-reports/AUTONOMOUS-MISSION5-BASELINE.md
+? docs/mission-reports/AUTONOMOUS-MISSION5-FA.md
+? docs/mission-reports/AUTONOMOUS-MISSION5-PARTIAL.md
+? docs/mission-reports/AUTONOMOUS-MISSION5-WORKSPACE-START.jsonl
+? docs/mission-reports/AUTONOMOUS-MISSION6-BASELINE.md
+? docs/mission-reports/AUTONOMOUS-MISSION6-FA.md
+? docs/mission-reports/AUTONOMOUS-MISSION6-PARTIAL.md
+? docs/mission-reports/AUTONOMOUS-MISSION6-WORKSPACE-START.jsonl
+? docs/mission-reports/AUTONOMOUS-SURVEY-SOURCE-ORDER.md
+? docs/mission-reports/CONTINUOUS-ENGINE-DECLARED-METADATA.json
+? docs/mission-reports/CONTINUOUS-ENGINE-METADATA-SNAPSHOT.md
+? docs/mission-reports/CONTINUOUS-ENGINE-NONFINITE-BOUNDARY.md
+? docs/mission-reports/CONTINUOUS-LATEST-CI-OBSERVATIONS.md
+? docs/mission-reports/CONTINUOUS-MISSION-BASELINE-AND-RETRIEVAL.md
+? docs/mission-reports/CONTINUOUS-MSE-NUMERICAL-FAIL-CLOSED.md
+? docs/mission-reports/CONTINUOUS-OCR-TESSERACTJS-COMPARISON.md
+? docs/mission-reports/CONTINUOUS-OGAI-PUBLIC-MODEL-SCAN.md
+? docs/mission-reports/CONTINUOUS-PICOMATCH-UPSTREAM-INVESTIGATION.md
+? docs/mission-reports/CONTINUOUS-PUBLIC-COMPETITOR-SCAN.md
+? docs/mission-reports/CONTINUOUS-TESSERACTJS-EXPLORATORY-EVIDENCE.json
+? docs/mission-reports/CONTINUOUS-TESSEROCR-551-SYNTHETIC-EVIDENCE.json
+? docs/mission-reports/CONTINUOUS-TESSEROCR-SYNTHETIC-DIAGNOSIS.md
+? docs/mission-reports/CONTINUOUS-TESSEROCR-SYNTHETIC-EVIDENCE.json
+? docs/mission-reports/CP113-CP114-REPOSITORY-AUDIT.md
+? docs/mission-reports/CP115-SURVEY-WORKBENCH-IMPLEMENTATION.md
+? docs/mission-reports/CP116-TRAJECTORY-REFERENCE-AND-QC.md
+? docs/mission-reports/CP117-SYNTHETIC-DDR-CORPUS-AND-OCR-GOVERNANCE.md
+? docs/mission-reports/CP118-SYNTHETIC-RAG-GROUNDING.md
+? docs/mission-reports/CP119-ADVISOR-PROVENANCE-AND-ABSTENTION.md
+? docs/mission-reports/CP120-ADVISOR-NPT-CASE-GROUNDING.md
+? docs/mission-reports/CP121-ADVISOR-NPT-SOURCE-RECORD-LINEAGE.md
+? docs/mission-reports/CP122-READ-ONLY-CONNECTOR-PROFILE-CONTRACT.md
+? docs/mission-reports/CP123-CONNECTOR-WORKER-SNAPSHOT-CAS.md
+? docs/mission-reports/CP124-NOTIFICATION-RECEIPT-REDACTION.md
+? docs/mission-reports/CP125-PRODUCTION-SMTP-ENDPOINT-POLICY.md
+? docs/mission-reports/CP126-WELL-COCKPIT-TIMELINE-LOCALIZATION.md
+? docs/mission-reports/CP127-PRODUCTION-SMTP-EGRESS-PINNING.md
+? docs/mission-reports/CP128-CI-DOCUMENTATION-COUNT-GUARD.md
+? docs/mission-reports/CP129-SURVEY-WORKSPACE-BILINGUAL-LOCALIZATION.md
+? docs/mission-reports/CP130-EXECUTION-RELIABILITY-AND-EVALUATION.md
+? docs/mission-reports/CP131-SYNTHETIC-WELL-BROWSER-PILOT.md
+? docs/mission-reports/CP132-FINAL-RELEASE-ASSURANCE.md
+? docs/mission-reports/CP133-DOCUMENTATION-RECONCILIATION.md
+? docs/mission-reports/CP134-SOURCE-LEVEL-PRODUCT-AUDIT.md
+? docs/mission-reports/CP135-BILINGUAL-INGESTION-OCR-BENCHMARK.md
+? docs/mission-reports/CP135-LOCAL-ADAPTER-V5-EXPLORATORY-EVIDENCE.json
+? docs/mission-reports/CP135-LOCAL-ADAPTER-V6-FAST-EVIDENCE.json
+? docs/mission-reports/CP135-LOCAL-ADAPTER-V7-FAST-EVIDENCE.json
+? docs/mission-reports/CP135-RUN-42728606694-CASE-EVIDENCE.json
+? docs/mission-reports/CP135-RUN-42730779071-CASE-EVIDENCE.json
+? docs/mission-reports/CP135-RUN-42734158263-CASE-EVIDENCE.json
+? docs/mission-reports/CP135-RUN-43564605450-CASE-EVIDENCE.json
+? docs/mission-reports/CP135-RUN-43711618310-CASE-EVIDENCE.json
+? docs/mission-reports/CP136-DDR-INTAKE-REVIEW-AND-DB-READBACK.md
+? docs/mission-reports/CP137-DDR-CORRECTION-CONCURRENCY.md
+? docs/mission-reports/CP138-DDR-TENANT-AND-SCOPE-ISOLATION.md
+? docs/mission-reports/CP139-SYNTHETIC-RAG-BENCHMARK-EVIDENCE.json
+? docs/mission-reports/CP139-SYNTHETIC-RAG-BENCHMARK.md
+? docs/mission-reports/CP140-ADVISOR-CLAIM-GROUNDING.md
+? docs/mission-reports/CP141-SURVEY-DATUM-AND-REFERENCE-LIFECYCLE.md
+? docs/mission-reports/CP142-INDEPENDENT-CALCULATION-ASSURANCE.md
+? docs/mission-reports/CP143-OPERATIONS-NPT-ANALYTICS.md
+? docs/mission-reports/CP144-STRUCTURED-REPORT-EXPORTS.md
+? docs/mission-reports/CP145-SCOPED-CONNECTOR-RELIABILITY.md
+? docs/mission-reports/CP146-NOTIFICATION-STATE-SEMANTICS.md
+? docs/mission-reports/CP147-WORKER-RECOVERY-AND-RESOURCE-BOUNDS.md
+? docs/mission-reports/CP148-AUTHORIZATION-BOUNDARIES.md
+? docs/mission-reports/CP149-NOTIFICATION-UI-ACCESSIBILITY.md
+? docs/mission-reports/CP150-TWO-WELL-SYNTHETIC-BROWSER-PILOT.md
+? docs/mission-reports/CP151-FINAL-CERTIFICATION.md
+? docs/mission-reports/CP152-RUN-438110-EVIDENCE-AND-RECOVERY.md
+? docs/mission-reports/CP153-WINDOWS-SURVEY-TIMESTAMP-REGRESSION.md
+? docs/mission-reports/CP154-LOCAL-BEST-TRAINEDDATA-200DPI-EVIDENCE.json
+? docs/mission-reports/CP154-LOCAL-FAST-TRAINEDDATA-150DPI-EVIDENCE.json
+? docs/mission-reports/CP154-LOCAL-FAST-TRAINEDDATA-300DPI-EVIDENCE.json
+? docs/mission-reports/CP154-LOCAL-FAST-TRAINEDDATA-EVIDENCE.json
+? docs/mission-reports/CP154-LOCAL-RTL-ISO-DATE-150DPI-EVIDENCE.json
+? docs/mission-reports/CP154-LOCAL-RTL-ISO-DATE-200DPI-EVIDENCE.json
+? docs/mission-reports/CP154-LOCAL-RTL-LTR-ISOLATION-200DPI-EVIDENCE.json
+? docs/mission-reports/CP154-PERSIAN-OCR-AND-CI-GATES.md
+? docs/mission-reports/CP155-CP166-PRODUCT-AND-ASSURANCE.md
+? docs/mission-reports/CP25-BASELINE-AND-GAP-AUDIT.md
+? docs/mission-reports/CP25-CI-REPAIR-AND-CERTIFICATION.md
+? docs/mission-reports/CP26-AUTH-BOUNDARY-AND-IDENTITY-UI.md
+? docs/mission-reports/CP31-CI-DEPLOYMENT-PROBE-CONTRACT.md
+? docs/mission-reports/CP32-E2E-PLATFORM-INDEPENDENT-VERDICT.md
+? docs/mission-reports/CP33-RESPONSE-ORACLE-COVERAGE.md
+? docs/mission-reports/CP34-INDEPENDENT-QUALITY-AUDIT.md
+? docs/mission-reports/CP51-58-FINAL-ASSURANCE.md
+? docs/mission-reports/CP59-CP75-CAPABILITY-MATRIX.md
+? docs/mission-reports/CP59-CP75-FINAL-ASSURANCE.md
+? docs/mission-reports/CP76-CP96-CAPABILITY-MATRIX.md
+? docs/mission-reports/CP83-CP96-FINAL-ASSURANCE.md
+? docs/mission-reports/CP97-CP112-FINAL-ASSURANCE.md
+? docs/mission-reports/MASTER-MISSION-ENGINE-REGISTRY-ASSURANCE.md
+? docs/mission-reports/MASTER-MISSION-PHASE0-BASELINE.md
+? docs/mission-reports/MASTER-MISSION-PROGRESS-AND-REMAINING-WORK.md
+? docs/mission-reports/MASTER-RTL-BASIC-CORRECTION-f29.json
+? docs/mission-reports/MASTER-RTL-RAQM-REPRODUCTION-f29.json
+? docs/mission-reports/MISSION7-BASELINE.md
+? docs/mission-reports/MISSION7-GIT-START.txt
+? docs/mission-reports/MISSION7-HISTORICAL-CAPABILITY-MATRIX.json
+? docs/mission-reports/MISSION7-LAYOUT-EQUIVALENCE.json
+? docs/mission-reports/MISSION7-RECOVERY-MATRIX.json
+? docs/mission-reports/MISSION7-REPORT-EN.md
+? docs/mission-reports/MISSION7-REPORT-FA.md
+? docs/mission-reports/MISSION7-WORKSPACE-END.jsonl
+? docs/mission-reports/MISSION7-WORKSPACE-START.jsonl
+? docs/mission-reports/MISSION8-BASELINE.md
+? docs/mission-reports/MISSION8-ENGINE-ASSURANCE.json
+? docs/mission-reports/MISSION8-FINAL-CI.json
+? docs/mission-reports/MISSION8-GIT-END.txt
+? docs/mission-reports/MISSION8-GIT-START.txt
+? docs/mission-reports/MISSION8-HISTORICAL-CAPABILITY-MATRIX.json
+? docs/mission-reports/MISSION8-HISTORICAL-OCR-CASES.json
+? docs/mission-reports/MISSION8-OCR-EXPLORATORY.json
+? docs/mission-reports/MISSION8-RECOVERY-MATRIX.json
+? docs/mission-reports/MISSION8-REPORT-EN.md
+? docs/mission-reports/MISSION8-REPORT-FA.md
+? docs/mission-reports/MISSION8-ROADMAP.md
+? docs/mission-reports/MISSION8-WORKSPACE-END.jsonl
+? docs/mission-reports/MISSION8-WORKSPACE-START.jsonl
+? docs/mission-reports/MISSION9-CONTINUATION-BACKEND-REGRESSION.txt
+? docs/mission-reports/MISSION9-CONTINUATION-GIT-PRECOMMIT.txt
+? docs/mission-reports/MISSION9-CONTINUATION-GIT-START.txt
+? docs/mission-reports/MISSION9-CONTINUATION-IGNORED-START.nul
+? docs/mission-reports/MISSION9-CONTINUATION-INDEX-START.nul
+? docs/mission-reports/MISSION9-CONTINUATION-PROTECTED.json
+? docs/mission-reports/MISSION9-CONTINUATION-RECOVERY.json
+? docs/mission-reports/MISSION9-CONTINUATION-UNTRACKED-START.nul
+? docs/mission-reports/MISSION9-CONTINUATION-WORKSPACE-PRECOMMIT.jsonl
+? docs/mission-reports/MISSION9-CONTINUATION2-BACKEND-REGRESSION.txt
+? docs/mission-reports/MISSION9-CONTINUATION2-BROWSER-SUMMARY.txt
+? docs/mission-reports/MISSION9-CONTINUATION2-CI-DIAGNOSIS.md
+? docs/mission-reports/MISSION9-CONTINUATION2-DIAGNOSTIC-GIT-PRECOMMIT.txt
+? docs/mission-reports/MISSION9-CONTINUATION2-DIAGNOSTIC-WORKSPACE-PRECOMMIT.jsonl
+? docs/mission-reports/MISSION9-CONTINUATION2-GIT-PRECOMMIT.txt
+? docs/mission-reports/MISSION9-CONTINUATION2-GIT-START.nul
+? docs/mission-reports/MISSION9-CONTINUATION2-IGNORED-START.nul
+? docs/mission-reports/MISSION9-CONTINUATION2-INDEX-START.nul
+? docs/mission-reports/MISSION9-CONTINUATION2-PROTECTED-END.json
+? docs/mission-reports/MISSION9-CONTINUATION2-PROTECTED-START.json
+? docs/mission-reports/MISSION9-CONTINUATION2-RECOVERY.json
+? docs/mission-reports/MISSION9-CONTINUATION2-REPORT.md
+? docs/mission-reports/MISSION9-CONTINUATION2-UNTRACKED-START.nul
+? docs/mission-reports/MISSION9-CONTINUATION2-WORKSPACE-PRECOMMIT.jsonl
+? docs/mission-reports/MISSION9-ENGINE-ASSURANCE.json
+? docs/mission-reports/MISSION9-GIT-END.txt
+? docs/mission-reports/MISSION9-GIT-START.txt
+? docs/mission-reports/MISSION9-HISTORICAL-CAPABILITY-MATRIX.json
+? docs/mission-reports/MISSION9-HISTORICAL-CAPABILITY-REPORT-EN.md
+? docs/mission-reports/MISSION9-HISTORICAL-CAPABILITY-REPORT-FA.md
+? docs/mission-reports/MISSION9-OCR-CONTAINMENT-CONTINUATION.md
+? docs/mission-reports/MISSION9-RECOVERY-MATRIX.json
+? docs/mission-reports/MISSION9-REPORT-EN.md
+? docs/mission-reports/MISSION9-REPORT-FA.md
+? docs/mission-reports/MISSION9-ROADMAP.md
+? docs/mission-reports/MISSION9-WORKSPACE-BASELINE.md
+? docs/mission-reports/MISSION9-WORKSPACE-END.jsonl
+? docs/mission-reports/MISSION9-WORKSPACE-START.jsonl
+? frontend/.playwright-report-cp151-71aae4f7f3364cd8bef9f4748c4283fb/index.html
+? frontend/e2e/assets/cp131_synthetic_ddr.csv
+? frontend/e2e/cp131-synthetic-pilot.spec.ts
+? frontend/e2e/cp150-fixtures.ts
+? frontend/e2e/cp150-two-well-pilot.spec.ts
+? frontend/e2e/daily-reports-workspace.spec.ts
+? frontend/e2e/database-readback.ts
+? frontend/e2e/failure-oracle.ts
+? frontend/e2e/global-setup.cp131.ts
+? frontend/e2e/global-setup.cp150.ts
+? frontend/e2e/surveys-workspace.spec.ts
+? frontend/playwright-report-master-full-7d42a1/index.html
+? frontend/playwright.cp131.config.ts
+? frontend/playwright.cp150.config.ts
+? frontend/scripts/verify-e2e-run.mjs
+? frontend/scripts/verify-e2e-run.test.mjs
+? frontend/scripts/verify-e2e-shape.mjs
+? frontend/src/components/documents/ExtractedRecordReviewForm.test.tsx
+? frontend/src/components/documents/ExtractedRecordReviewForm.tsx
+? frontend/src/components/engineering/UnitAwareResult.test.tsx
+? frontend/src/components/engineering/UnitAwareResult.tsx
+? frontend/src/components/engineering/UnitContractSummary.tsx
+? frontend/src/lib/failureOracle.test.ts
+? frontend/src/pages/auth/SecuritySettingsPage.test.tsx
+? frontend/src/pages/auth/SecuritySettingsPage.tsx
+? frontend/src/pages/engineering/AdvisorWorkspace.test.tsx
+? frontend/src/pages/engineering/CirculationWorkspace.test.tsx
+? frontend/src/pages/engineering/CirculationWorkspace.tsx
+? frontend/src/pages/engineering/ProgramsProceduresWorkspace.test.tsx
+? frontend/src/pages/engineering/ProgramsProceduresWorkspace.tsx
+? frontend/src/pages/engineering/ReportsWorkspace.test.tsx
+? frontend/src/pages/library/NotificationOutboxPanel.tsx
+? frontend/src/pages/library/PlatformPage.test.tsx
+? frontend/src/pages/wells/DailyReportsWorkspace.test.tsx
+? frontend/src/pages/wells/DailyReportsWorkspace.tsx
+? frontend/src/pages/wells/DocumentWorkspace.test.tsx
+? frontend/src/pages/wells/SurveysWorkspace.test.tsx
+? frontend/src/pages/wells/SurveysWorkspace.tsx
+? frontend/test-results-continue2/.last-run.json
+? frontend/test-results-continue2/well-cockpit-well-cockpit--82af4-om-a-generic-event-duration-chromium/error-context.md
+? frontend/test-results-continue2/well-cockpit-well-cockpit--82af4-om-a-generic-event-duration-chromium/test-failed-1.png
+? frontend/test-results-continue2/well-cockpit-well-cockpit--82af4-om-a-generic-event-duration-chromium/trace.zip
+? frontend/test-results-continue2b/.last-run.json
+? frontend/test-results-continue2connector/.last-run.json
+? frontend/test-results-continue2final/.last-run.json
+? frontend/test-results-continue2full/.last-run.json
+? frontend/test-results-continue2full/connectors-platform-CP11-t-e1520-dance-then-recovers-cleanly-chromium/error-context.md
+? frontend/test-results-continue2full/connectors-platform-CP11-t-e1520-dance-then-recovers-cleanly-chromium/test-failed-1.png
+? frontend/test-results-continue2full/connectors-platform-CP11-t-e1520-dance-then-recovers-cleanly-chromium/trace.zip
+? frontend/test-results-continue2full/live-operations-CP10-live--719a9-Persian-RTL-token-isolation-chromium/error-context.md
+? frontend/test-results-continue2full/live-operations-CP10-live--719a9-Persian-RTL-token-isolation-chromium/trace.zip
+? frontend/test-results-master-auth-c4a891de/.last-run.json
+? frontend/test-results-master-full-7d42a1/.last-run.json
+? frontend/test-results-master-full-7d42a1/e2e-results.json
+? frontend/tsconfig.e2e.json
+? scripts/compare_ocr_tesseractjs.cjs
+? scripts/compare_synthetic_ocr_tesseractjs.py
+? scripts/diagnose_synthetic_ocr_tesserocr.py
+? scripts/emit_synthetic_ocr_annotations.py
+? scripts/generate_synthetic_ocr_quality_corpus.py
+? scripts/seed_cp131_pilot.py
+? scripts/seed_cp150_pilot.py
+? scripts/snapshot_engine_registry.py
+? scripts/verify_backend_test_inventory.py
+? scripts/verify_daily_report_db_readback.py
+? scripts/verify_engine_roadmap.py
+? scripts/verify_engineering_catalogue.py
+? scripts/verify_engineering_product_db_readback.py
+? scripts/verify_synthetic_ocr_quality.py
+exit=0
+
+>>> git status --porcelain=v2 --ignored=matching --untracked-files=all
+1 .M N... 100644 100644 100644 34077296cbfd35fba9f6cb4a762802e73f95ae45 34077296cbfd35fba9f6cb4a762802e73f95ae45 .env.example
+1 .M N... 100644 100644 100644 ace0694ad1e4c192998ff2b5bbfb46d0a8ddddef ace0694ad1e4c192998ff2b5bbfb46d0a8ddddef .github/workflows/ci.yml
+1 .M N... 100644 100644 100644 43fdcc484916946560b92dbd0047852836ddae68 43fdcc484916946560b92dbd0047852836ddae68 README.md
+1 .M N... 100644 100644 100644 968c35584cbd907d0d335d30fce8d43807ba88c6 968c35584cbd907d0d335d30fce8d43807ba88c6 backend/Dockerfile
+1 .M N... 100644 100644 100644 a37a8dab760c8940cdd90832efc25bba0fc75ae4 a37a8dab760c8940cdd90832efc25bba0fc75ae4 backend/pyproject.toml
+1 .M N... 100644 100644 100644 09582420f99322ab98611a788b42efc44e16f5f4 09582420f99322ab98611a788b42efc44e16f5f4 backend/src/drillai/ai/guardrails.py
+1 .M N... 100644 100644 100644 5417acdbf2102a5883b4ba3f11ef70acf5f2bbfd 5417acdbf2102a5883b4ba3f11ef70acf5f2bbfd backend/src/drillai/ai/providers.py
+1 .M N... 100644 100644 100644 53735485cba6a0a628455cff01f29f867ce2e5dd 53735485cba6a0a628455cff01f29f867ce2e5dd backend/src/drillai/ai/router.py
+1 .M N... 100644 100644 100644 a42968d4a9697856b5f0f8767a3a0151156aa478 a42968d4a9697856b5f0f8767a3a0151156aa478 backend/src/drillai/ai/tools.py
+1 .M N... 100644 100644 100644 d0c267892e1a8d41039657e46e708aceb03e4b73 d0c267892e1a8d41039657e46e708aceb03e4b73 backend/src/drillai/api/app.py
+1 .M N... 100644 100644 100644 25773b77fe1ba3ffa3df3dd38544709c8b0f8ea1 25773b77fe1ba3ffa3df3dd38544709c8b0f8ea1 backend/src/drillai/api/deps.py
+1 .M N... 100644 100644 100644 0b77689cd0b8b2d5d2baeecfc111bb39d31cd6a2 0b77689cd0b8b2d5d2baeecfc111bb39d31cd6a2 backend/src/drillai/api/routers/__init__.py
+1 .M N... 100644 100644 100644 ba57caba71ff97230b5e4ee69f698422d78fb810 ba57caba71ff97230b5e4ee69f698422d78fb810 backend/src/drillai/api/routers/auth.py
+1 .M N... 100644 100644 100644 b1d7fc3a1f7faec5b6a7608eb35cea9a9d9a8705 b1d7fc3a1f7faec5b6a7608eb35cea9a9d9a8705 backend/src/drillai/api/routers/context.py
+1 .M N... 100644 100644 100644 4f94a6e7a735c987de95a54c6f79f4726db1c3bb 4f94a6e7a735c987de95a54c6f79f4726db1c3bb backend/src/drillai/api/routers/documents.py
+1 .M N... 100644 100644 100644 d5b6dbac29e0c16d8a837320989140ea3aaae6d2 d5b6dbac29e0c16d8a837320989140ea3aaae6d2 backend/src/drillai/api/routers/drilling.py
+1 .M N... 100644 100644 100644 bd9cc9ffb247dd26fef68c7d6174321d0e3bca64 bd9cc9ffb247dd26fef68c7d6174321d0e3bca64 backend/src/drillai/api/routers/evidence.py
+1 .M N... 100644 100644 100644 9739710092455353dcb84116cac580f948296ac4 9739710092455353dcb84116cac580f948296ac4 backend/src/drillai/api/routers/health.py
+1 .M N... 100644 100644 100644 45a837e11fd0b690a336a89d97719b2761bc2243 45a837e11fd0b690a336a89d97719b2761bc2243 backend/src/drillai/api/routers/operations.py
+1 .M N... 100644 100644 100644 676ccc47a90c8542798aaeaa47f9693cc303f03b 676ccc47a90c8542798aaeaa47f9693cc303f03b backend/src/drillai/api/routers/platform.py
+1 .M N... 100644 100644 100644 a13cde0ec03a44f388f291cf71b52633b4d55681 a13cde0ec03a44f388f291cf71b52633b4d55681 backend/src/drillai/api/routers/runs.py
+1 .M N... 100644 100644 100644 0c463ec11d8e2a802115f07a6bdc7e80fb042704 0c463ec11d8e2a802115f07a6bdc7e80fb042704 backend/src/drillai/api/routers/timeseries.py
+1 .M N... 100644 100644 100644 186ee4ac3264672514d55900756d7b922bf614c2 186ee4ac3264672514d55900756d7b922bf614c2 backend/src/drillai/api/serializers.py
+1 .M N... 100644 100644 100644 2e016e3fc0cc1a68d55e208fa8a7c19e6ffda855 2e016e3fc0cc1a68d55e208fa8a7c19e6ffda855 backend/src/drillai/context/builder.py
+1 .M N... 100644 100644 100644 e3c46d5bfb999f5cb5d8ffba3fb4135a0038ee72 e3c46d5bfb999f5cb5d8ffba3fb4135a0038ee72 backend/src/drillai/context/live_providers.py
+1 .M N... 100644 100644 100644 b1e68925d50c437f58fba2df168393f1942547fe b1e68925d50c437f58fba2df168393f1942547fe backend/src/drillai/context/model.py
+1 .M N... 100644 100644 100644 f2e5a3dd7b89852da29f9a95eb9f1832ba4e4dc7 f2e5a3dd7b89852da29f9a95eb9f1832ba4e4dc7 backend/src/drillai/core/clock.py
+1 .M N... 100644 100644 100644 5e889ec1f762db12534d1c9ae8c1100b54b18bb8 5e889ec1f762db12534d1c9ae8c1100b54b18bb8 backend/src/drillai/core/config.py
+1 .M N... 100644 100644 100644 0eda2b46155f8c3b32ac91c20ff1e1420b98b677 0eda2b46155f8c3b32ac91c20ff1e1420b98b677 backend/src/drillai/db/models/__init__.py
+1 .M N... 100644 100644 100644 9a8477f1ab6cffd6ecc29f847fedcbe4db019185 9a8477f1ab6cffd6ecc29f847fedcbe4db019185 backend/src/drillai/db/models/asset.py
+1 .M N... 100644 100644 100644 f697b99fe6fb5ae277bc8aa15f8a16a6bab4e4d7 f697b99fe6fb5ae277bc8aa15f8a16a6bab4e4d7 backend/src/drillai/db/models/documents.py
+1 .M N... 100644 100644 100644 68bdf474c1380efa739610c18c0b270ec0251844 68bdf474c1380efa739610c18c0b270ec0251844 backend/src/drillai/db/models/identity.py
+1 .M N... 100644 100644 100644 8bc7a9d0d511434815a667f43110fd42949da581 8bc7a9d0d511434815a667f43110fd42949da581 backend/src/drillai/db/models/operations.py
+1 .M N... 100644 100644 100644 5cc7963120a608fb9f317b4a46109b2118970c53 5cc7963120a608fb9f317b4a46109b2118970c53 backend/src/drillai/db/models/platform.py
+1 .M N... 100644 100644 100644 2a0fac126478fdff21b623cfaf770d75a3783837 2a0fac126478fdff21b623cfaf770d75a3783837 backend/src/drillai/documents/identity.py
+1 .M N... 100644 100644 100644 f3f45ce528c84684ed169e91f62bc50164fc48e1 f3f45ce528c84684ed169e91f62bc50164fc48e1 backend/src/drillai/documents/lifecycle.py
+1 .M N... 100644 100644 100644 3ae8153598073b501445d83a80e47e95739f433e 3ae8153598073b501445d83a80e47e95739f433e backend/src/drillai/documents/quotes.py
+1 .M N... 100644 100644 100644 a87e18f887506b4557c65d0d158edeada1e09b10 a87e18f887506b4557c65d0d158edeada1e09b10 backend/src/drillai/documents/scope.py
+1 .M N... 100644 100644 100644 76e692098458d4f0e96f86284f1871651e65ba74 76e692098458d4f0e96f86284f1871651e65ba74 backend/src/drillai/drilling/advisor.py
+1 .M N... 100644 100644 100644 b8103c3ea2eb8a371d2fc605dd3ef4529eb34d47 b8103c3ea2eb8a371d2fc605dd3ef4529eb34d47 backend/src/drillai/drilling/ddr.py
+1 .M N... 100644 100644 100644 f10f83ac35355b72c16fac76449212555d0d17d8 f10f83ac35355b72c16fac76449212555d0d17d8 backend/src/drillai/drilling/npt.py
+1 .M N... 100644 100644 100644 fd652c12819600ac69ac370bc3bc2ce3bccb047e fd652c12819600ac69ac370bc3bc2ce3bccb047e backend/src/drillai/drilling/optimisation.py
+1 .M N... 100644 100644 100644 793d514a2e1c2313bbc4177cf5f910591e452472 793d514a2e1c2313bbc4177cf5f910591e452472 backend/src/drillai/drilling/reporting.py
+1 .M N... 100644 100644 100644 c13436b0ea6a521579395933017cb600ba09ef9a c13436b0ea6a521579395933017cb600ba09ef9a backend/src/drillai/drilling/state.py
+1 .M N... 100644 100644 100644 467c9abbdb3cf3218c00082b8652ac5f60b1d15b 467c9abbdb3cf3218c00082b8652ac5f60b1d15b backend/src/drillai/drilling/timeline.py
+1 .M N... 100644 100644 100644 8da065080cd8e76bb037f46badad0b587134249b 8da065080cd8e76bb037f46badad0b587134249b backend/src/drillai/engines/contract.py
+1 .M N... 100644 100644 100644 b6e58c39d1e29070335c3b9a460b265655492215 b6e58c39d1e29070335c3b9a460b265655492215 backend/src/drillai/engines/fluids.py
+1 .M N... 100644 100644 100644 4f6801928ac9d745f9b5f631dac07056cd7d7008 4f6801928ac9d745f9b5f631dac07056cd7d7008 backend/src/drillai/engines/integrity.py
+1 .M N... 100644 100644 100644 04e34a3093e3e1cef3a950a721d0284f3315c5c7 04e34a3093e3e1cef3a950a721d0284f3315c5c7 backend/src/drillai/engines/mechanics.py
+1 .M N... 100644 100644 100644 bbb8395bad69517d3da64c06fcdff41237dbf926 bbb8395bad69517d3da64c06fcdff41237dbf926 backend/src/drillai/engines/offsets.py
+1 .M N... 100644 100644 100644 963b1ef71563d82f7fd573c050fc4a0fa4a76c94 963b1ef71563d82f7fd573c050fc4a0fa4a76c94 backend/src/drillai/engines/optimization.py
+1 .M N... 100644 100644 100644 76703cb84303ce5db463e76787a34865570fc5ae 76703cb84303ce5db463e76787a34865570fc5ae backend/src/drillai/engines/registry.py
+1 .M N... 100644 100644 100644 3e5e036a002621ebdfeac0707bca14a8bc06c2f6 3e5e036a002621ebdfeac0707bca14a8bc06c2f6 backend/src/drillai/engines/service.py
+1 .M N... 100644 100644 100644 62ffceb5bfe93e32fe9d8eeb9b51fb501087ef36 62ffceb5bfe93e32fe9d8eeb9b51fb501087ef36 backend/src/drillai/engines/trajectory.py
+1 .M N... 100644 100644 100644 ddbc7e7dd07411479868e46de58244ccdc8e973f ddbc7e7dd07411479868e46de58244ccdc8e973f backend/src/drillai/engines/tubulars.py
+1 .M N... 100644 100644 100644 1d555864e38dd38d1ac84ac6eca733ab1afb2a23 1d555864e38dd38d1ac84ac6eca733ab1afb2a23 backend/src/drillai/engines/twin.py
+1 .M N... 100644 100644 100644 e1023586b4e07378487278122db01041bfe1e047 e1023586b4e07378487278122db01041bfe1e047 backend/src/drillai/engines/wellcontrol.py
+1 .M N... 100644 100644 100644 49e75ea8e47e116afce8238a026bd87007fbf59c 49e75ea8e47e116afce8238a026bd87007fbf59c backend/src/drillai/ingestion/extractors.py
+1 .M N... 100644 100644 100644 e5eda2044c74d2f2fe36e9131e22fbcf61ad3458 e5eda2044c74d2f2fe36e9131e22fbcf61ad3458 backend/src/drillai/ingestion/parsers.py
+1 .M N... 100644 100644 100644 c08c8dc8665808c015c3cdade806f6ffbc5b770d c08c8dc8665808c015c3cdade806f6ffbc5b770d backend/src/drillai/ingestion/pipeline.py
+1 .M N... 100644 100644 100644 ee84639b6bc913b095a3f06664fc958630c06daf ee84639b6bc913b095a3f06664fc958630c06daf backend/src/drillai/operations/events.py
+1 .M N... 100644 100644 100644 33aefb3d0d09fec25a94bd87115d2f2d0cfe040d 33aefb3d0d09fec25a94bd87115d2f2d0cfe040d backend/src/drillai/operations/service.py
+1 .M N... 100644 100644 100644 5d2560cf25470ae748a0e54d8c46f1f85c03931e 5d2560cf25470ae748a0e54d8c46f1f85c03931e backend/src/drillai/rag/retriever.py
+1 .M N... 100644 100644 100644 86fb6e2aed65dcca4eff51f30655c0cb7093f3ce 86fb6e2aed65dcca4eff51f30655c0cb7093f3ce backend/src/drillai/security/catalog.py
+1 .M N... 100644 100644 100644 4dd461871051199a704125b67399149334ba3f59 4dd461871051199a704125b67399149334ba3f59 backend/src/drillai/security/rbac.py
+1 .M N... 100644 100644 100644 160a3702948957a29c0ac631a6549ee91ff0e404 160a3702948957a29c0ac631a6549ee91ff0e404 backend/src/drillai/security/secrets.py
+1 .M N... 100644 100644 100644 4d53d893e8c68085f064ac7fe61bca8bd5be9aac 4d53d893e8c68085f064ac7fe61bca8bd5be9aac backend/src/drillai/telemetry/adapters.py
+1 .M N... 100644 100644 100644 92078de77f9ff4be607d85a6d3cf99779a76fdf2 92078de77f9ff4be607d85a6d3cf99779a76fdf2 backend/src/drillai/telemetry/alerts.py
+1 .M N... 100644 100644 100644 ace72dca90476b825acce59879e7ce8e028641a0 ace72dca90476b825acce59879e7ce8e028641a0 backend/src/drillai/telemetry/connectors.py
+1 .M N... 100644 100644 100644 9851156f079334f3df06e355742ea6f58da552c9 9851156f079334f3df06e355742ea6f58da552c9 backend/src/drillai/telemetry/protocols/etp_binary.py
+1 .M N... 100644 100644 100644 62e0861404abff72585c80695da5b3a1a886cbbb 62e0861404abff72585c80695da5b3a1a886cbbb backend/src/drillai/telemetry/service.py
+1 .M N... 100644 100644 100644 40605581468df8ddf539aeb200e9c3f1f31f2ec1 40605581468df8ddf539aeb200e9c3f1f31f2ec1 backend/src/drillai/telemetry/vocabulary.py
+1 .M N... 100644 100644 100644 61aaf035f7f798913d585d1ca70633e501a526da 61aaf035f7f798913d585d1ca70633e501a526da backend/src/drillai/telemetry/worker.py
+1 .M N... 100644 100644 100644 430d9df879d3c8b7ae6d0c6b63bea6945e1de7ba 430d9df879d3c8b7ae6d0c6b63bea6945e1de7ba backend/src/drillai/units/registry.py
+1 .M N... 100644 100644 100644 4ca85f9f2416afcf5600f15b4dccac3a61648ff0 4ca85f9f2416afcf5600f15b4dccac3a61648ff0 backend/src/drillai/workflow/graph.py
+1 .M N... 100644 100644 100644 aabc58c8f5af54861532224ef9310a399f90d69c aabc58c8f5af54861532224ef9310a399f90d69c backend/src/drillai/workflow/nodes.py
+1 .M N... 100644 100644 100644 ff941d608b0f2a8b3ff9ebb582c08bbd1a14ae3e ff941d608b0f2a8b3ff9ebb582c08bbd1a14ae3e backend/src/drillai/workflow/notifications.py
+1 .M N... 100644 100644 100644 f2ae4680f368e6bd022d85e3f01a26ab3ad7ea79 f2ae4680f368e6bd022d85e3f01a26ab3ad7ea79 backend/src/drillai/workflow/runtime.py
+1 .M N... 100644 100644 100644 1d9cdabb90745c1f83b51bd98d4ec16b9b593465 1d9cdabb90745c1f83b51bd98d4ec16b9b593465 backend/src/drillai/workflow/service.py
+1 .M N... 100644 100644 100644 d816191f45f22d564f4a03810d8f5c252f260066 d816191f45f22d564f4a03810d8f5c252f260066 backend/tests/ai/test_ai_layer.py
+1 .M N... 100644 100644 100644 83ba80c65ee02cbecd611aad7387848d2b85231a 83ba80c65ee02cbecd611aad7387848d2b85231a backend/tests/api/conftest.py
+1 .M N... 100644 100644 100644 d0cfc27bb5222531d59856967b7f29c90dac2025 d0cfc27bb5222531d59856967b7f29c90dac2025 backend/tests/api/test_api.py
+1 .M N... 100644 100644 100644 66b1c275e7536039883adf1a74a8a667875a03a0 66b1c275e7536039883adf1a74a8a667875a03a0 backend/tests/api/test_assets_api.py
+1 .M N... 100644 100644 100644 c7713d82e97a0e9e429da2cd321195b230806c65 c7713d82e97a0e9e429da2cd321195b230806c65 backend/tests/api/test_drilling_api.py
+1 .M N... 100644 100644 100644 74442e9ab1a2b1583db53cf15affd68c19cc2c95 74442e9ab1a2b1583db53cf15affd68c19cc2c95 backend/tests/api/test_live_stream.py
+1 .M N... 100644 100644 100644 05883351b2f518169894512a28036d4993b20d41 05883351b2f518169894512a28036d4993b20d41 backend/tests/api/test_run_event_stream.py
+1 .M N... 100644 100644 100644 fbac1ef73daa82327aeba8b1ac11ce795eac3e71 fbac1ef73daa82327aeba8b1ac11ce795eac3e71 backend/tests/context/test_engineering_context.py
+1 .M N... 100644 100644 100644 4ea1acd6011833d68c2e80672e5ac2507fc6fda8 4ea1acd6011833d68c2e80672e5ac2507fc6fda8 backend/tests/db/test_migrations_postgres.py
+1 .M N... 100644 100644 100644 c5003995e4f7a72a1b5d416a1645e7a4e7e4bdf0 c5003995e4f7a72a1b5d416a1645e7a4e7e4bdf0 backend/tests/db/test_persistence.py
+1 .M N... 100644 100644 100644 5b72ca430ebfbbea9638fda20de75045ff01119f 5b72ca430ebfbbea9638fda20de75045ff01119f backend/tests/documents/test_document_identity.py
+1 .M N... 100644 100644 100644 abcf146f7243a93fc8e759bef3fdb57d38b5d2b7 abcf146f7243a93fc8e759bef3fdb57d38b5d2b7 backend/tests/documents/test_document_lifecycle.py
+1 .M N... 100644 100644 100644 529b31d6b0df1c55c666e2c9c1e9e63bb9bc5baa 529b31d6b0df1c55c666e2c9c1e9e63bb9bc5baa backend/tests/documents/test_document_provenance.py
+1 .M N... 100644 100644 100644 63e0dbaf87eb1ed7087a4f8b8c3933b422252d05 63e0dbaf87eb1ed7087a4f8b8c3933b422252d05 backend/tests/documents/test_evidence_integrity.py
+1 .M N... 100644 100644 100644 d874df40033a825b3dd1b66bac6c5c3107260d56 d874df40033a825b3dd1b66bac6c5c3107260d56 backend/tests/drilling/test_npt_summary.py
+1 .M N... 100644 100644 100644 8188cd137ab4ca369882713817d6ad7547797556 8188cd137ab4ca369882713817d6ad7547797556 backend/tests/drilling/test_npt_taxonomy.py
+1 .M N... 100644 100644 100644 637b2f280d31797e80a8d3ff0ca1696bc8777862 637b2f280d31797e80a8d3ff0ca1696bc8777862 backend/tests/engines/conftest.py
+1 .M N... 100644 100644 100644 3484c364b9a9cb8fcf3024b36e9091f9838555de 3484c364b9a9cb8fcf3024b36e9091f9838555de backend/tests/engines/test_cp19_engineering_validation.py
+1 .M N... 100644 100644 100644 2d0a5538226c70c1c55bb50d34a0aef33a316f82 2d0a5538226c70c1c55bb50d34a0aef33a316f82 backend/tests/engines/test_cp23_wellcontrol_and_engineering_audit.py
+1 .M N... 100644 100644 100644 ee0772e580db48f5c8fc0d6700f1bb10523da20e ee0772e580db48f5c8fc0d6700f1bb10523da20e backend/tests/engines/test_fluids.py
+1 .M N... 100644 100644 100644 68dcdeb566961aaa4e7be735b1c25d50c3263dce 68dcdeb566961aaa4e7be735b1c25d50c3263dce backend/tests/engines/test_mechanics.py
+1 .M N... 100644 100644 100644 5949954853f91fc48fef7b83146012db125cc6d7 5949954853f91fc48fef7b83146012db125cc6d7 backend/tests/engines/test_registry_contracts.py
+1 .M N... 100644 100644 100644 908eda6c31ecb061be26ab9b26391f15ac0628a4 908eda6c31ecb061be26ab9b26391f15ac0628a4 backend/tests/engines/test_trajectory.py
+1 .M N... 100644 100644 100644 1656c2f31ee02cc077223a4c907d0d033d464529 1656c2f31ee02cc077223a4c907d0d033d464529 backend/tests/engines/test_twin_optimization_engines.py
+1 .M N... 100644 100644 100644 0306ea631e995138189ea1b9aaab56c7677df39e 0306ea631e995138189ea1b9aaab56c7677df39e backend/tests/fixtures/documents_bytes.py
+1 .M N... 100644 100644 100644 e7486fbffa4a077e66aeb8f6ef32bddc21cfee6e e7486fbffa4a077e66aeb8f6ef32bddc21cfee6e backend/tests/fixtures/fabric.py
+1 .M N... 100644 100644 100644 d7be1850219e6628ef0f71d5844c58e541d881f0 d7be1850219e6628ef0f71d5844c58e541d881f0 backend/tests/fixtures/synthetic_ddr.py
+1 .M N... 100644 100644 100644 5004e1be8911076db88b22b083540591667e8a67 5004e1be8911076db88b22b083540591667e8a67 backend/tests/ingestion/test_pipeline.py
+1 .M N... 100644 100644 100644 6af07123540d5708609f2ce65f0d3f4187f8afce 6af07123540d5708609f2ce65f0d3f4187f8afce backend/tests/operations/test_ddr_idempotency.py
+1 .M N... 100644 100644 100644 2a5b26e1ef7cafac82b478d192a9faff1ef9487e 2a5b26e1ef7cafac82b478d192a9faff1ef9487e backend/tests/operations/test_event_service.py
+1 .M N... 100644 100644 100644 ee504d1e42f561de7cf9b075148a6fc4013ea99a ee504d1e42f561de7cf9b075148a6fc4013ea99a backend/tests/operations/test_npt_accounting.py
+1 .M N... 100644 100644 100644 2e9de6edf21051ec04c2435a7383cd0e214b6f03 2e9de6edf21051ec04c2435a7383cd0e214b6f03 backend/tests/operations/test_operation_service.py
+1 .M N... 100644 100644 100644 65a003b36a9966a473f3a4e00b949aba738d09da 65a003b36a9966a473f3a4e00b949aba738d09da backend/tests/operations/test_timeline_scaling.py
+1 .M N... 100644 100644 100644 f77cb051d88eb6b8f45e9263800a90189b6fec14 f77cb051d88eb6b8f45e9263800a90189b6fec14 backend/tests/rag/test_retriever.py
+1 .M N... 100644 100644 100644 042dc051a0a84dbc2cd72cec28a08532edb8aae8 042dc051a0a84dbc2cd72cec28a08532edb8aae8 backend/tests/security/test_cp21_auth_and_sessions.py
+1 .M N... 100644 100644 100644 dc2ade5db48522708689a7df9af2b84916889b30 dc2ade5db48522708689a7df9af2b84916889b30 backend/tests/security/test_cp22_secrets_and_crypto.py
+1 .M N... 100644 100644 100644 283ff60c2b8944caacaceb39a23e7d1c54ec525d 283ff60c2b8944caacaceb39a23e7d1c54ec525d backend/tests/telemetry/test_adapters.py
+1 .M N... 100644 100644 100644 c011c350e3f4e8fc908b41ff665af907e4843bbc c011c350e3f4e8fc908b41ff665af907e4843bbc backend/tests/telemetry/test_connector_worker.py
+1 .M N... 100644 100644 100644 b0a67572a616e29e2746967b39fdb9141d238748 b0a67572a616e29e2746967b39fdb9141d238748 backend/tests/telemetry/test_connectors_registry.py
+1 .M N... 100644 100644 100644 db2968e8f416f0a7fe43492b4fdd99f9f473c1d0 db2968e8f416f0a7fe43492b4fdd99f9f473c1d0 backend/tests/telemetry/test_cp12_protocol_conformance_and_security.py
+1 .M N... 100644 100644 100644 9443c3157a063ad4c43831a6fb25363a037a0c6a 9443c3157a063ad4c43831a6fb25363a037a0c6a backend/tests/telemetry/test_cp13_ssrf_and_egress.py
+1 .M N... 100644 100644 100644 518733005bdddb965bb1ad2dd898c85d43e49b97 518733005bdddb965bb1ad2dd898c85d43e49b97 backend/tests/telemetry/test_cp14_dns_and_transport_ssrf.py
+1 .M N... 100644 100644 100644 26ceefca0652c2652c58b0818456ecd6cd3100d2 26ceefca0652c2652c58b0818456ecd6cd3100d2 backend/tests/telemetry/test_queries_api.py
+1 .M N... 100644 100644 100644 05b98039821b7ced8c03c61292ef23a96d75c445 05b98039821b7ced8c03c61292ef23a96d75c445 backend/tests/telemetry/test_well_state_freshness.py
+1 .M N... 100644 100644 100644 7d00b1f404134865181e89d2f89a3aca67ce9d92 7d00b1f404134865181e89d2f89a3aca67ce9d92 backend/tests/test_cp16_adversarial_audit.py
+1 .M N... 100644 100644 100644 3bfd36bd6085d16ced7f52f50e70f9622f622998 3bfd36bd6085d16ced7f52f50e70f9622f622998 backend/tests/test_cp20_integration_completeness.py
+1 .M N... 100644 100644 100644 914536fd41299bf830f5752585f7fa07969f63e3 914536fd41299bf830f5752585f7fa07969f63e3 backend/tests/workflow/test_graph_and_expressions.py
+1 .M N... 100644 100644 100644 0c592be2d81d8f2d5cc3bbc5c2703be916331cca 0c592be2d81d8f2d5cc3bbc5c2703be916331cca backend/tests/workflow/test_runtime_execution.py
+1 .M N... 100644 100644 100644 da9b129a8d6d0bf757d19ace7f1bb3342bb87ceb da9b129a8d6d0bf757d19ace7f1bb3342bb87ceb docker-compose.yml
+1 .M N... 100644 100644 100644 a7d953da9f396ee44223f240725b4f5c20e933f5 a7d953da9f396ee44223f240725b4f5c20e933f5 docs/CONNECTORS_AND_OPERATIONS.md
+1 .M N... 100644 100644 100644 3243cdbe00629a3567df9cb9cdd87ca49c340bfc 3243cdbe00629a3567df9cb9cdd87ca49c340bfc docs/FRONTEND.md
+1 .M N... 100644 100644 100644 5abb65631938f7a4cd31e584a09b807468c3733c 5abb65631938f7a4cd31e584a09b807468c3733c docs/FRONTEND_TESTING.md
+1 .M N... 100644 100644 100644 d16d6d9635e0485316aeae587a4ef857d2e95e17 d16d6d9635e0485316aeae587a4ef857d2e95e17 docs/SECURITY_MODEL.md
+1 .M N... 100644 100644 100644 910d20e46112043c8069263be0c8e1982dabee46 910d20e46112043c8069263be0c8e1982dabee46 docs/WINDOWS-SETUP.md
+1 .M N... 100644 100644 100644 1c853a7fb0f407f6e68e8efb258298d3a9aa909c 1c853a7fb0f407f6e68e8efb258298d3a9aa909c docs/mission-reports/CP19-ENGINEERING-VALIDATION.md
+1 .M N... 100644 100644 100644 e73ba8faf6cbf960652e0f146ef00552dc1d7f8f e73ba8faf6cbf960652e0f146ef00552dc1d7f8f docs/mission-reports/CP23-ENGINEERING-CORRECTNESS-AUDIT.md
+1 .M N... 100644 100644 100644 10497fe33a0cb05b6a663f97e43a61449d328cad 10497fe33a0cb05b6a663f97e43a61449d328cad docs/mission-reports/FRONTEND-MISSION.md
+1 .M N... 100644 100644 100644 e6a6a3352d7d6498b4c8bc4ed193df76b4d5108b e6a6a3352d7d6498b4c8bc4ed193df76b4d5108b docs/mission-reports/PRODUCTION-READINESS-MATRIX.md
+1 .M N... 100644 100644 100644 2a2e37ffb6c815b68774ecb01c68603f615b40ce 2a2e37ffb6c815b68774ecb01c68603f615b40ce docs/mission-reports/REMAINING-GAPS-ROADMAP.md
+1 .M N... 100644 100644 100644 5e23c7bf931cb880e5b45b8ea7ea1444e977cda2 5e23c7bf931cb880e5b45b8ea7ea1444e977cda2 frontend/e2e/checkpoint5.spec.ts
+1 .M N... 100644 100644 100644 c51c43fbc225752c6928f4548695eb0e85a0b87d c51c43fbc225752c6928f4548695eb0e85a0b87d frontend/e2e/connectors-platform.spec.ts
+1 .M N... 100644 100644 100644 4970b9411b13f4f3a3a245bbe5f8efa04cb598a1 4970b9411b13f4f3a3a245bbe5f8efa04cb598a1 frontend/e2e/context-deeplinks.spec.ts
+1 .M N... 100644 100644 100644 6324d816ce11481271a12c566954eb624c2d1f07 6324d816ce11481271a12c566954eb624c2d1f07 frontend/e2e/documents-evidence.spec.ts
+1 .M N... 100644 100644 100644 aaca72c088493b3a47b2881064d7386a506b9fe4 aaca72c088493b3a47b2881064d7386a506b9fe4 frontend/e2e/error-auth.spec.ts
+1 .M N... 100644 100644 100644 bd4e4e03f2b02f535cd49c25615b752ca3a3bb3a bd4e4e03f2b02f535cd49c25615b752ca3a3bb3a frontend/e2e/error-faults.spec.ts
+1 .M N... 100644 100644 100644 331a6f32e1c596d3e12191a31d7964c33c90520e 331a6f32e1c596d3e12191a31d7964c33c90520e frontend/e2e/error-matrix.spec.ts
+1 .M N... 100644 100644 100644 a82e656114ad7ca3ec726ee443d48c670b08fb9c a82e656114ad7ca3ec726ee443d48c670b08fb9c frontend/e2e/fixtures.ts
+1 .M N... 100644 100644 100644 4afd4b220a02d9758eb32b02f5dd639e74ca54d8 4afd4b220a02d9758eb32b02f5dd639e74ca54d8 frontend/e2e/global-setup.ts
+1 .M N... 100644 100644 100644 8e1a1bc22c1e2d050ffda348b2ee47ebd704f625 8e1a1bc22c1e2d050ffda348b2ee47ebd704f625 frontend/e2e/identity-permissions.spec.ts
+1 .M N... 100644 100644 100644 dc0da67e1d135a8388a2d64673fda7ba8e0adae5 dc0da67e1d135a8388a2d64673fda7ba8e0adae5 frontend/e2e/live-operations.spec.ts
+1 .M N... 100644 100644 100644 84e393a2528d9f5b73713bb95db1ecfa809d337c 84e393a2528d9f5b73713bb95db1ecfa809d337c frontend/e2e/master-data.spec.ts
+1 .M N... 100644 100644 100644 b365de226e614acbd1a553bd1dc94199c6c62e6c b365de226e614acbd1a553bd1dc94199c6c62e6c frontend/e2e/operations-workspace.spec.ts
+1 .M N... 100644 100644 100644 dbc77f4e831843aac9695782c36882236bb58dbc dbc77f4e831843aac9695782c36882236bb58dbc frontend/e2e/rtl.spec.ts
+1 .M N... 100644 100644 100644 9439fb5dc63fcb03bdca48d938e4d4cc66d1c484 9439fb5dc63fcb03bdca48d938e4d4cc66d1c484 frontend/e2e/run-events.spec.ts
+1 .M N... 100644 100644 100644 63da2eae7c461e49a474667ce06ee440761e8d91 63da2eae7c461e49a474667ce06ee440761e8d91 frontend/e2e/run-monitor.spec.ts
+1 .M N... 100644 100644 100644 f8bc6514556e06ccdfc5bc44c91d7845a57a8138 f8bc6514556e06ccdfc5bc44c91d7845a57a8138 frontend/e2e/start-api.mjs
+1 .M N... 100644 100644 100644 3997ea27688885a93612372463046008373dbb68 3997ea27688885a93612372463046008373dbb68 frontend/e2e/well-cockpit.spec.ts
+1 .M N... 100644 100644 100644 b23651b1e2b844e4f155d8a34cafef41a5eecfb5 b23651b1e2b844e4f155d8a34cafef41a5eecfb5 frontend/e2e/workflow-studio.spec.ts
+1 .M N... 100644 100644 100644 ee3c6932204a8ec03976aaf4fb4e5d4215045cb6 ee3c6932204a8ec03976aaf4fb4e5d4215045cb6 frontend/nginx.conf
+1 .M N... 100644 100644 100644 aafd4e2811141d164331daee83d632b37928aa8b aafd4e2811141d164331daee83d632b37928aa8b frontend/package-lock.json
+1 .M N... 100644 100644 100644 cbb2c6e6d9573bc9041a0a9261dc9fd5c928ddb6 cbb2c6e6d9573bc9041a0a9261dc9fd5c928ddb6 frontend/package.json
+1 .M N... 100644 100644 100644 4426eed230b0e1c567e896e1bcc31bb7a0cc570a 4426eed230b0e1c567e896e1bcc31bb7a0cc570a frontend/playwright.config.ts
+1 .M N... 100644 100644 100644 39de3bc019ade77c5ae0f38629fb541cad1a7ec8 39de3bc019ade77c5ae0f38629fb541cad1a7ec8 frontend/src/App.tsx
+1 .M N... 100644 100644 100644 7588c64561e79ae0cafb637808c5845c27fd37e3 7588c64561e79ae0cafb637808c5845c27fd37e3 frontend/src/api/client.test.ts
+1 .M N... 100644 100644 100644 caaf727ac9349f2ddc12f84f1640b0fcebcf4536 caaf727ac9349f2ddc12f84f1640b0fcebcf4536 frontend/src/api/client.ts
+1 .M N... 100644 100644 100644 b13d0a6f26dd7bc8c0732b6267bbd8c9a4acbd23 b13d0a6f26dd7bc8c0732b6267bbd8c9a4acbd23 frontend/src/api/endpoints.ts
+1 .M N... 100644 100644 100644 8da9cf2a673a6c82e68ad8a1bd822c83474fe8c0 8da9cf2a673a6c82e68ad8a1bd822c83474fe8c0 frontend/src/api/engineRun.test.ts
+1 .M N... 100644 100644 100644 79ab6de5a2d0d45447e8e1a2b444ccf2dea19d4f 79ab6de5a2d0d45447e8e1a2b444ccf2dea19d4f frontend/src/api/engineRun.ts
+1 .M N... 100644 100644 100644 6f7d707b872488eb65ce1f0ba8c908c76da58f67 6f7d707b872488eb65ce1f0ba8c908c76da58f67 frontend/src/api/queryCancellation.test.tsx
+1 .M N... 100644 100644 100644 5de6c92c0d6f4995f063805c03f7b541f2fa9037 5de6c92c0d6f4995f063805c03f7b541f2fa9037 frontend/src/api/queryClient.test.ts
+1 .M N... 100644 100644 100644 3aa80dcd400ba7d7a211ee2935c4af81ed4baae4 3aa80dcd400ba7d7a211ee2935c4af81ed4baae4 frontend/src/api/queryClient.ts
+1 .M N... 100644 100644 100644 f1f87b68f70b15e9bf2d300e2fc6fef5eee09bbf f1f87b68f70b15e9bf2d300e2fc6fef5eee09bbf frontend/src/api/types.ts
+1 .M N... 100644 100644 100644 fe2cd12df3b6e230b9dceb3e80fc059c55df3e76 fe2cd12df3b6e230b9dceb3e80fc059c55df3e76 frontend/src/components/common/index.tsx
+1 .M N... 100644 100644 100644 8f62d63d3473bd7fb32a7c04e85faf54ccc0c665 8f62d63d3473bd7fb32a7c04e85faf54ccc0c665 frontend/src/components/evidence/EvidencePanel.test.tsx
+1 .M N... 100644 100644 100644 1344cba12d9bfd47db8c0af513aef19a911f32ed 1344cba12d9bfd47db8c0af513aef19a911f32ed frontend/src/components/evidence/EvidencePanel.tsx
+1 .M N... 100644 100644 100644 2db7518b15d83bc30500273731d0705e58c0d8fd 2db7518b15d83bc30500273731d0705e58c0d8fd frontend/src/components/layout/AppShell.tsx
+1 .M N... 100644 100644 100644 f398ed7f481d332e1938809d06bcd19114f6ac13 f398ed7f481d332e1938809d06bcd19114f6ac13 frontend/src/hooks/useRunEventStream.test.tsx
+1 .M N... 100644 100644 100644 2a7fd07a7521e74f748d88931480baf9961a0f84 2a7fd07a7521e74f748d88931480baf9961a0f84 frontend/src/hooks/useRunEventStream.ts
+1 .M N... 100644 100644 100644 731895b7f5009430c95b4c13b1a8c0326bb678e6 731895b7f5009430c95b4c13b1a8c0326bb678e6 frontend/src/hooks/useWellLiveStream.test.tsx
+1 .M N... 100644 100644 100644 3b567d022809639d6c66374ab887b2509fd4254c 3b567d022809639d6c66374ab887b2509fd4254c frontend/src/i18n/en.ts
+1 .M N... 100644 100644 100644 8371b46f10b08dd0764a0617550f7111700eda11 8371b46f10b08dd0764a0617550f7111700eda11 frontend/src/i18n/fa.ts
+1 .M N... 100644 100644 100644 31c08a5829bbc5728fd35e5885933065055ad4a5 31c08a5829bbc5728fd35e5885933065055ad4a5 frontend/src/i18n/usage.test.ts
+1 .M N... 100644 100644 100644 91b657d35c59e6073512bad729ac6a0e2fa67779 91b657d35c59e6073512bad729ac6a0e2fa67779 frontend/src/lib/format.test.ts
+1 .M N... 100644 100644 100644 68be3562aaf4e5a91cfef7fa5757600e792e4154 68be3562aaf4e5a91cfef7fa5757600e792e4154 frontend/src/lib/format.ts
+1 .M N... 100644 100644 100644 a79923df597841b2ebd36d7f411c705a1e0b0f39 a79923df597841b2ebd36d7f411c705a1e0b0f39 frontend/src/lib/workflowGraph.ts
+1 .M N... 100644 100644 100644 d896fa024cf1932fd4830b33a2e6d9b9a2620f8b d896fa024cf1932fd4830b33a2e6d9b9a2620f8b frontend/src/pages/engineering/AdvisorWorkspace.tsx
+1 .M N... 100644 100644 100644 b8272ecf1fdd76f79ab20ce01f36054cb976df5f b8272ecf1fdd76f79ab20ce01f36054cb976df5f frontend/src/pages/engineering/EngineeringWorkspace.test.tsx
+1 .M N... 100644 100644 100644 98924044c6866ff71c749c2528406d841cddefe2 98924044c6866ff71c749c2528406d841cddefe2 frontend/src/pages/engineering/EngineeringWorkspace.tsx
+1 .M N... 100644 100644 100644 6d163cc656ae016b6aaf518972cf8fc1e10c6cb6 6d163cc656ae016b6aaf518972cf8fc1e10c6cb6 frontend/src/pages/engineering/OptimisationWorkspace.test.tsx
+1 .M N... 100644 100644 100644 1f9f6a35ce90988b372c1b397ca0ff05e099e84f 1f9f6a35ce90988b372c1b397ca0ff05e099e84f frontend/src/pages/engineering/OptimisationWorkspace.tsx
+1 .M N... 100644 100644 100644 730c1855592db80c3d02079635a9208abe1c6235 730c1855592db80c3d02079635a9208abe1c6235 frontend/src/pages/engineering/ReportsWorkspace.tsx
+1 .M N... 100644 100644 100644 0eb823f07ab60585c93992df81b36daf71f116d1 0eb823f07ab60585c93992df81b36daf71f116d1 frontend/src/pages/library/ConnectorsPage.test.tsx
+1 .M N... 100644 100644 100644 a999396aa00cc31d980edee72f7ec4af89b4c191 a999396aa00cc31d980edee72f7ec4af89b4c191 frontend/src/pages/library/ConnectorsPage.tsx
+1 .M N... 100644 100644 100644 112807ea525acbaec65443f583ff88baf96d2ea8 112807ea525acbaec65443f583ff88baf96d2ea8 frontend/src/pages/library/LibraryPage.tsx
+1 .M N... 100644 100644 100644 23ca0c72bd2ae20bff6a2b361d3707dc7fdf93c3 23ca0c72bd2ae20bff6a2b361d3707dc7fdf93c3 frontend/src/pages/library/PlatformPage.tsx
+1 .M N... 100644 100644 100644 35a5044a4c34ad9823abc1942bd576270744994a 35a5044a4c34ad9823abc1942bd576270744994a frontend/src/pages/wells/DocumentWorkspace.tsx
+1 .M N... 100644 100644 100644 98ec14bf678056e9f374552211a49baa031e2439 98ec14bf678056e9f374552211a49baa031e2439 frontend/src/pages/wells/OperationalMonitor.test.tsx
+1 .M N... 100644 100644 100644 9fbfc47d749b058bcec7ae9793475291ff292d52 9fbfc47d749b058bcec7ae9793475291ff292d52 frontend/src/pages/wells/OperationsWorkspace.test.tsx
+1 .M N... 100644 100644 100644 503a9725705fe0c1c594dd30208ab03a52ee9ced 503a9725705fe0c1c594dd30208ab03a52ee9ced frontend/src/pages/wells/OperationsWorkspace.tsx
+1 .M N... 100644 100644 100644 fbe3471ac829e5a1e94bae3038680df09ad3cced fbe3471ac829e5a1e94bae3038680df09ad3cced frontend/src/pages/wells/WellCockpit.test.tsx
+1 .M N... 100644 100644 100644 206a8f0e1ec85af52664a9c64d5b73a1c4ff3e6c 206a8f0e1ec85af52664a9c64d5b73a1c4ff3e6c frontend/src/pages/wells/WellCockpit.tsx
+1 .M N... 100644 100644 100644 358c1e2504ae790c1b405e3606227b3bd2e3d177 358c1e2504ae790c1b405e3606227b3bd2e3d177 frontend/src/pages/workflow/RunMonitor.test.tsx
+1 .M N... 100644 100644 100644 6163c192a03c46000ba041d0efad17dbd0d1035e 6163c192a03c46000ba041d0efad17dbd0d1035e frontend/src/pages/workflow/RunMonitor.tsx
+1 .M N... 100644 100644 100644 37ebf457b1e631781e9192162ce2c9d22820b4a6 37ebf457b1e631781e9192162ce2c9d22820b4a6 frontend/src/pages/workflow/WorkflowStudio.tsx
+1 .M N... 100644 100644 100644 d32ff682003e0ff5d8a6e6bb3663d4c35a45b116 d32ff682003e0ff5d8a6e6bb3663d4c35a45b116 frontend/tsconfig.json
+1 .M N... 100644 100644 100644 a0cc8f0d71eb5ed4080208bb80183269955d89b7 a0cc8f0d71eb5ed4080208bb80183269955d89b7 frontend/tsconfig.node.json
+1 .M N... 100644 100644 100644 5741b4db902848a79a78fdab52d7b23561d092c7 5741b4db902848a79a78fdab52d7b23561d092c7 frontend/vite.config.ts
+1 .M N... 100644 100644 100644 0ec5f4da7fa21781fa77a813c6421e5321801963 0ec5f4da7fa21781fa77a813c6421e5321801963 frontend/vitest.config.ts
+1 .M N... 100644 100644 100644 a01015711370f7db6e17a49e0c3c124c3651f5da a01015711370f7db6e17a49e0c3c124c3651f5da scripts/bootstrap.ps1
+1 .M N... 100755 100755 100755 11e079b5c1bbce94401b8e7f1cfcec3a058eeb1a 11e079b5c1bbce94401b8e7f1cfcec3a058eeb1a scripts/bootstrap.sh
+1 .M N... 100644 100644 100644 621d994da92254646db5aa6db42f3c3b8e9f839f 621d994da92254646db5aa6db42f3c3b8e9f839f scripts/seed_demo.py
+1 .M N... 100644 100644 100644 dfff2a0ac2e8964b388654d3645c81f129dec717 dfff2a0ac2e8964b388654d3645c81f129dec717 scripts/verify_supply_chain_and_secrets.py
+? .gitattributes
+? backend/alembic/versions/a6f4c2d8e901_wellbore_report_scope_constraints.py
+? backend/alembic/versions/b83e4a6d1c29_survey_azimuth_frame_identity.py
+? backend/alembic/versions/c0f6d8a9b271_document_operation_identity.py
+? backend/alembic/versions/c2e7a1b9d608_daily_report_reconciliation_target_scope.py
+? backend/alembic/versions/c5ca12bb7b5d_daily_drilling_report_domain.py
+? backend/alembic/versions/c79f2a61d5b3_trajectory_datum_and_time_provenance.py
+? backend/alembic/versions/d2a4f6c8b109_event_depth_and_value_provenance.py
+? backend/alembic/versions/d8f3b4c2a917_daily_report_evidence_scope.py
+? backend/alembic/versions/da0881aa121d_version_extracted_record_reviews.py
+? backend/alembic/versions/e13acb7d4f20_daily_report_reconciliation.py
+? backend/alembic/versions/e2b4c6d8f013_daily_report_revision_lineage.py
+? backend/alembic/versions/e90f1c8a2b64_notification_acceptance_evidence.py
+? backend/alembic/versions/f0a4b8c1d2e3_daily_report_identity_reconciliation.py
+? backend/alembic/versions/f19a6d4c82b0_unique_document_promotion_identity.py
+? backend/alembic/versions/f29a3c8d7e10_trajectory_revision_governance.py
+? backend/src/drillai/api/routers/daily_reports.py
+? backend/src/drillai/api/routers/engineering_products.py
+? backend/src/drillai/api/routers/surveys.py
+? backend/src/drillai/assets/fonts/DejaVuSans-Bold.ttf
+? backend/src/drillai/assets/fonts/DejaVuSans.ttf
+? backend/src/drillai/assets/fonts/LICENSE-DejaVu.txt
+? backend/src/drillai/db/models/daily_reports.py
+? backend/src/drillai/documents/access.py
+? backend/src/drillai/documents/unit_review.py
+? backend/src/drillai/drilling/daily_report_exports.py
+? backend/src/drillai/drilling/daily_reports.py
+? backend/src/drillai/drilling/npt_intervals.py
+? backend/src/drillai/drilling/structured_report_exports.py
+? backend/src/drillai/drilling/surveys.py
+? backend/src/drillai/engineering/__init__.py
+? backend/src/drillai/engineering/exports.py
+? backend/src/drillai/engineering/products.py
+? backend/src/drillai/engineering/service.py
+? backend/src/drillai/engines/power_law.py
+? backend/src/drillai/engines/proximity.py
+? backend/src/drillai/engines/unit_contract.py
+? backend/src/drillai/ingestion/data/synthetic_ddr_ocr_quality_v1.json
+? backend/src/drillai/ingestion/data/synthetic_ddr_ocr_quality_v2.json
+? backend/src/drillai/ingestion/data/synthetic_ddr_ocr_quality_v3.json
+? backend/src/drillai/ingestion/ocr.py
+? backend/src/drillai/ingestion/ocr_benchmark.py
+? backend/src/drillai/ingestion/ocr_runtime.py
+? backend/src/drillai/ingestion/ocr_synthetic_quality.py
+? backend/src/drillai/operations/time_windows.py
+? backend/src/drillai/rag/benchmark.py
+? backend/src/drillai/workflow/notification_worker.py
+? backend/tessdata/LICENSE
+? backend/tessdata/README.md
+? backend/tessdata/fas.traineddata
+? backend/tests/api/test_daily_reports_api.py
+? backend/tests/api/test_daily_reports_tenant.py
+? backend/tests/api/test_document_record_review.py
+? backend/tests/api/test_document_upload_limits.py
+? backend/tests/api/test_engineering_products_api.py
+? backend/tests/api/test_notifications_api.py
+? backend/tests/api/test_ocr_runtime_api.py
+? backend/tests/api/test_reports_tenant.py
+? backend/tests/api/test_serializers.py
+? backend/tests/api/test_surveys_api.py
+? backend/tests/db/test_daily_report_domain_migration.py
+? backend/tests/db/test_daily_report_evidence_scope_migration.py
+? backend/tests/db/test_daily_report_identity_reconciliation_migration.py
+? backend/tests/db/test_daily_report_reconciliation_migration.py
+? backend/tests/db/test_daily_report_revision_lineage_migration.py
+? backend/tests/db/test_event_time_provenance_migration.py
+? backend/tests/db/test_notification_acceptance_migration.py
+? backend/tests/db/test_promotion_identity_migration.py
+? backend/tests/db/test_review_version_migration.py
+? backend/tests/db/test_trajectory_frame_migration.py
+? backend/tests/db/test_trajectory_provenance_migration.py
+? backend/tests/db/test_trajectory_revision_governance_migration.py
+? backend/tests/documents/test_access_predicates.py
+? backend/tests/documents/test_unit_review.py
+? backend/tests/drilling/test_advisor.py
+? backend/tests/drilling/test_advisor_cp130_grounding.py
+? backend/tests/drilling/test_advisor_cp140_grounding.py
+? backend/tests/drilling/test_daily_report_domain.py
+? backend/tests/drilling/test_ddr_time.py
+? backend/tests/drilling/test_mission7_npt_service.py
+? backend/tests/drilling/test_npt_interval_reconciliation.py
+? backend/tests/drilling/test_structured_report_exports.py
+? backend/tests/engineering/test_products.py
+? backend/tests/engines/test_cp142_independent_calculation_assurance.py
+? backend/tests/engines/test_mission4_hydraulics_safety.py
+? backend/tests/engines/test_mission6_power_law.py
+? backend/tests/engines/test_proximity.py
+? backend/tests/engines/test_unit_contract.py
+? backend/tests/fixtures/synthetic_ddr_corpus/README.md
+? backend/tests/fixtures/synthetic_ddr_corpus/corpus.json
+? backend/tests/fixtures/synthetic_ddr_corpus/ocr/manifest.json
+? backend/tests/fixtures/synthetic_ddr_corpus/ocr/scan_017_ground_truth.txt
+? backend/tests/fixtures/synthetic_ddr_corpus/ocr/scan_017_image_only.pdf
+? backend/tests/fixtures/synthetic_ddr_corpus/records/ddr_014_structured.csv
+? backend/tests/fixtures/synthetic_ddr_corpus/records/ddr_015_narrative.txt
+? backend/tests/fixtures/synthetic_ddr_corpus/records/program_negative.txt
+? backend/tests/ingestion/test_ocr.py
+? backend/tests/ingestion/test_ocr_annotations.py
+? backend/tests/ingestion/test_ocr_benchmark.py
+? backend/tests/ingestion/test_ocr_runtime.py
+? backend/tests/ingestion/test_ocr_synthetic_quality.py
+? backend/tests/ingestion/test_synthetic_ddr_corpus.py
+? backend/tests/ingestion/test_tesserocr_diagnostic.py
+? backend/tests/operations/test_daily_report_db_readback.py
+? backend/tests/operations/test_frontend_manual_vocabularies.py
+? backend/tests/operations/test_operational_source_reads.py
+? backend/tests/operations/test_operational_time_filters.py
+? backend/tests/rag/test_benchmark.py
+? backend/tests/security/test_cp148_authorization_boundaries.py
+? backend/tests/security/test_cp26_auth_proxy_and_tenant_boundaries.py
+? backend/tests/security/test_cp31_ci_deployment_probe_contract.py
+? backend/tests/security/test_cp32_e2e_console_error_contract.py
+? backend/tests/security/test_cp33_e2e_response_oracle_coverage.py
+? backend/tests/telemetry/test_cp130_independent_connector_workers.py
+? backend/tests/test_clock.py
+? backend/tests/workflow/test_ai_context_injection.py
+? backend/tests/workflow/test_cp130_failure_state_matrix.py
+? backend/tests/workflow/test_notification_worker.py
+? backend/tests/workflow/test_rag_search_node.py
+? backend/tests/workflow/test_workflow_http_egress.py
+? ci/test-inventory.json
+? docs/DAILY-DRILLING-REPORT-DATA-GOVERNANCE.md
+? docs/DRILLAI_MASTER_PRODUCT_ROADMAP.md
+? docs/ENGINEERING_CAPABILITY_CATALOGUE.en.md
+? docs/ENGINEERING_CAPABILITY_CATALOGUE.fa.md
+? docs/ENGINEERING_CAPABILITY_CATALOGUE.json
+? docs/OPERATIONS-DASHBOARD-METRICS.md
+? docs/mission-reports/AUTONOMOUS-CONTINUATION-FLUIDS-AND-STREAM.md
+? docs/mission-reports/AUTONOMOUS-CONTINUATION-FORENSICS-AND-AUDIT.md
+? docs/mission-reports/AUTONOMOUS-CONTINUATION-OCR-DIAGNOSTICS.md
+? docs/mission-reports/AUTONOMOUS-ENGINE-REGISTRY-11e6cd2.json
+? docs/mission-reports/AUTONOMOUS-ENGINE-REGISTRY-85396bc.json
+? docs/mission-reports/AUTONOMOUS-ENGINE-REGISTRY-8f013.json
+? docs/mission-reports/AUTONOMOUS-ENGINE-REGISTRY-SNAPSHOT.md
+? docs/mission-reports/AUTONOMOUS-MISSION2-ENGINE-GEOMETRY-AND-OCR.md
+? docs/mission-reports/AUTONOMOUS-MISSION3-FA.md
+? docs/mission-reports/AUTONOMOUS-MISSION3-PARTIAL.md
+? docs/mission-reports/AUTONOMOUS-MISSION4-ENGINE-INVENTORY.md
+? docs/mission-reports/AUTONOMOUS-MISSION4-FA.md
+? docs/mission-reports/AUTONOMOUS-MISSION4-PARTIAL.md
+? docs/mission-reports/AUTONOMOUS-MISSION4-WORKSPACE.md
+? docs/mission-reports/AUTONOMOUS-MISSION5-BASELINE.md
+? docs/mission-reports/AUTONOMOUS-MISSION5-FA.md
+? docs/mission-reports/AUTONOMOUS-MISSION5-PARTIAL.md
+? docs/mission-reports/AUTONOMOUS-MISSION5-WORKSPACE-START.jsonl
+? docs/mission-reports/AUTONOMOUS-MISSION6-BASELINE.md
+? docs/mission-reports/AUTONOMOUS-MISSION6-FA.md
+? docs/mission-reports/AUTONOMOUS-MISSION6-PARTIAL.md
+? docs/mission-reports/AUTONOMOUS-MISSION6-WORKSPACE-START.jsonl
+? docs/mission-reports/AUTONOMOUS-SURVEY-SOURCE-ORDER.md
+? docs/mission-reports/CONTINUOUS-ENGINE-DECLARED-METADATA.json
+? docs/mission-reports/CONTINUOUS-ENGINE-METADATA-SNAPSHOT.md
+? docs/mission-reports/CONTINUOUS-ENGINE-NONFINITE-BOUNDARY.md
+? docs/mission-reports/CONTINUOUS-LATEST-CI-OBSERVATIONS.md
+? docs/mission-reports/CONTINUOUS-MISSION-BASELINE-AND-RETRIEVAL.md
+? docs/mission-reports/CONTINUOUS-MSE-NUMERICAL-FAIL-CLOSED.md
+? docs/mission-reports/CONTINUOUS-OCR-TESSERACTJS-COMPARISON.md
+? docs/mission-reports/CONTINUOUS-OGAI-PUBLIC-MODEL-SCAN.md
+? docs/mission-reports/CONTINUOUS-PICOMATCH-UPSTREAM-INVESTIGATION.md
+? docs/mission-reports/CONTINUOUS-PUBLIC-COMPETITOR-SCAN.md
+? docs/mission-reports/CONTINUOUS-TESSERACTJS-EXPLORATORY-EVIDENCE.json
+? docs/mission-reports/CONTINUOUS-TESSEROCR-551-SYNTHETIC-EVIDENCE.json
+? docs/mission-reports/CONTINUOUS-TESSEROCR-SYNTHETIC-DIAGNOSIS.md
+? docs/mission-reports/CONTINUOUS-TESSEROCR-SYNTHETIC-EVIDENCE.json
+? docs/mission-reports/CP113-CP114-REPOSITORY-AUDIT.md
+? docs/mission-reports/CP115-SURVEY-WORKBENCH-IMPLEMENTATION.md
+? docs/mission-reports/CP116-TRAJECTORY-REFERENCE-AND-QC.md
+? docs/mission-reports/CP117-SYNTHETIC-DDR-CORPUS-AND-OCR-GOVERNANCE.md
+? docs/mission-reports/CP118-SYNTHETIC-RAG-GROUNDING.md
+? docs/mission-reports/CP119-ADVISOR-PROVENANCE-AND-ABSTENTION.md
+? docs/mission-reports/CP120-ADVISOR-NPT-CASE-GROUNDING.md
+? docs/mission-reports/CP121-ADVISOR-NPT-SOURCE-RECORD-LINEAGE.md
+? docs/mission-reports/CP122-READ-ONLY-CONNECTOR-PROFILE-CONTRACT.md
+? docs/mission-reports/CP123-CONNECTOR-WORKER-SNAPSHOT-CAS.md
+? docs/mission-reports/CP124-NOTIFICATION-RECEIPT-REDACTION.md
+? docs/mission-reports/CP125-PRODUCTION-SMTP-ENDPOINT-POLICY.md
+? docs/mission-reports/CP126-WELL-COCKPIT-TIMELINE-LOCALIZATION.md
+? docs/mission-reports/CP127-PRODUCTION-SMTP-EGRESS-PINNING.md
+? docs/mission-reports/CP128-CI-DOCUMENTATION-COUNT-GUARD.md
+? docs/mission-reports/CP129-SURVEY-WORKSPACE-BILINGUAL-LOCALIZATION.md
+? docs/mission-reports/CP130-EXECUTION-RELIABILITY-AND-EVALUATION.md
+? docs/mission-reports/CP131-SYNTHETIC-WELL-BROWSER-PILOT.md
+? docs/mission-reports/CP132-FINAL-RELEASE-ASSURANCE.md
+? docs/mission-reports/CP133-DOCUMENTATION-RECONCILIATION.md
+? docs/mission-reports/CP134-SOURCE-LEVEL-PRODUCT-AUDIT.md
+? docs/mission-reports/CP135-BILINGUAL-INGESTION-OCR-BENCHMARK.md
+? docs/mission-reports/CP135-LOCAL-ADAPTER-V5-EXPLORATORY-EVIDENCE.json
+? docs/mission-reports/CP135-LOCAL-ADAPTER-V6-FAST-EVIDENCE.json
+? docs/mission-reports/CP135-LOCAL-ADAPTER-V7-FAST-EVIDENCE.json
+? docs/mission-reports/CP135-RUN-42728606694-CASE-EVIDENCE.json
+? docs/mission-reports/CP135-RUN-42730779071-CASE-EVIDENCE.json
+? docs/mission-reports/CP135-RUN-42734158263-CASE-EVIDENCE.json
+? docs/mission-reports/CP135-RUN-43564605450-CASE-EVIDENCE.json
+? docs/mission-reports/CP135-RUN-43711618310-CASE-EVIDENCE.json
+? docs/mission-reports/CP136-DDR-INTAKE-REVIEW-AND-DB-READBACK.md
+? docs/mission-reports/CP137-DDR-CORRECTION-CONCURRENCY.md
+? docs/mission-reports/CP138-DDR-TENANT-AND-SCOPE-ISOLATION.md
+? docs/mission-reports/CP139-SYNTHETIC-RAG-BENCHMARK-EVIDENCE.json
+? docs/mission-reports/CP139-SYNTHETIC-RAG-BENCHMARK.md
+? docs/mission-reports/CP140-ADVISOR-CLAIM-GROUNDING.md
+? docs/mission-reports/CP141-SURVEY-DATUM-AND-REFERENCE-LIFECYCLE.md
+? docs/mission-reports/CP142-INDEPENDENT-CALCULATION-ASSURANCE.md
+? docs/mission-reports/CP143-OPERATIONS-NPT-ANALYTICS.md
+? docs/mission-reports/CP144-STRUCTURED-REPORT-EXPORTS.md
+? docs/mission-reports/CP145-SCOPED-CONNECTOR-RELIABILITY.md
+? docs/mission-reports/CP146-NOTIFICATION-STATE-SEMANTICS.md
+? docs/mission-reports/CP147-WORKER-RECOVERY-AND-RESOURCE-BOUNDS.md
+? docs/mission-reports/CP148-AUTHORIZATION-BOUNDARIES.md
+? docs/mission-reports/CP149-NOTIFICATION-UI-ACCESSIBILITY.md
+? docs/mission-reports/CP150-TWO-WELL-SYNTHETIC-BROWSER-PILOT.md
+? docs/mission-reports/CP151-FINAL-CERTIFICATION.md
+? docs/mission-reports/CP152-RUN-438110-EVIDENCE-AND-RECOVERY.md
+? docs/mission-reports/CP153-WINDOWS-SURVEY-TIMESTAMP-REGRESSION.md
+? docs/mission-reports/CP154-LOCAL-BEST-TRAINEDDATA-200DPI-EVIDENCE.json
+? docs/mission-reports/CP154-LOCAL-FAST-TRAINEDDATA-150DPI-EVIDENCE.json
+? docs/mission-reports/CP154-LOCAL-FAST-TRAINEDDATA-300DPI-EVIDENCE.json
+? docs/mission-reports/CP154-LOCAL-FAST-TRAINEDDATA-EVIDENCE.json
+? docs/mission-reports/CP154-LOCAL-RTL-ISO-DATE-150DPI-EVIDENCE.json
+? docs/mission-reports/CP154-LOCAL-RTL-ISO-DATE-200DPI-EVIDENCE.json
+? docs/mission-reports/CP154-LOCAL-RTL-LTR-ISOLATION-200DPI-EVIDENCE.json
+? docs/mission-reports/CP154-PERSIAN-OCR-AND-CI-GATES.md
+? docs/mission-reports/CP155-CP166-PRODUCT-AND-ASSURANCE.md
+? docs/mission-reports/CP25-BASELINE-AND-GAP-AUDIT.md
+? docs/mission-reports/CP25-CI-REPAIR-AND-CERTIFICATION.md
+? docs/mission-reports/CP26-AUTH-BOUNDARY-AND-IDENTITY-UI.md
+? docs/mission-reports/CP31-CI-DEPLOYMENT-PROBE-CONTRACT.md
+? docs/mission-reports/CP32-E2E-PLATFORM-INDEPENDENT-VERDICT.md
+? docs/mission-reports/CP33-RESPONSE-ORACLE-COVERAGE.md
+? docs/mission-reports/CP34-INDEPENDENT-QUALITY-AUDIT.md
+? docs/mission-reports/CP51-58-FINAL-ASSURANCE.md
+? docs/mission-reports/CP59-CP75-CAPABILITY-MATRIX.md
+? docs/mission-reports/CP59-CP75-FINAL-ASSURANCE.md
+? docs/mission-reports/CP76-CP96-CAPABILITY-MATRIX.md
+? docs/mission-reports/CP83-CP96-FINAL-ASSURANCE.md
+? docs/mission-reports/CP97-CP112-FINAL-ASSURANCE.md
+? docs/mission-reports/MASTER-MISSION-ENGINE-REGISTRY-ASSURANCE.md
+? docs/mission-reports/MASTER-MISSION-PHASE0-BASELINE.md
+? docs/mission-reports/MASTER-MISSION-PROGRESS-AND-REMAINING-WORK.md
+? docs/mission-reports/MASTER-RTL-BASIC-CORRECTION-f29.json
+? docs/mission-reports/MASTER-RTL-RAQM-REPRODUCTION-f29.json
+? docs/mission-reports/MISSION7-BASELINE.md
+? docs/mission-reports/MISSION7-GIT-START.txt
+? docs/mission-reports/MISSION7-HISTORICAL-CAPABILITY-MATRIX.json
+? docs/mission-reports/MISSION7-LAYOUT-EQUIVALENCE.json
+? docs/mission-reports/MISSION7-RECOVERY-MATRIX.json
+? docs/mission-reports/MISSION7-REPORT-EN.md
+? docs/mission-reports/MISSION7-REPORT-FA.md
+? docs/mission-reports/MISSION7-WORKSPACE-END.jsonl
+? docs/mission-reports/MISSION7-WORKSPACE-START.jsonl
+? docs/mission-reports/MISSION8-BASELINE.md
+? docs/mission-reports/MISSION8-ENGINE-ASSURANCE.json
+? docs/mission-reports/MISSION8-FINAL-CI.json
+? docs/mission-reports/MISSION8-GIT-END.txt
+? docs/mission-reports/MISSION8-GIT-START.txt
+? docs/mission-reports/MISSION8-HISTORICAL-CAPABILITY-MATRIX.json
+? docs/mission-reports/MISSION8-HISTORICAL-OCR-CASES.json
+? docs/mission-reports/MISSION8-OCR-EXPLORATORY.json
+? docs/mission-reports/MISSION8-RECOVERY-MATRIX.json
+? docs/mission-reports/MISSION8-REPORT-EN.md
+? docs/mission-reports/MISSION8-REPORT-FA.md
+? docs/mission-reports/MISSION8-ROADMAP.md
+? docs/mission-reports/MISSION8-WORKSPACE-END.jsonl
+? docs/mission-reports/MISSION8-WORKSPACE-START.jsonl
+? docs/mission-reports/MISSION9-CONTINUATION-BACKEND-REGRESSION.txt
+? docs/mission-reports/MISSION9-CONTINUATION-GIT-PRECOMMIT.txt
+? docs/mission-reports/MISSION9-CONTINUATION-GIT-START.txt
+? docs/mission-reports/MISSION9-CONTINUATION-IGNORED-START.nul
+? docs/mission-reports/MISSION9-CONTINUATION-INDEX-START.nul
+? docs/mission-reports/MISSION9-CONTINUATION-PROTECTED.json
+? docs/mission-reports/MISSION9-CONTINUATION-RECOVERY.json
+? docs/mission-reports/MISSION9-CONTINUATION-UNTRACKED-START.nul
+? docs/mission-reports/MISSION9-CONTINUATION-WORKSPACE-PRECOMMIT.jsonl
+? docs/mission-reports/MISSION9-CONTINUATION2-BACKEND-REGRESSION.txt
+? docs/mission-reports/MISSION9-CONTINUATION2-BROWSER-SUMMARY.txt
+? docs/mission-reports/MISSION9-CONTINUATION2-CI-DIAGNOSIS.md
+? docs/mission-reports/MISSION9-CONTINUATION2-DIAGNOSTIC-GIT-PRECOMMIT.txt
+? docs/mission-reports/MISSION9-CONTINUATION2-DIAGNOSTIC-WORKSPACE-PRECOMMIT.jsonl
+? docs/mission-reports/MISSION9-CONTINUATION2-GIT-PRECOMMIT.txt
+? docs/mission-reports/MISSION9-CONTINUATION2-GIT-START.nul
+? docs/mission-reports/MISSION9-CONTINUATION2-IGNORED-START.nul
+? docs/mission-reports/MISSION9-CONTINUATION2-INDEX-START.nul
+? docs/mission-reports/MISSION9-CONTINUATION2-PROTECTED-END.json
+? docs/mission-reports/MISSION9-CONTINUATION2-PROTECTED-START.json
+? docs/mission-reports/MISSION9-CONTINUATION2-RECOVERY.json
+? docs/mission-reports/MISSION9-CONTINUATION2-REPORT.md
+? docs/mission-reports/MISSION9-CONTINUATION2-UNTRACKED-START.nul
+? docs/mission-reports/MISSION9-CONTINUATION2-WORKSPACE-PRECOMMIT.jsonl
+? docs/mission-reports/MISSION9-ENGINE-ASSURANCE.json
+? docs/mission-reports/MISSION9-GIT-END.txt
+? docs/mission-reports/MISSION9-GIT-START.txt
+? docs/mission-reports/MISSION9-HISTORICAL-CAPABILITY-MATRIX.json
+? docs/mission-reports/MISSION9-HISTORICAL-CAPABILITY-REPORT-EN.md
+? docs/mission-reports/MISSION9-HISTORICAL-CAPABILITY-REPORT-FA.md
+? docs/mission-reports/MISSION9-OCR-CONTAINMENT-CONTINUATION.md
+? docs/mission-reports/MISSION9-RECOVERY-MATRIX.json
+? docs/mission-reports/MISSION9-REPORT-EN.md
+? docs/mission-reports/MISSION9-REPORT-FA.md
+? docs/mission-reports/MISSION9-ROADMAP.md
+? docs/mission-reports/MISSION9-WORKSPACE-BASELINE.md
+? docs/mission-reports/MISSION9-WORKSPACE-END.jsonl
+? docs/mission-reports/MISSION9-WORKSPACE-START.jsonl
+? frontend/.playwright-report-cp151-71aae4f7f3364cd8bef9f4748c4283fb/index.html
+? frontend/e2e/assets/cp131_synthetic_ddr.csv
+? frontend/e2e/cp131-synthetic-pilot.spec.ts
+? frontend/e2e/cp150-fixtures.ts
+? frontend/e2e/cp150-two-well-pilot.spec.ts
+? frontend/e2e/daily-reports-workspace.spec.ts
+? frontend/e2e/database-readback.ts
+? frontend/e2e/failure-oracle.ts
+? frontend/e2e/global-setup.cp131.ts
+? frontend/e2e/global-setup.cp150.ts
+? frontend/e2e/surveys-workspace.spec.ts
+? frontend/playwright-report-master-full-7d42a1/index.html
+? frontend/playwright.cp131.config.ts
+? frontend/playwright.cp150.config.ts
+? frontend/scripts/verify-e2e-run.mjs
+? frontend/scripts/verify-e2e-run.test.mjs
+? frontend/scripts/verify-e2e-shape.mjs
+? frontend/src/components/documents/ExtractedRecordReviewForm.test.tsx
+? frontend/src/components/documents/ExtractedRecordReviewForm.tsx
+? frontend/src/components/engineering/UnitAwareResult.test.tsx
+? frontend/src/components/engineering/UnitAwareResult.tsx
+? frontend/src/components/engineering/UnitContractSummary.tsx
+? frontend/src/lib/failureOracle.test.ts
+? frontend/src/pages/auth/SecuritySettingsPage.test.tsx
+? frontend/src/pages/auth/SecuritySettingsPage.tsx
+? frontend/src/pages/engineering/AdvisorWorkspace.test.tsx
+? frontend/src/pages/engineering/CirculationWorkspace.test.tsx
+? frontend/src/pages/engineering/CirculationWorkspace.tsx
+? frontend/src/pages/engineering/ProgramsProceduresWorkspace.test.tsx
+? frontend/src/pages/engineering/ProgramsProceduresWorkspace.tsx
+? frontend/src/pages/engineering/ReportsWorkspace.test.tsx
+? frontend/src/pages/library/NotificationOutboxPanel.tsx
+? frontend/src/pages/library/PlatformPage.test.tsx
+? frontend/src/pages/wells/DailyReportsWorkspace.test.tsx
+? frontend/src/pages/wells/DailyReportsWorkspace.tsx
+? frontend/src/pages/wells/DocumentWorkspace.test.tsx
+? frontend/src/pages/wells/SurveysWorkspace.test.tsx
+? frontend/src/pages/wells/SurveysWorkspace.tsx
+? frontend/test-results-continue2/.last-run.json
+? frontend/test-results-continue2/well-cockpit-well-cockpit--82af4-om-a-generic-event-duration-chromium/error-context.md
+? frontend/test-results-continue2/well-cockpit-well-cockpit--82af4-om-a-generic-event-duration-chromium/test-failed-1.png
+? frontend/test-results-continue2/well-cockpit-well-cockpit--82af4-om-a-generic-event-duration-chromium/trace.zip
+? frontend/test-results-continue2b/.last-run.json
+? frontend/test-results-continue2connector/.last-run.json
+? frontend/test-results-continue2final/.last-run.json
+? frontend/test-results-continue2full/.last-run.json
+? frontend/test-results-continue2full/connectors-platform-CP11-t-e1520-dance-then-recovers-cleanly-chromium/error-context.md
+? frontend/test-results-continue2full/connectors-platform-CP11-t-e1520-dance-then-recovers-cleanly-chromium/test-failed-1.png
+? frontend/test-results-continue2full/connectors-platform-CP11-t-e1520-dance-then-recovers-cleanly-chromium/trace.zip
+? frontend/test-results-continue2full/live-operations-CP10-live--719a9-Persian-RTL-token-isolation-chromium/error-context.md
+? frontend/test-results-continue2full/live-operations-CP10-live--719a9-Persian-RTL-token-isolation-chromium/trace.zip
+? frontend/test-results-master-auth-c4a891de/.last-run.json
+? frontend/test-results-master-full-7d42a1/.last-run.json
+? frontend/test-results-master-full-7d42a1/e2e-results.json
+? frontend/tsconfig.e2e.json
+? scripts/compare_ocr_tesseractjs.cjs
+? scripts/compare_synthetic_ocr_tesseractjs.py
+? scripts/diagnose_synthetic_ocr_tesserocr.py
+? scripts/emit_synthetic_ocr_annotations.py
+? scripts/generate_synthetic_ocr_quality_corpus.py
+? scripts/seed_cp131_pilot.py
+? scripts/seed_cp150_pilot.py
+? scripts/snapshot_engine_registry.py
+? scripts/verify_backend_test_inventory.py
+? scripts/verify_daily_report_db_readback.py
+? scripts/verify_engine_roadmap.py
+? scripts/verify_engineering_catalogue.py
+? scripts/verify_engineering_product_db_readback.py
+? scripts/verify_synthetic_ocr_quality.py
+exit=0
+
+>>> git remote -v
+origin	https://github.com/asgareyvazi/DrillAI.git (fetch)
+origin	https://github.com/asgareyvazi/DrillAI.git (push)
+exit=0
+
+>>> git ls-remote origin refs/heads/arena/9d8f5568-drillai refs/heads/main
+829c931ddbbd04f14a435ab3e9eef3ba30eefba3	refs/heads/arena/9d8f5568-drillai
+bfa066b28e0071880cb9191a4f1d47fdaa143e04	refs/heads/main
+exit=0
+
+>>> git log --oneline --decorate -30
+bfea530 (grafted, HEAD -> arena/9d8f5568-drillai) feat(security): CP24 deployment hardening, reverse proxy security headers, SHA pinning & supply-chain gate
+exit=0
+
+>>> git worktree list --porcelain
+worktree /home/user/DrillAI
+HEAD bfea530602a23bcc08efca85a136240f61c44a0d
+branch refs/heads/arena/9d8f5568-drillai
+
+exit=0
+
+>>> git stash list
+exit=0
+
+>>> git tag --list
+exit=0
+
+>>> git submodule status
+exit=0

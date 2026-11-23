@@ -1,0 +1,3 @@
+# Engineering capability — NOT_ACCEPTED
+
+The initial inventory is `../DRILLAI-ENGINEERING-CAPABILITY-REGISTER.json`. Most current statuses are UNKNOWN rather than claims based on an endpoint, test name or registry; see the 30-row recovery matrix and engine assurance. NPT Event interval union is scoped and is not physical downtime, generic event duration is not NPT, and row sums, interval union and cause allocation are distinct. Complete DDR, chronology, identity/review, well design, survey uncertainty, well control, cementing, reporting, AI/RAG and twin workflows remain to be independently verified. No golden-well or field acceptance is claimed.
