@@ -13,6 +13,7 @@ import io
 import os
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -424,6 +425,38 @@ def test_tesseract_cli_adapter_uses_stdin_and_bounds_child_output(tmp_path: Path
     with pytest.raises(OcrUnavailable, match="output exceeded"):
         bounded.recognize(b"small image")
 
+    # Exercise a real descendant, not a mocked Popen. The child inherits stdout and would
+    # write a marker after its leader times out (or exits successfully) if it survived.
+    for leader_exits in (False, True):
+        ready = tmp_path / f"descendant-ready-{leader_exits}"
+        survived = tmp_path / f"descendant-survived-{leader_exits}"
+        tree_script = tmp_path / f"tree-{leader_exits}"
+        child_code = (
+            "import pathlib,time; "
+            f"pathlib.Path({str(ready)!r}).write_text('ready'); "
+            "time.sleep(2.0); "
+            f"pathlib.Path({str(survived)!r}).write_text('survived')"
+        )
+        tree_script.write_text(
+            "#!/usr/bin/env python3\n"
+            "import pathlib,subprocess,sys,time\n"
+            "sys.stdin.buffer.read()\n"
+            f"subprocess.Popen([sys.executable, '-c', {child_code!r}])\n"
+            f"while not pathlib.Path({str(ready)!r}).exists(): time.sleep(0.01)\n"
+            + (f"sys.stdout.write({expected!r}); sys.stdout.flush()\n" if leader_exits else "time.sleep(10)\n"),
+            encoding="utf-8",
+        )
+        tree_script.chmod(0o755)
+        tree_provider = TesseractOcrProvider(executable=str(tree_script), timeout_seconds=1)
+        if leader_exits:
+            assert [line.text for line in tree_provider.recognize(b"page")] == ["Drill"]
+        else:
+            with pytest.raises(OcrUnavailable, match="per-page timeout"):
+                tree_provider.recognize(b"page")
+        assert ready.exists(), "descendant must have actually started"
+        time.sleep(2.1)
+        assert not survived.exists(), "OCR descendant survived its process group cleanup"
+
 
 def test_tesseract_rtl_language_routing_shares_the_original_page_deadline(monkeypatch) -> None:
     # Layout detection is charged to the same budget, and no Tesseract child may start
@@ -462,6 +495,38 @@ def test_tesseract_rtl_language_routing_shares_the_original_page_deadline(monkey
     assert [line.text for line in lines] == ["متن"]
     assert calls == [("eng+fas", 107.0), ("fas", 107.0)]
     assert provider.languages == "eng+fas"
+
+    # Time spent creating a subprocess must not be added back to the page budget.
+    clock = [100.0]
+    monkeypatch.setattr(ocr_module.time, "monotonic", lambda: clock[0])
+
+    class SlowSpawnChild:
+        def __init__(self):
+            self.stdin = io.BytesIO()
+            self.stdout = io.BytesIO()
+            self.returncode = None
+
+        def wait(self, timeout=None):
+            if self.returncode is None:
+                assert timeout == 0.0
+                raise subprocess.TimeoutExpired("synthetic", timeout)
+            return self.returncode
+
+        def poll(self):
+            return self.returncode
+
+        def kill(self):
+            self.returncode = -9
+
+    def slow_spawn(*args, **kwargs):
+        clock[0] = 108.0
+        return SlowSpawnChild()
+
+    monkeypatch.setattr(ocr_module.subprocess, "Popen", slow_spawn)
+    with pytest.raises(OcrUnavailable, match="per-page timeout"):
+        budget_provider._recognize_acquired(
+            b"page", "/synthetic", page_segmentation_mode=6, languages="eng", deadline_monotonic=107.0
+        )
 
 
 def test_tesseract_provider_availability_is_explicit_for_missing_executable() -> None:

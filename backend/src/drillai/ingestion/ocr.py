@@ -19,6 +19,7 @@ import math
 import os
 import re
 import shutil
+import signal
 import subprocess
 import threading
 import time
@@ -52,6 +53,33 @@ _PROCESS_SEMAPHORES: dict[int, threading.BoundedSemaphore] = {}
 _PROCESS_SEMAPHORES_LOCK = threading.Lock()
 _TESSERACT_DIAGNOSTIC_CACHE: dict[tuple[str, str, float, str, str], dict[str, object]] = {}
 _TESSERACT_DIAGNOSTIC_CACHE_LOCK = threading.Lock()
+
+
+def _stop_recognition_process(process: subprocess.Popen[bytes]) -> None:
+    """Stop an OCR invocation and its same-session descendants on POSIX.
+
+    POSIX recognition children are started in a fresh session, so their process-group ID is
+    their PID. Kill the group even after the leader exits: a descendant may still hold stdout
+    open. Windows currently stops only the direct child; Job Object containment is not yet
+    implemented, so this must not be represented as a cross-platform process-tree deadline.
+    A descendant that deliberately creates a new session can escape a POSIX process group.
+    """
+    if os.name != "nt":
+        pid = getattr(process, "pid", None)
+        if isinstance(pid, int) and pid > 0:
+            try:
+                os.killpg(pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass  # The session has already exited.
+            except OSError as exc:
+                if process.poll() is None:
+                    with suppress(OSError):
+                        process.kill()
+                raise OcrUnavailable("OCR process group could not be terminated") from exc
+            return
+    if process.poll() is None:
+        with suppress(OSError):
+            process.kill()
 
 
 def _process_semaphore(limit: int) -> threading.BoundedSemaphore:
@@ -717,6 +745,9 @@ class TesseractOcrProvider:
                 stderr=subprocess.DEVNULL,
                 env=child_env,
                 bufsize=0,
+                # A separate POSIX session contains ordinary descendants, including ones that
+                # inherit our pipes after the Tesseract leader exits. No shell is involved.
+                start_new_session=os.name != "nt",
             )
         except OSError as exc:
             raise OcrUnavailable("Tesseract could not be started") from exc
@@ -766,16 +797,15 @@ class TesseractOcrProvider:
         writer.start()
         timed_out = False
         try:
-            process.wait(timeout=timeout_remaining)
+            # Process creation itself may consume budget; don't grant it a fresh timeout.
+            process.wait(timeout=max(0.0, deadline_monotonic - time.monotonic()))
         except subprocess.TimeoutExpired:
             timed_out = True
-            with suppress(OSError):
-                process.kill()
-            process.wait()
         finally:
+            # Also terminate descendants after successful leader exit, before joining pipe
+            # readers/writers: an inherited pipe otherwise outlives the original process.
+            _stop_recognition_process(process)
             if process.poll() is None:
-                with suppress(OSError):
-                    process.kill()
                 process.wait()
             writer.join(timeout=1.0)
             reader.join(timeout=1.0)

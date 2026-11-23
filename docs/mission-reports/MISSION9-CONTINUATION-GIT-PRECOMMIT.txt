@@ -1,0 +1,85 @@
+PRE-COMMIT SNAPSHOT: this file excludes its own final commit and subsequent CI; start recorded a restored stale HEAD and was reconciled without modifying worktree bytes.
+## arena/9d8f5568-drillai...origin/arena/9d8f5568-drillai
+ M backend/src/drillai/ingestion/ocr.py
+ M backend/tests/ingestion/test_ocr.py
+?? docs/mission-reports/MISSION9-CONTINUATION-GIT-PRECOMMIT.txt
+?? docs/mission-reports/MISSION9-CONTINUATION-GIT-START.txt
+?? docs/mission-reports/MISSION9-CONTINUATION-IGNORED-START.nul
+?? docs/mission-reports/MISSION9-CONTINUATION-INDEX-START.nul
+?? docs/mission-reports/MISSION9-CONTINUATION-PROTECTED.json
+?? docs/mission-reports/MISSION9-CONTINUATION-RECOVERY.json
+?? docs/mission-reports/MISSION9-CONTINUATION-UNTRACKED-START.nul
+?? docs/mission-reports/MISSION9-OCR-CONTAINMENT-CONTINUATION.md
+?? frontend/.playwright-report-cp151-71aae4f7f3364cd8bef9f4748c4283fb/
+?? frontend/playwright-report-master-full-7d42a1/
+?? frontend/test-results-master-auth-c4a891de/
+?? frontend/test-results-master-full-7d42a1/
+
+IGNORED paths (collapsed directory form; generated local cache, not deleted):
+ M backend/src/drillai/ingestion/ocr.py
+ M backend/tests/ingestion/test_ocr.py
+?? docs/mission-reports/MISSION9-CONTINUATION-GIT-PRECOMMIT.txt
+?? docs/mission-reports/MISSION9-CONTINUATION-GIT-START.txt
+?? docs/mission-reports/MISSION9-CONTINUATION-IGNORED-START.nul
+?? docs/mission-reports/MISSION9-CONTINUATION-INDEX-START.nul
+?? docs/mission-reports/MISSION9-CONTINUATION-PROTECTED.json
+?? docs/mission-reports/MISSION9-CONTINUATION-RECOVERY.json
+?? docs/mission-reports/MISSION9-CONTINUATION-UNTRACKED-START.nul
+?? docs/mission-reports/MISSION9-OCR-CONTAINMENT-CONTINUATION.md
+?? frontend/.playwright-report-cp151-71aae4f7f3364cd8bef9f4748c4283fb/
+?? frontend/playwright-report-master-full-7d42a1/
+?? frontend/test-results-master-auth-c4a891de/
+?? frontend/test-results-master-full-7d42a1/
+!! .ruff_cache/
+!! backend/.pytest_cache/
+!! backend/.ruff_cache/
+!! backend/alembic/__pycache__/
+!! backend/alembic/versions/__pycache__/
+!! backend/src/drillai/__pycache__/
+!! backend/src/drillai/ai/__pycache__/
+!! backend/src/drillai/api/__pycache__/
+!! backend/src/drillai/api/routers/__pycache__/
+!! backend/src/drillai/assets/__pycache__/
+!! backend/src/drillai/context/__pycache__/
+!! backend/src/drillai/core/__pycache__/
+!! backend/src/drillai/db/__pycache__/
+!! backend/src/drillai/db/models/__pycache__/
+!! backend/src/drillai/documents/__pycache__/
+!! backend/src/drillai/drilling/__pycache__/
+!! backend/src/drillai/engineering/__pycache__/
+!! backend/src/drillai/engines/__pycache__/
+!! backend/src/drillai/ingestion/__pycache__/
+!! backend/src/drillai/observability/__pycache__/
+!! backend/src/drillai/operations/__pycache__/
+!! backend/src/drillai/rag/__pycache__/
+!! backend/src/drillai/security/__pycache__/
+!! backend/src/drillai/telemetry/__pycache__/
+!! backend/src/drillai/telemetry/protocols/__pycache__/
+!! backend/src/drillai/twin/__pycache__/
+!! backend/src/drillai/units/__pycache__/
+!! backend/src/drillai/workflow/__pycache__/
+!! backend/tests/__pycache__/
+!! backend/tests/ai/__pycache__/
+!! backend/tests/api/__pycache__/
+!! backend/tests/assets/__pycache__/
+!! backend/tests/context/__pycache__/
+!! backend/tests/db/__pycache__/
+!! backend/tests/documents/__pycache__/
+!! backend/tests/drilling/__pycache__/
+!! backend/tests/engineering/__pycache__/
+!! backend/tests/engines/__pycache__/
+!! backend/tests/fixtures/__pycache__/
+!! backend/tests/ingestion/__pycache__/
+!! backend/tests/operations/__pycache__/
+!! backend/tests/rag/__pycache__/
+!! backend/tests/security/__pycache__/
+!! backend/tests/telemetry/__pycache__/
+!! backend/tests/twin/__pycache__/
+!! backend/tests/units/__pycache__/
+!! backend/tests/workflow/__pycache__/
+!! scripts/__pycache__/
+
+76bef500a85c09f5362b1011ed42055a0aac07c1 refs/heads/arena/9d8f5568-drillai
+bfa066b28e0071880cb9191a4f1d47fdaa143e04 refs/heads/main
+76bef500a85c09f5362b1011ed42055a0aac07c1
+76bef500a85c09f5362b1011ed42055a0aac07c1
