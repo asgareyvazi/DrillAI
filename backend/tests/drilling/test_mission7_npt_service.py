@@ -127,6 +127,12 @@ async def test_time_filtered_union_retains_unassignable_events_in_same_scope(ses
     assert rec["status"] == "unavailable_incomplete"
     assert rec["union_hours"] is None
     assert (rec["scoped_event_count"], rec["overlapping_window_count"], rec["outside_window_count"], rec["unassignable_time_count"]) == (3, 1, 1, 1)
+    # The unknown-time row is absent from the legacy time-filtered cases but its scoped,
+    # tenant-qualified identity must remain available for review, not silently disappear.
+    assert unknown.id not in [item["id"] for item in result["cases"]]
+    assert rec["blocker_reason_counts"] == {"invalid_or_unqualified_time": 1}
+    assert rec["blockers"] == [{"event_id": unknown.id, "source_document_id": None,
+                                 "source_record_id": None, "reason": "invalid_or_unqualified_time"}]
     unknown.occurred_at = start + dt.timedelta(hours=3)
     unknown.occurred_at_basis = "source_record"
     unknown.ended_at = start + dt.timedelta(hours=4)
@@ -136,3 +142,5 @@ async def test_time_filtered_union_retains_unassignable_events_in_same_scope(ses
     assert rec["status"] == "complete_for_matching_events"
     assert rec["union_hours"] == 1
     assert (rec["outside_window_count"], rec["unassignable_time_count"]) == (2, 0)
+    assert rec["blockers"] == []
+    assert rec["blocker_reason_counts"] == {}

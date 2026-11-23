@@ -422,6 +422,22 @@ export function NptCard({ npt, onSelectCause }: { npt: NptSummary; onSelectCause
             npt.interval_reconciliation.missing_npt_hours_count > 0 && (
               <p>{t('cockpit.nptIntervalMissingHours', { count: npt.interval_reconciliation.missing_npt_hours_count })}</p>
             )}
+          {npt.interval_reconciliation.blockers && npt.interval_reconciliation.blockers.length > 0 && (
+            <details className="mt-2">
+              <summary className="cursor-pointer font-medium">{t('cockpit.nptBlockerTitle')}</summary>
+              <p>{t('cockpit.nptBlockerFirstReason')}</p>
+              {npt.interval_reconciliation.blockers_truncated && <p>{t('cockpit.nptBlockerTruncated')}</p>}
+              <ul className="mt-1 space-y-1">
+                {npt.interval_reconciliation.blockers.map((blocker, index) => (
+                  <li key={`${blocker.event_id ?? 'unknown'}-${index}`}>
+                    {t(`cockpit.nptBlockerReasons.${blocker.reason}`)} · {t('cockpit.nptBlockerEvent')}: <bdi dir="ltr">{blocker.event_id ?? '—'}</bdi>
+                    {' · '}{t('cockpit.nptEvidenceDocument')}: <bdi dir="ltr">{blocker.source_document_id ?? '—'}</bdi>
+                    {' · '}{t('cockpit.nptEvidenceRecord')}: <bdi dir="ltr">{blocker.source_record_id ?? '—'}</bdi>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
           <p>{t('cockpit.nptIntervalCaveat')}</p>
         </div>
       )}

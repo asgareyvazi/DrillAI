@@ -6,6 +6,7 @@ from dataclasses import replace
 import pytest
 
 from drillai.drilling.npt_intervals import (
+    MAX_BLOCKER_DETAILS,
     MAX_RECONCILIATION_EVENTS,
     IntervalEvidence,
     reconcile_event_intervals,
@@ -44,6 +45,9 @@ def test_incomplete_evidence_prevents_any_partial_union(change):
     assert summary["invalid_event_count"] == 1
     assert summary["union_hours"] is None
     assert summary["overlap_hours"] is None
+    assert sum(summary["blocker_reason_counts"].values()) == 1
+    assert len(summary["blockers"]) == 1
+    assert not summary["blockers_truncated"]
 
 
 def test_empty_and_bounded_scope():
@@ -53,6 +57,27 @@ def test_empty_and_bounded_scope():
     result = reconcile_event_intervals([event(0, 1)] * (MAX_RECONCILIATION_EVENTS + 1))
     assert result["status"] == "unavailable_limit"
     assert result["union_hours"] is None
+    assert result["blockers"] is None  # A limited prefix is not a complete assessment.
+    assert result["blocker_reason_counts"] is None
+
+    changes = [
+        ({"start": None}, "invalid_or_unqualified_time"),
+        ({"end": START}, "unordered_time"),
+        ({"npt_hours": None}, "missing_npt_hours"),
+        ({"hours_basis": "planned"}, "unqualified_npt_hours"),
+        ({"npt_hours": float("nan")}, "invalid_npt_hours"),
+        ({"npt_hours": 0.5}, "npt_hours_mismatch"),
+    ]
+    for change, reason in changes:
+        row = replace(event(0, 1), event_id="event-1", source_document_id="doc-1", source_record_id="record-1", **change)
+        rec = reconcile_event_intervals([row])
+        assert rec["blocker_reason_counts"] == {reason: 1}
+        assert rec["blockers"] == [{"event_id": "event-1", "source_document_id": "doc-1",
+                                     "source_record_id": "record-1", "reason": reason}]
+    many = reconcile_event_intervals([replace(event(0, 1), start=None)] * (MAX_BLOCKER_DETAILS + 2))
+    assert many["blocker_reason_counts"] == {"invalid_or_unqualified_time": MAX_BLOCKER_DETAILS + 2}
+    assert len(many["blockers"]) == MAX_BLOCKER_DETAILS
+    assert many["blockers_truncated"] is True
 
 
 def test_timezone_offsets_touching_and_partial_window_clipping():

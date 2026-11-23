@@ -16,6 +16,7 @@ from drillai.core.clock import ensure_utc
 from drillai.operations.time_windows import TIME_WINDOW_BASES
 
 MAX_RECONCILIATION_EVENTS = 10_000
+MAX_BLOCKER_DETAILS = 100
 # Timestamp and duration rounding can differ by at most one second without treating
 # the entire event as an unrelated partial NPT duration.
 MAX_DURATION_DIFFERENCE_SECONDS = 1.0
@@ -29,6 +30,9 @@ class IntervalEvidence:
     end_basis: str
     npt_hours: float | None
     hours_basis: str
+    event_id: str | None = None
+    source_document_id: str | None = None
+    source_record_id: str | None = None
 
 
 def reconcile_event_intervals(
@@ -49,9 +53,21 @@ def reconcile_event_intervals(
         return {"status": "unavailable_limit", "union_hours": None, "recorded_interval_hours": None,
                 "overlap_hours": None, "overlap_event_count": None, "invalid_event_count": None,
                 "missing_npt_hours_count": None, "event_count": None, "scoped_event_count": None,
-                "unassignable_time_count": None, "outside_window_count": None, "overlapping_window_count": None}
+                "unassignable_time_count": None, "outside_window_count": None, "overlapping_window_count": None,
+                "blocker_reason_counts": None, "blockers": None, "blockers_truncated": None}
     intervals: list[tuple[dt.datetime, dt.datetime]] = []
     invalid = missing_npt_hours = unassignable = outside = overlapping = 0
+    blockers: list[dict[str, str | None]] = []
+    reason_counts: dict[str, int] = {}
+
+    def record_blocker(row: IntervalEvidence, reason: str) -> None:
+        # A single first-failing reason per row makes counts additive, not an exhaustive list of
+        # defects. Identity is explicit source lineage, never a timestamp/title-based merge.
+        reason_counts[reason] = reason_counts.get(reason, 0) + 1
+        if len(blockers) < MAX_BLOCKER_DETAILS:
+            blockers.append({"event_id": row.event_id, "source_document_id": row.source_document_id,
+                             "source_record_id": row.source_record_id, "reason": reason})
+
     for row in rows:
         start = end = None
         if (row.start_basis in TIME_WINDOW_BASES and row.end_basis in TIME_WINDOW_BASES
@@ -65,6 +81,7 @@ def reconcile_event_intervals(
             invalid += 1
             if row.npt_hours is None:
                 missing_npt_hours += 1
+            record_blocker(row, "invalid_or_unqualified_time" if start is None or end is None else "unordered_time")
             continue
         # A qualified interval ending or starting exactly at the boundary has no duration
         # in the half-open reporting window. Its NPT quantity is irrelevant to this window.
@@ -74,11 +91,19 @@ def reconcile_event_intervals(
         overlapping += 1
         if row.npt_hours is None:
             missing_npt_hours += 1
-        if (row.hours_basis not in ("observed", "reported") or row.npt_hours is None
-                or isinstance(row.npt_hours, bool) or not isinstance(row.npt_hours, (int, float))
-                or not math.isfinite(row.npt_hours) or row.npt_hours <= 0
-                or abs((end - start).total_seconds() - row.npt_hours * 3600) > MAX_DURATION_DIFFERENCE_SECONDS):
+        reason = None
+        if row.npt_hours is None:
+            reason = "missing_npt_hours"
+        elif row.hours_basis not in ("observed", "reported"):
+            reason = "unqualified_npt_hours"
+        elif (isinstance(row.npt_hours, bool) or not isinstance(row.npt_hours, (int, float))
+              or not math.isfinite(row.npt_hours) or row.npt_hours <= 0):
+            reason = "invalid_npt_hours"
+        elif abs((end - start).total_seconds() - row.npt_hours * 3600) > MAX_DURATION_DIFFERENCE_SECONDS:
+            reason = "npt_hours_mismatch"
+        if reason is not None:
             invalid += 1
+            record_blocker(row, reason)
             continue
         low = max(start, since) if since else start
         high = min(end, until) if until else end
@@ -86,7 +111,8 @@ def reconcile_event_intervals(
     counts = {"scoped_event_count": len(rows), "unassignable_time_count": unassignable,
               "outside_window_count": outside, "overlapping_window_count": overlapping,
               "event_count": overlapping + unassignable, "invalid_event_count": invalid,
-              "missing_npt_hours_count": missing_npt_hours}
+              "missing_npt_hours_count": missing_npt_hours, "blocker_reason_counts": reason_counts,
+              "blockers": blockers, "blockers_truncated": invalid > len(blockers)}
     if invalid or not intervals:
         return {"status": "unavailable_incomplete" if invalid else "unavailable_no_evidence",
                 "union_hours": None, "recorded_interval_hours": None, "overlap_hours": None,

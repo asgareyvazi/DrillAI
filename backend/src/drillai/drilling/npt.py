@@ -884,7 +884,7 @@ class NptService:
         """
         stmt = select(Event).where(*self._event_filters(
             well_id, section_id=section_id, operation_id=operation_id,
-        )).limit(MAX_RECONCILIATION_EVENTS + 1)
+        )).order_by(Event.id).limit(MAX_RECONCILIATION_EVENTS + 1)
         rows = (await self.session.execute(stmt)).scalars().all()
         return reconcile_event_intervals([
             IntervalEvidence(
@@ -895,6 +895,9 @@ class NptService:
                 # row-summed KPI deliberately retains its separate fallback for compatibility.
                 npt_hours=row.npt_hours,
                 hours_basis=row.npt_hours_basis,
+                event_id=row.id,
+                source_document_id=row.source_document_id,
+                source_record_id=row.source_record_id,
             ) for row in rows
         ], since=since, until=until)
 

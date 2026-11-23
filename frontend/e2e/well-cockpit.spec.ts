@@ -144,25 +144,34 @@ test.describe('well cockpit built from the real well context', () => {
     await page.reload()
     await page.getByRole('tab', { name: /NPT|Non-productive time/i }).click()
     await expect(page.getByText(/1 matching event\(s\) lack explicit NPT hours/)).toBeVisible()
-    await page.getByText('Inspect selected source rows').click()
-    await expect(page.getByText(/Generic event duration \(legacy row sum only; not interval evidence\)/)).toBeVisible()
-    await expect(page.getByText(generic.id, { exact: true })).toBeVisible()
+    const sourceRows = page.locator('details').filter({ has: page.getByText('Inspect selected source rows') })
+    await sourceRows.getByText('Inspect selected source rows').click()
+    await expect(sourceRows.getByText(/Generic event duration \(legacy row sum only; not interval evidence\)/)).toBeVisible()
+    await expect(sourceRows.getByText(generic.id, { exact: true })).toBeVisible()
 
     // A record with unknown time must not disappear from a narrowed interval reconciliation.
-    await apiPost(request, '/events', {
+    const unknown = await apiPost<{ id: string }>(request, '/events', {
       well_id: well.id, title: 'Unassignable time', kind: 'stuck_pipe', is_npt: true,
       npt_category: 'stuck_pipe', npt_hours: 1, npt_hours_basis: 'reported',
     })
     const filtered = await apiGet<Reconciliation & { npt: { interval_reconciliation: {
       unassignable_time_count: number; scoped_event_count: number; outside_window_count: number
+      blockers: Array<{ event_id: string; reason: string }>
     } } }>(request, `/wells/${well.id}/npt?since=2026-03-15T00%3A00%3A00Z&until=2026-03-15T03%3A00%3A00Z`)
     expect(filtered.npt.interval_reconciliation).toMatchObject({
       status: 'unavailable_incomplete', union_hours: null, unassignable_time_count: 1,
       scoped_event_count: 5, outside_window_count: 1,
     })
+    expect(filtered.npt.interval_reconciliation.blockers).toContainEqual(expect.objectContaining({
+      event_id: unknown.id, reason: 'invalid_or_unqualified_time',
+    }))
     await page.reload()
     await page.getByRole('tab', { name: /NPT|Non-productive time/i }).click()
     await expect(page.getByText(/unassignable time: 1/)).toBeVisible()
+    const blockers = page.locator('details').filter({ has: page.getByText('Inspect interval blockers') })
+    await blockers.getByText('Inspect interval blockers').click()
+    await expect(blockers.getByText(unknown.id, { exact: true })).toBeVisible()
+    await expect(blockers.getByText(/Time is missing, invalid, or lacks qualified provenance/)).toBeVisible()
     expectNoFailures(consoleErrors, failedResponses)
   })
 

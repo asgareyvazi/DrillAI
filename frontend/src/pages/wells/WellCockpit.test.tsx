@@ -109,29 +109,41 @@ describe('NPT interval reconciliation', () => {
     expect(screen.getByText('record_test')).toBeInTheDocument()
   })
 
-  it('explains unassignable window evidence and no-evidence results', () => {
+  it('explains unassignable window evidence and no-evidence results', async () => {
     const base = { union_hours: null, overlap_hours: null, invalid_event_count: 1,
-      scoped_event_count: 3, overlapping_window_count: 1, outside_window_count: 1, unassignable_time_count: 1 }
+      scoped_event_count: 3, overlapping_window_count: 1, outside_window_count: 1, unassignable_time_count: 1,
+      blockers: [{ event_id: 'evn_hidden_by_window', source_document_id: 'doc_source', source_record_id: 'record_source',
+        reason: 'invalid_or_unqualified_time' }], blockers_truncated: true }
     const { rerender } = render(<I18nProvider><NptCard npt={{ ...npt.npt, interval_reconciliation: {
       ...base, status: 'unavailable_incomplete',
     } }} onSelectCause={() => {}} /></I18nProvider>)
     expect(screen.getByText(/Scoped events: 3; overlapping window: 1; outside window: 1; unassignable time: 1/)).toBeInTheDocument()
     expect(screen.queryByText(/Union:/)).not.toBeInTheDocument()
+    await userEvent.setup().click(screen.getByText('Inspect interval blockers'))
+    expect(screen.getByText(/Time is missing, invalid, or lacks qualified provenance/)).toBeInTheDocument()
+    expect(screen.getByText('evn_hidden_by_window')).toBeInTheDocument()
+    expect(screen.getByText('doc_source')).toBeInTheDocument()
+    expect(screen.getByText('record_source')).toBeInTheDocument()
+    expect(screen.getByText(/Only the first 100 blockers/)).toBeInTheDocument()
     rerender(<I18nProvider><NptCard npt={{ ...npt.npt, interval_reconciliation: {
       ...base, status: 'unavailable_no_evidence',
     } }} onSelectCause={() => {}} /></I18nProvider>)
     expect(screen.getByText(/not proof of zero physical NPT/)).toBeInTheDocument()
   })
 
-  it('does not render missing reconciliation as zero in Persian', () => {
+  it('does not render missing reconciliation as zero in Persian', async () => {
     window.localStorage.setItem('drillai.locale', 'fa')
     render(<I18nProvider><NptCard npt={{ ...npt.npt, interval_reconciliation: {
       status: 'unavailable_incomplete', union_hours: null, overlap_hours: null, invalid_event_count: 1,
-      missing_npt_hours_count: 1,
+      missing_npt_hours_count: 1, blockers: [{ event_id: 'evn_fa', source_document_id: null,
+        source_record_id: null, reason: 'missing_npt_hours' }],
     } }} onSelectCause={() => {}} /></I18nProvider>)
     expect(screen.getByText(/در دسترس نیست: حداقل یک بازه/)).toBeInTheDocument()
     expect(screen.getByText(/۱ رویداد منطبق فاقد ساعت صریح NPT|1 رویداد منطبق فاقد ساعت صریح NPT/)).toBeInTheDocument()
     expect(screen.queryByText(/اجتماع:/)).not.toBeInTheDocument()
+    await userEvent.setup().click(screen.getByText('بررسی موانع بازه‌ها'))
+    expect(screen.getByText(/ساعت صریح NPT وجود ندارد/)).toBeInTheDocument()
+    expect(screen.getByText('evn_fa')).toBeInTheDocument()
   })
 })
 

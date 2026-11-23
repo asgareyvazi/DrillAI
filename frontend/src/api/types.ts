@@ -450,6 +450,14 @@ export interface NptSummary {
     unassignable_time_count?: number | null
     outside_window_count?: number | null
     overlapping_window_count?: number | null
+    blocker_reason_counts?: Record<string, number> | null
+    blockers?: Array<{
+      event_id: string | null
+      source_document_id: string | null
+      source_record_id: string | null
+      reason: string
+    }> | null
+    blockers_truncated?: boolean | null
   }
   notes: string[]
 }
