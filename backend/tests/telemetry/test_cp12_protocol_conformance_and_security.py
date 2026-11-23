@@ -689,8 +689,13 @@ async def test_c1_c2_f2_atomic_cas_lease_heartbeat_preemption_and_governed_repla
                 claimed_c2 = await worker.claim_connector(cid, now=utc_now() + dt.timedelta(seconds=2))
                 assert claimed_c2 is not None
 
+                loop = asyncio.get_running_loop()
+                t_start = loop.time()
+                stage_times: dict[str, float] = {}
+
                 async def _preempt_after_200ms() -> None:
                     await asyncio.sleep(0.2)
+                    stage_times["wake"] = loop.time() - t_start
                     async with app.state.database.session() as s3:
                         svc3 = ConnectorService(s3, org_id)
                         await svc3.transition(
@@ -699,12 +704,19 @@ async def test_c1_c2_f2_atomic_cas_lease_heartbeat_preemption_and_governed_repla
                             reason="preempt slow poll",
                         )
                         await s3.commit()
+                    stage_times["commit"] = loop.time() - t_start
 
                 preempt_task = asyncio.create_task(_preempt_after_200ms())
-                t_start = asyncio.get_running_loop().time()
                 outcome_c2 = await worker.execute_claimed_poll(claimed_c2)
-                elapsed = asyncio.get_running_loop().time() - t_start
+                elapsed = loop.time() - t_start
                 await preempt_task
+                # Numeric-only timing, without connector identifiers, paths, or network payloads.
+                # Keep the unchanged safety assertion; this is diagnosis, not a tolerance change.
+                print(
+                    f"CP12_PREEMPT_TIMING wake_ms={stage_times.get('wake', -1) * 1000:.1f} "
+                    f"commit_ms={stage_times.get('commit', -1) * 1000:.1f} elapsed_ms={elapsed * 1000:.1f}",
+                    flush=True,
+                )
                 assert outcome_c2.status == "fenced"
                 # Must have been cancelled by heartbeat well before the 3.0s server sleep finished!
                 assert elapsed < 1.8
