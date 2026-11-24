@@ -63,7 +63,11 @@ NPT_METRIC_CONTRACT: dict[str, Any] = {
     ),
     "percentage": "100 * numerator / denominator; null when denominator is zero",
     "window": "only the caller-supplied since/until interval; no implicit reporting period",
-    "window_hours_policy": "recorded interval rows are included on overlap and their full reported hours are summed without proration",
+    "window_hours_policy": (
+        "recorded interval rows are included on overlap and their full reported hours are summed without "
+        "proration; legacy SQL overlap includes touching endpoints, while interval reconciliation uses "
+        "a half-open window and can exclude boundary-only rows"
+    ),
     "missing_policy": "missing or unclassified records are not imputed; a zero recorded total is not proof of zero physical downtime",
     "source_lineage": "event or operation row ids and source evidence in the bounded cases list; aggregate totals include the full matching population",
 }
@@ -685,7 +689,8 @@ class NptService:
             "candidates": rows,
             "note": (
                 "Offset NPT is only shown where the offset analysis actually recorded it; "
-                "similar wells are not evidence of similar performance"
+                "its reporting window and basis may differ from the subject's selected scope, "
+                "and similar wells are not evidence of similar performance"
             ),
         }
 

@@ -359,9 +359,9 @@ async def export_report(
     try:
         period_from = ensure_utc(period_from) if period_from is not None else None
         period_to = ensure_utc(period_to) if period_to is not None else None
-    except ValueError as exc:
+    except (ValueError, OverflowError) as exc:
         raise ValidationFailed(
-            "report period bounds must include a timezone offset",
+            "report period bounds must include a timezone offset and be representable in UTC",
             details={"reason": str(exc)},
         ) from exc
     if period_from is not None and period_to is not None and period_to < period_from:

@@ -1,0 +1,21 @@
+{
+  "status": "PARTIAL",
+  "entries": [
+    {
+      "id": "ocr.direct_child_reap",
+      "source": "backend/src/drillai/ingestion/ocr.py",
+      "test": "backend/tests/ingestion/test_ocr.py",
+      "result": "44 focused OCR tests passed on this host; Linux opt-in PID namespace test exercised setsid escape on timeout and leader exit",
+      "limitation": "Legacy process group escape reproduced; namespace mode opt-in and deployment compatibility unproved; Windows Job Object and hard document deadline absent"
+    },
+    {
+      "id": "reports.npt_period",
+      "source": "backend/src/drillai/drilling/reporting.py",
+      "api": "backend/src/drillai/api/routers/drilling.py",
+      "export": "JSON report export",
+      "test": "backend/tests/operations/test_npt_accounting.py::test_report_and_export_propagate_npt_period_without_claiming_proration",
+      "result": "included in 78 focused passed tests",
+      "limitation": "legacy inclusive overlap includes full row; no approved canonical downtime allocation, other report sections not necessarily period-scoped"
+    }
+  ]
+}

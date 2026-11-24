@@ -1,0 +1,5 @@
+{"scope": "private raw lstat inventory, excluding .git and captured before edits", "private_local_path": ".mission12-private/workspace-start-private.jsonl", "private_sha256": "24356186cfb9d7de4698ccea4df4e073077395d4972c1301b693b5df251552ef", "privacy": "Detailed path-level inventory is ignored by Git and retained locally with owner-only permissions; this sanitized file does not contain a recoverable path manifest."}
+{"initial_index_tracked": 437, "initial_index_untracked_files": 426, "initial_ignored_files": 0, "directories": 100, "scan_errors": 0, "initial_local_head": "bfea530602a23bcc08efca85a136240f61c44a0d"}
+{"remote_tracked_files_compared": 839, "remote_blob_or_mode_mismatches": 0, "after_index_reconciliation_tracked_changes": 0, "after_index_reconciliation_untracked_files": 24, "remote_head": "d3ec562f6137ff99009711abb037df092928a8ee"}
+{"protected_entries": 9, "compared_with_previous_mission_end": "contents, mode, type and size identical; all nine mtimes differ at mission start; cause unknown, no restoration attempted"}
+{"prior_mission_private_path_level_manifest": "UNAVAILABLE in restored sandbox; its committed digest is not a recoverable manifest."}

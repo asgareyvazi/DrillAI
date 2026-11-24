@@ -1,0 +1,193 @@
+{
+  "overall": "NOT_ACCEPTED",
+  "phase_numbering": "Mission 12 user specification phases 0 through 30; separate inherited Mission 10/11 phase numbers are not remapped.",
+  "inherited_phase_definitions": "UNRECOVERED from the available Mission 10/11 ledger, so first functional phase exits cannot be reconstructed from numbering alone.",
+  "phases": [
+    {
+      "phase": 0,
+      "name": "Forensic baseline and protected inventory",
+      "status": "PARTIAL",
+      "evidence_or_gap": "Private start inventory captured; no final disposition."
+    },
+    {
+      "phase": 1,
+      "name": "Reconstruct previous missions",
+      "status": "PARTIAL",
+      "evidence_or_gap": "Existing mission records reviewed; original inherited 26 phase definitions remain unrecovered."
+    },
+    {
+      "phase": 2,
+      "name": "Inherited 30-requirement audit",
+      "status": "PARTIAL",
+      "evidence_or_gap": "30-row inventory retains UNKNOWN for items not independently assessed."
+    },
+    {
+      "phase": 3,
+      "name": "OCR process containment and deadline",
+      "status": "PARTIAL",
+      "evidence_or_gap": "Legacy process group allows setsid escape. Experimental opt-in Linux PID namespace contains a synthetic escaped child on timeout and leader exit in this host, fails closed when unsupported; deployment compatibility, Windows Job Objects, and hard document deadline remain unproven."
+    },
+    {
+      "phase": 4,
+      "name": "OCR quality",
+      "status": "NOT_ACCEPTED",
+      "evidence_or_gap": "Frozen deployment gate failed on starting SHA; no deployed quality fix established."
+    },
+    {
+      "phase": 5,
+      "name": "Document ingestion and DDR batch",
+      "status": "UNKNOWN",
+      "evidence_or_gap": "Not independently assessed or implemented in this increment."
+    },
+    {
+      "phase": 6,
+      "name": "Manual DDR",
+      "status": "UNKNOWN",
+      "evidence_or_gap": "Not independently assessed or implemented in this increment."
+    },
+    {
+      "phase": 7,
+      "name": "NPT governance",
+      "status": "PARTIAL",
+      "evidence_or_gap": "Scoped report correction; approved canonical attribution not implemented."
+    },
+    {
+      "phase": 8,
+      "name": "Operations chronology",
+      "status": "UNKNOWN",
+      "evidence_or_gap": "Not independently assessed or implemented in this increment."
+    },
+    {
+      "phase": 9,
+      "name": "Survey and trajectory",
+      "status": "UNKNOWN",
+      "evidence_or_gap": "Not independently assessed or implemented in this increment."
+    },
+    {
+      "phase": 10,
+      "name": "Capacity",
+      "status": "UNKNOWN",
+      "evidence_or_gap": "Not independently assessed or implemented in this increment."
+    },
+    {
+      "phase": 11,
+      "name": "Hydraulics and rheology",
+      "status": "UNKNOWN",
+      "evidence_or_gap": "Not independently assessed or implemented in this increment."
+    },
+    {
+      "phase": 12,
+      "name": "Hole cleaning",
+      "status": "UNKNOWN",
+      "evidence_or_gap": "Not independently assessed or implemented in this increment."
+    },
+    {
+      "phase": 13,
+      "name": "Torque, drag and buckling",
+      "status": "UNKNOWN",
+      "evidence_or_gap": "Not independently assessed or implemented in this increment."
+    },
+    {
+      "phase": 14,
+      "name": "Casing and connections",
+      "status": "UNKNOWN",
+      "evidence_or_gap": "Not independently assessed or implemented in this increment."
+    },
+    {
+      "phase": 15,
+      "name": "Well control and MPD",
+      "status": "UNKNOWN",
+      "evidence_or_gap": "Not independently assessed or implemented in this increment."
+    },
+    {
+      "phase": 16,
+      "name": "Cementing, stability, surge/swab",
+      "status": "UNKNOWN",
+      "evidence_or_gap": "Not independently assessed or implemented in this increment."
+    },
+    {
+      "phase": 17,
+      "name": "Well design",
+      "status": "UNKNOWN",
+      "evidence_or_gap": "Not independently assessed or implemented in this increment."
+    },
+    {
+      "phase": 18,
+      "name": "Programs and procedures",
+      "status": "UNKNOWN",
+      "evidence_or_gap": "Not independently assessed or implemented in this increment."
+    },
+    {
+      "phase": 19,
+      "name": "Advisor, RAG and agents",
+      "status": "UNKNOWN",
+      "evidence_or_gap": "Not independently assessed or implemented in this increment."
+    },
+    {
+      "phase": 20,
+      "name": "Telemetry and digital twin",
+      "status": "UNKNOWN",
+      "evidence_or_gap": "Not independently assessed or implemented in this increment."
+    },
+    {
+      "phase": 21,
+      "name": "Reporting, security and UX",
+      "status": "PARTIAL",
+      "evidence_or_gap": "Report/API/export window correction; other sections and broader UX/security incomplete."
+    },
+    {
+      "phase": 22,
+      "name": "Independent calculation assurance",
+      "status": "PARTIAL",
+      "evidence_or_gap": "Three existing CP142 independent analytical vector tests passed; complete source-to-report assurance not performed."
+    },
+    {
+      "phase": 23,
+      "name": "Eighteen-area functional history",
+      "status": "PARTIAL",
+      "evidence_or_gap": "Path history for representative files recorded without asserting first functional commit."
+    },
+    {
+      "phase": 24,
+      "name": "Capability register and roadmap",
+      "status": "PARTIAL",
+      "evidence_or_gap": "Existing register remains partial; no comprehensive new inventory."
+    },
+    {
+      "phase": 25,
+      "name": "Two-well golden scenario",
+      "status": "PARTIAL",
+      "evidence_or_gap": "Dedicated CP150 two-well synthetic browser pilot passed 1/1 in 2.1m with zero retries; this is not complete specified golden or field validation."
+    },
+    {
+      "phase": 26,
+      "name": "Quality and cross-platform assurance",
+      "status": "PARTIAL",
+      "evidence_or_gap": "Focused tests and frontend checks passed; complete final cross-platform tests not established."
+    },
+    {
+      "phase": 27,
+      "name": "Exact-SHA CI",
+      "status": "NOT_ACCEPTED",
+      "evidence_or_gap": "Starting SHA CI failed OCR; new final SHA CI pending."
+    },
+    {
+      "phase": 28,
+      "name": "Workspace disposition",
+      "status": "PARTIAL",
+      "evidence_or_gap": "Private recoverable start manifest retained locally with restricted permissions; nine protected entries matched start at check; prior mission private manifest unavailable."
+    },
+    {
+      "phase": 29,
+      "name": "Master documentation",
+      "status": "PARTIAL",
+      "evidence_or_gap": "Interim records only; full report and all capability history remain incomplete."
+    },
+    {
+      "phase": 30,
+      "name": "Final acceptance",
+      "status": "NOT_ACCEPTED",
+      "evidence_or_gap": "Mandatory software gates remain open; no field qualification."
+    }
+  ]
+}

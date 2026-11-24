@@ -64,6 +64,9 @@ class Settings(BaseSettings):
     ocr_executable: str = "tesseract"
     ocr_languages: str = "eng+fas"
     ocr_timeout_seconds: float = Field(default=30.0, ge=1.0, le=120.0)
+    # Opt-in Linux PID namespace for recognition subprocesses. It fails closed when unsupported;
+    # the legacy mode remains explicitly weaker and is not a document-wide hard deadline.
+    ocr_process_isolation: Literal["legacy", "linux_pid_namespace"] = "legacy"
     ocr_max_pages: int = Field(default=20, ge=1, le=200)
     ocr_max_concurrency: int = Field(default=2, ge=1, le=8)
     ocr_dpi: int = Field(default=200, ge=72, le=300)

@@ -1,0 +1,492 @@
+{
+  "overall": "NOT_ACCEPTED",
+  "scope": "30 inherited requirements indexed; UNKNOWN entries remain unassessed. This is not a completed independent audit.",
+  "requirements": [
+    {
+      "id": 1,
+      "requirement": "Persian deployment OCR",
+      "status": "NOT_ACCEPTED",
+      "finding": "Starting deployment-image CI 45345525273 measured critical 308/384; unchanged global and multiple stratum thresholds failed.",
+      "source_pointers": [
+        "backend/src/drillai/ingestion/ocr.py",
+        "docs/mission-reports/CP135-BILINGUAL-INGESTION-OCR-BENCHMARK.md"
+      ],
+      "existing_paths": [
+        "backend/src/drillai/ingestion/ocr.py",
+        "docs/mission-reports/CP135-BILINGUAL-INGESTION-OCR-BENCHMARK.md"
+      ],
+      "prior_status": "NOT_ACCEPTED",
+      "prior_record": "docs/mission-reports/MISSION11-RECOVERY-MATRIX.json",
+      "next_action": "Restore actual accuracy and pass all unchanged deployed strata",
+      "full_exit_evidence": "NOT_ESTABLISHED"
+    },
+    {
+      "id": 2,
+      "requirement": "Bounded page OCR",
+      "status": "PARTIAL",
+      "finding": "Direct child reap is now bounded and failures are surfaced. An actual synthetic setsid descendant survived the existing POSIX process-group timeout; end-to-end hard deadline and Windows Job Objects remain unimplemented.",
+      "source_pointers": [
+        "backend/src/drillai/ingestion/ocr.py",
+        "backend/tests/ingestion/test_ocr.py"
+      ],
+      "existing_paths": [
+        "backend/src/drillai/ingestion/ocr.py",
+        "backend/tests/ingestion/test_ocr.py"
+      ],
+      "prior_status": "PARTIAL",
+      "prior_record": "docs/mission-reports/MISSION11-RECOVERY-MATRIX.json",
+      "next_action": "Queue/render/layout/OCR/parsing/publication deadline and Windows process-tree termination remain missing.",
+      "full_exit_evidence": "NOT_ESTABLISHED"
+    },
+    {
+      "id": 3,
+      "requirement": "Authorized holdout",
+      "status": "BLOCKED_BY_MISSING_AUTHORIZED_EVIDENCE",
+      "finding": "No authorized authentic holdout supplied; synthetic accuracy is not field validation.",
+      "source_pointers": [
+        "backend/src/drillai/ingestion/ocr_benchmark.py"
+      ],
+      "existing_paths": [
+        "backend/src/drillai/ingestion/ocr_benchmark.py"
+      ],
+      "prior_status": "BLOCKED_BY_MISSING_AUTHORIZED_EVIDENCE",
+      "prior_record": "docs/mission-reports/MISSION11-RECOVERY-MATRIX.json",
+      "next_action": "Obtain approved authentic DDRs, freeze independently adjudicated labels and split",
+      "full_exit_evidence": "NOT_ESTABLISHED"
+    },
+    {
+      "id": 4,
+      "requirement": "Full capacity geometry",
+      "status": "UNKNOWN",
+      "finding": "No fresh source-to-product audit or exit-gate execution established in this increment.",
+      "source_pointers": [
+        "backend/src/drillai/engines/fluids.py"
+      ],
+      "existing_paths": [
+        "backend/src/drillai/engines/fluids.py"
+      ],
+      "prior_status": "NOT_INDEPENDENTLY_ASSESSED",
+      "prior_record": "docs/mission-reports/MISSION11-RECOVERY-MATRIX.json",
+      "next_action": "Tool joints, washout, nesting and measured/design distinction",
+      "full_exit_evidence": "NOT_ESTABLISHED"
+    },
+    {
+      "id": 5,
+      "requirement": "Authenticated bore evidence",
+      "status": "UNKNOWN",
+      "finding": "No fresh source-to-product audit or exit-gate execution established in this increment.",
+      "source_pointers": [
+        "backend/src/drillai/engines/fluids.py"
+      ],
+      "existing_paths": [
+        "backend/src/drillai/engines/fluids.py"
+      ],
+      "prior_status": "NOT_INDEPENDENTLY_ASSESSED",
+      "prior_record": "docs/mission-reports/MISSION11-RECOVERY-MATRIX.json",
+      "next_action": "Caller text is not authenticated evidence; build review and identity linkage",
+      "full_exit_evidence": "NOT_ESTABLISHED"
+    },
+    {
+      "id": 6,
+      "requirement": "Versioned capacity design",
+      "status": "UNKNOWN",
+      "finding": "No fresh source-to-product audit or exit-gate execution established in this increment.",
+      "source_pointers": [
+        "frontend/src/pages/engineering/CirculationWorkspace.tsx"
+      ],
+      "existing_paths": [
+        "frontend/src/pages/engineering/CirculationWorkspace.tsx"
+      ],
+      "prior_status": "NOT_INDEPENDENTLY_ASSESSED",
+      "prior_record": "docs/mission-reports/MISSION11-RECOVERY-MATRIX.json",
+      "next_action": "No governed capacity revision/approval/export journey",
+      "full_exit_evidence": "NOT_ESTABLISHED"
+    },
+    {
+      "id": 7,
+      "requirement": "Hydraulics/ECD slice",
+      "status": "UNKNOWN",
+      "finding": "No fresh source-to-product audit or exit-gate execution established in this increment.",
+      "source_pointers": [
+        "backend/src/drillai/engines/fluids.py"
+      ],
+      "existing_paths": [
+        "backend/src/drillai/engines/fluids.py"
+      ],
+      "prior_status": "NOT_INDEPENDENTLY_ASSESSED",
+      "prior_record": "docs/mission-reports/MISSION11-RECOVERY-MATRIX.json",
+      "next_action": "Full surveyed depth profile, components, review and reports missing",
+      "full_exit_evidence": "NOT_ESTABLISHED"
+    },
+    {
+      "id": 8,
+      "requirement": "Survey-linked depths",
+      "status": "UNKNOWN",
+      "finding": "No fresh source-to-product audit or exit-gate execution established in this increment.",
+      "source_pointers": [
+        "backend/src/drillai/drilling/surveys.py"
+      ],
+      "existing_paths": [
+        "backend/src/drillai/drilling/surveys.py"
+      ],
+      "prior_status": "NOT_INDEPENDENTLY_ASSESSED",
+      "prior_record": "docs/mission-reports/MISSION11-RECOVERY-MATRIX.json",
+      "next_action": "Connect persisted revision and validated datum to hydraulics",
+      "full_exit_evidence": "NOT_ESTABLISHED"
+    },
+    {
+      "id": 9,
+      "requirement": "New rheology",
+      "status": "UNKNOWN",
+      "finding": "No fresh source-to-product audit or exit-gate execution established in this increment.",
+      "source_pointers": [
+        "backend/src/drillai/engines/power_law.py"
+      ],
+      "existing_paths": [
+        "backend/src/drillai/engines/power_law.py"
+      ],
+      "prior_status": "NOT_INDEPENDENTLY_ASSESSED",
+      "prior_record": "docs/mission-reports/MISSION11-RECOVERY-MATRIX.json",
+      "next_action": "Pipe math only; annular/full-well design and report still missing",
+      "full_exit_evidence": "NOT_ESTABLISHED"
+    },
+    {
+      "id": 10,
+      "requirement": "Survey geometric proximity",
+      "status": "UNKNOWN",
+      "finding": "No fresh source-to-product audit or exit-gate execution established in this increment.",
+      "source_pointers": [
+        "backend/src/drillai/engines/proximity.py"
+      ],
+      "existing_paths": [
+        "backend/src/drillai/engines/proximity.py"
+      ],
+      "prior_status": "NOT_INDEPENDENTLY_ASSESSED",
+      "prior_record": "docs/mission-reports/MISSION11-RECOVERY-MATRIX.json",
+      "next_action": "Select persisted surveys, datum validation and dedicated workflow",
+      "full_exit_evidence": "NOT_ESTABLISHED"
+    },
+    {
+      "id": 11,
+      "requirement": "Anti-collision uncertainty",
+      "status": "UNKNOWN",
+      "finding": "No fresh source-to-product audit or exit-gate execution established in this increment.",
+      "source_pointers": [
+        "backend/src/drillai/engines/proximity.py"
+      ],
+      "existing_paths": [
+        "backend/src/drillai/engines/proximity.py"
+      ],
+      "prior_status": "NOT_INDEPENDENTLY_ASSESSED",
+      "prior_record": "docs/mission-reports/MISSION11-RECOVERY-MATRIX.json",
+      "next_action": "Covariance/error model/SF not implemented; select source and implement",
+      "full_exit_evidence": "NOT_ESTABLISHED"
+    },
+    {
+      "id": 12,
+      "requirement": "Engine assurance",
+      "status": "PARTIAL",
+      "finding": "Ran three existing CP142 independent analytical synthetic vectors; these do not constitute a full sixteen-engine or non-registry audit.",
+      "source_pointers": [
+        "backend/tests/engines/test_cp142_independent_calculation_assurance.py"
+      ],
+      "existing_paths": [
+        "backend/tests/engines/test_cp142_independent_calculation_assurance.py"
+      ],
+      "prior_status": "NOT_INDEPENDENTLY_ASSESSED",
+      "prior_record": "docs/mission-reports/MISSION11-RECOVERY-MATRIX.json",
+      "next_action": "Full independent source-to-report audit of all 16 not done",
+      "full_exit_evidence": "NOT_ESTABLISHED"
+    },
+    {
+      "id": 13,
+      "requirement": "Manual DDR",
+      "status": "UNKNOWN",
+      "finding": "No fresh source-to-product audit or exit-gate execution established in this increment.",
+      "source_pointers": [
+        "backend/src/drillai/drilling/daily_reports.py"
+      ],
+      "existing_paths": [
+        "backend/src/drillai/drilling/daily_reports.py"
+      ],
+      "prior_status": "NOT_INDEPENDENTLY_ASSESSED",
+      "prior_record": "docs/mission-reports/MISSION11-RECOVERY-MATRIX.json",
+      "next_action": "Complete authored engineering data/review journey",
+      "full_exit_evidence": "NOT_ESTABLISHED"
+    },
+    {
+      "id": 14,
+      "requirement": "DDR batch/correction",
+      "status": "UNKNOWN",
+      "finding": "No fresh source-to-product audit or exit-gate execution established in this increment.",
+      "source_pointers": [
+        "backend/src/drillai/ingestion/pipeline.py"
+      ],
+      "existing_paths": [
+        "backend/src/drillai/ingestion/pipeline.py"
+      ],
+      "prior_status": "NOT_INDEPENDENTLY_ASSESSED",
+      "prior_record": "docs/mission-reports/MISSION11-RECOVERY-MATRIX.json",
+      "next_action": "Batch lifecycle and immutable corrections not fully verified",
+      "full_exit_evidence": "NOT_ESTABLISHED"
+    },
+    {
+      "id": 15,
+      "requirement": "Chronology",
+      "status": "UNKNOWN",
+      "finding": "No fresh source-to-product audit or exit-gate execution established in this increment.",
+      "source_pointers": [
+        "backend/src/drillai/drilling/timeline.py"
+      ],
+      "existing_paths": [
+        "backend/src/drillai/drilling/timeline.py"
+      ],
+      "prior_status": "NOT_INDEPENDENTLY_ASSESSED",
+      "prior_record": "docs/mission-reports/MISSION11-RECOVERY-MATRIX.json",
+      "next_action": "Reconcile overlaps and missing timestamps; no comprehensive journey",
+      "full_exit_evidence": "NOT_ESTABLISHED"
+    },
+    {
+      "id": 16,
+      "requirement": "NPT",
+      "status": "PARTIAL",
+      "finding": "Reports now pass period bounds to NPT and disclose legacy inclusive full-row and half-open reconciliation semantics; approved canonical attribution and Event/Operation identity reconciliation remain absent.",
+      "source_pointers": [
+        "backend/src/drillai/drilling/npt.py",
+        "backend/src/drillai/drilling/reporting.py",
+        "backend/tests/operations/test_npt_accounting.py"
+      ],
+      "existing_paths": [
+        "backend/src/drillai/drilling/npt.py",
+        "backend/src/drillai/drilling/reporting.py",
+        "backend/tests/operations/test_npt_accounting.py"
+      ],
+      "prior_status": "PARTIAL",
+      "prior_record": "docs/mission-reports/MISSION11-RECOVERY-MATRIX.json",
+      "next_action": "Explicit Event/Operation identity, cause allocation, independent approval, immutable revisions and export remain unimplemented; union covers scoped Event rows only.",
+      "full_exit_evidence": "NOT_ESTABLISHED"
+    },
+    {
+      "id": 17,
+      "requirement": "Well Design",
+      "status": "UNKNOWN",
+      "finding": "No fresh source-to-product audit or exit-gate execution established in this increment.",
+      "source_pointers": [
+        "backend/src/drillai/engineering/products.py"
+      ],
+      "existing_paths": [
+        "backend/src/drillai/engineering/products.py"
+      ],
+      "prior_status": "NOT_INDEPENDENTLY_ASSESSED",
+      "prior_record": "docs/mission-reports/MISSION11-RECOVERY-MATRIX.json",
+      "next_action": "Cross-domain linked design and E2E not complete",
+      "full_exit_evidence": "NOT_ESTABLISHED"
+    },
+    {
+      "id": 18,
+      "requirement": "Programs/Procedures",
+      "status": "UNKNOWN",
+      "finding": "No fresh source-to-product audit or exit-gate execution established in this increment.",
+      "source_pointers": [
+        "backend/src/drillai/engineering/service.py"
+      ],
+      "existing_paths": [
+        "backend/src/drillai/engineering/service.py"
+      ],
+      "prior_status": "NOT_INDEPENDENTLY_ASSESSED",
+      "prior_record": "docs/mission-reports/MISSION11-RECOVERY-MATRIX.json",
+      "next_action": "Existing lifecycle; full acceptance/export journey not reverified",
+      "full_exit_evidence": "NOT_ESTABLISHED"
+    },
+    {
+      "id": 19,
+      "requirement": "Advisor/RAG",
+      "status": "UNKNOWN",
+      "finding": "No fresh source-to-product audit or exit-gate execution established in this increment.",
+      "source_pointers": [
+        "backend/src/drillai/drilling/advisor.py"
+      ],
+      "existing_paths": [
+        "backend/src/drillai/drilling/advisor.py"
+      ],
+      "prior_status": "NOT_INDEPENDENTLY_ASSESSED",
+      "prior_record": "docs/mission-reports/MISSION11-RECOVERY-MATRIX.json",
+      "next_action": "Retrieval metrics, scope and full citation E2E remain",
+      "full_exit_evidence": "NOT_ESTABLISHED"
+    },
+    {
+      "id": 20,
+      "requirement": "Specialist agents",
+      "status": "UNKNOWN",
+      "finding": "No fresh source-to-product audit or exit-gate execution established in this increment.",
+      "source_pointers": [
+        "backend/src/drillai/workflow/graph.py"
+      ],
+      "existing_paths": [
+        "backend/src/drillai/workflow/graph.py"
+      ],
+      "prior_status": "NOT_INDEPENDENTLY_ASSESSED",
+      "prior_record": "docs/mission-reports/MISSION11-RECOVERY-MATRIX.json",
+      "next_action": "Dedicated bounded domain agents and human review incomplete",
+      "full_exit_evidence": "NOT_ESTABLISHED"
+    },
+    {
+      "id": 21,
+      "requirement": "Telemetry/Twin",
+      "status": "UNKNOWN",
+      "finding": "No fresh source-to-product audit or exit-gate execution established in this increment.",
+      "source_pointers": [
+        "backend/src/drillai/telemetry/service.py"
+      ],
+      "existing_paths": [
+        "backend/src/drillai/telemetry/service.py"
+      ],
+      "prior_status": "NOT_INDEPENDENTLY_ASSESSED",
+      "prior_record": "docs/mission-reports/MISSION11-RECOVERY-MATRIX.json",
+      "next_action": "End-to-end reconciliation and external interop unverified",
+      "full_exit_evidence": "NOT_ESTABLISHED"
+    },
+    {
+      "id": 22,
+      "requirement": "Reports/exports",
+      "status": "PARTIAL",
+      "finding": "Time-scoped NPT report and JSON export now share requested bounds; other report sections remain explicitly not necessarily scoped.",
+      "source_pointers": [
+        "backend/src/drillai/drilling/reporting.py",
+        "backend/tests/operations/test_npt_accounting.py"
+      ],
+      "existing_paths": [
+        "backend/src/drillai/drilling/reporting.py",
+        "backend/tests/operations/test_npt_accounting.py"
+      ],
+      "prior_status": "NOT_INDEPENDENTLY_ASSESSED",
+      "prior_record": "docs/mission-reports/MISSION11-RECOVERY-MATRIX.json",
+      "next_action": "Exact design/approval provenance and requested end-to-end journeys incomplete",
+      "full_exit_evidence": "NOT_ESTABLISHED"
+    },
+    {
+      "id": 23,
+      "requirement": "RBAC/deployment",
+      "status": "UNKNOWN",
+      "finding": "No fresh source-to-product audit or exit-gate execution established in this increment.",
+      "source_pointers": [
+        "backend/src/drillai/security/rbac.py"
+      ],
+      "existing_paths": [
+        "backend/src/drillai/security/rbac.py"
+      ],
+      "prior_status": "NOT_INDEPENDENTLY_ASSESSED",
+      "prior_record": "docs/mission-reports/MISSION11-RECOVERY-MATRIX.json",
+      "next_action": "New flows and deployment assurance not independently complete",
+      "full_exit_evidence": "NOT_ESTABLISHED"
+    },
+    {
+      "id": 24,
+      "requirement": "Catalogue",
+      "status": "UNKNOWN",
+      "finding": "No fresh source-to-product audit or exit-gate execution established in this increment.",
+      "source_pointers": [
+        "docs/ENGINEERING_CAPABILITY_CATALOGUE.json"
+      ],
+      "existing_paths": [
+        "docs/ENGINEERING_CAPABILITY_CATALOGUE.json"
+      ],
+      "prior_status": "NOT_INDEPENDENTLY_ASSESSED",
+      "prior_record": "docs/mission-reports/MISSION11-RECOVERY-MATRIX.json",
+      "next_action": "Regenerated inventory only; comprehensive historical audit/schema/roadmap incomplete",
+      "full_exit_evidence": "NOT_ESTABLISHED"
+    },
+    {
+      "id": 25,
+      "requirement": "Windows history",
+      "status": "UNKNOWN",
+      "finding": "No fresh source-to-product audit or exit-gate execution established in this increment.",
+      "source_pointers": [
+        "scripts/verify_stack.py"
+      ],
+      "existing_paths": [
+        "scripts/verify_stack.py"
+      ],
+      "prior_status": "NOT_INDEPENDENTLY_ASSESSED",
+      "prior_record": "docs/mission-reports/MISSION11-RECOVERY-MATRIX.json",
+      "next_action": "Three repeated native full-suite diagnostic runs on the final SHA and full native CI must complete; root cause beyond measured budget not established.",
+      "full_exit_evidence": "NOT_ESTABLISHED"
+    },
+    {
+      "id": 26,
+      "requirement": "Full E2E",
+      "status": "PARTIAL",
+      "finding": "Previous SHA CI browser ran 130/130 per OS; current worktree full browser results must be inspected independently.",
+      "source_pointers": [
+        ".github/workflows/ci.yml"
+      ],
+      "existing_paths": [
+        ".github/workflows/ci.yml"
+      ],
+      "prior_status": "PARTIAL",
+      "prior_record": "docs/mission-reports/MISSION11-RECOVERY-MATRIX.json",
+      "next_action": "Historical 129 do not substitute for requested new journeys",
+      "full_exit_evidence": "NOT_ESTABLISHED"
+    },
+    {
+      "id": 27,
+      "requirement": "Exact-SHA CI",
+      "status": "NOT_ACCEPTED",
+      "finding": "Starting SHA CI 45345525273 failed deployment-image OCR; final commit CI not yet established.",
+      "source_pointers": [
+        ".github/workflows/ci.yml"
+      ],
+      "existing_paths": [
+        ".github/workflows/ci.yml"
+      ],
+      "prior_status": "NOT_ACCEPTED",
+      "prior_record": "docs/mission-reports/MISSION11-RECOVERY-MATRIX.json",
+      "next_action": "Exact-final-SHA CI must be observed on both platforms; old runs cannot certify this mission.",
+      "full_exit_evidence": "NOT_ESTABLISHED"
+    },
+    {
+      "id": 28,
+      "requirement": "Workspace",
+      "status": "PARTIAL",
+      "finding": "Pre-change private inventory and protected fingerprints captured; ownership and privacy disposition are incomplete.",
+      "source_pointers": [
+        "docs/mission-reports/MISSION12-WORKSPACE-START.jsonl"
+      ],
+      "existing_paths": [
+        "docs/mission-reports/MISSION12-WORKSPACE-START.jsonl"
+      ],
+      "prior_status": "PARTIAL",
+      "prior_record": "docs/mission-reports/MISSION11-RECOVERY-MATRIX.json",
+      "next_action": "Retain protected untracked artifacts and compare start/end metadata; exact final CI checkout artifact is separately named by run ID; historical original mtimes and missing bytes remain unavailable.",
+      "full_exit_evidence": "NOT_ESTABLISHED"
+    },
+    {
+      "id": 29,
+      "requirement": "Mission 7 Windows frontend authoring timeout",
+      "status": "UNKNOWN",
+      "finding": "No fresh source-to-product audit or exit-gate execution established in this increment.",
+      "source_pointers": [],
+      "existing_paths": [],
+      "prior_status": "NOT_INDEPENDENTLY_ASSESSED",
+      "prior_record": "docs/mission-reports/MISSION11-RECOVERY-MATRIX.json",
+      "next_action": "Three repeated native full-suite diagnostic runs on the final SHA and full native CI must complete; root cause beyond measured budget not established.",
+      "full_exit_evidence": "NOT_ESTABLISHED"
+    },
+    {
+      "id": 30,
+      "requirement": "Mission 7 deployed OCR accuracy regression",
+      "status": "NOT_ACCEPTED",
+      "finding": "Unchanged deployed OCR gate failed at starting SHA; inherited Mission 7 regression remains.",
+      "source_pointers": [
+        "backend/src/drillai/ingestion/ocr.py"
+      ],
+      "existing_paths": [
+        "backend/src/drillai/ingestion/ocr.py"
+      ],
+      "prior_status": "NOT_ACCEPTED",
+      "prior_record": "docs/mission-reports/MISSION11-RECOVERY-MATRIX.json",
+      "next_action": "Restore all unchanged 64-case global and stratum gates.",
+      "full_exit_evidence": "NOT_ESTABLISHED"
+    }
+  ]
+}

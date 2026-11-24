@@ -21,6 +21,7 @@ import re
 import shutil
 import signal
 import subprocess
+import sys
 import threading
 import time
 import unicodedata
@@ -40,6 +41,9 @@ __all__ = [
 MAX_TSV_BYTES = 16 * 1024 * 1024
 MAX_DIAGNOSTIC_OUTPUT_BYTES = 128 * 1024
 DIAGNOSTIC_TIMEOUT_SECONDS = 3.0
+# Reaping must itself be bounded: a kill request is not proof that a child has exited.
+# This is a cleanup bound, not an end-to-end document deadline or process-tree guarantee.
+PROCESS_REAP_TIMEOUT_SECONDS = 1.0
 TESSERACT_ADAPTER_VERSION = "tesseract-cli-tsv-v11"
 TESSERACT_PAGE_SEGMENTATION_MODE = 6
 TESSERACT_TWO_COLUMN_PAGE_SEGMENTATION_MODE = 11
@@ -51,7 +55,7 @@ TESSERACT_LANGUAGE_ROUTING_POLICY = (
 # and one shared per-page timeout; this is an explicit second recognition strategy, not a retry on error.
 _PROCESS_SEMAPHORES: dict[int, threading.BoundedSemaphore] = {}
 _PROCESS_SEMAPHORES_LOCK = threading.Lock()
-_TESSERACT_DIAGNOSTIC_CACHE: dict[tuple[str, str, float, str, str], dict[str, object]] = {}
+_TESSERACT_DIAGNOSTIC_CACHE: dict[tuple[str, str, float, str, str, str], dict[str, object]] = {}
 _TESSERACT_DIAGNOSTIC_CACHE_LOCK = threading.Lock()
 
 
@@ -80,6 +84,21 @@ def _stop_recognition_process(process: subprocess.Popen[bytes]) -> None:
     if process.poll() is None:
         with suppress(OSError):
             process.kill()
+
+
+def _reap_stopped_process(process: subprocess.Popen[bytes]) -> bool:
+    """Try a bounded reap after termination; false means termination was not established.
+
+    This only addresses the direct child, not escaped descendants. It must never turn a
+    failed termination into a successful OCR result or block indefinitely on ``wait()``.
+    """
+    if process.poll() is not None:
+        return True
+    try:
+        process.wait(timeout=PROCESS_REAP_TIMEOUT_SECONDS)
+    except (subprocess.TimeoutExpired, OSError):
+        return False
+    return process.poll() is not None
 
 
 def _process_semaphore(limit: int) -> threading.BoundedSemaphore:
@@ -404,6 +423,7 @@ class TesseractOcrProvider:
     max_output_bytes: int = 4 * 1024 * 1024
     max_concurrency: int = 2
     page_segmentation_mode: int = TESSERACT_PAGE_SEGMENTATION_MODE
+    process_isolation: str = "legacy"
 
     name: str = "tesseract"
     _runtime_version: str | None = field(default=None, init=False, repr=False)
@@ -433,6 +453,8 @@ class TesseractOcrProvider:
         # Tesseract separates multiple languages with '+'. Accept comma-separated operator config,
         # but convert it here rather than passing a separator its CLI does not define.
         self.languages = "+".join(parts)
+        if self.process_isolation not in {"legacy", "linux_pid_namespace"}:
+            raise ValueError("unsupported OCR process isolation mode")
         if not self.executable or "\x00" in self.executable:
             raise ValueError("executable must be a non-empty path")
         if not math.isfinite(self.timeout_seconds) or not 1 <= self.timeout_seconds <= 120:
@@ -473,18 +495,28 @@ class TesseractOcrProvider:
                     child_env[key] = os.environ[key]
         return child_env
 
+    def _isolated_command(self, command: list[str]) -> list[str]:
+        if self.process_isolation == "legacy":
+            return command
+        unshare = shutil.which("unshare") if sys.platform.startswith("linux") else None
+        if not unshare:
+            raise OcrUnavailable("Linux PID namespace isolation requires the unshare executable")
+        supervisor = Path(__file__).with_name("ocr_namespace_supervisor.py")
+        return [unshare, "--user", "--map-root-user", "--pid", "--fork", "--kill-child",
+                sys.executable, str(supervisor), *command]
+
     def _run_diagnostic(self, executable: str, argument: str) -> tuple[str | None, str | None]:
         try:
             process = subprocess.Popen(
-                [executable, argument],
+                self._isolated_command([executable, argument]),
                 stdin=subprocess.DEVNULL,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 env=self._child_environment(),
                 bufsize=0,
             )
-        except OSError:
-            return None, "Tesseract diagnostic probe could not be started"
+        except (OSError, OcrUnavailable):
+            return None, "Tesseract diagnostic probe or requested isolation could not be started"
         assert process.stdout is not None
         output = bytearray()
         output_overflow = threading.Event()
@@ -510,18 +542,16 @@ class TesseractOcrProvider:
         reader = threading.Thread(target=read_bounded_output, name="drillai-ocr-diagnostic", daemon=True)
         reader.start()
         timed_out = False
+        reaped = True
         try:
             process.wait(timeout=DIAGNOSTIC_TIMEOUT_SECONDS)
         except subprocess.TimeoutExpired:
             timed_out = True
-            with suppress(OSError):
-                process.kill()
-            process.wait()
         finally:
             if process.poll() is None:
                 with suppress(OSError):
                     process.kill()
-                process.wait()
+                reaped = _reap_stopped_process(process)
             reader.join(timeout=1.0)
             if reader.is_alive():
                 with suppress(OSError):
@@ -530,6 +560,8 @@ class TesseractOcrProvider:
             with suppress(OSError):
                 process.stdout.close()
 
+        if not reaped:
+            return None, "Tesseract diagnostic process could not be reaped after termination"
         if timed_out:
             return None, "Tesseract diagnostic probe timed out"
         if output_overflow.is_set() or len(output) > MAX_DIAGNOSTIC_OUTPUT_BYTES:
@@ -548,6 +580,7 @@ class TesseractOcrProvider:
             self.executable,
             self.languages,
             self.timeout_seconds,
+            self.process_isolation,
             os.environ.get("PATH", ""),
             os.environ.get("TESSDATA_PREFIX", ""),
         )
@@ -733,7 +766,7 @@ class TesseractOcrProvider:
         child_env = self._child_environment()
         try:
             process = subprocess.Popen(
-                [
+                self._isolated_command([
                     executable,
                     "stdin",
                     "stdout",
@@ -742,7 +775,7 @@ class TesseractOcrProvider:
                     "-l",
                     languages,
                     "tsv",
-                ],
+                ]),
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.DEVNULL,
@@ -799,6 +832,7 @@ class TesseractOcrProvider:
         reader.start()
         writer.start()
         timed_out = False
+        termination_error: OcrUnavailable | None = None
         try:
             # Process creation itself may consume budget; don't grant it a fresh timeout.
             process.wait(timeout=max(0.0, deadline_monotonic - time.monotonic()))
@@ -807,9 +841,12 @@ class TesseractOcrProvider:
         finally:
             # Also terminate descendants after successful leader exit, before joining pipe
             # readers/writers: an inherited pipe otherwise outlives the original process.
-            _stop_recognition_process(process)
-            if process.poll() is None:
-                process.wait()
+            try:
+                _stop_recognition_process(process)
+            except OcrUnavailable as exc:
+                termination_error = exc
+            if not _reap_stopped_process(process):
+                termination_error = OcrUnavailable("Tesseract process could not be reaped after termination")
             writer.join(timeout=1.0)
             reader.join(timeout=1.0)
             if writer.is_alive():
@@ -825,6 +862,10 @@ class TesseractOcrProvider:
             with suppress(OSError):
                 process.stdout.close()
 
+        # An unreaped direct child is a failed termination, irrespective of its apparent output.
+        # Descendants in a new POSIX session or on Windows still require stronger containment.
+        if termination_error is not None:
+            raise termination_error
         # wait(timeout=0) can still return success for a child that already exited after the
         # deadline, and teardown/pipe draining also consumes time. Do not publish late output.
         if timed_out or time.monotonic() >= deadline_monotonic:

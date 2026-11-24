@@ -812,3 +812,112 @@ def test_tesseract_refuses_successful_child_output_after_incomplete_input(monkey
     with pytest.raises(OcrUnavailable, match="complete rendered page") as exc:
         provider.recognize(b"synthetic-page")
     assert "private" not in str(exc.value)
+
+
+def test_recognition_does_not_wait_forever_or_publish_when_kill_does_not_reap(monkeypatch) -> None:
+    """Simulated unreapable direct child is a failure, not process-tree certification."""
+    class UnreapableProcess:
+        def __init__(self):
+            self.stdin = io.BytesIO()
+            self.stdout = io.BytesIO(_tsv([_word(left=1, top=2, width=30, height=10, conf="88", text="unsafe")]))
+            self.returncode = None
+            self.wait_timeouts = []
+            self.kill_count = 0
+
+        def wait(self, timeout=None):
+            self.wait_timeouts.append(timeout)
+            assert timeout is not None, "cleanup must never make an unbounded wait"
+            raise subprocess.TimeoutExpired("synthetic", timeout)
+
+        def poll(self):
+            return None
+
+        def kill(self):
+            self.kill_count += 1
+
+    child = UnreapableProcess()
+    monkeypatch.setattr(ocr_module.subprocess, "Popen", lambda *_args, **_kwargs: child)
+    monkeypatch.setattr(ocr_module, "_detect_central_column_divider", lambda _png: None)
+    provider = TesseractOcrProvider(executable="tesseract", timeout_seconds=5)
+    monkeypatch.setattr(provider, "_resolved_executable", lambda: "/synthetic/tesseract")
+
+    with pytest.raises(OcrUnavailable, match="could not be reaped"):
+        provider.recognize(b"synthetic-page")
+    assert child.kill_count >= 1
+    assert len(child.wait_timeouts) == 2
+    assert child.wait_timeouts[-1] == ocr_module.PROCESS_REAP_TIMEOUT_SECONDS
+
+
+def test_diagnostic_does_not_wait_forever_when_kill_does_not_reap(monkeypatch) -> None:
+    class UnreapableDiagnostic:
+        def __init__(self):
+            self.stdout = io.BytesIO(b"tesseract 5.5.0\n")
+            self.returncode = None
+            self.wait_timeouts = []
+            self.kill_count = 0
+
+        def wait(self, timeout=None):
+            self.wait_timeouts.append(timeout)
+            assert timeout is not None, "cleanup must never make an unbounded wait"
+            raise subprocess.TimeoutExpired("synthetic", timeout)
+
+        def poll(self):
+            return None
+
+        def kill(self):
+            self.kill_count += 1
+
+    child = UnreapableDiagnostic()
+    monkeypatch.setattr(ocr_module.subprocess, "Popen", lambda *_args, **_kwargs: child)
+    result, error = TesseractOcrProvider()._run_diagnostic("/synthetic/tesseract", "--version")
+    assert result is None
+    assert error == "Tesseract diagnostic process could not be reaped after termination"
+    assert child.kill_count >= 1
+    assert child.wait_timeouts == [ocr_module.DIAGNOSTIC_TIMEOUT_SECONDS, ocr_module.PROCESS_REAP_TIMEOUT_SECONDS]
+
+
+def test_opt_in_pid_namespace_fails_closed_or_contains_escaped_child(tmp_path, monkeypatch) -> None:
+    """Real namespace case when supported; otherwise verify no legacy fallback is used."""
+    import shutil
+
+    provider = TesseractOcrProvider(process_isolation="linux_pid_namespace", timeout_seconds=1)
+    unshare = shutil.which("unshare") if sys.platform.startswith("linux") else None
+    if not unshare:
+        with pytest.raises(OcrUnavailable, match="requires the unshare"):
+            provider._isolated_command([sys.executable, "-c", "pass"])
+        return
+    probe = subprocess.run(
+        [unshare, "--user", "--map-root-user", "--pid", "--fork", "--kill-child", sys.executable, "-c", "pass"],
+        capture_output=True, timeout=10, check=False,
+    )
+    if probe.returncode:
+        # It must fail, not silently retry without isolation.
+        result, error = provider._run_diagnostic(sys.executable, "--version")
+        assert result is None and error
+        return
+    expected = _tsv([_word(left=1, top=2, width=30, height=10, conf="88", text="Drill")]).decode()
+    for leader_exits in (False, True):
+        ready = tmp_path / f"ns-ready-{leader_exits}"
+        survived = tmp_path / f"ns-survived-{leader_exits}"
+        child = (f"import pathlib,time;pathlib.Path({str(ready)!r}).write_text('ready');"
+                 f"time.sleep(2);pathlib.Path({str(survived)!r}).write_text('survived')")
+        script = tmp_path / f"ns-script-{leader_exits}"
+        script.write_text(
+            "#!/usr/bin/env python3\nimport pathlib,subprocess,sys,time\n"
+            "sys.stdin.buffer.read()\n"
+            + f"subprocess.Popen([sys.executable,'-c',{child!r}],start_new_session=True)\n"
+            + f"while not pathlib.Path({str(ready)!r}).exists(): time.sleep(0.01)\n"
+            + (f"sys.stdout.write({expected!r});sys.stdout.flush()\n" if leader_exits else "time.sleep(10)\n"),
+            encoding="utf-8",
+        )
+        script.chmod(0o755)
+        p = TesseractOcrProvider(executable=str(script), process_isolation="linux_pid_namespace", timeout_seconds=1)
+        monkeypatch.setattr(ocr_module, "_detect_central_column_divider", lambda _: None)
+        if leader_exits:
+            assert [line.text for line in p.recognize(b"page")] == ["Drill"]
+        else:
+            with pytest.raises(OcrUnavailable, match="per-page timeout"):
+                p.recognize(b"page")
+        assert ready.exists()
+        time.sleep(2.2)
+        assert not survived.exists()

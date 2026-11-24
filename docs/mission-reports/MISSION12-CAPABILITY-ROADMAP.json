@@ -1,0 +1,13 @@
+{
+  "status": "PARTIAL",
+  "register": "docs/DRILLAI-ENGINEERING-CAPABILITY-REGISTER.json",
+  "warning": "Existing register is an inherited inventory, not a newly comprehensive independent assessment; see MISSION12-ENGINE-ASSURANCE.json and MISSION12-HISTORICAL-CAPABILITY-MATRIX.json for unknowns.",
+  "priorities": [
+    {"priority": 1, "action": "Remediate deployment-image Persian OCR against the unchanged pinned corpus, then rerun the real quality gate; preserve critical-field and strata thresholds.", "status": "OPEN"},
+    {"priority": 2, "action": "Establish enforceable document-wide deadline and complete process-tree containment on supported Linux deployments and Windows Job Objects. Commission and adversarially test optional Linux namespace mode in each deployment.", "status": "OPEN"},
+    {"priority": 3, "action": "Implement and approve canonical NPT attribution, overlap reconciliation and cross-surface time-window semantics; preserve legacy provenance and explicit limitations until migrated.", "status": "OPEN"},
+    {"priority": 4, "action": "Independently trace all 16 registered engines and non-registry calculations through source, units, API, persistence, UI and export against documented reference vectors and boundaries.", "status": "OPEN"},
+    {"priority": 5, "action": "Reconstruct the inherited 26 phase definitions, functional history and requirements with evidence; complete the 18-area inventory and full requested golden scenario.", "status": "OPEN"},
+    {"priority": 6, "action": "Complete full local and cross-platform CI on the exact pushed final SHA, including deployment-image OCR and authorized field evidence, before acceptance.", "status": "OPEN"}
+  ]
+}

@@ -1,0 +1,166 @@
+{
+  "status": "PARTIAL",
+  "scope": "16 inherited registered engines inventoried; three previously existing independent synthetic vector tests passed, not a complete audit. Non-registry calculations remain undiscovered.",
+  "engines": [
+    {
+      "id": "drilling.mse",
+      "version": "1.1.1",
+      "source": "backend/src/drillai/engines/mechanics.py",
+      "mission12_status": "PARTIAL",
+      "partial_reference_check": "independent Teale work/volume example",
+      "test": "backend/tests/engines/test_cp142_independent_calculation_assurance.py",
+      "limitations": "Not a complete source-to-report audit or field validation.",
+      "prior_register_status": "UNKNOWN"
+    },
+    {
+      "id": "hydraulics.laminar",
+      "version": "1.7.0",
+      "source": "backend/src/drillai/engines/fluids.py",
+      "mission12_status": "PARTIAL",
+      "partial_reference_check": "Newtonian pipe Hagen–Poiseuille limit",
+      "test": "backend/tests/engines/test_cp142_independent_calculation_assurance.py",
+      "limitations": "Not a complete source-to-report audit or field validation.",
+      "prior_register_status": "UNKNOWN"
+    },
+    {
+      "id": "hydraulics.power_law_pipe",
+      "version": "1.0.0",
+      "source": "backend/src/drillai/engines/power_law.py",
+      "mission12_status": "UNKNOWN",
+      "partial_reference_check": null,
+      "test": null,
+      "limitations": "Not a complete source-to-report audit or field validation.",
+      "prior_register_status": "UNKNOWN"
+    },
+    {
+      "id": "integrity.barrier_envelope",
+      "version": "1.1.0",
+      "source": "backend/src/drillai/engines/integrity.py",
+      "mission12_status": "UNKNOWN",
+      "partial_reference_check": null,
+      "test": null,
+      "limitations": "Not a complete source-to-report audit or field validation.",
+      "prior_register_status": "UNKNOWN"
+    },
+    {
+      "id": "offsets.similarity",
+      "version": "1.1.0",
+      "source": "backend/src/drillai/engines/offsets.py",
+      "mission12_status": "UNKNOWN",
+      "partial_reference_check": null,
+      "test": null,
+      "limitations": "Not a complete source-to-report audit or field validation.",
+      "prior_register_status": "UNKNOWN"
+    },
+    {
+      "id": "optimization.pareto",
+      "version": "1.1.0",
+      "source": "backend/src/drillai/engines/optimization.py",
+      "mission12_status": "UNKNOWN",
+      "partial_reference_check": null,
+      "test": null,
+      "limitations": "Not a complete source-to-report audit or field validation.",
+      "prior_register_status": "UNKNOWN"
+    },
+    {
+      "id": "optimization.sweep",
+      "version": "1.1.0",
+      "source": "backend/src/drillai/engines/optimization.py",
+      "mission12_status": "UNKNOWN",
+      "partial_reference_check": null,
+      "test": null,
+      "limitations": "Not a complete source-to-report audit or field validation.",
+      "prior_register_status": "UNKNOWN"
+    },
+    {
+      "id": "readiness.assessment",
+      "version": "1.1.0",
+      "source": "backend/src/drillai/engines/readiness.py",
+      "mission12_status": "UNKNOWN",
+      "partial_reference_check": null,
+      "test": null,
+      "limitations": "Not a complete source-to-report audit or field validation.",
+      "prior_register_status": "UNKNOWN"
+    },
+    {
+      "id": "schematic.well_model",
+      "version": "1.1.0",
+      "source": "backend/src/drillai/engines/schematic.py",
+      "mission12_status": "UNKNOWN",
+      "partial_reference_check": null,
+      "test": null,
+      "limitations": "Not a complete source-to-report audit or field validation.",
+      "prior_register_status": "UNKNOWN"
+    },
+    {
+      "id": "torque_drag.soft_string",
+      "version": "1.1.0",
+      "source": "backend/src/drillai/engines/mechanics.py",
+      "mission12_status": "UNKNOWN",
+      "partial_reference_check": null,
+      "test": null,
+      "limitations": "Not a complete source-to-report audit or field validation.",
+      "prior_register_status": "UNKNOWN"
+    },
+    {
+      "id": "trajectory.geometric_proximity",
+      "version": "1.0.0",
+      "source": "backend/src/drillai/engines/proximity.py",
+      "mission12_status": "UNKNOWN",
+      "partial_reference_check": null,
+      "test": null,
+      "limitations": "Not a complete source-to-report audit or field validation.",
+      "prior_register_status": "UNKNOWN"
+    },
+    {
+      "id": "trajectory.minimum_curvature",
+      "version": "1.3.0",
+      "source": "backend/src/drillai/engines/trajectory.py",
+      "mission12_status": "PARTIAL",
+      "partial_reference_check": "independent great-circle tangent integral",
+      "test": "backend/tests/engines/test_cp142_independent_calculation_assurance.py",
+      "limitations": "Not a complete source-to-report audit or field validation.",
+      "prior_register_status": "UNKNOWN"
+    },
+    {
+      "id": "tubulars.api_5c3",
+      "version": "1.1.0",
+      "source": "backend/src/drillai/engines/tubulars.py",
+      "mission12_status": "UNKNOWN",
+      "partial_reference_check": null,
+      "test": null,
+      "limitations": "Not a complete source-to-report audit or field validation.",
+      "prior_register_status": "NEEDS_FIELD_VALIDATION"
+    },
+    {
+      "id": "twin.reconciliation",
+      "version": "1.2.0",
+      "source": "backend/src/drillai/engines/twin.py",
+      "mission12_status": "UNKNOWN",
+      "partial_reference_check": null,
+      "test": null,
+      "limitations": "Not a complete source-to-report audit or field validation.",
+      "prior_register_status": "UNKNOWN"
+    },
+    {
+      "id": "well_control.kill_sheet",
+      "version": "1.2.0",
+      "source": "backend/src/drillai/engines/wellcontrol.py",
+      "mission12_status": "UNKNOWN",
+      "partial_reference_check": null,
+      "test": null,
+      "limitations": "Not a complete source-to-report audit or field validation.",
+      "prior_register_status": "NEEDS_FIELD_VALIDATION"
+    },
+    {
+      "id": "wellbore.capacity",
+      "version": "1.4.0",
+      "source": "backend/src/drillai/engines/fluids.py",
+      "mission12_status": "UNKNOWN",
+      "partial_reference_check": null,
+      "test": null,
+      "limitations": "Not a complete source-to-report audit or field validation.",
+      "prior_register_status": "UNKNOWN"
+    }
+  ]
+}

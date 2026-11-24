@@ -24,6 +24,9 @@ htmlcov/
 .data/
 drillai.db*
 
+# --- private, path-level mission evidence (never publish without privacy review) ---
+/.mission12-private/
+
 # --- environment / secrets ---
 .env
 .env.*

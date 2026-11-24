@@ -1,0 +1,311 @@
+{
+  "status": "NOT_ACCEPTED",
+  "starting_sha": "d3ec562f6137ff99009711abb037df092928a8ee",
+  "starting_run": "https://github.com/asgareyvazi/DrillAI/actions/runs/45345525273",
+  "starting_run_conclusion": "failure",
+  "starting_linux_failed_step": "Deployment-image CP135 OCR quality",
+  "starting_windows": "native Windows job and frontend reliability job passed",
+  "starting_ocr": {
+    "dataset": {
+      "case_count": 64,
+      "classification": "synthetic",
+      "id": "cp135-synthetic-ddr-ocr",
+      "languages": [
+        "eng",
+        "fas"
+      ],
+      "sha256": "31aca80b4323fe470d34705e36038296ef620adb7525373f5196c9f561b6735d",
+      "stratification_dimensions": [
+        "language",
+        "layout",
+        "scan_condition"
+      ],
+      "version": "3.0.0"
+    },
+    "metrics": {
+      "all_strata_thresholds_passed": false,
+      "case_count": 64,
+      "character_error_rate": 0.10839594903626266,
+      "character_errors": 1659,
+      "critical_field_exact_rate": 0.8020833333333334,
+      "critical_fields_expected": 384,
+      "critical_fields_matched": 308,
+      "evaluated_cases": 64,
+      "expected_characters": 15305,
+      "expected_words": 2328,
+      "incomplete_or_failed_cases": 0,
+      "thresholds_passed": false,
+      "word_error_rate": 0.15506872852233677,
+      "word_errors": 361
+    },
+    "strata": {
+      "language": [
+        {
+          "cases": 32,
+          "characters": [
+            18,
+            8154,
+            0.002207505518763797
+          ],
+          "critical": [
+            190,
+            192,
+            0.9895833333333334
+          ],
+          "evaluated": 32,
+          "incomplete": 0,
+          "passed": true,
+          "stratum": "eng",
+          "words": [
+            16,
+            1152,
+            0.013888888888888888
+          ]
+        },
+        {
+          "cases": 32,
+          "characters": [
+            1641,
+            7151,
+            0.22947839463012165
+          ],
+          "critical": [
+            118,
+            192,
+            0.6145833333333334
+          ],
+          "evaluated": 32,
+          "incomplete": 0,
+          "passed": false,
+          "stratum": "fas",
+          "words": [
+            345,
+            1176,
+            0.29336734693877553
+          ]
+        }
+      ],
+      "layout": [
+        {
+          "cases": 16,
+          "characters": [
+            266,
+            3822,
+            0.0695970695970696
+          ],
+          "critical": [
+            88,
+            96,
+            0.9166666666666666
+          ],
+          "evaluated": 16,
+          "incomplete": 0,
+          "passed": true,
+          "stratum": "compact",
+          "words": [
+            59,
+            582,
+            0.1013745704467354
+          ]
+        },
+        {
+          "cases": 16,
+          "characters": [
+            380,
+            3821,
+            0.09945040565297043
+          ],
+          "critical": [
+            88,
+            96,
+            0.9166666666666666
+          ],
+          "evaluated": 16,
+          "incomplete": 0,
+          "passed": true,
+          "stratum": "single_column",
+          "words": [
+            78,
+            582,
+            0.13402061855670103
+          ]
+        },
+        {
+          "cases": 16,
+          "characters": [
+            428,
+            3830,
+            0.11174934725848563
+          ],
+          "critical": [
+            50,
+            96,
+            0.5208333333333334
+          ],
+          "evaluated": 16,
+          "incomplete": 0,
+          "passed": false,
+          "stratum": "table",
+          "words": [
+            114,
+            582,
+            0.1958762886597938
+          ]
+        },
+        {
+          "cases": 16,
+          "characters": [
+            585,
+            3832,
+            0.15266179540709812
+          ],
+          "critical": [
+            82,
+            96,
+            0.8541666666666666
+          ],
+          "evaluated": 16,
+          "incomplete": 0,
+          "passed": false,
+          "stratum": "two_column",
+          "words": [
+            110,
+            582,
+            0.18900343642611683
+          ]
+        }
+      ],
+      "scan_condition": [
+        {
+          "cases": 16,
+          "characters": [
+            463,
+            3811,
+            0.12149042246129625
+          ],
+          "critical": [
+            77,
+            96,
+            0.8020833333333334
+          ],
+          "evaluated": 16,
+          "incomplete": 0,
+          "passed": false,
+          "stratum": "clean",
+          "words": [
+            96,
+            580,
+            0.16551724137931034
+          ]
+        },
+        {
+          "cases": 16,
+          "characters": [
+            457,
+            3815,
+            0.11979030144167759
+          ],
+          "critical": [
+            77,
+            96,
+            0.8020833333333334
+          ],
+          "evaluated": 16,
+          "incomplete": 0,
+          "passed": false,
+          "stratum": "light_noise",
+          "words": [
+            96,
+            580,
+            0.16551724137931034
+          ]
+        },
+        {
+          "cases": 16,
+          "characters": [
+            320,
+            3799,
+            0.08423269281389839
+          ],
+          "critical": [
+            77,
+            96,
+            0.8020833333333334
+          ],
+          "evaluated": 16,
+          "incomplete": 0,
+          "passed": false,
+          "stratum": "light_skew",
+          "words": [
+            77,
+            580,
+            0.13275862068965516
+          ]
+        },
+        {
+          "cases": 16,
+          "characters": [
+            419,
+            3880,
+            0.10798969072164949
+          ],
+          "critical": [
+            77,
+            96,
+            0.8020833333333334
+          ],
+          "evaluated": 16,
+          "incomplete": 0,
+          "passed": false,
+          "stratum": "low_contrast",
+          "words": [
+            92,
+            588,
+            0.1564625850340136
+          ]
+        }
+      ]
+    },
+    "runtime": {
+      "adapter_version": "tesseract-cli-tsv-v11",
+      "available_languages": [
+        "eng",
+        "fas",
+        "osd"
+      ],
+      "configured_languages": [
+        "eng",
+        "fas"
+      ],
+      "fixture_rendering_policy": {
+        "rtl_left_to_right_runs": "U+200E-LRM-isolation-for-ISO-dates-only",
+        "version": "cp135-rtl-ltr-isolation-basic-layout-v4"
+      },
+      "pdf_renderer_version": "5.15.2",
+      "provider": "tesseract",
+      "required_languages": [
+        "eng",
+        "fas"
+      ],
+      "runtime_version": "tesseract 5.5.0",
+      "synthetic_routing": {
+        "eng": {
+          "combined_only": 32,
+          "fas_rerun": 0,
+          "unknown": 0
+        },
+        "fas": {
+          "combined_only": 0,
+          "fas_rerun": 32,
+          "unknown": 0
+        }
+      },
+      "traineddata_sha256": {
+        "eng": "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2",
+        "fas": "db1c0a91208aff00d3cf1ed2c1d23f76419afd5f024688b4f71adc3f2ce4a505"
+      }
+    }
+  },
+  "final_sha": null,
+  "final_ci": "UNKNOWN; a new pushed SHA requires its own complete Linux and Windows run."
+}

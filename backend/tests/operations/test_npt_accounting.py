@@ -327,3 +327,65 @@ async def test_a_well_with_nothing_recorded_reports_zero_and_says_where_that_com
     assert npt["cases"] == []
     assert npt["percent_of_well_time"] is None or npt["percent_of_well_time"] == 0.0
     assert any("never an assumed zero" in note for note in npt["notes"])
+
+
+async def test_report_and_export_propagate_npt_period_without_claiming_proration(fabric: Fabric) -> None:
+    """Synthetic API/DB evidence: report period must not silently use an all-well NPT total."""
+    org_id = fabric.org_id(fabric.alpha)
+    well_id = fabric.alpha.well_id
+    common = {"org_id": org_id, "well_id": well_id, "wellbore_id": fabric.alpha.wellbore_id, "is_npt": True}
+    async with fabric.session() as session:
+        session.add_all([
+            Event(**common, title="in window", npt_hours=2, npt_hours_basis="reported",
+                  occurred_at=BASE + dt.timedelta(hours=10), occurred_at_basis="source_record",
+                  ended_at=BASE + dt.timedelta(hours=12), ended_at_basis="source_record"),
+            Event(**common, title="outside", npt_hours=8, npt_hours_basis="reported",
+                  occurred_at=BASE - dt.timedelta(days=1), occurred_at_basis="source_record",
+                  ended_at=BASE - dt.timedelta(days=1) + dt.timedelta(hours=8), ended_at_basis="source_record"),
+            # Inclusive legacy SQL overlap includes a row starting exactly at period_to; the
+            # independent interval reconciliation uses a half-open window and excludes it.
+            Event(**common, title="touches end boundary", npt_hours=1, npt_hours_basis="reported",
+                  occurred_at=BASE + dt.timedelta(days=1), occurred_at_basis="source_record",
+                  ended_at=BASE + dt.timedelta(days=1, hours=1), ended_at_basis="source_record"),
+            Event(**common, title="unknown time", npt_hours=3, npt_hours_basis="reported"),
+        ])
+        await session.commit()
+
+    base_url = f"/api/v1/wells/{well_id}/reports/daily_drilling"
+    params = {"period_from": BASE.isoformat(), "period_to": (BASE + dt.timedelta(days=1)).isoformat()}
+    response = await fabric.http.get(base_url, params=params, headers=fabric.alpha.headers)
+    assert response.status_code == 200, response.text
+    payload = response.json()["report"]
+    npt_section = next(row for row in payload["sections"] if row["key"] == "npt")
+    npt = npt_section["items"][0]
+    assert npt["total_hours"] == 3  # two hours in the period, plus the inclusive-boundary row
+    assert npt["scope"]["since"] == BASE.isoformat()
+    assert npt["scope"]["until"] == (BASE + dt.timedelta(days=1)).isoformat()
+    assert npt["interval_reconciliation"]["status"] == "unavailable_incomplete"
+    assert npt["interval_reconciliation"]["unassignable_time_count"] == 1
+    assert "not approved NPT or physical downtime" in npt_section["note"]
+    assert "without proration" in payload["metadata"]["period_scope"]["timeline_and_npt"]
+    assert "half-open" in payload["metadata"]["period_scope"]["boundary_caveat"]
+    assert "not necessarily restricted" in payload["metadata"]["period_scope"]["other_sections"]
+
+    exported = await fabric.http.get(f"{base_url}/export", params=params | {"format": "json"},
+                                     headers=fabric.alpha.headers)
+    assert exported.status_code == 200, exported.text
+    exported_report = exported.json()["report"]
+    exported_npt = next(row for row in exported_report["sections"] if row["key"] == "npt")["items"][0]
+    assert exported_npt["total_hours"] == npt["total_hours"]
+    assert exported_npt["scope"] == npt["scope"]
+    assert exported_report["metadata"]["period_scope"] == payload["metadata"]["period_scope"]
+
+    whole = await fabric.http.get(base_url, headers=fabric.alpha.headers)
+    assert whole.status_code == 200
+    whole_npt = next(row for row in whole.json()["report"]["sections"] if row["key"] == "npt")["items"][0]
+    assert whole_npt["total_hours"] == 14
+    assert not whole_npt["scope"]["time_window_applied"]
+    for invalid in ({"period_from": "2026-03-01T00:00:00", "period_to": params["period_to"]},
+                    {"period_from": params["period_from"], "period_to": params["period_from"]},
+                    {"period_from": params["period_to"], "period_to": params["period_from"]}):
+        assert (await fabric.http.get(base_url, params=invalid, headers=fabric.alpha.headers)).status_code == 422
+        assert (await fabric.http.get(f"{base_url}/export", params=invalid,
+                                      headers=fabric.alpha.headers)).status_code == 422
+    assert (await fabric.http.get(base_url, params=params, headers=fabric.bravo.headers)).status_code in (403, 404)

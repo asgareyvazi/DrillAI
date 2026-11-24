@@ -1,0 +1,11 @@
+{
+  "status": "PARTIAL",
+  "policy": "No broad deletion, rewriting history, force push or protected-artifact modification. Existing untracked and ignored material remains unclassified and retained; do not assume ownership.",
+  "recoverable_private_manifest": ".mission12-private/workspace-start-private.jsonl",
+  "manifest_sha256": "24356186cfb9d7de4698ccea4df4e073077395d4972c1301b693b5df251552ef",
+  "privacy": "Path-level manifest contains potentially sensitive local names and remains Git-ignored with owner-only permissions. This is local workspace storage, not proof of an independent durable backup; preserve it securely and review before any publication or workspace disposal.",
+  "protected_comparison": "MISSION12-PROTECTED-CHECK.json",
+  "baseline_limitation": "Mission 11 private path-level manifest was absent in this restored sandbox. Its digest is not a recoverable manifest. Protected entries at Mission 12 start matched previous end in type/mode/size/content but all mtime values differed for an unknown reason.",
+  "initial_reconciliation": "Fetched and compared all 839 remote tracked blobs and modes, then reconciled index/ref to verified remote HEAD without overwriting working files. Twenty-four initial untracked files were preserved.",
+  "pending": "Review ownership and retention of all initial and newly generated artifacts; no cleanup authorization is implied. Repeat protected comparison immediately before final disposition."
+}

@@ -1,0 +1,20 @@
+# Mission 12 — engineering recovery and assurance
+
+**Overall: NOT_ACCEPTED. Field qualification: BLOCKED_BY_MISSING_AUTHORIZED_EVIDENCE.** This is an honest partial increment, not closure of all phases or evidence of fitness for use in a real well.
+
+## Work performed
+
+- Reconciled the restored workspace to the verified remote branch head without overwriting working files. Retained the private, recoverable start inventory and preserved the initial untracked files. Nine protected entries matched their Mission 12 start fingerprints, including mtime, at the recorded check. Mission 11 end mtimes differed at the next start for an unknown reason. See [workspace disposition](MISSION12-WORKSPACE-DISPOSITION.json) and [protected comparison](MISSION12-PROTECTED-CHECK.json).
+- Bounded the wait after attempting to kill an unreapable OCR direct child. The legacy POSIX process group does **not** contain a descendant that calls `setsid`, demonstrated in a local synthetic probe. An opt-in `DRILLAI_OCR_PROCESS_ISOLATION=linux_pid_namespace` mode runs the OCR child beneath a Linux PID-namespace init using `unshare`; it fails rather than falling back when unavailable. A real local synthetic test exercised an escaped child on timeout and on normal leader exit. This is not Windows containment, a hard end-to-end document deadline, or a claim of compatibility with Docker, production hosts, or arbitrary privileged processes. The default remains legacy and weaker; operators must explicitly commission the opt-in mode.
+- Propagated NPT report bounds consistently through report/API/JSON export, with validation and caveats. Legacy overlap behavior includes full rows rather than prorating, and other report sections are not necessarily period-scoped. This is not approved canonical event reconciliation.
+- Indexed 30 inherited requirements, 31 phase slots, 16 engines and 18 historical areas; unknowns remain unknown. Three CP142 analytical checks are useful but do not establish complete independent source-to-report assurance. The original inherited 26 phase definitions could not be recovered from the available records.
+
+## Evidence and limitations
+
+Focused OCR/runtime/annotation tests: **44 passed** on this Linux host, including namespace test in the supported branch. Focused NPT/API tests: **78 passed**. CP142: **3 passed**. Frontend lint and typecheck passed; frontend unit tests **423 passed**, and E2E inventory listed **130 tests in 20 files**. Documentation guard passed. Dedicated CP150 synthetic two-well browser pilot **1/1 passed, zero retries, 2.1 minutes**. These are not field evidence. Full SQLite and browser regression processes were started before the final namespace code and their final results must be checked separately; they cannot certify the final source snapshot.
+
+Baseline CI [45345525273](https://github.com/asgareyvazi/DrillAI/actions/runs/45345525273), SHA `d3ec562f6137ff99009711abb037df092928a8ee`, failed the real deployment-image OCR quality gate despite Windows jobs passing. On the unchanged corpus, critical fields were **308/384**, Persian **118/192**, English **190/192**; the required threshold is 90% overall and by stratum. OCR quality is unresolved; no corpus, threshold, test, or CI weakening was applied. A final pushed SHA requires complete Linux and Windows CI on that same SHA before any certification.
+
+## Records and next steps
+
+See [requirements](MISSION12-REQUIREMENT-MATRIX.json), [phase ledger](MISSION12-PHASE-LEDGER.json), [engine assurance](MISSION12-ENGINE-ASSURANCE.json), [history](MISSION12-HISTORICAL-CAPABILITY-MATRIX.json), [golden results](MISSION12-GOLDEN-RESULTS.json), [CI](MISSION12-CI-CERTIFICATION.json), [traceability](MISSION12-SOURCE-TO-REPORT-TRACEABILITY.json), and [roadmap](MISSION12-CAPABILITY-ROADMAP.json). Address deployment OCR quality, cross-platform containment and document deadline, approved NPT accounting, complete independent assurance and history, full golden scope, exact-SHA CI, and authorized field evidence. Unassessed phases and capabilities remain `UNKNOWN`; synthetic success is not a substitute for field qualification.

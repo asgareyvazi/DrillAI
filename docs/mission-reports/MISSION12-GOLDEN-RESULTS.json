@@ -1,0 +1,11 @@
+{
+  "status": "PARTIAL",
+  "classification": "SYNTHETIC_ONLY_NOT_FIELD_VALIDATION",
+  "results": [
+    {"scenario": "CP150 isolated two-well browser pilot", "result": "PASS", "count": "1/1", "duration": "2.1 minutes", "retries": 0, "evidence": "frontend/e2e/cp150-two-well-pilot.spec.ts", "limits": "Synthetic browser/API/SQLite flow; not every requested golden scenario or production qualification."},
+    {"scenario": "CP142 independent synthetic analytical vectors", "result": "PASS", "count": "3/3", "evidence": "backend/tests/engines/test_cp142_independent_calculation_assurance.py", "limits": "Three representative calculations only; not independent assurance of all 16 engines."},
+    {"scenario": "NPT report and export period propagation", "result": "PASS", "count": "78 focused tests across the NPT, classifier and API scope", "evidence": "backend/tests/operations/test_npt_accounting.py", "limits": "Legacy inclusive overlap includes full rows, not proration or approved canonical reconciliation."},
+    {"scenario": "OCR synthetic deployment quality", "result": "FAIL", "evidence": "MISSION12-CI-CERTIFICATION.json", "limits": "Starting SHA deployment-image run, not current-SHA certification; fixed corpus and thresholds unchanged."}
+  ],
+  "authorized_field_evidence": "BLOCKED_BY_MISSING_AUTHORIZED_EVIDENCE"
+}

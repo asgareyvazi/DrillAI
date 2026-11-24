@@ -1,0 +1,169 @@
+{
+  "status": "PASS",
+  "scope": "Nine protected path/type/mode/size/mtime_ns/SHA256 entries compared to Mission 12 start, not previous Mission 11 end.",
+  "entries": [
+    {
+      "start": {
+        "path": "frontend/.playwright-report-cp151-71aae4f7f3364cd8bef9f4748c4283fb",
+        "type": "directory",
+        "mode": "0o755",
+        "size": 60,
+        "mtime_ns": 1795508520164426412
+      },
+      "end": {
+        "path": "frontend/.playwright-report-cp151-71aae4f7f3364cd8bef9f4748c4283fb",
+        "type": "directory",
+        "mode": "0o755",
+        "size": 60,
+        "mtime_ns": 1795508520164426412
+      },
+      "identical": true
+    },
+    {
+      "start": {
+        "path": "frontend/.playwright-report-cp151-71aae4f7f3364cd8bef9f4748c4283fb/index.html",
+        "type": "file",
+        "mode": "0o644",
+        "size": 927479,
+        "mtime_ns": 1795508520164426412,
+        "sha256": "0bb5b83130d9869fcc36f112ca431268e1c544f4fd94f6321c28d575c12ac00f"
+      },
+      "end": {
+        "path": "frontend/.playwright-report-cp151-71aae4f7f3364cd8bef9f4748c4283fb/index.html",
+        "type": "file",
+        "mode": "0o644",
+        "size": 927479,
+        "mtime_ns": 1795508520164426412,
+        "sha256": "0bb5b83130d9869fcc36f112ca431268e1c544f4fd94f6321c28d575c12ac00f"
+      },
+      "identical": true
+    },
+    {
+      "start": {
+        "path": "frontend/playwright-report-master-full-7d42a1",
+        "type": "directory",
+        "mode": "0o755",
+        "size": 60,
+        "mtime_ns": 1795508520168426432
+      },
+      "end": {
+        "path": "frontend/playwright-report-master-full-7d42a1",
+        "type": "directory",
+        "mode": "0o755",
+        "size": 60,
+        "mtime_ns": 1795508520168426432
+      },
+      "identical": true
+    },
+    {
+      "start": {
+        "path": "frontend/playwright-report-master-full-7d42a1/index.html",
+        "type": "file",
+        "mode": "0o644",
+        "size": 926911,
+        "mtime_ns": 1795508520168426432,
+        "sha256": "08bc7c242cee30a0c8c17fb17caf8512dcc42d19aac7eeab2648e8d3fe1feddb"
+      },
+      "end": {
+        "path": "frontend/playwright-report-master-full-7d42a1/index.html",
+        "type": "file",
+        "mode": "0o644",
+        "size": 926911,
+        "mtime_ns": 1795508520168426432,
+        "sha256": "08bc7c242cee30a0c8c17fb17caf8512dcc42d19aac7eeab2648e8d3fe1feddb"
+      },
+      "identical": true
+    },
+    {
+      "start": {
+        "path": "frontend/test-results-master-auth-c4a891de",
+        "type": "directory",
+        "mode": "0o755",
+        "size": 60,
+        "mtime_ns": 1795508520188426533
+      },
+      "end": {
+        "path": "frontend/test-results-master-auth-c4a891de",
+        "type": "directory",
+        "mode": "0o755",
+        "size": 60,
+        "mtime_ns": 1795508520188426533
+      },
+      "identical": true
+    },
+    {
+      "start": {
+        "path": "frontend/test-results-master-auth-c4a891de/.last-run.json",
+        "type": "file",
+        "mode": "0o644",
+        "size": 45,
+        "mtime_ns": 1795508520188426533,
+        "sha256": "91d1c43004802cd49950d78eb11c8fa7d05da8ffffe219a8b13b2f561bc00903"
+      },
+      "end": {
+        "path": "frontend/test-results-master-auth-c4a891de/.last-run.json",
+        "type": "file",
+        "mode": "0o644",
+        "size": 45,
+        "mtime_ns": 1795508520188426533,
+        "sha256": "91d1c43004802cd49950d78eb11c8fa7d05da8ffffe219a8b13b2f561bc00903"
+      },
+      "identical": true
+    },
+    {
+      "start": {
+        "path": "frontend/test-results-master-full-7d42a1",
+        "type": "directory",
+        "mode": "0o755",
+        "size": 60,
+        "mtime_ns": 1795508520188426533
+      },
+      "end": {
+        "path": "frontend/test-results-master-full-7d42a1",
+        "type": "directory",
+        "mode": "0o755",
+        "size": 60,
+        "mtime_ns": 1795508520188426533
+      },
+      "identical": true
+    },
+    {
+      "start": {
+        "path": "frontend/test-results-master-full-7d42a1/.last-run.json",
+        "type": "file",
+        "mode": "0o644",
+        "size": 45,
+        "mtime_ns": 1795508520188426533,
+        "sha256": "91d1c43004802cd49950d78eb11c8fa7d05da8ffffe219a8b13b2f561bc00903"
+      },
+      "end": {
+        "path": "frontend/test-results-master-full-7d42a1/.last-run.json",
+        "type": "file",
+        "mode": "0o644",
+        "size": 45,
+        "mtime_ns": 1795508520188426533,
+        "sha256": "91d1c43004802cd49950d78eb11c8fa7d05da8ffffe219a8b13b2f561bc00903"
+      },
+      "identical": true
+    },
+    {
+      "start": {
+        "path": "frontend/test-results-master-full-7d42a1/e2e-results.json",
+        "type": "file",
+        "mode": "0o644",
+        "size": 169655,
+        "mtime_ns": 1795508520188426533,
+        "sha256": "555a97d72d99dff75dc7d6eb551d34b5c534f40f68c44eb4924a43afa5216bf9"
+      },
+      "end": {
+        "path": "frontend/test-results-master-full-7d42a1/e2e-results.json",
+        "type": "file",
+        "mode": "0o644",
+        "size": 169655,
+        "mtime_ns": 1795508520188426533,
+        "sha256": "555a97d72d99dff75dc7d6eb551d34b5c534f40f68c44eb4924a43afa5216bf9"
+      },
+      "identical": true
+    }
+  ]
+}

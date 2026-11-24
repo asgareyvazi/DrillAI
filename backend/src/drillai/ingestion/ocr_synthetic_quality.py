@@ -620,6 +620,7 @@ def run_synthetic_quality_benchmark(settings: Settings | None = None) -> dict[st
         executable=resolved.ocr_executable,
         timeout_seconds=resolved.ocr_timeout_seconds,
         max_concurrency=resolved.ocr_max_concurrency,
+        process_isolation=resolved.ocr_process_isolation,
     )
     diagnostics = provider.diagnostics()
     pdfium_available, pdfium_version = _pdfium_details()

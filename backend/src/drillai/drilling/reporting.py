@@ -25,6 +25,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from drillai.core.clock import ensure_utc
 from drillai.core.errors import ValidationFailed
 from drillai.db.models import EngineRun, Lesson, Operation
 from drillai.documents.access import operational_source_conditions
@@ -194,6 +195,16 @@ class ReportingService:
                 f"unknown report kind {kind!r}",
                 details={"unknown": [kind], "known": sorted(REPORT_KINDS)},
             )
+        try:
+            period_from = ensure_utc(period_from) if period_from is not None else None
+            period_to = ensure_utc(period_to) if period_to is not None else None
+        except (ValueError, OverflowError) as exc:
+            raise ValidationFailed(
+                "report period bounds must include a timezone offset and be representable in UTC",
+                details={"reason": str(exc)},
+            ) from exc
+        if period_from is not None and period_to is not None and period_from >= period_to:
+            raise ValidationFailed("report period requires period_from to be earlier than period_to")
         now = dt.datetime.now(tz=dt.UTC)
         state = await self.state.state(well_id)
         report = Report(
@@ -209,6 +220,12 @@ class ReportingService:
             "progress": state["progress"],
             "counts": state["counts"],
             "generated_by": "drillai.drilling.reporting",
+            "period_scope": {
+                "applied": period_from is not None or period_to is not None,
+                "timeline_and_npt": "Filtered to the requested bounds; legacy NPT row sums include full overlapping row hours, without proration.",
+                "other_sections": "Current state and other report sections are not necessarily restricted to the requested period.",
+                "boundary_caveat": "Legacy NPT overlap uses inclusive endpoints; interval reconciliation uses a half-open window and can differ at boundaries.",
+            },
         }
 
         timeline = await self.timeline.build(
@@ -265,14 +282,19 @@ class ReportingService:
                 )
             )
         if kind in {"npt", "daily_drilling", "management_summary", "end_of_well"}:
-            summary = await self.npt.summarise(well_id)
+            summary = await self.npt.summarise(well_id, since=period_from, until=period_to)
             report.sections.append(
                 ReportSection(
                     key="npt",
-                    title="Non-productive time",
+                    title="Recorded NPT and legacy row sums",
                     kind="facts",
                     items=[summary.to_dict()],
-                    note="derived from recorded NPT events and operation roll-ups only",
+                    note=(
+                        "Legacy event totals may include generic duration and overlapping rows. "
+                        "They are not approved NPT or physical downtime. A selected period uses "
+                        "inclusive overlap and full row hours without proration; interval reconciliation "
+                        "uses a half-open window."
+                    ),
                 )
             )
             report.sections.append(
@@ -321,7 +343,9 @@ class ReportingService:
                 )
             )
         if kind in {"offset_comparison", "management_summary", "end_of_well"}:
-            summary = await self.npt.summarise(well_id, include_offsets=True)
+            summary = await self.npt.summarise(
+                well_id, since=period_from, until=period_to, include_offsets=True
+            )
             report.sections.append(
                 ReportSection(
                     key="offsets",

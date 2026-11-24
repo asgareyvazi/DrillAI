@@ -50,6 +50,7 @@ def _runtime_snapshot(
     languages: str,
     timeout_seconds: float,
     max_concurrency: int,
+    process_isolation: str,
 ) -> tuple[dict[str, object], bool, str | None]:
     """Probe immutable deployment dependencies once per process/configuration.
 
@@ -61,6 +62,7 @@ def _runtime_snapshot(
         executable=executable,
         timeout_seconds=timeout_seconds,
         max_concurrency=max_concurrency,
+        process_isolation=process_isolation,
     )
     return provider.diagnostics(), *_pdfium_details()
 
@@ -79,6 +81,7 @@ def inspect_ocr_runtime(
         "layout_detection": "visible-central-divider-with-small-skew-search; otherwise-unclassified",
         "language_routing_policy": TESSERACT_LANGUAGE_ROUTING_POLICY,
         "timeout_seconds_per_page": resolved.ocr_timeout_seconds,
+        "process_isolation": resolved.ocr_process_isolation,
         "max_blank_pages_per_document": resolved.ocr_max_pages,
         "max_page_pixels": resolved.ocr_max_page_pixels,
         "max_concurrent_tesseract_processes": resolved.ocr_max_concurrency,
@@ -116,6 +119,7 @@ def inspect_ocr_runtime(
             resolved.ocr_languages,
             resolved.ocr_timeout_seconds,
             resolved.ocr_max_concurrency,
+            resolved.ocr_process_isolation,
         )
     runtime = dict(cached_runtime)
     runtime["available_languages"] = list(cached_runtime.get("available_languages", []))
@@ -207,6 +211,7 @@ def run_synthetic_runtime_canary(settings: Settings | None = None) -> dict[str, 
         executable=resolved.ocr_executable,
         timeout_seconds=resolved.ocr_timeout_seconds,
         max_concurrency=resolved.ocr_max_concurrency,
+        process_isolation=resolved.ocr_process_isolation,
     )
     available, reason = provider.availability()
     if not available:
