@@ -1,0 +1,40 @@
+{
+  "status": "PARTIAL",
+  "results": [
+    {
+      "scenario": "81 focused NPT, analytical vectors, documentation and security guards",
+      "status": "PARTIAL",
+      "actual": "81 passed; synthetic/local only."
+    },
+    {
+      "scenario": "64-case synthetic OCR in local CLI shim",
+      "status": "NOT_ACCEPTED",
+      "actual": "311/384 critical fields, no deployment equivalence; initial attempt incomplete."
+    },
+    {
+      "scenario": "Expanded Mission 13 two-well golden workflow",
+      "status": "NOT_IMPLEMENTED",
+      "actual": "Prior Mission 12 CP150 was 1/1, insufficient for requested expanded scope."
+    },
+    {
+      "scenario": "Full local SQLite backend",
+      "status": "PARTIAL",
+      "actual": "1902 passed, 15 skipped in 786.64 s; not PostgreSQL/native Windows."
+    },
+    {
+      "scenario": "Full local browser",
+      "status": "PARTIAL",
+      "actual": "130 passed in 9.8 minutes with zero retries."
+    },
+    {
+      "scenario": "CP150 initial launch",
+      "status": "PARTIAL",
+      "actual": "Agent-specified temporary path was rejected before collection by CP150 isolation guard; exit 1."
+    },
+    {
+      "scenario": "CP150 fresh compliant path rerun",
+      "status": "PARTIAL",
+      "actual": "1/1 passed in 53 seconds; synthetic only; does not erase failed launch or cover expanded golden scope."
+    }
+  ]
+}

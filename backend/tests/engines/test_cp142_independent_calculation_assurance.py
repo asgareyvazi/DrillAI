@@ -125,3 +125,49 @@ def test_mse_superposition_matches_independent_teale_definition(engines):
     assert result.outputs.mse_si == pytest.approx(axial_pa + rotary_pa, rel=1e-12)
     assert result.outputs.dysfunction_indicator == "unknown"
     assert any("no confined compressive strength" in note for note in result.outputs.notes)
+
+
+def test_power_law_pressure_gradient_matches_independent_radial_flow_integral(engines):
+    """Numerically integrate the pipe shear profile rather than reusing the closed-form solver."""
+    diameter_m, length_m, flow_m3_s, density = 0.10, 850.0, 0.0005, 1200.0
+    consistency = 0.8
+    for flow_index in (0.55, 1.25):
+        _, result = engines.execute("hydraulics.power_law_pipe", {
+            "diameter_si": diameter_m, "length_si": length_m, "flow_rate_si": flow_m3_s,
+            "density_si": density, "consistency_si": consistency, "flow_index": flow_index,
+            "measured_shear_min_per_s": 0.0, "measured_shear_max_per_s": 10000.0,
+        })
+        gradient = result.outputs.pressure_gradient_si
+        radius, subdivisions = diameter_m / 2.0, 20000
+        dr = radius / subdivisions
+        # By integrating concentric rings and exchanging the order of integration, the flow
+        # follows Q = pi integral_0^R r^2 * shear_rate(r) dr, where local shear stress is G*r/2.
+        # The reference is a midpoint numerical integral, not the engine's closed expression.
+        independently_integrated_q = math.pi * sum(
+            (r := (i + 0.5) * dr) ** 2 * (gradient * r / (2.0 * consistency)) ** (1.0 / flow_index)
+            for i in range(subdivisions)
+        ) * dr
+        assert independently_integrated_q == pytest.approx(flow_m3_s, rel=1e-8)
+        assert result.outputs.pressure_loss_si == pytest.approx(gradient * length_m, rel=1e-12)
+
+
+def test_kill_sheet_static_balance_and_pressure_endpoints_independent(engines):
+    """Synthetic hydrostatic reference only; not an approved well-control procedure."""
+    depth_m, mud_density, sidpp_pa, scr_pa = 2400.0, 1200.0, 1_200_000.0, 2_500_000.0
+    _, result = engines.execute("well_control.kill_sheet", {
+        "tvd_si": depth_m, "current_mud_weight_si": mud_density, "sidpp_si": sidpp_pa,
+        "slow_circulating_pressure_si": scr_pa, "strokes_to_bit": 1200.0,
+        "annulus_strokes": 600.0, "method": "wait_and_weight",
+    })
+    formation_pa = mud_density * 9.80665 * depth_m + sidpp_pa
+    independently_balanced_density = formation_pa / (9.80665 * depth_m)
+    assert result.outputs.formation_pressure_si == pytest.approx(formation_pa, rel=1e-12)
+    assert result.outputs.kill_mud_weight_si == pytest.approx(independently_balanced_density, rel=1e-12)
+    assert result.outputs.initial_circulating_pressure_si == pytest.approx(scr_pa + sidpp_pa, rel=1e-12)
+    assert result.outputs.final_circulating_pressure_si == pytest.approx(
+        scr_pa * independently_balanced_density / mud_density, rel=1e-12
+    )
+    assert result.outputs.schedule[0].pressure_si == pytest.approx(scr_pa + sidpp_pa)
+    assert result.outputs.schedule[-1].pressure_si == pytest.approx(result.outputs.final_circulating_pressure_si)
+    assert result.outputs.input_provenance_verified is False
+    assert result.outputs.volumetric_kick_tolerance_si is None

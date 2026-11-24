@@ -1,0 +1,5176 @@
+{
+  "status": "NOT_ACCEPTED",
+  "corpus_sha256": "31aca80b4323fe470d34705e36038296ef620adb7525373f5196c9f561b6735d",
+  "production_historical": {
+    "run": "https://github.com/asgareyvazi/DrillAI/actions/runs/45362046917",
+    "sha": "fddaf78f0fc82da23995894b8d374e985ed72112",
+    "runtime": {
+      "adapter_version": "tesseract-cli-tsv-v11",
+      "available_languages": [
+        "eng",
+        "fas",
+        "osd"
+      ],
+      "configured_languages": [
+        "eng",
+        "fas"
+      ],
+      "fixture_rendering_policy": {
+        "rtl_left_to_right_runs": "U+200E-LRM-isolation-for-ISO-dates-only",
+        "version": "cp135-rtl-ltr-isolation-basic-layout-v4"
+      },
+      "pdf_renderer_version": "5.15.2",
+      "provider": "tesseract",
+      "required_languages": [
+        "eng",
+        "fas"
+      ],
+      "runtime_version": "tesseract 5.5.0",
+      "synthetic_routing": {
+        "eng": {
+          "combined_only": 32,
+          "fas_rerun": 0,
+          "unknown": 0
+        },
+        "fas": {
+          "combined_only": 0,
+          "fas_rerun": 32,
+          "unknown": 0
+        }
+      },
+      "traineddata_sha256": {
+        "eng": "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2",
+        "fas": "db1c0a91208aff00d3cf1ed2c1d23f76419afd5f024688b4f71adc3f2ce4a505"
+      }
+    },
+    "metrics": {
+      "all_strata_thresholds_passed": false,
+      "case_count": 64,
+      "character_error_rate": 0.10839594903626266,
+      "character_errors": 1659,
+      "critical_field_exact_rate": 0.8020833333333334,
+      "critical_fields_expected": 384,
+      "critical_fields_matched": 308,
+      "evaluated_cases": 64,
+      "expected_characters": 15305,
+      "expected_words": 2328,
+      "incomplete_or_failed_cases": 0,
+      "thresholds_passed": false,
+      "word_error_rate": 0.15506872852233677,
+      "word_errors": 361
+    },
+    "strata": {
+      "language": [
+        {
+          "cases": 32,
+          "characters": [
+            18,
+            8154,
+            0.002207505518763797
+          ],
+          "critical": [
+            190,
+            192,
+            0.9895833333333334
+          ],
+          "evaluated": 32,
+          "incomplete": 0,
+          "passed": true,
+          "stratum": "eng",
+          "words": [
+            16,
+            1152,
+            0.013888888888888888
+          ]
+        },
+        {
+          "cases": 32,
+          "characters": [
+            1641,
+            7151,
+            0.22947839463012165
+          ],
+          "critical": [
+            118,
+            192,
+            0.6145833333333334
+          ],
+          "evaluated": 32,
+          "incomplete": 0,
+          "passed": false,
+          "stratum": "fas",
+          "words": [
+            345,
+            1176,
+            0.29336734693877553
+          ]
+        }
+      ],
+      "layout": [
+        {
+          "cases": 16,
+          "characters": [
+            266,
+            3822,
+            0.0695970695970696
+          ],
+          "critical": [
+            88,
+            96,
+            0.9166666666666666
+          ],
+          "evaluated": 16,
+          "incomplete": 0,
+          "passed": true,
+          "stratum": "compact",
+          "words": [
+            59,
+            582,
+            0.1013745704467354
+          ]
+        },
+        {
+          "cases": 16,
+          "characters": [
+            380,
+            3821,
+            0.09945040565297043
+          ],
+          "critical": [
+            88,
+            96,
+            0.9166666666666666
+          ],
+          "evaluated": 16,
+          "incomplete": 0,
+          "passed": true,
+          "stratum": "single_column",
+          "words": [
+            78,
+            582,
+            0.13402061855670103
+          ]
+        },
+        {
+          "cases": 16,
+          "characters": [
+            428,
+            3830,
+            0.11174934725848563
+          ],
+          "critical": [
+            50,
+            96,
+            0.5208333333333334
+          ],
+          "evaluated": 16,
+          "incomplete": 0,
+          "passed": false,
+          "stratum": "table",
+          "words": [
+            114,
+            582,
+            0.1958762886597938
+          ]
+        },
+        {
+          "cases": 16,
+          "characters": [
+            585,
+            3832,
+            0.15266179540709812
+          ],
+          "critical": [
+            82,
+            96,
+            0.8541666666666666
+          ],
+          "evaluated": 16,
+          "incomplete": 0,
+          "passed": false,
+          "stratum": "two_column",
+          "words": [
+            110,
+            582,
+            0.18900343642611683
+          ]
+        }
+      ],
+      "scan_condition": [
+        {
+          "cases": 16,
+          "characters": [
+            463,
+            3811,
+            0.12149042246129625
+          ],
+          "critical": [
+            77,
+            96,
+            0.8020833333333334
+          ],
+          "evaluated": 16,
+          "incomplete": 0,
+          "passed": false,
+          "stratum": "clean",
+          "words": [
+            96,
+            580,
+            0.16551724137931034
+          ]
+        },
+        {
+          "cases": 16,
+          "characters": [
+            457,
+            3815,
+            0.11979030144167759
+          ],
+          "critical": [
+            77,
+            96,
+            0.8020833333333334
+          ],
+          "evaluated": 16,
+          "incomplete": 0,
+          "passed": false,
+          "stratum": "light_noise",
+          "words": [
+            96,
+            580,
+            0.16551724137931034
+          ]
+        },
+        {
+          "cases": 16,
+          "characters": [
+            320,
+            3799,
+            0.08423269281389839
+          ],
+          "critical": [
+            77,
+            96,
+            0.8020833333333334
+          ],
+          "evaluated": 16,
+          "incomplete": 0,
+          "passed": false,
+          "stratum": "light_skew",
+          "words": [
+            77,
+            580,
+            0.13275862068965516
+          ]
+        },
+        {
+          "cases": 16,
+          "characters": [
+            419,
+            3880,
+            0.10798969072164949
+          ],
+          "critical": [
+            77,
+            96,
+            0.8020833333333334
+          ],
+          "evaluated": 16,
+          "incomplete": 0,
+          "passed": false,
+          "stratum": "low_contrast",
+          "words": [
+            92,
+            588,
+            0.1564625850340136
+          ]
+        }
+      ]
+    },
+    "cases": [
+      {
+        "cer": 0.003968253968253968,
+        "character_errors": 1,
+        "critical_fields_expected": 6,
+        "critical_fields_matched": 6,
+        "expected_characters": 252,
+        "expected_words": 36,
+        "id": "cp135-ddr-001",
+        "language": "eng",
+        "layout": "single_column",
+        "pdf_sha256": "752b167b350fc085db165d3bd30fd65d26c780fdbf8866ccbb7350955b2fc52d",
+        "processing_ms": 973.845,
+        "reason": null,
+        "recognition_ms": 504.679,
+        "scan_condition": "clean",
+        "status": "evaluated",
+        "wer": 0.027777777777777776,
+        "word_errors": 1
+      },
+      {
+        "cer": 0.0,
+        "character_errors": 0,
+        "critical_fields_expected": 6,
+        "critical_fields_matched": 6,
+        "expected_characters": 253,
+        "expected_words": 36,
+        "id": "cp135-ddr-002",
+        "language": "eng",
+        "layout": "single_column",
+        "pdf_sha256": "7b5877340b8e14a902da359b5d50bfeef82924e39265945950071aaf53e094f3",
+        "processing_ms": 828.351,
+        "reason": null,
+        "recognition_ms": 451.035,
+        "scan_condition": "clean",
+        "status": "evaluated",
+        "wer": 0.0,
+        "word_errors": 0
+      },
+      {
+        "cer": 0.004016064257028112,
+        "character_errors": 1,
+        "critical_fields_expected": 6,
+        "critical_fields_matched": 6,
+        "expected_characters": 249,
+        "expected_words": 35,
+        "id": "cp135-ddr-003",
+        "language": "eng",
+        "layout": "single_column",
+        "pdf_sha256": "ba6e0019d507944cced7459f211ec820ff6d06714a09202060cc12e1f2a1d313",
+        "processing_ms": 885.648,
+        "reason": null,
+        "recognition_ms": 499.106,
+        "scan_condition": "low_contrast",
+        "status": "evaluated",
+        "wer": 0.02857142857142857,
+        "word_errors": 1
+      },
+      {
+        "cer": 0.0,
+        "character_errors": 0,
+        "critical_fields_expected": 6,
+        "critical_fields_matched": 6,
+        "expected_characters": 268,
+        "expected_words": 37,
+        "id": "cp135-ddr-004",
+        "language": "eng",
+        "layout": "single_column",
+        "pdf_sha256": "67049dc8b0ad40154da43317aa498875ba28403aea6d572816da625d843206f6",
+        "processing_ms": 841.92,
+        "reason": null,
+        "recognition_ms": 449.985,
+        "scan_condition": "low_contrast",
+        "status": "evaluated",
+        "wer": 0.0,
+        "word_errors": 0
+      },
+      {
+        "cer": 0.0,
+        "character_errors": 0,
+        "critical_fields_expected": 6,
+        "critical_fields_matched": 6,
+        "expected_characters": 252,
+        "expected_words": 36,
+        "id": "cp135-ddr-005",
+        "language": "eng",
+        "layout": "single_column",
+        "pdf_sha256": "505da085d09406764bfbbef4ccead408c91909aca5b1b459d4d5e854f281baab",
+        "processing_ms": 1118.638,
+        "reason": null,
+        "recognition_ms": 506.233,
+        "scan_condition": "light_skew",
+        "status": "evaluated",
+        "wer": 0.0,
+        "word_errors": 0
+      },
+      {
+        "cer": 0.0,
+        "character_errors": 0,
+        "critical_fields_expected": 6,
+        "critical_fields_matched": 6,
+        "expected_characters": 253,
+        "expected_words": 36,
+        "id": "cp135-ddr-006",
+        "language": "eng",
+        "layout": "single_column",
+        "pdf_sha256": "debc6c13821f66d9706d93f78ff83412bedd651680b41c8442255415009534e9",
+        "processing_ms": 1118.578,
+        "reason": null,
+        "recognition_ms": 506.555,
+        "scan_condition": "light_skew",
+        "status": "evaluated",
+        "wer": 0.0,
+        "word_errors": 0
+      },
+      {
+        "cer": 0.004016064257028112,
+        "character_errors": 1,
+        "critical_fields_expected": 6,
+        "critical_fields_matched": 6,
+        "expected_characters": 249,
+        "expected_words": 35,
+        "id": "cp135-ddr-007",
+        "language": "eng",
+        "layout": "single_column",
+        "pdf_sha256": "0bebfbc1a1a7205863bc9392f1f3ef712a8be17d18829d267e6e5182d38520d5",
+        "processing_ms": 895.348,
+        "reason": null,
+        "recognition_ms": 451.908,
+        "scan_condition": "light_noise",
+        "status": "evaluated",
+        "wer": 0.02857142857142857,
+        "word_errors": 1
+      },
+      {
+        "cer": 0.0,
+        "character_errors": 0,
+        "critical_fields_expected": 6,
+        "critical_fields_matched": 6,
+        "expected_characters": 258,
+        "expected_words": 37,
+        "id": "cp135-ddr-008",
+        "language": "eng",
+        "layout": "single_column",
+        "pdf_sha256": "3ddd5568749f86030ffa56100f54b023aa19627408896c17c37c4bce18f319cc",
+        "processing_ms": 940.145,
+        "reason": null,
+        "recognition_ms": 501.445,
+        "scan_condition": "light_noise",
+        "status": "evaluated",
+        "wer": 0.0,
+        "word_errors": 0
+      },
+      {
+        "cer": 0.00392156862745098,
+        "character_errors": 1,
+        "critical_fields_expected": 6,
+        "critical_fields_matched": 6,
+        "expected_characters": 255,
+        "expected_words": 36,
+        "id": "cp135-ddr-009",
+        "language": "eng",
+        "layout": "table",
+        "pdf_sha256": "943a902709dc5255b3509cd8cdd2fe8e63c46ad9c7a4485e1c668de5b65f555c",
+        "processing_ms": 880.936,
+        "reason": null,
+        "recognition_ms": 501.338,
+        "scan_condition": "clean",
+        "status": "evaluated",
+        "wer": 0.027777777777777776,
+        "word_errors": 1
+      },
+      {
+        "cer": 0.003937007874015748,
+        "character_errors": 1,
+        "critical_fields_expected": 6,
+        "critical_fields_matched": 6,
+        "expected_characters": 254,
+        "expected_words": 36,
+        "id": "cp135-ddr-010",
+        "language": "eng",
+        "layout": "table",
+        "pdf_sha256": "ac95d422bdee3c17d882b3c255cc6a4b53fdebc5b1d46d5aa3465f03583f65a1",
+        "processing_ms": 881.451,
+        "reason": null,
+        "recognition_ms": 503.307,
+        "scan_condition": "clean",
+        "status": "evaluated",
+        "wer": 0.027777777777777776,
+        "word_errors": 1
+      },
+      {
+        "cer": 0.0,
+        "character_errors": 0,
+        "critical_fields_expected": 6,
+        "critical_fields_matched": 6,
+        "expected_characters": 249,
+        "expected_words": 35,
+        "id": "cp135-ddr-011",
+        "language": "eng",
+        "layout": "table",
+        "pdf_sha256": "91e98484442cbad39eda39778284ebdc963b7b53268455cdaa67c39f45fca917",
+        "processing_ms": 888.897,
+        "reason": null,
+        "recognition_ms": 501.357,
+        "scan_condition": "low_contrast",
+        "status": "evaluated",
+        "wer": 0.0,
+        "word_errors": 0
+      },
+      {
+        "cer": 0.0037174721189591076,
+        "character_errors": 1,
+        "critical_fields_expected": 6,
+        "critical_fields_matched": 6,
+        "expected_characters": 269,
+        "expected_words": 37,
+        "id": "cp135-ddr-012",
+        "language": "eng",
+        "layout": "table",
+        "pdf_sha256": "f0fbfa1619f2de2084d12060fe4b6894e0ac3f4ade2006567effadb2a32f72cf",
+        "processing_ms": 904.194,
+        "reason": null,
+        "recognition_ms": 501.37,
+        "scan_condition": "low_contrast",
+        "status": "evaluated",
+        "wer": 0.02702702702702703,
+        "word_errors": 1
+      },
+      {
+        "cer": 0.003952569169960474,
+        "character_errors": 1,
+        "critical_fields_expected": 6,
+        "critical_fields_matched": 6,
+        "expected_characters": 253,
+        "expected_words": 36,
+        "id": "cp135-ddr-013",
+        "language": "eng",
+        "layout": "table",
+        "pdf_sha256": "ed657955dbd91e4730871307255b55310426cfd500abc6fc88ce8b59e04cbfcf",
+        "processing_ms": 1135.287,
+        "reason": null,
+        "recognition_ms": 504.087,
+        "scan_condition": "light_skew",
+        "status": "evaluated",
+        "wer": 0.027777777777777776,
+        "word_errors": 1
+      },
+      {
+        "cer": 0.007874015748031496,
+        "character_errors": 2,
+        "critical_fields_expected": 6,
+        "critical_fields_matched": 4,
+        "expected_characters": 254,
+        "expected_words": 36,
+        "id": "cp135-ddr-014",
+        "language": "eng",
+        "layout": "table",
+        "pdf_sha256": "c54c249b40d493072bf2d9e05596593941488560561b45197ba64c986f22cb54",
+        "processing_ms": 1140.154,
+        "reason": null,
+        "recognition_ms": 504.484,
+        "scan_condition": "light_skew",
+        "status": "evaluated",
+        "wer": 0.1111111111111111,
+        "word_errors": 4
+      },
+      {
+        "cer": 0.004016064257028112,
+        "character_errors": 1,
+        "critical_fields_expected": 6,
+        "critical_fields_matched": 6,
+        "expected_characters": 249,
+        "expected_words": 35,
+        "id": "cp135-ddr-015",
+        "language": "eng",
+        "layout": "table",
+        "pdf_sha256": "30695bd874c5b40e8bf54bd66815829b2375b796e49245b7d47d74eef96c79d9",
+        "processing_ms": 935.589,
+        "reason": null,
+        "recognition_ms": 501.178,
+        "scan_condition": "light_noise",
+        "status": "evaluated",
+        "wer": 0.02857142857142857,
+        "word_errors": 1
+      },
+      {
+        "cer": 0.003875968992248062,
+        "character_errors": 1,
+        "critical_fields_expected": 6,
+        "critical_fields_matched": 6,
+        "expected_characters": 258,
+        "expected_words": 37,
+        "id": "cp135-ddr-016",
+        "language": "eng",
+        "layout": "table",
+        "pdf_sha256": "60d40ef3a51e09066d97290c9fc9a80d4aaf4982d24823a9c8cca92c9589f155",
+        "processing_ms": 946.332,
+        "reason": null,
+        "recognition_ms": 501.353,
+        "scan_condition": "light_noise",
+        "status": "evaluated",
+        "wer": 0.02702702702702703,
+        "word_errors": 1
+      },
+      {
+        "cer": 0.00392156862745098,
+        "character_errors": 1,
+        "critical_fields_expected": 6,
+        "critical_fields_matched": 6,
+        "expected_characters": 255,
+        "expected_words": 36,
+        "id": "cp135-ddr-017",
+        "language": "eng",
+        "layout": "two_column",
+        "pdf_sha256": "b1e1d8b97d58feb965155dd4af13f612018d73b3515a5119bde0f9dc65d2bb10",
+        "processing_ms": 734.207,
+        "reason": null,
+        "recognition_ms": 384.832,
+        "scan_condition": "clean",
+        "status": "evaluated",
+        "wer": 0.027777777777777776,
+        "word_errors": 1
+      },
+      {
+        "cer": 0.0,
+        "character_errors": 0,
+        "critical_fields_expected": 6,
+        "critical_fields_matched": 6,
+        "expected_characters": 253,
+        "expected_words": 36,
+        "id": "cp135-ddr-018",
+        "language": "eng",
+        "layout": "two_column",
+        "pdf_sha256": "f11faef50031a79bc6f4ac5ebbfdf3a94b8c4c827c7fa8d8e76730e4f150a57a",
+        "processing_ms": 685.068,
+        "reason": null,
+        "recognition_ms": 334.69,
+        "scan_condition": "clean",
+        "status": "evaluated",
+        "wer": 0.0,
+        "word_errors": 0
+      },
+      {
+        "cer": 0.004,
+        "character_errors": 1,
+        "critical_fields_expected": 6,
+        "critical_fields_matched": 6,
+        "expected_characters": 250,
+        "expected_words": 35,
+        "id": "cp135-ddr-019",
+        "language": "eng",
+        "layout": "two_column",
+        "pdf_sha256": "1ecf2e7f1e8410fcbd6b9ed7d98473b8bcf2139d14bdb92ee68d93f32776f0d2",
+        "processing_ms": 740.729,
+        "reason": null,
+        "recognition_ms": 384.58,
+        "scan_condition": "low_contrast",
+        "status": "evaluated",
+        "wer": 0.02857142857142857,
+        "word_errors": 1
+      },
+      {
+        "cer": 0.01858736059479554,
+        "character_errors": 5,
+        "critical_fields_expected": 6,
+        "critical_fields_matched": 6,
+        "expected_characters": 269,
+        "expected_words": 37,
+        "id": "cp135-ddr-020",
+        "language": "eng",
+        "layout": "two_column",
+        "pdf_sha256": "a2948d89c83c4702f0616317e5732bce5f1e146d507620457334285495af8566",
+        "processing_ms": 745.11,
+        "reason": null,
+        "recognition_ms": 385.903,
+        "scan_condition": "low_contrast",
+        "status": "evaluated",
+        "wer": 0.02702702702702703,
+        "word_errors": 1
+      },
+      {
+        "cer": 0.0,
+        "character_errors": 0,
+        "critical_fields_expected": 6,
+        "critical_fields_matched": 6,
+        "expected_characters": 252,
+        "expected_words": 36,
+        "id": "cp135-ddr-021",
+        "language": "eng",
+        "layout": "two_column",
+        "pdf_sha256": "92b27f79d6c10dd3ce7b47e6f0382cf724b3bb5c0b9675b22f8c766ed41ddba5",
+        "processing_ms": 1135.245,
+        "reason": null,
+        "recognition_ms": 502.829,
+        "scan_condition": "light_skew",
+        "status": "evaluated",
+        "wer": 0.0,
+        "word_errors": 0
+      },
+      {
+        "cer": 0.0,
+        "character_errors": 0,
+        "critical_fields_expected": 6,
+        "critical_fields_matched": 6,
+        "expected_characters": 254,
+        "expected_words": 36,
+        "id": "cp135-ddr-022",
+        "language": "eng",
+        "layout": "two_column",
+        "pdf_sha256": "12d4ef81f6fcee9f15eb171866aebe26ae780c1025c7f135c0c92378d5aed18c",
+        "processing_ms": 1137.375,
+        "reason": null,
+        "recognition_ms": 501.613,
+        "scan_condition": "light_skew",
+        "status": "evaluated",
+        "wer": 0.0,
+        "word_errors": 0
+      },
+      {
+        "cer": 0.0,
+        "character_errors": 0,
+        "critical_fields_expected": 6,
+        "critical_fields_matched": 6,
+        "expected_characters": 249,
+        "expected_words": 35,
+        "id": "cp135-ddr-023",
+        "language": "eng",
+        "layout": "two_column",
+        "pdf_sha256": "943b6d5ccf711a294841a3cd3acaae6b2043fb2d38c560b14a8b4941c6371bb3",
+        "processing_ms": 799.727,
+        "reason": null,
+        "recognition_ms": 385.435,
+        "scan_condition": "light_noise",
+        "status": "evaluated",
+        "wer": 0.0,
+        "word_errors": 0
+      },
+      {
+        "cer": 0.0,
+        "character_errors": 0,
+        "critical_fields_expected": 6,
+        "critical_fields_matched": 6,
+        "expected_characters": 259,
+        "expected_words": 37,
+        "id": "cp135-ddr-024",
+        "language": "eng",
+        "layout": "two_column",
+        "pdf_sha256": "147a255039dc246d46a84de60214a13cb03dbc76c96f805fee73a99569f1c52f",
+        "processing_ms": 801.104,
+        "reason": null,
+        "recognition_ms": 384.873,
+        "scan_condition": "light_noise",
+        "status": "evaluated",
+        "wer": 0.0,
+        "word_errors": 0
+      },
+      {
+        "cer": 0.0,
+        "character_errors": 0,
+        "critical_fields_expected": 6,
+        "critical_fields_matched": 6,
+        "expected_characters": 255,
+        "expected_words": 36,
+        "id": "cp135-ddr-025",
+        "language": "eng",
+        "layout": "compact",
+        "pdf_sha256": "7ad20a7bf3f91367f23d039f813c6f411ba2e82a311728fcc1f078e93c8168ea",
+        "processing_ms": 792.434,
+        "reason": null,
+        "recognition_ms": 448.765,
+        "scan_condition": "clean",
+        "status": "evaluated",
+        "wer": 0.0,
+        "word_errors": 0
+      },
+      {
+        "cer": 0.0,
+        "character_errors": 0,
+        "critical_fields_expected": 6,
+        "critical_fields_matched": 6,
+        "expected_characters": 254,
+        "expected_words": 36,
+        "id": "cp135-ddr-026",
+        "language": "eng",
+        "layout": "compact",
+        "pdf_sha256": "6f4e307639c047bf67f945ac1bc3aa98c96a063fe62a437674f8856884cf4ddb",
+        "processing_ms": 792.23,
+        "reason": null,
+        "recognition_ms": 451.948,
+        "scan_condition": "clean",
+        "status": "evaluated",
+        "wer": 0.0,
+        "word_errors": 0
+      },
+      {
+        "cer": 0.0,
+        "character_errors": 0,
+        "critical_fields_expected": 6,
+        "critical_fields_matched": 6,
+        "expected_characters": 250,
+        "expected_words": 35,
+        "id": "cp135-ddr-027",
+        "language": "eng",
+        "layout": "compact",
+        "pdf_sha256": "ced455dbfc37ed57c7f2d56d1804fb6fd3ccd520dab1c8b5befb8264e9243e9f",
+        "processing_ms": 800.022,
+        "reason": null,
+        "recognition_ms": 450.808,
+        "scan_condition": "low_contrast",
+        "status": "evaluated",
+        "wer": 0.0,
+        "word_errors": 0
+      },
+      {
+        "cer": 0.0,
+        "character_errors": 0,
+        "critical_fields_expected": 6,
+        "critical_fields_matched": 6,
+        "expected_characters": 268,
+        "expected_words": 37,
+        "id": "cp135-ddr-028",
+        "language": "eng",
+        "layout": "compact",
+        "pdf_sha256": "4436ccb67340963021e3ddbe22ae9aa45d9e9de671da21175ead7fa7462c9ba3",
+        "processing_ms": 814.68,
+        "reason": null,
+        "recognition_ms": 449.838,
+        "scan_condition": "low_contrast",
+        "status": "evaluated",
+        "wer": 0.0,
+        "word_errors": 0
+      },
+      {
+        "cer": 0.0,
+        "character_errors": 0,
+        "critical_fields_expected": 6,
+        "critical_fields_matched": 6,
+        "expected_characters": 253,
+        "expected_words": 36,
+        "id": "cp135-ddr-029",
+        "language": "eng",
+        "layout": "compact",
+        "pdf_sha256": "112ad7d3628ad9f6dcd42c34a0832d50c155668c68b64cbf999e1eec8a3f952f",
+        "processing_ms": 1028.188,
+        "reason": null,
+        "recognition_ms": 452.417,
+        "scan_condition": "light_skew",
+        "status": "evaluated",
+        "wer": 0.0,
+        "word_errors": 0
+      },
+      {
+        "cer": 0.0,
+        "character_errors": 0,
+        "critical_fields_expected": 6,
+        "critical_fields_matched": 6,
+        "expected_characters": 254,
+        "expected_words": 36,
+        "id": "cp135-ddr-030",
+        "language": "eng",
+        "layout": "compact",
+        "pdf_sha256": "3b32ef7dd0516961b0b759a17921b593532bc4a544a3e1963f9d3195dab71795",
+        "processing_ms": 1017.992,
+        "reason": null,
+        "recognition_ms": 451.25,
+        "scan_condition": "light_skew",
+        "status": "evaluated",
+        "wer": 0.0,
+        "word_errors": 0
+      },
+      {
+        "cer": 0.0,
+        "character_errors": 0,
+        "critical_fields_expected": 6,
+        "critical_fields_matched": 6,
+        "expected_characters": 246,
+        "expected_words": 35,
+        "id": "cp135-ddr-031",
+        "language": "eng",
+        "layout": "compact",
+        "pdf_sha256": "6f4996e83fc5a48a697e0f9bb668eb41ecb58295c34bf6187a335aa5b2dd4f6b",
+        "processing_ms": 850.159,
+        "reason": null,
+        "recognition_ms": 450.663,
+        "scan_condition": "light_noise",
+        "status": "evaluated",
+        "wer": 0.0,
+        "word_errors": 0
+      },
+      {
+        "cer": 0.0,
+        "character_errors": 0,
+        "critical_fields_expected": 6,
+        "critical_fields_matched": 6,
+        "expected_characters": 258,
+        "expected_words": 37,
+        "id": "cp135-ddr-032",
+        "language": "eng",
+        "layout": "compact",
+        "pdf_sha256": "0a0db34bcde021b13e134ca8737ffed3251fe05c21319bb395377a3990616b08",
+        "processing_ms": 856.2,
+        "reason": null,
+        "recognition_ms": 450.028,
+        "scan_condition": "light_noise",
+        "status": "evaluated",
+        "wer": 0.0,
+        "word_errors": 0
+      },
+      {
+        "cer": 0.23766816143497757,
+        "character_errors": 53,
+        "critical_fields_expected": 6,
+        "critical_fields_matched": 5,
+        "expected_characters": 223,
+        "expected_words": 37,
+        "id": "cp135-ddr-033",
+        "language": "fas",
+        "layout": "single_column",
+        "pdf_sha256": "b1a7ce7fd3a1f7296022475fddf66c7844c61c1dfc83943f6707fde3245d26f0",
+        "processing_ms": 1090.767,
+        "reason": null,
+        "recognition_ms": 715.514,
+        "scan_condition": "clean",
+        "status": "evaluated",
+        "wer": 0.2972972972972973,
+        "word_errors": 11
+      },
+      {
+        "cer": 0.25339366515837103,
+        "character_errors": 56,
+        "critical_fields_expected": 6,
+        "critical_fields_matched": 5,
+        "expected_characters": 221,
+        "expected_words": 36,
+        "id": "cp135-ddr-034",
+        "language": "fas",
+        "layout": "single_column",
+        "pdf_sha256": "f06f701453f797301e7bd4184ee88f07a71638cfdb9ea0d244c757a2d529a1bd",
+        "processing_ms": 1083.722,
+        "reason": null,
+        "recognition_ms": 716.64,
+        "scan_condition": "clean",
+        "status": "evaluated",
+        "wer": 0.2777777777777778,
+        "word_errors": 10
+      },
+      {
+        "cer": 0.2636363636363636,
+        "character_errors": 58,
+        "critical_fields_expected": 6,
+        "critical_fields_matched": 5,
+        "expected_characters": 220,
+        "expected_words": 36,
+        "id": "cp135-ddr-035",
+        "language": "fas",
+        "layout": "single_column",
+        "pdf_sha256": "9c8e13d506a3741be44cf06d9e4f54a46408cdb0bacf8519f462dab53fe727cb",
+        "processing_ms": 1086.634,
+        "reason": null,
+        "recognition_ms": 716.843,
+        "scan_condition": "low_contrast",
+        "status": "evaluated",
+        "wer": 0.2777777777777778,
+        "word_errors": 10
+      },
+      {
+        "cer": 0.14285714285714285,
+        "character_errors": 33,
+        "critical_fields_expected": 6,
+        "critical_fields_matched": 5,
+        "expected_characters": 231,
+        "expected_words": 39,
+        "id": "cp135-ddr-036",
+        "language": "fas",
+        "layout": "single_column",
+        "pdf_sha256": "1876a23f4b7b0f69db874ebb48e6215a815676db0031c6c08b74c04ce2cb7d31",
+        "processing_ms": 1099.639,
+        "reason": null,
+        "recognition_ms": 717.486,
+        "scan_condition": "low_contrast",
+        "status": "evaluated",
+        "wer": 0.20512820512820512,
+        "word_errors": 8
+      },
+      {
+        "cer": 0.15178571428571427,
+        "character_errors": 34,
+        "critical_fields_expected": 6,
+        "critical_fields_matched": 5,
+        "expected_characters": 224,
+        "expected_words": 37,
+        "id": "cp135-ddr-037",
+        "language": "fas",
+        "layout": "single_column",
+        "pdf_sha256": "a7461c8c45430aaca039c265a9b3e192cf723c8d6b6e1bf43f9e1475cb2e92d7",
+        "processing_ms": 1274.615,
+        "reason": null,
+        "recognition_ms": 716.859,
+        "scan_condition": "light_skew",
+        "status": "evaluated",
+        "wer": 0.1891891891891892,
+        "word_errors": 7
+      },
+      {
+        "cer": 0.21818181818181817,
+        "character_errors": 48,
+        "critical_fields_expected": 6,
+        "critical_fields_matched": 5,
+        "expected_characters": 220,
+        "expected_words": 36,
+        "id": "cp135-ddr-038",
+        "language": "fas",
+        "layout": "single_column",
+        "pdf_sha256": "2d0a24fb78860ead5be7d0e1b25cc55e3fbd56d3b137cc58e0523845edbf68ba",
+        "processing_ms": 1269.627,
+        "reason": null,
+        "recognition_ms": 715.928,
+        "scan_condition": "light_skew",
+        "status": "evaluated",
+        "wer": 0.2777777777777778,
+        "word_errors": 10
+      },
+      {
+        "cer": 0.15384615384615385,
+        "character_errors": 34,
+        "critical_fields_expected": 6,
+        "critical_fields_matched": 5,
+        "expected_characters": 221,
+        "expected_words": 36,
+        "id": "cp135-ddr-039",
+        "language": "fas",
+        "layout": "single_column",
+        "pdf_sha256": "0355b0454db96fb2bc74fed8b5ff747877da4556e72e228413a9993eb27b000f",
+        "processing_ms": 1140.325,
+        "reason": null,
+        "recognition_ms": 716.306,
+        "scan_condition": "light_noise",
+        "status": "evaluated",
+        "wer": 0.19444444444444445,
+        "word_errors": 7
+      },
+      {
+        "cer": 0.2687224669603524,
+        "character_errors": 61,
+        "critical_fields_expected": 6,
+        "critical_fields_matched": 5,
+        "expected_characters": 227,
+        "expected_words": 37,
+        "id": "cp135-ddr-040",
+        "language": "fas",
+        "layout": "single_column",
+        "pdf_sha256": "a94f297f8785fd06dbf9a2a6b1ff2884e7828ea43540537e399db72c189230d4",
+        "processing_ms": 1145.314,
+        "reason": null,
+        "recognition_ms": 716.666,
+        "scan_condition": "light_noise",
+        "status": "evaluated",
+        "wer": 0.32432432432432434,
+        "word_errors": 12
+      },
+      {
+        "cer": 0.2062780269058296,
+        "character_errors": 46,
+        "critical_fields_expected": 6,
+        "critical_fields_matched": 0,
+        "expected_characters": 223,
+        "expected_words": 37,
+        "id": "cp135-ddr-041",
+        "language": "fas",
+        "layout": "table",
+        "pdf_sha256": "2a6c7b0d70d5a9430ef7fd679c3792d56bd071a777bc74786759d222af807244",
+        "processing_ms": 1082.378,
+        "reason": null,
+        "recognition_ms": 717.198,
+        "scan_condition": "clean",
+        "status": "evaluated",
+        "wer": 0.32432432432432434,
+        "word_errors": 12
+      },
+      {
+        "cer": 0.28378378378378377,
+        "character_errors": 63,
+        "critical_fields_expected": 6,
+        "critical_fields_matched": 1,
+        "expected_characters": 222,
+        "expected_words": 36,
+        "id": "cp135-ddr-042",
+        "language": "fas",
+        "layout": "table",
+        "pdf_sha256": "d915f02a14906e199c516e726513e6366a67aba634df6855132836087171b8fb",
+        "processing_ms": 1088.08,
+        "reason": null,
+        "recognition_ms": 716.498,
+        "scan_condition": "clean",
+        "status": "evaluated",
+        "wer": 0.3611111111111111,
+        "word_errors": 13
+      },
+      {
+        "cer": 0.27601809954751133,
+        "character_errors": 61,
+        "critical_fields_expected": 6,
+        "critical_fields_matched": 0,
+        "expected_characters": 221,
+        "expected_words": 36,
+        "id": "cp135-ddr-043",
+        "language": "fas",
+        "layout": "table",
+        "pdf_sha256": "99f1f32c4dd90b3d6a7b6c51340318e7c339448512bad5cfb9470d934251a457",
+        "processing_ms": 1091.522,
+        "reason": null,
+        "recognition_ms": 715.751,
+        "scan_condition": "low_contrast",
+        "status": "evaluated",
+        "wer": 0.3888888888888889,
+        "word_errors": 14
+      },
+      {
+        "cer": 0.23706896551724138,
+        "character_errors": 55,
+        "critical_fields_expected": 6,
+        "critical_fields_matched": 0,
+        "expected_characters": 232,
+        "expected_words": 39,
+        "id": "cp135-ddr-044",
+        "language": "fas",
+        "layout": "table",
+        "pdf_sha256": "12fb90f4945ed91edaed7330f51f8a91eb28e632a6e50041d3c40e41a7aeff5c",
+        "processing_ms": 1194.365,
+        "reason": null,
+        "recognition_ms": 816.721,
+        "scan_condition": "low_contrast",
+        "status": "evaluated",
+        "wer": 0.4358974358974359,
+        "word_errors": 17
+      },
+      {
+        "cer": 0.18303571428571427,
+        "character_errors": 41,
+        "critical_fields_expected": 6,
+        "critical_fields_matched": 1,
+        "expected_characters": 224,
+        "expected_words": 37,
+        "id": "cp135-ddr-045",
+        "language": "fas",
+        "layout": "table",
+        "pdf_sha256": "012bb491705756d59170b18b5ed34fad027955c3ad05d28cd996d75952635413",
+        "processing_ms": 1301.335,
+        "reason": null,
+        "recognition_ms": 718.072,
+        "scan_condition": "light_skew",
+        "status": "evaluated",
+        "wer": 0.2972972972972973,
+        "word_errors": 11
+      },
+      {
+        "cer": 0.19545454545454546,
+        "character_errors": 43,
+        "critical_fields_expected": 6,
+        "critical_fields_matched": 1,
+        "expected_characters": 220,
+        "expected_words": 36,
+        "id": "cp135-ddr-046",
+        "language": "fas",
+        "layout": "table",
+        "pdf_sha256": "bc0b5bc35dcf830b20270d3b2b14165301d00f4d85360b7610eb4960c9010b73",
+        "processing_ms": 1361.26,
+        "reason": null,
+        "recognition_ms": 767.099,
+        "scan_condition": "light_skew",
+        "status": "evaluated",
+        "wer": 0.2777777777777778,
+        "word_errors": 10
+      },
+      {
+        "cer": 0.20361990950226244,
+        "character_errors": 45,
+        "critical_fields_expected": 6,
+        "critical_fields_matched": 0,
+        "expected_characters": 221,
+        "expected_words": 36,
+        "id": "cp135-ddr-047",
+        "language": "fas",
+        "layout": "table",
+        "pdf_sha256": "e9d5b68955a6b3fbc009859e9ddedee6669a8a6ea04e77d5ae60f233803fd691",
+        "processing_ms": 1201.754,
+        "reason": null,
+        "recognition_ms": 764.922,
+        "scan_condition": "light_noise",
+        "status": "evaluated",
+        "wer": 0.3333333333333333,
+        "word_errors": 12
+      },
+      {
+        "cer": 0.2920353982300885,
+        "character_errors": 66,
+        "critical_fields_expected": 6,
+        "critical_fields_matched": 1,
+        "expected_characters": 226,
+        "expected_words": 37,
+        "id": "cp135-ddr-048",
+        "language": "fas",
+        "layout": "table",
+        "pdf_sha256": "906ee46ee531c34b42c6e438355cdd9acf1b131cd46531d7af9a540c4ae65ddd",
+        "processing_ms": 1142.028,
+        "reason": null,
+        "recognition_ms": 714.727,
+        "scan_condition": "light_noise",
+        "status": "evaluated",
+        "wer": 0.40540540540540543,
+        "word_errors": 15
+      },
+      {
+        "cer": 0.41964285714285715,
+        "character_errors": 94,
+        "critical_fields_expected": 6,
+        "critical_fields_matched": 4,
+        "expected_characters": 224,
+        "expected_words": 37,
+        "id": "cp135-ddr-049",
+        "language": "fas",
+        "layout": "two_column",
+        "pdf_sha256": "bff8b5109ad78f5ea3e54920d8c59badd1e327356f46a812326e0e702c767a10",
+        "processing_ms": 850.872,
+        "reason": null,
+        "recognition_ms": 548.993,
+        "scan_condition": "clean",
+        "status": "evaluated",
+        "wer": 0.4594594594594595,
+        "word_errors": 17
+      },
+      {
+        "cer": 0.4144144144144144,
+        "character_errors": 92,
+        "critical_fields_expected": 6,
+        "critical_fields_matched": 4,
+        "expected_characters": 222,
+        "expected_words": 36,
+        "id": "cp135-ddr-050",
+        "language": "fas",
+        "layout": "two_column",
+        "pdf_sha256": "b8156255ea2f2c24bd9a6128b9dbc802c21dbc7568a0170a31c39a9b98c3fddb",
+        "processing_ms": 850.253,
+        "reason": null,
+        "recognition_ms": 549.73,
+        "scan_condition": "clean",
+        "status": "evaluated",
+        "wer": 0.4444444444444444,
+        "word_errors": 16
+      },
+      {
+        "cer": 0.3090909090909091,
+        "character_errors": 68,
+        "critical_fields_expected": 6,
+        "critical_fields_matched": 5,
+        "expected_characters": 220,
+        "expected_words": 36,
+        "id": "cp135-ddr-051",
+        "language": "fas",
+        "layout": "two_column",
+        "pdf_sha256": "61fd187f721f01373d58fd3fb0e4f63f4c709a84bcaa37a1c58ad3d3846f7934",
+        "processing_ms": 909.884,
+        "reason": null,
+        "recognition_ms": 599.182,
+        "scan_condition": "low_contrast",
+        "status": "evaluated",
+        "wer": 0.3333333333333333,
+        "word_errors": 12
+      },
+      {
+        "cer": 0.3103448275862069,
+        "character_errors": 72,
+        "critical_fields_expected": 6,
+        "critical_fields_matched": 4,
+        "expected_characters": 232,
+        "expected_words": 39,
+        "id": "cp135-ddr-052",
+        "language": "fas",
+        "layout": "two_column",
+        "pdf_sha256": "0ecd3eb248254af5dbe20441bec212f2cfc12ad9df559fc68f94d9af4304d83f",
+        "processing_ms": 918.874,
+        "reason": null,
+        "recognition_ms": 600.277,
+        "scan_condition": "low_contrast",
+        "status": "evaluated",
+        "wer": 0.3333333333333333,
+        "word_errors": 13
+      },
+      {
+        "cer": 0.15625,
+        "character_errors": 35,
+        "critical_fields_expected": 6,
+        "critical_fields_matched": 5,
+        "expected_characters": 224,
+        "expected_words": 37,
+        "id": "cp135-ddr-053",
+        "language": "fas",
+        "layout": "two_column",
+        "pdf_sha256": "f7453089fc0830a78885e0fe35a23146039785096e9cabad0161af4d8ec67797",
+        "processing_ms": 1300.293,
+        "reason": null,
+        "recognition_ms": 767.541,
+        "scan_condition": "light_skew",
+        "status": "evaluated",
+        "wer": 0.21621621621621623,
+        "word_errors": 8
+      },
+      {
+        "cer": 0.248868778280543,
+        "character_errors": 55,
+        "critical_fields_expected": 6,
+        "critical_fields_matched": 4,
+        "expected_characters": 221,
+        "expected_words": 36,
+        "id": "cp135-ddr-054",
+        "language": "fas",
+        "layout": "two_column",
+        "pdf_sha256": "c5030318469af94963d679234014304f0abed750c7c9ffffb819aacb95b642f1",
+        "processing_ms": 1298.431,
+        "reason": null,
+        "recognition_ms": 766.684,
+        "scan_condition": "light_skew",
+        "status": "evaluated",
+        "wer": 0.3333333333333333,
+        "word_errors": 12
+      },
+      {
+        "cer": 0.40271493212669685,
+        "character_errors": 89,
+        "critical_fields_expected": 6,
+        "critical_fields_matched": 4,
+        "expected_characters": 221,
+        "expected_words": 36,
+        "id": "cp135-ddr-055",
+        "language": "fas",
+        "layout": "two_column",
+        "pdf_sha256": "e0f34d0fbe8eb8945043f6338857cc74167d0a86ae91c5e588f99b72b0c45668",
+        "processing_ms": 921.001,
+        "reason": null,
+        "recognition_ms": 549.221,
+        "scan_condition": "light_noise",
+        "status": "evaluated",
+        "wer": 0.4444444444444444,
+        "word_errors": 16
+      },
+      {
+        "cer": 0.32158590308370044,
+        "character_errors": 73,
+        "critical_fields_expected": 6,
+        "critical_fields_matched": 4,
+        "expected_characters": 227,
+        "expected_words": 37,
+        "id": "cp135-ddr-056",
+        "language": "fas",
+        "layout": "two_column",
+        "pdf_sha256": "e4b80df80d675bcb64180a13bab308d7c0aceb017f4822c3ed1a2d1175632cc9",
+        "processing_ms": 1027.616,
+        "reason": null,
+        "recognition_ms": 650.136,
+        "scan_condition": "light_noise",
+        "status": "evaluated",
+        "wer": 0.35135135135135137,
+        "word_errors": 13
+      },
+      {
+        "cer": 0.12053571428571429,
+        "character_errors": 27,
+        "critical_fields_expected": 6,
+        "critical_fields_matched": 5,
+        "expected_characters": 224,
+        "expected_words": 37,
+        "id": "cp135-ddr-057",
+        "language": "fas",
+        "layout": "compact",
+        "pdf_sha256": "566c578e5129e1fe8eb115b05921f81cc3ec6c6a64bfffa751eaea7cdbf73973",
+        "processing_ms": 1053.508,
+        "reason": null,
+        "recognition_ms": 715.71,
+        "scan_condition": "clean",
+        "status": "evaluated",
+        "wer": 0.16216216216216217,
+        "word_errors": 6
+      },
+      {
+        "cer": 0.12669683257918551,
+        "character_errors": 28,
+        "critical_fields_expected": 6,
+        "critical_fields_matched": 5,
+        "expected_characters": 221,
+        "expected_words": 36,
+        "id": "cp135-ddr-058",
+        "language": "fas",
+        "layout": "compact",
+        "pdf_sha256": "75911ca5c4a95668f6c885e76bb705c4c7cb61edb1205f1b78a037ba85ec4815",
+        "processing_ms": 1052.308,
+        "reason": null,
+        "recognition_ms": 714.911,
+        "scan_condition": "clean",
+        "status": "evaluated",
+        "wer": 0.19444444444444445,
+        "word_errors": 7
+      },
+      {
+        "cer": 0.13122171945701358,
+        "character_errors": 29,
+        "critical_fields_expected": 6,
+        "critical_fields_matched": 5,
+        "expected_characters": 221,
+        "expected_words": 36,
+        "id": "cp135-ddr-059",
+        "language": "fas",
+        "layout": "compact",
+        "pdf_sha256": "5114994b518dcfac21a037ce9b8ef4175709a354125e5d589d125df8d753d066",
+        "processing_ms": 1008.963,
+        "reason": null,
+        "recognition_ms": 665.132,
+        "scan_condition": "low_contrast",
+        "status": "evaluated",
+        "wer": 0.19444444444444445,
+        "word_errors": 7
+      },
+      {
+        "cer": 0.15151515151515152,
+        "character_errors": 35,
+        "critical_fields_expected": 6,
+        "critical_fields_matched": 5,
+        "expected_characters": 231,
+        "expected_words": 39,
+        "id": "cp135-ddr-060",
+        "language": "fas",
+        "layout": "compact",
+        "pdf_sha256": "31e42805e17242fd4dc59ba0cc7ca3b4fc06553be2bbfdded3d3c058e39a15a2",
+        "processing_ms": 1063.555,
+        "reason": null,
+        "recognition_ms": 715.023,
+        "scan_condition": "low_contrast",
+        "status": "evaluated",
+        "wer": 0.1794871794871795,
+        "word_errors": 7
+      },
+      {
+        "cer": 0.14027149321266968,
+        "character_errors": 31,
+        "critical_fields_expected": 6,
+        "critical_fields_matched": 5,
+        "expected_characters": 221,
+        "expected_words": 37,
+        "id": "cp135-ddr-061",
+        "language": "fas",
+        "layout": "compact",
+        "pdf_sha256": "95c0ae3bb1b7f608ec77110048958c9fd58b060468c7652ef0418bb9dc55ae60",
+        "processing_ms": 1237.434,
+        "reason": null,
+        "recognition_ms": 715.98,
+        "scan_condition": "light_skew",
+        "status": "evaluated",
+        "wer": 0.1891891891891892,
+        "word_errors": 7
+      },
+      {
+        "cer": 0.13636363636363635,
+        "character_errors": 30,
+        "critical_fields_expected": 6,
+        "critical_fields_matched": 5,
+        "expected_characters": 220,
+        "expected_words": 36,
+        "id": "cp135-ddr-062",
+        "language": "fas",
+        "layout": "compact",
+        "pdf_sha256": "411fe1d853f99e99ccabac28fa1072eeca44a5a3c716d6450f298384e09929a8",
+        "processing_ms": 1239.072,
+        "reason": null,
+        "recognition_ms": 715.535,
+        "scan_condition": "light_skew",
+        "status": "evaluated",
+        "wer": 0.19444444444444445,
+        "word_errors": 7
+      },
+      {
+        "cer": 0.1590909090909091,
+        "character_errors": 35,
+        "critical_fields_expected": 6,
+        "critical_fields_matched": 5,
+        "expected_characters": 220,
+        "expected_words": 36,
+        "id": "cp135-ddr-063",
+        "language": "fas",
+        "layout": "compact",
+        "pdf_sha256": "c626e7e721a91033571f0d6ac9ff36000a72c8e8b41c5bf0aa7c34a55a6cbe97",
+        "processing_ms": 1114.618,
+        "reason": null,
+        "recognition_ms": 716.025,
+        "scan_condition": "light_noise",
+        "status": "evaluated",
+        "wer": 0.19444444444444445,
+        "word_errors": 7
+      },
+      {
+        "cer": 0.22566371681415928,
+        "character_errors": 51,
+        "critical_fields_expected": 6,
+        "critical_fields_matched": 5,
+        "expected_characters": 226,
+        "expected_words": 37,
+        "id": "cp135-ddr-064",
+        "language": "fas",
+        "layout": "compact",
+        "pdf_sha256": "8a30fec9568e4e449503591e923eab148e3877f5b44571da424a6e8404114838",
+        "processing_ms": 1063.134,
+        "reason": null,
+        "recognition_ms": 664.954,
+        "scan_condition": "light_noise",
+        "status": "evaluated",
+        "wer": 0.2972972972972973,
+        "word_errors": 11
+      }
+    ],
+    "limitations": "Only per-case metrics were published in annotations; individual field values and root-cause classifications from the real deployment are not available here. GitHub artifact download redirected to a network-blocked Azure host."
+  },
+  "local_experiment": {
+    "classification": "synthetic tesserocr 5.5.4 shim; NOT deployed Tesseract CLI, NOT deployment image, NOT field validation",
+    "first_attempt": "64/64 incomplete due to shim missing the TSV header; failed result retained privately",
+    "second_attempt": "64/64 evaluated; 311/384 matched, global and strata gate failed",
+    "language_pack_sha256": {
+      "eng": "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2",
+      "fas": "db1c0a91208aff00d3cf1ed2c1d23f76419afd5f024688b4f71adc3f2ce4a505"
+    },
+    "observed_mismatch_categories": {
+      "NUMERIC_OR_UNIT_VALUE_MISMATCH": 32,
+      "IDENTIFIER_VALUE_MISMATCH": 32,
+      "DATE_VALUE_MISMATCH": 7,
+      "LABEL_ASSOCIATION_MISSING": 2
+    },
+    "categories_are": "Observational heuristics, not confirmed engineering root causes.",
+    "cases": [
+      {
+        "id": "cp135-ddr-001",
+        "language": "eng",
+        "layout": "single_column",
+        "scan_condition": "clean",
+        "ocr_status": "applied",
+        "fields": [
+          {
+            "key": "sample_id",
+            "expected_synthetic": "CP135-DDR-001",
+            "observed_synthetic": " CP135-DDR-001",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "report_date",
+            "expected_synthetic": "2026-06-01",
+            "observed_synthetic": " 2026-06-01",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "measured_depth_m",
+            "expected_synthetic": "900.0",
+            "observed_synthetic": " 900.0 M",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "rop_m_per_h",
+            "expected_synthetic": "7.25",
+            "observed_synthetic": " 7.25 M/H",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "mud_weight_ppg",
+            "expected_synthetic": "9.8",
+            "observed_synthetic": " 9.8 PPG",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "npt_h",
+            "expected_synthetic": "0.00",
+            "observed_synthetic": " 0.00 H",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          }
+        ]
+      },
+      {
+        "id": "cp135-ddr-002",
+        "language": "eng",
+        "layout": "single_column",
+        "scan_condition": "clean",
+        "ocr_status": "applied",
+        "fields": [
+          {
+            "key": "sample_id",
+            "expected_synthetic": "CP135-DDR-002",
+            "observed_synthetic": " CP135-DDR-002",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "report_date",
+            "expected_synthetic": "2026-06-02",
+            "observed_synthetic": " 2026-06-02",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "measured_depth_m",
+            "expected_synthetic": "917.5",
+            "observed_synthetic": " 917.5 M",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "rop_m_per_h",
+            "expected_synthetic": "14.00",
+            "observed_synthetic": " 14.00 M/H",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "mud_weight_ppg",
+            "expected_synthetic": "10.0",
+            "observed_synthetic": " 10.0 PPG",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "npt_h",
+            "expected_synthetic": "0.25",
+            "observed_synthetic": " 0.25 H",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          }
+        ]
+      },
+      {
+        "id": "cp135-ddr-003",
+        "language": "eng",
+        "layout": "single_column",
+        "scan_condition": "low_contrast",
+        "ocr_status": "applied",
+        "fields": [
+          {
+            "key": "sample_id",
+            "expected_synthetic": "CP135-DDR-003",
+            "observed_synthetic": " CP135-DDR-003",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "report_date",
+            "expected_synthetic": "2026-06-03",
+            "observed_synthetic": " 2026-06-03",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "measured_depth_m",
+            "expected_synthetic": "934.0",
+            "observed_synthetic": " 934.0 M",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "rop_m_per_h",
+            "expected_synthetic": "20.75",
+            "observed_synthetic": " 20.75 M/H",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "mud_weight_ppg",
+            "expected_synthetic": "10.2",
+            "observed_synthetic": " 10.2 PPG",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "npt_h",
+            "expected_synthetic": "0.50",
+            "observed_synthetic": " 0.50 H",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          }
+        ]
+      },
+      {
+        "id": "cp135-ddr-004",
+        "language": "eng",
+        "layout": "single_column",
+        "scan_condition": "low_contrast",
+        "ocr_status": "applied",
+        "fields": [
+          {
+            "key": "sample_id",
+            "expected_synthetic": "CP135-DDR-004",
+            "observed_synthetic": " CP135-DDR-004",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "report_date",
+            "expected_synthetic": "2026-06-04",
+            "observed_synthetic": " 2026-06-04",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "measured_depth_m",
+            "expected_synthetic": "951.5",
+            "observed_synthetic": " 951.5 M",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "rop_m_per_h",
+            "expected_synthetic": "27.50",
+            "observed_synthetic": " 27.50 M/H",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "mud_weight_ppg",
+            "expected_synthetic": "10.4",
+            "observed_synthetic": " 10.4 PPG",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "npt_h",
+            "expected_synthetic": "0.75",
+            "observed_synthetic": " 0.75 H",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          }
+        ]
+      },
+      {
+        "id": "cp135-ddr-005",
+        "language": "eng",
+        "layout": "single_column",
+        "scan_condition": "light_skew",
+        "ocr_status": "applied",
+        "fields": [
+          {
+            "key": "sample_id",
+            "expected_synthetic": "CP135-DDR-005",
+            "observed_synthetic": " CP135-DDR-005",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "report_date",
+            "expected_synthetic": "2026-06-05",
+            "observed_synthetic": " 2026-06-05",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "measured_depth_m",
+            "expected_synthetic": "968.0",
+            "observed_synthetic": " 968.0 M",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "rop_m_per_h",
+            "expected_synthetic": "11.75",
+            "observed_synthetic": " 11.75 M/H",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "mud_weight_ppg",
+            "expected_synthetic": "10.6",
+            "observed_synthetic": " 10.6 PPG",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "npt_h",
+            "expected_synthetic": "1.00",
+            "observed_synthetic": " 1.00 H",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          }
+        ]
+      },
+      {
+        "id": "cp135-ddr-006",
+        "language": "eng",
+        "layout": "single_column",
+        "scan_condition": "light_skew",
+        "ocr_status": "applied",
+        "fields": [
+          {
+            "key": "sample_id",
+            "expected_synthetic": "CP135-DDR-006",
+            "observed_synthetic": " CP135-DDR-006",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "report_date",
+            "expected_synthetic": "2026-06-06",
+            "observed_synthetic": " 2026-06-06",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "measured_depth_m",
+            "expected_synthetic": "985.5",
+            "observed_synthetic": " 985.5 M",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "rop_m_per_h",
+            "expected_synthetic": "18.50",
+            "observed_synthetic": " 18.50 M/H",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "mud_weight_ppg",
+            "expected_synthetic": "10.8",
+            "observed_synthetic": " 10.8 PPG",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "npt_h",
+            "expected_synthetic": "1.25",
+            "observed_synthetic": " 1.25 H",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          }
+        ]
+      },
+      {
+        "id": "cp135-ddr-007",
+        "language": "eng",
+        "layout": "single_column",
+        "scan_condition": "light_noise",
+        "ocr_status": "applied",
+        "fields": [
+          {
+            "key": "sample_id",
+            "expected_synthetic": "CP135-DDR-007",
+            "observed_synthetic": " CP135-DDR-007",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "report_date",
+            "expected_synthetic": "2026-06-07",
+            "observed_synthetic": " 2026-06-07",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "measured_depth_m",
+            "expected_synthetic": "1002.0",
+            "observed_synthetic": " 1002.0 M",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "rop_m_per_h",
+            "expected_synthetic": "25.25",
+            "observed_synthetic": " 25.25 M/H",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "mud_weight_ppg",
+            "expected_synthetic": "11.0",
+            "observed_synthetic": " 11.0 PPG",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "npt_h",
+            "expected_synthetic": "1.50",
+            "observed_synthetic": " 1.50 H",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          }
+        ]
+      },
+      {
+        "id": "cp135-ddr-008",
+        "language": "eng",
+        "layout": "single_column",
+        "scan_condition": "light_noise",
+        "ocr_status": "applied",
+        "fields": [
+          {
+            "key": "sample_id",
+            "expected_synthetic": "CP135-DDR-008",
+            "observed_synthetic": " CP135-DDR-008",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "report_date",
+            "expected_synthetic": "2026-06-08",
+            "observed_synthetic": " 2026-06-08",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "measured_depth_m",
+            "expected_synthetic": "1019.5",
+            "observed_synthetic": " 1019.5 M",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "rop_m_per_h",
+            "expected_synthetic": "9.50",
+            "observed_synthetic": " 9.50 M/H",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "mud_weight_ppg",
+            "expected_synthetic": "11.2",
+            "observed_synthetic": " 11.2 PPG",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "npt_h",
+            "expected_synthetic": "1.75",
+            "observed_synthetic": " 1.75 H",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          }
+        ]
+      },
+      {
+        "id": "cp135-ddr-009",
+        "language": "eng",
+        "layout": "table",
+        "scan_condition": "clean",
+        "ocr_status": "applied",
+        "fields": [
+          {
+            "key": "sample_id",
+            "expected_synthetic": "CP135-DDR-009",
+            "observed_synthetic": " CP135-DDR-009",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "report_date",
+            "expected_synthetic": "2026-06-09",
+            "observed_synthetic": " 2026-06-09",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "measured_depth_m",
+            "expected_synthetic": "1036.0",
+            "observed_synthetic": " 1036.0 M",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "rop_m_per_h",
+            "expected_synthetic": "16.25",
+            "observed_synthetic": " 16.25 M/H",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "mud_weight_ppg",
+            "expected_synthetic": "11.4",
+            "observed_synthetic": " 11.4 PPG",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "npt_h",
+            "expected_synthetic": "2.00",
+            "observed_synthetic": " 2.00 H",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          }
+        ]
+      },
+      {
+        "id": "cp135-ddr-010",
+        "language": "eng",
+        "layout": "table",
+        "scan_condition": "clean",
+        "ocr_status": "applied",
+        "fields": [
+          {
+            "key": "sample_id",
+            "expected_synthetic": "CP135-DDR-010",
+            "observed_synthetic": " CP135-DDR-010",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "report_date",
+            "expected_synthetic": "2026-06-10",
+            "observed_synthetic": " 2026-06-10",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "measured_depth_m",
+            "expected_synthetic": "1053.5",
+            "observed_synthetic": " 1053.5 M",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "rop_m_per_h",
+            "expected_synthetic": "23.00",
+            "observed_synthetic": " 23.00 M/H",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "mud_weight_ppg",
+            "expected_synthetic": "11.6",
+            "observed_synthetic": " 11.6 PPG",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "npt_h",
+            "expected_synthetic": "2.25",
+            "observed_synthetic": " 2.25 4H",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          }
+        ]
+      },
+      {
+        "id": "cp135-ddr-011",
+        "language": "eng",
+        "layout": "table",
+        "scan_condition": "low_contrast",
+        "ocr_status": "applied",
+        "fields": [
+          {
+            "key": "sample_id",
+            "expected_synthetic": "CP135-DDR-011",
+            "observed_synthetic": " CP135-DDR-011",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "report_date",
+            "expected_synthetic": "2026-06-11",
+            "observed_synthetic": " 2026-06-11",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "measured_depth_m",
+            "expected_synthetic": "1070.0",
+            "observed_synthetic": " 1070.0 M",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "rop_m_per_h",
+            "expected_synthetic": "7.25",
+            "observed_synthetic": " 7.25 M/H",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "mud_weight_ppg",
+            "expected_synthetic": "11.8",
+            "observed_synthetic": " 11.8 PPG",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "npt_h",
+            "expected_synthetic": "2.50",
+            "observed_synthetic": " 2.50 H",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          }
+        ]
+      },
+      {
+        "id": "cp135-ddr-012",
+        "language": "eng",
+        "layout": "table",
+        "scan_condition": "low_contrast",
+        "ocr_status": "applied",
+        "fields": [
+          {
+            "key": "sample_id",
+            "expected_synthetic": "CP135-DDR-012",
+            "observed_synthetic": " CP135-DDR-012",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "report_date",
+            "expected_synthetic": "2026-06-12",
+            "observed_synthetic": " 2026-06-12",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "measured_depth_m",
+            "expected_synthetic": "1087.5",
+            "observed_synthetic": " 1087.5 M",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "rop_m_per_h",
+            "expected_synthetic": "14.00",
+            "observed_synthetic": " 14.00 M/H",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "mud_weight_ppg",
+            "expected_synthetic": "12.0",
+            "observed_synthetic": " 12.0 PPG",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "npt_h",
+            "expected_synthetic": "2.75",
+            "observed_synthetic": " 2.75 4H",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          }
+        ]
+      },
+      {
+        "id": "cp135-ddr-013",
+        "language": "eng",
+        "layout": "table",
+        "scan_condition": "light_skew",
+        "ocr_status": "applied",
+        "fields": [
+          {
+            "key": "sample_id",
+            "expected_synthetic": "CP135-DDR-013",
+            "observed_synthetic": " CP135-DDR-013",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "report_date",
+            "expected_synthetic": "2026-06-13",
+            "observed_synthetic": " 2026-06-13",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "measured_depth_m",
+            "expected_synthetic": "1104.0",
+            "observed_synthetic": " 1104.0 M",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "rop_m_per_h",
+            "expected_synthetic": "20.75",
+            "observed_synthetic": " 20.75 M/H",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "mud_weight_ppg",
+            "expected_synthetic": "12.2",
+            "observed_synthetic": " 12.2 PPG",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "npt_h",
+            "expected_synthetic": "0.00",
+            "observed_synthetic": " 0.00 H",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          }
+        ]
+      },
+      {
+        "id": "cp135-ddr-014",
+        "language": "eng",
+        "layout": "table",
+        "scan_condition": "light_skew",
+        "ocr_status": "applied",
+        "fields": [
+          {
+            "key": "sample_id",
+            "expected_synthetic": "CP135-DDR-014",
+            "observed_synthetic": " CP135-DDR-014",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "report_date",
+            "expected_synthetic": "2026-06-14",
+            "observed_synthetic": " 2026-06-14",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "measured_depth_m",
+            "expected_synthetic": "1121.5",
+            "observed_synthetic": " 1121.5M",
+            "label_present_anywhere": true,
+            "matched": false,
+            "category": "NUMERIC_OR_UNIT_VALUE_MISMATCH"
+          },
+          {
+            "key": "rop_m_per_h",
+            "expected_synthetic": "27.50",
+            "observed_synthetic": " 27.50 M/H",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "mud_weight_ppg",
+            "expected_synthetic": "12.4",
+            "observed_synthetic": " 12.4 PPG",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "npt_h",
+            "expected_synthetic": "0.25",
+            "observed_synthetic": " 0.25H",
+            "label_present_anywhere": true,
+            "matched": false,
+            "category": "NUMERIC_OR_UNIT_VALUE_MISMATCH"
+          }
+        ]
+      },
+      {
+        "id": "cp135-ddr-015",
+        "language": "eng",
+        "layout": "table",
+        "scan_condition": "light_noise",
+        "ocr_status": "applied",
+        "fields": [
+          {
+            "key": "sample_id",
+            "expected_synthetic": "CP135-DDR-015",
+            "observed_synthetic": " CP135-DDR-015",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "report_date",
+            "expected_synthetic": "2026-06-15",
+            "observed_synthetic": " 2026-06-15",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "measured_depth_m",
+            "expected_synthetic": "1138.0",
+            "observed_synthetic": " 1138.0 M",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "rop_m_per_h",
+            "expected_synthetic": "11.75",
+            "observed_synthetic": " 11.75 M/H",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "mud_weight_ppg",
+            "expected_synthetic": "12.6",
+            "observed_synthetic": " 12.6 PPG",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "npt_h",
+            "expected_synthetic": "0.50",
+            "observed_synthetic": " 0.50 H",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          }
+        ]
+      },
+      {
+        "id": "cp135-ddr-016",
+        "language": "eng",
+        "layout": "table",
+        "scan_condition": "light_noise",
+        "ocr_status": "applied",
+        "fields": [
+          {
+            "key": "sample_id",
+            "expected_synthetic": "CP135-DDR-016",
+            "observed_synthetic": " CP135-DDR-016",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "report_date",
+            "expected_synthetic": "2026-06-16",
+            "observed_synthetic": " 2026-06-16",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "measured_depth_m",
+            "expected_synthetic": "1155.5",
+            "observed_synthetic": " 1155.5 M",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "rop_m_per_h",
+            "expected_synthetic": "18.50",
+            "observed_synthetic": " 18.50 M/H",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "mud_weight_ppg",
+            "expected_synthetic": "9.8",
+            "observed_synthetic": " 9.8 PPG",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "npt_h",
+            "expected_synthetic": "0.75",
+            "observed_synthetic": " 0.75 H",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          }
+        ]
+      },
+      {
+        "id": "cp135-ddr-017",
+        "language": "eng",
+        "layout": "two_column",
+        "scan_condition": "clean",
+        "ocr_status": "applied",
+        "fields": [
+          {
+            "key": "sample_id",
+            "expected_synthetic": "CP135-DDR-017",
+            "observed_synthetic": " CP135-DDR-017",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "report_date",
+            "expected_synthetic": "2026-06-17",
+            "observed_synthetic": " 2026-06-17",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "measured_depth_m",
+            "expected_synthetic": "1172.0",
+            "observed_synthetic": " 1172.0 M",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "rop_m_per_h",
+            "expected_synthetic": "25.25",
+            "observed_synthetic": " 25.25 M/H",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "mud_weight_ppg",
+            "expected_synthetic": "10.0",
+            "observed_synthetic": " 10.0 PPG",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "npt_h",
+            "expected_synthetic": "1.00",
+            "observed_synthetic": " 1.00 H",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          }
+        ]
+      },
+      {
+        "id": "cp135-ddr-018",
+        "language": "eng",
+        "layout": "two_column",
+        "scan_condition": "clean",
+        "ocr_status": "applied",
+        "fields": [
+          {
+            "key": "sample_id",
+            "expected_synthetic": "CP135-DDR-018",
+            "observed_synthetic": " CP135-DDR-018",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "report_date",
+            "expected_synthetic": "2026-06-18",
+            "observed_synthetic": " 2026-06-18",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "measured_depth_m",
+            "expected_synthetic": "1189.5",
+            "observed_synthetic": " 1189.5 M",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "rop_m_per_h",
+            "expected_synthetic": "9.50",
+            "observed_synthetic": " 9.50 M/H",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "mud_weight_ppg",
+            "expected_synthetic": "10.2",
+            "observed_synthetic": " 10.2 PPG",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "npt_h",
+            "expected_synthetic": "1.25",
+            "observed_synthetic": " 1.25 H",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          }
+        ]
+      },
+      {
+        "id": "cp135-ddr-019",
+        "language": "eng",
+        "layout": "two_column",
+        "scan_condition": "low_contrast",
+        "ocr_status": "applied",
+        "fields": [
+          {
+            "key": "sample_id",
+            "expected_synthetic": "CP135-DDR-019",
+            "observed_synthetic": " CP135-DDR-019",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "report_date",
+            "expected_synthetic": "2026-06-19",
+            "observed_synthetic": " 2026-06-19",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "measured_depth_m",
+            "expected_synthetic": "1206.0",
+            "observed_synthetic": " 1206.0 M",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "rop_m_per_h",
+            "expected_synthetic": "16.25",
+            "observed_synthetic": " 16.25 M/H",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "mud_weight_ppg",
+            "expected_synthetic": "10.4",
+            "observed_synthetic": " 10.4 PPG",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "npt_h",
+            "expected_synthetic": "1.50",
+            "observed_synthetic": " 1.50 H",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          }
+        ]
+      },
+      {
+        "id": "cp135-ddr-020",
+        "language": "eng",
+        "layout": "two_column",
+        "scan_condition": "low_contrast",
+        "ocr_status": "applied",
+        "fields": [
+          {
+            "key": "sample_id",
+            "expected_synthetic": "CP135-DDR-020",
+            "observed_synthetic": " CP135-DDR-020",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "report_date",
+            "expected_synthetic": "2026-06-20",
+            "observed_synthetic": " 2026-06-20",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "measured_depth_m",
+            "expected_synthetic": "1223.5",
+            "observed_synthetic": " 1223.5 M",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "rop_m_per_h",
+            "expected_synthetic": "23.00",
+            "observed_synthetic": " 23.00 M/H",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "mud_weight_ppg",
+            "expected_synthetic": "10.6",
+            "observed_synthetic": " 10.6 PPG",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "npt_h",
+            "expected_synthetic": "1.75",
+            "observed_synthetic": " 1.75 H",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          }
+        ]
+      },
+      {
+        "id": "cp135-ddr-021",
+        "language": "eng",
+        "layout": "two_column",
+        "scan_condition": "light_skew",
+        "ocr_status": "applied",
+        "fields": [
+          {
+            "key": "sample_id",
+            "expected_synthetic": "CP135-DDR-021",
+            "observed_synthetic": " CP135-DDR-021",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "report_date",
+            "expected_synthetic": "2026-06-21",
+            "observed_synthetic": " 2026-06-21",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "measured_depth_m",
+            "expected_synthetic": "1240.0",
+            "observed_synthetic": " 1240.0 M",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "rop_m_per_h",
+            "expected_synthetic": "7.25",
+            "observed_synthetic": " 7.25 M/H",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "mud_weight_ppg",
+            "expected_synthetic": "10.8",
+            "observed_synthetic": " 10.8 PPG",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "npt_h",
+            "expected_synthetic": "2.00",
+            "observed_synthetic": " 2.00 H",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          }
+        ]
+      },
+      {
+        "id": "cp135-ddr-022",
+        "language": "eng",
+        "layout": "two_column",
+        "scan_condition": "light_skew",
+        "ocr_status": "applied",
+        "fields": [
+          {
+            "key": "sample_id",
+            "expected_synthetic": "CP135-DDR-022",
+            "observed_synthetic": " CP135-DDR-022",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "report_date",
+            "expected_synthetic": "2026-06-22",
+            "observed_synthetic": " 2026-06-22",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "measured_depth_m",
+            "expected_synthetic": "1257.5",
+            "observed_synthetic": " 1257.5 M",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "rop_m_per_h",
+            "expected_synthetic": "14.00",
+            "observed_synthetic": " 14.00 M/H",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "mud_weight_ppg",
+            "expected_synthetic": "11.0",
+            "observed_synthetic": " 11.0 PPG",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "npt_h",
+            "expected_synthetic": "2.25",
+            "observed_synthetic": " 2.25 H",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          }
+        ]
+      },
+      {
+        "id": "cp135-ddr-023",
+        "language": "eng",
+        "layout": "two_column",
+        "scan_condition": "light_noise",
+        "ocr_status": "applied",
+        "fields": [
+          {
+            "key": "sample_id",
+            "expected_synthetic": "CP135-DDR-023",
+            "observed_synthetic": " CP135-DDR-023",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "report_date",
+            "expected_synthetic": "2026-06-23",
+            "observed_synthetic": " 2026-06-23",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "measured_depth_m",
+            "expected_synthetic": "1274.0",
+            "observed_synthetic": " 1274.0 M",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "rop_m_per_h",
+            "expected_synthetic": "20.75",
+            "observed_synthetic": " 20.75 M/H",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "mud_weight_ppg",
+            "expected_synthetic": "11.2",
+            "observed_synthetic": " 11.2 PPG",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "npt_h",
+            "expected_synthetic": "2.50",
+            "observed_synthetic": " 2.50 H",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          }
+        ]
+      },
+      {
+        "id": "cp135-ddr-024",
+        "language": "eng",
+        "layout": "two_column",
+        "scan_condition": "light_noise",
+        "ocr_status": "applied",
+        "fields": [
+          {
+            "key": "sample_id",
+            "expected_synthetic": "CP135-DDR-024",
+            "observed_synthetic": " CP135-DDR-024",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "report_date",
+            "expected_synthetic": "2026-06-24",
+            "observed_synthetic": " 2026-06-24",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "measured_depth_m",
+            "expected_synthetic": "1291.5",
+            "observed_synthetic": " 1291.5 M",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "rop_m_per_h",
+            "expected_synthetic": "27.50",
+            "observed_synthetic": " 27.50 M/H",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "mud_weight_ppg",
+            "expected_synthetic": "11.4",
+            "observed_synthetic": " 11.4 PPG",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "npt_h",
+            "expected_synthetic": "2.75",
+            "observed_synthetic": " 2.75 H",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          }
+        ]
+      },
+      {
+        "id": "cp135-ddr-025",
+        "language": "eng",
+        "layout": "compact",
+        "scan_condition": "clean",
+        "ocr_status": "applied",
+        "fields": [
+          {
+            "key": "sample_id",
+            "expected_synthetic": "CP135-DDR-025",
+            "observed_synthetic": " CP135-DDR-025",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "report_date",
+            "expected_synthetic": "2026-06-25",
+            "observed_synthetic": " 2026-06-25",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "measured_depth_m",
+            "expected_synthetic": "1308.0",
+            "observed_synthetic": " 1308.0 M",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "rop_m_per_h",
+            "expected_synthetic": "11.75",
+            "observed_synthetic": " 11.75 M/H",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "mud_weight_ppg",
+            "expected_synthetic": "11.6",
+            "observed_synthetic": " 11.6 PPG",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "npt_h",
+            "expected_synthetic": "0.00",
+            "observed_synthetic": " 0.00 H",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          }
+        ]
+      },
+      {
+        "id": "cp135-ddr-026",
+        "language": "eng",
+        "layout": "compact",
+        "scan_condition": "clean",
+        "ocr_status": "applied",
+        "fields": [
+          {
+            "key": "sample_id",
+            "expected_synthetic": "CP135-DDR-026",
+            "observed_synthetic": " CP135-DDR-026",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "report_date",
+            "expected_synthetic": "2026-06-26",
+            "observed_synthetic": " 2026-06-26",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "measured_depth_m",
+            "expected_synthetic": "1325.5",
+            "observed_synthetic": " 1325.5 M",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "rop_m_per_h",
+            "expected_synthetic": "18.50",
+            "observed_synthetic": " 18.50 M/H",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "mud_weight_ppg",
+            "expected_synthetic": "11.8",
+            "observed_synthetic": " 11.8 PPG",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "npt_h",
+            "expected_synthetic": "0.25",
+            "observed_synthetic": " 0.25 H",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          }
+        ]
+      },
+      {
+        "id": "cp135-ddr-027",
+        "language": "eng",
+        "layout": "compact",
+        "scan_condition": "low_contrast",
+        "ocr_status": "applied",
+        "fields": [
+          {
+            "key": "sample_id",
+            "expected_synthetic": "CP135-DDR-027",
+            "observed_synthetic": " CP135-DDR-027",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "report_date",
+            "expected_synthetic": "2026-06-27",
+            "observed_synthetic": " 2026-06-27",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "measured_depth_m",
+            "expected_synthetic": "1342.0",
+            "observed_synthetic": " 1342.0 M",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "rop_m_per_h",
+            "expected_synthetic": "25.25",
+            "observed_synthetic": " 25.25 M/H",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "mud_weight_ppg",
+            "expected_synthetic": "12.0",
+            "observed_synthetic": " 12.0 PPG",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "npt_h",
+            "expected_synthetic": "0.50",
+            "observed_synthetic": " 0.50 H",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          }
+        ]
+      },
+      {
+        "id": "cp135-ddr-028",
+        "language": "eng",
+        "layout": "compact",
+        "scan_condition": "low_contrast",
+        "ocr_status": "applied",
+        "fields": [
+          {
+            "key": "sample_id",
+            "expected_synthetic": "CP135-DDR-028",
+            "observed_synthetic": " CP135-DDR-028",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "report_date",
+            "expected_synthetic": "2026-06-28",
+            "observed_synthetic": " 2026-06-28",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "measured_depth_m",
+            "expected_synthetic": "1359.5",
+            "observed_synthetic": " 1359.5 M",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "rop_m_per_h",
+            "expected_synthetic": "9.50",
+            "observed_synthetic": " 9.50 M/H",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "mud_weight_ppg",
+            "expected_synthetic": "12.2",
+            "observed_synthetic": " 12.2 PPG",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "npt_h",
+            "expected_synthetic": "0.75",
+            "observed_synthetic": " 0.75 H",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          }
+        ]
+      },
+      {
+        "id": "cp135-ddr-029",
+        "language": "eng",
+        "layout": "compact",
+        "scan_condition": "light_skew",
+        "ocr_status": "applied",
+        "fields": [
+          {
+            "key": "sample_id",
+            "expected_synthetic": "CP135-DDR-029",
+            "observed_synthetic": " CP135-DDR-029",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "report_date",
+            "expected_synthetic": "2026-06-29",
+            "observed_synthetic": " 2026-06-29",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "measured_depth_m",
+            "expected_synthetic": "1376.0",
+            "observed_synthetic": " 1376.0 M",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "rop_m_per_h",
+            "expected_synthetic": "16.25",
+            "observed_synthetic": " 16.25 M/H",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "mud_weight_ppg",
+            "expected_synthetic": "12.4",
+            "observed_synthetic": " 12.4 PPG",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "npt_h",
+            "expected_synthetic": "1.00",
+            "observed_synthetic": " 1.00 H",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          }
+        ]
+      },
+      {
+        "id": "cp135-ddr-030",
+        "language": "eng",
+        "layout": "compact",
+        "scan_condition": "light_skew",
+        "ocr_status": "applied",
+        "fields": [
+          {
+            "key": "sample_id",
+            "expected_synthetic": "CP135-DDR-030",
+            "observed_synthetic": " CP135-DDR-030",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "report_date",
+            "expected_synthetic": "2026-06-30",
+            "observed_synthetic": " 2026-06-30",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "measured_depth_m",
+            "expected_synthetic": "1393.5",
+            "observed_synthetic": " 1393.5 M",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "rop_m_per_h",
+            "expected_synthetic": "23.00",
+            "observed_synthetic": " 23.00 M/H",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "mud_weight_ppg",
+            "expected_synthetic": "12.6",
+            "observed_synthetic": " 12.6 PPG",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "npt_h",
+            "expected_synthetic": "1.25",
+            "observed_synthetic": " 1.25 H",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          }
+        ]
+      },
+      {
+        "id": "cp135-ddr-031",
+        "language": "eng",
+        "layout": "compact",
+        "scan_condition": "light_noise",
+        "ocr_status": "applied",
+        "fields": [
+          {
+            "key": "sample_id",
+            "expected_synthetic": "CP135-DDR-031",
+            "observed_synthetic": " CP135-DDR-031",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "report_date",
+            "expected_synthetic": "2026-07-01",
+            "observed_synthetic": " 2026-07-01",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "measured_depth_m",
+            "expected_synthetic": "910.0",
+            "observed_synthetic": " 910.0 M",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "rop_m_per_h",
+            "expected_synthetic": "7.25",
+            "observed_synthetic": " 7.25 M/H",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "mud_weight_ppg",
+            "expected_synthetic": "9.8",
+            "observed_synthetic": " 9.8 PPG",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "npt_h",
+            "expected_synthetic": "1.50",
+            "observed_synthetic": " 1.50 H",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          }
+        ]
+      },
+      {
+        "id": "cp135-ddr-032",
+        "language": "eng",
+        "layout": "compact",
+        "scan_condition": "light_noise",
+        "ocr_status": "applied",
+        "fields": [
+          {
+            "key": "sample_id",
+            "expected_synthetic": "CP135-DDR-032",
+            "observed_synthetic": " CP135-DDR-032",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "report_date",
+            "expected_synthetic": "2026-07-02",
+            "observed_synthetic": " 2026-07-02",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "measured_depth_m",
+            "expected_synthetic": "927.5",
+            "observed_synthetic": " 927.5 M",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "rop_m_per_h",
+            "expected_synthetic": "14.00",
+            "observed_synthetic": " 14.00 M/H",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "mud_weight_ppg",
+            "expected_synthetic": "10.0",
+            "observed_synthetic": " 10.0 PPG",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "npt_h",
+            "expected_synthetic": "1.75",
+            "observed_synthetic": " 1.75 H",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          }
+        ]
+      },
+      {
+        "id": "cp135-ddr-033",
+        "language": "fas",
+        "layout": "single_column",
+        "scan_condition": "clean",
+        "ocr_status": "applied",
+        "fields": [
+          {
+            "key": "sample_id",
+            "expected_synthetic": "CP135-DDR-033",
+            "observed_synthetic": " 65135-008-033",
+            "label_present_anywhere": true,
+            "matched": false,
+            "category": "IDENTIFIER_VALUE_MISMATCH"
+          },
+          {
+            "key": "report_date",
+            "expected_synthetic": "2026-07-03",
+            "observed_synthetic": " 2026-07-03",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "measured_depth_m",
+            "expected_synthetic": "944.0",
+            "observed_synthetic": " 944.0 ۲",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "rop_m_per_h",
+            "expected_synthetic": "20.75",
+            "observed_synthetic": " 20.75 ۷/۲۱",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "mud_weight_ppg",
+            "expected_synthetic": "10.2",
+            "observed_synthetic": " 10.2 ۴۴6",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "npt_h",
+            "expected_synthetic": "2.00",
+            "observed_synthetic": " 2.00 ۲۷",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          }
+        ]
+      },
+      {
+        "id": "cp135-ddr-034",
+        "language": "fas",
+        "layout": "single_column",
+        "scan_condition": "clean",
+        "ocr_status": "applied",
+        "fields": [
+          {
+            "key": "sample_id",
+            "expected_synthetic": "CP135-DDR-034",
+            "observed_synthetic": " ۳135-1۱۱۱۴-۵34)",
+            "label_present_anywhere": true,
+            "matched": false,
+            "category": "IDENTIFIER_VALUE_MISMATCH"
+          },
+          {
+            "key": "report_date",
+            "expected_synthetic": "2026-07-04",
+            "observed_synthetic": " 2026-07-04",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "measured_depth_m",
+            "expected_synthetic": "961.5",
+            "observed_synthetic": " 961.5 ۱\"",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "rop_m_per_h",
+            "expected_synthetic": "27.50",
+            "observed_synthetic": " 27.50 ۷/۲۱",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "mud_weight_ppg",
+            "expected_synthetic": "10.4",
+            "observed_synthetic": " 10.4 2۳6",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "npt_h",
+            "expected_synthetic": "2.25",
+            "observed_synthetic": " 2.25 ۲",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          }
+        ]
+      },
+      {
+        "id": "cp135-ddr-035",
+        "language": "fas",
+        "layout": "single_column",
+        "scan_condition": "low_contrast",
+        "ocr_status": "applied",
+        "fields": [
+          {
+            "key": "sample_id",
+            "expected_synthetic": "CP135-DDR-035",
+            "observed_synthetic": " ۳135-1۱۱۱۴-۵35)",
+            "label_present_anywhere": true,
+            "matched": false,
+            "category": "IDENTIFIER_VALUE_MISMATCH"
+          },
+          {
+            "key": "report_date",
+            "expected_synthetic": "2026-07-05",
+            "observed_synthetic": " 2026-07-05",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "measured_depth_m",
+            "expected_synthetic": "978.0",
+            "observed_synthetic": " 978.0 ۲",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "rop_m_per_h",
+            "expected_synthetic": "11.75",
+            "observed_synthetic": " 11.75 ۷/۲۱",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "mud_weight_ppg",
+            "expected_synthetic": "10.6",
+            "observed_synthetic": " 10.6 2۳6",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "npt_h",
+            "expected_synthetic": "2.50",
+            "observed_synthetic": " 2.50 ۲",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          }
+        ]
+      },
+      {
+        "id": "cp135-ddr-036",
+        "language": "fas",
+        "layout": "single_column",
+        "scan_condition": "low_contrast",
+        "ocr_status": "applied",
+        "fields": [
+          {
+            "key": "sample_id",
+            "expected_synthetic": "CP135-DDR-036",
+            "observed_synthetic": " 6۳135-008-036",
+            "label_present_anywhere": true,
+            "matched": false,
+            "category": "IDENTIFIER_VALUE_MISMATCH"
+          },
+          {
+            "key": "report_date",
+            "expected_synthetic": "2026-07-06",
+            "observed_synthetic": " 2026-07-06",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "measured_depth_m",
+            "expected_synthetic": "995.5",
+            "observed_synthetic": " 995.5 ۳",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "rop_m_per_h",
+            "expected_synthetic": "18.50",
+            "observed_synthetic": " 18.50 ۷/۲۱",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "mud_weight_ppg",
+            "expected_synthetic": "10.8",
+            "observed_synthetic": " 10.8 2۲6",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "npt_h",
+            "expected_synthetic": "2.75",
+            "observed_synthetic": " 2.75 !۲",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          }
+        ]
+      },
+      {
+        "id": "cp135-ddr-037",
+        "language": "fas",
+        "layout": "single_column",
+        "scan_condition": "light_skew",
+        "ocr_status": "applied",
+        "fields": [
+          {
+            "key": "sample_id",
+            "expected_synthetic": "CP135-DDR-037",
+            "observed_synthetic": " 6۳135-00۴8-037",
+            "label_present_anywhere": true,
+            "matched": false,
+            "category": "IDENTIFIER_VALUE_MISMATCH"
+          },
+          {
+            "key": "report_date",
+            "expected_synthetic": "2026-07-07",
+            "observed_synthetic": " 2026-07-07",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "measured_depth_m",
+            "expected_synthetic": "1012.0",
+            "observed_synthetic": " 1012.0 ۲",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "rop_m_per_h",
+            "expected_synthetic": "25.25",
+            "observed_synthetic": " 25.25 ۱/۲۱",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "mud_weight_ppg",
+            "expected_synthetic": "11.0",
+            "observed_synthetic": " 11.0 ۴۴6۵",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "npt_h",
+            "expected_synthetic": "0.00",
+            "observed_synthetic": " 0.00 ۲۷",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          }
+        ]
+      },
+      {
+        "id": "cp135-ddr-038",
+        "language": "fas",
+        "layout": "single_column",
+        "scan_condition": "light_skew",
+        "ocr_status": "applied",
+        "fields": [
+          {
+            "key": "sample_id",
+            "expected_synthetic": "CP135-DDR-038",
+            "observed_synthetic": " 0۳135-1۲0158-038",
+            "label_present_anywhere": true,
+            "matched": false,
+            "category": "IDENTIFIER_VALUE_MISMATCH"
+          },
+          {
+            "key": "report_date",
+            "expected_synthetic": "2026-07-08",
+            "observed_synthetic": " 2026-07-08",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "measured_depth_m",
+            "expected_synthetic": "1029.5",
+            "observed_synthetic": " 1029.5 ۲۸",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "rop_m_per_h",
+            "expected_synthetic": "9.50",
+            "observed_synthetic": " 9.50 ۱۸/۲۱",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "mud_weight_ppg",
+            "expected_synthetic": "11.2",
+            "observed_synthetic": " 11.2 2۴6",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "npt_h",
+            "expected_synthetic": "0.25",
+            "observed_synthetic": " 0.25 !۲",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          }
+        ]
+      },
+      {
+        "id": "cp135-ddr-039",
+        "language": "fas",
+        "layout": "single_column",
+        "scan_condition": "light_noise",
+        "ocr_status": "applied",
+        "fields": [
+          {
+            "key": "sample_id",
+            "expected_synthetic": "CP135-DDR-039",
+            "observed_synthetic": " 65135-008-039",
+            "label_present_anywhere": true,
+            "matched": false,
+            "category": "IDENTIFIER_VALUE_MISMATCH"
+          },
+          {
+            "key": "report_date",
+            "expected_synthetic": "2026-07-09",
+            "observed_synthetic": " 2026-07-09",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "measured_depth_m",
+            "expected_synthetic": "1046.0",
+            "observed_synthetic": " 1046.0 ۱\"",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "rop_m_per_h",
+            "expected_synthetic": "16.25",
+            "observed_synthetic": " 16.25 ۷/۲۱",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "mud_weight_ppg",
+            "expected_synthetic": "11.4",
+            "observed_synthetic": " 11.4 2۴6",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "npt_h",
+            "expected_synthetic": "0.50",
+            "observed_synthetic": " 0.50 ۱",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          }
+        ]
+      },
+      {
+        "id": "cp135-ddr-040",
+        "language": "fas",
+        "layout": "single_column",
+        "scan_condition": "light_noise",
+        "ocr_status": "applied",
+        "fields": [
+          {
+            "key": "sample_id",
+            "expected_synthetic": "CP135-DDR-040",
+            "observed_synthetic": " ۳135-1۲۱۴-۵40)",
+            "label_present_anywhere": true,
+            "matched": false,
+            "category": "IDENTIFIER_VALUE_MISMATCH"
+          },
+          {
+            "key": "report_date",
+            "expected_synthetic": "2026-07-10",
+            "observed_synthetic": " 2026-07-10",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "measured_depth_m",
+            "expected_synthetic": "1063.5",
+            "observed_synthetic": " 1063.5 ۲",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "rop_m_per_h",
+            "expected_synthetic": "23.00",
+            "observed_synthetic": " 23.00 ۷/۲۱",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "mud_weight_ppg",
+            "expected_synthetic": "11.6",
+            "observed_synthetic": " 11.6 ۳6",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "npt_h",
+            "expected_synthetic": "0.75",
+            "observed_synthetic": " 0.75 ۲۱",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          }
+        ]
+      },
+      {
+        "id": "cp135-ddr-041",
+        "language": "fas",
+        "layout": "table",
+        "scan_condition": "clean",
+        "ocr_status": "applied",
+        "fields": [
+          {
+            "key": "sample_id",
+            "expected_synthetic": "CP135-DDR-041",
+            "observed_synthetic": " 6۴135-99871",
+            "label_present_anywhere": true,
+            "matched": false,
+            "category": "IDENTIFIER_VALUE_MISMATCH"
+          },
+          {
+            "key": "report_date",
+            "expected_synthetic": "2026-07-11",
+            "observed_synthetic": " 2026-07-1",
+            "label_present_anywhere": true,
+            "matched": false,
+            "category": "DATE_VALUE_MISMATCH"
+          },
+          {
+            "key": "measured_depth_m",
+            "expected_synthetic": "1080.0",
+            "observed_synthetic": " 19990",
+            "label_present_anywhere": true,
+            "matched": false,
+            "category": "NUMERIC_OR_UNIT_VALUE_MISMATCH"
+          },
+          {
+            "key": "rop_m_per_h",
+            "expected_synthetic": "7.25",
+            "observed_synthetic": " ۸۷ 7.25",
+            "label_present_anywhere": true,
+            "matched": false,
+            "category": "NUMERIC_OR_UNIT_VALUE_MISMATCH"
+          },
+          {
+            "key": "mud_weight_ppg",
+            "expected_synthetic": "11.8",
+            "observed_synthetic": " ۴۴6۵ 11.8",
+            "label_present_anywhere": true,
+            "matched": false,
+            "category": "NUMERIC_OR_UNIT_VALUE_MISMATCH"
+          },
+          {
+            "key": "npt_h",
+            "expected_synthetic": "1.00",
+            "observed_synthetic": null,
+            "label_present_anywhere": true,
+            "matched": false,
+            "category": "LABEL_ASSOCIATION_MISSING"
+          }
+        ]
+      },
+      {
+        "id": "cp135-ddr-042",
+        "language": "fas",
+        "layout": "table",
+        "scan_condition": "clean",
+        "ocr_status": "applied",
+        "fields": [
+          {
+            "key": "sample_id",
+            "expected_synthetic": "CP135-DDR-042",
+            "observed_synthetic": " 0۳135-۱۱2",
+            "label_present_anywhere": true,
+            "matched": false,
+            "category": "IDENTIFIER_VALUE_MISMATCH"
+          },
+          {
+            "key": "report_date",
+            "expected_synthetic": "2026-07-12",
+            "observed_synthetic": " 2026-07-2",
+            "label_present_anywhere": true,
+            "matched": false,
+            "category": "DATE_VALUE_MISMATCH"
+          },
+          {
+            "key": "measured_depth_m",
+            "expected_synthetic": "1097.5",
+            "observed_synthetic": " ۸ 1097.5",
+            "label_present_anywhere": true,
+            "matched": false,
+            "category": "NUMERIC_OR_UNIT_VALUE_MISMATCH"
+          },
+          {
+            "key": "rop_m_per_h",
+            "expected_synthetic": "14.00",
+            "observed_synthetic": " ۱ 14.00",
+            "label_present_anywhere": true,
+            "matched": false,
+            "category": "NUMERIC_OR_UNIT_VALUE_MISMATCH"
+          },
+          {
+            "key": "mud_weight_ppg",
+            "expected_synthetic": "12.0",
+            "observed_synthetic": " 6 12.0",
+            "label_present_anywhere": true,
+            "matched": false,
+            "category": "NUMERIC_OR_UNIT_VALUE_MISMATCH"
+          },
+          {
+            "key": "npt_h",
+            "expected_synthetic": "1.25",
+            "observed_synthetic": " ۲ 1.25",
+            "label_present_anywhere": true,
+            "matched": false,
+            "category": "NUMERIC_OR_UNIT_VALUE_MISMATCH"
+          }
+        ]
+      },
+      {
+        "id": "cp135-ddr-043",
+        "language": "fas",
+        "layout": "table",
+        "scan_condition": "low_contrast",
+        "ocr_status": "applied",
+        "fields": [
+          {
+            "key": "sample_id",
+            "expected_synthetic": "CP135-DDR-043",
+            "observed_synthetic": " 0۳135-۱۱3",
+            "label_present_anywhere": true,
+            "matched": false,
+            "category": "IDENTIFIER_VALUE_MISMATCH"
+          },
+          {
+            "key": "report_date",
+            "expected_synthetic": "2026-07-13",
+            "observed_synthetic": null,
+            "label_present_anywhere": false,
+            "matched": false,
+            "category": "LABEL_ASSOCIATION_MISSING"
+          },
+          {
+            "key": "measured_depth_m",
+            "expected_synthetic": "1114.0",
+            "observed_synthetic": " ۸ 1114.0",
+            "label_present_anywhere": true,
+            "matched": false,
+            "category": "NUMERIC_OR_UNIT_VALUE_MISMATCH"
+          },
+          {
+            "key": "rop_m_per_h",
+            "expected_synthetic": "20.75",
+            "observed_synthetic": " ۷۷ 20.75",
+            "label_present_anywhere": true,
+            "matched": false,
+            "category": "NUMERIC_OR_UNIT_VALUE_MISMATCH"
+          },
+          {
+            "key": "mud_weight_ppg",
+            "expected_synthetic": "12.2",
+            "observed_synthetic": " 6 12.2",
+            "label_present_anywhere": true,
+            "matched": false,
+            "category": "NUMERIC_OR_UNIT_VALUE_MISMATCH"
+          },
+          {
+            "key": "npt_h",
+            "expected_synthetic": "1.50",
+            "observed_synthetic": " 150۲",
+            "label_present_anywhere": true,
+            "matched": false,
+            "category": "NUMERIC_OR_UNIT_VALUE_MISMATCH"
+          }
+        ]
+      },
+      {
+        "id": "cp135-ddr-044",
+        "language": "fas",
+        "layout": "table",
+        "scan_condition": "low_contrast",
+        "ocr_status": "applied",
+        "fields": [
+          {
+            "key": "sample_id",
+            "expected_synthetic": "CP135-DDR-044",
+            "observed_synthetic": " 0۳135-۱۳4",
+            "label_present_anywhere": true,
+            "matched": false,
+            "category": "IDENTIFIER_VALUE_MISMATCH"
+          },
+          {
+            "key": "report_date",
+            "expected_synthetic": "2026-07-14",
+            "observed_synthetic": " 2026-07-4",
+            "label_present_anywhere": true,
+            "matched": false,
+            "category": "DATE_VALUE_MISMATCH"
+          },
+          {
+            "key": "measured_depth_m",
+            "expected_synthetic": "1131.5",
+            "observed_synthetic": " ۸ 1131.5",
+            "label_present_anywhere": true,
+            "matched": false,
+            "category": "NUMERIC_OR_UNIT_VALUE_MISMATCH"
+          },
+          {
+            "key": "rop_m_per_h",
+            "expected_synthetic": "27.50",
+            "observed_synthetic": " ۷۷ 27.50",
+            "label_present_anywhere": true,
+            "matched": false,
+            "category": "NUMERIC_OR_UNIT_VALUE_MISMATCH"
+          },
+          {
+            "key": "mud_weight_ppg",
+            "expected_synthetic": "12.4",
+            "observed_synthetic": " 6 12.4",
+            "label_present_anywhere": true,
+            "matched": false,
+            "category": "NUMERIC_OR_UNIT_VALUE_MISMATCH"
+          },
+          {
+            "key": "npt_h",
+            "expected_synthetic": "1.75",
+            "observed_synthetic": " | 1.75",
+            "label_present_anywhere": true,
+            "matched": false,
+            "category": "NUMERIC_OR_UNIT_VALUE_MISMATCH"
+          }
+        ]
+      },
+      {
+        "id": "cp135-ddr-045",
+        "language": "fas",
+        "layout": "table",
+        "scan_condition": "light_skew",
+        "ocr_status": "applied",
+        "fields": [
+          {
+            "key": "sample_id",
+            "expected_synthetic": "CP135-DDR-045",
+            "observed_synthetic": " 6۳135-00845",
+            "label_present_anywhere": true,
+            "matched": false,
+            "category": "IDENTIFIER_VALUE_MISMATCH"
+          },
+          {
+            "key": "report_date",
+            "expected_synthetic": "2026-07-15",
+            "observed_synthetic": " 2026-07-5",
+            "label_present_anywhere": true,
+            "matched": false,
+            "category": "DATE_VALUE_MISMATCH"
+          },
+          {
+            "key": "measured_depth_m",
+            "expected_synthetic": "1148.0",
+            "observed_synthetic": " 1148.0",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "rop_m_per_h",
+            "expected_synthetic": "11.75",
+            "observed_synthetic": " ۱۸۷۷ 11.75",
+            "label_present_anywhere": true,
+            "matched": false,
+            "category": "NUMERIC_OR_UNIT_VALUE_MISMATCH"
+          },
+          {
+            "key": "mud_weight_ppg",
+            "expected_synthetic": "12.6",
+            "observed_synthetic": " 6 12.6",
+            "label_present_anywhere": true,
+            "matched": false,
+            "category": "NUMERIC_OR_UNIT_VALUE_MISMATCH"
+          },
+          {
+            "key": "npt_h",
+            "expected_synthetic": "2.00",
+            "observed_synthetic": " ۲ 2.00",
+            "label_present_anywhere": true,
+            "matched": false,
+            "category": "NUMERIC_OR_UNIT_VALUE_MISMATCH"
+          }
+        ]
+      },
+      {
+        "id": "cp135-ddr-046",
+        "language": "fas",
+        "layout": "table",
+        "scan_condition": "light_skew",
+        "ocr_status": "applied",
+        "fields": [
+          {
+            "key": "sample_id",
+            "expected_synthetic": "CP135-DDR-046",
+            "observed_synthetic": " 6۳135-006",
+            "label_present_anywhere": true,
+            "matched": false,
+            "category": "IDENTIFIER_VALUE_MISMATCH"
+          },
+          {
+            "key": "report_date",
+            "expected_synthetic": "2026-07-16",
+            "observed_synthetic": " 2026-07-6",
+            "label_present_anywhere": true,
+            "matched": false,
+            "category": "DATE_VALUE_MISMATCH"
+          },
+          {
+            "key": "measured_depth_m",
+            "expected_synthetic": "1165.5",
+            "observed_synthetic": " 1165.5",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "rop_m_per_h",
+            "expected_synthetic": "18.50",
+            "observed_synthetic": " ۱/۲ 18.50",
+            "label_present_anywhere": true,
+            "matched": false,
+            "category": "NUMERIC_OR_UNIT_VALUE_MISMATCH"
+          },
+          {
+            "key": "mud_weight_ppg",
+            "expected_synthetic": "9.8",
+            "observed_synthetic": " 6 9.8",
+            "label_present_anywhere": true,
+            "matched": false,
+            "category": "NUMERIC_OR_UNIT_VALUE_MISMATCH"
+          },
+          {
+            "key": "npt_h",
+            "expected_synthetic": "2.25",
+            "observed_synthetic": " (ا 2.25",
+            "label_present_anywhere": true,
+            "matched": false,
+            "category": "NUMERIC_OR_UNIT_VALUE_MISMATCH"
+          }
+        ]
+      },
+      {
+        "id": "cp135-ddr-047",
+        "language": "fas",
+        "layout": "table",
+        "scan_condition": "light_noise",
+        "ocr_status": "applied",
+        "fields": [
+          {
+            "key": "sample_id",
+            "expected_synthetic": "CP135-DDR-047",
+            "observed_synthetic": " 0۳135-۱۷7",
+            "label_present_anywhere": true,
+            "matched": false,
+            "category": "IDENTIFIER_VALUE_MISMATCH"
+          },
+          {
+            "key": "report_date",
+            "expected_synthetic": "2026-07-17",
+            "observed_synthetic": " 2026-07-7",
+            "label_present_anywhere": true,
+            "matched": false,
+            "category": "DATE_VALUE_MISMATCH"
+          },
+          {
+            "key": "measured_depth_m",
+            "expected_synthetic": "1182.0",
+            "observed_synthetic": " ۸ 1182.0",
+            "label_present_anywhere": true,
+            "matched": false,
+            "category": "NUMERIC_OR_UNIT_VALUE_MISMATCH"
+          },
+          {
+            "key": "rop_m_per_h",
+            "expected_synthetic": "25.25",
+            "observed_synthetic": " ۲۷ 25.25",
+            "label_present_anywhere": true,
+            "matched": false,
+            "category": "NUMERIC_OR_UNIT_VALUE_MISMATCH"
+          },
+          {
+            "key": "mud_weight_ppg",
+            "expected_synthetic": "10.0",
+            "observed_synthetic": " 6 10.0",
+            "label_present_anywhere": true,
+            "matched": false,
+            "category": "NUMERIC_OR_UNIT_VALUE_MISMATCH"
+          },
+          {
+            "key": "npt_h",
+            "expected_synthetic": "2.50",
+            "observed_synthetic": " 2320۱",
+            "label_present_anywhere": true,
+            "matched": false,
+            "category": "NUMERIC_OR_UNIT_VALUE_MISMATCH"
+          }
+        ]
+      },
+      {
+        "id": "cp135-ddr-048",
+        "language": "fas",
+        "layout": "table",
+        "scan_condition": "light_noise",
+        "ocr_status": "applied",
+        "fields": [
+          {
+            "key": "sample_id",
+            "expected_synthetic": "CP135-DDR-048",
+            "observed_synthetic": " 0۳135-1۱۱۳8",
+            "label_present_anywhere": true,
+            "matched": false,
+            "category": "IDENTIFIER_VALUE_MISMATCH"
+          },
+          {
+            "key": "report_date",
+            "expected_synthetic": "2026-07-18",
+            "observed_synthetic": " 2026-07-8",
+            "label_present_anywhere": true,
+            "matched": false,
+            "category": "DATE_VALUE_MISMATCH"
+          },
+          {
+            "key": "measured_depth_m",
+            "expected_synthetic": "1199.5",
+            "observed_synthetic": " 1199.5",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "rop_m_per_h",
+            "expected_synthetic": "9.50",
+            "observed_synthetic": " ۱ 9.50",
+            "label_present_anywhere": true,
+            "matched": false,
+            "category": "NUMERIC_OR_UNIT_VALUE_MISMATCH"
+          },
+          {
+            "key": "mud_weight_ppg",
+            "expected_synthetic": "10.2",
+            "observed_synthetic": " 6 10.2",
+            "label_present_anywhere": true,
+            "matched": false,
+            "category": "NUMERIC_OR_UNIT_VALUE_MISMATCH"
+          },
+          {
+            "key": "npt_h",
+            "expected_synthetic": "2.75",
+            "observed_synthetic": " با 2.75",
+            "label_present_anywhere": true,
+            "matched": false,
+            "category": "NUMERIC_OR_UNIT_VALUE_MISMATCH"
+          }
+        ]
+      },
+      {
+        "id": "cp135-ddr-049",
+        "language": "fas",
+        "layout": "two_column",
+        "scan_condition": "clean",
+        "ocr_status": "applied",
+        "fields": [
+          {
+            "key": "sample_id",
+            "expected_synthetic": "CP135-DDR-049",
+            "observed_synthetic": " 0۲0۴8-049]-06۴۳135)",
+            "label_present_anywhere": true,
+            "matched": false,
+            "category": "IDENTIFIER_VALUE_MISMATCH"
+          },
+          {
+            "key": "report_date",
+            "expected_synthetic": "2026-07-19",
+            "observed_synthetic": " 2026-07-19",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "measured_depth_m",
+            "expected_synthetic": "1216.0",
+            "observed_synthetic": " 1216.0 ۲",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "rop_m_per_h",
+            "expected_synthetic": "16.25",
+            "observed_synthetic": " 16.25 (۲//",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "mud_weight_ppg",
+            "expected_synthetic": "10.4",
+            "observed_synthetic": " 10.4 2۴6",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "npt_h",
+            "expected_synthetic": "0.00",
+            "observed_synthetic": " 0.00 !۲",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          }
+        ]
+      },
+      {
+        "id": "cp135-ddr-050",
+        "language": "fas",
+        "layout": "two_column",
+        "scan_condition": "clean",
+        "ocr_status": "applied",
+        "fields": [
+          {
+            "key": "sample_id",
+            "expected_synthetic": "CP135-DDR-050",
+            "observed_synthetic": " 0۲0۴8-050]-06۴135)",
+            "label_present_anywhere": true,
+            "matched": false,
+            "category": "IDENTIFIER_VALUE_MISMATCH"
+          },
+          {
+            "key": "report_date",
+            "expected_synthetic": "2026-07-20",
+            "observed_synthetic": " 2026-07-20",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "measured_depth_m",
+            "expected_synthetic": "1233.5",
+            "observed_synthetic": " 1233.5 ۲",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "rop_m_per_h",
+            "expected_synthetic": "23.00",
+            "observed_synthetic": " 23.00 (۲//",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "mud_weight_ppg",
+            "expected_synthetic": "10.6",
+            "observed_synthetic": " 10.6 2۴6",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "npt_h",
+            "expected_synthetic": "0.25",
+            "observed_synthetic": " 0.25 !۲",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          }
+        ]
+      },
+      {
+        "id": "cp135-ddr-051",
+        "language": "fas",
+        "layout": "two_column",
+        "scan_condition": "low_contrast",
+        "ocr_status": "applied",
+        "fields": [
+          {
+            "key": "sample_id",
+            "expected_synthetic": "CP135-DDR-051",
+            "observed_synthetic": " 0۲0۴8-051]-06۴135)",
+            "label_present_anywhere": true,
+            "matched": false,
+            "category": "IDENTIFIER_VALUE_MISMATCH"
+          },
+          {
+            "key": "report_date",
+            "expected_synthetic": "2026-07-21",
+            "observed_synthetic": " 2026-07-21",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "measured_depth_m",
+            "expected_synthetic": "1250.0",
+            "observed_synthetic": " 1250.0 ۲",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "rop_m_per_h",
+            "expected_synthetic": "7.25",
+            "observed_synthetic": " 7.25 ۳/۲۱",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "mud_weight_ppg",
+            "expected_synthetic": "10.8",
+            "observed_synthetic": " 10.8 2۴6",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "npt_h",
+            "expected_synthetic": "0.50",
+            "observed_synthetic": " 0.50 !۲",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          }
+        ]
+      },
+      {
+        "id": "cp135-ddr-052",
+        "language": "fas",
+        "layout": "two_column",
+        "scan_condition": "low_contrast",
+        "ocr_status": "applied",
+        "fields": [
+          {
+            "key": "sample_id",
+            "expected_synthetic": "CP135-DDR-052",
+            "observed_synthetic": " 06۴135-۲0۲0۴-052)",
+            "label_present_anywhere": true,
+            "matched": false,
+            "category": "IDENTIFIER_VALUE_MISMATCH"
+          },
+          {
+            "key": "report_date",
+            "expected_synthetic": "2026-07-22",
+            "observed_synthetic": " 2026-07-22",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "measured_depth_m",
+            "expected_synthetic": "1267.5",
+            "observed_synthetic": " 1267.5 ۲",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "rop_m_per_h",
+            "expected_synthetic": "14.00",
+            "observed_synthetic": " 14.00 ۳/۲۱",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "mud_weight_ppg",
+            "expected_synthetic": "11.0",
+            "observed_synthetic": " 11.0 2۴6",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "npt_h",
+            "expected_synthetic": "0.75",
+            "observed_synthetic": " 0.75 !۲",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          }
+        ]
+      },
+      {
+        "id": "cp135-ddr-053",
+        "language": "fas",
+        "layout": "two_column",
+        "scan_condition": "light_skew",
+        "ocr_status": "applied",
+        "fields": [
+          {
+            "key": "sample_id",
+            "expected_synthetic": "CP135-DDR-053",
+            "observed_synthetic": " 06۴۳135-0]08-053",
+            "label_present_anywhere": true,
+            "matched": false,
+            "category": "IDENTIFIER_VALUE_MISMATCH"
+          },
+          {
+            "key": "report_date",
+            "expected_synthetic": "2026-07-23",
+            "observed_synthetic": " 2026-07-23",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "measured_depth_m",
+            "expected_synthetic": "1284.0",
+            "observed_synthetic": " 1284.0 ۲",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "rop_m_per_h",
+            "expected_synthetic": "20.75",
+            "observed_synthetic": " 20.75 ۳/۳",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "mud_weight_ppg",
+            "expected_synthetic": "11.2",
+            "observed_synthetic": " 11.2 ۳۳6",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "npt_h",
+            "expected_synthetic": "1.00",
+            "observed_synthetic": " 1.00 ۲۷",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          }
+        ]
+      },
+      {
+        "id": "cp135-ddr-054",
+        "language": "fas",
+        "layout": "two_column",
+        "scan_condition": "light_skew",
+        "ocr_status": "applied",
+        "fields": [
+          {
+            "key": "sample_id",
+            "expected_synthetic": "CP135-DDR-054",
+            "observed_synthetic": " 06۴۳135-0]08-054",
+            "label_present_anywhere": true,
+            "matched": false,
+            "category": "IDENTIFIER_VALUE_MISMATCH"
+          },
+          {
+            "key": "report_date",
+            "expected_synthetic": "2026-07-24",
+            "observed_synthetic": " 2026-07-24",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "measured_depth_m",
+            "expected_synthetic": "1301.5",
+            "observed_synthetic": " 1301.5 ۲",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "rop_m_per_h",
+            "expected_synthetic": "27.50",
+            "observed_synthetic": " 250 ۳/۳",
+            "label_present_anywhere": true,
+            "matched": false,
+            "category": "NUMERIC_OR_UNIT_VALUE_MISMATCH"
+          },
+          {
+            "key": "mud_weight_ppg",
+            "expected_synthetic": "11.4",
+            "observed_synthetic": " 11.4 ۳۳6",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "npt_h",
+            "expected_synthetic": "1.25",
+            "observed_synthetic": " 1.25 ۲۷",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          }
+        ]
+      },
+      {
+        "id": "cp135-ddr-055",
+        "language": "fas",
+        "layout": "two_column",
+        "scan_condition": "light_noise",
+        "ocr_status": "applied",
+        "fields": [
+          {
+            "key": "sample_id",
+            "expected_synthetic": "CP135-DDR-055",
+            "observed_synthetic": " 00۴8-055]-06۴135)",
+            "label_present_anywhere": true,
+            "matched": false,
+            "category": "IDENTIFIER_VALUE_MISMATCH"
+          },
+          {
+            "key": "report_date",
+            "expected_synthetic": "2026-07-25",
+            "observed_synthetic": " 2026-07-25",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "measured_depth_m",
+            "expected_synthetic": "1318.0",
+            "observed_synthetic": " 1318.0 ۲",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "rop_m_per_h",
+            "expected_synthetic": "11.75",
+            "observed_synthetic": " 11.75 (۲//",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "mud_weight_ppg",
+            "expected_synthetic": "11.6",
+            "observed_synthetic": " 11.6 2۴6",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "npt_h",
+            "expected_synthetic": "1.50",
+            "observed_synthetic": " 1.50 !۲",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          }
+        ]
+      },
+      {
+        "id": "cp135-ddr-056",
+        "language": "fas",
+        "layout": "two_column",
+        "scan_condition": "light_noise",
+        "ocr_status": "applied",
+        "fields": [
+          {
+            "key": "sample_id",
+            "expected_synthetic": "CP135-DDR-056",
+            "observed_synthetic": " 00۴8-056]-06۴135)",
+            "label_present_anywhere": true,
+            "matched": false,
+            "category": "IDENTIFIER_VALUE_MISMATCH"
+          },
+          {
+            "key": "report_date",
+            "expected_synthetic": "2026-07-26",
+            "observed_synthetic": " 2026-07-26",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "measured_depth_m",
+            "expected_synthetic": "1335.5",
+            "observed_synthetic": " 1335.5 ۲",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "rop_m_per_h",
+            "expected_synthetic": "18.50",
+            "observed_synthetic": " 1950 (۲//",
+            "label_present_anywhere": true,
+            "matched": false,
+            "category": "NUMERIC_OR_UNIT_VALUE_MISMATCH"
+          },
+          {
+            "key": "mud_weight_ppg",
+            "expected_synthetic": "11.8",
+            "observed_synthetic": " 11.8 2۴6",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "npt_h",
+            "expected_synthetic": "1.75",
+            "observed_synthetic": " 1.75 !۲",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          }
+        ]
+      },
+      {
+        "id": "cp135-ddr-057",
+        "language": "fas",
+        "layout": "compact",
+        "scan_condition": "clean",
+        "ocr_status": "applied",
+        "fields": [
+          {
+            "key": "sample_id",
+            "expected_synthetic": "CP135-DDR-057",
+            "observed_synthetic": " ۴135-008-057",
+            "label_present_anywhere": true,
+            "matched": false,
+            "category": "IDENTIFIER_VALUE_MISMATCH"
+          },
+          {
+            "key": "report_date",
+            "expected_synthetic": "2026-07-27",
+            "observed_synthetic": " 2026-07-27",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "measured_depth_m",
+            "expected_synthetic": "1352.0",
+            "observed_synthetic": " 1352.0 1",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "rop_m_per_h",
+            "expected_synthetic": "25.25",
+            "observed_synthetic": " 25.25 ۱۸/۲",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "mud_weight_ppg",
+            "expected_synthetic": "12.0",
+            "observed_synthetic": " 12.0 8۴6",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "npt_h",
+            "expected_synthetic": "2.00",
+            "observed_synthetic": " 2.00 !۲",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          }
+        ]
+      },
+      {
+        "id": "cp135-ddr-058",
+        "language": "fas",
+        "layout": "compact",
+        "scan_condition": "clean",
+        "ocr_status": "applied",
+        "fields": [
+          {
+            "key": "sample_id",
+            "expected_synthetic": "CP135-DDR-058",
+            "observed_synthetic": " ۴135-008-058",
+            "label_present_anywhere": true,
+            "matched": false,
+            "category": "IDENTIFIER_VALUE_MISMATCH"
+          },
+          {
+            "key": "report_date",
+            "expected_synthetic": "2026-07-28",
+            "observed_synthetic": " 2026-07-28",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "measured_depth_m",
+            "expected_synthetic": "1369.5",
+            "observed_synthetic": " 1369.5 ۸",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "rop_m_per_h",
+            "expected_synthetic": "9.50",
+            "observed_synthetic": " 9.50 ۱۸/۲",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "mud_weight_ppg",
+            "expected_synthetic": "12.2",
+            "observed_synthetic": " 12.2 2۴6",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "npt_h",
+            "expected_synthetic": "2.25",
+            "observed_synthetic": " 2.25 !۲",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          }
+        ]
+      },
+      {
+        "id": "cp135-ddr-059",
+        "language": "fas",
+        "layout": "compact",
+        "scan_condition": "low_contrast",
+        "ocr_status": "applied",
+        "fields": [
+          {
+            "key": "sample_id",
+            "expected_synthetic": "CP135-DDR-059",
+            "observed_synthetic": " ۴135-008-059",
+            "label_present_anywhere": true,
+            "matched": false,
+            "category": "IDENTIFIER_VALUE_MISMATCH"
+          },
+          {
+            "key": "report_date",
+            "expected_synthetic": "2026-07-29",
+            "observed_synthetic": " 2026-07-29",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "measured_depth_m",
+            "expected_synthetic": "1386.0",
+            "observed_synthetic": " 1386.0 ۱۸",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "rop_m_per_h",
+            "expected_synthetic": "16.25",
+            "observed_synthetic": " 16.25 ۱۸/۲",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "mud_weight_ppg",
+            "expected_synthetic": "12.4",
+            "observed_synthetic": " 12.4 2۴6",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "npt_h",
+            "expected_synthetic": "2.50",
+            "observed_synthetic": " 2.50 !۲",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          }
+        ]
+      },
+      {
+        "id": "cp135-ddr-060",
+        "language": "fas",
+        "layout": "compact",
+        "scan_condition": "low_contrast",
+        "ocr_status": "applied",
+        "fields": [
+          {
+            "key": "sample_id",
+            "expected_synthetic": "CP135-DDR-060",
+            "observed_synthetic": " 06۳135-0۲۴-۵60)",
+            "label_present_anywhere": true,
+            "matched": false,
+            "category": "IDENTIFIER_VALUE_MISMATCH"
+          },
+          {
+            "key": "report_date",
+            "expected_synthetic": "2026-07-30",
+            "observed_synthetic": " 2026-07-30",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "measured_depth_m",
+            "expected_synthetic": "903.5",
+            "observed_synthetic": " 903.5 ۲۱",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "rop_m_per_h",
+            "expected_synthetic": "23.00",
+            "observed_synthetic": " 23.00 ۷/۳۱",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "mud_weight_ppg",
+            "expected_synthetic": "12.6",
+            "observed_synthetic": " 12.6 2۴6",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "npt_h",
+            "expected_synthetic": "2.75",
+            "observed_synthetic": " 2.75 ۲۱",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          }
+        ]
+      },
+      {
+        "id": "cp135-ddr-061",
+        "language": "fas",
+        "layout": "compact",
+        "scan_condition": "light_skew",
+        "ocr_status": "applied",
+        "fields": [
+          {
+            "key": "sample_id",
+            "expected_synthetic": "CP135-DDR-061",
+            "observed_synthetic": " ۲135-008-061",
+            "label_present_anywhere": true,
+            "matched": false,
+            "category": "IDENTIFIER_VALUE_MISMATCH"
+          },
+          {
+            "key": "report_date",
+            "expected_synthetic": "2026-07-31",
+            "observed_synthetic": " 2026-07-31",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "measured_depth_m",
+            "expected_synthetic": "920.0",
+            "observed_synthetic": " 920.0 ۲۸",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "rop_m_per_h",
+            "expected_synthetic": "7.25",
+            "observed_synthetic": " 7.25 ۱۱/۲۱",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "mud_weight_ppg",
+            "expected_synthetic": "9.8",
+            "observed_synthetic": " 9.8 2۴6",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "npt_h",
+            "expected_synthetic": "0.00",
+            "observed_synthetic": " 0.00 ۲۱",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          }
+        ]
+      },
+      {
+        "id": "cp135-ddr-062",
+        "language": "fas",
+        "layout": "compact",
+        "scan_condition": "light_skew",
+        "ocr_status": "applied",
+        "fields": [
+          {
+            "key": "sample_id",
+            "expected_synthetic": "CP135-DDR-062",
+            "observed_synthetic": " ۴135-008-062",
+            "label_present_anywhere": true,
+            "matched": false,
+            "category": "IDENTIFIER_VALUE_MISMATCH"
+          },
+          {
+            "key": "report_date",
+            "expected_synthetic": "2026-08-01",
+            "observed_synthetic": " 2026-08-01",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "measured_depth_m",
+            "expected_synthetic": "937.5",
+            "observed_synthetic": " 937.5 ۲۸",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "rop_m_per_h",
+            "expected_synthetic": "14.00",
+            "observed_synthetic": " 14.00 ۱۸/۲",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "mud_weight_ppg",
+            "expected_synthetic": "10.0",
+            "observed_synthetic": " 10.0 2۴6",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "npt_h",
+            "expected_synthetic": "0.25",
+            "observed_synthetic": " 0.25 ۲",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          }
+        ]
+      },
+      {
+        "id": "cp135-ddr-063",
+        "language": "fas",
+        "layout": "compact",
+        "scan_condition": "light_noise",
+        "ocr_status": "applied",
+        "fields": [
+          {
+            "key": "sample_id",
+            "expected_synthetic": "CP135-DDR-063",
+            "observed_synthetic": " 06۳135-0۲۴8-063)",
+            "label_present_anywhere": true,
+            "matched": false,
+            "category": "IDENTIFIER_VALUE_MISMATCH"
+          },
+          {
+            "key": "report_date",
+            "expected_synthetic": "2026-08-02",
+            "observed_synthetic": " 2026-08-02",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "measured_depth_m",
+            "expected_synthetic": "954.0",
+            "observed_synthetic": " 954.0 ۲",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "rop_m_per_h",
+            "expected_synthetic": "20.75",
+            "observed_synthetic": " 20.75 ۱/۲۱",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "mud_weight_ppg",
+            "expected_synthetic": "10.2",
+            "observed_synthetic": " 10.2 2۴6",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "npt_h",
+            "expected_synthetic": "0.50",
+            "observed_synthetic": " 0.50 !۲",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          }
+        ]
+      },
+      {
+        "id": "cp135-ddr-064",
+        "language": "fas",
+        "layout": "compact",
+        "scan_condition": "light_noise",
+        "ocr_status": "applied",
+        "fields": [
+          {
+            "key": "sample_id",
+            "expected_synthetic": "CP135-DDR-064",
+            "observed_synthetic": " ۴135-008-064",
+            "label_present_anywhere": true,
+            "matched": false,
+            "category": "IDENTIFIER_VALUE_MISMATCH"
+          },
+          {
+            "key": "report_date",
+            "expected_synthetic": "2026-08-03",
+            "observed_synthetic": " 2026-08-03",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "measured_depth_m",
+            "expected_synthetic": "971.5",
+            "observed_synthetic": " 971.5 1",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "rop_m_per_h",
+            "expected_synthetic": "27.50",
+            "observed_synthetic": " 27.50 ۱۸/۲",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "mud_weight_ppg",
+            "expected_synthetic": "10.4",
+            "observed_synthetic": " 10.4 2۴6",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          },
+          {
+            "key": "npt_h",
+            "expected_synthetic": "0.75",
+            "observed_synthetic": " 0.75 !۲",
+            "label_present_anywhere": true,
+            "matched": true,
+            "category": "MATCH"
+          }
+        ]
+      }
+    ]
+  }
+}

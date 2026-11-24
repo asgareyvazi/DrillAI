@@ -342,8 +342,8 @@ async def test_report_and_export_propagate_npt_period_without_claiming_proration
             Event(**common, title="outside", npt_hours=8, npt_hours_basis="reported",
                   occurred_at=BASE - dt.timedelta(days=1), occurred_at_basis="source_record",
                   ended_at=BASE - dt.timedelta(days=1) + dt.timedelta(hours=8), ended_at_basis="source_record"),
-            # Inclusive legacy SQL overlap includes a row starting exactly at period_to; the
-            # independent interval reconciliation uses a half-open window and excludes it.
+            # A row starting at period_to is outside both the half-open NPT aggregate and the
+            # independent interval reconciliation; the older inclusive total counted it.
             Event(**common, title="touches end boundary", npt_hours=1, npt_hours_basis="reported",
                   occurred_at=BASE + dt.timedelta(days=1), occurred_at_basis="source_record",
                   ended_at=BASE + dt.timedelta(days=1, hours=1), ended_at_basis="source_record"),
@@ -358,11 +358,13 @@ async def test_report_and_export_propagate_npt_period_without_claiming_proration
     payload = response.json()["report"]
     npt_section = next(row for row in payload["sections"] if row["key"] == "npt")
     npt = npt_section["items"][0]
-    assert npt["total_hours"] == 3  # two hours in the period, plus the inclusive-boundary row
+    assert npt["total_hours"] == 2  # the row beginning exactly at period_to is excluded
+    assert npt["interval_reconciliation"]["outside_window_count"] == 2
     assert npt["scope"]["since"] == BASE.isoformat()
     assert npt["scope"]["until"] == (BASE + dt.timedelta(days=1)).isoformat()
     assert npt["interval_reconciliation"]["status"] == "unavailable_incomplete"
     assert npt["interval_reconciliation"]["unassignable_time_count"] == 1
+    assert any("cannot establish complete period totals" in note for note in npt["notes"])
     assert "not approved NPT or physical downtime" in npt_section["note"]
     assert "without proration" in payload["metadata"]["period_scope"]["timeline_and_npt"]
     assert "half-open" in payload["metadata"]["period_scope"]["boundary_caveat"]
@@ -389,3 +391,42 @@ async def test_report_and_export_propagate_npt_period_without_claiming_proration
         assert (await fabric.http.get(f"{base_url}/export", params=invalid,
                                       headers=fabric.alpha.headers)).status_code == 422
     assert (await fabric.http.get(base_url, params=params, headers=fabric.bravo.headers)).status_code in (403, 404)
+
+
+async def test_npt_half_open_window_applies_to_events_and_actual_operations(fabric: Fabric) -> None:
+    """Keep full row values, but exclude zero-duration touches at either window boundary."""
+    org_id = fabric.org_id(fabric.alpha)
+    well_id = fabric.alpha.well_id
+    window_end = BASE + dt.timedelta(hours=4)
+    common = {"org_id": org_id, "well_id": well_id, "wellbore_id": fabric.alpha.wellbore_id}
+    event_rows = [
+        ("ends at start", BASE - dt.timedelta(hours=1), BASE, 7),
+        ("overlaps start", BASE - dt.timedelta(hours=1), BASE + dt.timedelta(hours=1), 2),
+        ("fully inside", BASE + dt.timedelta(hours=1), BASE + dt.timedelta(hours=2), 1),
+        ("overlaps end", BASE + dt.timedelta(hours=3), BASE + dt.timedelta(hours=5), 2),
+        ("starts at end", window_end, window_end + dt.timedelta(hours=1), 9),
+        ("point at start", BASE, None, 0.5),
+        ("point at end", window_end, None, 0.25),
+    ]
+    async with fabric.session() as session:
+        for title, start, end, hours in event_rows:
+            session.add(Event(**common, title=title, is_npt=True, npt_hours=hours,
+                              npt_hours_basis="reported", occurred_at=start,
+                              occurred_at_basis="source_record", ended_at=end,
+                              ended_at_basis="source_record" if end is not None else "unknown"))
+        for seq, (name, start, end, hours) in enumerate(event_rows, 1):
+            session.add(Operation(**common, name=name, sequence=seq, operation_class="actual",
+                                  actual_start=start, actual_start_basis="source_record",
+                                  actual_end=end, actual_end_basis="source_record" if end else "unknown",
+                                  actual_duration_hours=hours, npt_hours=hours, is_productive=False))
+        await session.commit()
+    params = {"since": BASE.isoformat(), "until": window_end.isoformat()}
+    npt = await _npt(fabric, **params)
+    assert npt["hours_from_events"] == 5.5
+    assert npt["hours_from_operations"] == 5.5
+    assert {case["title"] for case in npt["cases"] if case["source"] == "event"} == {
+        "overlaps start", "fully inside", "overlaps end", "point at start"
+    }
+    assert npt["interval_reconciliation"]["status"] == "unavailable_incomplete"
+    assert npt["interval_reconciliation"]["union_hours"] is None
+    assert "half-open" in npt["metric_contract"]["window_hours_policy"]

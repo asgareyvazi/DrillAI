@@ -224,7 +224,7 @@ class ReportingService:
                 "applied": period_from is not None or period_to is not None,
                 "timeline_and_npt": "Filtered to the requested bounds; legacy NPT row sums include full overlapping row hours, without proration.",
                 "other_sections": "Current state and other report sections are not necessarily restricted to the requested period.",
-                "boundary_caveat": "Legacy NPT overlap uses inclusive endpoints; interval reconciliation uses a half-open window and can differ at boundaries.",
+                "boundary_caveat": "NPT uses a half-open window; chronology still uses inclusive overlap. Point-only NPT records do not establish complete intervals.",
             },
         }
 
@@ -292,8 +292,8 @@ class ReportingService:
                     note=(
                         "Legacy event totals may include generic duration and overlapping rows. "
                         "They are not approved NPT or physical downtime. A selected period uses "
-                        "inclusive overlap and full row hours without proration; interval reconciliation "
-                        "uses a half-open window."
+                        "a half-open window and full row hours without proration. Point-only rows do "
+                        "not establish complete intervals."
                     ),
                 )
             )

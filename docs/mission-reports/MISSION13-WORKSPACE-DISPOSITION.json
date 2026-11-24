@@ -1,0 +1,63 @@
+{
+  "status": "PARTIAL",
+  "initial_tracked": 437,
+  "initial_untracked_files": 441,
+  "reconciled_untracked_files": 24,
+  "protected": "MISSION13-PROTECTED-START.json",
+  "private_recoverable_manifest": ".mission12-private/mission13-baseline/workspace-start-private.jsonl",
+  "sha256": "3c4e204ec7eeaba537bfca80e78953bac6b3a6c4841945deab6f42c7ce1ba384",
+  "private_storage": "owner-only, ignored, path-level detail subject to privacy review; not an independently backed-up archive",
+  "untracked_policy": "All 24 historical untracked files retained, including nine protected entries. No broad clean or unknown deletion.",
+  "prior_manifest": "Mission 12 private path-level manifest unavailable after workspace restoration.",
+  "pending": "Pre-certification inventory is not final after commit/CI. Recheck protected entries, remote refs, processes and ownership; final disposition and exact-SHA CI remain open.",
+  "pre_existing_untracked_files": [
+    "frontend/.playwright-report-cp151-71aae4f7f3364cd8bef9f4748c4283fb/index.html",
+    "frontend/playwright-report-master-full-7d42a1/index.html",
+    "frontend/test-results-continue2/.last-run.json",
+    "frontend/test-results-continue2/well-cockpit-well-cockpit--82af4-om-a-generic-event-duration-chromium/error-context.md",
+    "frontend/test-results-continue2/well-cockpit-well-cockpit--82af4-om-a-generic-event-duration-chromium/test-failed-1.png",
+    "frontend/test-results-continue2/well-cockpit-well-cockpit--82af4-om-a-generic-event-duration-chromium/trace.zip",
+    "frontend/test-results-continue2b/.last-run.json",
+    "frontend/test-results-continue2connector/.last-run.json",
+    "frontend/test-results-continue2final/.last-run.json",
+    "frontend/test-results-continue2full/.last-run.json",
+    "frontend/test-results-continue2full/connectors-platform-CP11-t-e1520-dance-then-recovers-cleanly-chromium/error-context.md",
+    "frontend/test-results-continue2full/connectors-platform-CP11-t-e1520-dance-then-recovers-cleanly-chromium/test-failed-1.png",
+    "frontend/test-results-continue2full/connectors-platform-CP11-t-e1520-dance-then-recovers-cleanly-chromium/trace.zip",
+    "frontend/test-results-continue2full/live-operations-CP10-live--719a9-Persian-RTL-token-isolation-chromium/error-context.md",
+    "frontend/test-results-continue2full/live-operations-CP10-live--719a9-Persian-RTL-token-isolation-chromium/trace.zip",
+    "frontend/test-results-m10-cont3-full/.last-run.json",
+    "frontend/test-results-m10-cont3-full/daily-reports-workspace-da-27cb8-actual-extracted-CSV-source-chromium/error-context.md",
+    "frontend/test-results-m10-cont3-full/daily-reports-workspace-da-27cb8-actual-extracted-CSV-source-chromium/test-failed-1.png",
+    "frontend/test-results-m10-cont3-full/daily-reports-workspace-da-27cb8-actual-extracted-CSV-source-chromium/trace.zip",
+    "frontend/test-results-m10-cont3-readback/.last-run.json",
+    "frontend/test-results-m10-cont3/.last-run.json",
+    "frontend/test-results-master-auth-c4a891de/.last-run.json",
+    "frontend/test-results-master-full-7d42a1/.last-run.json",
+    "frontend/test-results-master-full-7d42a1/e2e-results.json"
+  ],
+  "pre_certification_end_manifest": {
+    "path": ".mission12-private/mission13-baseline/workspace-end-private.jsonl",
+    "sha256": "1e49b9dadc2c59947012ee899f782f3c60e08d2965e07d40ad7fe2914918c4a0",
+    "scan_error_count": 0
+  },
+  "protected_end": "MISSION13-PROTECTED-END.json",
+  "mission_generated_retained": [
+    {
+      "path": "frontend/node_modules/",
+      "classification": "ignored dependency installation created for local tests; reproducible but retained, not blindly removed"
+    },
+    {
+      "paths": [
+        "frontend/.e2e-cp150-m13-retry-6f0b951c/",
+        "frontend/.e2e-cp150-results-m13-retry-6f0b951c/"
+      ],
+      "classification": "ignored synthetic CP150 database and test results retained as local test evidence"
+    },
+    {
+      "path": ".mission12-private/mission13-baseline/",
+      "classification": "ignored owner-only recoverable inventories and logs retained as evidence"
+    }
+  ],
+  "external_temporary_work": "Unique /tmp/drillai-m13.VfzmwIkq contains virtualenv, test logs, local OCR shim, synthetic inputs and browser data; not part of durable workspace snapshot."
+}

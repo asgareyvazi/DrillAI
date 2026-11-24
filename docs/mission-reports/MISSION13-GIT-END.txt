@@ -1,0 +1,4 @@
+PRE-CERTIFICATION STATUS — not a final Git/workspace closure record.
+Baseline fddaf78f0fc82da23995894b8d374e985ed72112; final commit and CI must be checked separately.
+Detailed precommit status: owner-only .mission12-private/mission13-baseline/git-end-precommit.txt.
+Pre-existing untracked exceptions are enumerated in MISSION13-WORKSPACE-DISPOSITION.json.

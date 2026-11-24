@@ -1,0 +1,29 @@
+{
+  "status": "PARTIAL",
+  "entries": [
+    {
+      "id": "npt.half_open_window",
+      "source": [
+        "backend/src/drillai/operations/time_windows.py",
+        "backend/src/drillai/drilling/npt.py"
+      ],
+      "report": "backend/src/drillai/drilling/reporting.py",
+      "test": "backend/tests/operations/test_npt_accounting.py",
+      "status": "PARTIAL",
+      "limitation": "Legacy row sums are unprorated and not approved NPT; chronology remains inclusive; unknown time blocks completeness."
+    },
+    {
+      "id": "ci.checkout",
+      "source": ".github/workflows/ci.yml",
+      "test": "backend/tests/test_cp17_windows_portability.py",
+      "status": "IMPLEMENTED_NOT_INDEPENDENTLY_VALIDATED",
+      "limitation": "Static local guard; native CI execution pending."
+    },
+    {
+      "id": "ocr.local_diagnostics",
+      "source": "docs/mission-reports/MISSION13-OCR-DIAGNOSTICS.json",
+      "status": "NOT_ACCEPTED",
+      "limitation": "Real image threshold still failed; local shim is not deployment."
+    }
+  ]
+}

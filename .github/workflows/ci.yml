@@ -68,7 +68,13 @@ jobs:
       # branch name that has since moved.
       - name: Provenance
         run: |
-          echo "commit:  $(git rev-parse HEAD)"
+          checkout_sha="$(git rev-parse HEAD)"
+          echo "commit:  $checkout_sha"
+          echo "workflow SHA: $GITHUB_SHA"
+          if [ -z "$GITHUB_SHA" ] || [ "$checkout_sha" != "$GITHUB_SHA" ]; then
+            echo "Checked-out commit does not match the workflow SHA" >&2
+            exit 1
+          fi
           echo "branch:  $(git branch --show-current)"
           echo "subject: $(git log -1 --oneline)"
           echo "dirty:"
@@ -524,7 +530,12 @@ jobs:
       - name: Provenance (Windows PowerShell)
         shell: pwsh
         run: |
-          Write-Host "commit:  $(git rev-parse HEAD)"
+          $checkoutSha = (git rev-parse HEAD).Trim()
+          if ($LASTEXITCODE -ne 0 -or -not $env:GITHUB_SHA -or $checkoutSha -ne $env:GITHUB_SHA) {
+            throw "Checked-out commit does not match the workflow SHA"
+          }
+          Write-Host "commit:  $checkoutSha"
+          Write-Host "workflow SHA: $env:GITHUB_SHA"
           Write-Host "branch:  $(git branch --show-current)"
           Write-Host "subject: $(git log -1 --oneline)"
           Write-Host "os:      $([System.Environment]::OSVersion.VersionString)"
@@ -797,6 +808,16 @@ jobs:
     steps:
       - name: Check out the commit under test
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Verify reliability checkout provenance
+        shell: pwsh
+        run: |
+          $checkoutSha = (git rev-parse HEAD).Trim()
+          if ($LASTEXITCODE -ne 0 -or -not $env:GITHUB_SHA -or $checkoutSha -ne $env:GITHUB_SHA) {
+            throw "Reliability checkout does not match the workflow SHA"
+          }
+          Write-Host "checked-out SHA: $checkoutSha"
+          Write-Host "workflow SHA: $env:GITHUB_SHA"
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "- Reliability checkout SHA: $checkoutSha"
       - name: Set up Node 22
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:

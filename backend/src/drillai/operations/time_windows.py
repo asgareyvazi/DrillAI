@@ -7,7 +7,7 @@ readable with their basis but cannot silently become observed time.
 
 from __future__ import annotations
 
-from sqlalchemy import case
+from sqlalchemy import and_, case, or_
 
 from drillai.db.models import Event, Operation
 
@@ -45,6 +45,25 @@ def interval_overlap_conditions(start, end, *, since=None, until=None):
         conditions.append(high >= since)
     if until is not None:
         conditions.append(low <= until)
+    return conditions
+
+
+def npt_half_open_overlap_conditions(start, end, *, since=None, until=None):
+    """NPT row-sum selection for a half-open ``[since, until)`` reporting window.
+
+    A positive interval must have positive overlap. A single endpoint (or equal endpoints) is
+    retained as a point only when that point lies in the window. It is not evidence of a complete
+    interval; independent reconciliation still reports it as incomplete. Full reported row hours
+    are retained without proration, and invalid reversed intervals are excluded from this legacy
+    subtotal while remaining visible to reconciliation.
+    """
+    low = case((start.is_not(None), start), else_=end)
+    high = case((end.is_not(None), end), else_=start)
+    conditions = [low.is_not(None), high.is_not(None), low <= high]
+    if since is not None:
+        conditions.append(or_(high > since, and_(low == high, low >= since)))
+    if until is not None:
+        conditions.append(low < until)
     return conditions
 
 

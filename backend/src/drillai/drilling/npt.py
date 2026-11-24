@@ -44,7 +44,7 @@ from drillai.drilling.npt_intervals import (
 from drillai.operations.time_windows import (
     TIME_WINDOW_BASES,
     event_time_expressions,
-    interval_overlap_conditions,
+    npt_half_open_overlap_conditions,
     operation_time_expressions,
 )
 
@@ -65,8 +65,8 @@ NPT_METRIC_CONTRACT: dict[str, Any] = {
     "window": "only the caller-supplied since/until interval; no implicit reporting period",
     "window_hours_policy": (
         "recorded interval rows are included on overlap and their full reported hours are summed without "
-        "proration; legacy SQL overlap includes touching endpoints, while interval reconciliation uses "
-        "a half-open window and can exclude boundary-only rows"
+        "proration. The NPT window is half-open; positive intervals touching only a boundary are "
+        "excluded. Single endpoints within the window remain point evidence, not a complete interval."
     ),
     "missing_policy": "missing or unclassified records are not imputed; a zero recorded total is not proof of zero physical downtime",
     "source_lineage": "event or operation row ids and source evidence in the bounded cases list; aggregate totals include the full matching population",
@@ -313,7 +313,7 @@ class NptService:
         if since is not None or until is not None:
             event_start, event_end = event_time_expressions()
             clauses.extend(
-                interval_overlap_conditions(
+                npt_half_open_overlap_conditions(
                     event_start,
                     event_end,
                     since=since,
@@ -421,7 +421,7 @@ class NptService:
             clauses.append(Operation.id == operation_id)
         if since is not None or until is not None:
             clauses.extend(
-                interval_overlap_conditions(
+                npt_half_open_overlap_conditions(
                     operation_start,
                     operation_end,
                     since=since,
@@ -761,7 +761,7 @@ class NptService:
             productive_clauses.append(Operation.id == operation_id)
         if since is not None or until is not None:
             productive_clauses.extend(
-                interval_overlap_conditions(
+                npt_half_open_overlap_conditions(
                     operation_start,
                     operation_end,
                     since=since,
@@ -812,6 +812,12 @@ class NptService:
             notes.append(
                 "the summary is scoped: totals and breakdowns cover only the selected "
                 "section/operation and time window, not the whole well"
+            )
+        if since is not None or until is not None:
+            notes.append(
+                "Time-filtered legacy sums exclude rows whose time cannot be assigned to the window; "
+                "they cannot establish complete period totals. Event interval reconciliation separately "
+                "reports unassignable evidence; operation-time completeness is not established."
             )
         if truncated:
             notes.append(

@@ -113,3 +113,25 @@ def test_cp17_03_cross_platform_scripts_and_windows_ci_contract() -> None:
     assert "windows-certification:" in ci_text
     assert "runs-on: windows-latest" in ci_text
     assert "scripts/bootstrap.ps1" in ci_text
+
+    # Each independent job must check its own actual checkout against the workflow SHA, before
+    # running test commands. Workflow metadata alone did not establish the reliability job's SHA.
+    import yaml
+
+    jobs = yaml.safe_load(ci_text)["jobs"]
+    for job_name, step_name in (
+        ("certification", "Provenance"),
+        ("windows-certification", "Provenance (Windows PowerShell)"),
+        ("windows-authoring-repeats", "Verify reliability checkout provenance"),
+    ):
+        steps = jobs[job_name]["steps"]
+        checkout_index = next(i for i, step in enumerate(steps) if step.get("name") == "Check out the commit under test")
+        index = next(i for i, step in enumerate(steps) if step.get("name") == step_name)
+        assert index == checkout_index + 1
+        script = steps[index]["run"]
+        assert "git rev-parse HEAD" in script and "GITHUB_SHA" in script
+        assert ("[ \"$checkout_sha\" != \"$GITHUB_SHA\" ]" in script
+                or "$checkoutSha -ne $env:GITHUB_SHA" in script)
+        if job_name == "certification":
+            assert "[ -z \"$GITHUB_SHA\" ]" in script and "exit 1" in script
+        assert not steps[index].get("continue-on-error", False)

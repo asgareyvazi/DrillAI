@@ -1,0 +1,823 @@
+{
+  "status": "NOT_ACCEPTED",
+  "phases": [
+    {
+      "phase": 0,
+      "name": "Live forensic baseline",
+      "entry_sha": "fddaf78f0fc82da23995894b8d374e985ed72112",
+      "status": "PARTIAL",
+      "requirements": "Live forensic baseline",
+      "source_inspected": [
+        "git ls-tree",
+        "git status",
+        "MISSION12-PROTECTED-CHECK.json"
+      ],
+      "files_changed": [],
+      "migrations": [],
+      "api_changes": [],
+      "ui_changes": [],
+      "tests": [],
+      "commands": [],
+      "exit_codes": [],
+      "failures": [],
+      "evidence_or_gap": "Full pre-edit local manifest and protected fingerprints saved privately; previous private manifests absent and protected mtimes changed. No deletion.",
+      "remaining_blockers": [
+        "Full pre-edit local manifest and protected fingerprints saved privately; previous private manifests absent and protected mtimes changed. No deletion."
+      ],
+      "exit_decision": "PARTIAL"
+    },
+    {
+      "phase": 1,
+      "name": "Recover Missions 10–12",
+      "entry_sha": "fddaf78f0fc82da23995894b8d374e985ed72112",
+      "status": "PARTIAL",
+      "requirements": "Recover Missions 10–12",
+      "source_inspected": [
+        "MISSION12-REQUIREMENT-MATRIX.json",
+        "MISSION12-PHASE-LEDGER.json"
+      ],
+      "files_changed": [],
+      "migrations": [],
+      "api_changes": [],
+      "ui_changes": [],
+      "tests": [],
+      "commands": [],
+      "exit_codes": [],
+      "failures": [],
+      "evidence_or_gap": "30 inherited entries indexed; most not independently reassessed, inherited 26 phase definitions not recovered.",
+      "remaining_blockers": [
+        "30 inherited entries indexed; most not independently reassessed, inherited 26 phase definitions not recovered."
+      ],
+      "exit_decision": "PARTIAL"
+    },
+    {
+      "phase": 2,
+      "name": "OCR root cause",
+      "entry_sha": "fddaf78f0fc82da23995894b8d374e985ed72112",
+      "status": "PARTIAL",
+      "requirements": "OCR root cause",
+      "source_inspected": [
+        "backend/src/drillai/ingestion/ocr_synthetic_quality.py",
+        "backend/src/drillai/ingestion/ocr.py",
+        "backend/Dockerfile"
+      ],
+      "files_changed": [],
+      "migrations": [],
+      "api_changes": [],
+      "ui_changes": [],
+      "tests": [],
+      "commands": [],
+      "exit_codes": [],
+      "failures": [
+        "GitHub artifact download unavailable on restricted Azure redirect",
+        "Local shim initial TSV protocol missing header: 64 incomplete",
+        "Local shim corrected: 311/384, did not pass"
+      ],
+      "evidence_or_gap": "Actual deployment case-level CI annotations inspected; locally reproducible image unavailable; exploratory local shim per-field observations explicitly distinguished.",
+      "remaining_blockers": [
+        "Actual deployment case-level CI annotations inspected; locally reproducible image unavailable; exploratory local shim per-field observations explicitly distinguished."
+      ],
+      "exit_decision": "PARTIAL"
+    },
+    {
+      "phase": 3,
+      "name": "OCR quality",
+      "entry_sha": "fddaf78f0fc82da23995894b8d374e985ed72112",
+      "status": "NOT_ACCEPTED",
+      "requirements": "OCR quality",
+      "source_inspected": [],
+      "files_changed": [],
+      "migrations": [],
+      "api_changes": [],
+      "ui_changes": [],
+      "tests": [],
+      "commands": [],
+      "exit_codes": [],
+      "failures": [],
+      "evidence_or_gap": "Real deployment OCR CI gate remains failed; frozen corpus preserved; no production remediation established.",
+      "remaining_blockers": [
+        "Real deployment OCR CI gate remains failed; frozen corpus preserved; no production remediation established."
+      ],
+      "exit_decision": "NOT_ACCEPTED"
+    },
+    {
+      "phase": 4,
+      "name": "Cross-platform OCR process isolation",
+      "entry_sha": "fddaf78f0fc82da23995894b8d374e985ed72112",
+      "status": "PARTIAL",
+      "requirements": "Cross-platform OCR process isolation",
+      "source_inspected": [],
+      "files_changed": [],
+      "migrations": [],
+      "api_changes": [],
+      "ui_changes": [],
+      "tests": [],
+      "commands": [],
+      "exit_codes": [],
+      "failures": [],
+      "evidence_or_gap": "Inspected legacy and opt-in namespace; no native Windows Job Object or deployment containment certification.",
+      "remaining_blockers": [
+        "Inspected legacy and opt-in namespace; no native Windows Job Object or deployment containment certification."
+      ],
+      "exit_decision": "PARTIAL"
+    },
+    {
+      "phase": 5,
+      "name": "Whole-document deadline",
+      "entry_sha": "fddaf78f0fc82da23995894b8d374e985ed72112",
+      "status": "NOT_IMPLEMENTED",
+      "requirements": "Whole-document deadline",
+      "source_inspected": [],
+      "files_changed": [],
+      "migrations": [],
+      "api_changes": [],
+      "ui_changes": [],
+      "tests": [],
+      "commands": [],
+      "exit_codes": [],
+      "failures": [],
+      "evidence_or_gap": "No end-to-end hard document deadline established.",
+      "remaining_blockers": [
+        "No end-to-end hard document deadline established."
+      ],
+      "exit_decision": "NOT_IMPLEMENTED"
+    },
+    {
+      "phase": 6,
+      "name": "Document ingestion and DDR batch",
+      "entry_sha": "fddaf78f0fc82da23995894b8d374e985ed72112",
+      "status": "UNKNOWN",
+      "requirements": "Document ingestion and DDR batch",
+      "source_inspected": [],
+      "files_changed": [],
+      "migrations": [],
+      "api_changes": [],
+      "ui_changes": [],
+      "tests": [],
+      "commands": [],
+      "exit_codes": [],
+      "failures": [],
+      "evidence_or_gap": "This phase was not independently audited or implemented in this increment.",
+      "remaining_blockers": [
+        "This phase was not independently audited or implemented in this increment."
+      ],
+      "exit_decision": "UNKNOWN"
+    },
+    {
+      "phase": 7,
+      "name": "Manual DDR",
+      "entry_sha": "fddaf78f0fc82da23995894b8d374e985ed72112",
+      "status": "UNKNOWN",
+      "requirements": "Manual DDR",
+      "source_inspected": [],
+      "files_changed": [],
+      "migrations": [],
+      "api_changes": [],
+      "ui_changes": [],
+      "tests": [],
+      "commands": [],
+      "exit_codes": [],
+      "failures": [],
+      "evidence_or_gap": "This phase was not independently audited or implemented in this increment.",
+      "remaining_blockers": [
+        "This phase was not independently audited or implemented in this increment."
+      ],
+      "exit_decision": "UNKNOWN"
+    },
+    {
+      "phase": 8,
+      "name": "Canonical NPT accounting",
+      "entry_sha": "fddaf78f0fc82da23995894b8d374e985ed72112",
+      "status": "PARTIAL",
+      "requirements": "Canonical NPT accounting",
+      "source_inspected": [
+        "backend/src/drillai/drilling/npt.py",
+        "backend/src/drillai/operations/time_windows.py",
+        "backend/src/drillai/drilling/reporting.py"
+      ],
+      "files_changed": [
+        "backend/src/drillai/drilling/npt.py",
+        "backend/src/drillai/operations/time_windows.py",
+        "backend/src/drillai/drilling/reporting.py",
+        "backend/tests/operations/test_npt_accounting.py"
+      ],
+      "migrations": [],
+      "api_changes": [],
+      "ui_changes": [],
+      "tests": [
+        "63 focused NPT/time-window/API tests passed; later combined run 81 passed"
+      ],
+      "commands": [
+        "pytest -o addopts='' -q backend/tests/operations/test_npt_accounting.py backend/tests/operations/test_operational_time_filters.py backend/tests/drilling/test_npt_summary.py backend/tests/drilling/test_npt_interval_reconciliation.py backend/tests/api/test_drilling_api.py"
+      ],
+      "exit_codes": [
+        0
+      ],
+      "failures": [],
+      "evidence_or_gap": "NPT positive interval window boundary aligned across event and operation row sums; no canonical approved attribution, proration or identity reconciliation.",
+      "remaining_blockers": [
+        "NPT positive interval window boundary aligned across event and operation row sums; no canonical approved attribution, proration or identity reconciliation."
+      ],
+      "exit_decision": "PARTIAL"
+    },
+    {
+      "phase": 9,
+      "name": "Operations chronology",
+      "entry_sha": "fddaf78f0fc82da23995894b8d374e985ed72112",
+      "status": "UNKNOWN",
+      "requirements": "Operations chronology",
+      "source_inspected": [],
+      "files_changed": [],
+      "migrations": [],
+      "api_changes": [],
+      "ui_changes": [],
+      "tests": [],
+      "commands": [],
+      "exit_codes": [],
+      "failures": [],
+      "evidence_or_gap": "This phase was not independently audited or implemented in this increment.",
+      "remaining_blockers": [
+        "This phase was not independently audited or implemented in this increment."
+      ],
+      "exit_decision": "UNKNOWN"
+    },
+    {
+      "phase": 10,
+      "name": "Survey and trajectory",
+      "entry_sha": "fddaf78f0fc82da23995894b8d374e985ed72112",
+      "status": "UNKNOWN",
+      "requirements": "Survey and trajectory",
+      "source_inspected": [],
+      "files_changed": [],
+      "migrations": [],
+      "api_changes": [],
+      "ui_changes": [],
+      "tests": [],
+      "commands": [],
+      "exit_codes": [],
+      "failures": [],
+      "evidence_or_gap": "This phase was not independently audited or implemented in this increment.",
+      "remaining_blockers": [
+        "This phase was not independently audited or implemented in this increment."
+      ],
+      "exit_decision": "UNKNOWN"
+    },
+    {
+      "phase": 11,
+      "name": "Uncertainty anti-collision",
+      "entry_sha": "fddaf78f0fc82da23995894b8d374e985ed72112",
+      "status": "UNKNOWN",
+      "requirements": "Uncertainty anti-collision",
+      "source_inspected": [],
+      "files_changed": [],
+      "migrations": [],
+      "api_changes": [],
+      "ui_changes": [],
+      "tests": [],
+      "commands": [],
+      "exit_codes": [],
+      "failures": [],
+      "evidence_or_gap": "This phase was not independently audited or implemented in this increment.",
+      "remaining_blockers": [
+        "This phase was not independently audited or implemented in this increment."
+      ],
+      "exit_decision": "UNKNOWN"
+    },
+    {
+      "phase": 12,
+      "name": "Capacity and volumes",
+      "entry_sha": "fddaf78f0fc82da23995894b8d374e985ed72112",
+      "status": "UNKNOWN",
+      "requirements": "Capacity and volumes",
+      "source_inspected": [],
+      "files_changed": [],
+      "migrations": [],
+      "api_changes": [],
+      "ui_changes": [],
+      "tests": [],
+      "commands": [],
+      "exit_codes": [],
+      "failures": [],
+      "evidence_or_gap": "This phase was not independently audited or implemented in this increment.",
+      "remaining_blockers": [
+        "This phase was not independently audited or implemented in this increment."
+      ],
+      "exit_decision": "UNKNOWN"
+    },
+    {
+      "phase": 13,
+      "name": "Hydraulics and rheology",
+      "entry_sha": "fddaf78f0fc82da23995894b8d374e985ed72112",
+      "status": "UNKNOWN",
+      "requirements": "Hydraulics and rheology",
+      "source_inspected": [],
+      "files_changed": [],
+      "migrations": [],
+      "api_changes": [],
+      "ui_changes": [],
+      "tests": [],
+      "commands": [],
+      "exit_codes": [],
+      "failures": [],
+      "evidence_or_gap": "This phase was not independently audited or implemented in this increment.",
+      "remaining_blockers": [
+        "This phase was not independently audited or implemented in this increment."
+      ],
+      "exit_decision": "UNKNOWN"
+    },
+    {
+      "phase": 14,
+      "name": "Hole cleaning",
+      "entry_sha": "fddaf78f0fc82da23995894b8d374e985ed72112",
+      "status": "UNKNOWN",
+      "requirements": "Hole cleaning",
+      "source_inspected": [],
+      "files_changed": [],
+      "migrations": [],
+      "api_changes": [],
+      "ui_changes": [],
+      "tests": [],
+      "commands": [],
+      "exit_codes": [],
+      "failures": [],
+      "evidence_or_gap": "This phase was not independently audited or implemented in this increment.",
+      "remaining_blockers": [
+        "This phase was not independently audited or implemented in this increment."
+      ],
+      "exit_decision": "UNKNOWN"
+    },
+    {
+      "phase": 15,
+      "name": "Torque and drag",
+      "entry_sha": "fddaf78f0fc82da23995894b8d374e985ed72112",
+      "status": "UNKNOWN",
+      "requirements": "Torque and drag",
+      "source_inspected": [],
+      "files_changed": [],
+      "migrations": [],
+      "api_changes": [],
+      "ui_changes": [],
+      "tests": [],
+      "commands": [],
+      "exit_codes": [],
+      "failures": [],
+      "evidence_or_gap": "This phase was not independently audited or implemented in this increment.",
+      "remaining_blockers": [
+        "This phase was not independently audited or implemented in this increment."
+      ],
+      "exit_decision": "UNKNOWN"
+    },
+    {
+      "phase": 16,
+      "name": "Tubulars and casing",
+      "entry_sha": "fddaf78f0fc82da23995894b8d374e985ed72112",
+      "status": "UNKNOWN",
+      "requirements": "Tubulars and casing",
+      "source_inspected": [],
+      "files_changed": [],
+      "migrations": [],
+      "api_changes": [],
+      "ui_changes": [],
+      "tests": [],
+      "commands": [],
+      "exit_codes": [],
+      "failures": [],
+      "evidence_or_gap": "This phase was not independently audited or implemented in this increment.",
+      "remaining_blockers": [
+        "This phase was not independently audited or implemented in this increment."
+      ],
+      "exit_decision": "UNKNOWN"
+    },
+    {
+      "phase": 17,
+      "name": "Well control and MPD",
+      "entry_sha": "fddaf78f0fc82da23995894b8d374e985ed72112",
+      "status": "UNKNOWN",
+      "requirements": "Well control and MPD",
+      "source_inspected": [],
+      "files_changed": [],
+      "migrations": [],
+      "api_changes": [],
+      "ui_changes": [],
+      "tests": [],
+      "commands": [],
+      "exit_codes": [],
+      "failures": [],
+      "evidence_or_gap": "This phase was not independently audited or implemented in this increment.",
+      "remaining_blockers": [
+        "This phase was not independently audited or implemented in this increment."
+      ],
+      "exit_decision": "UNKNOWN"
+    },
+    {
+      "phase": 18,
+      "name": "Cementing stability surge-swab",
+      "entry_sha": "fddaf78f0fc82da23995894b8d374e985ed72112",
+      "status": "UNKNOWN",
+      "requirements": "Cementing stability surge-swab",
+      "source_inspected": [],
+      "files_changed": [],
+      "migrations": [],
+      "api_changes": [],
+      "ui_changes": [],
+      "tests": [],
+      "commands": [],
+      "exit_codes": [],
+      "failures": [],
+      "evidence_or_gap": "This phase was not independently audited or implemented in this increment.",
+      "remaining_blockers": [
+        "This phase was not independently audited or implemented in this increment."
+      ],
+      "exit_decision": "UNKNOWN"
+    },
+    {
+      "phase": 19,
+      "name": "Well Design",
+      "entry_sha": "fddaf78f0fc82da23995894b8d374e985ed72112",
+      "status": "UNKNOWN",
+      "requirements": "Well Design",
+      "source_inspected": [],
+      "files_changed": [],
+      "migrations": [],
+      "api_changes": [],
+      "ui_changes": [],
+      "tests": [],
+      "commands": [],
+      "exit_codes": [],
+      "failures": [],
+      "evidence_or_gap": "This phase was not independently audited or implemented in this increment.",
+      "remaining_blockers": [
+        "This phase was not independently audited or implemented in this increment."
+      ],
+      "exit_decision": "UNKNOWN"
+    },
+    {
+      "phase": 20,
+      "name": "Programs and Procedures",
+      "entry_sha": "fddaf78f0fc82da23995894b8d374e985ed72112",
+      "status": "UNKNOWN",
+      "requirements": "Programs and Procedures",
+      "source_inspected": [],
+      "files_changed": [],
+      "migrations": [],
+      "api_changes": [],
+      "ui_changes": [],
+      "tests": [],
+      "commands": [],
+      "exit_codes": [],
+      "failures": [],
+      "evidence_or_gap": "This phase was not independently audited or implemented in this increment.",
+      "remaining_blockers": [
+        "This phase was not independently audited or implemented in this increment."
+      ],
+      "exit_decision": "UNKNOWN"
+    },
+    {
+      "phase": 21,
+      "name": "Advisor and RAG",
+      "entry_sha": "fddaf78f0fc82da23995894b8d374e985ed72112",
+      "status": "UNKNOWN",
+      "requirements": "Advisor and RAG",
+      "source_inspected": [],
+      "files_changed": [],
+      "migrations": [],
+      "api_changes": [],
+      "ui_changes": [],
+      "tests": [],
+      "commands": [],
+      "exit_codes": [],
+      "failures": [],
+      "evidence_or_gap": "This phase was not independently audited or implemented in this increment.",
+      "remaining_blockers": [
+        "This phase was not independently audited or implemented in this increment."
+      ],
+      "exit_decision": "UNKNOWN"
+    },
+    {
+      "phase": 22,
+      "name": "Telemetry and Digital Twin",
+      "entry_sha": "fddaf78f0fc82da23995894b8d374e985ed72112",
+      "status": "UNKNOWN",
+      "requirements": "Telemetry and Digital Twin",
+      "source_inspected": [],
+      "files_changed": [],
+      "migrations": [],
+      "api_changes": [],
+      "ui_changes": [],
+      "tests": [],
+      "commands": [],
+      "exit_codes": [],
+      "failures": [],
+      "evidence_or_gap": "This phase was not independently audited or implemented in this increment.",
+      "remaining_blockers": [
+        "This phase was not independently audited or implemented in this increment."
+      ],
+      "exit_decision": "UNKNOWN"
+    },
+    {
+      "phase": 23,
+      "name": "Reports governance RBAC bilingual UX",
+      "entry_sha": "fddaf78f0fc82da23995894b8d374e985ed72112",
+      "status": "NOT_ACCEPTED",
+      "requirements": "Reports governance RBAC bilingual UX",
+      "source_inspected": [],
+      "files_changed": [],
+      "migrations": [],
+      "api_changes": [],
+      "ui_changes": [],
+      "tests": [],
+      "commands": [],
+      "exit_codes": [],
+      "failures": [
+        "Ordered focused CP17 + CP31 + CP24 run: 11 passed, 1 failed: explicit auth-enabled app returned 200 rather than 401 after CP31 cached auth-disabled global settings. CP24 alone passed 1/1. current_auth uses process-global get_settings rather than factory app settings. Potential authentication bypass if settings diverge; unfixed."
+      ],
+      "evidence_or_gap": "NPT report boundary and incompleteness caveats only; no broad governance or UX audit.",
+      "remaining_blockers": [
+        "NPT report boundary and incompleteness caveats only; no broad governance or UX audit.",
+        "Investigate and fix authentication app-settings/cache inconsistency across HTTP, WebSocket and session/CSRF paths; validate security and isolation."
+      ],
+      "exit_decision": "NOT_ACCEPTED"
+    },
+    {
+      "phase": 24,
+      "name": "Independent 16-engine assurance",
+      "entry_sha": "fddaf78f0fc82da23995894b8d374e985ed72112",
+      "status": "PARTIAL",
+      "requirements": "Independent 16-engine assurance",
+      "source_inspected": [
+        "backend/tests/engines/test_cp142_independent_calculation_assurance.py",
+        "backend/src/drillai/engines/power_law.py",
+        "backend/src/drillai/engines/wellcontrol.py"
+      ],
+      "files_changed": [
+        "backend/tests/engines/test_cp142_independent_calculation_assurance.py"
+      ],
+      "migrations": [],
+      "api_changes": [],
+      "ui_changes": [],
+      "tests": [
+        "5 analytical vectors passed"
+      ],
+      "commands": [
+        "pytest -o addopts='' -q backend/tests/engines/test_cp142_independent_calculation_assurance.py"
+      ],
+      "exit_codes": [
+        0
+      ],
+      "failures": [],
+      "evidence_or_gap": "Five independent synthetic analytical checks across five engines; remaining eleven and source-to-report paths unassessed.",
+      "remaining_blockers": [
+        "Five independent synthetic analytical checks across five engines; remaining eleven and source-to-report paths unassessed."
+      ],
+      "exit_decision": "PARTIAL"
+    },
+    {
+      "phase": 25,
+      "name": "Non-registry calculations",
+      "entry_sha": "fddaf78f0fc82da23995894b8d374e985ed72112",
+      "status": "UNKNOWN",
+      "requirements": "Non-registry calculations",
+      "source_inspected": [],
+      "files_changed": [],
+      "migrations": [],
+      "api_changes": [],
+      "ui_changes": [],
+      "tests": [],
+      "commands": [],
+      "exit_codes": [],
+      "failures": [],
+      "evidence_or_gap": "This phase was not independently audited or implemented in this increment.",
+      "remaining_blockers": [
+        "This phase was not independently audited or implemented in this increment."
+      ],
+      "exit_decision": "UNKNOWN"
+    },
+    {
+      "phase": 26,
+      "name": "18-area functional history",
+      "entry_sha": "fddaf78f0fc82da23995894b8d374e985ed72112",
+      "status": "UNKNOWN",
+      "requirements": "18-area functional history",
+      "source_inspected": [],
+      "files_changed": [],
+      "migrations": [],
+      "api_changes": [],
+      "ui_changes": [],
+      "tests": [],
+      "commands": [],
+      "exit_codes": [],
+      "failures": [],
+      "evidence_or_gap": "Inherited 18-area history is a list of path additions, not independently established functional history.",
+      "remaining_blockers": [
+        "Inherited 18-area history is a list of path additions, not independently established functional history."
+      ],
+      "exit_decision": "UNKNOWN"
+    },
+    {
+      "phase": 27,
+      "name": "Capability register",
+      "entry_sha": "fddaf78f0fc82da23995894b8d374e985ed72112",
+      "status": "PARTIAL",
+      "requirements": "Capability register",
+      "source_inspected": [],
+      "files_changed": [],
+      "migrations": [],
+      "api_changes": [],
+      "ui_changes": [],
+      "tests": [],
+      "commands": [],
+      "exit_codes": [],
+      "failures": [],
+      "evidence_or_gap": "Inherited register retained without pretending a comprehensive rebuild.",
+      "remaining_blockers": [
+        "Inherited register retained without pretending a comprehensive rebuild."
+      ],
+      "exit_decision": "PARTIAL"
+    },
+    {
+      "phase": 28,
+      "name": "Engineering roadmap",
+      "entry_sha": "fddaf78f0fc82da23995894b8d374e985ed72112",
+      "status": "PARTIAL",
+      "requirements": "Engineering roadmap",
+      "source_inspected": [],
+      "files_changed": [],
+      "migrations": [],
+      "api_changes": [],
+      "ui_changes": [],
+      "tests": [],
+      "commands": [],
+      "exit_codes": [],
+      "failures": [],
+      "evidence_or_gap": "22 inherited roadmap entries retained; no comprehensive technical disposition.",
+      "remaining_blockers": [
+        "22 inherited roadmap entries retained; no comprehensive technical disposition."
+      ],
+      "exit_decision": "PARTIAL"
+    },
+    {
+      "phase": 29,
+      "name": "Two-well golden scenario",
+      "entry_sha": "fddaf78f0fc82da23995894b8d374e985ed72112",
+      "status": "PARTIAL",
+      "requirements": "Two-well golden scenario",
+      "source_inspected": [],
+      "files_changed": [],
+      "migrations": [],
+      "api_changes": [],
+      "ui_changes": [],
+      "tests": [
+        "First CP150 command failed before collection (exit 1); separate fresh-path rerun 1/1 passed (exit 0)."
+      ],
+      "commands": [
+        "npm run e2e -- --config playwright.cp150.config.ts"
+      ],
+      "exit_codes": [
+        1,
+        0
+      ],
+      "failures": [
+        "Initial agent-specified isolated path was rejected by the existing safety guard."
+      ],
+      "evidence_or_gap": "Mission 13 CP150 first launch failed because the agent selected a path outside the config-approved frontend child; rerun with a fresh permitted path passed 1/1 in 53.0 s, synthetic only. Expanded specified golden scenario not implemented.",
+      "remaining_blockers": [
+        "Mission 12 CP150 synthetic 1/1 is not the requested expanded golden scenario."
+      ],
+      "exit_decision": "PARTIAL"
+    },
+    {
+      "phase": 30,
+      "name": "Cross-platform quality",
+      "entry_sha": "fddaf78f0fc82da23995894b8d374e985ed72112",
+      "status": "PARTIAL",
+      "requirements": "Cross-platform quality",
+      "source_inspected": [],
+      "files_changed": [],
+      "migrations": [],
+      "api_changes": [],
+      "ui_changes": [],
+      "tests": [
+        "Full SQLite: 1902 passed, 15 skipped",
+        "Frontend lint/typecheck: passed; unit/component: 423 passed",
+        "Browser: 130 passed",
+        "E2E inventory: 130 tests/20 files",
+        "After final CI guard shell correction: CP17 + CP31 8 passed; shell guard matching/mismatched/empty SHA exit 0/1/1. Full regression was before this correction."
+      ],
+      "commands": [
+        "pytest -o addopts='' -q backend/tests",
+        "npm run lint && npm run typecheck && npm test && npm run e2e:verify-shape",
+        "npm run e2e -- --reporter=list"
+      ],
+      "exit_codes": [
+        0,
+        0,
+        0
+      ],
+      "failures": [
+        "Ordered focused security run after full regression: 11 passed, 1 failed (CP24 expected unauthenticated 401, received 200); isolated CP24 1 passed. See phase 23.",
+        "Attempted python scripts/verify_supply_chain_and_secrets.py --help; script executed its checks instead of providing help, then failed because system Python lacks pip_audit (exit 1). No fresh complete supply-chain audit established."
+      ],
+      "evidence_or_gap": "SQLite full suite 1902 passed and 15 skipped; frontend lint/typecheck and 423 unit tests passed; full local browser 130 passed; independent native Windows, PostgreSQL and exact-SHA CI remain open.",
+      "remaining_blockers": [
+        "81 focused tests and 1917 collected; complete cross-platform suite and final CI not yet completed."
+      ],
+      "exit_decision": "PARTIAL"
+    },
+    {
+      "phase": 31,
+      "name": "Exact-SHA CI",
+      "entry_sha": "fddaf78f0fc82da23995894b8d374e985ed72112",
+      "status": "NOT_ACCEPTED",
+      "requirements": "Exact-SHA CI",
+      "source_inspected": [
+        ".github/workflows/ci.yml"
+      ],
+      "files_changed": [
+        ".github/workflows/ci.yml",
+        "backend/tests/test_cp17_windows_portability.py"
+      ],
+      "migrations": [],
+      "api_changes": [],
+      "ui_changes": [],
+      "tests": [
+        "13 CI/documentation/security guards passed"
+      ],
+      "commands": [
+        "pytest -o addopts='' -q backend/tests/test_cp17_windows_portability.py backend/tests/test_cp16_adversarial_audit.py::test_cp16_10_documentation_and_contract_consistency_guard backend/tests/security/test_cp24_deployment_and_supply_chain.py backend/tests/security/test_cp31_ci_deployment_probe_contract.py"
+      ],
+      "exit_codes": [
+        0
+      ],
+      "failures": [],
+      "evidence_or_gap": "Baseline exact-SHA CI failed OCR; future workflow now checks each job checkout against GITHUB_SHA; no final run yet.",
+      "remaining_blockers": [
+        "Baseline exact-SHA CI failed OCR; future workflow now checks each job checkout against GITHUB_SHA; no final run yet."
+      ],
+      "exit_decision": "NOT_ACCEPTED"
+    },
+    {
+      "phase": 32,
+      "name": "Workspace closure",
+      "entry_sha": "fddaf78f0fc82da23995894b8d374e985ed72112",
+      "status": "PARTIAL",
+      "requirements": "Workspace closure",
+      "source_inspected": [],
+      "files_changed": [],
+      "migrations": [],
+      "api_changes": [],
+      "ui_changes": [],
+      "tests": [],
+      "commands": [],
+      "exit_codes": [],
+      "failures": [],
+      "evidence_or_gap": "Private recoverable start manifest, protected comparison, pre-existing untracked exceptions recorded; final closure pending.",
+      "remaining_blockers": [
+        "Private recoverable start manifest, protected comparison, pre-existing untracked exceptions recorded; final closure pending."
+      ],
+      "exit_decision": "PARTIAL"
+    },
+    {
+      "phase": 33,
+      "name": "Master engineering report",
+      "entry_sha": "fddaf78f0fc82da23995894b8d374e985ed72112",
+      "status": "PARTIAL",
+      "requirements": "Master engineering report",
+      "source_inspected": [],
+      "files_changed": [],
+      "migrations": [],
+      "api_changes": [],
+      "ui_changes": [],
+      "tests": [],
+      "commands": [],
+      "exit_codes": [],
+      "failures": [],
+      "evidence_or_gap": "Interim bilingual reports and machine records only, not definitive history and capability report.",
+      "remaining_blockers": [
+        "Interim bilingual reports and machine records only, not definitive history and capability report."
+      ],
+      "exit_decision": "PARTIAL"
+    },
+    {
+      "phase": 34,
+      "name": "Acceptance decision",
+      "entry_sha": "fddaf78f0fc82da23995894b8d374e985ed72112",
+      "status": "NOT_ACCEPTED",
+      "requirements": "Acceptance decision",
+      "source_inspected": [],
+      "files_changed": [],
+      "migrations": [],
+      "api_changes": [],
+      "ui_changes": [],
+      "tests": [],
+      "commands": [],
+      "exit_codes": [],
+      "failures": [],
+      "evidence_or_gap": "Mandatory OCR, cross-platform safety, broader product and assurance, final CI and workspace closure remain open.",
+      "remaining_blockers": [
+        "Mandatory OCR, cross-platform safety, broader product and assurance, final CI and workspace closure remain open.",
+        "Potential authentication bypass from app factory/global cached auth configuration mismatch, observed in order-dependent security test."
+      ],
+      "exit_decision": "NOT_ACCEPTED"
+    }
+  ]
+}

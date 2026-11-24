@@ -1,0 +1,5 @@
+{"scope": "pre-edit lstat and SHA-256 inventory excluding .git", "recoverable_private_path": ".mission12-private/mission13-baseline/workspace-start-private.jsonl", "sha256": "3c4e204ec7eeaba537bfca80e78953bac6b3a6c4841945deab6f42c7ce1ba384", "classification": "private owner-only; privacy review required before publication"}
+{"initial_head": "bfea530602a23bcc08efca85a136240f61c44a0d", "remote_head": "fddaf78f0fc82da23995894b8d374e985ed72112", "remote_main": "bfa066b28e0071880cb9191a4f1d47fdaa143e04", "initial_tracked": 437, "initial_untracked_files": 441, "initial_ignored_files": 0, "entries": 978, "scan_errors": 0}
+{"reconciliation": "854 remote tracked files matched local blob and executable mode; HEAD ancestry verified; index/ref updated without overwriting working files", "post_reconciliation_tracked_changes": 0, "post_reconciliation_untracked_files": 24}
+{"protected": "nine matched prior end except mtime; all mtimes changed for unknown reasons; no modification or restoration attempted"}
+{"previous_private_manifest": "Mission 12 local path-level manifest unavailable in restored workspace; digest is not a recoverable manifest."}

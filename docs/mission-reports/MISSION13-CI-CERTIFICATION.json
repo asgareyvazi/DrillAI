@@ -1,0 +1,12 @@
+{
+  "status": "NOT_ACCEPTED",
+  "baseline_sha": "fddaf78f0fc82da23995894b8d374e985ed72112",
+  "baseline_run": "https://github.com/asgareyvazi/DrillAI/actions/runs/45362046917",
+  "baseline_conclusion": "failure",
+  "linux": "1914 backend, 423 frontend, 130 browser passed; deployment OCR failed 308/384",
+  "native_windows": "1898 backend passed, 1 skipped, 15 deselected; 423 frontend and 130 browser passed",
+  "windows_auxiliary_checkout": "UNKNOWN: historical printed SHA discrepancy unresolved; run metadata alone is insufficient",
+  "future_checkout_guard": "Each job asserts checkout SHA equals GITHUB_SHA; requires real CI execution",
+  "final_sha": null,
+  "final_run": "UNKNOWN; external CI artifacts are authoritative for exact SHA; after any commit a new run is required."
+}
