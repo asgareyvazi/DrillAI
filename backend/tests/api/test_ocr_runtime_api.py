@@ -4,16 +4,12 @@ from __future__ import annotations
 
 import pytest
 
-from drillai.core.config import Settings
-
 
 @pytest.mark.asyncio
-async def test_readiness_degrades_when_enabled_ocr_runtime_is_missing(client, monkeypatch) -> None:
-    from drillai.api.routers import health as health_router
+async def test_readiness_degrades_when_enabled_ocr_runtime_is_missing(client, app, monkeypatch) -> None:
     from drillai.ingestion import ocr_runtime
 
-    settings = Settings(_env_file=None, ocr_enabled=True)
-    monkeypatch.setattr(health_router, "get_settings", lambda: settings)
+    monkeypatch.setattr(app.state, "settings", app.state.settings.model_copy(update={"ocr_enabled": True}))
     monkeypatch.setattr(
         ocr_runtime,
         "inspect_ocr_runtime",
@@ -37,12 +33,10 @@ async def test_readiness_degrades_when_enabled_ocr_runtime_is_missing(client, mo
 
 
 @pytest.mark.asyncio
-async def test_readiness_keeps_disabled_ocr_optional_and_does_not_probe(client, monkeypatch) -> None:
-    from drillai.api.routers import health as health_router
+async def test_readiness_keeps_disabled_ocr_optional_and_does_not_probe(client, app, monkeypatch) -> None:
     from drillai.ingestion import ocr_runtime
 
-    settings = Settings(_env_file=None, ocr_enabled=False)
-    monkeypatch.setattr(health_router, "get_settings", lambda: settings)
+    monkeypatch.setattr(app.state, "settings", app.state.settings.model_copy(update={"ocr_enabled": False}))
 
     def disabled_without_probe(_settings, *, probe_when_disabled):
         assert probe_when_disabled is False

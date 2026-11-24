@@ -21,7 +21,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from drillai.api.deps import AuthContext, OptionalFilter, get_blob_store, get_db, require
+from drillai.api.deps import AuthContext, OptionalFilter, get_app_settings, get_blob_store, get_db, require
 from drillai.api.serializers import (
     bounded_json_preview,
     document_out,
@@ -31,7 +31,6 @@ from drillai.api.serializers import (
 )
 from drillai.core.audit import record_audit
 from drillai.core.clock import ensure_utc, utc_now
-from drillai.core.config import get_settings
 from drillai.core.errors import Conflict, NotFound, ValidationFailed
 from drillai.core.idempotency import complete, replay_or_reserve
 from drillai.db.models import (
@@ -386,7 +385,7 @@ async def upload_document(
         )
     )
 
-    settings = get_settings()
+    settings = get_app_settings(request)
     from drillai.ingestion.parsers import MAX_BYTES
 
     # The parser's cap is an independent hard ceiling. Honour a stricter deployment setting while

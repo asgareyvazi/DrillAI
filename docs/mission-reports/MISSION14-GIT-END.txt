@@ -1,0 +1,1 @@
+PARTIAL: precommit record only. Authorized branch arena/9d8f5568-drillai. Starting remote f32071d2851c918d5f751e035e80e5273b724fe7; final SHA and exact-SHA CI must be verified externally after push.

@@ -1,0 +1,294 @@
+{
+  "status": "NOT_ACCEPTED",
+  "phases": [
+    {
+      "phase": 0,
+      "name": "Forensic baseline and mission recovery",
+      "status": "PARTIAL",
+      "entry_sha": "f32071d2851c918d5f751e035e80e5273b724fe7",
+      "evidence": "Live start manifest and remote blob/mode comparison; 873 matched; local ref reconciled without worktree overwrite; 24 historical untracked retained; prior private manifest absent; all nine historical mtimes differ.",
+      "remaining": "Exact Mission 14 acceptance criteria not established."
+    },
+    {
+      "phase": 1,
+      "name": "Application-scoped authentication",
+      "status": "PARTIAL",
+      "entry_sha": "f32071d2851c918d5f751e035e80e5273b724fe7",
+      "evidence": "Original CP17/CP31/CP24 ordered run 11 passed/1 failed (200 rather than 401); new multi-app test before fix 4 failed/1 passed; request-scoped auth, CSRF, cookies and WebSockets implemented. Initial security run 228 passed/1 failed because existing rotation test relied on global config; explicit app-config update and app-scoped secret metadata added; rerun 229 passed; reverse order 17 passed.",
+      "remaining": "Other request-time and worker process-global configurations, connector egress, secret resolution and singleton provider isolation remain unaudited/unfixed; no full boundary claim."
+    },
+    {
+      "phase": 2,
+      "name": "Security, RBAC and tenant isolation",
+      "status": "NOT_ACCEPTED",
+      "entry_sha": "f32071d2851c918d5f751e035e80e5273b724fe7",
+      "evidence": "Security and WebSocket suite 229 passed locally after one recorded failure and correction; does not establish every endpoint/tenant boundary.",
+      "remaining": "Exact Mission 14 acceptance criteria not established."
+    },
+    {
+      "phase": 3,
+      "name": "Deployment OCR restoration",
+      "status": "NOT_ACCEPTED",
+      "entry_sha": "f32071d2851c918d5f751e035e80e5273b724fe7",
+      "evidence": "Historical deployed CI 45380922574 f32071d: critical 308/384, Persian 118/192, English 190/192, table 50/96, two-column 82/96. Docker/Tesseract unavailable locally; no fix or new image benchmark.",
+      "remaining": "Need deployable runtime, root-cause fix and all unchanged corpus and stratum thresholds; authorized holdout separately missing."
+    },
+    {
+      "phase": 4,
+      "name": "Linux and Windows OCR containment",
+      "status": "PARTIAL",
+      "entry_sha": "f32071d2851c918d5f751e035e80e5273b724fe7",
+      "evidence": "Mission 13 bounded reap and optional Linux namespace only; legacy default and Windows Job Object remain.",
+      "remaining": "Exact Mission 14 acceptance criteria not established."
+    },
+    {
+      "phase": 5,
+      "name": "Document-wide deadline",
+      "status": "NOT_IMPLEMENTED",
+      "entry_sha": "f32071d2851c918d5f751e035e80e5273b724fe7",
+      "evidence": "Mission 13 showed no enforced absolute document deadline.",
+      "remaining": "Exact Mission 14 acceptance criteria not established."
+    },
+    {
+      "phase": 6,
+      "name": "DDR batch ingestion",
+      "status": "UNKNOWN",
+      "entry_sha": "f32071d2851c918d5f751e035e80e5273b724fe7",
+      "evidence": "Inherited Mission 13 reports; not exhaustively revalidated in Mission 14.",
+      "remaining": "Exact Mission 14 acceptance criteria not established."
+    },
+    {
+      "phase": 7,
+      "name": "Manual DDR",
+      "status": "UNKNOWN",
+      "entry_sha": "f32071d2851c918d5f751e035e80e5273b724fe7",
+      "evidence": "Inherited Mission 13 reports; not exhaustively revalidated in Mission 14.",
+      "remaining": "Exact Mission 14 acceptance criteria not established."
+    },
+    {
+      "phase": 8,
+      "name": "Extraction provenance",
+      "status": "UNKNOWN",
+      "entry_sha": "f32071d2851c918d5f751e035e80e5273b724fe7",
+      "evidence": "Inherited Mission 13 reports; not exhaustively revalidated in Mission 14.",
+      "remaining": "Exact Mission 14 acceptance criteria not established."
+    },
+    {
+      "phase": 9,
+      "name": "Operations chronology",
+      "status": "UNKNOWN",
+      "entry_sha": "f32071d2851c918d5f751e035e80e5273b724fe7",
+      "evidence": "Inherited Mission 13 reports; not exhaustively revalidated in Mission 14.",
+      "remaining": "Exact Mission 14 acceptance criteria not established."
+    },
+    {
+      "phase": 10,
+      "name": "Canonical approved NPT",
+      "status": "PARTIAL",
+      "entry_sha": "f32071d2851c918d5f751e035e80e5273b724fe7",
+      "evidence": "Mission 13 half-open legacy row selection and reconciliation only; full row hours, generic duration fallback, duplicate and operation/event reconciliation, review and immutable approval remain unresolved.",
+      "remaining": "Exact Mission 14 acceptance criteria not established."
+    },
+    {
+      "phase": 11,
+      "name": "Survey and trajectory",
+      "status": "UNKNOWN",
+      "entry_sha": "f32071d2851c918d5f751e035e80e5273b724fe7",
+      "evidence": "Inherited Mission 13 reports; not exhaustively revalidated in Mission 14.",
+      "remaining": "Exact Mission 14 acceptance criteria not established."
+    },
+    {
+      "phase": 12,
+      "name": "Uncertainty anti-collision",
+      "status": "UNKNOWN",
+      "entry_sha": "f32071d2851c918d5f751e035e80e5273b724fe7",
+      "evidence": "Inherited Mission 13 reports; not exhaustively revalidated in Mission 14.",
+      "remaining": "Exact Mission 14 acceptance criteria not established."
+    },
+    {
+      "phase": 13,
+      "name": "Capacity and volumes",
+      "status": "UNKNOWN",
+      "entry_sha": "f32071d2851c918d5f751e035e80e5273b724fe7",
+      "evidence": "Inherited Mission 13 reports; not exhaustively revalidated in Mission 14.",
+      "remaining": "Exact Mission 14 acceptance criteria not established."
+    },
+    {
+      "phase": 14,
+      "name": "Hydraulics and ECD",
+      "status": "UNKNOWN",
+      "entry_sha": "f32071d2851c918d5f751e035e80e5273b724fe7",
+      "evidence": "Inherited Mission 13 reports; not exhaustively revalidated in Mission 14.",
+      "remaining": "Exact Mission 14 acceptance criteria not established."
+    },
+    {
+      "phase": 15,
+      "name": "Hole cleaning",
+      "status": "UNKNOWN",
+      "entry_sha": "f32071d2851c918d5f751e035e80e5273b724fe7",
+      "evidence": "Inherited Mission 13 reports; not exhaustively revalidated in Mission 14.",
+      "remaining": "Exact Mission 14 acceptance criteria not established."
+    },
+    {
+      "phase": 16,
+      "name": "Torque, drag and buckling",
+      "status": "UNKNOWN",
+      "entry_sha": "f32071d2851c918d5f751e035e80e5273b724fe7",
+      "evidence": "Inherited Mission 13 reports; not exhaustively revalidated in Mission 14.",
+      "remaining": "Exact Mission 14 acceptance criteria not established."
+    },
+    {
+      "phase": 17,
+      "name": "Tubulars and casing",
+      "status": "UNKNOWN",
+      "entry_sha": "f32071d2851c918d5f751e035e80e5273b724fe7",
+      "evidence": "Inherited Mission 13 reports; not exhaustively revalidated in Mission 14.",
+      "remaining": "Exact Mission 14 acceptance criteria not established."
+    },
+    {
+      "phase": 18,
+      "name": "Well control and MPD",
+      "status": "UNKNOWN",
+      "entry_sha": "f32071d2851c918d5f751e035e80e5273b724fe7",
+      "evidence": "Inherited Mission 13 reports; not exhaustively revalidated in Mission 14.",
+      "remaining": "Exact Mission 14 acceptance criteria not established."
+    },
+    {
+      "phase": 19,
+      "name": "Cementing, stability and surge/swab",
+      "status": "UNKNOWN",
+      "entry_sha": "f32071d2851c918d5f751e035e80e5273b724fe7",
+      "evidence": "Inherited Mission 13 reports; not exhaustively revalidated in Mission 14.",
+      "remaining": "Exact Mission 14 acceptance criteria not established."
+    },
+    {
+      "phase": 20,
+      "name": "Integrated Well Design",
+      "status": "UNKNOWN",
+      "entry_sha": "f32071d2851c918d5f751e035e80e5273b724fe7",
+      "evidence": "Inherited Mission 13 reports; not exhaustively revalidated in Mission 14.",
+      "remaining": "Exact Mission 14 acceptance criteria not established."
+    },
+    {
+      "phase": 21,
+      "name": "Programs and Procedures",
+      "status": "UNKNOWN",
+      "entry_sha": "f32071d2851c918d5f751e035e80e5273b724fe7",
+      "evidence": "Inherited Mission 13 reports; not exhaustively revalidated in Mission 14.",
+      "remaining": "Exact Mission 14 acceptance criteria not established."
+    },
+    {
+      "phase": 22,
+      "name": "Advisor and RAG",
+      "status": "UNKNOWN",
+      "entry_sha": "f32071d2851c918d5f751e035e80e5273b724fe7",
+      "evidence": "Inherited Mission 13 reports; not exhaustively revalidated in Mission 14.",
+      "remaining": "Exact Mission 14 acceptance criteria not established."
+    },
+    {
+      "phase": 23,
+      "name": "Telemetry, WITSML and Digital Twin",
+      "status": "UNKNOWN",
+      "entry_sha": "f32071d2851c918d5f751e035e80e5273b724fe7",
+      "evidence": "Inherited Mission 13 reports; not exhaustively revalidated in Mission 14.",
+      "remaining": "Exact Mission 14 acceptance criteria not established."
+    },
+    {
+      "phase": 24,
+      "name": "Bilingual reports and governance",
+      "status": "PARTIAL",
+      "entry_sha": "f32071d2851c918d5f751e035e80e5273b724fe7",
+      "evidence": "Existing bilingual/report workflows and historical tests exist, but comprehensive access, provenance, approval and completeness audit is not established.",
+      "remaining": "Exact Mission 14 acceptance criteria not established."
+    },
+    {
+      "phase": 25,
+      "name": "Independent 16-engine assurance",
+      "status": "PARTIAL",
+      "entry_sha": "f32071d2851c918d5f751e035e80e5273b724fe7",
+      "evidence": "Mission 13 assurance retains sixteen engine rows and five narrow synthetic reference vectors; no full independent source-to-report audit.",
+      "remaining": "Exact Mission 14 acceptance criteria not established."
+    },
+    {
+      "phase": 26,
+      "name": "Non-registry calculations",
+      "status": "PARTIAL",
+      "entry_sha": "f32071d2851c918d5f751e035e80e5273b724fe7",
+      "evidence": "AST scan produced candidate files containing arithmetic operations, not an exhaustive calculation inventory or assurance.",
+      "remaining": "Exact Mission 14 acceptance criteria not established."
+    },
+    {
+      "phase": 27,
+      "name": "Expanded two-well golden scenario",
+      "status": "NOT_IMPLEMENTED",
+      "entry_sha": "f32071d2851c918d5f751e035e80e5273b724fe7",
+      "evidence": "CP150 fresh isolated synthetic smoke rerun 1/1 in 48.3 seconds; expanded requested integrated two-well scenario not implemented.",
+      "remaining": "Exact Mission 14 acceptance criteria not established."
+    },
+    {
+      "phase": 28,
+      "name": "Cross-platform regression",
+      "status": "PARTIAL",
+      "entry_sha": "f32071d2851c918d5f751e035e80e5273b724fe7",
+      "evidence": "First full SQLite: 1903 passed, 15 skipped, 4 failed; first targeted rerun 8 passed/1 failed stale README manifest; second targeted rerun 9 passed; corrected-source full SQLite 1907 passed, 15 skipped (634.73s). Frontend lint, typecheck, build, 423 unit tests passed; build emitted bundle-size warning. First browser 129 passed/1 failed due to agent-selected path not satisfying readback .e2e-* rule; fresh compliant full rerun 130 passed. Separate CP150 1/1. Exact-SHA CI pending.",
+      "remaining": "Exact Mission 14 acceptance criteria not established."
+    },
+    {
+      "phase": 29,
+      "name": "Historical reconstruction",
+      "status": "PARTIAL",
+      "entry_sha": "f32071d2851c918d5f751e035e80e5273b724fe7",
+      "evidence": "Historical path-addition evidence retained from Mission 13 for 18 areas; first functional implementation and full traceability remain unknown.",
+      "remaining": "Exact Mission 14 acceptance criteria not established."
+    },
+    {
+      "phase": 30,
+      "name": "Engineering roadmap implementation",
+      "status": "PARTIAL",
+      "entry_sha": "f32071d2851c918d5f751e035e80e5273b724fe7",
+      "evidence": "Inherited 22 planned items retained with no new engineering implementation or verified reference.",
+      "remaining": "Exact Mission 14 acceptance criteria not established."
+    },
+    {
+      "phase": 31,
+      "name": "Master catalogue and report",
+      "status": "PARTIAL",
+      "entry_sha": "f32071d2851c918d5f751e035e80e5273b724fe7",
+      "evidence": "Interim bilingual summaries and inherited register only; no comprehensive single-source capability audit.",
+      "remaining": "Exact Mission 14 acceptance criteria not established."
+    },
+    {
+      "phase": 32,
+      "name": "Mission reports and traceability",
+      "status": "PARTIAL",
+      "entry_sha": "f32071d2851c918d5f751e035e80e5273b724fe7",
+      "evidence": "Interim Mission 14 documents; all gaps and uncertainties explicit.",
+      "remaining": "Exact Mission 14 acceptance criteria not established."
+    },
+    {
+      "phase": 33,
+      "name": "Workspace reconciliation and push",
+      "status": "PARTIAL",
+      "entry_sha": "f32071d2851c918d5f751e035e80e5273b724fe7",
+      "evidence": "Workspace snapshots and protected comparison are provisional until after final commit and CI.",
+      "remaining": "Exact Mission 14 acceptance criteria not established."
+    },
+    {
+      "phase": 34,
+      "name": "Exact-SHA CI",
+      "status": "NOT_ACCEPTED",
+      "entry_sha": "f32071d2851c918d5f751e035e80e5273b724fe7",
+      "evidence": "Final candidate CI not yet run. Last historical CI 45380922574 failed deployment OCR.",
+      "remaining": "Exact Mission 14 acceptance criteria not established."
+    },
+    {
+      "phase": 35,
+      "name": "Acceptance decision",
+      "status": "NOT_ACCEPTED",
+      "entry_sha": "f32071d2851c918d5f751e035e80e5273b724fe7",
+      "evidence": "Software and release NOT_ACCEPTED; field BLOCKED_BY_MISSING_AUTHORIZED_EVIDENCE; independent assurance partial.",
+      "remaining": "Exact Mission 14 acceptance criteria not established."
+    }
+  ],
+  "known_test_failure": "Ordered original auth reproduction failed 1/12; first post-fix broad suite failed 1/229 due to changed explicit app config semantics. Failures are retained, not erased by later passes. Full SQLite first run 1903 passed/15 skipped/4 failed; focused rerun 8 passed/1 failed; second focused rerun 9 passed. No rerun erases prior failures. First browser 129 passed/1 failed due to selected directory name not meeting readback .e2e-* safety rule; compliant fresh full rerun 130 passed."
+}

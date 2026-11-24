@@ -29,7 +29,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from drillai.core.clock import UTC
-from drillai.core.config import get_settings
+from drillai.core.config import Settings
 from drillai.core.errors import AuthenticationRequired, PermissionDenied
 from drillai.core.ids import new_id
 from drillai.db.models import ApiToken, Membership, Organization, User, UserSession
@@ -53,6 +53,14 @@ __all__ = [
 #: which is what a browser sends for an unset <select>; without this, ``?wellbore_id=`` would
 #: filter for an empty string and silently return nothing.
 OptionalFilter = Annotated[str | None, Query(), BeforeValidator(lambda value: value or None)]
+
+
+def get_app_settings(request: Request) -> Settings:
+    """Use the owning application's configuration; missing settings fail closed."""
+    settings = getattr(request.app.state, "settings", None)
+    if not isinstance(settings, Settings):
+        raise AuthenticationRequired("application settings are not configured")
+    return settings
 
 
 def get_database(request: Request) -> Database:
@@ -99,9 +107,8 @@ class AuthContext:
     unit_system: str = "field_us"
 
 
-def derive_session_csrf_token(session_id: str, session_token_hash: str) -> str:
-    """Derive the per-session CSRF synchronizer token bound to the server's CSRF key and session digest."""
-    settings = get_settings()
+def derive_session_csrf_token(session_id: str, session_token_hash: str, settings: Settings) -> str:
+    """Derive the per-session CSRF token with the owning application's key."""
     key = (settings.session_csrf_secret or settings.secret_master_key or "drillai-csrf-key").encode("utf-8")
     msg = f"csrf:v1:{session_id}:{session_token_hash}".encode()
     return hmac.new(key, msg, hashlib.sha256).hexdigest()
@@ -172,7 +179,9 @@ async def _resolve_token(session: AsyncSession, token: str) -> tuple[ApiToken, U
     return row, user
 
 
-async def _resolve_session(session: AsyncSession, cookie_token: str) -> tuple[UserSession, User, str]:
+async def _resolve_session(
+    session: AsyncSession, cookie_token: str, settings: Settings
+) -> tuple[UserSession, User, str]:
     parts = cookie_token.split("_")
     if len(parts) < 3 or parts[0] != "ds":
         raise AuthenticationRequired("malformed session cookie")
@@ -209,7 +218,7 @@ async def _resolve_session(session: AsyncSession, cookie_token: str) -> tuple[Us
     ).scalar_one_or_none()
     if org is None or not org.is_active:
         raise AuthenticationRequired("session organization is not active")
-    csrf_token = derive_session_csrf_token(matched.id, matched.session_token_hash)
+    csrf_token = derive_session_csrf_token(matched.id, matched.session_token_hash, settings)
     if not constant_time_equals(hash_token("csrf", csrf_token), matched.csrf_token_hash):
         raise AuthenticationRequired("session CSRF binding is invalid")
     matched.last_seen_at = now
@@ -240,7 +249,7 @@ async def current_auth(
     x_csrf_token: Annotated[str | None, Header()] = None,
     accept_language: Annotated[str | None, Header()] = None,
 ) -> AuthContext:
-    settings = get_settings()
+    settings = get_app_settings(request)
     if accept_language is None and hasattr(request, "headers"):
         accept_language = request.headers.get("accept-language")
     locale = (accept_language or "en").split(",")[0].split("-")[0].strip() or "en"
@@ -271,7 +280,7 @@ async def current_auth(
         cookies = getattr(request, "cookies", None) or {}
         cookie_token = cookies.get(settings.session_cookie_name)
         if cookie_token:
-            session_row, user, expected_csrf = await _resolve_session(session, cookie_token.strip())
+            session_row, user, expected_csrf = await _resolve_session(session, cookie_token.strip(), settings)
             method = (getattr(request, "method", "GET") or "GET").upper()
             if method in {"POST", "PUT", "PATCH", "DELETE"}:
                 supplied_csrf = x_csrf_token

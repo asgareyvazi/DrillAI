@@ -26,12 +26,13 @@ from drillai.api.deps import (
     AuthContext,
     current_auth,
     derive_session_csrf_token,
+    get_app_settings,
     get_database,
     get_db,
     require,
 )
 from drillai.core.clock import UTC
-from drillai.core.config import get_settings
+from drillai.core.config import Settings
 from drillai.core.errors import (
     AuthenticationRequired,
     Conflict,
@@ -147,7 +148,7 @@ async def _record_rate_limit_failure(
     bucket_keys: list[tuple[str, str]],
 ) -> None:
     """Increment failure counters in an independent transaction so 401/403 does not roll them back."""
-    settings = get_settings()
+    settings = database.settings
     now = dt.datetime.now(tz=UTC)
     window_delta = dt.timedelta(seconds=max(1, settings.auth_rate_limit_window_seconds))
     lockout_delta = dt.timedelta(seconds=max(1, settings.auth_rate_limit_lockout_seconds))
@@ -240,8 +241,7 @@ async def _record_audit_independent(
         )
 
 
-def _set_session_cookie(response: Response, raw_token: str) -> None:
-    settings = get_settings()
+def _set_session_cookie(response: Response, raw_token: str, settings: Settings) -> None:
     response.set_cookie(
         key=settings.session_cookie_name,
         value=raw_token,
@@ -253,8 +253,7 @@ def _set_session_cookie(response: Response, raw_token: str) -> None:
     )
 
 
-def _clear_session_cookie(response: Response) -> None:
-    settings = get_settings()
+def _clear_session_cookie(response: Response, settings: Settings) -> None:
     response.delete_cookie(
         key=settings.session_cookie_name,
         httponly=True,
@@ -386,10 +385,10 @@ async def bootstrap_admin(
         )
 
     now = dt.datetime.now(tz=UTC)
-    settings = get_settings()
+    settings = get_app_settings(request)
     raw_token, token_prefix, token_hash = new_api_token(prefix="ds")
     session_id = new_id("ses")
-    csrf_token = derive_session_csrf_token(session_id, token_hash)
+    csrf_token = derive_session_csrf_token(session_id, token_hash, settings)
     session_row = UserSession(
         id=session_id,
         org_id=org.id,
@@ -423,7 +422,7 @@ async def bootstrap_admin(
     )
     await session.flush()
 
-    _set_session_cookie(response, raw_token)
+    _set_session_cookie(response, raw_token, settings)
     roles = [SYSTEM_ROLES[k] for k in valid_roles]
     principal = principal_from_roles(
         principal_id=user.id,
@@ -561,10 +560,10 @@ async def login(
 
     await _reset_rate_limit_buckets(database, [f"login_acct:{email_norm}", f"login_ip:{ip}"])
 
-    settings = get_settings()
+    settings = get_app_settings(request)
     raw_token, token_prefix, token_hash = new_api_token(prefix="ds")
     session_id = new_id("ses")
-    csrf_token = derive_session_csrf_token(session_id, token_hash)
+    csrf_token = derive_session_csrf_token(session_id, token_hash, settings)
     session_row = UserSession(
         id=session_id,
         org_id=target_org.id,
@@ -599,7 +598,7 @@ async def login(
     )
     await session.flush()
 
-    _set_session_cookie(response, raw_token)
+    _set_session_cookie(response, raw_token, settings)
     roles = [SYSTEM_ROLES[k] for k in org_role_keys]
     principal = principal_from_roles(
         principal_id=user.id,
@@ -688,18 +687,19 @@ async def logout(
                 occurred_at=now,
             )
         )
-    _clear_session_cookie(response)
+    _clear_session_cookie(response, get_app_settings(request))
     return {"status": "logged_out", "session_id": auth.session_id}
 
 
 @router.get("/auth/me", summary="Current authenticated user, organization, session, and permissions")
 async def auth_me(
+    request: Request,
     response: Response,
     session: Annotated[AsyncSession, Depends(get_db)],
     auth: Annotated[AuthContext, Depends(current_auth)],
 ) -> dict[str, Any]:
     response.headers["Cache-Control"] = "no-store"
-    settings = get_settings()
+    settings = get_app_settings(request)
     user = (
         await session.execute(select(User).where(User.id == auth.principal.id))
     ).scalar_one_or_none()

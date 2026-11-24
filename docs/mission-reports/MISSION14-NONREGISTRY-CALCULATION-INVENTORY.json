@@ -1,0 +1,768 @@
+{
+  "status": "PARTIAL",
+  "method": "Mechanical AST BinOp/AugAssign path candidates outside engine directory; no completeness or correctness claim. Excludes frontend, dynamic expressions and many semantic calculations.",
+  "candidates": [
+    {
+      "path": "backend/src/drillai/ai/agents.py",
+      "arithmetic_ast_nodes": 2,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/ai/guardrails.py",
+      "arithmetic_ast_nodes": 27,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/ai/providers.py",
+      "arithmetic_ast_nodes": 54,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/ai/router.py",
+      "arithmetic_ast_nodes": 29,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/ai/tools.py",
+      "arithmetic_ast_nodes": 22,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/api/app.py",
+      "arithmetic_ast_nodes": 8,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/api/deps.py",
+      "arithmetic_ast_nodes": 14,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/api/routers/alerts.py",
+      "arithmetic_ast_nodes": 30,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/api/routers/assets.py",
+      "arithmetic_ast_nodes": 155,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/api/routers/auth.py",
+      "arithmetic_ast_nodes": 27,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/api/routers/connectors.py",
+      "arithmetic_ast_nodes": 36,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/api/routers/context.py",
+      "arithmetic_ast_nodes": 11,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/api/routers/daily_reports.py",
+      "arithmetic_ast_nodes": 71,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/api/routers/documents.py",
+      "arithmetic_ast_nodes": 45,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/api/routers/drilling.py",
+      "arithmetic_ast_nodes": 18,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/api/routers/engineering_products.py",
+      "arithmetic_ast_nodes": 14,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/api/routers/evidence.py",
+      "arithmetic_ast_nodes": 2,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/api/routers/faults.py",
+      "arithmetic_ast_nodes": 3,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/api/routers/health.py",
+      "arithmetic_ast_nodes": 1,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/api/routers/live.py",
+      "arithmetic_ast_nodes": 11,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/api/routers/operations.py",
+      "arithmetic_ast_nodes": 86,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/api/routers/platform.py",
+      "arithmetic_ast_nodes": 7,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/api/routers/registry.py",
+      "arithmetic_ast_nodes": 6,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/api/routers/runs.py",
+      "arithmetic_ast_nodes": 8,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/api/routers/surveys.py",
+      "arithmetic_ast_nodes": 2,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/api/routers/timeseries.py",
+      "arithmetic_ast_nodes": 31,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/api/routers/twin.py",
+      "arithmetic_ast_nodes": 8,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/api/routers/workflows.py",
+      "arithmetic_ast_nodes": 18,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/api/serializers.py",
+      "arithmetic_ast_nodes": 29,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/assets/identity.py",
+      "arithmetic_ast_nodes": 3,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/assets/service.py",
+      "arithmetic_ast_nodes": 100,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/assets/vocabulary.py",
+      "arithmetic_ast_nodes": 3,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/context/builder.py",
+      "arithmetic_ast_nodes": 21,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/context/live_providers.py",
+      "arithmetic_ast_nodes": 12,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/context/model.py",
+      "arithmetic_ast_nodes": 31,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/core/audit.py",
+      "arithmetic_ast_nodes": 15,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/core/clock.py",
+      "arithmetic_ast_nodes": 5,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/core/config.py",
+      "arithmetic_ast_nodes": 9,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/core/errors.py",
+      "arithmetic_ast_nodes": 2,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/core/events.py",
+      "arithmetic_ast_nodes": 13,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/core/idempotency.py",
+      "arithmetic_ast_nodes": 5,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/core/ids.py",
+      "arithmetic_ast_nodes": 12,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/core/logging.py",
+      "arithmetic_ast_nodes": 2,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/core/pagination.py",
+      "arithmetic_ast_nodes": 3,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/core/serialization.py",
+      "arithmetic_ast_nodes": 1,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/db/base.py",
+      "arithmetic_ast_nodes": 4,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/db/models/ai.py",
+      "arithmetic_ast_nodes": 91,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/db/models/asset.py",
+      "arithmetic_ast_nodes": 110,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/db/models/daily_reports.py",
+      "arithmetic_ast_nodes": 72,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/db/models/design.py",
+      "arithmetic_ast_nodes": 83,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/db/models/documents.py",
+      "arithmetic_ast_nodes": 104,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/db/models/engines.py",
+      "arithmetic_ast_nodes": 51,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/db/models/equipment.py",
+      "arithmetic_ast_nodes": 84,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/db/models/identity.py",
+      "arithmetic_ast_nodes": 20,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/db/models/operations.py",
+      "arithmetic_ast_nodes": 114,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/db/models/optimization.py",
+      "arithmetic_ast_nodes": 46,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/db/models/platform.py",
+      "arithmetic_ast_nodes": 144,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/db/models/twin.py",
+      "arithmetic_ast_nodes": 27,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/db/models/workflow.py",
+      "arithmetic_ast_nodes": 76,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/db/session.py",
+      "arithmetic_ast_nodes": 5,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/documents/identity.py",
+      "arithmetic_ast_nodes": 15,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/documents/lifecycle.py",
+      "arithmetic_ast_nodes": 2,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/documents/quotes.py",
+      "arithmetic_ast_nodes": 6,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/documents/scope.py",
+      "arithmetic_ast_nodes": 27,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/drilling/advisor.py",
+      "arithmetic_ast_nodes": 49,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/drilling/classifiers.py",
+      "arithmetic_ast_nodes": 17,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/drilling/daily_report_exports.py",
+      "arithmetic_ast_nodes": 19,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/drilling/daily_reports.py",
+      "arithmetic_ast_nodes": 75,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/drilling/ddr.py",
+      "arithmetic_ast_nodes": 43,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/drilling/dependencies.py",
+      "arithmetic_ast_nodes": 6,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/drilling/npt.py",
+      "arithmetic_ast_nodes": 53,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/drilling/npt_intervals.py",
+      "arithmetic_ast_nodes": 42,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/drilling/optimisation.py",
+      "arithmetic_ast_nodes": 35,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/drilling/reporting.py",
+      "arithmetic_ast_nodes": 7,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/drilling/state.py",
+      "arithmetic_ast_nodes": 41,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/drilling/structured_report_exports.py",
+      "arithmetic_ast_nodes": 27,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/drilling/surveys.py",
+      "arithmetic_ast_nodes": 60,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/drilling/timeline.py",
+      "arithmetic_ast_nodes": 33,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/engineering/exports.py",
+      "arithmetic_ast_nodes": 2,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/engineering/products.py",
+      "arithmetic_ast_nodes": 23,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/engineering/service.py",
+      "arithmetic_ast_nodes": 23,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/ingestion/extractors.py",
+      "arithmetic_ast_nodes": 104,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/ingestion/ocr.py",
+      "arithmetic_ast_nodes": 78,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/ingestion/ocr_benchmark.py",
+      "arithmetic_ast_nodes": 50,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/ingestion/ocr_namespace_supervisor.py",
+      "arithmetic_ast_nodes": 1,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/ingestion/ocr_runtime.py",
+      "arithmetic_ast_nodes": 12,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/ingestion/ocr_synthetic_quality.py",
+      "arithmetic_ast_nodes": 70,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/ingestion/parsers.py",
+      "arithmetic_ast_nodes": 112,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/ingestion/pipeline.py",
+      "arithmetic_ast_nodes": 69,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/ingestion/storage.py",
+      "arithmetic_ast_nodes": 10,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/observability/tracing.py",
+      "arithmetic_ast_nodes": 40,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/operations/events.py",
+      "arithmetic_ast_nodes": 49,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/operations/service.py",
+      "arithmetic_ast_nodes": 44,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/operations/time_windows.py",
+      "arithmetic_ast_nodes": 4,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/rag/benchmark.py",
+      "arithmetic_ast_nodes": 100,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/rag/retriever.py",
+      "arithmetic_ast_nodes": 70,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/security/actions.py",
+      "arithmetic_ast_nodes": 14,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/security/passwords.py",
+      "arithmetic_ast_nodes": 34,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/security/rbac.py",
+      "arithmetic_ast_nodes": 6,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/security/secrets.py",
+      "arithmetic_ast_nodes": 15,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/telemetry/adapters.py",
+      "arithmetic_ast_nodes": 73,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/telemetry/alerts.py",
+      "arithmetic_ast_nodes": 68,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/telemetry/connectors.py",
+      "arithmetic_ast_nodes": 243,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/telemetry/cursor.py",
+      "arithmetic_ast_nodes": 3,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/telemetry/etp_client.py",
+      "arithmetic_ast_nodes": 19,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/telemetry/identity.py",
+      "arithmetic_ast_nodes": 20,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/telemetry/outbox.py",
+      "arithmetic_ast_nodes": 28,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/telemetry/protocols/etp.py",
+      "arithmetic_ast_nodes": 78,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/telemetry/protocols/etp_binary.py",
+      "arithmetic_ast_nodes": 154,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/telemetry/protocols/harness.py",
+      "arithmetic_ast_nodes": 14,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/telemetry/protocols/witsml.py",
+      "arithmetic_ast_nodes": 125,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/telemetry/rules.py",
+      "arithmetic_ast_nodes": 29,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/telemetry/service.py",
+      "arithmetic_ast_nodes": 109,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/telemetry/sql.py",
+      "arithmetic_ast_nodes": 1,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/telemetry/units.py",
+      "arithmetic_ast_nodes": 31,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/telemetry/witsml_client.py",
+      "arithmetic_ast_nodes": 14,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/telemetry/worker.py",
+      "arithmetic_ast_nodes": 57,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/twin/aspects.py",
+      "arithmetic_ast_nodes": 2,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/twin/service.py",
+      "arithmetic_ast_nodes": 48,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/units/registry.py",
+      "arithmetic_ast_nodes": 58,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/workflow/expressions.py",
+      "arithmetic_ast_nodes": 9,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/workflow/graph.py",
+      "arithmetic_ast_nodes": 21,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/workflow/nodes.py",
+      "arithmetic_ast_nodes": 53,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/workflow/notification_worker.py",
+      "arithmetic_ast_nodes": 7,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/workflow/notifications.py",
+      "arithmetic_ast_nodes": 55,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/workflow/runtime.py",
+      "arithmetic_ast_nodes": 46,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    },
+    {
+      "path": "backend/src/drillai/workflow/service.py",
+      "arithmetic_ast_nodes": 19,
+      "status": "UNKNOWN",
+      "limitation": "Mechanical candidate only; not classified as engineering formula, independently checked or linked end-to-end."
+    }
+  ]
+}

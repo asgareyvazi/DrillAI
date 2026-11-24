@@ -1,0 +1,459 @@
+{
+  "status": "PARTIAL",
+  "scope": "All 30 inherited entries retained; source and original finding linked. Tests, dependencies and exact acceptance need further reconciliation; statuses not promoted.",
+  "items": [
+    {
+      "id": 1,
+      "requirement": "Persian deployment OCR",
+      "status": "NOT_ACCEPTED",
+      "original_source": "docs/mission-reports/MISSION12-REQUIREMENT-MATRIX.json",
+      "mission13_record": "MISSION13-REQUIREMENT-MATRIX.json",
+      "source_pointers": [
+        "backend/src/drillai/ingestion/ocr.py",
+        "docs/mission-reports/CP135-BILINGUAL-INGESTION-OCR-BENCHMARK.md"
+      ],
+      "current_behavior": "Baseline deployment OCR failed; local shim remains below threshold.",
+      "tests": "Not comprehensively reconciled; refer to Mission 13 evidence and source-specific suites.",
+      "dependencies": "Source/API/UI/review, independent references, platform or authorized evidence as applicable; not fully mapped.",
+      "corrective_action": "Restore actual accuracy and pass all unchanged deployed strata",
+      "acceptance_criterion": "The corresponding original mission requirement and Mission 14 phase must be independently evidenced; unresolved until verified."
+    },
+    {
+      "id": 2,
+      "requirement": "Bounded page OCR",
+      "status": "PARTIAL",
+      "original_source": "docs/mission-reports/MISSION12-REQUIREMENT-MATRIX.json",
+      "mission13_record": "MISSION13-REQUIREMENT-MATRIX.json",
+      "source_pointers": [
+        "backend/src/drillai/ingestion/ocr.py",
+        "backend/tests/ingestion/test_ocr.py"
+      ],
+      "current_behavior": "Legacy process group can be escaped; optional Linux namespace is not deployment certified, Windows Job Object and document-wide deadline remain missing.",
+      "tests": "Not comprehensively reconciled; refer to Mission 13 evidence and source-specific suites.",
+      "dependencies": "Source/API/UI/review, independent references, platform or authorized evidence as applicable; not fully mapped.",
+      "corrective_action": "Queue/render/layout/OCR/parsing/publication deadline and Windows process-tree termination remain missing.",
+      "acceptance_criterion": "The corresponding original mission requirement and Mission 14 phase must be independently evidenced; unresolved until verified."
+    },
+    {
+      "id": 3,
+      "requirement": "Authorized holdout",
+      "status": "BLOCKED_BY_MISSING_AUTHORIZED_EVIDENCE",
+      "original_source": "docs/mission-reports/MISSION12-REQUIREMENT-MATRIX.json",
+      "mission13_record": "MISSION13-REQUIREMENT-MATRIX.json",
+      "source_pointers": [
+        "backend/src/drillai/ingestion/ocr_benchmark.py"
+      ],
+      "current_behavior": "No authorized field holdout was supplied.",
+      "tests": "Not comprehensively reconciled; refer to Mission 13 evidence and source-specific suites.",
+      "dependencies": "Source/API/UI/review, independent references, platform or authorized evidence as applicable; not fully mapped.",
+      "corrective_action": "Obtain approved authentic DDRs, freeze independently adjudicated labels and split",
+      "acceptance_criterion": "The corresponding original mission requirement and Mission 14 phase must be independently evidenced; unresolved until verified."
+    },
+    {
+      "id": 4,
+      "requirement": "Full capacity geometry",
+      "status": "UNKNOWN",
+      "original_source": "docs/mission-reports/MISSION12-REQUIREMENT-MATRIX.json",
+      "mission13_record": "MISSION13-REQUIREMENT-MATRIX.json",
+      "source_pointers": [
+        "backend/src/drillai/engines/fluids.py"
+      ],
+      "current_behavior": "Inherited item not independently assessed in this increment; prior status is not promoted.",
+      "tests": "Not comprehensively reconciled; refer to Mission 13 evidence and source-specific suites.",
+      "dependencies": "Source/API/UI/review, independent references, platform or authorized evidence as applicable; not fully mapped.",
+      "corrective_action": "Tool joints, washout, nesting and measured/design distinction",
+      "acceptance_criterion": "The corresponding original mission requirement and Mission 14 phase must be independently evidenced; unresolved until verified."
+    },
+    {
+      "id": 5,
+      "requirement": "Authenticated bore evidence",
+      "status": "UNKNOWN",
+      "original_source": "docs/mission-reports/MISSION12-REQUIREMENT-MATRIX.json",
+      "mission13_record": "MISSION13-REQUIREMENT-MATRIX.json",
+      "source_pointers": [
+        "backend/src/drillai/engines/fluids.py"
+      ],
+      "current_behavior": "Inherited item not independently assessed in this increment; prior status is not promoted.",
+      "tests": "Not comprehensively reconciled; refer to Mission 13 evidence and source-specific suites.",
+      "dependencies": "Source/API/UI/review, independent references, platform or authorized evidence as applicable; not fully mapped.",
+      "corrective_action": "Caller text is not authenticated evidence; build review and identity linkage",
+      "acceptance_criterion": "The corresponding original mission requirement and Mission 14 phase must be independently evidenced; unresolved until verified."
+    },
+    {
+      "id": 6,
+      "requirement": "Versioned capacity design",
+      "status": "UNKNOWN",
+      "original_source": "docs/mission-reports/MISSION12-REQUIREMENT-MATRIX.json",
+      "mission13_record": "MISSION13-REQUIREMENT-MATRIX.json",
+      "source_pointers": [
+        "frontend/src/pages/engineering/CirculationWorkspace.tsx"
+      ],
+      "current_behavior": "Inherited item not independently assessed in this increment; prior status is not promoted.",
+      "tests": "Not comprehensively reconciled; refer to Mission 13 evidence and source-specific suites.",
+      "dependencies": "Source/API/UI/review, independent references, platform or authorized evidence as applicable; not fully mapped.",
+      "corrective_action": "No governed capacity revision/approval/export journey",
+      "acceptance_criterion": "The corresponding original mission requirement and Mission 14 phase must be independently evidenced; unresolved until verified."
+    },
+    {
+      "id": 7,
+      "requirement": "Hydraulics/ECD slice",
+      "status": "UNKNOWN",
+      "original_source": "docs/mission-reports/MISSION12-REQUIREMENT-MATRIX.json",
+      "mission13_record": "MISSION13-REQUIREMENT-MATRIX.json",
+      "source_pointers": [
+        "backend/src/drillai/engines/fluids.py"
+      ],
+      "current_behavior": "Inherited item not independently assessed in this increment; prior status is not promoted.",
+      "tests": "Not comprehensively reconciled; refer to Mission 13 evidence and source-specific suites.",
+      "dependencies": "Source/API/UI/review, independent references, platform or authorized evidence as applicable; not fully mapped.",
+      "corrective_action": "Full surveyed depth profile, components, review and reports missing",
+      "acceptance_criterion": "The corresponding original mission requirement and Mission 14 phase must be independently evidenced; unresolved until verified."
+    },
+    {
+      "id": 8,
+      "requirement": "Survey-linked depths",
+      "status": "UNKNOWN",
+      "original_source": "docs/mission-reports/MISSION12-REQUIREMENT-MATRIX.json",
+      "mission13_record": "MISSION13-REQUIREMENT-MATRIX.json",
+      "source_pointers": [
+        "backend/src/drillai/drilling/surveys.py"
+      ],
+      "current_behavior": "Inherited item not independently assessed in this increment; prior status is not promoted.",
+      "tests": "Not comprehensively reconciled; refer to Mission 13 evidence and source-specific suites.",
+      "dependencies": "Source/API/UI/review, independent references, platform or authorized evidence as applicable; not fully mapped.",
+      "corrective_action": "Connect persisted revision and validated datum to hydraulics",
+      "acceptance_criterion": "The corresponding original mission requirement and Mission 14 phase must be independently evidenced; unresolved until verified."
+    },
+    {
+      "id": 9,
+      "requirement": "New rheology",
+      "status": "UNKNOWN",
+      "original_source": "docs/mission-reports/MISSION12-REQUIREMENT-MATRIX.json",
+      "mission13_record": "MISSION13-REQUIREMENT-MATRIX.json",
+      "source_pointers": [
+        "backend/src/drillai/engines/power_law.py"
+      ],
+      "current_behavior": "Inherited item not independently assessed in this increment; prior status is not promoted.",
+      "tests": "Not comprehensively reconciled; refer to Mission 13 evidence and source-specific suites.",
+      "dependencies": "Source/API/UI/review, independent references, platform or authorized evidence as applicable; not fully mapped.",
+      "corrective_action": "Pipe math only; annular/full-well design and report still missing",
+      "acceptance_criterion": "The corresponding original mission requirement and Mission 14 phase must be independently evidenced; unresolved until verified."
+    },
+    {
+      "id": 10,
+      "requirement": "Survey geometric proximity",
+      "status": "UNKNOWN",
+      "original_source": "docs/mission-reports/MISSION12-REQUIREMENT-MATRIX.json",
+      "mission13_record": "MISSION13-REQUIREMENT-MATRIX.json",
+      "source_pointers": [
+        "backend/src/drillai/engines/proximity.py"
+      ],
+      "current_behavior": "Inherited item not independently assessed in this increment; prior status is not promoted.",
+      "tests": "Not comprehensively reconciled; refer to Mission 13 evidence and source-specific suites.",
+      "dependencies": "Source/API/UI/review, independent references, platform or authorized evidence as applicable; not fully mapped.",
+      "corrective_action": "Select persisted surveys, datum validation and dedicated workflow",
+      "acceptance_criterion": "The corresponding original mission requirement and Mission 14 phase must be independently evidenced; unresolved until verified."
+    },
+    {
+      "id": 11,
+      "requirement": "Anti-collision uncertainty",
+      "status": "UNKNOWN",
+      "original_source": "docs/mission-reports/MISSION12-REQUIREMENT-MATRIX.json",
+      "mission13_record": "MISSION13-REQUIREMENT-MATRIX.json",
+      "source_pointers": [
+        "backend/src/drillai/engines/proximity.py"
+      ],
+      "current_behavior": "Inherited item not independently assessed in this increment; prior status is not promoted.",
+      "tests": "Not comprehensively reconciled; refer to Mission 13 evidence and source-specific suites.",
+      "dependencies": "Source/API/UI/review, independent references, platform or authorized evidence as applicable; not fully mapped.",
+      "corrective_action": "Covariance/error model/SF not implemented; select source and implement",
+      "acceptance_criterion": "The corresponding original mission requirement and Mission 14 phase must be independently evidenced; unresolved until verified."
+    },
+    {
+      "id": 12,
+      "requirement": "Engine assurance",
+      "status": "PARTIAL",
+      "original_source": "docs/mission-reports/MISSION12-REQUIREMENT-MATRIX.json",
+      "mission13_record": "MISSION13-REQUIREMENT-MATRIX.json",
+      "source_pointers": [
+        "backend/tests/engines/test_cp142_independent_calculation_assurance.py"
+      ],
+      "current_behavior": "Five independent synthetic vector tests cover five engines, not 16 complete source-to-report audits.",
+      "tests": "Not comprehensively reconciled; refer to Mission 13 evidence and source-specific suites.",
+      "dependencies": "Source/API/UI/review, independent references, platform or authorized evidence as applicable; not fully mapped.",
+      "corrective_action": "Full independent source-to-report audit of all 16 not done",
+      "acceptance_criterion": "The corresponding original mission requirement and Mission 14 phase must be independently evidenced; unresolved until verified."
+    },
+    {
+      "id": 13,
+      "requirement": "Manual DDR",
+      "status": "UNKNOWN",
+      "original_source": "docs/mission-reports/MISSION12-REQUIREMENT-MATRIX.json",
+      "mission13_record": "MISSION13-REQUIREMENT-MATRIX.json",
+      "source_pointers": [
+        "backend/src/drillai/drilling/daily_reports.py"
+      ],
+      "current_behavior": "Inherited item not independently assessed in this increment; prior status is not promoted.",
+      "tests": "Not comprehensively reconciled; refer to Mission 13 evidence and source-specific suites.",
+      "dependencies": "Source/API/UI/review, independent references, platform or authorized evidence as applicable; not fully mapped.",
+      "corrective_action": "Complete authored engineering data/review journey",
+      "acceptance_criterion": "The corresponding original mission requirement and Mission 14 phase must be independently evidenced; unresolved until verified."
+    },
+    {
+      "id": 14,
+      "requirement": "DDR batch/correction",
+      "status": "UNKNOWN",
+      "original_source": "docs/mission-reports/MISSION12-REQUIREMENT-MATRIX.json",
+      "mission13_record": "MISSION13-REQUIREMENT-MATRIX.json",
+      "source_pointers": [
+        "backend/src/drillai/ingestion/pipeline.py"
+      ],
+      "current_behavior": "Inherited item not independently assessed in this increment; prior status is not promoted.",
+      "tests": "Not comprehensively reconciled; refer to Mission 13 evidence and source-specific suites.",
+      "dependencies": "Source/API/UI/review, independent references, platform or authorized evidence as applicable; not fully mapped.",
+      "corrective_action": "Batch lifecycle and immutable corrections not fully verified",
+      "acceptance_criterion": "The corresponding original mission requirement and Mission 14 phase must be independently evidenced; unresolved until verified."
+    },
+    {
+      "id": 15,
+      "requirement": "Chronology",
+      "status": "UNKNOWN",
+      "original_source": "docs/mission-reports/MISSION12-REQUIREMENT-MATRIX.json",
+      "mission13_record": "MISSION13-REQUIREMENT-MATRIX.json",
+      "source_pointers": [
+        "backend/src/drillai/drilling/timeline.py"
+      ],
+      "current_behavior": "Inherited item not independently assessed in this increment; prior status is not promoted.",
+      "tests": "Not comprehensively reconciled; refer to Mission 13 evidence and source-specific suites.",
+      "dependencies": "Source/API/UI/review, independent references, platform or authorized evidence as applicable; not fully mapped.",
+      "corrective_action": "Reconcile overlaps and missing timestamps; no comprehensive journey",
+      "acceptance_criterion": "The corresponding original mission requirement and Mission 14 phase must be independently evidenced; unresolved until verified."
+    },
+    {
+      "id": 16,
+      "requirement": "NPT",
+      "status": "PARTIAL",
+      "original_source": "docs/mission-reports/MISSION12-REQUIREMENT-MATRIX.json",
+      "mission13_record": "MISSION13-REQUIREMENT-MATRIX.json",
+      "source_pointers": [
+        "backend/src/drillai/drilling/npt.py",
+        "backend/src/drillai/drilling/reporting.py",
+        "backend/tests/operations/test_npt_accounting.py"
+      ],
+      "current_behavior": "NPT interval boundary aligned for SQL row selection; generic duration fallback, unknown times, approved attribution and identity remain unresolved.",
+      "tests": "Not comprehensively reconciled; refer to Mission 13 evidence and source-specific suites.",
+      "dependencies": "Source/API/UI/review, independent references, platform or authorized evidence as applicable; not fully mapped.",
+      "corrective_action": "Explicit Event/Operation identity, cause allocation, independent approval, immutable revisions and export remain unimplemented; union covers scoped Event rows only.",
+      "acceptance_criterion": "The corresponding original mission requirement and Mission 14 phase must be independently evidenced; unresolved until verified."
+    },
+    {
+      "id": 17,
+      "requirement": "Well Design",
+      "status": "UNKNOWN",
+      "original_source": "docs/mission-reports/MISSION12-REQUIREMENT-MATRIX.json",
+      "mission13_record": "MISSION13-REQUIREMENT-MATRIX.json",
+      "source_pointers": [
+        "backend/src/drillai/engineering/products.py"
+      ],
+      "current_behavior": "Inherited item not independently assessed in this increment; prior status is not promoted.",
+      "tests": "Not comprehensively reconciled; refer to Mission 13 evidence and source-specific suites.",
+      "dependencies": "Source/API/UI/review, independent references, platform or authorized evidence as applicable; not fully mapped.",
+      "corrective_action": "Cross-domain linked design and E2E not complete",
+      "acceptance_criterion": "The corresponding original mission requirement and Mission 14 phase must be independently evidenced; unresolved until verified."
+    },
+    {
+      "id": 18,
+      "requirement": "Programs/Procedures",
+      "status": "UNKNOWN",
+      "original_source": "docs/mission-reports/MISSION12-REQUIREMENT-MATRIX.json",
+      "mission13_record": "MISSION13-REQUIREMENT-MATRIX.json",
+      "source_pointers": [
+        "backend/src/drillai/engineering/service.py"
+      ],
+      "current_behavior": "Inherited item not independently assessed in this increment; prior status is not promoted.",
+      "tests": "Not comprehensively reconciled; refer to Mission 13 evidence and source-specific suites.",
+      "dependencies": "Source/API/UI/review, independent references, platform or authorized evidence as applicable; not fully mapped.",
+      "corrective_action": "Existing lifecycle; full acceptance/export journey not reverified",
+      "acceptance_criterion": "The corresponding original mission requirement and Mission 14 phase must be independently evidenced; unresolved until verified."
+    },
+    {
+      "id": 19,
+      "requirement": "Advisor/RAG",
+      "status": "UNKNOWN",
+      "original_source": "docs/mission-reports/MISSION12-REQUIREMENT-MATRIX.json",
+      "mission13_record": "MISSION13-REQUIREMENT-MATRIX.json",
+      "source_pointers": [
+        "backend/src/drillai/drilling/advisor.py"
+      ],
+      "current_behavior": "Inherited item not independently assessed in this increment; prior status is not promoted.",
+      "tests": "Not comprehensively reconciled; refer to Mission 13 evidence and source-specific suites.",
+      "dependencies": "Source/API/UI/review, independent references, platform or authorized evidence as applicable; not fully mapped.",
+      "corrective_action": "Retrieval metrics, scope and full citation E2E remain",
+      "acceptance_criterion": "The corresponding original mission requirement and Mission 14 phase must be independently evidenced; unresolved until verified."
+    },
+    {
+      "id": 20,
+      "requirement": "Specialist agents",
+      "status": "UNKNOWN",
+      "original_source": "docs/mission-reports/MISSION12-REQUIREMENT-MATRIX.json",
+      "mission13_record": "MISSION13-REQUIREMENT-MATRIX.json",
+      "source_pointers": [
+        "backend/src/drillai/workflow/graph.py"
+      ],
+      "current_behavior": "Inherited item not independently assessed in this increment; prior status is not promoted.",
+      "tests": "Not comprehensively reconciled; refer to Mission 13 evidence and source-specific suites.",
+      "dependencies": "Source/API/UI/review, independent references, platform or authorized evidence as applicable; not fully mapped.",
+      "corrective_action": "Dedicated bounded domain agents and human review incomplete",
+      "acceptance_criterion": "The corresponding original mission requirement and Mission 14 phase must be independently evidenced; unresolved until verified."
+    },
+    {
+      "id": 21,
+      "requirement": "Telemetry/Twin",
+      "status": "UNKNOWN",
+      "original_source": "docs/mission-reports/MISSION12-REQUIREMENT-MATRIX.json",
+      "mission13_record": "MISSION13-REQUIREMENT-MATRIX.json",
+      "source_pointers": [
+        "backend/src/drillai/telemetry/service.py"
+      ],
+      "current_behavior": "Inherited item not independently assessed in this increment; prior status is not promoted.",
+      "tests": "Not comprehensively reconciled; refer to Mission 13 evidence and source-specific suites.",
+      "dependencies": "Source/API/UI/review, independent references, platform or authorized evidence as applicable; not fully mapped.",
+      "corrective_action": "End-to-end reconciliation and external interop unverified",
+      "acceptance_criterion": "The corresponding original mission requirement and Mission 14 phase must be independently evidenced; unresolved until verified."
+    },
+    {
+      "id": 22,
+      "requirement": "Reports/exports",
+      "status": "PARTIAL",
+      "original_source": "docs/mission-reports/MISSION12-REQUIREMENT-MATRIX.json",
+      "mission13_record": "MISSION13-REQUIREMENT-MATRIX.json",
+      "source_pointers": [
+        "backend/src/drillai/drilling/reporting.py",
+        "backend/tests/operations/test_npt_accounting.py"
+      ],
+      "current_behavior": "NPT report caveats and boundary policy updated; broader report scope not independently assessed.",
+      "tests": "Not comprehensively reconciled; refer to Mission 13 evidence and source-specific suites.",
+      "dependencies": "Source/API/UI/review, independent references, platform or authorized evidence as applicable; not fully mapped.",
+      "corrective_action": "Exact design/approval provenance and requested end-to-end journeys incomplete",
+      "acceptance_criterion": "The corresponding original mission requirement and Mission 14 phase must be independently evidenced; unresolved until verified."
+    },
+    {
+      "id": 23,
+      "requirement": "RBAC/deployment",
+      "status": "UNKNOWN",
+      "original_source": "docs/mission-reports/MISSION12-REQUIREMENT-MATRIX.json",
+      "mission13_record": "MISSION13-REQUIREMENT-MATRIX.json",
+      "source_pointers": [
+        "backend/src/drillai/security/rbac.py"
+      ],
+      "current_behavior": "Inherited item not independently assessed in this increment; prior status is not promoted.",
+      "tests": "Not comprehensively reconciled; refer to Mission 13 evidence and source-specific suites.",
+      "dependencies": "Source/API/UI/review, independent references, platform or authorized evidence as applicable; not fully mapped.",
+      "corrective_action": "New flows and deployment assurance not independently complete",
+      "acceptance_criterion": "The corresponding original mission requirement and Mission 14 phase must be independently evidenced; unresolved until verified."
+    },
+    {
+      "id": 24,
+      "requirement": "Catalogue",
+      "status": "UNKNOWN",
+      "original_source": "docs/mission-reports/MISSION12-REQUIREMENT-MATRIX.json",
+      "mission13_record": "MISSION13-REQUIREMENT-MATRIX.json",
+      "source_pointers": [
+        "docs/ENGINEERING_CAPABILITY_CATALOGUE.json"
+      ],
+      "current_behavior": "Inherited item not independently assessed in this increment; prior status is not promoted.",
+      "tests": "Not comprehensively reconciled; refer to Mission 13 evidence and source-specific suites.",
+      "dependencies": "Source/API/UI/review, independent references, platform or authorized evidence as applicable; not fully mapped.",
+      "corrective_action": "Regenerated inventory only; comprehensive historical audit/schema/roadmap incomplete",
+      "acceptance_criterion": "The corresponding original mission requirement and Mission 14 phase must be independently evidenced; unresolved until verified."
+    },
+    {
+      "id": 25,
+      "requirement": "Windows history",
+      "status": "UNKNOWN",
+      "original_source": "docs/mission-reports/MISSION12-REQUIREMENT-MATRIX.json",
+      "mission13_record": "MISSION13-REQUIREMENT-MATRIX.json",
+      "source_pointers": [
+        "scripts/verify_stack.py"
+      ],
+      "current_behavior": "Inherited item not independently assessed in this increment; prior status is not promoted.",
+      "tests": "Not comprehensively reconciled; refer to Mission 13 evidence and source-specific suites.",
+      "dependencies": "Source/API/UI/review, independent references, platform or authorized evidence as applicable; not fully mapped.",
+      "corrective_action": "Three repeated native full-suite diagnostic runs on the final SHA and full native CI must complete; root cause beyond measured budget not established.",
+      "acceptance_criterion": "The corresponding original mission requirement and Mission 14 phase must be independently evidenced; unresolved until verified."
+    },
+    {
+      "id": 26,
+      "requirement": "Full E2E",
+      "status": "UNKNOWN",
+      "original_source": "docs/mission-reports/MISSION12-REQUIREMENT-MATRIX.json",
+      "mission13_record": "MISSION13-REQUIREMENT-MATRIX.json",
+      "source_pointers": [
+        ".github/workflows/ci.yml"
+      ],
+      "current_behavior": "New full cross-platform browser and two-well golden scenario not yet executed.",
+      "tests": "Not comprehensively reconciled; refer to Mission 13 evidence and source-specific suites.",
+      "dependencies": "Source/API/UI/review, independent references, platform or authorized evidence as applicable; not fully mapped.",
+      "corrective_action": "Historical 129 do not substitute for requested new journeys",
+      "acceptance_criterion": "The corresponding original mission requirement and Mission 14 phase must be independently evidenced; unresolved until verified."
+    },
+    {
+      "id": 27,
+      "requirement": "Exact-SHA CI",
+      "status": "NOT_ACCEPTED",
+      "original_source": "docs/mission-reports/MISSION12-REQUIREMENT-MATRIX.json",
+      "mission13_record": "MISSION13-REQUIREMENT-MATRIX.json",
+      "source_pointers": [
+        ".github/workflows/ci.yml"
+      ],
+      "current_behavior": "Mission 12 exact-SHA CI failed Linux OCR; final Mission 13 CI is not yet established.",
+      "tests": "Not comprehensively reconciled; refer to Mission 13 evidence and source-specific suites.",
+      "dependencies": "Source/API/UI/review, independent references, platform or authorized evidence as applicable; not fully mapped.",
+      "corrective_action": "Exact-final-SHA CI must be observed on both platforms; old runs cannot certify this mission.",
+      "acceptance_criterion": "The corresponding original mission requirement and Mission 14 phase must be independently evidenced; unresolved until verified."
+    },
+    {
+      "id": 28,
+      "requirement": "Workspace",
+      "status": "PARTIAL",
+      "original_source": "docs/mission-reports/MISSION12-REQUIREMENT-MATRIX.json",
+      "mission13_record": "MISSION13-REQUIREMENT-MATRIX.json",
+      "source_pointers": [
+        "docs/mission-reports/MISSION12-WORKSPACE-START.jsonl"
+      ],
+      "current_behavior": "Private start manifest and protected comparison captured; final disposition not established.",
+      "tests": "Not comprehensively reconciled; refer to Mission 13 evidence and source-specific suites.",
+      "dependencies": "Source/API/UI/review, independent references, platform or authorized evidence as applicable; not fully mapped.",
+      "corrective_action": "Retain protected untracked artifacts and compare start/end metadata; exact final CI checkout artifact is separately named by run ID; historical original mtimes and missing bytes remain unavailable.",
+      "acceptance_criterion": "The corresponding original mission requirement and Mission 14 phase must be independently evidenced; unresolved until verified."
+    },
+    {
+      "id": 29,
+      "requirement": "Mission 7 Windows frontend authoring timeout",
+      "status": "UNKNOWN",
+      "original_source": "docs/mission-reports/MISSION12-REQUIREMENT-MATRIX.json",
+      "mission13_record": "MISSION13-REQUIREMENT-MATRIX.json",
+      "source_pointers": [],
+      "current_behavior": "Auxiliary Windows job checkout SHA is not established from accessible annotations; new guard requires GITHUB_SHA equality on future runs.",
+      "tests": "Not comprehensively reconciled; refer to Mission 13 evidence and source-specific suites.",
+      "dependencies": "Source/API/UI/review, independent references, platform or authorized evidence as applicable; not fully mapped.",
+      "corrective_action": "Three repeated native full-suite diagnostic runs on the final SHA and full native CI must complete; root cause beyond measured budget not established.",
+      "acceptance_criterion": "The corresponding original mission requirement and Mission 14 phase must be independently evidenced; unresolved until verified."
+    },
+    {
+      "id": 30,
+      "requirement": "Mission 7 deployed OCR accuracy regression",
+      "status": "NOT_ACCEPTED",
+      "original_source": "docs/mission-reports/MISSION12-REQUIREMENT-MATRIX.json",
+      "mission13_record": "MISSION13-REQUIREMENT-MATRIX.json",
+      "source_pointers": [
+        "backend/src/drillai/ingestion/ocr.py"
+      ],
+      "current_behavior": "OCR deployment regression remains open.",
+      "tests": "Not comprehensively reconciled; refer to Mission 13 evidence and source-specific suites.",
+      "dependencies": "Source/API/UI/review, independent references, platform or authorized evidence as applicable; not fully mapped.",
+      "corrective_action": "Restore all unchanged 64-case global and stratum gates.",
+      "acceptance_criterion": "The corresponding original mission requirement and Mission 14 phase must be independently evidenced; unresolved until verified."
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "status": "NOT_ACCEPTED",
+  "scope": "Precommit/pre-certification record, not the result of the final candidate. The workflow's run metadata, job summaries and artifacts are authoritative for the SHA actually tested.",
+  "previous_run": "https://github.com/asgareyvazi/DrillAI/actions/runs/45380922574",
+  "previous_sha": "f32071d2851c918d5f751e035e80e5273b724fe7",
+  "previous_conclusion": "failure: Linux deployment-image OCR quality gate",
+  "previous_jobs": {
+    "linux": 138399413253,
+    "windows": 138399413603,
+    "windows_reliability": 138399413618
+  },
+  "final_candidate_sha": null,
+  "final_candidate_run": "UNKNOWN until pushed and executed",
+  "remaining": "OCR must pass unchanged thresholds; all mandatory full Linux and Windows jobs, expanded golden scenario, security and exact-SHA provenance must be verified. A candidate CI run alone cannot establish missing engineering scope or field qualification."
+}

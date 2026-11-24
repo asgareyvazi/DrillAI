@@ -284,17 +284,22 @@ async def test_system_scope_rbac_privacy_redaction_idempotency_and_cas(
             assert redacted_cross_tenant["revision"] == 2
 
             # Scenario 2 continued: Principal in isolated Tenant B (even with admin header) cannot mutate system-wide egress policy!
-            monkeypatch.setenv("DRILLAI_DEV_ORG_SLUG", "tenant-b-isolated")
-            reset_settings_cache()
-            res_tenant_b_admin = await client.put(
-                "/api/v1/connectors/egress-policy",
-                headers={"X-Dev-Roles": "admin"},
-                json={
-                    "reason": "Isolated tenant trying to alter system egress policy",
-                    "allowed_hosts": ["tenant-b.corp"],
-                    "allowed_private_cidrs": ["10.99.0.0/16"],
-                },
-            )
+            # A separate application provides the isolated development organization explicitly;
+            # mutating the process-global cache must not switch an existing application's identity.
+            tenant_app = create_app(app.state.settings.model_copy(update={"dev_org_slug": "tenant-b-isolated"}))
+            try:
+                async with AsyncClient(transport=ASGITransport(app=tenant_app), base_url="http://test") as tenant_client:
+                    res_tenant_b_admin = await tenant_client.put(
+                        "/api/v1/connectors/egress-policy",
+                        headers={"X-Dev-Roles": "admin"},
+                        json={
+                            "reason": "Isolated tenant trying to alter system egress policy",
+                            "allowed_hosts": ["tenant-b.corp"],
+                            "allowed_private_cidrs": ["10.99.0.0/16"],
+                        },
+                    )
+            finally:
+                await tenant_app.state.database.dispose()
             assert res_tenant_b_admin.status_code == 403
             assert res_tenant_b_admin.json()["error"]["details"]["reason"] == "system_scope_required"
 

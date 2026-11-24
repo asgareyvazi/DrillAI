@@ -11,15 +11,14 @@ from __future__ import annotations
 
 from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, Request, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from drillai.api.deps import AuthContext, get_db, require
+from drillai.api.deps import AuthContext, get_app_settings, get_db, require
 from drillai.core.clock import utc_now
-from drillai.core.config import get_settings
 from drillai.core.errors import Conflict, NotFound, PermissionDenied, ValidationFailed
 from drillai.db.models import AuditLog, OutboundMessage, SecretRef
 from drillai.security.actions import ActionLevel
@@ -36,6 +35,7 @@ router = APIRouter(tags=["platform"])
 
 @router.get("/platform/capabilities", summary="What this deployment can do, resolved live")
 async def capabilities(
+    request: Request,
     _: Annotated[AuthContext, Depends(require("registry.read"))],
 ) -> dict[str, Any]:
     from drillai.ai.agents import agent_catalogue
@@ -47,7 +47,7 @@ async def capabilities(
     from drillai.security.actions import registered_actions
     from drillai.workflow.nodes import registered_node_types
 
-    settings = get_settings()
+    settings = get_app_settings(request)
     engines = load_default_engines()
     by_category: dict[str, int] = {}
     for engine in engines:
@@ -95,6 +95,7 @@ DEV_ROLE_PRESETS: tuple[str, ...] = (
 
 @router.get("/platform/identity", summary="Who the caller is, and what they may do")
 async def identity(
+    request: Request,
     auth: Annotated[AuthContext, Depends(require("well.read"))],
 ) -> dict[str, Any]:
     """The caller's principal as the platform resolved it.
@@ -107,7 +108,7 @@ async def identity(
     """
     from drillai.security.rbac import ROLE_CATALOGUE
 
-    settings = get_settings()
+    settings = get_app_settings(request)
     principal = auth.principal
     payload: dict[str, Any] = {
         "principal_id": principal.id,
@@ -156,6 +157,7 @@ async def identity(
 
 @router.get("/platform/providers", summary="LLM providers and models")
 async def providers(
+    request: Request,
     _: Annotated[AuthContext, Depends(require("registry.read"))],
 ) -> dict[str, Any]:
     from drillai.ai.providers import provider_registry
@@ -186,7 +188,7 @@ async def providers(
             for name, provider in providers.items()
         ],
         "total": len(providers),
-        "configured_provider": get_settings().llm_provider,
+        "configured_provider": get_app_settings(request).llm_provider,
     }
 
 
@@ -288,6 +290,7 @@ async def agent_detail(
 
 @router.get("/platform/integrations", summary="Integration status (no secrets, no fake health)")
 async def integrations(
+    request: Request,
     _: Annotated[AuthContext, Depends(require("registry.read"))],
 ) -> dict[str, Any]:
     """Report each outbound integration's *configuration state*, and whether it is enabled.
@@ -295,7 +298,7 @@ async def integrations(
     No provider is contacted here: a status endpoint that makes outbound calls reports its own
     timeouts as integration failures. Reachability is a separate, explicit action.
     """
-    settings = get_settings()
+    settings = get_app_settings(request)
     return {
         "items": [
             {
@@ -532,6 +535,7 @@ async def retry_notification(
 
 @router.get("/platform/secrets", summary="List tenant secret references (masked metadata only)")
 async def list_secret_refs(
+    request: Request,
     auth: Annotated[AuthContext, Depends(require("vault.manage"))],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict[str, Any]:
@@ -542,7 +546,7 @@ async def list_secret_refs(
             .order_by(SecretRef.key.asc())
         )
     ).scalars().all()
-    return {"items": [mask_secret_ref_row(r) for r in rows]}
+    return {"items": [mask_secret_ref_row(r, settings=get_app_settings(request)) for r in rows]}
 
 
 @router.post(
@@ -551,6 +555,7 @@ async def list_secret_refs(
     summary="Create or update a tenant-scoped SecretRef (env or AES-256-GCM db_encrypted)",
 )
 async def upsert_secret_ref(
+    request: Request,
     body: SecretRefUpsertRequest,
     auth: Annotated[AuthContext, Depends(require("vault.manage"))],
     session: Annotated[AsyncSession, Depends(get_db)],
@@ -566,6 +571,7 @@ async def upsert_secret_ref(
             body.secret_value,
             org_id=auth.org_id,
             secret_key=body.key,
+            settings=get_app_settings(request),
         )
     else:
         if not body.env_var or not is_valid_env_secret_name(body.env_var):
@@ -627,7 +633,7 @@ async def upsert_secret_ref(
             occurred_at=now,
         )
     )
-    return mask_secret_ref_row(row)
+    return mask_secret_ref_row(row, settings=get_app_settings(request))
 
 
 @router.post(
@@ -635,6 +641,7 @@ async def upsert_secret_ref(
     summary="Rotate an encrypted database SecretRef to a new value or active master key version",
 )
 async def rotate_secret_ref(
+    request: Request,
     secret_key: str,
     body: SecretRefRotateRequest,
     auth: Annotated[AuthContext, Depends(require("vault.manage"))],
@@ -661,6 +668,7 @@ async def rotate_secret_ref(
         org_id=auth.org_id,
         secret_key=row.key,
         new_plaintext=body.secret_value,
+        settings=get_app_settings(request),
     )
     now = utc_now()
     row.locator = new_envelope
@@ -684,7 +692,7 @@ async def rotate_secret_ref(
             occurred_at=now,
         )
     )
-    return mask_secret_ref_row(row)
+    return mask_secret_ref_row(row, settings=get_app_settings(request))
 
 
 @router.delete(
@@ -692,6 +700,7 @@ async def rotate_secret_ref(
     summary="Revoke a tenant SecretRef and wipe stored ciphertext",
 )
 async def revoke_secret_ref(
+    request: Request,
     secret_key: str,
     auth: Annotated[AuthContext, Depends(require("vault.manage"))],
     session: Annotated[AsyncSession, Depends(get_db)],
@@ -724,5 +733,5 @@ async def revoke_secret_ref(
             occurred_at=now,
         )
     )
-    return mask_secret_ref_row(row)
+    return mask_secret_ref_row(row, settings=get_app_settings(request))
 

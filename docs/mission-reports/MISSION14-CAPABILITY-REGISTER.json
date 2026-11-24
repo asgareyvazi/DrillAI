@@ -1,0 +1,8 @@
+{
+  "status": "PARTIAL",
+  "scope": "Pointer to inherited register and Mission 13 engineering assurance; not a completed integrated capability catalogue.",
+  "prior_register": "docs/DRILLAI-ENGINEERING-CAPABILITY-REGISTER.json",
+  "engine_assurance": "MISSION14-ENGINE-ASSURANCE.json",
+  "history": "MISSION14-HISTORICAL-CAPABILITY-MATRIX.json",
+  "roadmap": "MISSION14-CAPABILITY-ROADMAP.json"
+}

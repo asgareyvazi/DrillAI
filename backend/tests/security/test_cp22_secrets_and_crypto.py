@@ -418,6 +418,12 @@ async def test_cp22_02_platform_secrets_api_rbac_connector_and_notification_reso
             monkeypatch.setenv("DRILLAI_SECRET_ACTIVE_KEY_VERSION", "2")
             monkeypatch.setenv("DRILLAI_SECRET_PREVIOUS_MASTER_KEYS", f"v1:{master_v1}")
             reset_settings_cache()
+            # Reconfigure this application explicitly; the process-global cache is not its authority.
+            app.state.settings = app.state.settings.model_copy(update={
+                "secret_master_key": master_v2,
+                "secret_active_key_version": 2,
+                "secret_previous_master_keys": f"v1:{master_v1}",
+            })
 
             r_list_a = await admin_a_client.get("/api/v1/platform/secrets")
             assert r_list_a.status_code == 200

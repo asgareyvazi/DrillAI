@@ -1,0 +1,238 @@
+{
+  "status": "PARTIAL",
+  "scope": "Pre-certification, closure not yet established.",
+  "historical_untracked": "24 Mission 13 path exceptions retained; complete earlier per-path metadata unavailable because Mission 13 private end manifest was not restored.",
+  "protected": "Nine entries match prior bytes/type/mode/size; timestamps differ from Mission 13. Preserved current values.",
+  "private_evidence": ".mission12-private/mission14-baseline/ is owner-only and ignored; contains sensitive paths, diff and test logs. Not an independent backup.",
+  "temporary": "Mission-created private temporary directory contains Python environment, logs, and synthetic browser databases; retained pending certification. Not guaranteed durable after sandbox restoration.",
+  "prior_ignored": "Mission 13 node_modules, CP150 directories and private manifest absent in restored initial snapshot.",
+  "pending": "Finish full test, commit, push, exact-SHA CI and recheck complete workspace/refs.",
+  "precommit_ignored_paths": [
+    {
+      "path": ".mission12-private/",
+      "classification": "private audit evidence; retained"
+    },
+    {
+      "path": ".ruff_cache/",
+      "classification": "test/build dependency or cache generated during mission; retained to avoid unchecked deletion"
+    },
+    {
+      "path": "backend/.pytest_cache/",
+      "classification": "test/build dependency or cache generated during mission; retained to avoid unchecked deletion"
+    },
+    {
+      "path": "backend/.ruff_cache/",
+      "classification": "test/build dependency or cache generated during mission; retained to avoid unchecked deletion"
+    },
+    {
+      "path": "backend/alembic/__pycache__/",
+      "classification": "test/build dependency or cache generated during mission; retained to avoid unchecked deletion"
+    },
+    {
+      "path": "backend/alembic/versions/__pycache__/",
+      "classification": "test/build dependency or cache generated during mission; retained to avoid unchecked deletion"
+    },
+    {
+      "path": "backend/src/drillai/__pycache__/",
+      "classification": "test/build dependency or cache generated during mission; retained to avoid unchecked deletion"
+    },
+    {
+      "path": "backend/src/drillai/ai/__pycache__/",
+      "classification": "test/build dependency or cache generated during mission; retained to avoid unchecked deletion"
+    },
+    {
+      "path": "backend/src/drillai/api/__pycache__/",
+      "classification": "test/build dependency or cache generated during mission; retained to avoid unchecked deletion"
+    },
+    {
+      "path": "backend/src/drillai/api/routers/__pycache__/",
+      "classification": "test/build dependency or cache generated during mission; retained to avoid unchecked deletion"
+    },
+    {
+      "path": "backend/src/drillai/assets/__pycache__/",
+      "classification": "test/build dependency or cache generated during mission; retained to avoid unchecked deletion"
+    },
+    {
+      "path": "backend/src/drillai/context/__pycache__/",
+      "classification": "test/build dependency or cache generated during mission; retained to avoid unchecked deletion"
+    },
+    {
+      "path": "backend/src/drillai/core/__pycache__/",
+      "classification": "test/build dependency or cache generated during mission; retained to avoid unchecked deletion"
+    },
+    {
+      "path": "backend/src/drillai/db/__pycache__/",
+      "classification": "test/build dependency or cache generated during mission; retained to avoid unchecked deletion"
+    },
+    {
+      "path": "backend/src/drillai/db/models/__pycache__/",
+      "classification": "test/build dependency or cache generated during mission; retained to avoid unchecked deletion"
+    },
+    {
+      "path": "backend/src/drillai/documents/__pycache__/",
+      "classification": "test/build dependency or cache generated during mission; retained to avoid unchecked deletion"
+    },
+    {
+      "path": "backend/src/drillai/drilling/__pycache__/",
+      "classification": "test/build dependency or cache generated during mission; retained to avoid unchecked deletion"
+    },
+    {
+      "path": "backend/src/drillai/engineering/__pycache__/",
+      "classification": "test/build dependency or cache generated during mission; retained to avoid unchecked deletion"
+    },
+    {
+      "path": "backend/src/drillai/engines/__pycache__/",
+      "classification": "test/build dependency or cache generated during mission; retained to avoid unchecked deletion"
+    },
+    {
+      "path": "backend/src/drillai/ingestion/__pycache__/",
+      "classification": "test/build dependency or cache generated during mission; retained to avoid unchecked deletion"
+    },
+    {
+      "path": "backend/src/drillai/observability/__pycache__/",
+      "classification": "test/build dependency or cache generated during mission; retained to avoid unchecked deletion"
+    },
+    {
+      "path": "backend/src/drillai/operations/__pycache__/",
+      "classification": "test/build dependency or cache generated during mission; retained to avoid unchecked deletion"
+    },
+    {
+      "path": "backend/src/drillai/rag/__pycache__/",
+      "classification": "test/build dependency or cache generated during mission; retained to avoid unchecked deletion"
+    },
+    {
+      "path": "backend/src/drillai/security/__pycache__/",
+      "classification": "test/build dependency or cache generated during mission; retained to avoid unchecked deletion"
+    },
+    {
+      "path": "backend/src/drillai/telemetry/__pycache__/",
+      "classification": "test/build dependency or cache generated during mission; retained to avoid unchecked deletion"
+    },
+    {
+      "path": "backend/src/drillai/telemetry/protocols/__pycache__/",
+      "classification": "test/build dependency or cache generated during mission; retained to avoid unchecked deletion"
+    },
+    {
+      "path": "backend/src/drillai/twin/__pycache__/",
+      "classification": "test/build dependency or cache generated during mission; retained to avoid unchecked deletion"
+    },
+    {
+      "path": "backend/src/drillai/units/__pycache__/",
+      "classification": "test/build dependency or cache generated during mission; retained to avoid unchecked deletion"
+    },
+    {
+      "path": "backend/src/drillai/workflow/__pycache__/",
+      "classification": "test/build dependency or cache generated during mission; retained to avoid unchecked deletion"
+    },
+    {
+      "path": "backend/tests/__pycache__/",
+      "classification": "test/build dependency or cache generated during mission; retained to avoid unchecked deletion"
+    },
+    {
+      "path": "backend/tests/ai/__pycache__/",
+      "classification": "test/build dependency or cache generated during mission; retained to avoid unchecked deletion"
+    },
+    {
+      "path": "backend/tests/api/__pycache__/",
+      "classification": "test/build dependency or cache generated during mission; retained to avoid unchecked deletion"
+    },
+    {
+      "path": "backend/tests/assets/__pycache__/",
+      "classification": "test/build dependency or cache generated during mission; retained to avoid unchecked deletion"
+    },
+    {
+      "path": "backend/tests/context/__pycache__/",
+      "classification": "test/build dependency or cache generated during mission; retained to avoid unchecked deletion"
+    },
+    {
+      "path": "backend/tests/db/__pycache__/",
+      "classification": "test/build dependency or cache generated during mission; retained to avoid unchecked deletion"
+    },
+    {
+      "path": "backend/tests/documents/__pycache__/",
+      "classification": "test/build dependency or cache generated during mission; retained to avoid unchecked deletion"
+    },
+    {
+      "path": "backend/tests/drilling/__pycache__/",
+      "classification": "test/build dependency or cache generated during mission; retained to avoid unchecked deletion"
+    },
+    {
+      "path": "backend/tests/engineering/__pycache__/",
+      "classification": "test/build dependency or cache generated during mission; retained to avoid unchecked deletion"
+    },
+    {
+      "path": "backend/tests/engines/__pycache__/",
+      "classification": "test/build dependency or cache generated during mission; retained to avoid unchecked deletion"
+    },
+    {
+      "path": "backend/tests/fixtures/__pycache__/",
+      "classification": "test/build dependency or cache generated during mission; retained to avoid unchecked deletion"
+    },
+    {
+      "path": "backend/tests/ingestion/__pycache__/",
+      "classification": "test/build dependency or cache generated during mission; retained to avoid unchecked deletion"
+    },
+    {
+      "path": "backend/tests/operations/__pycache__/",
+      "classification": "test/build dependency or cache generated during mission; retained to avoid unchecked deletion"
+    },
+    {
+      "path": "backend/tests/rag/__pycache__/",
+      "classification": "test/build dependency or cache generated during mission; retained to avoid unchecked deletion"
+    },
+    {
+      "path": "backend/tests/security/__pycache__/",
+      "classification": "test/build dependency or cache generated during mission; retained to avoid unchecked deletion"
+    },
+    {
+      "path": "backend/tests/telemetry/__pycache__/",
+      "classification": "test/build dependency or cache generated during mission; retained to avoid unchecked deletion"
+    },
+    {
+      "path": "backend/tests/twin/__pycache__/",
+      "classification": "test/build dependency or cache generated during mission; retained to avoid unchecked deletion"
+    },
+    {
+      "path": "backend/tests/units/__pycache__/",
+      "classification": "test/build dependency or cache generated during mission; retained to avoid unchecked deletion"
+    },
+    {
+      "path": "backend/tests/workflow/__pycache__/",
+      "classification": "test/build dependency or cache generated during mission; retained to avoid unchecked deletion"
+    },
+    {
+      "path": "frontend/.e2e-cp150-m14-7e28c1a9/",
+      "classification": "synthetic CP150 run evidence, marker checked; retained"
+    },
+    {
+      "path": "frontend/.e2e-cp150-results-m14-7e28c1a9/",
+      "classification": "synthetic CP150 run evidence, marker checked; retained"
+    },
+    {
+      "path": "frontend/dist/",
+      "classification": "test/build dependency or cache generated during mission; retained to avoid unchecked deletion"
+    },
+    {
+      "path": "frontend/node_modules/",
+      "classification": "test/build dependency or cache generated during mission; retained to avoid unchecked deletion"
+    },
+    {
+      "path": "frontend/tsconfig.app.tsbuildinfo",
+      "classification": "test/build dependency or cache generated during mission; retained to avoid unchecked deletion"
+    },
+    {
+      "path": "frontend/tsconfig.e2e.tsbuildinfo",
+      "classification": "test/build dependency or cache generated during mission; retained to avoid unchecked deletion"
+    },
+    {
+      "path": "frontend/tsconfig.node.tsbuildinfo",
+      "classification": "test/build dependency or cache generated during mission; retained to avoid unchecked deletion"
+    },
+    {
+      "path": "scripts/__pycache__/",
+      "classification": "test/build dependency or cache generated during mission; retained to avoid unchecked deletion"
+    }
+  ],
+  "historical_untracked_check": "24/24 files match Mission14 start metadata and hashes; 9/9 protected entries match Mission14 start. All protected mtimes differ from earlier recorded Mission13 end, reason unknown.",
+  "precommit_manifest_sha256": "b7d21b4d9beee9c2949489d9792e140434b21bc8794a36c3d5eb4e4ec25c8ae4"
+}

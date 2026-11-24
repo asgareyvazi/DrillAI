@@ -12,9 +12,8 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Request
 
-from drillai.api.deps import current_auth, get_database
+from drillai.api.deps import current_auth, get_app_settings, get_database
 from drillai.api.version import API_VERSION
-from drillai.core.config import get_settings
 from drillai.db.session import Database
 from drillai.observability.tracing import get_metrics
 
@@ -23,7 +22,7 @@ router = APIRouter(tags=["platform"])
 
 @router.get("/health", summary="Liveness")
 async def health(request: Request) -> dict[str, Any]:
-    settings = get_settings()
+    settings = get_app_settings(request)
     catalogues = getattr(request.app.state, "catalogues", {})
     started_at = getattr(request.app.state, "started_at", None)
     return {
@@ -41,7 +40,7 @@ async def readiness(
     database: Annotated[Database, Depends(get_database)],
     _: Annotated[Any, Depends(current_auth)],
 ) -> dict[str, Any]:
-    settings = get_settings()
+    settings = get_app_settings(request)
     checks: dict[str, Any] = {}
     healthy = True
     try:
@@ -103,7 +102,7 @@ async def readiness(
 
 @router.get("/version", summary="API and platform version")
 async def version(request: Request) -> dict[str, Any]:
-    settings = get_settings()
+    settings = get_app_settings(request)
     return {
         "api_version": API_VERSION,
         "app_name": settings.app_name,

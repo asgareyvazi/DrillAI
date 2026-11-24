@@ -1,0 +1,8 @@
+{
+  "software": "NOT_ACCEPTED",
+  "independent_calculation_assurance": "PARTIAL",
+  "field_qualification": "BLOCKED_BY_MISSING_AUTHORIZED_EVIDENCE",
+  "cross_platform_ci": "NOT_ACCEPTED",
+  "workspace_git": "PARTIAL",
+  "reason": "Unresolved OCR deployment gate, process containment and deadlines, engineering workflows and assurance; final exact-SHA CI pending."
+}

@@ -1,0 +1,168 @@
+{
+  "status": "PARTIAL",
+  "scope": "Inherited path-addition evidence from reachable history, not proof of first functional capability; eighteen areas remain unknown pending service/UI/persistence audit.",
+  "areas": [
+    {
+      "area": "DDR",
+      "representative_source": "backend/src/drillai/drilling/daily_reports.py",
+      "earliest_added_path_commit": "699a551b6fd9ce7fa098012ed8e4f4b656f5fb3f\t2026-11-01\tfeat(reports): add manual daily report lifecycle API",
+      "first_functional_commit": "UNKNOWN",
+      "source_to_report_audit": "UNKNOWN",
+      "status": "UNKNOWN",
+      "caveat": "Path addition or rename tracking does not establish first functional service, API, UI, persistence or validation."
+    },
+    {
+      "area": "NPT",
+      "representative_source": "backend/src/drillai/drilling/npt.py",
+      "earliest_added_path_commit": "b9810172979d076a247c680df63646de272d8501\t2026-09-27\tfeat(backend): drilling intelligence domain with NPT, timeline and reporting APIs",
+      "first_functional_commit": "UNKNOWN",
+      "source_to_report_audit": "UNKNOWN",
+      "status": "UNKNOWN",
+      "caveat": "Path addition or rename tracking does not establish first functional service, API, UI, persistence or validation."
+    },
+    {
+      "area": "OCR",
+      "representative_source": "backend/src/drillai/ingestion/ocr.py",
+      "earliest_added_path_commit": "aa64c161bf79d31f93a054773a184e2d687bb9d8\t2026-11-01\tfeat(cp59-cp75): close verified lifecycle and export gaps",
+      "first_functional_commit": "UNKNOWN",
+      "source_to_report_audit": "UNKNOWN",
+      "status": "UNKNOWN",
+      "caveat": "Path addition or rename tracking does not establish first functional service, API, UI, persistence or validation."
+    },
+    {
+      "area": "operations and chronology",
+      "representative_source": "backend/src/drillai/drilling/timeline.py",
+      "earliest_added_path_commit": "b9810172979d076a247c680df63646de272d8501\t2026-09-27\tfeat(backend): drilling intelligence domain with NPT, timeline and reporting APIs",
+      "first_functional_commit": "UNKNOWN",
+      "source_to_report_audit": "UNKNOWN",
+      "status": "UNKNOWN",
+      "caveat": "Path addition or rename tracking does not establish first functional service, API, UI, persistence or validation."
+    },
+    {
+      "area": "survey and trajectory",
+      "representative_source": "backend/src/drillai/drilling/surveys.py",
+      "earliest_added_path_commit": "160bcc0b10d1cfbf139c79038cf3a0034f44ce64\t2026-11-07\tfeat(surveys): add reviewed trajectory revision workflow",
+      "first_functional_commit": "UNKNOWN",
+      "source_to_report_audit": "UNKNOWN",
+      "status": "UNKNOWN",
+      "caveat": "Path addition or rename tracking does not establish first functional service, API, UI, persistence or validation."
+    },
+    {
+      "area": "geometric proximity",
+      "representative_source": "backend/src/drillai/engines/proximity.py",
+      "earliest_added_path_commit": "2be1f7bffab0fbca0a49f9b9a08c5efceea51814\t2026-11-22\tAdvance circulation and geometric proximity with explicit evidence limits",
+      "first_functional_commit": "UNKNOWN",
+      "source_to_report_audit": "UNKNOWN",
+      "status": "UNKNOWN",
+      "caveat": "Path addition or rename tracking does not establish first functional service, API, UI, persistence or validation."
+    },
+    {
+      "area": "capacity hydraulics rheology ECD and cuttings screen",
+      "representative_source": "backend/src/drillai/engines/fluids.py",
+      "earliest_added_path_commit": "aa7ff9d236082db93342d3f0e892430778126a11\t2026-09-26\tfeat: establish drilling AI platform foundation",
+      "first_functional_commit": "UNKNOWN",
+      "source_to_report_audit": "UNKNOWN",
+      "status": "UNKNOWN",
+      "caveat": "Path addition or rename tracking does not establish first functional service, API, UI, persistence or validation."
+    },
+    {
+      "area": "well design and programs/procedures",
+      "representative_source": "backend/src/drillai/engineering/products.py",
+      "earliest_added_path_commit": "d7526a1120e28d3255dfdb702e14e89e4b2b42f7\t2026-11-18\tfeat: add governed engineering products and OCR evidence",
+      "first_functional_commit": "UNKNOWN",
+      "source_to_report_audit": "UNKNOWN",
+      "status": "UNKNOWN",
+      "caveat": "Path addition or rename tracking does not establish first functional service, API, UI, persistence or validation."
+    },
+    {
+      "area": "AI advisor",
+      "representative_source": "backend/src/drillai/drilling/advisor.py",
+      "earliest_added_path_commit": "b9810172979d076a247c680df63646de272d8501\t2026-09-27\tfeat(backend): drilling intelligence domain with NPT, timeline and reporting APIs",
+      "first_functional_commit": "UNKNOWN",
+      "source_to_report_audit": "UNKNOWN",
+      "status": "UNKNOWN",
+      "caveat": "Path addition or rename tracking does not establish first functional service, API, UI, persistence or validation."
+    },
+    {
+      "area": "RAG",
+      "representative_source": "backend/src/drillai/rag/retriever.py",
+      "earliest_added_path_commit": "aa7ff9d236082db93342d3f0e892430778126a11\t2026-09-26\tfeat: establish drilling AI platform foundation",
+      "first_functional_commit": "UNKNOWN",
+      "source_to_report_audit": "UNKNOWN",
+      "status": "UNKNOWN",
+      "caveat": "Path addition or rename tracking does not establish first functional service, API, UI, persistence or validation."
+    },
+    {
+      "area": "telemetry connectors and twin",
+      "representative_source": "backend/src/drillai/telemetry/service.py",
+      "earliest_added_path_commit": "978df6133788a887b3841ed1978114e6e7a8f0de\t2026-10-06\tCP9 checkpoint B part 1: telemetry ingestion, windows, latest values and their tests",
+      "first_functional_commit": "UNKNOWN",
+      "source_to_report_audit": "UNKNOWN",
+      "status": "UNKNOWN",
+      "caveat": "Path addition or rename tracking does not establish first functional service, API, UI, persistence or validation."
+    },
+    {
+      "area": "reports",
+      "representative_source": "backend/src/drillai/drilling/reporting.py",
+      "earliest_added_path_commit": "b9810172979d076a247c680df63646de272d8501\t2026-09-27\tfeat(backend): drilling intelligence domain with NPT, timeline and reporting APIs",
+      "first_functional_commit": "UNKNOWN",
+      "source_to_report_audit": "UNKNOWN",
+      "status": "UNKNOWN",
+      "caveat": "Path addition or rename tracking does not establish first functional service, API, UI, persistence or validation."
+    },
+    {
+      "area": "hole cleaning",
+      "representative_source": null,
+      "earliest_added_path_commit": null,
+      "first_functional_commit": "UNKNOWN",
+      "source_to_report_audit": "UNKNOWN",
+      "status": "UNKNOWN",
+      "caveat": "Path addition or rename tracking does not establish first functional service, API, UI, persistence or validation."
+    },
+    {
+      "area": "surge and swab",
+      "representative_source": null,
+      "earliest_added_path_commit": null,
+      "first_functional_commit": "UNKNOWN",
+      "source_to_report_audit": "UNKNOWN",
+      "status": "UNKNOWN",
+      "caveat": "Path addition or rename tracking does not establish first functional service, API, UI, persistence or validation."
+    },
+    {
+      "area": "drillstring buckling",
+      "representative_source": null,
+      "earliest_added_path_commit": null,
+      "first_functional_commit": "UNKNOWN",
+      "source_to_report_audit": "UNKNOWN",
+      "status": "UNKNOWN",
+      "caveat": "Path addition or rename tracking does not establish first functional service, API, UI, persistence or validation."
+    },
+    {
+      "area": "cementing design",
+      "representative_source": null,
+      "earliest_added_path_commit": null,
+      "first_functional_commit": "UNKNOWN",
+      "source_to_report_audit": "UNKNOWN",
+      "status": "UNKNOWN",
+      "caveat": "Path addition or rename tracking does not establish first functional service, API, UI, persistence or validation."
+    },
+    {
+      "area": "wellbore stability",
+      "representative_source": null,
+      "earliest_added_path_commit": null,
+      "first_functional_commit": "UNKNOWN",
+      "source_to_report_audit": "UNKNOWN",
+      "status": "UNKNOWN",
+      "caveat": "Path addition or rename tracking does not establish first functional service, API, UI, persistence or validation."
+    },
+    {
+      "area": "full uncertainty-based anti-collision",
+      "representative_source": null,
+      "earliest_added_path_commit": null,
+      "first_functional_commit": "UNKNOWN",
+      "source_to_report_audit": "UNKNOWN",
+      "status": "UNKNOWN",
+      "caveat": "Path addition or rename tracking does not establish first functional service, API, UI, persistence or validation."
+    }
+  ]
+}

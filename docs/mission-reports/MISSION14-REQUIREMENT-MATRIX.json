@@ -1,0 +1,374 @@
+{
+  "status": "PARTIAL",
+  "scope": "Mission 13 baseline retained; not evidence of exhaustive Mission 14 criteria. See recovery matrix and phase ledger.",
+  "requirements": [
+    {
+      "id": 1,
+      "requirement": "Persian deployment OCR",
+      "status": "NOT_ACCEPTED",
+      "finding": "Baseline deployment OCR failed; local shim remains below threshold.",
+      "prior_mission12_status": "NOT_ACCEPTED",
+      "prior_source": "docs/mission-reports/MISSION12-REQUIREMENT-MATRIX.json",
+      "source_pointers": [
+        "backend/src/drillai/ingestion/ocr.py",
+        "docs/mission-reports/CP135-BILINGUAL-INGESTION-OCR-BENCHMARK.md"
+      ],
+      "next_action": "Restore actual accuracy and pass all unchanged deployed strata"
+    },
+    {
+      "id": 2,
+      "requirement": "Bounded page OCR",
+      "status": "PARTIAL",
+      "finding": "Legacy process group can be escaped; optional Linux namespace is not deployment certified, Windows Job Object and document-wide deadline remain missing.",
+      "prior_mission12_status": "PARTIAL",
+      "prior_source": "docs/mission-reports/MISSION12-REQUIREMENT-MATRIX.json",
+      "source_pointers": [
+        "backend/src/drillai/ingestion/ocr.py",
+        "backend/tests/ingestion/test_ocr.py"
+      ],
+      "next_action": "Queue/render/layout/OCR/parsing/publication deadline and Windows process-tree termination remain missing."
+    },
+    {
+      "id": 3,
+      "requirement": "Authorized holdout",
+      "status": "BLOCKED_BY_MISSING_AUTHORIZED_EVIDENCE",
+      "finding": "No authorized field holdout was supplied.",
+      "prior_mission12_status": "BLOCKED_BY_MISSING_AUTHORIZED_EVIDENCE",
+      "prior_source": "docs/mission-reports/MISSION12-REQUIREMENT-MATRIX.json",
+      "source_pointers": [
+        "backend/src/drillai/ingestion/ocr_benchmark.py"
+      ],
+      "next_action": "Obtain approved authentic DDRs, freeze independently adjudicated labels and split"
+    },
+    {
+      "id": 4,
+      "requirement": "Full capacity geometry",
+      "status": "UNKNOWN",
+      "finding": "Inherited item not independently assessed in this increment; prior status is not promoted.",
+      "prior_mission12_status": "UNKNOWN",
+      "prior_source": "docs/mission-reports/MISSION12-REQUIREMENT-MATRIX.json",
+      "source_pointers": [
+        "backend/src/drillai/engines/fluids.py"
+      ],
+      "next_action": "Tool joints, washout, nesting and measured/design distinction"
+    },
+    {
+      "id": 5,
+      "requirement": "Authenticated bore evidence",
+      "status": "UNKNOWN",
+      "finding": "Inherited item not independently assessed in this increment; prior status is not promoted.",
+      "prior_mission12_status": "UNKNOWN",
+      "prior_source": "docs/mission-reports/MISSION12-REQUIREMENT-MATRIX.json",
+      "source_pointers": [
+        "backend/src/drillai/engines/fluids.py"
+      ],
+      "next_action": "Caller text is not authenticated evidence; build review and identity linkage"
+    },
+    {
+      "id": 6,
+      "requirement": "Versioned capacity design",
+      "status": "UNKNOWN",
+      "finding": "Inherited item not independently assessed in this increment; prior status is not promoted.",
+      "prior_mission12_status": "UNKNOWN",
+      "prior_source": "docs/mission-reports/MISSION12-REQUIREMENT-MATRIX.json",
+      "source_pointers": [
+        "frontend/src/pages/engineering/CirculationWorkspace.tsx"
+      ],
+      "next_action": "No governed capacity revision/approval/export journey"
+    },
+    {
+      "id": 7,
+      "requirement": "Hydraulics/ECD slice",
+      "status": "UNKNOWN",
+      "finding": "Inherited item not independently assessed in this increment; prior status is not promoted.",
+      "prior_mission12_status": "UNKNOWN",
+      "prior_source": "docs/mission-reports/MISSION12-REQUIREMENT-MATRIX.json",
+      "source_pointers": [
+        "backend/src/drillai/engines/fluids.py"
+      ],
+      "next_action": "Full surveyed depth profile, components, review and reports missing"
+    },
+    {
+      "id": 8,
+      "requirement": "Survey-linked depths",
+      "status": "UNKNOWN",
+      "finding": "Inherited item not independently assessed in this increment; prior status is not promoted.",
+      "prior_mission12_status": "UNKNOWN",
+      "prior_source": "docs/mission-reports/MISSION12-REQUIREMENT-MATRIX.json",
+      "source_pointers": [
+        "backend/src/drillai/drilling/surveys.py"
+      ],
+      "next_action": "Connect persisted revision and validated datum to hydraulics"
+    },
+    {
+      "id": 9,
+      "requirement": "New rheology",
+      "status": "UNKNOWN",
+      "finding": "Inherited item not independently assessed in this increment; prior status is not promoted.",
+      "prior_mission12_status": "UNKNOWN",
+      "prior_source": "docs/mission-reports/MISSION12-REQUIREMENT-MATRIX.json",
+      "source_pointers": [
+        "backend/src/drillai/engines/power_law.py"
+      ],
+      "next_action": "Pipe math only; annular/full-well design and report still missing"
+    },
+    {
+      "id": 10,
+      "requirement": "Survey geometric proximity",
+      "status": "UNKNOWN",
+      "finding": "Inherited item not independently assessed in this increment; prior status is not promoted.",
+      "prior_mission12_status": "UNKNOWN",
+      "prior_source": "docs/mission-reports/MISSION12-REQUIREMENT-MATRIX.json",
+      "source_pointers": [
+        "backend/src/drillai/engines/proximity.py"
+      ],
+      "next_action": "Select persisted surveys, datum validation and dedicated workflow"
+    },
+    {
+      "id": 11,
+      "requirement": "Anti-collision uncertainty",
+      "status": "UNKNOWN",
+      "finding": "Inherited item not independently assessed in this increment; prior status is not promoted.",
+      "prior_mission12_status": "UNKNOWN",
+      "prior_source": "docs/mission-reports/MISSION12-REQUIREMENT-MATRIX.json",
+      "source_pointers": [
+        "backend/src/drillai/engines/proximity.py"
+      ],
+      "next_action": "Covariance/error model/SF not implemented; select source and implement"
+    },
+    {
+      "id": 12,
+      "requirement": "Engine assurance",
+      "status": "PARTIAL",
+      "finding": "Five independent synthetic vector tests cover five engines, not 16 complete source-to-report audits.",
+      "prior_mission12_status": "PARTIAL",
+      "prior_source": "docs/mission-reports/MISSION12-REQUIREMENT-MATRIX.json",
+      "source_pointers": [
+        "backend/tests/engines/test_cp142_independent_calculation_assurance.py"
+      ],
+      "next_action": "Full independent source-to-report audit of all 16 not done"
+    },
+    {
+      "id": 13,
+      "requirement": "Manual DDR",
+      "status": "UNKNOWN",
+      "finding": "Inherited item not independently assessed in this increment; prior status is not promoted.",
+      "prior_mission12_status": "UNKNOWN",
+      "prior_source": "docs/mission-reports/MISSION12-REQUIREMENT-MATRIX.json",
+      "source_pointers": [
+        "backend/src/drillai/drilling/daily_reports.py"
+      ],
+      "next_action": "Complete authored engineering data/review journey"
+    },
+    {
+      "id": 14,
+      "requirement": "DDR batch/correction",
+      "status": "UNKNOWN",
+      "finding": "Inherited item not independently assessed in this increment; prior status is not promoted.",
+      "prior_mission12_status": "UNKNOWN",
+      "prior_source": "docs/mission-reports/MISSION12-REQUIREMENT-MATRIX.json",
+      "source_pointers": [
+        "backend/src/drillai/ingestion/pipeline.py"
+      ],
+      "next_action": "Batch lifecycle and immutable corrections not fully verified"
+    },
+    {
+      "id": 15,
+      "requirement": "Chronology",
+      "status": "UNKNOWN",
+      "finding": "Inherited item not independently assessed in this increment; prior status is not promoted.",
+      "prior_mission12_status": "UNKNOWN",
+      "prior_source": "docs/mission-reports/MISSION12-REQUIREMENT-MATRIX.json",
+      "source_pointers": [
+        "backend/src/drillai/drilling/timeline.py"
+      ],
+      "next_action": "Reconcile overlaps and missing timestamps; no comprehensive journey"
+    },
+    {
+      "id": 16,
+      "requirement": "NPT",
+      "status": "PARTIAL",
+      "finding": "NPT interval boundary aligned for SQL row selection; generic duration fallback, unknown times, approved attribution and identity remain unresolved.",
+      "prior_mission12_status": "PARTIAL",
+      "prior_source": "docs/mission-reports/MISSION12-REQUIREMENT-MATRIX.json",
+      "source_pointers": [
+        "backend/src/drillai/drilling/npt.py",
+        "backend/src/drillai/drilling/reporting.py",
+        "backend/tests/operations/test_npt_accounting.py"
+      ],
+      "next_action": "Explicit Event/Operation identity, cause allocation, independent approval, immutable revisions and export remain unimplemented; union covers scoped Event rows only."
+    },
+    {
+      "id": 17,
+      "requirement": "Well Design",
+      "status": "UNKNOWN",
+      "finding": "Inherited item not independently assessed in this increment; prior status is not promoted.",
+      "prior_mission12_status": "UNKNOWN",
+      "prior_source": "docs/mission-reports/MISSION12-REQUIREMENT-MATRIX.json",
+      "source_pointers": [
+        "backend/src/drillai/engineering/products.py"
+      ],
+      "next_action": "Cross-domain linked design and E2E not complete"
+    },
+    {
+      "id": 18,
+      "requirement": "Programs/Procedures",
+      "status": "UNKNOWN",
+      "finding": "Inherited item not independently assessed in this increment; prior status is not promoted.",
+      "prior_mission12_status": "UNKNOWN",
+      "prior_source": "docs/mission-reports/MISSION12-REQUIREMENT-MATRIX.json",
+      "source_pointers": [
+        "backend/src/drillai/engineering/service.py"
+      ],
+      "next_action": "Existing lifecycle; full acceptance/export journey not reverified"
+    },
+    {
+      "id": 19,
+      "requirement": "Advisor/RAG",
+      "status": "UNKNOWN",
+      "finding": "Inherited item not independently assessed in this increment; prior status is not promoted.",
+      "prior_mission12_status": "UNKNOWN",
+      "prior_source": "docs/mission-reports/MISSION12-REQUIREMENT-MATRIX.json",
+      "source_pointers": [
+        "backend/src/drillai/drilling/advisor.py"
+      ],
+      "next_action": "Retrieval metrics, scope and full citation E2E remain"
+    },
+    {
+      "id": 20,
+      "requirement": "Specialist agents",
+      "status": "UNKNOWN",
+      "finding": "Inherited item not independently assessed in this increment; prior status is not promoted.",
+      "prior_mission12_status": "UNKNOWN",
+      "prior_source": "docs/mission-reports/MISSION12-REQUIREMENT-MATRIX.json",
+      "source_pointers": [
+        "backend/src/drillai/workflow/graph.py"
+      ],
+      "next_action": "Dedicated bounded domain agents and human review incomplete"
+    },
+    {
+      "id": 21,
+      "requirement": "Telemetry/Twin",
+      "status": "UNKNOWN",
+      "finding": "Inherited item not independently assessed in this increment; prior status is not promoted.",
+      "prior_mission12_status": "UNKNOWN",
+      "prior_source": "docs/mission-reports/MISSION12-REQUIREMENT-MATRIX.json",
+      "source_pointers": [
+        "backend/src/drillai/telemetry/service.py"
+      ],
+      "next_action": "End-to-end reconciliation and external interop unverified"
+    },
+    {
+      "id": 22,
+      "requirement": "Reports/exports",
+      "status": "PARTIAL",
+      "finding": "NPT report caveats and boundary policy updated; broader report scope not independently assessed.",
+      "prior_mission12_status": "PARTIAL",
+      "prior_source": "docs/mission-reports/MISSION12-REQUIREMENT-MATRIX.json",
+      "source_pointers": [
+        "backend/src/drillai/drilling/reporting.py",
+        "backend/tests/operations/test_npt_accounting.py"
+      ],
+      "next_action": "Exact design/approval provenance and requested end-to-end journeys incomplete"
+    },
+    {
+      "id": 23,
+      "requirement": "RBAC/deployment",
+      "status": "UNKNOWN",
+      "finding": "Inherited item not independently assessed in this increment; prior status is not promoted.",
+      "prior_mission12_status": "UNKNOWN",
+      "prior_source": "docs/mission-reports/MISSION12-REQUIREMENT-MATRIX.json",
+      "source_pointers": [
+        "backend/src/drillai/security/rbac.py"
+      ],
+      "next_action": "New flows and deployment assurance not independently complete"
+    },
+    {
+      "id": 24,
+      "requirement": "Catalogue",
+      "status": "UNKNOWN",
+      "finding": "Inherited item not independently assessed in this increment; prior status is not promoted.",
+      "prior_mission12_status": "UNKNOWN",
+      "prior_source": "docs/mission-reports/MISSION12-REQUIREMENT-MATRIX.json",
+      "source_pointers": [
+        "docs/ENGINEERING_CAPABILITY_CATALOGUE.json"
+      ],
+      "next_action": "Regenerated inventory only; comprehensive historical audit/schema/roadmap incomplete"
+    },
+    {
+      "id": 25,
+      "requirement": "Windows history",
+      "status": "UNKNOWN",
+      "finding": "Inherited item not independently assessed in this increment; prior status is not promoted.",
+      "prior_mission12_status": "UNKNOWN",
+      "prior_source": "docs/mission-reports/MISSION12-REQUIREMENT-MATRIX.json",
+      "source_pointers": [
+        "scripts/verify_stack.py"
+      ],
+      "next_action": "Three repeated native full-suite diagnostic runs on the final SHA and full native CI must complete; root cause beyond measured budget not established."
+    },
+    {
+      "id": 26,
+      "requirement": "Full E2E",
+      "status": "UNKNOWN",
+      "finding": "New full cross-platform browser and two-well golden scenario not yet executed.",
+      "prior_mission12_status": "PARTIAL",
+      "prior_source": "docs/mission-reports/MISSION12-REQUIREMENT-MATRIX.json",
+      "source_pointers": [
+        ".github/workflows/ci.yml"
+      ],
+      "next_action": "Historical 129 do not substitute for requested new journeys"
+    },
+    {
+      "id": 27,
+      "requirement": "Exact-SHA CI",
+      "status": "NOT_ACCEPTED",
+      "finding": "Mission 12 exact-SHA CI failed Linux OCR; final Mission 13 CI is not yet established.",
+      "prior_mission12_status": "NOT_ACCEPTED",
+      "prior_source": "docs/mission-reports/MISSION12-REQUIREMENT-MATRIX.json",
+      "source_pointers": [
+        ".github/workflows/ci.yml"
+      ],
+      "next_action": "Exact-final-SHA CI must be observed on both platforms; old runs cannot certify this mission."
+    },
+    {
+      "id": 28,
+      "requirement": "Workspace",
+      "status": "PARTIAL",
+      "finding": "Private start manifest and protected comparison captured; final disposition not established.",
+      "prior_mission12_status": "PARTIAL",
+      "prior_source": "docs/mission-reports/MISSION12-REQUIREMENT-MATRIX.json",
+      "source_pointers": [
+        "docs/mission-reports/MISSION12-WORKSPACE-START.jsonl"
+      ],
+      "next_action": "Retain protected untracked artifacts and compare start/end metadata; exact final CI checkout artifact is separately named by run ID; historical original mtimes and missing bytes remain unavailable."
+    },
+    {
+      "id": 29,
+      "requirement": "Mission 7 Windows frontend authoring timeout",
+      "status": "UNKNOWN",
+      "finding": "Auxiliary Windows job checkout SHA is not established from accessible annotations; new guard requires GITHUB_SHA equality on future runs.",
+      "prior_mission12_status": "UNKNOWN",
+      "prior_source": "docs/mission-reports/MISSION12-REQUIREMENT-MATRIX.json",
+      "source_pointers": [],
+      "next_action": "Three repeated native full-suite diagnostic runs on the final SHA and full native CI must complete; root cause beyond measured budget not established."
+    },
+    {
+      "id": 30,
+      "requirement": "Mission 7 deployed OCR accuracy regression",
+      "status": "NOT_ACCEPTED",
+      "finding": "OCR deployment regression remains open.",
+      "prior_mission12_status": "NOT_ACCEPTED",
+      "prior_source": "docs/mission-reports/MISSION12-REQUIREMENT-MATRIX.json",
+      "source_pointers": [
+        "backend/src/drillai/ingestion/ocr.py"
+      ],
+      "next_action": "Restore all unchanged 64-case global and stratum gates."
+    }
+  ],
+  "security_regression": {
+    "status": "PARTIAL",
+    "finding": "Request auth and session handling corrected; broader process-global connector, provider and settings audit remains open.",
+    "tests": "test_m14_app_scoped_auth.py; ordered CP17/CP31/CP24 and security suite"
+  }
+}

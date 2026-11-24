@@ -542,7 +542,7 @@ async def stream_run_events(websocket: WebSocket, run_id: str, after_seq: int = 
                 headers["authorization"] = auth_header
             if dev_roles:
                 headers["x-dev-roles"] = dev_roles
-            request = _HeaderShim(headers, dict(websocket.query_params), cookies=dict(websocket.cookies))
+            request = _HeaderShim(headers, dict(websocket.query_params), cookies=dict(websocket.cookies), app=websocket.app)
             auth = await current_auth(request, session)  # type: ignore[arg-type]
             if not auth.principal.has_permission("workflow.read"):
                 await _close_websocket_if_connected(
@@ -678,7 +678,9 @@ class _HeaderShim:
         query: dict[str, str] | None = None,
         *,
         cookies: dict[str, str] | None = None,
+        app: Any,
     ) -> None:
+        self.app = app
         self.headers = headers
         self.query_params = query or {}
         self.cookies = cookies or {}

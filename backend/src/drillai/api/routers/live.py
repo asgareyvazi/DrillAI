@@ -106,7 +106,9 @@ class _HeaderShim:
         query: dict[str, str] | None = None,
         *,
         cookies: dict[str, str] | None = None,
+        app: Any,
     ) -> None:
+        self.app = app
         self.headers = headers
         self.query_params = query or {}
         self.cookies = cookies or {}
@@ -236,7 +238,7 @@ async def stream_well_live(
                 headers["authorization"] = auth_header
             if dev_roles:
                 headers["x-dev-roles"] = dev_roles
-            request = _HeaderShim(headers, dict(websocket.query_params), cookies=dict(websocket.cookies))
+            request = _HeaderShim(headers, dict(websocket.query_params), cookies=dict(websocket.cookies), app=websocket.app)
             auth = await current_auth(request, session)  # type: ignore[arg-type]
             if not auth.principal.has_permission("live.read"):
                 await websocket.close(code=4403, reason="live.read is required")
