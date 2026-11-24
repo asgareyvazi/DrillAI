@@ -163,13 +163,13 @@
       "phase": 26,
       "name": "Quality and cross-platform assurance",
       "status": "PARTIAL",
-      "evidence_or_gap": "Pre-final-namespace collection SQLite 1898 passed/15 skipped, source changed during run; full browser 124 passed/6 failed with mixed old Settings and new lazily loaded OCR runtime. Fresh fault/auth rerun 7/7 passed. New final-source full runs started; results pending. Focused tests and frontend checks passed."
+      "evidence_or_gap": "Final-code SQLite 1899 passed/15 skipped; full browser initially 128 passed/2 failed using invalid agent-selected readback path and an auth oracle 401; focused retry 5/1, then full clean .e2e-prefixed run 130/130. Earlier mixed-source browser 124/6 failure and fresh 7/7 retry also retained. Native platforms require exact-SHA CI."
     },
     {
       "phase": 27,
       "name": "Exact-SHA CI",
       "status": "NOT_ACCEPTED",
-      "evidence_or_gap": "Starting SHA CI failed OCR; new final SHA CI pending."
+      "evidence_or_gap": "Run 45359346395 on e1d1df0 Linux OCR gate failed; Linux backend 1914 and browser 130 passed, Windows incomplete at observation. New documentation commit requires its own complete CI."
     },
     {
       "phase": 28,

@@ -48,6 +48,30 @@
       "result": "PASS",
       "count": "1898 passed, 15 skipped",
       "limits": "Source changed while process ran; not exact-source certification."
+    },
+    {
+      "scenario": "Full SQLite with final code",
+      "result": "PASS",
+      "count": "1899 passed, 15 skipped",
+      "limits": "Local SQLite, not PostgreSQL or native Windows CI."
+    },
+    {
+      "scenario": "Full browser with final code and initial isolated paths",
+      "result": "FAIL",
+      "count": "128 passed, 2 failed",
+      "limits": "Read-only DDR helper refused the agent-selected temp path because its parent lacked the required .e2e prefix. Auth failure oracle reported an unprovoked identity 401; root cause unestablished."
+    },
+    {
+      "scenario": "Fresh focused DDR/auth browser rerun with same incompatible path naming",
+      "result": "FAIL",
+      "count": "5 passed, 1 failed",
+      "limits": "DDR readback refused the incorrectly named agent-selected path; auth tests passed. This does not erase earlier failures."
+    },
+    {
+      "scenario": "Full browser with fresh approved .e2e-prefixed isolated paths",
+      "result": "PASS",
+      "count": "130/130, zero retries, 7.6 minutes",
+      "limits": "Separate full run; does not erase prior failures or independently certify all native platforms."
     }
   ],
   "authorized_field_evidence": "BLOCKED_BY_MISSING_AUTHORIZED_EVIDENCE"

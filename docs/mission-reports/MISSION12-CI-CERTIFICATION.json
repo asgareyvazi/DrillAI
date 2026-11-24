@@ -311,6 +311,13 @@
   "intermediate_run": {
     "sha": "ed9690889815e1aba3dcf28f71f826d51552401b",
     "url": "https://github.com/asgareyvazi/DrillAI/actions/runs/45357994078",
-    "observation": "In progress at documentation update; Windows independent frontend reliability job passed, other jobs incomplete. Not final-SHA certification."
+    "conclusion": "cancelled after subsequent push; Windows independent frontend reliability job passed before cancellation"
+  },
+  "later_run": {
+    "sha": "e1d1df075aecde8c9db035a9a44ee4d5f4fa9c6e",
+    "url": "https://github.com/asgareyvazi/DrillAI/actions/runs/45359346395",
+    "observation": "Linux job failed Deployment-image CP135 OCR quality; Linux backend 1914 passed, frontend 423 passed, browser 130 passed; Windows independent frontend reliability passed and native Windows job still in progress at recording. Subsequent documentation commit requires its own CI.",
+    "ocr_critical_fields": "308/384",
+    "corpus_sha256": "31aca80b4323fe470d34705e36038296ef620adb7525373f5196c9f561b6735d"
   }
 }
