@@ -1,17 +1,17 @@
 """NPT intelligence.
 
-Non-productive time is **derived from recorded events**, never estimated. The rule this module
-enforces is that an hour of NPT exists because somebody recorded an event with a duration (or an
-operation with ``npt_hours``), and every aggregated number keeps a path back to those rows.
+The legacy event aggregate sums recorded event rows flagged as NPT. For compatibility it falls
+back to generic event duration when explicit NPT hours are missing. Generic duration is not proof
+of NPT, and overlapping rows can double count; the sum does not establish physical downtime.
+The separately published interval reconciliation is also evidence-limited, not approved downtime.
 
-Two independent sources exist in the model and they are reported separately rather than blended:
+Two separate source bases exist and are reported rather than blended:
 
-``events``      — what happened, with ``is_npt``, ``npt_code``/``npt_category`` and a duration
-``operations``  — the operation row's own ``npt_hours`` (the DDR roll-up)
+``events``      — flagged event rows, including the legacy generic-duration fallback
+``operations``  — actual operation rows' own ``npt_hours`` (the DDR roll-up)
 
-Blending them would double count. So :func:`summarise` publishes both and makes the *choice* of
-the reporting total explicit (``basis``), because an engineering review must be able to reconcile
-the platform's number with the rig's number.
+They may refer to the same loss. :func:`summarise` publishes both and makes the choice of basis
+explicit; an engineering review must still reconcile the records and the rig's report.
 """
 
 from __future__ import annotations

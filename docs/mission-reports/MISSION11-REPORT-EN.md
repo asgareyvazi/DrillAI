@@ -1,0 +1,28 @@
+# Mission 11 — interim report (NOT_ACCEPTED)
+
+This is an interim record, not a claim that Mission 11 is complete. The starting branch was `arena/9d8f5568-drillai`, local and remote SHA `c6e96c422acd66521b5d9172eaf5c13ef5296f82`; `origin/main` was `bfa066b28e0071880cb9191a4f1d47fdaa143e04` (308 ahead, 0 behind). The source-tree changes described below have not yet been certified on Linux and Windows at their eventual commit SHA. Prior CI cannot certify them.
+
+## Implemented in this increment
+
+* `WellStateService` no longer substitutes generic event duration when explicit NPT hours are zero. Its legacy event sum remains backward-compatible for missing NPT hours, with an explicit warning; its productive denominator and operation roll-up now exclude planned rows and the productive denominator excludes nonproductive actual rows, matching the NPT service's basis. This deliberately changes prior incorrect numerical state results for affected records.
+* Advisor retains legacy numeric keys but describes totals, categories and dominance as legacy row arithmetic, attaches metric contract and interval reconciliation, exposes case hour source, and distinguishes missing hours from explicit zero and generic event duration from NPT.
+* Workflow NPT outputs retain existing fields and add metric contract, interval reconciliation and a basis-specific caveat. Neither source establishes approved allocation or physical downtime; event and operation sums must not be added without identity reconciliation.
+* A synthetic cross-surface integration test exercises explicit zero, generic duration, missing duration, planned vs actual operations, productive vs nonproductive actual hours, Advisor, state, NPT service and both workflow bases. The final test variant also reads the state through the API and checks tenant isolation. It is not field validation. A focused regression passed 74 tests on the earlier variant; after adding API and tenant checks, that final test passed separately (1/1).
+
+The NPT interval output is evidence-limited, not a guaranteed actual downtime union or operation reconciliation. Existing consumers must migrate away from interpreting the legacy event sum or percentage as measured NPT; legacy fallback is **not removed** here. No authorization, source report, standard or vendor claim has been invented.
+
+## Acceptance blockers and inherited evidence
+
+On the starting SHA, [CI 45336060484](https://github.com/asgareyvazi/DrillAI/actions/runs/45336060484) failed the Linux deployment-image OCR gate. Linux backend: 1,909 passed; Playwright: 130 passed. Windows backend: 1,893 passed, 1 skipped, 15 deselected; frontend: 423 passed; Playwright: 130 passed. The independent frontend job passed. These are historical results, not results for this increment.
+
+The unchanged synthetic corpus (`data/synthetic_ddr_ocr_quality_v3.json`, SHA-256 `31aca80b4323fe470d34705e36038296ef620adb7525373f5196c9f561b6735d`) gave 64/64 evaluated, critical fields **308/384**; Persian 118/192, English 190/192; compact 88/96, single-column 88/96, table 50/96, two-column 82/96; clean, noise, skew and contrast each 77/96. CER 0.1083959490, WER 0.1550687285. The gate requires at least 90% overall and in every critical stratum. These numbers are from the previous deployment-image run, not a new benchmark or proof of field quality. The diagnostic confidence-selection experiment also failed and was not deployed (`MISSION10-CONTINUATION3-OCR-CONFIDENCE-DIAGNOSTIC.json`).
+
+Hard end-to-end document deadline and process-tree containment are not established: current POSIX recognition uses a process group but descendants can escape it; Windows recognition does not provide Job Object containment. No native-Windows proof exists for a replacement. An authorized authentic DDR holdout remains unavailable. OCR quality, independent 16-engine and non-registry calculation audits, 18-area functional history, two-well browser/API/DB golden scenario, current-SHA Linux/Windows CI and full workspace disposition remain open. The capability register retains its partial/unverified classification.
+
+The previous local full browser run had 129 passes and one DDR failure due to its readback database path; a later isolated run with an allowed path passed once. This does not retroactively turn the full suite green.
+
+## Evidence and limitations
+
+* `MISSION11-RECOVERY-MATRIX.json` lists all 30 inherited requirements without treating unassessed entries as complete. `MISSION11-PHASE-LEDGER.json` preserves 26 inherited numbers, but phase-specific mapping and exit audits remain unfinished.
+* `MISSION11-WORKSPACE-BASELINE.json` stores counts and a digest of the original private path-level manifest; the latter stays temporary pending privacy review. The digest alone is not a recoverable archive. Initial tracked 831, untracked files 24, ignored entries 12,052 and directories 1,704; no scan errors. `MISSION11-PROTECTED-START.json` and `MISSION11-PROTECTED-CHECK.json` preserve and compare the nine protected entries, including metadata and hashes. No other existing untracked/ignored artifacts were deleted or classified as disposable. Workspace closure is incomplete.
+* A local full SQLite run returned **1,894 passed, 15 skipped, 1 failed**: `test_cp16_10_documentation_and_contract_consistency_guard` rejected a changed README marker. The marker was restored afterwards and a focused rerun of the guard and the final cross-surface test passed 2/2; the full run was not retroactively passed and the test file was also extended while that run was in progress. New-SHA CI results must be checked separately. Full exact-SHA Linux and native Windows are required, including the unchanged OCR gate.

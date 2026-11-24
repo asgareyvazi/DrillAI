@@ -845,11 +845,19 @@ class WellStateService:
         )
 
         npt_events = [event for event in events if event.is_npt]
-        npt_hours = sum(float(event.npt_hours or event.duration_hours or 0.0) for event in npt_events)
-        productive_hours = sum(
-            float(op.actual_duration_hours or 0.0) for op in operations if op.operation_class == "actual"
+        # Match the legacy event SQL COALESCE semantics: an explicit zero must never fall back to
+        # the generic duration. This remains a legacy row sum, not verified NPT or interval union.
+        npt_hours = sum(
+            float(event.npt_hours if event.npt_hours is not None else event.duration_hours or 0.0)
+            for event in npt_events
         )
-        npt_from_operations = sum(float(op.npt_hours or 0.0) for op in operations)
+        productive_hours = sum(
+            float(op.actual_duration_hours or 0.0)
+            for op in operations if op.operation_class == "actual" and op.is_productive is True
+        )
+        npt_from_operations = sum(
+            float(op.npt_hours or 0.0) for op in operations if op.operation_class == "actual"
+        )
         total_hours = productive_hours + npt_hours
         return {
             "well": {
@@ -902,8 +910,10 @@ class WellStateService:
                 ),
                 "measured_hours_total": round(total_hours, 2),
                 "note": (
-                    "NPT is the sum of recorded NPT events; operations without events contribute "
-                    "nothing, so an under-reported well stays visibly under-reported"
+                    "Legacy event row sum: generic event duration is used when explicit NPT hours "
+                    "are absent; overlapping rows may double count. Neither the sum nor its "
+                    "percentage establishes verified NPT or physical downtime. The operation "
+                    "roll-up contains actual rows only and is not added to this event sum."
                 ),
             },
             "twin": {

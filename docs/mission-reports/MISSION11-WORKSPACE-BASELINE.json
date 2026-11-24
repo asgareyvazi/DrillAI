@@ -1,0 +1,24 @@
+{
+  "status": "PARTIAL",
+  "starting_branch": "arena/9d8f5568-drillai",
+  "starting_head": "c6e96c422acd66521b5d9172eaf5c13ef5296f82",
+  "starting_remote_head": "c6e96c422acd66521b5d9172eaf5c13ef5296f82",
+  "starting_origin_main": "bfa066b28e0071880cb9191a4f1d47fdaa143e04",
+  "ahead_behind_main": [
+    308,
+    0
+  ],
+  "full_private_manifest_sha256": "8c4768c461da66abfe816d54dd2b208f6ac0f0d58f223a6e2bfbaf2aac8144f8",
+  "manifest_retention": "Full path-level scan remains in temporary workspace only pending privacy review; digest does not itself make those paths recoverable.",
+  "counts_at_start": {
+    "tracked": 831,
+    "untracked_files": 24,
+    "ignored": 12052,
+    "directories": 1704,
+    "errors": 0
+  },
+  "protected_entries_at_start": 9,
+  "protected_matches_previous_continuation_end": true,
+  "protected_matches_start_at_check": true,
+  "workspace_closure": "NOT_COMPLETED; preserved untracked and ignored files need ownership and privacy disposition"
+}

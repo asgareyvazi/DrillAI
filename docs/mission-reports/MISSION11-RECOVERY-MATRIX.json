@@ -1,0 +1,392 @@
+{
+  "overall": "NOT_ACCEPTED",
+  "scope": "30 inherited requirements indexed; unassessed entries are not accepted, not an independent completed audit.",
+  "requirements": [
+    {
+      "id": 1,
+      "requirement": "Persian deployment OCR",
+      "mission11_status": "NOT_ACCEPTED",
+      "mission11_evidence_or_gap": "Baseline SHA CI deployment-image OCR failed: 308/384 critical fields; all unchanged strata gate not met.",
+      "prior_inventory_status": "NOT_ACCEPTED",
+      "prior_inventory_record": "docs/mission-reports/MISSION10-RECOVERY-MATRIX.json",
+      "source_pointers": [
+        "backend/src/drillai/ingestion/ocr.py"
+      ],
+      "acceptance_gate": "Full corresponding Mission 10 phase exit gate including persistence, review, UI, independent tests and final-SHA CI; field evidence separately classified.",
+      "next_action": "Restore actual accuracy and pass all unchanged deployed strata"
+    },
+    {
+      "id": 2,
+      "requirement": "Bounded page OCR",
+      "mission11_status": "PARTIAL",
+      "mission11_evidence_or_gap": "Source review: per-page recognition has timeout and POSIX process-group killing, but no end-to-end hard deadline and Windows descendants not Job-contained.",
+      "prior_inventory_status": "PARTIAL",
+      "prior_inventory_record": "docs/mission-reports/MISSION10-RECOVERY-MATRIX.json",
+      "source_pointers": [
+        "backend/src/drillai/ingestion/parsers.py"
+      ],
+      "acceptance_gate": "Full corresponding Mission 10 phase exit gate including persistence, review, UI, independent tests and final-SHA CI; field evidence separately classified.",
+      "next_action": "Queue/render/layout/OCR/parsing/publication deadline and Windows process-tree termination remain missing."
+    },
+    {
+      "id": 3,
+      "requirement": "Authorized holdout",
+      "mission11_status": "BLOCKED_BY_MISSING_AUTHORIZED_EVIDENCE",
+      "mission11_evidence_or_gap": "No authentic authorized field holdout was supplied; synthetic evidence is not a substitute.",
+      "prior_inventory_status": "BLOCKED_BY_MISSING_AUTHORIZED_EVIDENCE",
+      "prior_inventory_record": "docs/mission-reports/MISSION10-RECOVERY-MATRIX.json",
+      "source_pointers": [
+        "backend/src/drillai/ingestion/ocr_benchmark.py"
+      ],
+      "acceptance_gate": "Full corresponding Mission 10 phase exit gate including persistence, review, UI, independent tests and final-SHA CI; field evidence separately classified.",
+      "next_action": "Obtain approved authentic DDRs, freeze independently adjudicated labels and split"
+    },
+    {
+      "id": 4,
+      "requirement": "Full capacity geometry",
+      "mission11_status": "NOT_INDEPENDENTLY_ASSESSED",
+      "mission11_evidence_or_gap": "Prior inventory and source pointers exist, but no Mission 11 independent source-to-report audit or exit-gate evidence is established.",
+      "prior_inventory_status": "UNKNOWN",
+      "prior_inventory_record": "docs/mission-reports/MISSION10-RECOVERY-MATRIX.json",
+      "source_pointers": [
+        "backend/src/drillai/engines/fluids.py"
+      ],
+      "acceptance_gate": "Full corresponding Mission 10 phase exit gate including persistence, review, UI, independent tests and final-SHA CI; field evidence separately classified.",
+      "next_action": "Tool joints, washout, nesting and measured/design distinction"
+    },
+    {
+      "id": 5,
+      "requirement": "Authenticated bore evidence",
+      "mission11_status": "NOT_INDEPENDENTLY_ASSESSED",
+      "mission11_evidence_or_gap": "Prior inventory and source pointers exist, but no Mission 11 independent source-to-report audit or exit-gate evidence is established.",
+      "prior_inventory_status": "UNKNOWN",
+      "prior_inventory_record": "docs/mission-reports/MISSION10-RECOVERY-MATRIX.json",
+      "source_pointers": [
+        "backend/src/drillai/engines/fluids.py"
+      ],
+      "acceptance_gate": "Full corresponding Mission 10 phase exit gate including persistence, review, UI, independent tests and final-SHA CI; field evidence separately classified.",
+      "next_action": "Caller text is not authenticated evidence; build review and identity linkage"
+    },
+    {
+      "id": 6,
+      "requirement": "Versioned capacity design",
+      "mission11_status": "NOT_INDEPENDENTLY_ASSESSED",
+      "mission11_evidence_or_gap": "Prior inventory and source pointers exist, but no Mission 11 independent source-to-report audit or exit-gate evidence is established.",
+      "prior_inventory_status": "UNKNOWN",
+      "prior_inventory_record": "docs/mission-reports/MISSION10-RECOVERY-MATRIX.json",
+      "source_pointers": [
+        "frontend/src/pages/engineering/CirculationWorkspace.tsx"
+      ],
+      "acceptance_gate": "Full corresponding Mission 10 phase exit gate including persistence, review, UI, independent tests and final-SHA CI; field evidence separately classified.",
+      "next_action": "No governed capacity revision/approval/export journey"
+    },
+    {
+      "id": 7,
+      "requirement": "Hydraulics/ECD slice",
+      "mission11_status": "NOT_INDEPENDENTLY_ASSESSED",
+      "mission11_evidence_or_gap": "Prior inventory and source pointers exist, but no Mission 11 independent source-to-report audit or exit-gate evidence is established.",
+      "prior_inventory_status": "UNKNOWN",
+      "prior_inventory_record": "docs/mission-reports/MISSION10-RECOVERY-MATRIX.json",
+      "source_pointers": [
+        "backend/src/drillai/engines/fluids.py"
+      ],
+      "acceptance_gate": "Full corresponding Mission 10 phase exit gate including persistence, review, UI, independent tests and final-SHA CI; field evidence separately classified.",
+      "next_action": "Full surveyed depth profile, components, review and reports missing"
+    },
+    {
+      "id": 8,
+      "requirement": "Survey-linked depths",
+      "mission11_status": "NOT_INDEPENDENTLY_ASSESSED",
+      "mission11_evidence_or_gap": "Prior inventory and source pointers exist, but no Mission 11 independent source-to-report audit or exit-gate evidence is established.",
+      "prior_inventory_status": "UNKNOWN",
+      "prior_inventory_record": "docs/mission-reports/MISSION10-RECOVERY-MATRIX.json",
+      "source_pointers": [
+        "backend/src/drillai/drilling/surveys.py"
+      ],
+      "acceptance_gate": "Full corresponding Mission 10 phase exit gate including persistence, review, UI, independent tests and final-SHA CI; field evidence separately classified.",
+      "next_action": "Connect persisted revision and validated datum to hydraulics"
+    },
+    {
+      "id": 9,
+      "requirement": "New rheology",
+      "mission11_status": "NOT_INDEPENDENTLY_ASSESSED",
+      "mission11_evidence_or_gap": "Prior inventory and source pointers exist, but no Mission 11 independent source-to-report audit or exit-gate evidence is established.",
+      "prior_inventory_status": "UNKNOWN",
+      "prior_inventory_record": "docs/mission-reports/MISSION10-RECOVERY-MATRIX.json",
+      "source_pointers": [
+        "backend/src/drillai/engines/power_law.py"
+      ],
+      "acceptance_gate": "Full corresponding Mission 10 phase exit gate including persistence, review, UI, independent tests and final-SHA CI; field evidence separately classified.",
+      "next_action": "Pipe math only; annular/full-well design and report still missing"
+    },
+    {
+      "id": 10,
+      "requirement": "Survey geometric proximity",
+      "mission11_status": "NOT_INDEPENDENTLY_ASSESSED",
+      "mission11_evidence_or_gap": "Prior inventory and source pointers exist, but no Mission 11 independent source-to-report audit or exit-gate evidence is established.",
+      "prior_inventory_status": "UNKNOWN",
+      "prior_inventory_record": "docs/mission-reports/MISSION10-RECOVERY-MATRIX.json",
+      "source_pointers": [
+        "backend/src/drillai/engines/proximity.py"
+      ],
+      "acceptance_gate": "Full corresponding Mission 10 phase exit gate including persistence, review, UI, independent tests and final-SHA CI; field evidence separately classified.",
+      "next_action": "Select persisted surveys, datum validation and dedicated workflow"
+    },
+    {
+      "id": 11,
+      "requirement": "Anti-collision uncertainty",
+      "mission11_status": "NOT_INDEPENDENTLY_ASSESSED",
+      "mission11_evidence_or_gap": "Prior inventory and source pointers exist, but no Mission 11 independent source-to-report audit or exit-gate evidence is established.",
+      "prior_inventory_status": "UNKNOWN",
+      "prior_inventory_record": "docs/mission-reports/MISSION10-RECOVERY-MATRIX.json",
+      "source_pointers": [
+        "backend/src/drillai/engines/proximity.py"
+      ],
+      "acceptance_gate": "Full corresponding Mission 10 phase exit gate including persistence, review, UI, independent tests and final-SHA CI; field evidence separately classified.",
+      "next_action": "Covariance/error model/SF not implemented; select source and implement"
+    },
+    {
+      "id": 12,
+      "requirement": "Engine assurance",
+      "mission11_status": "NOT_INDEPENDENTLY_ASSESSED",
+      "mission11_evidence_or_gap": "Prior inventory and source pointers exist, but no Mission 11 independent source-to-report audit or exit-gate evidence is established.",
+      "prior_inventory_status": "UNKNOWN",
+      "prior_inventory_record": "docs/mission-reports/MISSION10-RECOVERY-MATRIX.json",
+      "source_pointers": [
+        "backend/src/drillai/engines/registry.py"
+      ],
+      "acceptance_gate": "Full corresponding Mission 10 phase exit gate including persistence, review, UI, independent tests and final-SHA CI; field evidence separately classified.",
+      "next_action": "Full independent source-to-report audit of all 16 not done"
+    },
+    {
+      "id": 13,
+      "requirement": "Manual DDR",
+      "mission11_status": "NOT_INDEPENDENTLY_ASSESSED",
+      "mission11_evidence_or_gap": "Prior inventory and source pointers exist, but no Mission 11 independent source-to-report audit or exit-gate evidence is established.",
+      "prior_inventory_status": "UNKNOWN",
+      "prior_inventory_record": "docs/mission-reports/MISSION10-RECOVERY-MATRIX.json",
+      "source_pointers": [
+        "backend/src/drillai/drilling/daily_reports.py"
+      ],
+      "acceptance_gate": "Full corresponding Mission 10 phase exit gate including persistence, review, UI, independent tests and final-SHA CI; field evidence separately classified.",
+      "next_action": "Complete authored engineering data/review journey"
+    },
+    {
+      "id": 14,
+      "requirement": "DDR batch/correction",
+      "mission11_status": "NOT_INDEPENDENTLY_ASSESSED",
+      "mission11_evidence_or_gap": "Prior inventory and source pointers exist, but no Mission 11 independent source-to-report audit or exit-gate evidence is established.",
+      "prior_inventory_status": "UNKNOWN",
+      "prior_inventory_record": "docs/mission-reports/MISSION10-RECOVERY-MATRIX.json",
+      "source_pointers": [
+        "backend/src/drillai/ingestion/pipeline.py"
+      ],
+      "acceptance_gate": "Full corresponding Mission 10 phase exit gate including persistence, review, UI, independent tests and final-SHA CI; field evidence separately classified.",
+      "next_action": "Batch lifecycle and immutable corrections not fully verified"
+    },
+    {
+      "id": 15,
+      "requirement": "Chronology",
+      "mission11_status": "NOT_INDEPENDENTLY_ASSESSED",
+      "mission11_evidence_or_gap": "Prior inventory and source pointers exist, but no Mission 11 independent source-to-report audit or exit-gate evidence is established.",
+      "prior_inventory_status": "UNKNOWN",
+      "prior_inventory_record": "docs/mission-reports/MISSION10-RECOVERY-MATRIX.json",
+      "source_pointers": [
+        "backend/src/drillai/drilling/timeline.py"
+      ],
+      "acceptance_gate": "Full corresponding Mission 10 phase exit gate including persistence, review, UI, independent tests and final-SHA CI; field evidence separately classified.",
+      "next_action": "Reconcile overlaps and missing timestamps; no comprehensive journey"
+    },
+    {
+      "id": 16,
+      "requirement": "NPT",
+      "mission11_status": "PARTIAL",
+      "mission11_evidence_or_gap": "Explicit-zero fallback corrected and state/advisor/workflow caveats added; synthetic cross-surface test passes. Legacy event row sums may contain generic duration and overlaps; no approved physical downtime reconciliation.",
+      "prior_inventory_status": "PARTIAL",
+      "prior_inventory_record": "docs/mission-reports/MISSION10-RECOVERY-MATRIX.json",
+      "source_pointers": [
+        "backend/src/drillai/drilling/npt.py"
+      ],
+      "acceptance_gate": "Full corresponding Mission 10 phase exit gate including persistence, review, UI, independent tests and final-SHA CI; field evidence separately classified.",
+      "next_action": "Explicit Event/Operation identity, cause allocation, independent approval, immutable revisions and export remain unimplemented; union covers scoped Event rows only."
+    },
+    {
+      "id": 17,
+      "requirement": "Well Design",
+      "mission11_status": "NOT_INDEPENDENTLY_ASSESSED",
+      "mission11_evidence_or_gap": "Prior inventory and source pointers exist, but no Mission 11 independent source-to-report audit or exit-gate evidence is established.",
+      "prior_inventory_status": "UNKNOWN",
+      "prior_inventory_record": "docs/mission-reports/MISSION10-RECOVERY-MATRIX.json",
+      "source_pointers": [
+        "backend/src/drillai/engineering/products.py"
+      ],
+      "acceptance_gate": "Full corresponding Mission 10 phase exit gate including persistence, review, UI, independent tests and final-SHA CI; field evidence separately classified.",
+      "next_action": "Cross-domain linked design and E2E not complete"
+    },
+    {
+      "id": 18,
+      "requirement": "Programs/Procedures",
+      "mission11_status": "NOT_INDEPENDENTLY_ASSESSED",
+      "mission11_evidence_or_gap": "Prior inventory and source pointers exist, but no Mission 11 independent source-to-report audit or exit-gate evidence is established.",
+      "prior_inventory_status": "UNKNOWN",
+      "prior_inventory_record": "docs/mission-reports/MISSION10-RECOVERY-MATRIX.json",
+      "source_pointers": [
+        "backend/src/drillai/engineering/service.py"
+      ],
+      "acceptance_gate": "Full corresponding Mission 10 phase exit gate including persistence, review, UI, independent tests and final-SHA CI; field evidence separately classified.",
+      "next_action": "Existing lifecycle; full acceptance/export journey not reverified"
+    },
+    {
+      "id": 19,
+      "requirement": "Advisor/RAG",
+      "mission11_status": "NOT_INDEPENDENTLY_ASSESSED",
+      "mission11_evidence_or_gap": "Prior inventory and source pointers exist, but no Mission 11 independent source-to-report audit or exit-gate evidence is established.",
+      "prior_inventory_status": "UNKNOWN",
+      "prior_inventory_record": "docs/mission-reports/MISSION10-RECOVERY-MATRIX.json",
+      "source_pointers": [
+        "backend/src/drillai/drilling/advisor.py"
+      ],
+      "acceptance_gate": "Full corresponding Mission 10 phase exit gate including persistence, review, UI, independent tests and final-SHA CI; field evidence separately classified.",
+      "next_action": "Retrieval metrics, scope and full citation E2E remain"
+    },
+    {
+      "id": 20,
+      "requirement": "Specialist agents",
+      "mission11_status": "NOT_INDEPENDENTLY_ASSESSED",
+      "mission11_evidence_or_gap": "Prior inventory and source pointers exist, but no Mission 11 independent source-to-report audit or exit-gate evidence is established.",
+      "prior_inventory_status": "UNKNOWN",
+      "prior_inventory_record": "docs/mission-reports/MISSION10-RECOVERY-MATRIX.json",
+      "source_pointers": [
+        "backend/src/drillai/workflow/graph.py"
+      ],
+      "acceptance_gate": "Full corresponding Mission 10 phase exit gate including persistence, review, UI, independent tests and final-SHA CI; field evidence separately classified.",
+      "next_action": "Dedicated bounded domain agents and human review incomplete"
+    },
+    {
+      "id": 21,
+      "requirement": "Telemetry/Twin",
+      "mission11_status": "NOT_INDEPENDENTLY_ASSESSED",
+      "mission11_evidence_or_gap": "Prior inventory and source pointers exist, but no Mission 11 independent source-to-report audit or exit-gate evidence is established.",
+      "prior_inventory_status": "UNKNOWN",
+      "prior_inventory_record": "docs/mission-reports/MISSION10-RECOVERY-MATRIX.json",
+      "source_pointers": [
+        "backend/src/drillai/telemetry/service.py"
+      ],
+      "acceptance_gate": "Full corresponding Mission 10 phase exit gate including persistence, review, UI, independent tests and final-SHA CI; field evidence separately classified.",
+      "next_action": "End-to-end reconciliation and external interop unverified"
+    },
+    {
+      "id": 22,
+      "requirement": "Reports/exports",
+      "mission11_status": "NOT_INDEPENDENTLY_ASSESSED",
+      "mission11_evidence_or_gap": "Prior inventory and source pointers exist, but no Mission 11 independent source-to-report audit or exit-gate evidence is established.",
+      "prior_inventory_status": "UNKNOWN",
+      "prior_inventory_record": "docs/mission-reports/MISSION10-RECOVERY-MATRIX.json",
+      "source_pointers": [
+        "backend/src/drillai/engineering/exports.py"
+      ],
+      "acceptance_gate": "Full corresponding Mission 10 phase exit gate including persistence, review, UI, independent tests and final-SHA CI; field evidence separately classified.",
+      "next_action": "Exact design/approval provenance and requested end-to-end journeys incomplete"
+    },
+    {
+      "id": 23,
+      "requirement": "RBAC/deployment",
+      "mission11_status": "NOT_INDEPENDENTLY_ASSESSED",
+      "mission11_evidence_or_gap": "Prior inventory and source pointers exist, but no Mission 11 independent source-to-report audit or exit-gate evidence is established.",
+      "prior_inventory_status": "UNKNOWN",
+      "prior_inventory_record": "docs/mission-reports/MISSION10-RECOVERY-MATRIX.json",
+      "source_pointers": [
+        "backend/src/drillai/security/rbac.py"
+      ],
+      "acceptance_gate": "Full corresponding Mission 10 phase exit gate including persistence, review, UI, independent tests and final-SHA CI; field evidence separately classified.",
+      "next_action": "New flows and deployment assurance not independently complete"
+    },
+    {
+      "id": 24,
+      "requirement": "Catalogue",
+      "mission11_status": "NOT_INDEPENDENTLY_ASSESSED",
+      "mission11_evidence_or_gap": "Prior inventory and source pointers exist, but no Mission 11 independent source-to-report audit or exit-gate evidence is established.",
+      "prior_inventory_status": "UNKNOWN",
+      "prior_inventory_record": "docs/mission-reports/MISSION10-RECOVERY-MATRIX.json",
+      "source_pointers": [
+        "docs/ENGINEERING_CAPABILITY_CATALOGUE.json"
+      ],
+      "acceptance_gate": "Full corresponding Mission 10 phase exit gate including persistence, review, UI, independent tests and final-SHA CI; field evidence separately classified.",
+      "next_action": "Regenerated inventory only; comprehensive historical audit/schema/roadmap incomplete"
+    },
+    {
+      "id": 25,
+      "requirement": "Windows history",
+      "mission11_status": "NOT_INDEPENDENTLY_ASSESSED",
+      "mission11_evidence_or_gap": "Prior inventory and source pointers exist, but no Mission 11 independent source-to-report audit or exit-gate evidence is established.",
+      "prior_inventory_status": "UNKNOWN",
+      "prior_inventory_record": "docs/mission-reports/MISSION10-RECOVERY-MATRIX.json",
+      "source_pointers": [
+        "scripts/verify_stack.py"
+      ],
+      "acceptance_gate": "Full corresponding Mission 10 phase exit gate including persistence, review, UI, independent tests and final-SHA CI; field evidence separately classified.",
+      "next_action": "Three repeated native full-suite diagnostic runs on the final SHA and full native CI must complete; root cause beyond measured budget not established."
+    },
+    {
+      "id": 26,
+      "requirement": "Full E2E",
+      "mission11_status": "PARTIAL",
+      "mission11_evidence_or_gap": "Prior SHA CI had 130/130 browser tests on each OS; local prior full suite had 129/130 and isolated DDR pass. No Mission 11 full browser run yet.",
+      "prior_inventory_status": "UNKNOWN",
+      "prior_inventory_record": "docs/mission-reports/MISSION10-RECOVERY-MATRIX.json",
+      "source_pointers": [
+        "frontend/e2e/well-cockpit.spec.ts"
+      ],
+      "acceptance_gate": "Full corresponding Mission 10 phase exit gate including persistence, review, UI, independent tests and final-SHA CI; field evidence separately classified.",
+      "next_action": "Historical 129 do not substitute for requested new journeys"
+    },
+    {
+      "id": 27,
+      "requirement": "Exact-SHA CI",
+      "mission11_status": "NOT_ACCEPTED",
+      "mission11_evidence_or_gap": "Previous SHA CI failed Linux deployment OCR; new final SHA CI is pending.",
+      "prior_inventory_status": "NOT_ACCEPTED",
+      "prior_inventory_record": "docs/mission-reports/MISSION10-RECOVERY-MATRIX.json",
+      "source_pointers": [
+        ".github/workflows/ci.yml"
+      ],
+      "acceptance_gate": "Full corresponding Mission 10 phase exit gate including persistence, review, UI, independent tests and final-SHA CI; field evidence separately classified.",
+      "next_action": "Exact-final-SHA CI must be observed on both platforms; old runs cannot certify this mission."
+    },
+    {
+      "id": 28,
+      "requirement": "Workspace",
+      "mission11_status": "PARTIAL",
+      "mission11_evidence_or_gap": "Protected entries checked; 24 initial untracked files retained; broader ignored/untracked privacy review and closure are incomplete.",
+      "prior_inventory_status": "UNKNOWN",
+      "prior_inventory_record": "docs/mission-reports/MISSION10-RECOVERY-MATRIX.json",
+      "source_pointers": [
+        "docs/mission-reports/MISSION7-WORKSPACE-START.jsonl"
+      ],
+      "acceptance_gate": "Full corresponding Mission 10 phase exit gate including persistence, review, UI, independent tests and final-SHA CI; field evidence separately classified.",
+      "next_action": "Retain protected untracked artifacts and compare start/end metadata; exact final CI checkout artifact is separately named by run ID; historical original mtimes and missing bytes remain unavailable."
+    },
+    {
+      "id": 29,
+      "requirement": "Mission 7 Windows frontend authoring timeout",
+      "mission11_status": "NOT_INDEPENDENTLY_ASSESSED",
+      "mission11_evidence_or_gap": "Prior inventory and source pointers exist, but no Mission 11 independent source-to-report audit or exit-gate evidence is established.",
+      "prior_inventory_status": "UNKNOWN",
+      "prior_inventory_record": "docs/mission-reports/MISSION10-RECOVERY-MATRIX.json",
+      "source_pointers": [],
+      "acceptance_gate": "Full corresponding Mission 10 phase exit gate including persistence, review, UI, independent tests and final-SHA CI; field evidence separately classified.",
+      "next_action": "Three repeated native full-suite diagnostic runs on the final SHA and full native CI must complete; root cause beyond measured budget not established."
+    },
+    {
+      "id": 30,
+      "requirement": "Mission 7 deployed OCR accuracy regression",
+      "mission11_status": "NOT_ACCEPTED",
+      "mission11_evidence_or_gap": "Deployment benchmark critical 308/384; Persian 118/192 and table 50/96 below 90 percent.",
+      "prior_inventory_status": "NOT_ACCEPTED",
+      "prior_inventory_record": "docs/mission-reports/MISSION10-RECOVERY-MATRIX.json",
+      "source_pointers": [],
+      "acceptance_gate": "Full corresponding Mission 10 phase exit gate including persistence, review, UI, independent tests and final-SHA CI; field evidence separately classified.",
+      "next_action": "Restore all unchanged 64-case global and stratum gates."
+    }
+  ]
+}

@@ -1,0 +1,165 @@
+{
+  "overall": "NOT_ACCEPTED",
+  "starting_sha": "c6e96c422acd66521b5d9172eaf5c13ef5296f82",
+  "scope": "26 inherited phase numbers preserved; original phase mapping and exits must be reconciled against the original mission before acceptance; a number alone is not completion evidence.",
+  "phases": [
+    {
+      "phase": 0,
+      "mission11_status": "PARTIAL",
+      "evidence": [
+        "docs/mission-reports/MISSION11-WORKSPACE-BASELINE.json"
+      ],
+      "open": "Exact phase-specific audit, implementation and exit evidence remain incomplete."
+    },
+    {
+      "phase": 1,
+      "mission11_status": "NOT_INDEPENDENTLY_ASSESSED",
+      "evidence": [],
+      "open": "Exact phase-specific audit, implementation and exit evidence remain incomplete."
+    },
+    {
+      "phase": 2,
+      "mission11_status": "NOT_INDEPENDENTLY_ASSESSED",
+      "evidence": [],
+      "open": "Exact phase-specific audit, implementation and exit evidence remain incomplete."
+    },
+    {
+      "phase": 3,
+      "mission11_status": "NOT_INDEPENDENTLY_ASSESSED",
+      "evidence": [],
+      "open": "Exact phase-specific audit, implementation and exit evidence remain incomplete."
+    },
+    {
+      "phase": 4,
+      "mission11_status": "NOT_INDEPENDENTLY_ASSESSED",
+      "evidence": [],
+      "open": "Exact phase-specific audit, implementation and exit evidence remain incomplete."
+    },
+    {
+      "phase": 5,
+      "mission11_status": "NOT_INDEPENDENTLY_ASSESSED",
+      "evidence": [],
+      "open": "Exact phase-specific audit, implementation and exit evidence remain incomplete."
+    },
+    {
+      "phase": 6,
+      "mission11_status": "NOT_INDEPENDENTLY_ASSESSED",
+      "evidence": [],
+      "open": "Exact phase-specific audit, implementation and exit evidence remain incomplete."
+    },
+    {
+      "phase": 7,
+      "mission11_status": "NOT_INDEPENDENTLY_ASSESSED",
+      "evidence": [],
+      "open": "Exact phase-specific audit, implementation and exit evidence remain incomplete."
+    },
+    {
+      "phase": 8,
+      "mission11_status": "NOT_INDEPENDENTLY_ASSESSED",
+      "evidence": [],
+      "open": "Exact phase-specific audit, implementation and exit evidence remain incomplete."
+    },
+    {
+      "phase": 9,
+      "mission11_status": "NOT_INDEPENDENTLY_ASSESSED",
+      "evidence": [],
+      "open": "Exact phase-specific audit, implementation and exit evidence remain incomplete."
+    },
+    {
+      "phase": 10,
+      "mission11_status": "NOT_INDEPENDENTLY_ASSESSED",
+      "evidence": [],
+      "open": "Exact phase-specific audit, implementation and exit evidence remain incomplete."
+    },
+    {
+      "phase": 11,
+      "mission11_status": "NOT_INDEPENDENTLY_ASSESSED",
+      "evidence": [],
+      "open": "Exact phase-specific audit, implementation and exit evidence remain incomplete."
+    },
+    {
+      "phase": 12,
+      "mission11_status": "NOT_INDEPENDENTLY_ASSESSED",
+      "evidence": [],
+      "open": "Exact phase-specific audit, implementation and exit evidence remain incomplete."
+    },
+    {
+      "phase": 13,
+      "mission11_status": "NOT_INDEPENDENTLY_ASSESSED",
+      "evidence": [],
+      "open": "Exact phase-specific audit, implementation and exit evidence remain incomplete."
+    },
+    {
+      "phase": 14,
+      "mission11_status": "NOT_INDEPENDENTLY_ASSESSED",
+      "evidence": [],
+      "open": "Exact phase-specific audit, implementation and exit evidence remain incomplete."
+    },
+    {
+      "phase": 15,
+      "mission11_status": "NOT_INDEPENDENTLY_ASSESSED",
+      "evidence": [],
+      "open": "Exact phase-specific audit, implementation and exit evidence remain incomplete."
+    },
+    {
+      "phase": 16,
+      "mission11_status": "NOT_INDEPENDENTLY_ASSESSED",
+      "evidence": [],
+      "open": "Exact phase-specific audit, implementation and exit evidence remain incomplete."
+    },
+    {
+      "phase": 17,
+      "mission11_status": "NOT_INDEPENDENTLY_ASSESSED",
+      "evidence": [],
+      "open": "Exact phase-specific audit, implementation and exit evidence remain incomplete."
+    },
+    {
+      "phase": 18,
+      "mission11_status": "NOT_INDEPENDENTLY_ASSESSED",
+      "evidence": [],
+      "open": "Exact phase-specific audit, implementation and exit evidence remain incomplete."
+    },
+    {
+      "phase": 19,
+      "mission11_status": "NOT_INDEPENDENTLY_ASSESSED",
+      "evidence": [],
+      "open": "Exact phase-specific audit, implementation and exit evidence remain incomplete."
+    },
+    {
+      "phase": 20,
+      "mission11_status": "NOT_INDEPENDENTLY_ASSESSED",
+      "evidence": [],
+      "open": "Exact phase-specific audit, implementation and exit evidence remain incomplete."
+    },
+    {
+      "phase": 21,
+      "mission11_status": "NOT_INDEPENDENTLY_ASSESSED",
+      "evidence": [],
+      "open": "Exact phase-specific audit, implementation and exit evidence remain incomplete."
+    },
+    {
+      "phase": 22,
+      "mission11_status": "NOT_INDEPENDENTLY_ASSESSED",
+      "evidence": [],
+      "open": "Exact phase-specific audit, implementation and exit evidence remain incomplete."
+    },
+    {
+      "phase": 23,
+      "mission11_status": "NOT_INDEPENDENTLY_ASSESSED",
+      "evidence": [],
+      "open": "Exact phase-specific audit, implementation and exit evidence remain incomplete."
+    },
+    {
+      "phase": 24,
+      "mission11_status": "NOT_INDEPENDENTLY_ASSESSED",
+      "evidence": [],
+      "open": "Exact phase-specific audit, implementation and exit evidence remain incomplete."
+    },
+    {
+      "phase": 25,
+      "mission11_status": "NOT_INDEPENDENTLY_ASSESSED",
+      "evidence": [],
+      "open": "Exact phase-specific audit, implementation and exit evidence remain incomplete."
+    }
+  ]
+}

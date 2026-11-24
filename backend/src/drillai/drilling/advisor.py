@@ -1410,11 +1410,14 @@ class OperationsAdvisor:
         alternate_hours = npt.hours_operations if alternate_basis == "operations" else npt.hours_events
         if has_recorded_npt:
             statement = (
-                f"NPT {round(npt.total_hours, 2)} h on the recorded {npt.basis} basis "
-                f"over {npt.event_count} selected case(s)"
+                f"Legacy {npt.basis} row sum {round(npt.total_hours, 2)} h "
+                f"over {npt.event_count} selected case(s); not verified NPT, "
+                "interval union, or physical downtime"
             )
+            if npt.basis == "events":
+                statement += "; generic event duration may be included and rows may overlap"
             if npt.percent_of_well_time is not None:
-                statement += f" ({round(npt.percent_of_well_time, 2)}% of recorded well time)"
+                statement += f" ({round(npt.percent_of_well_time, 2)}% of the legacy recorded-hour denominator)"
             if alternate_hours != npt.total_hours:
                 statement += (
                     f"; the alternate {alternate_basis} basis records {round(alternate_hours, 2)} h "
@@ -1440,6 +1443,8 @@ class OperationsAdvisor:
                         "cases_returned": len(npt.cases),
                         "cases_truncated": npt.cases_truncated,
                         "case_limit": npt.case_limit,
+                        "metric_contract": npt.to_dict()["metric_contract"],
+                        "interval_reconciliation": npt.interval_reconciliation,
                         "notes": list(npt.notes),
                     },
                 )
@@ -1451,8 +1456,9 @@ class OperationsAdvisor:
                     Fact(
                         key=f"npt.category.{row.key}",
                         statement=(
-                            f"NPT category {row.label}: {row.hours} h ({row.percent_of_total}%), "
-                            f"{row.occurrences} case(s)"
+                            f"Legacy {npt.basis} row-sum category {row.label}: "
+                            f"{row.hours} h ({row.percent_of_total}%), {row.occurrences} case(s); "
+                            "not allocated or verified NPT"
                         ),
                         value=row.hours,
                         unit="h",
@@ -1468,14 +1474,26 @@ class OperationsAdvisor:
                     )
                 )
             for case in npt.cases[:ADVISOR_NPT_CASE_LIMIT]:
+                if case.hours_source == "missing":
+                    case_statement = f"Recorded event {case.title}: NPT hours are not established, category {case.category}"
+                    case_value = None
+                elif case.hours_source == "generic_event_duration":
+                    case_statement = (
+                        f"Recorded event {case.title}: generic duration {round(case.hours, 2)} h, "
+                        f"category {case.category}; generic duration is not established NPT"
+                    )
+                    case_value = case.hours
+                else:
+                    case_statement = (
+                        f"Recorded case {case.title}: {round(case.hours, 2)} h, category {case.category}; "
+                        "the recorded quantity is not an approved NPT allocation"
+                    )
+                    case_value = case.hours
                 answer.facts.append(
                     Fact(
                         key=f"npt.case.{case.id}",
-                        statement=(
-                            f"Recorded NPT case {case.title}: {round(case.hours, 2)} h, "
-                            f"category {case.category}"
-                        ),
-                        value=case.hours,
+                        statement=case_statement,
+                        value=case_value,
                         unit="h",
                         source=f"npt.{case.source}",
                         source_id=case.id,
@@ -1486,6 +1504,7 @@ class OperationsAdvisor:
                             "code": case.code,
                             "cause": case.cause,
                             "hours_basis": case.hours_basis,
+                            "hours_source": case.hours_source,
                             "started_at": case.started_at.isoformat() if case.started_at else None,
                             "started_at_basis": case.started_at_basis,
                             "ended_at": case.ended_at.isoformat() if case.ended_at else None,
@@ -1516,7 +1535,7 @@ class OperationsAdvisor:
                     }
                 )
             if npt.total_hours == 0:
-                zero_statement = f"The selected {npt.basis} basis records zero NPT hours"
+                zero_statement = f"The selected legacy {npt.basis} row sum is zero"
                 if alternate_hours != npt.total_hours:
                     zero_statement += (
                         f" while the alternate {alternate_basis} basis records "
@@ -1716,12 +1735,12 @@ class OperationsAdvisor:
                 answer.inference.append(
                     {
                         "key": "npt.dominant",
-                        "statement": f"The dominant recorded NPT category is {worst.label}",
+                        "statement": f"The largest category in the legacy {npt.basis} row sum is {worst.label}; this is not an approved NPT cause allocation",
                         "basis": (
-                            f"{worst.hours} h of {round(npt.total_hours, 2)} h NPT "
-                            f"({worst.percent_of_total}%)"
+                            f"{worst.hours} h of {round(npt.total_hours, 2)} h legacy row sum "
+                            f"({worst.percent_of_total}%); event sums may include generic duration and overlaps"
                         ),
-                        "confidence": "arithmetic over recorded NPT rows",
+                        "confidence": "arithmetic over legacy recorded rows, not verified physical downtime",
                         "basis_kind": "derived_from_evidence",
                         "supporting_fact_keys": ["npt.total", f"npt.category.{worst.key}"],
                     }

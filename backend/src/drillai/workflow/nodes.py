@@ -949,6 +949,15 @@ async def _npt_summary(context: NodeContext, config: BaseModel) -> NodeOutcome:
         context.well_id, basis=cfg.basis, include_offsets=cfg.include_offsets
     )
     payload = summary.to_dict()
+    # Keep the existing numeric fields for workflow compatibility, but carry their full semantics
+    # alongside them so consumers cannot mistake the legacy event fallback for verified NPT.
+    caveat = (
+        "Legacy row sum only: generic event duration may be included and rows may overlap; "
+        "not verified NPT, an approved allocation, interval union, or physical downtime."
+        if cfg.basis == "events" else
+        "Operation NPT roll-up is recorded data, not independently approved physical downtime; "
+        "do not add it to the event row sum without explicit identity reconciliation."
+    )
     return NodeOutcome(
         outputs={
             "total_hours": payload["total_hours"],
@@ -957,9 +966,12 @@ async def _npt_summary(context: NodeContext, config: BaseModel) -> NodeOutcome:
             "by_category": payload["by_category"][:8],
             "top_case": payload["cases"][0] if payload["cases"] else None,
             "controllable_hours": payload["controllable_hours"],
+            "metric_contract": payload["metric_contract"],
+            "interval_reconciliation": payload["interval_reconciliation"],
+            "legacy_metric_caveat": caveat,
             "notes": payload["notes"],
         },
-        notes=payload["notes"][:3],
+        notes=[caveat, *payload["notes"][:3]],
     )
 
 
