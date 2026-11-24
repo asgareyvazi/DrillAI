@@ -163,7 +163,7 @@
       "phase": 26,
       "name": "Quality and cross-platform assurance",
       "status": "PARTIAL",
-      "evidence_or_gap": "Focused tests and frontend checks passed; complete final cross-platform tests not established."
+      "evidence_or_gap": "Pre-final-namespace collection SQLite 1898 passed/15 skipped, source changed during run; full browser 124 passed/6 failed with mixed old Settings and new lazily loaded OCR runtime. Fresh fault/auth rerun 7/7 passed. New final-source full runs started; results pending. Focused tests and frontend checks passed."
     },
     {
       "phase": 27,

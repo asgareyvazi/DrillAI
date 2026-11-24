@@ -307,5 +307,10 @@
     }
   },
   "final_sha": null,
-  "final_ci": "UNKNOWN; a new pushed SHA requires its own complete Linux and Windows run."
+  "final_ci": "UNKNOWN; a new pushed SHA requires its own complete Linux and Windows run.",
+  "intermediate_run": {
+    "sha": "ed9690889815e1aba3dcf28f71f826d51552401b",
+    "url": "https://github.com/asgareyvazi/DrillAI/actions/runs/45357994078",
+    "observation": "In progress at documentation update; Windows independent frontend reliability job passed, other jobs incomplete. Not final-SHA certification."
+  }
 }
