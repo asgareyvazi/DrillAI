@@ -65,6 +65,10 @@ async def test_generic_event_duration_is_not_explicit_npt_interval_evidence(sess
     service = NptService(session, org_id=org.id)
     before = (await service.summarise(well.id, include_offsets=False)).to_dict()
     assert before["total_hours"] == 2  # Legacy row sum remains distinct, not a deduplicated value.
+    explicit = before["interval_reconciliation"]["explicit_npt_row_sum"]
+    assert explicit["status"] == "partial"
+    assert explicit["known_row_sum_hours"] is None
+    assert explicit["missing_hours_count"] == 1
     assert before["interval_reconciliation"]["status"] == "unavailable_incomplete"
     assert before["interval_reconciliation"]["union_hours"] is None
     assert before["interval_reconciliation"]["missing_npt_hours_count"] == 1
@@ -80,6 +84,10 @@ async def test_generic_event_duration_is_not_explicit_npt_interval_evidence(sess
     after = (await service.summarise(well.id, include_offsets=False)).to_dict()
     assert after["interval_reconciliation"]["status"] == "complete_for_matching_events"
     assert after["interval_reconciliation"]["union_hours"] == 2
+    explicit = after["interval_reconciliation"]["explicit_npt_row_sum"]
+    assert explicit["status"] == "complete_for_matching_events"
+    assert explicit["known_row_sum_hours"] == 2
+    assert explicit["qualified_event_count"] == 1
     assert after["interval_reconciliation"]["missing_npt_hours_count"] == 0
     assert after["cases"][0]["hours_source"] == "explicit_npt_hours"
 

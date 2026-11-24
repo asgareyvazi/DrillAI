@@ -1,0 +1,16 @@
+============================= test session starts ==============================
+platform linux -- Python 3.11.2, pytest-9.2.0, pluggy-1.7.0
+rootdir: /home/user/DrillAI/backend
+configfile: pyproject.toml
+plugins: platformdirs-4.14.8, anyio-4.16.0, cov-7.1.0, asyncio-1.5.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 61 items
+
+backend/tests/drilling/test_npt_interval_reconciliation.py ............. [ 21%]
+........                                                                 [ 34%]
+backend/tests/drilling/test_mission7_npt_service.py ...                  [ 39%]
+backend/tests/drilling/test_npt_summary.py .......                       [ 50%]
+backend/tests/operations/test_npt_accounting.py ..........               [ 67%]
+backend/tests/api/test_drilling_api.py ....................              [100%]
+
+============================= 61 passed in 43.76s ==============================

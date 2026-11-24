@@ -567,8 +567,10 @@
       "source_to_report_independent_audit": "NOT_COMPLETED",
       "earliest_path_commit_observed": "b9810172979d076a247c680df63646de272d8501\t2026-09-27\tfeat(backend): drilling intelligence domain with NPT, timeline and reporting APIs",
       "first_functional_implementation": "UNKNOWN",
-      "mission10_status": "UNKNOWN",
-      "history_caveat": "Earliest path commit does not establish first implementation, pre-rename equivalence, functionality, or historical regression."
+      "mission10_status": "PARTIAL",
+      "history_caveat": "Earliest path commit does not establish first implementation, pre-rename equivalence, functionality, or historical regression.",
+      "mission10_evidence": "docs/mission-reports/MISSION10-CONTINUATION3-REPORT-EN.md",
+      "remaining": "Legacy consumers, event/operation identity, cause attribution policy, review, immutable revisions and export"
     },
     {
       "area": "OCR",

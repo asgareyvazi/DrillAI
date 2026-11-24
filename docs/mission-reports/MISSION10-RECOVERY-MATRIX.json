@@ -321,8 +321,8 @@
       "requirement": "NPT",
       "previous_mission8_status": "PARTIAL",
       "previous_mission9_status": "PARTIAL",
-      "current_status": "UNKNOWN",
-      "status_basis": "UNKNOWN: source presence alone is not independent workflow validation",
+      "current_status": "PARTIAL",
+      "status_basis": "Separate explicit observed/reported event row sum and localized legacy warning; focused service/API and synthetic browser tests, not complete workflow validation",
       "existing_source_paths": [
         "backend/src/drillai/drilling/npt.py"
       ],
@@ -336,11 +336,16 @@
         "backend/tests/drilling/test_npt_taxonomy.py",
         "backend/tests/operations/test_npt_accounting.py"
       ],
-      "observed_evidence": [],
-      "failed_or_incomplete_evidence": "Explicit Event/Operation identity, cause allocation, independent approval, immutable revisions and export remain unimplemented; union covers scoped Event rows only.",
+      "observed_evidence": [
+        "backend/src/drillai/drilling/npt_intervals.py",
+        "backend/tests/drilling/test_npt_interval_reconciliation.py",
+        "frontend/e2e/well-cockpit.spec.ts",
+        "docs/mission-reports/MISSION10-CONTINUATION3-REPORT-EN.md"
+      ],
+      "failed_or_incomplete_evidence": "Legacy event aggregate still includes generic duration; other consumers and source-review, Event/Operation identity, cause allocation, revisions and export remain incomplete.",
       "corrective_actions": "Explicit Event/Operation identity, cause allocation, independent approval, immutable revisions and export remain unimplemented; union covers scoped Event rows only.",
       "acceptance_criteria": "Full corresponding Mission 10 phase exit gate including persistence, review, UI, independent tests and final-SHA CI; field evidence separately classified.",
-      "disposition": "open; not yet independently re-audited"
+      "disposition": "open; scoped implementation is not full workflow acceptance"
     },
     {
       "id": 17,

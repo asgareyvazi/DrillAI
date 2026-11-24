@@ -456,6 +456,38 @@
         "path history is not first confirmed functional implementation",
         "complete non-registry calculation inventory, field validation and golden-well journey"
       ]
+    },
+    {
+      "area": "Mission 10 continuation: NPT and OCR diagnostic",
+      "status": "PARTIAL",
+      "starting_sha": "c78d0e06f881cd55f74d86d7bc90a3649887487f",
+      "changed_files": [
+        "backend/src/drillai/drilling/npt_intervals.py",
+        "backend/src/drillai/drilling/npt.py",
+        "frontend/src/pages/wells/WellCockpit.tsx",
+        "frontend/e2e/well-cockpit.spec.ts",
+        "scripts/diagnose_ocr_confidence_selection.py"
+      ],
+      "test_results": [
+        "61 focused NPT/API tests passed after UTC overflow guard",
+        "1 real-browser synthetic NPT journey passed",
+        "423 frontend unit tests passed before last localized explanatory text",
+        "1894 backend tests passed and 15 PostgreSQL skipped before final UTC overflow guard; inventory verifier passed"
+      ],
+      "failures": [
+        "intermediate NPT regression failed legacy error-message match; compatibility wording restored and 61 tests passed",
+        "64-case OCR confidence-selection experiment failed 305/384 vs prior emulator baseline 311/384, exit 2"
+      ],
+      "unresolved_items": [
+        "exact-final-SHA CI and full-browser regression pending when written",
+        "legacy event fallback retained and used by other consumers",
+        "full identity, cause allocation, review and export remain unimplemented",
+        "OCR quality and native end-to-end hard deadline remain unaccepted"
+      ],
+      "evidence": [
+        "docs/mission-reports/MISSION10-CONTINUATION3-REPORT-EN.md",
+        "docs/mission-reports/MISSION10-CONTINUATION3-OCR-CONFIDENCE-DIAGNOSTIC.json"
+      ]
     }
   ]
 }

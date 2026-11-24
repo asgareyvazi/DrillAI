@@ -715,9 +715,9 @@ class NptService:
         try:
             since = ensure_utc(since) if since is not None else None
             until = ensure_utc(until) if until is not None else None
-        except ValueError as exc:
+        except (ValueError, OverflowError) as exc:
             raise ValidationFailed(
-                "NPT window timestamps must include a timezone offset",
+                "NPT window timestamps must include a timezone offset and be representable in UTC",
                 details={"field": "since/until", "reason": str(exc)},
             ) from exc
         if since is not None and until is not None and since >= until:

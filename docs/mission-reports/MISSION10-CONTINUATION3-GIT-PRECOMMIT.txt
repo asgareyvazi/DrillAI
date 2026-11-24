@@ -1,0 +1,57 @@
+Precommit status only; full browser regression and CI may still be running. This is not a final workspace snapshot.
+## arena/9d8f5568-drillai...origin/arena/9d8f5568-drillai
+ M README.md
+ M backend/src/drillai/drilling/npt.py
+ M backend/src/drillai/drilling/npt_intervals.py
+ M backend/tests/api/test_drilling_api.py
+ M backend/tests/drilling/test_mission7_npt_service.py
+ M backend/tests/drilling/test_npt_interval_reconciliation.py
+ M backend/tests/drilling/test_npt_summary.py
+ M backend/tests/ingestion/test_tesserocr_diagnostic.py
+ M ci/test-inventory.json
+ M docs/DRILLAI-ENGINEERING-CAPABILITY-REGISTER.json
+ M docs/mission-reports/MISSION10-PHASE-LEDGER.json
+ M docs/mission-reports/MISSION10-RECOVERY-MATRIX.json
+ M frontend/e2e/well-cockpit.spec.ts
+ M frontend/src/api/types.ts
+ M frontend/src/i18n/en.ts
+ M frontend/src/i18n/fa.ts
+ M frontend/src/pages/wells/WellCockpit.test.tsx
+ M frontend/src/pages/wells/WellCockpit.tsx
+?? docs/mission-reports/MISSION10-CONTINUATION3-GIT-PRECOMMIT.txt
+?? docs/mission-reports/MISSION10-CONTINUATION3-GIT-START.txt
+?? docs/mission-reports/MISSION10-CONTINUATION3-IGNORED-START.nul
+?? docs/mission-reports/MISSION10-CONTINUATION3-INDEX-START.nul
+?? docs/mission-reports/MISSION10-CONTINUATION3-NPT-REGRESSION.txt
+?? docs/mission-reports/MISSION10-CONTINUATION3-OCR-CONFIDENCE-DIAGNOSTIC.json
+?? docs/mission-reports/MISSION10-CONTINUATION3-PROTECTED-END.json
+?? docs/mission-reports/MISSION10-CONTINUATION3-RECONCILIATION-START.json
+?? docs/mission-reports/MISSION10-CONTINUATION3-REPORT-EN.md
+?? docs/mission-reports/MISSION10-CONTINUATION3-REPORT-FA.md
+?? docs/mission-reports/MISSION10-CONTINUATION3-UNTRACKED-START.nul
+?? frontend/.playwright-report-cp151-71aae4f7f3364cd8bef9f4748c4283fb/
+?? frontend/playwright-report-master-full-7d42a1/
+?? frontend/test-results-continue2/
+?? frontend/test-results-continue2b/
+?? frontend/test-results-continue2connector/
+?? frontend/test-results-continue2final/
+?? frontend/test-results-continue2full/
+?? frontend/test-results-m10-cont3-full/
+?? frontend/test-results-m10-cont3/
+?? frontend/test-results-master-auth-c4a891de/
+?? frontend/test-results-master-full-7d42a1/
+?? scripts/diagnose_ocr_confidence_selection.py
+
+HEAD: c78d0e06f881cd55f74d86d7bc90a3649887487f
+
+Worktrees:
+worktree /home/user/DrillAI
+HEAD c78d0e06f881cd55f74d86d7bc90a3649887487f
+branch refs/heads/arena/9d8f5568-drillai
+
+
+Stashes:
+
+Tags:
+
+Submodules:

@@ -127,23 +127,30 @@ test.describe('well cockpit built from the real well context', () => {
     await makeEvent('Nested interval', '2026-03-15T01:00:00Z', '2026-03-15T01:30:00Z', 0.5, true)
     type Reconciliation = { npt: { total_hours: number; interval_reconciliation: {
       status: string; union_hours: number | null; overlap_hours: number | null; missing_npt_hours_count: number | null
+      explicit_npt_row_sum: { status: string; known_row_sum_hours: number | null; qualified_event_count: number | null; missing_hours_count: number | null }
     } } }
     const before = await apiGet<Reconciliation>(request, `/wells/${well.id}/npt`)
     expect(before.npt.total_hours).toBe(4.5)
-    expect(before.npt.interval_reconciliation).toMatchObject({ status: 'complete_for_matching_events', union_hours: 3, overlap_hours: 1.5 })
+    expect(before.npt.interval_reconciliation).toMatchObject({ status: 'complete_for_matching_events', union_hours: 3, overlap_hours: 1.5,
+      explicit_npt_row_sum: { status: 'complete_for_matching_events', known_row_sum_hours: 4.5, qualified_event_count: 3 } })
     await page.goto(`/wells/${well.id}/cockpit`)
     await page.getByRole('tab', { name: /NPT|Non-productive time/i }).click()
+    await expect(page.getByText('Legacy event row sum (not verified NPT)')).toBeVisible()
+    await expect(page.getByText('Known row sum: 4 h 30 min; qualified rows: 3.')).toBeVisible()
     await expect(page.getByText('Union: 3 h; overlap in recorded intervals: 1 h 30 min')).toBeVisible()
 
     const generic = await makeEvent('Generic duration only', '2026-03-15T04:00:00Z', '2026-03-15T05:00:00Z', 1, false)
     const after = await apiGet<Reconciliation>(request, `/wells/${well.id}/npt`)
     expect(after.npt.total_hours).toBe(5.5)
-    expect(after.npt.interval_reconciliation).toMatchObject({ status: 'unavailable_incomplete', union_hours: null, missing_npt_hours_count: 1 })
+    expect(after.npt.interval_reconciliation).toMatchObject({ status: 'unavailable_incomplete', union_hours: null, missing_npt_hours_count: 1,
+      explicit_npt_row_sum: { status: 'partial', known_row_sum_hours: 4.5, qualified_event_count: 3, missing_hours_count: 1 } })
     const readback = await apiGet<{ id: string; duration_hours: number; npt_hours: number | null }>(request, `/events/${generic.id}`)
     expect(readback).toMatchObject({ id: generic.id, duration_hours: 1, npt_hours: null })
     await page.reload()
     await page.getByRole('tab', { name: /NPT|Non-productive time/i }).click()
     await expect(page.getByText(/1 matching event\(s\) lack explicit NPT hours/)).toBeVisible()
+    await expect(page.getByText('Partial: one or more events cannot be included')).toBeVisible()
+    await expect(page.getByText('Known row sum: 4 h 30 min; qualified rows: 3.')).toBeVisible()
     const sourceRows = page.locator('details').filter({ has: page.getByText('Inspect selected source rows') })
     await sourceRows.getByText('Inspect selected source rows').click()
     await expect(sourceRows.getByText(/Generic event duration \(legacy row sum only; not interval evidence\)/)).toBeVisible()

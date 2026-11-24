@@ -235,6 +235,9 @@ async def test_npt_metric_window_rejects_ambiguous_or_empty_time_bounds(session,
     service = NptService(session, org_id=well.org_id)
     with pytest.raises(ValidationFailed, match="must include a timezone offset"):
         await service.summarise(well.id, since=dt.datetime(2026, 3, 15))
+    with pytest.raises(ValidationFailed, match="representable in UTC"):
+        await service.summarise(well.id, since=dt.datetime.max.replace(
+            tzinfo=dt.timezone(-dt.timedelta(hours=12))))
     with pytest.raises(ValidationFailed, match="earlier than until"):
         await service.summarise(
             well.id,

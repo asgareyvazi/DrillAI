@@ -45,3 +45,16 @@ def test_synthetic_pass_attribution_rejects_incomplete_or_unexpected_traces(diag
     for events, inputs in invalid:
         with pytest.raises(ValueError):
             diagnostic["_group_passes"](events, inputs)
+
+    # Confidence-selection is a separate synthetic experiment, never the product OCR path.
+    from drillai.ingestion.ocr import OcrLine
+
+    script = Path(__file__).resolve().parents[3] / "scripts" / "diagnose_ocr_confidence_selection.py"
+    select = runpy.run_path(str(script))["select_lines"]
+    fas = OcrLine("raw Persian", 0.6, (10, 10, 50, 10))
+    mixed = OcrLine("raw mixed", 0.8, (10, 10, 50, 10))
+    assert select([mixed], [fas]) == [mixed]
+    assert select([mixed, mixed], [fas]) == [fas]  # ambiguous source match is not merged
+    assert select([mixed], [fas, fas]) == [fas, fas]  # ambiguous target match is not merged
+    assert select([OcrLine("same confidence", 0.65, fas.bbox)], [fas]) == [fas]
+    assert select([OcrLine("distant", 0.99, (100, 100, 50, 10))], [fas]) == [fas]

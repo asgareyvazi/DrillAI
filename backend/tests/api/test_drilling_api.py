@@ -461,6 +461,18 @@ async def test_npt_pareto_is_ordered_and_self_consistent(client):
     # Source DDR events without qualified full start/end intervals cannot produce a union.
     assert npt["interval_reconciliation"]["status"] == "unavailable_incomplete"
     assert npt["interval_reconciliation"]["union_hours"] is None
+    # The separately exposed explicit NPT row sum never falls back to generic event duration.
+    explicit = npt["interval_reconciliation"]["explicit_npt_row_sum"]
+    qualified = [row["hours"] for row in npt["cases"]
+                 if row["hours_source"] == "explicit_npt_hours" and row["hours_basis"] in ("observed", "reported")]
+    assert explicit["qualified_event_count"] == len(qualified)
+    if qualified:
+        assert explicit["known_row_sum_hours"] == pytest.approx(sum(qualified))
+    else:
+        assert explicit["known_row_sum_hours"] is None
+    assert explicit["missing_hours_count"] == sum(
+        row["hours_source"] in ("generic_event_duration", "missing") for row in npt["cases"]
+    )
     by_category = npt["by_category"]
     assert by_category[0]["key"] == "stuck_pipe"
     assert by_category[0]["hours"] == pytest.approx(6.0, abs=0.01)

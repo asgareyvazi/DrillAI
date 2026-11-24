@@ -458,6 +458,16 @@ export interface NptSummary {
       reason: string
     }> | null
     blockers_truncated?: boolean | null
+    explicit_npt_row_sum?: {
+      status: 'partial' | 'complete_for_matching_events' | 'unavailable_no_evidence' | 'unavailable_limit' | 'unavailable_numerical'
+      known_row_sum_hours: number | null
+      qualified_event_count: number | null
+      missing_hours_count: number | null
+      unqualified_hours_count: number | null
+      invalid_hours_count: number | null
+      unassignable_window_count: number | null
+      outside_window_count: number | null
+    }
   }
   notes: string[]
 }

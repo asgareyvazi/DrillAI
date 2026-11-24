@@ -1,0 +1,151 @@
+{
+  "remote_entries": 819,
+  "mismatches": [],
+  "old_tracked_not_in_remote": [],
+  "additional_untracked": [
+    "frontend/.playwright-report-cp151-71aae4f7f3364cd8bef9f4748c4283fb/index.html",
+    "frontend/playwright-report-master-full-7d42a1/index.html",
+    "frontend/test-results-continue2/.last-run.json",
+    "frontend/test-results-continue2/well-cockpit-well-cockpit--82af4-om-a-generic-event-duration-chromium/error-context.md",
+    "frontend/test-results-continue2/well-cockpit-well-cockpit--82af4-om-a-generic-event-duration-chromium/test-failed-1.png",
+    "frontend/test-results-continue2/well-cockpit-well-cockpit--82af4-om-a-generic-event-duration-chromium/trace.zip",
+    "frontend/test-results-continue2b/.last-run.json",
+    "frontend/test-results-continue2connector/.last-run.json",
+    "frontend/test-results-continue2final/.last-run.json",
+    "frontend/test-results-continue2full/.last-run.json",
+    "frontend/test-results-continue2full/connectors-platform-CP11-t-e1520-dance-then-recovers-cleanly-chromium/error-context.md",
+    "frontend/test-results-continue2full/connectors-platform-CP11-t-e1520-dance-then-recovers-cleanly-chromium/test-failed-1.png",
+    "frontend/test-results-continue2full/connectors-platform-CP11-t-e1520-dance-then-recovers-cleanly-chromium/trace.zip",
+    "frontend/test-results-continue2full/live-operations-CP10-live--719a9-Persian-RTL-token-isolation-chromium/error-context.md",
+    "frontend/test-results-continue2full/live-operations-CP10-live--719a9-Persian-RTL-token-isolation-chromium/trace.zip",
+    "frontend/test-results-master-auth-c4a891de/.last-run.json",
+    "frontend/test-results-master-full-7d42a1/.last-run.json",
+    "frontend/test-results-master-full-7d42a1/e2e-results.json"
+  ],
+  "protected": [
+    {
+      "path": "frontend/.playwright-report-cp151-71aae4f7f3364cd8bef9f4748c4283fb",
+      "type": "directory",
+      "mode": "0o755",
+      "size": 60,
+      "mtime_ns": 1795497798347096629
+    },
+    {
+      "path": "frontend/.playwright-report-cp151-71aae4f7f3364cd8bef9f4748c4283fb/index.html",
+      "type": "file",
+      "mode": "0o644",
+      "size": 927479,
+      "mtime_ns": 1795497798347096629,
+      "sha256": "0bb5b83130d9869fcc36f112ca431268e1c544f4fd94f6321c28d575c12ac00f"
+    },
+    {
+      "path": "frontend/playwright-report-master-full-7d42a1",
+      "type": "directory",
+      "mode": "0o755",
+      "size": 60,
+      "mtime_ns": 1795497798351096649
+    },
+    {
+      "path": "frontend/playwright-report-master-full-7d42a1/index.html",
+      "type": "file",
+      "mode": "0o644",
+      "size": 926911,
+      "mtime_ns": 1795497798351096649,
+      "sha256": "08bc7c242cee30a0c8c17fb17caf8512dcc42d19aac7eeab2648e8d3fe1feddb"
+    },
+    {
+      "path": "frontend/test-results-master-auth-c4a891de",
+      "type": "directory",
+      "mode": "0o755",
+      "size": 60,
+      "mtime_ns": 1795497798363096710
+    },
+    {
+      "path": "frontend/test-results-master-auth-c4a891de/.last-run.json",
+      "type": "file",
+      "mode": "0o644",
+      "size": 45,
+      "mtime_ns": 1795497798363096710,
+      "sha256": "91d1c43004802cd49950d78eb11c8fa7d05da8ffffe219a8b13b2f561bc00903"
+    },
+    {
+      "path": "frontend/test-results-master-full-7d42a1",
+      "type": "directory",
+      "mode": "0o755",
+      "size": 60,
+      "mtime_ns": 1795497798363096710
+    },
+    {
+      "path": "frontend/test-results-master-full-7d42a1/.last-run.json",
+      "type": "file",
+      "mode": "0o644",
+      "size": 45,
+      "mtime_ns": 1795497798363096710,
+      "sha256": "91d1c43004802cd49950d78eb11c8fa7d05da8ffffe219a8b13b2f561bc00903"
+    },
+    {
+      "path": "frontend/test-results-master-full-7d42a1/e2e-results.json",
+      "type": "file",
+      "mode": "0o644",
+      "size": 169655,
+      "mtime_ns": 1795497798363096710,
+      "sha256": "555a97d72d99dff75dc7d6eb551d34b5c534f40f68c44eb4924a43afa5216bf9"
+    }
+  ],
+  "protected_difference_fields": [
+    {
+      "path": "frontend/.playwright-report-cp151-71aae4f7f3364cd8bef9f4748c4283fb",
+      "fields": [
+        "mtime_ns"
+      ]
+    },
+    {
+      "path": "frontend/.playwright-report-cp151-71aae4f7f3364cd8bef9f4748c4283fb/index.html",
+      "fields": [
+        "mtime_ns"
+      ]
+    },
+    {
+      "path": "frontend/playwright-report-master-full-7d42a1",
+      "fields": [
+        "mtime_ns"
+      ]
+    },
+    {
+      "path": "frontend/playwright-report-master-full-7d42a1/index.html",
+      "fields": [
+        "mtime_ns"
+      ]
+    },
+    {
+      "path": "frontend/test-results-master-auth-c4a891de",
+      "fields": [
+        "mtime_ns"
+      ]
+    },
+    {
+      "path": "frontend/test-results-master-auth-c4a891de/.last-run.json",
+      "fields": [
+        "mtime_ns"
+      ]
+    },
+    {
+      "path": "frontend/test-results-master-full-7d42a1",
+      "fields": [
+        "mtime_ns"
+      ]
+    },
+    {
+      "path": "frontend/test-results-master-full-7d42a1/.last-run.json",
+      "fields": [
+        "mtime_ns"
+      ]
+    },
+    {
+      "path": "frontend/test-results-master-full-7d42a1/e2e-results.json",
+      "fields": [
+        "mtime_ns"
+      ]
+    }
+  ]
+}

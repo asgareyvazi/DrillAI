@@ -105,6 +105,9 @@ def test_interval_window_rejects_naive_equal_and_reversed_bounds():
         reconcile_event_intervals([event(0, 1)], since=START, until=START)
     with pytest.raises(ValueError, match="earlier"):
         reconcile_event_intervals([event(0, 1)], since=START + dt.timedelta(hours=1), until=START)
+    with pytest.raises(ValueError, match="representable"):
+        reconcile_event_intervals([event(0, 1)], since=dt.datetime.max.replace(
+            tzinfo=dt.timezone(-dt.timedelta(hours=12))))
 
 
 def test_window_classifies_outside_overlap_and_unassignable_without_hiding_unknowns():
@@ -127,3 +130,59 @@ def test_window_with_only_qualified_outside_events_is_not_measured_zero():
     assert result["union_hours"] is None
     assert result["outside_window_count"] == 2
     assert result["overlapping_window_count"] == 0
+
+
+def test_explicit_npt_row_sum_separates_partial_evidence_from_interval_union():
+    rows = [event(0, 3), replace(event(1, 3), npt_hours=1),
+            replace(event(5, 6), npt_hours=None), replace(event(7, 8), hours_basis="planned"),
+            replace(event(9, 10), npt_hours=-1), replace(event(11, 12), npt_hours=0)]
+    result = reconcile_event_intervals(rows)
+    subtotal = result["explicit_npt_row_sum"]
+    assert subtotal == {"status": "partial", "known_row_sum_hours": 4.0,
+                        "qualified_event_count": 3, "missing_hours_count": 1,
+                        "unqualified_hours_count": 1, "invalid_hours_count": 1,
+                        "unassignable_window_count": 0, "outside_window_count": 0}
+    assert result["union_hours"] is None
+    # Partial explicit NPT can be smaller than event duration, and a row sum may overlap.
+    assert reconcile_event_intervals([rows[1]])["explicit_npt_row_sum"]["known_row_sum_hours"] == 1
+    assert reconcile_event_intervals([rows[-1]])["explicit_npt_row_sum"]["known_row_sum_hours"] == 0
+    assert reconcile_event_intervals([])["explicit_npt_row_sum"]["known_row_sum_hours"] is None
+    assert reconcile_event_intervals([event(0, 1)] * (MAX_RECONCILIATION_EVENTS + 1))["explicit_npt_row_sum"]["status"] == "unavailable_limit"
+
+
+def test_explicit_npt_row_sum_window_has_no_proration_and_fails_closed_on_unknown_times():
+    rows = [event(0, 2), event(1, 3), event(4, 5), replace(event(7, 8), start=None)]
+    result = reconcile_event_intervals(rows, since=START + dt.timedelta(hours=1), until=START + dt.timedelta(hours=3))
+    subtotal = result["explicit_npt_row_sum"]
+    assert subtotal["status"] == "partial"
+    assert subtotal["known_row_sum_hours"] == 4.0  # full reported row hours, not interval union
+    assert subtotal["qualified_event_count"] == 2
+    assert subtotal["outside_window_count"] == 1
+    assert subtotal["unassignable_window_count"] == 1
+    assert result["union_hours"] is None
+    # Without a time filter the explicit row quantity can be included even without a timestamp;
+    # this still is not an interval union, a field verification, or physical downtime.
+    unfiltered = reconcile_event_intervals([rows[-1]])
+    assert unfiltered["explicit_npt_row_sum"]["status"] == "complete_for_matching_events"
+    assert unfiltered["explicit_npt_row_sum"]["known_row_sum_hours"] == 1
+    assert unfiltered["union_hours"] is None
+    # Offsets at the extreme datetime range can overflow while normalizing to UTC; do not
+    # crash or publish a supposedly complete result for an unassignable event.
+    overflow_time = dt.datetime.max.replace(tzinfo=dt.timezone(-dt.timedelta(hours=12)))
+    overflow = reconcile_event_intervals([replace(event(0, 1), start=overflow_time)],
+                                         since=START, until=START + dt.timedelta(hours=3))
+    assert overflow["status"] == "unavailable_incomplete"
+    assert overflow["explicit_npt_row_sum"]["status"] == "partial"
+    assert overflow["explicit_npt_row_sum"]["unassignable_window_count"] == 1
+
+
+def test_explicit_npt_row_sum_rejects_nonfinite_values_and_numeric_overflow():
+    bad = [replace(event(0, 1), npt_hours=value) for value in (float("inf"), float("nan"), True, -1)]
+    result = reconcile_event_intervals(bad)["explicit_npt_row_sum"]
+    assert result["status"] == "partial"
+    assert result["known_row_sum_hours"] is None
+    assert result["invalid_hours_count"] == 4
+    huge = [replace(event(0, 1), npt_hours=1e308)] * 2
+    result = reconcile_event_intervals(huge)["explicit_npt_row_sum"]
+    assert result["status"] == "unavailable_numerical"
+    assert result["known_row_sum_hours"] is None

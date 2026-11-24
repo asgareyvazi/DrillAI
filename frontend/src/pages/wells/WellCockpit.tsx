@@ -331,9 +331,10 @@ export function NptCard({ npt, onSelectCause }: { npt: NptSummary; onSelectCause
   const { t, locale } = useI18n()
   return (
     <div className="space-y-3">
+      {npt.basis === 'events' && <p className="text-xs font-medium text-warning">{t('cockpit.nptLegacyWarning')}</p>}
       <dl className="grid grid-cols-2 gap-2 lg:grid-cols-4">
         <Value
-          label={t('cockpit.npt')}
+          label={t(npt.basis === 'events' ? 'cockpit.nptLegacyEventTotal' : 'cockpit.npt')}
           value={npt.total_hours}
           unit="h"
           source={npt.basis}
@@ -397,6 +398,30 @@ export function NptCard({ npt, onSelectCause }: { npt: NptSummary; onSelectCause
           <p className="text-xs text-graphite-500">{t('cockpit.nptNoRecordedEvents')}</p>
         )}
       </div>
+      {npt.interval_reconciliation?.explicit_npt_row_sum && (() => {
+        const sum = npt.interval_reconciliation.explicit_npt_row_sum
+        return (
+          <div className="rounded border border-graphite-200 p-2 text-xs dark:border-graphite-700">
+            <p className="font-medium">{t('cockpit.nptExplicitRowTitle')}</p>
+            <p>{t(`cockpit.nptExplicitRowStatus.${sum.status}`)}</p>
+            {sum.known_row_sum_hours !== null && sum.qualified_event_count !== null && (
+              <p>{t('cockpit.nptExplicitRowValue', {
+                hours: formatDuration(sum.known_row_sum_hours), qualified: sum.qualified_event_count,
+              })}</p>
+            )}
+            {sum.missing_hours_count !== null && sum.unqualified_hours_count !== null &&
+             sum.invalid_hours_count !== null && sum.unassignable_window_count !== null &&
+             sum.outside_window_count !== null && (
+              <p>{t('cockpit.nptExplicitRowCounts', {
+                missing: sum.missing_hours_count, unqualified: sum.unqualified_hours_count,
+                invalid: sum.invalid_hours_count, unassignable: sum.unassignable_window_count,
+                outside: sum.outside_window_count,
+              })}</p>
+            )}
+            <p>{t('cockpit.nptExplicitRowCaveat')}</p>
+          </div>
+        )
+      })()}
       {npt.interval_reconciliation && (
         <div className="rounded border border-graphite-200 p-2 text-xs dark:border-graphite-700">
           <p className="font-medium">{t('cockpit.nptIntervalTitle')}</p>

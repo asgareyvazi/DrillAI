@@ -88,6 +88,44 @@ beforeEach(() => {
 })
 
 describe('NPT interval reconciliation', () => {
+  it('separates a partial explicit-hour row sum from the legacy event total', () => {
+    const explicit = { status: 'partial' as const, known_row_sum_hours: 1.5,
+      qualified_event_count: 1, missing_hours_count: 1, unqualified_hours_count: 0,
+      invalid_hours_count: 0, unassignable_window_count: 1, outside_window_count: 2 }
+    const { rerender } = render(<I18nProvider><NptCard npt={{ ...npt.npt, basis: 'events', interval_reconciliation: {
+      status: 'unavailable_incomplete', union_hours: null, overlap_hours: null, invalid_event_count: 1,
+      explicit_npt_row_sum: explicit,
+    } }} onSelectCause={() => {}} /></I18nProvider>)
+    expect(screen.getByText('Legacy event row sum (not verified NPT)')).toBeInTheDocument()
+    expect(screen.getByText(/not verified NPT, interval union or physical downtime/)).toBeInTheDocument()
+    expect(screen.getByText('Explicit reported/observed NPT row sum')).toBeInTheDocument()
+    expect(screen.getByText('Partial: one or more events cannot be included')).toBeInTheDocument()
+    expect(screen.getByText(/Known row sum:.*qualified rows: 1/)).toBeInTheDocument()
+    expect(screen.getByText(/Missing hours: 1; unqualified: 0; invalid: 0; unassignable window: 1; outside window: 2/)).toBeInTheDocument()
+    expect(screen.getByText(/A partial sum is not a complete total/)).toBeInTheDocument()
+    rerender(<I18nProvider><NptCard npt={{ ...npt.npt, basis: 'events', interval_reconciliation: {
+      status: 'unavailable_limit', union_hours: null, overlap_hours: null, invalid_event_count: null,
+      explicit_npt_row_sum: { ...explicit, status: 'unavailable_limit', known_row_sum_hours: null,
+        qualified_event_count: null, missing_hours_count: null, unqualified_hours_count: null,
+        invalid_hours_count: null, unassignable_window_count: null, outside_window_count: null },
+    } }} onSelectCause={() => {}} /></I18nProvider>)
+    expect(screen.getByText('Unavailable: event processing limit reached')).toBeInTheDocument()
+    expect(screen.queryByText(/Known row sum:/)).not.toBeInTheDocument()
+  })
+
+  it('localizes explicit-hour incompleteness in Persian', () => {
+    window.localStorage.setItem('drillai.locale', 'fa')
+    render(<I18nProvider><NptCard npt={{ ...npt.npt, basis: 'events', interval_reconciliation: {
+      status: 'unavailable_incomplete', union_hours: null, overlap_hours: null, invalid_event_count: 1,
+      explicit_npt_row_sum: { status: 'partial', known_row_sum_hours: null, qualified_event_count: 0,
+        missing_hours_count: 1, unqualified_hours_count: 0, invalid_hours_count: 0,
+        unassignable_window_count: 0, outside_window_count: 0 },
+    } }} onSelectCause={() => {}} /></I18nProvider>)
+    expect(screen.getByText('جمع قدیمی ردیف‌های رویداد (NPT تأییدشده نیست)')).toBeInTheDocument()
+    expect(screen.getByText('ناقص: یک یا چند رویداد قابل محاسبه نیست')).toBeInTheDocument()
+    expect(screen.queryByText(/جمع ردیف‌های معلوم:/)).not.toBeInTheDocument()
+  })
+
   it('shows overlap separately from recorded totals and explains the limitations', () => {
     render(<I18nProvider><NptCard npt={{ ...npt.npt, interval_reconciliation: {
       status: 'complete_for_matching_events', union_hours: 3, overlap_hours: 1, invalid_event_count: 0,
