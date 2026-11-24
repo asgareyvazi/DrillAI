@@ -751,9 +751,11 @@ test('CP131 synthetic-well pilot persists Survey → DDR → Operations/NPT → 
   const nptFact = advisor.answer.facts.find((fact) => fact.key === 'npt.total')
   expect(nptFact?.value).toBe(2)
   expect(nptFact?.unit).toBe('h')
-  expect(nptFact?.provenance.selected_basis).toBeTruthy()
+  expect(nptFact?.provenance.selected_basis).toBe('events')
+  expect(nptFact?.statement).toContain('not verified NPT')
+  expect(nptFact?.statement).toContain('generic event duration may be included')
   expect(advisor.answer.narrative).toBeNull()
-  await expect(page.getByText(/NPT 2\.0 h on the recorded events basis/i)).toBeVisible()
+  await expect(page.getByText(/Legacy events row sum 2\.0 h over 1 selected case\(s\); not verified NPT/i)).toBeVisible()
   await expect(page.getByText('No copy-only response was requested.')).toBeVisible()
 
   // Reports/export: the management summary is assembled from persisted operations, NPT, the MSE
