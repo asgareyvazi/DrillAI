@@ -11,5 +11,19 @@
   },
   "final_candidate_sha": null,
   "final_candidate_run": "UNKNOWN until pushed and executed",
-  "remaining": "OCR must pass unchanged thresholds; all mandatory full Linux and Windows jobs, expanded golden scenario, security and exact-SHA provenance must be verified. A candidate CI run alone cannot establish missing engineering scope or field qualification."
+  "remaining": "OCR must pass unchanged thresholds; all mandatory full Linux and Windows jobs, expanded golden scenario, security and exact-SHA provenance must be verified. A candidate CI run alone cannot establish missing engineering scope or field qualification.",
+  "candidate_1": {
+    "sha": "9c8613ff61c07609e1a4eb617021c0bbe6e65e37",
+    "run": "https://github.com/asgareyvazi/DrillAI/actions/runs/45401613648",
+    "linux_backend": "failure: 1921 passed, 1 failed; CP18 recovery drill used global cache to switch app tenant",
+    "linux_ocr": "failure: 308/384 critical fields across 64 evaluated cases (unchanged frozen corpus); Persian 118/192 and table 50/96 from annotations.",
+    "other_jobs": "Native Windows success: 1906 passed, 1 skipped, 15 deselected, 423 frontend tests, 130 browser tests; Windows reliability success. Full run failure remains.",
+    "artifacts": {
+      "linux_backend_tests": 14924069815,
+      "ocr": 14924877344,
+      "playwright": 14925675673,
+      "windows_timings": 14923936668,
+      "checkout_evidence": 14922583320
+    }
+  }
 }

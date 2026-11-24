@@ -554,7 +554,7 @@ async def _verify_restored_relationships_and_tenant_isolation(
     reset_settings_cache()
     reset_egress_policy()
 
-    app = create_app(Settings(database_url=restored_async_url, auth_enabled=False))
+    app = create_app(Settings(database_url=restored_async_url, auth_enabled=False, dev_org_slug="org-dr-alpha"))
     try:
         async with app.state.database.session() as session:
             twin_a = TwinService(session, org_id=seeded_ids["org_a_id"])
@@ -616,10 +616,7 @@ async def _verify_restored_relationships_and_tenant_isolation(
         async with httpx.AsyncClient(transport=transport, base_url="http://dr-verify.local") as client:
             headers_sup = {"X-Dev-Roles": "drilling_supervisor,admin"}
 
-            # Tenant A context (dev_org_slug = org-dr-alpha)
-            os.environ["DRILLAI_DEV_ORG_SLUG"] = "org-dr-alpha"
-            reset_settings_cache()
-
+            # Tenant A uses the application's explicit development-organization setting.
             # Health & readiness against restored PostgreSQL DB
             r_ready = await client.get("/api/v1/health/ready", headers=headers_sup)
             assert r_ready.status_code == 200
@@ -642,17 +639,22 @@ async def _verify_restored_relationships_and_tenant_isolation(
             assert "witsml.alpha-rig.example.com" in pol["allowed_hosts"]
             assert "10.42.0.0/16" in pol["allowed_private_cidrs"]
 
-            # Tenant B context (dev_org_slug = org-dr-beta)
-            os.environ["DRILLAI_DEV_ORG_SLUG"] = "org-dr-beta"
-            reset_settings_cache()
-
-            # Tenant B sees only BETA-DR-WELL-01 and gets 404 on ALPHA-DR-WELL-01
-            wells_b = (await client.get("/api/v1/wells", headers=headers_sup)).json()
-            assert [w["id"] for w in wells_b["items"]] == [seeded_ids["well_b_id"]]
-            cross_well_a = await client.get(f"/api/v1/wells/{seeded_ids['well_a_id']}", headers=headers_sup)
-            assert cross_well_a.status_code == 404
-            cncs_b = (await client.get("/api/v1/connectors", headers=headers_sup)).json()
-            assert [c["id"] for c in cncs_b["items"]] == [seeded_ids["connector_b_id"]]
+            # A second application on the restored database has its own tenant identity. A process
+            # settings-cache change must not switch the existing application's authorization context.
+            app_b = create_app(Settings(database_url=restored_async_url, auth_enabled=False, dev_org_slug="org-dr-beta"))
+            try:
+                async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app_b), base_url="http://dr-verify.local") as client_b:
+                    wells_b = (await client_b.get("/api/v1/wells", headers=headers_sup)).json()
+                    assert [w["id"] for w in wells_b["items"]] == [seeded_ids["well_b_id"]]
+                    cross_well_a = await client_b.get(f"/api/v1/wells/{seeded_ids['well_a_id']}", headers=headers_sup)
+                    assert cross_well_a.status_code == 404
+                    cncs_b = (await client_b.get("/api/v1/connectors", headers=headers_sup)).json()
+                    assert [c["id"] for c in cncs_b["items"]] == [seeded_ids["connector_b_id"]]
+                # Tenant A remains unchanged after requests to the second application.
+                wells_a_again = (await client.get("/api/v1/wells", headers=headers_sup)).json()
+                assert [w["id"] for w in wells_a_again["items"]] == [seeded_ids["well_a_id"]]
+            finally:
+                await app_b.state.database.dispose()
 
         return {
             "health_ready_status": "ok",

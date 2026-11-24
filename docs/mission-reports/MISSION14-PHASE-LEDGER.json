@@ -14,7 +14,7 @@
       "name": "Application-scoped authentication",
       "status": "PARTIAL",
       "entry_sha": "f32071d2851c918d5f751e035e80e5273b724fe7",
-      "evidence": "Original CP17/CP31/CP24 ordered run 11 passed/1 failed (200 rather than 401); new multi-app test before fix 4 failed/1 passed; request-scoped auth, CSRF, cookies and WebSockets implemented. Initial security run 228 passed/1 failed because existing rotation test relied on global config; explicit app-config update and app-scoped secret metadata added; rerun 229 passed; reverse order 17 passed.",
+      "evidence": "Original CP17/CP31/CP24 ordered run 11 passed/1 failed (200 rather than 401); new multi-app test before fix 4 failed/1 passed; request-scoped auth, CSRF, cookies and WebSockets implemented. Initial security run 228 passed/1 failed because existing rotation test relied on global config; explicit app-config update and app-scoped secret metadata added; rerun 229 passed; reverse order 17 passed. PostgreSQL disaster-recovery drill had relied on mutating cached global tenant settings; updated it to use two explicit apps, retaining cross-tenant assertions.",
       "remaining": "Other request-time and worker process-global configurations, connector egress, secret resolution and singleton provider isolation remain unaudited/unfixed; no full boundary claim."
     },
     {
@@ -230,7 +230,7 @@
       "name": "Cross-platform regression",
       "status": "PARTIAL",
       "entry_sha": "f32071d2851c918d5f751e035e80e5273b724fe7",
-      "evidence": "First full SQLite: 1903 passed, 15 skipped, 4 failed; first targeted rerun 8 passed/1 failed stale README manifest; second targeted rerun 9 passed; corrected-source full SQLite 1907 passed, 15 skipped (634.73s). Frontend lint, typecheck, build, 423 unit tests passed; build emitted bundle-size warning. First browser 129 passed/1 failed due to agent-selected path not satisfying readback .e2e-* rule; fresh compliant full rerun 130 passed. Separate CP150 1/1. Exact-SHA CI pending.",
+      "evidence": "First full SQLite: 1903 passed, 15 skipped, 4 failed; first targeted rerun 8 passed/1 failed stale README manifest; second targeted rerun 9 passed; corrected-source full SQLite 1907 passed, 15 skipped (634.73s). Frontend lint, typecheck, build, 423 unit tests passed; build emitted bundle-size warning. First browser 129 passed/1 failed due to agent-selected path not satisfying readback .e2e-* rule; fresh compliant full rerun 130 passed. Separate CP150 1/1. Exact-SHA CI pending. Candidate CI 45401613648 Linux backend failed CP18 PostgreSQL recovery assertion (1921 passed, 1 failed) and OCR failed. Local PostgreSQL subset reproduced CP18 failure (14 passed/1 failed/1907 deselected), then passed 15/15 with 1907 deselected after recovery-drill fix; 1 runtime-directory warning. A fresh full PostgreSQL-enabled backend rerun after the drill fix passed 1922 tests, 1 runtime-directory warning, in 639.02 seconds. New exact-SHA CI remains required; browser results predate the drill-only change.",
       "remaining": "Exact Mission 14 acceptance criteria not established."
     },
     {
@@ -290,5 +290,5 @@
       "remaining": "Exact Mission 14 acceptance criteria not established."
     }
   ],
-  "known_test_failure": "Ordered original auth reproduction failed 1/12; first post-fix broad suite failed 1/229 due to changed explicit app config semantics. Failures are retained, not erased by later passes. Full SQLite first run 1903 passed/15 skipped/4 failed; focused rerun 8 passed/1 failed; second focused rerun 9 passed. No rerun erases prior failures. First browser 129 passed/1 failed due to selected directory name not meeting readback .e2e-* safety rule; compliant fresh full rerun 130 passed."
+  "known_test_failure": "Ordered original auth reproduction failed 1/12; first post-fix broad suite failed 1/229 due to changed explicit app config semantics. Failures are retained, not erased by later passes. Full SQLite first run 1903 passed/15 skipped/4 failed; focused rerun 8 passed/1 failed; second focused rerun 9 passed. No rerun erases prior failures. First browser 129 passed/1 failed due to selected directory name not meeting readback .e2e-* safety rule; compliant fresh full rerun 130 passed. Candidate 9c8613ff CI Linux: 1921 passed/1 failed CP18 disaster recovery; deployed OCR failed. Local PostgreSQL subset 14 passed/1 failed/1907 deselected; fixed drill uses app-scoped tenant and subset rerun passed 15/15."
 }
