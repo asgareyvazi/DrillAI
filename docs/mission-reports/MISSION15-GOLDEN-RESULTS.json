@@ -1,0 +1,7 @@
+{
+  "status": "NOT_ACCEPTED",
+  "expanded_two_well": "NOT_IMPLEMENTED",
+  "evidence": "Mission 13 CP150 was synthetic and focused; does not satisfy expanded scenario.",
+  "cp150_smoke": "Fresh local synthetic CP150: 1 passed in 48.3 seconds, separate from expanded scenario.",
+  "mission15_provenance": "Inherited Mission 14 snapshot; not newly or comprehensively verified during this increment."
+}

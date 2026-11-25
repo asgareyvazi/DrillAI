@@ -424,6 +424,7 @@ async def test_cp22_02_platform_secrets_api_rbac_connector_and_notification_reso
                 "secret_active_key_version": 2,
                 "secret_previous_master_keys": f"v1:{master_v1}",
             })
+            app.state.database.settings = app.state.settings
 
             r_list_a = await admin_a_client.get("/api/v1/platform/secrets")
             assert r_list_a.status_code == 200

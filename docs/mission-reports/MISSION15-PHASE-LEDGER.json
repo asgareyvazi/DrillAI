@@ -1,0 +1,265 @@
+{
+  "status": "NOT_ACCEPTED",
+  "scope": "Interim; phase status is not a claim of exhaustive audit.",
+  "phases": [
+    {
+      "phase": 0,
+      "name": "Forensic baseline and mission recovery",
+      "status": "PARTIAL",
+      "evidence": "Live baseline and blob/mode reconciliation captured; exhaustive historical recovery remains incomplete.",
+      "next_action": "Complete and verify all phase-specific criteria before acceptance."
+    },
+    {
+      "phase": 1,
+      "name": "Security and multi-tenant isolation",
+      "status": "NOT_ACCEPTED",
+      "evidence": "Scoped database session decryption and worker defaults repaired; global AI provider contamination reproduced and other global settings remain.",
+      "next_action": "Complete and verify all phase-specific criteria before acceptance."
+    },
+    {
+      "phase": 2,
+      "name": "OCR root cause",
+      "status": "NOT_ACCEPTED",
+      "evidence": "Mission 14 exact-SHA deployment gate failed; local Docker, Tesseract and PDF renderer unavailable; no Mission 15 deployment fix.",
+      "next_action": "Complete and verify all phase-specific criteria before acceptance."
+    },
+    {
+      "phase": 3,
+      "name": "Real OCR accuracy",
+      "status": "NOT_ACCEPTED",
+      "evidence": "Mission 14 exact-SHA deployment gate failed; local Docker, Tesseract and PDF renderer unavailable; no Mission 15 deployment fix.",
+      "next_action": "Complete and verify all phase-specific criteria before acceptance."
+    },
+    {
+      "phase": 4,
+      "name": "Cross-platform OCR process containment",
+      "status": "PARTIAL",
+      "evidence": "Not completed or independently verified in Mission 15; inherit Mission 14 evidence without promotion.",
+      "next_action": "Complete and verify all phase-specific criteria before acceptance."
+    },
+    {
+      "phase": 5,
+      "name": "Document-wide deadline",
+      "status": "NOT_IMPLEMENTED",
+      "evidence": "Not completed or independently verified in Mission 15; inherit Mission 14 evidence without promotion.",
+      "next_action": "Complete and verify all phase-specific criteria before acceptance."
+    },
+    {
+      "phase": 6,
+      "name": "DDR domain",
+      "status": "UNKNOWN",
+      "evidence": "Not completed or independently verified in Mission 15; inherit Mission 14 evidence without promotion.",
+      "next_action": "Complete and verify all phase-specific criteria before acceptance."
+    },
+    {
+      "phase": 7,
+      "name": "Operations chronology",
+      "status": "UNKNOWN",
+      "evidence": "Not completed or independently verified in Mission 15; inherit Mission 14 evidence without promotion.",
+      "next_action": "Complete and verify all phase-specific criteria before acceptance."
+    },
+    {
+      "phase": 8,
+      "name": "Canonical NPT",
+      "status": "UNKNOWN",
+      "evidence": "Not completed or independently verified in Mission 15; inherit Mission 14 evidence without promotion.",
+      "next_action": "Complete and verify all phase-specific criteria before acceptance."
+    },
+    {
+      "phase": 9,
+      "name": "Survey and trajectory",
+      "status": "UNKNOWN",
+      "evidence": "Not completed or independently verified in Mission 15; inherit Mission 14 evidence without promotion.",
+      "next_action": "Complete and verify all phase-specific criteria before acceptance."
+    },
+    {
+      "phase": 10,
+      "name": "Advanced anti-collision",
+      "status": "UNKNOWN",
+      "evidence": "Not completed or independently verified in Mission 15; inherit Mission 14 evidence without promotion.",
+      "next_action": "Complete and verify all phase-specific criteria before acceptance."
+    },
+    {
+      "phase": 11,
+      "name": "Wellbore capacity",
+      "status": "UNKNOWN",
+      "evidence": "Not completed or independently verified in Mission 15; inherit Mission 14 evidence without promotion.",
+      "next_action": "Complete and verify all phase-specific criteria before acceptance."
+    },
+    {
+      "phase": 12,
+      "name": "Hydraulics and rheology",
+      "status": "UNKNOWN",
+      "evidence": "Not completed or independently verified in Mission 15; inherit Mission 14 evidence without promotion.",
+      "next_action": "Complete and verify all phase-specific criteria before acceptance."
+    },
+    {
+      "phase": 13,
+      "name": "Hole cleaning and cuttings",
+      "status": "UNKNOWN",
+      "evidence": "Not completed or independently verified in Mission 15; inherit Mission 14 evidence without promotion.",
+      "next_action": "Complete and verify all phase-specific criteria before acceptance."
+    },
+    {
+      "phase": 14,
+      "name": "Torque drag and buckling",
+      "status": "UNKNOWN",
+      "evidence": "Not completed or independently verified in Mission 15; inherit Mission 14 evidence without promotion.",
+      "next_action": "Complete and verify all phase-specific criteria before acceptance."
+    },
+    {
+      "phase": 15,
+      "name": "Tubulars casing and connections",
+      "status": "UNKNOWN",
+      "evidence": "Not completed or independently verified in Mission 15; inherit Mission 14 evidence without promotion.",
+      "next_action": "Complete and verify all phase-specific criteria before acceptance."
+    },
+    {
+      "phase": 16,
+      "name": "Well control",
+      "status": "UNKNOWN",
+      "evidence": "Not completed or independently verified in Mission 15; inherit Mission 14 evidence without promotion.",
+      "next_action": "Complete and verify all phase-specific criteria before acceptance."
+    },
+    {
+      "phase": 17,
+      "name": "Cementing stability surge swab",
+      "status": "UNKNOWN",
+      "evidence": "Not completed or independently verified in Mission 15; inherit Mission 14 evidence without promotion.",
+      "next_action": "Complete and verify all phase-specific criteria before acceptance."
+    },
+    {
+      "phase": 18,
+      "name": "Well Design",
+      "status": "UNKNOWN",
+      "evidence": "Not completed or independently verified in Mission 15; inherit Mission 14 evidence without promotion.",
+      "next_action": "Complete and verify all phase-specific criteria before acceptance."
+    },
+    {
+      "phase": 19,
+      "name": "Programs and procedures",
+      "status": "UNKNOWN",
+      "evidence": "Not completed or independently verified in Mission 15; inherit Mission 14 evidence without promotion.",
+      "next_action": "Complete and verify all phase-specific criteria before acceptance."
+    },
+    {
+      "phase": 20,
+      "name": "Advisor RAG and agents",
+      "status": "UNKNOWN",
+      "evidence": "Not completed or independently verified in Mission 15; inherit Mission 14 evidence without promotion.",
+      "next_action": "Complete and verify all phase-specific criteria before acceptance."
+    },
+    {
+      "phase": 21,
+      "name": "Telemetry WITSML ETP and Twin",
+      "status": "UNKNOWN",
+      "evidence": "Not completed or independently verified in Mission 15; inherit Mission 14 evidence without promotion.",
+      "next_action": "Complete and verify all phase-specific criteria before acceptance."
+    },
+    {
+      "phase": 22,
+      "name": "Reporting and governance",
+      "status": "UNKNOWN",
+      "evidence": "Not completed or independently verified in Mission 15; inherit Mission 14 evidence without promotion.",
+      "next_action": "Complete and verify all phase-specific criteria before acceptance."
+    },
+    {
+      "phase": 23,
+      "name": "Registry and non-registry assurance",
+      "status": "PARTIAL",
+      "evidence": "Not completed or independently verified in Mission 15; inherit Mission 14 evidence without promotion.",
+      "next_action": "Complete and verify all phase-specific criteria before acceptance."
+    },
+    {
+      "phase": 24,
+      "name": "Historical capability audit",
+      "status": "PARTIAL",
+      "evidence": "Not completed or independently verified in Mission 15; inherit Mission 14 evidence without promotion.",
+      "next_action": "Complete and verify all phase-specific criteria before acceptance."
+    },
+    {
+      "phase": 25,
+      "name": "Expanded two-well golden scenario",
+      "status": "NOT_ACCEPTED",
+      "evidence": "CP150 is a limited synthetic smoke test, not the expanded requested scenario.",
+      "next_action": "Complete and verify all phase-specific criteria before acceptance."
+    },
+    {
+      "phase": 26,
+      "name": "Frontend completion",
+      "status": "UNKNOWN",
+      "evidence": "Not completed or independently verified in Mission 15; inherit Mission 14 evidence without promotion.",
+      "next_action": "Complete and verify all phase-specific criteria before acceptance."
+    },
+    {
+      "phase": 27,
+      "name": "API database migrations",
+      "status": "UNKNOWN",
+      "evidence": "Not completed or independently verified in Mission 15; inherit Mission 14 evidence without promotion.",
+      "next_action": "Complete and verify all phase-specific criteria before acceptance."
+    },
+    {
+      "phase": 28,
+      "name": "Test quality and regression",
+      "status": "UNKNOWN",
+      "evidence": "Not completed or independently verified in Mission 15; inherit Mission 14 evidence without promotion.",
+      "next_action": "Complete and verify all phase-specific criteria before acceptance."
+    },
+    {
+      "phase": 29,
+      "name": "Linux and Windows certification",
+      "status": "UNKNOWN",
+      "evidence": "Not completed or independently verified in Mission 15; inherit Mission 14 evidence without promotion.",
+      "next_action": "Complete and verify all phase-specific criteria before acceptance."
+    },
+    {
+      "phase": 30,
+      "name": "Capability roadmap",
+      "status": "UNKNOWN",
+      "evidence": "Not completed or independently verified in Mission 15; inherit Mission 14 evidence without promotion.",
+      "next_action": "Complete and verify all phase-specific criteria before acceptance."
+    },
+    {
+      "phase": 31,
+      "name": "Source-to-report traceability",
+      "status": "UNKNOWN",
+      "evidence": "Not completed or independently verified in Mission 15; inherit Mission 14 evidence without promotion.",
+      "next_action": "Complete and verify all phase-specific criteria before acceptance."
+    },
+    {
+      "phase": 32,
+      "name": "Final security and engineering gate",
+      "status": "UNKNOWN",
+      "evidence": "Not completed or independently verified in Mission 15; inherit Mission 14 evidence without promotion.",
+      "next_action": "Complete and verify all phase-specific criteria before acceptance."
+    },
+    {
+      "phase": 33,
+      "name": "Exact-SHA CI",
+      "status": "NOT_ACCEPTED",
+      "evidence": "Current increment exact-SHA CI not yet available at report snapshot; inherited run 45407343559 failed OCR.",
+      "next_action": "Complete and verify all phase-specific criteria before acceptance."
+    },
+    {
+      "phase": 34,
+      "name": "Workspace and Git closure",
+      "status": "PARTIAL",
+      "evidence": "Precommit snapshot only; private start inventory retained, historical path metadata not fully recoverable, exact final closure not established.",
+      "next_action": "Complete and verify all phase-specific criteria before acceptance."
+    },
+    {
+      "phase": 35,
+      "name": "Capability register",
+      "status": "PARTIAL",
+      "evidence": "Not completed or independently verified in Mission 15; inherit Mission 14 evidence without promotion.",
+      "next_action": "Complete and verify all phase-specific criteria before acceptance."
+    },
+    {
+      "phase": 36,
+      "name": "Final reports",
+      "status": "PARTIAL",
+      "evidence": "Not completed or independently verified in Mission 15; inherit Mission 14 evidence without promotion.",
+      "next_action": "Complete and verify all phase-specific criteria before acceptance."
+    }
+  ]
+}

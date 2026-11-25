@@ -1,0 +1,16 @@
+{
+  "status": "NOT_ACCEPTED",
+  "source_run": "https://github.com/asgareyvazi/DrillAI/actions/runs/45407343559",
+  "source_sha": "5547608796ac1da22ca2ae83219be899a0bcc804",
+  "frozen_corpus_sha256": "31aca80b4323fe470d34705e36038296ef620adb7525373f5196c9f561b6735d",
+  "evaluated_cases": 64,
+  "critical_fields": "308/384",
+  "english": "190/192",
+  "persian": "118/192",
+  "table": "50/96",
+  "two_column": "82/96",
+  "cer": 0.108395949,
+  "wer": 0.1550687285,
+  "mission15_deployment_rerun": "NOT_RUN",
+  "blocker": "Docker/Podman, Tesseract CLI and pdftoppm are unavailable locally; unresolved engineering fix is not treated as an external blocker."
+}

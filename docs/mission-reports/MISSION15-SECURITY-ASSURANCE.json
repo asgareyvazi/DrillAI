@@ -1,0 +1,14 @@
+{
+  "status": "NOT_ACCEPTED",
+  "resolved_in_increment": [
+    "Connector and notification encrypted-secret resolution require owning Database session settings; unscoped sessions fail closed.",
+    "ConnectorWorker defaults read its Database settings."
+  ],
+  "tests": "Three regressions reproduced before fix; focused expanded suite 29 passed, 2 PostgreSQL-only skips; worker test uses synthetic local adapter.",
+  "limitations": [
+    "Application-scoped provider registry not implemented: creating app B replaces app A global provider registry, reproduced.",
+    "Global egress policy and other process-scoped configuration remain.",
+    "Database settings must be explicitly updated together with app settings during runtime reconfiguration; atomic rotation protocol not established.",
+    "Connector runtime end-to-end cross-worker isolation, environment secret isolation and complete authorization matrix remain unproved."
+  ]
+}

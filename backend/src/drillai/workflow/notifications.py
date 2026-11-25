@@ -149,10 +149,13 @@ async def resolve_notification_secret_async(
                 return None
             return os.environ.get(env_name) or None
         if row.backend == "db_encrypted":
+            from drillai.db.session import settings_for_session
             from drillai.security.secrets import decrypt_secret_value
 
             try:
-                return decrypt_secret_value(row.locator, org_id=org_id, secret_key=row.key)
+                return decrypt_secret_value(
+                    row.locator, org_id=org_id, secret_key=row.key, settings=settings_for_session(session)
+                )
             except ValidationFailed:
                 return None
         return None

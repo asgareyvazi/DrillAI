@@ -1,0 +1,11 @@
+{
+  "status": "NOT_ACCEPTED",
+  "scope": "Precommit snapshot; this file does not certify its containing commit.",
+  "mission14_run": "https://github.com/asgareyvazi/DrillAI/actions/runs/45407343559",
+  "mission14_sha": "5547608796ac1da22ca2ae83219be899a0bcc804",
+  "mission14_conclusion": "failure",
+  "linux": "1922 backend, 130 browser passed; deployment OCR failed",
+  "windows": "native Windows and reliability jobs passed",
+  "artifacts": "Uploaded in GitHub Actions; sandbox download was unavailable because redirected artifact host is outside allowed egress.",
+  "mission15_exact_sha": "PENDING"
+}

@@ -1,0 +1,11 @@
+{
+  "status": "NOT_ACCEPTED",
+  "field_qualification": "BLOCKED_BY_MISSING_AUTHORIZED_EVIDENCE",
+  "security": "NOT_ACCEPTED",
+  "ocr": "NOT_ACCEPTED",
+  "expanded_golden": "NOT_ACCEPTED",
+  "full_assurance": "NOT_ACCEPTED",
+  "workspace_closure": "NOT_ACCEPTED",
+  "exact_sha_ci": "PENDING",
+  "note": "This precommit record is not a final certification."
+}

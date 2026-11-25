@@ -1,0 +1,162 @@
+{
+  "status": "PARTIAL",
+  "scope": "Inherited 22 planned items; no Mission 14 engineering implementation or reference selection claimed.",
+  "items": [
+    {
+      "id": "turbulent_hydraulics",
+      "name": "turbulent hydraulics",
+      "required_reference": "NOT_SELECTED",
+      "status": "PLANNED",
+      "validation": "NOT_MEASURED"
+    },
+    {
+      "id": "Power_Law_full-well_and_annular_hydraulics",
+      "name": "Power Law full-well and annular hydraulics",
+      "required_reference": "NOT_SELECTED",
+      "status": "PLANNED",
+      "validation": "NOT_MEASURED"
+    },
+    {
+      "id": "Herschel-Bulkley_rheology",
+      "name": "Herschel-Bulkley rheology",
+      "required_reference": "NOT_SELECTED",
+      "status": "PLANNED",
+      "validation": "NOT_MEASURED"
+    },
+    {
+      "id": "hole_cleaning",
+      "name": "hole cleaning",
+      "required_reference": "NOT_SELECTED",
+      "status": "PLANNED",
+      "validation": "NOT_MEASURED"
+    },
+    {
+      "id": "cuttings_transport",
+      "name": "cuttings transport",
+      "required_reference": "NOT_SELECTED",
+      "status": "PLANNED",
+      "validation": "NOT_MEASURED"
+    },
+    {
+      "id": "uncertainty-based_anti-collision",
+      "name": "uncertainty-based anti-collision",
+      "required_reference": "NOT_SELECTED",
+      "status": "PLANNED",
+      "validation": "NOT_MEASURED"
+    },
+    {
+      "id": "advanced_torque_and_drag",
+      "name": "advanced torque and drag",
+      "required_reference": "NOT_SELECTED",
+      "status": "PLANNED",
+      "validation": "NOT_MEASURED"
+    },
+    {
+      "id": "surge/swab",
+      "name": "surge/swab",
+      "required_reference": "NOT_SELECTED",
+      "status": "PLANNED",
+      "validation": "NOT_MEASURED"
+    },
+    {
+      "id": "casing_design",
+      "name": "casing design",
+      "required_reference": "NOT_SELECTED",
+      "status": "PLANNED",
+      "validation": "NOT_MEASURED"
+    },
+    {
+      "id": "tubular_connection_capacity",
+      "name": "tubular connection capacity",
+      "required_reference": "NOT_SELECTED",
+      "status": "PLANNED",
+      "validation": "NOT_MEASURED"
+    },
+    {
+      "id": "cementing",
+      "name": "cementing",
+      "required_reference": "NOT_SELECTED",
+      "status": "PLANNED",
+      "validation": "NOT_MEASURED"
+    },
+    {
+      "id": "wellbore_stability",
+      "name": "wellbore stability",
+      "required_reference": "NOT_SELECTED",
+      "status": "PLANNED",
+      "validation": "NOT_MEASURED"
+    },
+    {
+      "id": "kick_tolerance",
+      "name": "kick tolerance",
+      "required_reference": "NOT_SELECTED",
+      "status": "PLANNED",
+      "validation": "NOT_MEASURED"
+    },
+    {
+      "id": "MAASP",
+      "name": "MAASP",
+      "required_reference": "NOT_SELECTED",
+      "status": "PLANNED",
+      "validation": "NOT_MEASURED"
+    },
+    {
+      "id": "managed_pressure_drilling",
+      "name": "managed pressure drilling",
+      "required_reference": "NOT_SELECTED",
+      "status": "PLANNED",
+      "validation": "NOT_MEASURED"
+    },
+    {
+      "id": "drillstring_design",
+      "name": "drillstring design",
+      "required_reference": "NOT_SELECTED",
+      "status": "PLANNED",
+      "validation": "NOT_MEASURED"
+    },
+    {
+      "id": "casing-seat_planning",
+      "name": "casing-seat planning",
+      "required_reference": "NOT_SELECTED",
+      "status": "PLANNED",
+      "validation": "NOT_MEASURED"
+    },
+    {
+      "id": "pressure_management",
+      "name": "pressure management",
+      "required_reference": "NOT_SELECTED",
+      "status": "PLANNED",
+      "validation": "NOT_MEASURED"
+    },
+    {
+      "id": "well_integrity",
+      "name": "well integrity",
+      "required_reference": "NOT_SELECTED",
+      "status": "PLANNED",
+      "validation": "NOT_MEASURED"
+    },
+    {
+      "id": "well_economics",
+      "name": "well economics",
+      "required_reference": "NOT_SELECTED",
+      "status": "PLANNED",
+      "validation": "NOT_MEASURED"
+    },
+    {
+      "id": "lifecycle_performance",
+      "name": "lifecycle performance",
+      "required_reference": "NOT_SELECTED",
+      "status": "PLANNED",
+      "validation": "NOT_MEASURED"
+    },
+    {
+      "id": "advanced_optimization",
+      "name": "advanced optimization",
+      "required_reference": "NOT_SELECTED",
+      "status": "PLANNED",
+      "validation": "NOT_MEASURED"
+    }
+  ],
+  "source": "docs/DRILLAI-ENGINEERING-CAPABILITY-REGISTER.json",
+  "mission15_provenance": "Inherited Mission 14 snapshot; not newly or comprehensively verified during this increment."
+}

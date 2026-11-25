@@ -1,0 +1,278 @@
+{
+  "status": "PARTIAL",
+  "scope": "Mission 15 tracking list; UNKNOWN means not fully reviewed here, not absent. Detailed inherited register and roadmap remain linked.",
+  "prior_register": "docs/DRILLAI-ENGINEERING-CAPABILITY-REGISTER.json",
+  "roadmap": "MISSION15-CAPABILITY-ROADMAP.json",
+  "capabilities": [
+    {
+      "name": "Project and well management",
+      "status": "UNKNOWN",
+      "evidence": "Mission 14 reports and Mission 15 interim reports; lifecycle not comprehensively revalidated.",
+      "next_action": "Audit domain model, API, UI, persistence, provenance, review, reports and assurance."
+    },
+    {
+      "name": "DDR manual authoring",
+      "status": "UNKNOWN",
+      "evidence": "Mission 14 reports and Mission 15 interim reports; lifecycle not comprehensively revalidated.",
+      "next_action": "Audit domain model, API, UI, persistence, provenance, review, reports and assurance."
+    },
+    {
+      "name": "DDR batch import",
+      "status": "UNKNOWN",
+      "evidence": "Mission 14 reports and Mission 15 interim reports; lifecycle not comprehensively revalidated.",
+      "next_action": "Audit domain model, API, UI, persistence, provenance, review, reports and assurance."
+    },
+    {
+      "name": "OCR",
+      "status": "NOT_ACCEPTED",
+      "evidence": "Mission 14 reports and Mission 15 interim reports; lifecycle not comprehensively revalidated.",
+      "next_action": "Audit domain model, API, UI, persistence, provenance, review, reports and assurance."
+    },
+    {
+      "name": "Document intelligence",
+      "status": "UNKNOWN",
+      "evidence": "Mission 14 reports and Mission 15 interim reports; lifecycle not comprehensively revalidated.",
+      "next_action": "Audit domain model, API, UI, persistence, provenance, review, reports and assurance."
+    },
+    {
+      "name": "Chronology",
+      "status": "UNKNOWN",
+      "evidence": "Mission 14 reports and Mission 15 interim reports; lifecycle not comprehensively revalidated.",
+      "next_action": "Audit domain model, API, UI, persistence, provenance, review, reports and assurance."
+    },
+    {
+      "name": "NPT",
+      "status": "UNKNOWN",
+      "evidence": "Mission 14 reports and Mission 15 interim reports; lifecycle not comprehensively revalidated.",
+      "next_action": "Audit domain model, API, UI, persistence, provenance, review, reports and assurance."
+    },
+    {
+      "name": "Survey",
+      "status": "UNKNOWN",
+      "evidence": "Mission 14 reports and Mission 15 interim reports; lifecycle not comprehensively revalidated.",
+      "next_action": "Audit domain model, API, UI, persistence, provenance, review, reports and assurance."
+    },
+    {
+      "name": "Trajectory",
+      "status": "UNKNOWN",
+      "evidence": "Mission 14 reports and Mission 15 interim reports; lifecycle not comprehensively revalidated.",
+      "next_action": "Audit domain model, API, UI, persistence, provenance, review, reports and assurance."
+    },
+    {
+      "name": "Anti-collision",
+      "status": "UNKNOWN",
+      "evidence": "Mission 14 reports and Mission 15 interim reports; lifecycle not comprehensively revalidated.",
+      "next_action": "Audit domain model, API, UI, persistence, provenance, review, reports and assurance."
+    },
+    {
+      "name": "Capacity",
+      "status": "UNKNOWN",
+      "evidence": "Mission 14 reports and Mission 15 interim reports; lifecycle not comprehensively revalidated.",
+      "next_action": "Audit domain model, API, UI, persistence, provenance, review, reports and assurance."
+    },
+    {
+      "name": "Hydraulics",
+      "status": "UNKNOWN",
+      "evidence": "Mission 14 reports and Mission 15 interim reports; lifecycle not comprehensively revalidated.",
+      "next_action": "Audit domain model, API, UI, persistence, provenance, review, reports and assurance."
+    },
+    {
+      "name": "Rheology",
+      "status": "UNKNOWN",
+      "evidence": "Mission 14 reports and Mission 15 interim reports; lifecycle not comprehensively revalidated.",
+      "next_action": "Audit domain model, API, UI, persistence, provenance, review, reports and assurance."
+    },
+    {
+      "name": "ECD",
+      "status": "UNKNOWN",
+      "evidence": "Mission 14 reports and Mission 15 interim reports; lifecycle not comprehensively revalidated.",
+      "next_action": "Audit domain model, API, UI, persistence, provenance, review, reports and assurance."
+    },
+    {
+      "name": "Hole cleaning",
+      "status": "UNKNOWN",
+      "evidence": "Mission 14 reports and Mission 15 interim reports; lifecycle not comprehensively revalidated.",
+      "next_action": "Audit domain model, API, UI, persistence, provenance, review, reports and assurance."
+    },
+    {
+      "name": "Cuttings transport",
+      "status": "UNKNOWN",
+      "evidence": "Mission 14 reports and Mission 15 interim reports; lifecycle not comprehensively revalidated.",
+      "next_action": "Audit domain model, API, UI, persistence, provenance, review, reports and assurance."
+    },
+    {
+      "name": "Torque and drag",
+      "status": "UNKNOWN",
+      "evidence": "Mission 14 reports and Mission 15 interim reports; lifecycle not comprehensively revalidated.",
+      "next_action": "Audit domain model, API, UI, persistence, provenance, review, reports and assurance."
+    },
+    {
+      "name": "Buckling",
+      "status": "UNKNOWN",
+      "evidence": "Mission 14 reports and Mission 15 interim reports; lifecycle not comprehensively revalidated.",
+      "next_action": "Audit domain model, API, UI, persistence, provenance, review, reports and assurance."
+    },
+    {
+      "name": "Tubulars",
+      "status": "UNKNOWN",
+      "evidence": "Mission 14 reports and Mission 15 interim reports; lifecycle not comprehensively revalidated.",
+      "next_action": "Audit domain model, API, UI, persistence, provenance, review, reports and assurance."
+    },
+    {
+      "name": "Casing design",
+      "status": "UNKNOWN",
+      "evidence": "Mission 14 reports and Mission 15 interim reports; lifecycle not comprehensively revalidated.",
+      "next_action": "Audit domain model, API, UI, persistence, provenance, review, reports and assurance."
+    },
+    {
+      "name": "Well control",
+      "status": "UNKNOWN",
+      "evidence": "Mission 14 reports and Mission 15 interim reports; lifecycle not comprehensively revalidated.",
+      "next_action": "Audit domain model, API, UI, persistence, provenance, review, reports and assurance."
+    },
+    {
+      "name": "Kick tolerance",
+      "status": "UNKNOWN",
+      "evidence": "Mission 14 reports and Mission 15 interim reports; lifecycle not comprehensively revalidated.",
+      "next_action": "Audit domain model, API, UI, persistence, provenance, review, reports and assurance."
+    },
+    {
+      "name": "MAASP",
+      "status": "UNKNOWN",
+      "evidence": "Mission 14 reports and Mission 15 interim reports; lifecycle not comprehensively revalidated.",
+      "next_action": "Audit domain model, API, UI, persistence, provenance, review, reports and assurance."
+    },
+    {
+      "name": "MPD",
+      "status": "UNKNOWN",
+      "evidence": "Mission 14 reports and Mission 15 interim reports; lifecycle not comprehensively revalidated.",
+      "next_action": "Audit domain model, API, UI, persistence, provenance, review, reports and assurance."
+    },
+    {
+      "name": "Cementing",
+      "status": "UNKNOWN",
+      "evidence": "Mission 14 reports and Mission 15 interim reports; lifecycle not comprehensively revalidated.",
+      "next_action": "Audit domain model, API, UI, persistence, provenance, review, reports and assurance."
+    },
+    {
+      "name": "Wellbore stability",
+      "status": "UNKNOWN",
+      "evidence": "Mission 14 reports and Mission 15 interim reports; lifecycle not comprehensively revalidated.",
+      "next_action": "Audit domain model, API, UI, persistence, provenance, review, reports and assurance."
+    },
+    {
+      "name": "Surge and swab",
+      "status": "UNKNOWN",
+      "evidence": "Mission 14 reports and Mission 15 interim reports; lifecycle not comprehensively revalidated.",
+      "next_action": "Audit domain model, API, UI, persistence, provenance, review, reports and assurance."
+    },
+    {
+      "name": "Well Design",
+      "status": "UNKNOWN",
+      "evidence": "Mission 14 reports and Mission 15 interim reports; lifecycle not comprehensively revalidated.",
+      "next_action": "Audit domain model, API, UI, persistence, provenance, review, reports and assurance."
+    },
+    {
+      "name": "Programs and Procedures",
+      "status": "UNKNOWN",
+      "evidence": "Mission 14 reports and Mission 15 interim reports; lifecycle not comprehensively revalidated.",
+      "next_action": "Audit domain model, API, UI, persistence, provenance, review, reports and assurance."
+    },
+    {
+      "name": "AI Advisor",
+      "status": "UNKNOWN",
+      "evidence": "Mission 14 reports and Mission 15 interim reports; lifecycle not comprehensively revalidated.",
+      "next_action": "Audit domain model, API, UI, persistence, provenance, review, reports and assurance."
+    },
+    {
+      "name": "RAG",
+      "status": "UNKNOWN",
+      "evidence": "Mission 14 reports and Mission 15 interim reports; lifecycle not comprehensively revalidated.",
+      "next_action": "Audit domain model, API, UI, persistence, provenance, review, reports and assurance."
+    },
+    {
+      "name": "Specialist Agents",
+      "status": "UNKNOWN",
+      "evidence": "Mission 14 reports and Mission 15 interim reports; lifecycle not comprehensively revalidated.",
+      "next_action": "Audit domain model, API, UI, persistence, provenance, review, reports and assurance."
+    },
+    {
+      "name": "Telemetry",
+      "status": "UNKNOWN",
+      "evidence": "Mission 14 reports and Mission 15 interim reports; lifecycle not comprehensively revalidated.",
+      "next_action": "Audit domain model, API, UI, persistence, provenance, review, reports and assurance."
+    },
+    {
+      "name": "WITSML",
+      "status": "UNKNOWN",
+      "evidence": "Mission 14 reports and Mission 15 interim reports; lifecycle not comprehensively revalidated.",
+      "next_action": "Audit domain model, API, UI, persistence, provenance, review, reports and assurance."
+    },
+    {
+      "name": "ETP",
+      "status": "UNKNOWN",
+      "evidence": "Mission 14 reports and Mission 15 interim reports; lifecycle not comprehensively revalidated.",
+      "next_action": "Audit domain model, API, UI, persistence, provenance, review, reports and assurance."
+    },
+    {
+      "name": "Digital Twin",
+      "status": "UNKNOWN",
+      "evidence": "Mission 14 reports and Mission 15 interim reports; lifecycle not comprehensively revalidated.",
+      "next_action": "Audit domain model, API, UI, persistence, provenance, review, reports and assurance."
+    },
+    {
+      "name": "Reporting",
+      "status": "UNKNOWN",
+      "evidence": "Mission 14 reports and Mission 15 interim reports; lifecycle not comprehensively revalidated.",
+      "next_action": "Audit domain model, API, UI, persistence, provenance, review, reports and assurance."
+    },
+    {
+      "name": "Analytics",
+      "status": "UNKNOWN",
+      "evidence": "Mission 14 reports and Mission 15 interim reports; lifecycle not comprehensively revalidated.",
+      "next_action": "Audit domain model, API, UI, persistence, provenance, review, reports and assurance."
+    },
+    {
+      "name": "Security",
+      "status": "PARTIAL",
+      "evidence": "Mission 14 reports and Mission 15 interim reports; lifecycle not comprehensively revalidated.",
+      "next_action": "Audit domain model, API, UI, persistence, provenance, review, reports and assurance."
+    },
+    {
+      "name": "RBAC",
+      "status": "UNKNOWN",
+      "evidence": "Mission 14 reports and Mission 15 interim reports; lifecycle not comprehensively revalidated.",
+      "next_action": "Audit domain model, API, UI, persistence, provenance, review, reports and assurance."
+    },
+    {
+      "name": "Workflow",
+      "status": "UNKNOWN",
+      "evidence": "Mission 14 reports and Mission 15 interim reports; lifecycle not comprehensively revalidated.",
+      "next_action": "Audit domain model, API, UI, persistence, provenance, review, reports and assurance."
+    },
+    {
+      "name": "Audit",
+      "status": "UNKNOWN",
+      "evidence": "Mission 14 reports and Mission 15 interim reports; lifecycle not comprehensively revalidated.",
+      "next_action": "Audit domain model, API, UI, persistence, provenance, review, reports and assurance."
+    },
+    {
+      "name": "Bilingual UX",
+      "status": "UNKNOWN",
+      "evidence": "Mission 14 reports and Mission 15 interim reports; lifecycle not comprehensively revalidated.",
+      "next_action": "Audit domain model, API, UI, persistence, provenance, review, reports and assurance."
+    },
+    {
+      "name": "Deployment",
+      "status": "UNKNOWN",
+      "evidence": "Mission 14 reports and Mission 15 interim reports; lifecycle not comprehensively revalidated.",
+      "next_action": "Audit domain model, API, UI, persistence, provenance, review, reports and assurance."
+    },
+    {
+      "name": "Interoperability",
+      "status": "UNKNOWN",
+      "evidence": "Mission 14 reports and Mission 15 interim reports; lifecycle not comprehensively revalidated.",
+      "next_action": "Audit domain model, API, UI, persistence, provenance, review, reports and assurance."
+    }
+  ]
+}

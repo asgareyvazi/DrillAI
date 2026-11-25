@@ -1,0 +1,4 @@
+PARTIAL — precommit snapshot, not final Git closure.
+Initial local metadata bfea530 reconciled to remote 5547608796ac1da22ca2ae83219be899a0bcc804 only after 896 tracked blob/mode matches; no workspace files overwritten.
+Protected main at baseline bfa066b28e0071880cb9191a4f1d47fdaa143e04.
+Final commit, remote ref and exact-SHA CI pending.

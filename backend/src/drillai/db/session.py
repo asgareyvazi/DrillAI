@@ -20,6 +20,7 @@ from sqlalchemy import event, text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 
 from drillai.core.config import Settings, get_settings
+from drillai.core.errors import ConfigurationError
 from drillai.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -86,7 +87,8 @@ class Database:
     def session_factory(self) -> async_sessionmaker[AsyncSession]:
         if self._session_factory is None:
             self._session_factory = async_sessionmaker(
-                bind=self.engine, expire_on_commit=False, autoflush=False
+                bind=self.engine, expire_on_commit=False, autoflush=False,
+                info={"drillai_database": self},
             )
         return self._session_factory
 
@@ -136,6 +138,19 @@ class Database:
 
     def dialect_name(self) -> str:
         return self.engine.dialect.name
+
+
+def settings_for_session(session: AsyncSession) -> Settings:
+    """Return the owning database's configuration, never process-global configuration.
+
+    Encrypted credentials require a session created by the owning Database. A bare SQLAlchemy
+    session has no trustworthy application identity and must fail closed rather than decrypt with
+    whichever master key happens to be cached in this process.
+    """
+    database = session.info.get("drillai_database")
+    if not isinstance(database, Database) or not isinstance(database.settings, Settings):
+        raise ConfigurationError("database session has no application-scoped settings")
+    return database.settings
 
 
 def _sqlite_fk_pragma(dbapi_connection, _connection_record) -> None:  # pragma: no cover - driver hook

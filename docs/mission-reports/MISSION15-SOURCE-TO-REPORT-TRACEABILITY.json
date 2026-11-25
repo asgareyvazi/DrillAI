@@ -1,0 +1,27 @@
+{
+  "status": "PARTIAL",
+  "entries": [
+    {
+      "id": "app_scoped_auth",
+      "status": "PARTIAL",
+      "sources": [
+        "backend/src/drillai/api/deps.py",
+        "backend/src/drillai/api/routers/auth.py",
+        "backend/src/drillai/api/routers/live.py",
+        "backend/src/drillai/api/routers/runs.py"
+      ],
+      "test": "backend/tests/security/test_m14_app_scoped_auth.py",
+      "report": "MISSION14-REPORT-EN.md",
+      "limitation": "Other process-global connector/worker/provider settings remain."
+    },
+    {
+      "id": "legacy_npt",
+      "status": "PARTIAL",
+      "source": "backend/src/drillai/drilling/npt.py",
+      "report": "backend/src/drillai/drilling/reporting.py",
+      "test": "backend/tests/operations/test_npt_accounting.py",
+      "limitation": "Not approved canonical physical downtime."
+    }
+  ],
+  "mission15_provenance": "Inherited Mission 14 snapshot; not newly or comprehensively verified during this increment."
+}

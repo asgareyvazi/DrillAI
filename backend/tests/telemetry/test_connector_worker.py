@@ -18,6 +18,7 @@ from drillai.core.clock import utc_now
 from drillai.core.config import Settings, get_settings, reset_settings_cache
 from drillai.core.errors import ConfigurationError
 from drillai.db.models import Base, Connector, ConnectorRun, Organization, Project, TimeSeries, Well, Wellbore
+from drillai.db.session import Database
 from drillai.observability.tracing import get_metrics
 from drillai.telemetry.protocols.witsml import LocalWitsmlSoapServer
 from drillai.telemetry.worker import ClaimedConnector, ConnectorWorker
@@ -94,7 +95,7 @@ def test_connector_worker_rejects_unbounded_supervisor_limits():
         {"retention_limit": True},
     ):
         with pytest.raises(ConfigurationError):
-            ConnectorWorker(object(), **overrides)
+            ConnectorWorker(Database(settings=Settings()), **overrides)
 
 
 async def test_competing_workers_cas_and_stale_worker_fencing(

@@ -2217,6 +2217,7 @@ async def resolve_secret_refs(
                     )
                 resolved[slot] = val
             elif row.backend == "db_encrypted":
+                from drillai.db.session import settings_for_session
                 from drillai.security.secrets import decrypt_secret_value
 
                 try:
@@ -2224,6 +2225,7 @@ async def resolve_secret_refs(
                         row.locator,
                         org_id=org_id,
                         secret_key=row.key,
+                        settings=settings_for_session(session),
                     )
                 except ValidationFailed as exc:
                     raise ValidationFailed(

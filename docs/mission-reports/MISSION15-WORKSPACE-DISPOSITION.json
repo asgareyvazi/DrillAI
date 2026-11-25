@@ -1,0 +1,178 @@
+{
+  "status": "PARTIAL",
+  "scope": "Precommit snapshot; full private manifest and later final comparison required.",
+  "historical_untracked": [
+    {
+      "path": "frontend/.playwright-report-cp151-71aae4f7f3364cd8bef9f4748c4283fb/index.html",
+      "classification": "historical test/report evidence; ownership not independently established",
+      "disposition": "retain; do not delete",
+      "present_at_start": true,
+      "start_sha256": "0bb5b83130d9869fcc36f112ca431268e1c544f4fd94f6321c28d575c12ac00f"
+    },
+    {
+      "path": "frontend/playwright-report-master-full-7d42a1/index.html",
+      "classification": "historical test/report evidence; ownership not independently established",
+      "disposition": "retain; do not delete",
+      "present_at_start": true,
+      "start_sha256": "08bc7c242cee30a0c8c17fb17caf8512dcc42d19aac7eeab2648e8d3fe1feddb"
+    },
+    {
+      "path": "frontend/test-results-continue2/.last-run.json",
+      "classification": "historical test/report evidence; ownership not independently established",
+      "disposition": "retain; do not delete",
+      "present_at_start": true,
+      "start_sha256": "1eb82cbc9991c6c4c503495ca984a11cca6b28a0e9f882d592fcc5aaca44e7fc"
+    },
+    {
+      "path": "frontend/test-results-continue2/well-cockpit-well-cockpit--82af4-om-a-generic-event-duration-chromium/error-context.md",
+      "classification": "historical test/report evidence; ownership not independently established",
+      "disposition": "retain; do not delete",
+      "present_at_start": true,
+      "start_sha256": "579daa1e1b5b20be5d2243b27d9f383849cd013fe1a49d582d1546dcbc97fcb4"
+    },
+    {
+      "path": "frontend/test-results-continue2/well-cockpit-well-cockpit--82af4-om-a-generic-event-duration-chromium/test-failed-1.png",
+      "classification": "historical test/report evidence; ownership not independently established",
+      "disposition": "retain; do not delete",
+      "present_at_start": true,
+      "start_sha256": "9bf0586cbdff9e2f63ee00ea8fc950f39da337f2382d336abae7e5e20fc6681b"
+    },
+    {
+      "path": "frontend/test-results-continue2/well-cockpit-well-cockpit--82af4-om-a-generic-event-duration-chromium/trace.zip",
+      "classification": "historical test/report evidence; ownership not independently established",
+      "disposition": "retain; do not delete",
+      "present_at_start": true,
+      "start_sha256": "92adc581b47fb81204ff82395ddc3b62cae37ab5e286ef5b35ef431b6db1bf86"
+    },
+    {
+      "path": "frontend/test-results-continue2b/.last-run.json",
+      "classification": "historical test/report evidence; ownership not independently established",
+      "disposition": "retain; do not delete",
+      "present_at_start": true,
+      "start_sha256": "91d1c43004802cd49950d78eb11c8fa7d05da8ffffe219a8b13b2f561bc00903"
+    },
+    {
+      "path": "frontend/test-results-continue2connector/.last-run.json",
+      "classification": "historical test/report evidence; ownership not independently established",
+      "disposition": "retain; do not delete",
+      "present_at_start": true,
+      "start_sha256": "91d1c43004802cd49950d78eb11c8fa7d05da8ffffe219a8b13b2f561bc00903"
+    },
+    {
+      "path": "frontend/test-results-continue2final/.last-run.json",
+      "classification": "historical test/report evidence; ownership not independently established",
+      "disposition": "retain; do not delete",
+      "present_at_start": true,
+      "start_sha256": "91d1c43004802cd49950d78eb11c8fa7d05da8ffffe219a8b13b2f561bc00903"
+    },
+    {
+      "path": "frontend/test-results-continue2full/.last-run.json",
+      "classification": "historical test/report evidence; ownership not independently established",
+      "disposition": "retain; do not delete",
+      "present_at_start": true,
+      "start_sha256": "9068802127ea79e80117071709f6e440d358920b2add1db2ccdd09fdf6dc9469"
+    },
+    {
+      "path": "frontend/test-results-continue2full/connectors-platform-CP11-t-e1520-dance-then-recovers-cleanly-chromium/error-context.md",
+      "classification": "historical test/report evidence; ownership not independently established",
+      "disposition": "retain; do not delete",
+      "present_at_start": true,
+      "start_sha256": "37f7b76da6617d431a2e69d984d4d90381d540432930e4c2bcc819bea43a5e64"
+    },
+    {
+      "path": "frontend/test-results-continue2full/connectors-platform-CP11-t-e1520-dance-then-recovers-cleanly-chromium/test-failed-1.png",
+      "classification": "historical test/report evidence; ownership not independently established",
+      "disposition": "retain; do not delete",
+      "present_at_start": true,
+      "start_sha256": "fa8d9eb9530c85ff916e0c24a86bf24784942e18298775f947bfcec7c7818645"
+    },
+    {
+      "path": "frontend/test-results-continue2full/connectors-platform-CP11-t-e1520-dance-then-recovers-cleanly-chromium/trace.zip",
+      "classification": "historical test/report evidence; ownership not independently established",
+      "disposition": "retain; do not delete",
+      "present_at_start": true,
+      "start_sha256": "3786985c49690e1a4bf8adcb1055cb3903fbcc95c6b15d816bbf7393620e9498"
+    },
+    {
+      "path": "frontend/test-results-continue2full/live-operations-CP10-live--719a9-Persian-RTL-token-isolation-chromium/error-context.md",
+      "classification": "historical test/report evidence; ownership not independently established",
+      "disposition": "retain; do not delete",
+      "present_at_start": true,
+      "start_sha256": "1aeb86382d493471c97b1a838340255ac0d81aa28e4d12443d5450bb4af4aad0"
+    },
+    {
+      "path": "frontend/test-results-continue2full/live-operations-CP10-live--719a9-Persian-RTL-token-isolation-chromium/trace.zip",
+      "classification": "historical test/report evidence; ownership not independently established",
+      "disposition": "retain; do not delete",
+      "present_at_start": true,
+      "start_sha256": "ceea114d5e8cb46f6294ab385638643ad1e513cea8246944a22ed46f6012b189"
+    },
+    {
+      "path": "frontend/test-results-m10-cont3-full/.last-run.json",
+      "classification": "historical test/report evidence; ownership not independently established",
+      "disposition": "retain; do not delete",
+      "present_at_start": true,
+      "start_sha256": "821f159b3fc895ef4b57f67e1df00456076b2f8adb8cfb3224f6eba1c48b4ec3"
+    },
+    {
+      "path": "frontend/test-results-m10-cont3-full/daily-reports-workspace-da-27cb8-actual-extracted-CSV-source-chromium/error-context.md",
+      "classification": "historical test/report evidence; ownership not independently established",
+      "disposition": "retain; do not delete",
+      "present_at_start": true,
+      "start_sha256": "1efacfa1fa064abeed972384691e1cc4d84af0aa04bf98e89d1457439bd8a240"
+    },
+    {
+      "path": "frontend/test-results-m10-cont3-full/daily-reports-workspace-da-27cb8-actual-extracted-CSV-source-chromium/test-failed-1.png",
+      "classification": "historical test/report evidence; ownership not independently established",
+      "disposition": "retain; do not delete",
+      "present_at_start": true,
+      "start_sha256": "87cfc0456f90bdec862da2a2714caf0841ca4a0fd63bc35a4eaee619e878637b"
+    },
+    {
+      "path": "frontend/test-results-m10-cont3-full/daily-reports-workspace-da-27cb8-actual-extracted-CSV-source-chromium/trace.zip",
+      "classification": "historical test/report evidence; ownership not independently established",
+      "disposition": "retain; do not delete",
+      "present_at_start": true,
+      "start_sha256": "7b0b159960a2336002d132a31ddcf3b7a0f7547a3c489a183e4d19d723bd5d7b"
+    },
+    {
+      "path": "frontend/test-results-m10-cont3-readback/.last-run.json",
+      "classification": "historical test/report evidence; ownership not independently established",
+      "disposition": "retain; do not delete",
+      "present_at_start": true,
+      "start_sha256": "91d1c43004802cd49950d78eb11c8fa7d05da8ffffe219a8b13b2f561bc00903"
+    },
+    {
+      "path": "frontend/test-results-m10-cont3/.last-run.json",
+      "classification": "historical test/report evidence; ownership not independently established",
+      "disposition": "retain; do not delete",
+      "present_at_start": true,
+      "start_sha256": "91d1c43004802cd49950d78eb11c8fa7d05da8ffffe219a8b13b2f561bc00903"
+    },
+    {
+      "path": "frontend/test-results-master-auth-c4a891de/.last-run.json",
+      "classification": "historical test/report evidence; ownership not independently established",
+      "disposition": "retain; do not delete",
+      "present_at_start": true,
+      "start_sha256": "91d1c43004802cd49950d78eb11c8fa7d05da8ffffe219a8b13b2f561bc00903"
+    },
+    {
+      "path": "frontend/test-results-master-full-7d42a1/.last-run.json",
+      "classification": "historical test/report evidence; ownership not independently established",
+      "disposition": "retain; do not delete",
+      "present_at_start": true,
+      "start_sha256": "91d1c43004802cd49950d78eb11c8fa7d05da8ffffe219a8b13b2f561bc00903"
+    },
+    {
+      "path": "frontend/test-results-master-full-7d42a1/e2e-results.json",
+      "classification": "historical test/report evidence; ownership not independently established",
+      "disposition": "retain; do not delete",
+      "present_at_start": true,
+      "start_sha256": "555a97d72d99dff75dc7d6eb551d34b5c534f40f68c44eb4924a43afa5216bf9"
+    }
+  ],
+  "protected": "Nine entries retained; all bytes, type, mode and size match Mission 14 start, but all timestamps differ across sandbox restoration.",
+  "private_evidence": "Mission 15 baseline stored in ignored owner-only private directory; not an independent backup.",
+  "environment": "Temporary Python environment and test output retained outside repository.",
+  "ignored": "Caches and private baseline retained, not comprehensively closed."
+}

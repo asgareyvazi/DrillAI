@@ -117,7 +117,7 @@ class ConnectorWorker:
         before_commit_hook: Callable[[ClaimedConnector], Awaitable[None]] | None = None,
         before_claim_cas_hook: Callable[[str], Awaitable[None]] | None = None,
     ) -> None:
-        settings = get_settings()
+        settings = database.settings
         host = socket.gethostname().split(".")[0]
         self.database = database
         self.worker_id = worker_id or f"wrk_{host}_{os.getpid()}_{new_id('w')[-6:]}"
