@@ -44,7 +44,7 @@ DIAGNOSTIC_TIMEOUT_SECONDS = 3.0
 # Reaping must itself be bounded: a kill request is not proof that a child has exited.
 # This is a cleanup bound, not an end-to-end document deadline or process-tree guarantee.
 PROCESS_REAP_TIMEOUT_SECONDS = 1.0
-TESSERACT_ADAPTER_VERSION = "tesseract-cli-tsv-v11"
+TESSERACT_ADAPTER_VERSION = "tesseract-cli-tsv-v12"
 TESSERACT_PAGE_SEGMENTATION_MODE = 6
 TESSERACT_TWO_COLUMN_PAGE_SEGMENTATION_MODE = 11
 TESSERACT_LANGUAGE_ROUTING_POLICY = (
@@ -334,7 +334,8 @@ def _order_column_lines(
 def parse_tesseract_tsv(data: bytes) -> list[OcrLine]:
     """Turn Tesseract word rows into ordered lines, preserving boxes and confidence.
 
-    Parent rows and negative confidence (Tesseract's "not scored" marker) are not treated as words.
+    Parent rows and empty word rows are not treated as words. A text-bearing word with malformed
+    geometry or missing/unscored confidence invalidates the page rather than silently disappearing.
     A line score is character-weighted over its word scores; it is a transcription-confidence signal,
     not a probability that a drilling value is correct. The TSV parser has its own hard byte ceiling so
     callers cannot accidentally bypass the provider's subprocess-output bound.
@@ -347,7 +348,8 @@ def parse_tesseract_tsv(data: bytes) -> list[OcrLine]:
         # The CSV default would treat a leading literal double quote as an opening quote and
         # consume subsequent rows into the same text field, corrupting both text and provenance.
         reader = csv.DictReader(io.StringIO(text, newline=""), delimiter="\t", quoting=csv.QUOTE_NONE)
-        if reader.fieldnames is None or not set(_REQUIRED_TSV_COLUMNS).issubset(reader.fieldnames):
+        if (reader.fieldnames is None or len(reader.fieldnames) != len(set(reader.fieldnames))
+                or not set(_REQUIRED_TSV_COLUMNS).issubset(reader.fieldnames)):
             raise OcrUnavailable("Tesseract returned an unrecognised TSV format")
         grouped: dict[tuple[int, int, int, int], list[tuple[str, float, int, int, int, int]]] = {}
         for row in reader:
@@ -357,6 +359,8 @@ def parse_tesseract_tsv(data: bytes) -> list[OcrLine]:
                 raise OcrUnavailable("Tesseract returned a TSV row with ambiguous columns")
             if row.get("level") != "5":
                 continue
+            if any(row.get(column) is None for column in _REQUIRED_TSV_COLUMNS):
+                raise OcrUnavailable("Tesseract returned incomplete word evidence")
             word = (row.get("text") or "").strip()
             if not word:
                 continue
@@ -370,8 +374,8 @@ def parse_tesseract_tsv(data: bytes) -> list[OcrLine]:
                 width = int(row["width"])
                 height = int(row["height"])
                 raw_confidence = float(row["conf"])
-            except (KeyError, TypeError, ValueError, OverflowError):
-                continue
+            except (KeyError, TypeError, ValueError, OverflowError) as exc:
+                raise OcrUnavailable("Tesseract returned invalid word evidence") from exc
             if (
                 page_num < 1
                 or min(block_num, par_num, line_num, left, top, width, height) < 0
@@ -380,7 +384,7 @@ def parse_tesseract_tsv(data: bytes) -> list[OcrLine]:
                 or not math.isfinite(raw_confidence)
                 or not 0 <= raw_confidence <= 100
             ):
-                continue
+                raise OcrUnavailable("Tesseract returned invalid word evidence")
             key = (page_num, block_num, par_num, line_num)
             # Preserve Tesseract's row order. Sorting by each word's top coordinate can scramble
             # mixed-script text and words whose glyph tops differ slightly on the same baseline.

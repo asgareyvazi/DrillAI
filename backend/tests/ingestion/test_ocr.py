@@ -206,9 +206,7 @@ def test_tesseract_tsv_preserves_engine_word_order_and_calculates_line_evidence(
         _word(left=100, top=100, width=50, height=15, conf="90", text="mud"),
         _word(left=50, top=98, width=30, height=17, conf="80", text="weight"),
         _word(line=2, left=50, top=130, width=45, height=15, conf="100", text="12.4"),
-        _word(line=3, left=50, top=160, width=10, height=12, conf="-1", text="not-scored"),
         ["4", "1", "1", "1", "1", "0", "10", "10", "20", "10", "-1", "parent row"],
-        _word(line=4, left=-1, top=190, width=10, height=10, conf="90", text="negative-box"),
     ]
 
     lines = parse_tesseract_tsv(_tsv(rows))
@@ -389,7 +387,7 @@ def test_tesseract_cli_adapter_uses_stdin_and_bounds_child_output(tmp_path: Path
         languages="eng,fas", executable=str(script), timeout_seconds=5, max_output_bytes=1024
     )
     assert provider.availability() == (True, None)
-    assert provider.version == "tesseract-cli-tsv-v11; tesseract 5.3.0"
+    assert provider.version == "tesseract-cli-tsv-v12; tesseract 5.3.0"
     lines = provider.recognize(b"png-contract")
     assert len(lines) == 1
     assert lines[0].text == "Drill"
@@ -641,7 +639,7 @@ def test_tesseract_diagnostics_verify_languages_and_capture_runtime_version(monk
     assert diagnostics["available_languages"] == ["eng"]
     assert diagnostics["missing_languages"] == ["fas"]
     assert diagnostics["reason"] == "Tesseract is missing configured language data: fas"
-    assert provider.version == "tesseract-cli-tsv-v11; tesseract 5.4.1"
+    assert provider.version == "tesseract-cli-tsv-v12; tesseract 5.4.1"
 
 
 def test_tesseract_diagnostic_version_rejects_path_or_untrusted_process_text(monkeypatch) -> None:
@@ -710,9 +708,9 @@ def test_tesseract_runtime_diagnostics_are_cached_across_provider_instances(monk
     second = second_provider.diagnostics()
     second["available_languages"].append("tampered")
 
-    assert first_version == "tesseract-cli-tsv-v11; tesseract 5.4.1"
+    assert first_version == "tesseract-cli-tsv-v12; tesseract 5.4.1"
     assert calls == ["--version", "--list-langs"]
-    assert second_provider.version == "tesseract-cli-tsv-v11; tesseract 5.4.1"
+    assert second_provider.version == "tesseract-cli-tsv-v12; tesseract 5.4.1"
     assert first["available_languages"] == ["eng", "fas"]
 
 
@@ -921,3 +919,46 @@ def test_opt_in_pid_namespace_fails_closed_or_contains_escaped_child(tmp_path, m
         assert ready.exists()
         time.sleep(2.2)
         assert not survived.exists()
+
+
+@pytest.mark.parametrize("bad_row", [
+    _word(left=5, top=5, width=20, height=10, conf="-1", text="unscored"),
+    _word(left=-1, top=5, width=20, height=10, conf="90", text="bad-box"),
+    _word(left=5, top=5, width=20, height=10, conf="nan", text="bad-confidence"),
+    _word(left=5, top=5, width=20, height=10, conf="101", text="invalid-confidence"),
+    ["5", "1", "1", "1", "1", "1", "not-a-coordinate", "5", "20", "10", "90", "bad-coordinate"],
+])
+def test_tesseract_tsv_fails_instead_of_silently_dropping_invalid_word_evidence(bad_row):
+    valid = _word(left=10, top=10, width=20, height=10, conf="90", text="valid")
+    with pytest.raises(OcrUnavailable, match="word evidence"):
+        parse_tesseract_tsv(_tsv([valid, bad_row]))
+
+
+def test_tesseract_tsv_rejects_duplicate_headers_and_truncated_word_rows():
+    header = "\t".join(_COLUMNS) + "\n"
+    truncated = "5\t1\t1\t1\t1\t1\t10\t10\t20\t10\t90\n"
+    with pytest.raises(OcrUnavailable, match="word evidence"):
+        parse_tesseract_tsv((header + truncated).encode())
+    duplicate = header.rstrip("\n") + "\ttext\n"
+    with pytest.raises(OcrUnavailable, match="TSV format"):
+        parse_tesseract_tsv(duplicate.encode())
+
+
+def test_malformed_word_evidence_marks_pdf_page_failed_without_partial_text():
+    class MalformedTsvProvider(ContractProvider):
+        def recognize(self, image_png: bytes) -> list[OcrLine]:
+            self.calls += 1
+            return parse_tesseract_tsv(_tsv([
+                _word(left=10, top=10, width=30, height=10, conf="90", text="valid"),
+                _word(left=-1, top=20, width=30, height=10, conf="90", text="incomplete"),
+            ]))
+
+    provider = MalformedTsvProvider()
+    parsed = parse_bytes(_blank_pdf(), filename="synthetic.pdf", ocr_provider=provider,
+                         ocr_max_page_pixels=1_000_000)
+    assert provider.calls == 1
+    assert parsed.pages[0].ocr_status == "failed"
+    assert not parsed.pages[0].ocr_applied
+    assert parsed.pages[0].text == ""
+    assert parsed.metadata["ocr_required_pages"] == [1]
+    assert any("invalid word evidence" in warning for warning in parsed.warnings)

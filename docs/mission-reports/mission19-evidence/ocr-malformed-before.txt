@@ -1,0 +1,103 @@
+FFFFFF                                                                   [100%]
+=================================== FAILURES ===================================
+_ test_tesseract_tsv_fails_instead_of_silently_dropping_invalid_word_evidence[bad_row0] _
+
+bad_row = ['5', '1', '1', '1', '1', '1', ...]
+
+    @pytest.mark.parametrize("bad_row", [
+        _word(left=5, top=5, width=20, height=10, conf="-1", text="unscored"),
+        _word(left=-1, top=5, width=20, height=10, conf="90", text="bad-box"),
+        _word(left=5, top=5, width=20, height=10, conf="nan", text="bad-confidence"),
+        _word(left=5, top=5, width=20, height=10, conf="101", text="invalid-confidence"),
+        ["5", "1", "1", "1", "1", "1", "not-a-coordinate", "5", "20", "10", "90", "bad-coordinate"],
+    ])
+    def test_tesseract_tsv_fails_instead_of_silently_dropping_invalid_word_evidence(bad_row):
+        valid = _word(left=10, top=10, width=20, height=10, conf="90", text="valid")
+>       with pytest.raises(OcrUnavailable, match="word evidence"):
+E       Failed: DID NOT RAISE OcrUnavailable
+
+backend/tests/ingestion/test_ocr.py:935: Failed
+_ test_tesseract_tsv_fails_instead_of_silently_dropping_invalid_word_evidence[bad_row1] _
+
+bad_row = ['5', '1', '1', '1', '1', '1', ...]
+
+    @pytest.mark.parametrize("bad_row", [
+        _word(left=5, top=5, width=20, height=10, conf="-1", text="unscored"),
+        _word(left=-1, top=5, width=20, height=10, conf="90", text="bad-box"),
+        _word(left=5, top=5, width=20, height=10, conf="nan", text="bad-confidence"),
+        _word(left=5, top=5, width=20, height=10, conf="101", text="invalid-confidence"),
+        ["5", "1", "1", "1", "1", "1", "not-a-coordinate", "5", "20", "10", "90", "bad-coordinate"],
+    ])
+    def test_tesseract_tsv_fails_instead_of_silently_dropping_invalid_word_evidence(bad_row):
+        valid = _word(left=10, top=10, width=20, height=10, conf="90", text="valid")
+>       with pytest.raises(OcrUnavailable, match="word evidence"):
+E       Failed: DID NOT RAISE OcrUnavailable
+
+backend/tests/ingestion/test_ocr.py:935: Failed
+_ test_tesseract_tsv_fails_instead_of_silently_dropping_invalid_word_evidence[bad_row2] _
+
+bad_row = ['5', '1', '1', '1', '1', '1', ...]
+
+    @pytest.mark.parametrize("bad_row", [
+        _word(left=5, top=5, width=20, height=10, conf="-1", text="unscored"),
+        _word(left=-1, top=5, width=20, height=10, conf="90", text="bad-box"),
+        _word(left=5, top=5, width=20, height=10, conf="nan", text="bad-confidence"),
+        _word(left=5, top=5, width=20, height=10, conf="101", text="invalid-confidence"),
+        ["5", "1", "1", "1", "1", "1", "not-a-coordinate", "5", "20", "10", "90", "bad-coordinate"],
+    ])
+    def test_tesseract_tsv_fails_instead_of_silently_dropping_invalid_word_evidence(bad_row):
+        valid = _word(left=10, top=10, width=20, height=10, conf="90", text="valid")
+>       with pytest.raises(OcrUnavailable, match="word evidence"):
+E       Failed: DID NOT RAISE OcrUnavailable
+
+backend/tests/ingestion/test_ocr.py:935: Failed
+_ test_tesseract_tsv_fails_instead_of_silently_dropping_invalid_word_evidence[bad_row3] _
+
+bad_row = ['5', '1', '1', '1', '1', '1', ...]
+
+    @pytest.mark.parametrize("bad_row", [
+        _word(left=5, top=5, width=20, height=10, conf="-1", text="unscored"),
+        _word(left=-1, top=5, width=20, height=10, conf="90", text="bad-box"),
+        _word(left=5, top=5, width=20, height=10, conf="nan", text="bad-confidence"),
+        _word(left=5, top=5, width=20, height=10, conf="101", text="invalid-confidence"),
+        ["5", "1", "1", "1", "1", "1", "not-a-coordinate", "5", "20", "10", "90", "bad-coordinate"],
+    ])
+    def test_tesseract_tsv_fails_instead_of_silently_dropping_invalid_word_evidence(bad_row):
+        valid = _word(left=10, top=10, width=20, height=10, conf="90", text="valid")
+>       with pytest.raises(OcrUnavailable, match="word evidence"):
+E       Failed: DID NOT RAISE OcrUnavailable
+
+backend/tests/ingestion/test_ocr.py:935: Failed
+_ test_tesseract_tsv_fails_instead_of_silently_dropping_invalid_word_evidence[bad_row4] _
+
+bad_row = ['5', '1', '1', '1', '1', '1', ...]
+
+    @pytest.mark.parametrize("bad_row", [
+        _word(left=5, top=5, width=20, height=10, conf="-1", text="unscored"),
+        _word(left=-1, top=5, width=20, height=10, conf="90", text="bad-box"),
+        _word(left=5, top=5, width=20, height=10, conf="nan", text="bad-confidence"),
+        _word(left=5, top=5, width=20, height=10, conf="101", text="invalid-confidence"),
+        ["5", "1", "1", "1", "1", "1", "not-a-coordinate", "5", "20", "10", "90", "bad-coordinate"],
+    ])
+    def test_tesseract_tsv_fails_instead_of_silently_dropping_invalid_word_evidence(bad_row):
+        valid = _word(left=10, top=10, width=20, height=10, conf="90", text="valid")
+>       with pytest.raises(OcrUnavailable, match="word evidence"):
+E       Failed: DID NOT RAISE OcrUnavailable
+
+backend/tests/ingestion/test_ocr.py:935: Failed
+_____ test_tesseract_tsv_rejects_duplicate_headers_and_truncated_word_rows _____
+
+    def test_tesseract_tsv_rejects_duplicate_headers_and_truncated_word_rows():
+        header = "\t".join(_COLUMNS) + "\n"
+        truncated = "5\t1\t1\t1\t1\t1\t10\t10\t20\t10\t90\n"
+>       with pytest.raises(OcrUnavailable, match="word evidence"):
+E       Failed: DID NOT RAISE OcrUnavailable
+
+backend/tests/ingestion/test_ocr.py:942: Failed
+=========================== short test summary info ============================
+FAILED backend/tests/ingestion/test_ocr.py::test_tesseract_tsv_fails_instead_of_silently_dropping_invalid_word_evidence[bad_row0]
+FAILED backend/tests/ingestion/test_ocr.py::test_tesseract_tsv_fails_instead_of_silently_dropping_invalid_word_evidence[bad_row1]
+FAILED backend/tests/ingestion/test_ocr.py::test_tesseract_tsv_fails_instead_of_silently_dropping_invalid_word_evidence[bad_row2]
+FAILED backend/tests/ingestion/test_ocr.py::test_tesseract_tsv_fails_instead_of_silently_dropping_invalid_word_evidence[bad_row3]
+FAILED backend/tests/ingestion/test_ocr.py::test_tesseract_tsv_fails_instead_of_silently_dropping_invalid_word_evidence[bad_row4]
+FAILED backend/tests/ingestion/test_ocr.py::test_tesseract_tsv_rejects_duplicate_headers_and_truncated_word_rows
