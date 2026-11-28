@@ -208,8 +208,14 @@ def test_router_default_privacy_ceiling_uses_bootstrapped_settings():
     with pytest.raises(ModelNotConfigured):
         LlmRouter(registry=registry).route(profile=TaskProfile.SUMMARIZE)
     settings.llm_max_privacy = "public_cloud"
-    bootstrap_default_providers(registry=registry, settings=settings)
-    assert LlmRouter(registry=registry).route(profile=TaskProfile.SUMMARIZE).spec.provider == "openai_compatible"
+    from drillai.core.errors import ConfigurationError
+
+    with pytest.raises(ConfigurationError, match="deployment ceiling"):
+        bootstrap_default_providers(registry=registry, settings=settings)
+    # A genuinely new application/registry can opt into a different deployment ceiling.
+    new_registry = ProviderRegistry()
+    bootstrap_default_providers(registry=new_registry, settings=settings)
+    assert LlmRouter(registry=new_registry).route(profile=TaskProfile.SUMMARIZE).spec.provider == "openai_compatible"
 
 
 @pytest.mark.asyncio

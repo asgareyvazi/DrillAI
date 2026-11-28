@@ -1,0 +1,37 @@
+FFF                                                                      [100%]
+=================================== FAILURES ===================================
+_____ test_runtime_cannot_raise_bootstrap_ceiling_or_reset_it_by_clearing ______
+
+    def test_runtime_cannot_raise_bootstrap_ceiling_or_reset_it_by_clearing():
+        app = create_app(_settings())
+        registry = app.state.database.provider_registry
+>       with pytest.raises(ConfigurationError, match=r"deployment|ceiling"):
+E       Failed: DID NOT RAISE ConfigurationError
+
+backend/tests/security/test_m19_deployment_privacy.py:22: Failed
+_ test_rebootstrap_cannot_elevate_ceiling_or_destroy_existing_provider_configuration _
+
+    def test_rebootstrap_cannot_elevate_ceiling_or_destroy_existing_provider_configuration():
+        app = create_app(_settings())
+        registry = app.state.database.provider_registry
+        before = registry.providers()
+        elevated = _settings()
+        elevated.llm_max_privacy = "public_cloud"
+>       with pytest.raises(ConfigurationError, match=r"deployment|ceiling"):
+E       Failed: DID NOT RAISE ConfigurationError
+
+backend/tests/security/test_m19_deployment_privacy.py:37: Failed
+___ test_cleared_application_registry_cannot_be_routed_using_explicit_policy ___
+
+    def test_cleared_application_registry_cannot_be_routed_using_explicit_policy():
+        app = create_app(_settings())
+        registry = app.state.database.provider_registry
+        registry.clear()
+>       with pytest.raises(ConfigurationError, match=r"ceiling"):
+E       Failed: DID NOT RAISE ConfigurationError
+
+backend/tests/security/test_m19_deployment_privacy.py:47: Failed
+=========================== short test summary info ============================
+FAILED backend/tests/security/test_m19_deployment_privacy.py::test_runtime_cannot_raise_bootstrap_ceiling_or_reset_it_by_clearing
+FAILED backend/tests/security/test_m19_deployment_privacy.py::test_rebootstrap_cannot_elevate_ceiling_or_destroy_existing_provider_configuration
+FAILED backend/tests/security/test_m19_deployment_privacy.py::test_cleared_application_registry_cannot_be_routed_using_explicit_policy

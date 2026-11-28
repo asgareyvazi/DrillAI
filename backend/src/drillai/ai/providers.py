@@ -552,8 +552,35 @@ class ProviderRegistry:
 
     def __init__(self) -> None:
         self._providers: dict[str, LLMProvider] = {}
-        self.max_privacy: PrivacyClass | None = None
+        self._max_privacy: PrivacyClass | None = None
+        self._deployment_ceiling: PrivacyClass | None = None
         self._closed = False
+
+    @property
+    def deployment_ceiling(self) -> PrivacyClass | None:
+        """The first configured limit, fixed for the lifetime of this registry."""
+        return self._deployment_ceiling
+
+    @property
+    def max_privacy(self) -> PrivacyClass | None:
+        return self._max_privacy
+
+    @max_privacy.setter
+    def max_privacy(self, value: PrivacyClass | None) -> None:
+        self.validate_privacy_ceiling(value)
+        if value is not None and self._deployment_ceiling is None:
+            self._deployment_ceiling = value
+        self._max_privacy = value
+
+    def validate_privacy_ceiling(self, value: PrivacyClass | None) -> None:
+        """Reject a runtime policy looser than the registry's original deployment limit."""
+        from drillai.core.errors import ConfigurationError
+
+        if value is not None and not isinstance(value, PrivacyClass):
+            raise ConfigurationError("invalid application privacy ceiling")
+        order = {PrivacyClass.LOCAL: 0, PrivacyClass.PRIVATE_CLOUD: 1, PrivacyClass.PUBLIC_CLOUD: 2}
+        if value is not None and self._deployment_ceiling is not None and order[value] > order[self._deployment_ceiling]:
+            raise ConfigurationError("application privacy ceiling cannot exceed its deployment ceiling")
 
     def ensure_open(self) -> None:
         from drillai.core.errors import ConfigurationError
@@ -652,8 +679,11 @@ def bootstrap_default_providers(
     if not isinstance(registry, ProviderRegistry) or not isinstance(settings, Settings):
         raise ConfigurationError("provider bootstrap requires an explicit registry and application settings")
     target = registry
+    ceiling = PrivacyClass(settings.llm_max_privacy)
+    # Validate before clearing the existing configuration so a rejected reload is nondestructive.
+    target.validate_privacy_ceiling(ceiling)
     target.clear()
-    target.max_privacy = PrivacyClass(settings.llm_max_privacy)
+    target.max_privacy = ceiling
 
     if settings.llm_provider == "stub":
         if settings.environment != "production":

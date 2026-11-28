@@ -1,0 +1,84 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+____ test_chat_rejects_public_provider_with_falsely_local_model_before_send ____
+
+self = <test_m19_deployment_privacy.test_chat_rejects_public_provider_with_falsely_local_model_before_send.<locals>.PublicProvider object at 0x7f50b915f310>
+request = CompletionRequest(messages=[ChatMessage(role='user', content='private report', name=None, tool_call_id=None)], model='...d-local', temperature=0.0, max_tokens=None, response_schema=None, tools=[], stop=[], metadata={}, timeout_seconds=60.0)
+
+    async def complete(self, request):
+        self.called = True
+>       raise AssertionError("protected content reached a public provider")
+E       AssertionError: protected content reached a public provider
+
+backend/tests/security/test_m19_deployment_privacy.py:66: AssertionError
+
+The above exception was the direct cause of the following exception:
+
+    async def test_chat_rejects_public_provider_with_falsely_local_model_before_send():
+        from drillai.ai.providers import ChatMessage, CompletionRequest, LLMCapability, ModelSpec
+        from drillai.core.errors import ModelNotConfigured
+    
+        class PublicProvider:
+            name = "public-provider"
+            privacy = PrivacyClass.PUBLIC_CLOUD
+            called = False
+    
+            def models(self):
+                return [ModelSpec(provider=self.name, model="claimed-local", privacy=PrivacyClass.LOCAL,
+                                  capabilities=frozenset({LLMCapability.CHAT}))]
+    
+            async def complete(self, request):
+                self.called = True
+                raise AssertionError("protected content reached a public provider")
+    
+        app = create_app(_settings())
+        registry = app.state.database.provider_registry
+        registry.clear()
+        registry.max_privacy = PrivacyClass.LOCAL
+        provider = PublicProvider()
+        registry.register(provider)
+        try:
+            async with app.state.database.session() as session:
+                with pytest.raises(ModelNotConfigured):
+>                   await LlmRouter(registry=registry).complete(
+                        CompletionRequest(messages=[ChatMessage(role="user", content="private report")]),
+                        session=session,
+                    )
+
+backend/tests/security/test_m19_deployment_privacy.py:77: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+backend/src/drillai/ai/router.py:219: in complete
+    response = await self._call_with_retry(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <drillai.ai.router.LlmRouter object at 0x7f50b841c310>
+decision = RouteDecision(provider=<test_m19_deployment_privacy.test_chat_rejects_public_provider_with_falsely_local_model_before_... for chat (privacy=local, latency≈1500 ms, cost=0.0/0.0 per 1k tokens)'], considered=['public-provider:claimed-local'])
+request = CompletionRequest(messages=[ChatMessage(role='user', content='private report', name=None, tool_call_id=None)], model='...d-local', temperature=0.0, max_tokens=None, response_schema=None, tools=[], stop=[], metadata={}, timeout_seconds=60.0)
+validate = True
+session = <sqlalchemy.ext.asyncio.session.AsyncSession object at 0x7f50b90df610>
+profile = <TaskProfile.CHAT: 'chat'>, prompt_tokens = 7
+
+    async def _call_with_retry(
+        self, decision: RouteDecision, request: CompletionRequest, *, validate: bool,
+        session: AsyncSession, profile: TaskProfile, prompt_tokens: int,
+    ) -> CompletionResponse:
+        def verify_decision() -> None:
+            if registry_for_session(session) is not self.registry:
+                raise ConfigurationError("router registry no longer matches the session owner")
+            current = self.route(profile=profile, prompt_tokens=prompt_tokens)
+            if current.provider is not decision.provider or current.spec != decision.spec:
+                raise ConfigurationError("provider routing changed during the request")
+    
+        provider = decision.provider
+        verify_decision()
+        try:
+            response = await provider.complete(request)
+        except ProviderError:
+            raise
+        except Exception as exc:
+>           raise ProviderError(f"{provider.name} call failed: {exc}") from exc
+E           drillai.core.errors.ProviderError: public-provider call failed: protected content reached a public provider
+
+backend/src/drillai/ai/router.py:256: ProviderError
+=========================== short test summary info ============================
+FAILED backend/tests/security/test_m19_deployment_privacy.py::test_chat_rejects_public_provider_with_falsely_local_model_before_send

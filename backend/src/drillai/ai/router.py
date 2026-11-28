@@ -116,6 +116,8 @@ class LlmRouter:
             raise ConfigurationError("an explicit application-owned provider registry is required")
         self.registry = registry
         ceiling = registry.max_privacy
+        if ceiling is None and registry.deployment_ceiling is not None:
+            raise ConfigurationError("application privacy ceiling is no longer configured")
         self._requires_ceiling = ceiling is not None
         if policy is None:
             if ceiling is None:
@@ -136,8 +138,15 @@ class LlmRouter:
         candidates: list[tuple[ModelSpec, LLMProvider]] = []
         considered: list[str] = []
         for provider in self.registry.providers().values():
+            provider_privacy = getattr(provider, "privacy", None)
             for spec in provider.models():
                 considered.append(f"{spec.provider}:{spec.model}")
+                if spec.provider != provider.name or not isinstance(provider_privacy, PrivacyClass):
+                    continue
+                if not self.policy.allows_privacy(provider_privacy):
+                    continue
+                if ceiling is not None and not RoutingPolicy(max_privacy=ceiling).allows_privacy(provider_privacy):
+                    continue
                 if spec.model in self.policy.denied_models:
                     continue
                 if self.policy.allowed_models and spec.model not in self.policy.allowed_models:

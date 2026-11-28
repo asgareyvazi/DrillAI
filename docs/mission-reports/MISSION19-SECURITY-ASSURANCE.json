@@ -10,7 +10,7 @@
       "status": "PARTIAL",
       "change": "Require an owned registered provider, a configured ceiling and one unambiguous model within the provider and model privacy limits; recheck ownership, ceiling and embedding space after the asynchronous call.",
       "evidence": "mission19-evidence/embedding-before.txt records five fail-first cases. Focused tests verify no outbound invocation on rejection and reject changed configuration before persistence or scoring.",
-      "limitations": "The application ceiling remains mutable in process; layered deployment/tenant ceilings, provider endpoint egress, tenant authorization of each indexing invocation, atomic configuration and in-flight cancellation remain unproven."
+      "limitations": "The first configured registry ceiling is fixed against public setter and bootstrap elevation; arbitrary in-process private-state tampering, tenant-specific ceilings, endpoint egress, tenant authorization of each indexing invocation, atomic configuration and in-flight cancellation remain unproven."
     },
     {
       "id": "M19-EMBED-002",
@@ -19,8 +19,23 @@
       "change": "Reject missing or mixed organization identities before invoking the provider; PostgreSQL integration indexes separate tenant batches.",
       "evidence": "mission19-evidence/embedding-mixed-tenant-before.txt; focused regression and PostgreSQL pgvector integration.",
       "limitations": "Same-tenant batching does not itself authorize the caller or prove tenant-specific provider/credential isolation."
+    },
+    {
+      "id": "M19-PRIVACY-003",
+      "initial_state": "Runtime mutation, registry clearing and rebootstrap could raise the original application privacy limit; chat routing also trusted a model privacy declaration when its provider was less private.",
+      "status": "PARTIAL",
+      "change": "Preserve the first configured ceiling for the registry lifetime, reject escalations before clearing providers, fail closed after a cleared ceiling and enforce both provider and model privacy during chat selection.",
+      "evidence": "Fail-first tests in mission19-evidence/deployment-ceiling-before.txt and chat-provider-privacy-before.txt; focused and broader security regression tests.",
+      "limitations": "Not a sandbox against arbitrary Python private-state mutation; per-tenant policy, complete recovery/atomic bootstrap and layered network restrictions remain open."
     }
   ],
-  "open": ["immutable layered privacy ceilings", "layered egress and SSRF", "notification and worker isolation", "atomic secret rotation", "tenant-scoped embedding authorization", "complete concurrency and lifecycle security assurance"],
+  "open": [
+    "tenant-specific and immutable deployment-wide policies beyond application registry",
+    "layered egress and SSRF",
+    "notification and worker isolation",
+    "atomic secret rotation",
+    "tenant-scoped embedding authorization",
+    "complete concurrency and lifecycle security assurance"
+  ],
   "field_or_vendor_qualification": "BLOCKED_BY_MISSING_AUTHORIZED_EVIDENCE"
 }
