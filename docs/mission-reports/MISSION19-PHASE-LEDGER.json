@@ -1,0 +1,26 @@
+{
+  "mission": 19,
+  "verdict": "NOT_ACCEPTED",
+  "scope_note": "Bounded workstream ledger; not a claim that every requested phase was completed or independently verified.",
+  "start": {
+    "branch": "arena/9d8f5568-drillai",
+    "base_at_start": "5519b4520e1a064fe8e7d091fa3e101e4306e833",
+    "protected_main": "bfa066b28e0071880cb9191a4f1d47fdaa143e04",
+    "workspace_manifest_sha256": "bece963a3b6c006a3f3f5a3bfafb2cff0bc015e79e20137a9fb74384008ed6c1",
+    "inherited_untracked_files": 24
+  },
+  "workstreams": [
+    {"name": "provider and embedding privacy", "status": "PARTIAL", "evidence": "MISSION19-SECURITY-ASSURANCE.json and mission19-evidence/", "open": "tenant authorization, per-tenant secrets/providers, complete egress, lifecycle and in-flight cancellation"},
+    {"name": "program concurrency and rollback", "status": "PARTIAL", "evidence": "mission19-evidence/program-review-race.md and two-well-browser.txt", "open": "broader state-space and multiprocess assurance; complete engineering and expanded workflow"},
+    {"name": "OCR quality and malformed evidence", "status": "NOT_ACCEPTED", "evidence": "mission19-evidence/ocr-safety-and-quality.md", "open": "deployed frozen gate, robust Persian table/multicolumn reconstruction and per-stratum thresholds"},
+    {"name": "OCR containment and full-document deadlines", "status": "NOT_ACCEPTED", "evidence": "mission19-evidence/ocr-safety-and-quality.md", "open": "enforced Linux and Windows process-tree containment, rendering and cleanup deadline"},
+    {"name": "connector and notification egress", "status": "PARTIAL", "evidence": "mission19-evidence/egress-dns-race.md", "open": "application/database ownership, settings/harness isolation, policy changes after pinning and in-flight cancellation"},
+    {"name": "DDR, chronology and NPT", "status": "PARTIAL", "open": "canonical persisted completeness, identity, chronology, approval and integration"},
+    {"name": "surveys, uncertainty, anti-collision and drilling calculations", "status": "PARTIAL", "open": "complete input and uncertainty models, independent engineering references and safety assurance"},
+    {"name": "integrated product and two-well workflow", "status": "PARTIAL", "open": "expanded scenario, end-to-end persistence, operational and field validation"},
+    {"name": "capability, history and 22-item roadmap", "status": "PARTIAL", "evidence": "inherited docs/ENGINEERING_CAPABILITY_CATALOGUE.json, docs/mission-reports/MISSION15-HISTORICAL-CAPABILITY-MATRIX.json and docs/DRILLAI-ENGINEERING-ROADMAP.json", "open": "comprehensive current source-to-evidence and independent history audit"},
+    {"name": "field and vendor qualification", "status": "BLOCKED_BY_MISSING_AUTHORIZED_EVIDENCE", "open": "authorized representative external evidence"},
+    {"name": "final exact-SHA platform CI and workspace", "status": "NOT_ACCEPTED", "open": "all mandatory jobs green for final pushed SHA, final refs/status/process and path-level reconciliation"}
+  ],
+  "limits": "Synthetic workflows, local test passes and earlier commits do not establish field, vendor or exact-final-SHA certification."
+}

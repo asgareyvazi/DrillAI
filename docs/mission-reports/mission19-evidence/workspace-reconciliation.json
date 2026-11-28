@@ -1,0 +1,244 @@
+{
+  "status": "PARTIAL",
+  "scope": "Point-in-time before report commit; recheck live before handoff. Files and symlinks only, excluding .git internals. Changed inherited ignored caches/bytecode are test tool effects, not deleted evidence. New ignored paths are not claimed to be field data.",
+  "start_manifest": "../MISSION19-WORKSPACE-START-MANIFEST.jsonl",
+  "inherited_untracked_paths": [
+    "frontend/.playwright-report-cp151-71aae4f7f3364cd8bef9f4748c4283fb/index.html",
+    "frontend/playwright-report-master-full-7d42a1/index.html",
+    "frontend/test-results-continue2/.last-run.json",
+    "frontend/test-results-continue2/well-cockpit-well-cockpit--82af4-om-a-generic-event-duration-chromium/error-context.md",
+    "frontend/test-results-continue2/well-cockpit-well-cockpit--82af4-om-a-generic-event-duration-chromium/test-failed-1.png",
+    "frontend/test-results-continue2/well-cockpit-well-cockpit--82af4-om-a-generic-event-duration-chromium/trace.zip",
+    "frontend/test-results-continue2b/.last-run.json",
+    "frontend/test-results-continue2connector/.last-run.json",
+    "frontend/test-results-continue2final/.last-run.json",
+    "frontend/test-results-continue2full/.last-run.json",
+    "frontend/test-results-continue2full/connectors-platform-CP11-t-e1520-dance-then-recovers-cleanly-chromium/error-context.md",
+    "frontend/test-results-continue2full/connectors-platform-CP11-t-e1520-dance-then-recovers-cleanly-chromium/test-failed-1.png",
+    "frontend/test-results-continue2full/connectors-platform-CP11-t-e1520-dance-then-recovers-cleanly-chromium/trace.zip",
+    "frontend/test-results-continue2full/live-operations-CP10-live--719a9-Persian-RTL-token-isolation-chromium/error-context.md",
+    "frontend/test-results-continue2full/live-operations-CP10-live--719a9-Persian-RTL-token-isolation-chromium/trace.zip",
+    "frontend/test-results-m10-cont3-full/.last-run.json",
+    "frontend/test-results-m10-cont3-full/daily-reports-workspace-da-27cb8-actual-extracted-CSV-source-chromium/error-context.md",
+    "frontend/test-results-m10-cont3-full/daily-reports-workspace-da-27cb8-actual-extracted-CSV-source-chromium/test-failed-1.png",
+    "frontend/test-results-m10-cont3-full/daily-reports-workspace-da-27cb8-actual-extracted-CSV-source-chromium/trace.zip",
+    "frontend/test-results-m10-cont3-readback/.last-run.json",
+    "frontend/test-results-m10-cont3/.last-run.json",
+    "frontend/test-results-master-auth-c4a891de/.last-run.json",
+    "frontend/test-results-master-full-7d42a1/.last-run.json",
+    "frontend/test-results-master-full-7d42a1/e2e-results.json"
+  ],
+  "current_untracked_paths": [
+    "docs/mission-reports/MISSION19-PHASE-LEDGER.json",
+    "docs/mission-reports/MISSION19-REPORT-EN.md",
+    "docs/mission-reports/MISSION19-REPORT-FA.md",
+    "frontend/.playwright-report-cp151-71aae4f7f3364cd8bef9f4748c4283fb/index.html",
+    "frontend/playwright-report-master-full-7d42a1/index.html",
+    "frontend/test-results-continue2/.last-run.json",
+    "frontend/test-results-continue2/well-cockpit-well-cockpit--82af4-om-a-generic-event-duration-chromium/error-context.md",
+    "frontend/test-results-continue2/well-cockpit-well-cockpit--82af4-om-a-generic-event-duration-chromium/test-failed-1.png",
+    "frontend/test-results-continue2/well-cockpit-well-cockpit--82af4-om-a-generic-event-duration-chromium/trace.zip",
+    "frontend/test-results-continue2b/.last-run.json",
+    "frontend/test-results-continue2connector/.last-run.json",
+    "frontend/test-results-continue2final/.last-run.json",
+    "frontend/test-results-continue2full/.last-run.json",
+    "frontend/test-results-continue2full/connectors-platform-CP11-t-e1520-dance-then-recovers-cleanly-chromium/error-context.md",
+    "frontend/test-results-continue2full/connectors-platform-CP11-t-e1520-dance-then-recovers-cleanly-chromium/test-failed-1.png",
+    "frontend/test-results-continue2full/connectors-platform-CP11-t-e1520-dance-then-recovers-cleanly-chromium/trace.zip",
+    "frontend/test-results-continue2full/live-operations-CP10-live--719a9-Persian-RTL-token-isolation-chromium/error-context.md",
+    "frontend/test-results-continue2full/live-operations-CP10-live--719a9-Persian-RTL-token-isolation-chromium/trace.zip",
+    "frontend/test-results-m10-cont3-full/.last-run.json",
+    "frontend/test-results-m10-cont3-full/daily-reports-workspace-da-27cb8-actual-extracted-CSV-source-chromium/error-context.md",
+    "frontend/test-results-m10-cont3-full/daily-reports-workspace-da-27cb8-actual-extracted-CSV-source-chromium/test-failed-1.png",
+    "frontend/test-results-m10-cont3-full/daily-reports-workspace-da-27cb8-actual-extracted-CSV-source-chromium/trace.zip",
+    "frontend/test-results-m10-cont3-readback/.last-run.json",
+    "frontend/test-results-m10-cont3/.last-run.json",
+    "frontend/test-results-master-auth-c4a891de/.last-run.json",
+    "frontend/test-results-master-full-7d42a1/.last-run.json",
+    "frontend/test-results-master-full-7d42a1/e2e-results.json"
+  ],
+  "missing_inherited_files_or_symlinks": [],
+  "changed_inherited_files_or_symlinks": [
+    {
+      "path": ".ruff_cache/0.17.6/15547527073589979833",
+      "git_class": "ignored",
+      "differences": [
+        "content",
+        "mtime_ns"
+      ]
+    },
+    {
+      "path": "backend/.pytest_cache/v/cache/lastfailed",
+      "git_class": "ignored",
+      "differences": [
+        "content",
+        "mtime_ns"
+      ]
+    },
+    {
+      "path": "backend/.pytest_cache/v/cache/nodeids",
+      "git_class": "ignored",
+      "differences": [
+        "content",
+        "mtime_ns"
+      ]
+    },
+    {
+      "path": "backend/.ruff_cache/0.17.6/10160319796953110745",
+      "git_class": "ignored",
+      "differences": [
+        "content",
+        "mtime_ns"
+      ]
+    },
+    {
+      "path": "backend/.ruff_cache/0.17.6/1158724072298387214",
+      "git_class": "ignored",
+      "differences": [
+        "content",
+        "mtime_ns"
+      ]
+    },
+    {
+      "path": "backend/.ruff_cache/0.17.6/16567988421216835683",
+      "git_class": "ignored",
+      "differences": [
+        "content",
+        "mtime_ns"
+      ]
+    },
+    {
+      "path": "backend/.ruff_cache/0.17.6/17340878684287632655",
+      "git_class": "ignored",
+      "differences": [
+        "content",
+        "mtime_ns"
+      ]
+    },
+    {
+      "path": "backend/.ruff_cache/0.17.6/17605850845702582623",
+      "git_class": "ignored",
+      "differences": [
+        "content",
+        "mtime_ns"
+      ]
+    },
+    {
+      "path": "backend/.ruff_cache/0.17.6/4153470216139336570",
+      "git_class": "ignored",
+      "differences": [
+        "content",
+        "mtime_ns"
+      ]
+    },
+    {
+      "path": "backend/.ruff_cache/0.17.6/4641699839799002108",
+      "git_class": "ignored",
+      "differences": [
+        "content",
+        "mtime_ns"
+      ]
+    },
+    {
+      "path": "backend/src/drillai/ai/__pycache__/providers.cpython-311.pyc",
+      "git_class": "ignored",
+      "differences": [
+        "content",
+        "mtime_ns"
+      ]
+    },
+    {
+      "path": "backend/src/drillai/ai/__pycache__/router.cpython-311.pyc",
+      "git_class": "ignored",
+      "differences": [
+        "content",
+        "mtime_ns"
+      ]
+    },
+    {
+      "path": "backend/src/drillai/engineering/__pycache__/service.cpython-311.pyc",
+      "git_class": "ignored",
+      "differences": [
+        "content",
+        "mtime_ns"
+      ]
+    },
+    {
+      "path": "backend/src/drillai/ingestion/__pycache__/ocr.cpython-311.pyc",
+      "git_class": "ignored",
+      "differences": [
+        "content",
+        "mtime_ns"
+      ]
+    },
+    {
+      "path": "backend/src/drillai/rag/__pycache__/retriever.cpython-311.pyc",
+      "git_class": "ignored",
+      "differences": [
+        "content",
+        "mtime_ns"
+      ]
+    },
+    {
+      "path": "backend/tests/__pycache__/test_cp20_integration_completeness.cpython-311-pytest-9.2.0.pyc",
+      "git_class": "ignored",
+      "differences": [
+        "content",
+        "mtime_ns"
+      ]
+    },
+    {
+      "path": "backend/tests/ai/__pycache__/test_ai_layer.cpython-311-pytest-9.2.0.pyc",
+      "git_class": "ignored",
+      "differences": [
+        "content",
+        "mtime_ns"
+      ]
+    },
+    {
+      "path": "backend/tests/api/__pycache__/test_engineering_products_api.cpython-311-pytest-9.2.0.pyc",
+      "git_class": "ignored",
+      "differences": [
+        "content",
+        "mtime_ns"
+      ]
+    },
+    {
+      "path": "backend/tests/ingestion/__pycache__/test_ocr.cpython-311-pytest-9.2.0.pyc",
+      "git_class": "ignored",
+      "differences": [
+        "content",
+        "mtime_ns"
+      ]
+    },
+    {
+      "path": "backend/tests/rag/__pycache__/test_retriever.cpython-311-pytest-9.2.0.pyc",
+      "git_class": "ignored",
+      "differences": [
+        "content",
+        "mtime_ns"
+      ]
+    }
+  ],
+  "new_ignored_file_paths": [
+    ".pytest_cache/.gitignore",
+    ".pytest_cache/CACHEDIR.TAG",
+    ".pytest_cache/README.md",
+    ".pytest_cache/v/cache/lastfailed",
+    "backend/tests/security/__pycache__/test_m19_deployment_privacy.cpython-311-pytest-9.2.0.pyc",
+    "backend/tests/security/__pycache__/test_m19_embedding_boundary.cpython-311-pytest-9.2.0.pyc",
+    "frontend/.e2e-cp150-mission19-concurrency-1795869827/.cp150-output-run.json",
+    "frontend/.e2e-cp150-mission19-concurrency-1795869827/.cp150-run.json",
+    "frontend/.e2e-cp150-mission19-concurrency-1795869827/e2e.db",
+    "frontend/.e2e-cp150-mission19-concurrency-1795869827/fixtures.json",
+    "frontend/.e2e-cp150-results-mission19-concurrency-1795869827/.last-run.json",
+    "frontend/.e2e-cp150-results-mission19-concurrency-1795869827/e2e-results.json"
+  ],
+  "counts": {
+    "baseline_untracked_files": 24,
+    "baseline_ignored_files_and_symlinks": 12106,
+    "changed": 20,
+    "missing": 0,
+    "new_ignored_files": 12
+  }
+}
