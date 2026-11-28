@@ -347,3 +347,113 @@ async def test_smtp_endpoint_resolver_blocks_private_dns_and_production_plain_sm
             is_production=True,
         )
     assert plaintext_result.value.details["reason"] == "invalid_scheme"
+
+
+@pytest.mark.asyncio
+async def test_async_dns_cannot_gain_private_access_from_another_policy_during_resolution():
+    import threading
+
+    from drillai.telemetry.connectors import resolve_and_pin_http_endpoint_async, set_egress_policy
+
+    entered, release = threading.Event(), threading.Event()
+
+    def resolver(host: str, port: int) -> list[str]:
+        entered.set()
+        assert release.wait(3)
+        return ["10.42.1.10"]
+
+    set_egress_policy(allowed_hosts=[], allowed_private_cidrs=[])
+    task = asyncio.create_task(resolve_and_pin_http_endpoint_async(
+        "https://rig.example", resolver=resolver, dns_timeout_seconds=5
+    ))
+    try:
+        assert await asyncio.to_thread(entered.wait, 3)
+        set_egress_policy(allowed_hosts=["rig.example"], allowed_private_cidrs=["10.42.0.0/16"])
+        release.set()
+        with pytest.raises(ValidationFailed, match="private network destination"):
+            await task
+    finally:
+        release.set()
+        if not task.done():
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("revoke", [False, True])
+async def test_async_dns_respects_current_policy_after_resolution(revoke: bool):
+    import threading
+
+    from drillai.telemetry.connectors import resolve_and_pin_http_endpoint_async, set_egress_policy
+
+    entered, release = threading.Event(), threading.Event()
+
+    def resolver(host: str, port: int) -> list[str]:
+        entered.set()
+        assert release.wait(3)
+        return ["10.42.1.10"]
+
+    set_egress_policy(allowed_hosts=["rig.example"], allowed_private_cidrs=["10.42.0.0/16"])
+    task = asyncio.create_task(resolve_and_pin_http_endpoint_async(
+        "https://rig.example", resolver=resolver, dns_timeout_seconds=5
+    ))
+    try:
+        assert await asyncio.to_thread(entered.wait, 3)
+        if revoke:
+            set_egress_policy(allowed_hosts=[], allowed_private_cidrs=[])
+        release.set()
+        if revoke:
+            with pytest.raises(ValidationFailed, match="private network destination"):
+                await task
+        else:
+            pinned = await task
+            assert pinned.pinned_ip == "10.42.1.10"
+    finally:
+        release.set()
+        if not task.done():
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
+
+
+@pytest.mark.asyncio
+async def test_webhook_does_not_send_when_dns_policy_is_widened_mid_lookup(session, monkeypatch):
+    import threading
+
+    from drillai.telemetry.connectors import set_egress_policy
+
+    entered, release = threading.Event(), threading.Event()
+
+    def resolver(host: str, port: int) -> list[str]:
+        entered.set()
+        assert release.wait(3)
+        return ["10.42.1.10"]
+
+    def forbidden_client(*args, **kwargs):
+        pytest.fail("HTTP client must not be created for a policy-denied destination")
+
+    org = Organization(slug="webhook-policy-race", name="Webhook Policy Race")
+    session.add(org)
+    await session.flush()
+    message = OutboundMessage(
+        id="obm_policy_race", org_id=org.id, channel="webhook",
+        recipient="https://rig.example/hook", subject="safe", body="must not be sent", payload={},
+    )
+    monkeypatch.setattr("drillai.workflow.notifications.httpx.AsyncClient", forbidden_client)
+    set_custom_dns_resolver(resolver)
+    set_egress_policy(allowed_hosts=[], allowed_private_cidrs=[])
+    task = asyncio.create_task(WebhookNotificationAdapter().send(session, message))
+    try:
+        assert await asyncio.to_thread(entered.wait, 3)
+        set_egress_policy(allowed_hosts=["rig.example"], allowed_private_cidrs=["10.42.0.0/16"])
+        release.set()
+        outcome = await task
+        assert outcome.status == "failed_terminal"
+        assert outcome.error_code == "ssrf_blocked"
+    finally:
+        release.set()
+        if not task.done():
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task

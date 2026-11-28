@@ -1,0 +1,5 @@
+# Mission 19 async DNS policy race — PARTIAL
+
+The deterministic fail-first test starts DNS with a restrictive policy, changes the process-global snapshot to allow a private endpoint while the resolver is paused, and observes the pin unexpectedly succeed. The recorded fix validates identical resolved IPs against both the entry and current policy snapshots; focused tests cover widening, revocation and unchanged policy. A webhook test uses the actual adapter path, pauses DNS and asserts that no HTTP client is created when the policy widens mid-lookup. Focused telemetry/workflow/security regressions passed with PostgreSQL-only skips; see logs. The initial broader command named a nonexistent notifications test module and ran no tests (`egress-regression.txt`); the corrected retry is retained.
+
+This is not application- or database-owned policy isolation. An already overwritten global snapshot at entry, settings and harness state, explicit policy overrides, policy changes after pinning, cancellation of in-flight network calls, recovery and true cross-process concurrency remain open. This change cannot justify complete security acceptance.

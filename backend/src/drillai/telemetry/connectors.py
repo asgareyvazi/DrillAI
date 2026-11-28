@@ -2880,6 +2880,12 @@ async def resolve_and_pin_endpoint_async(
     dns_timeout_seconds: float = DEFAULT_DNS_TIMEOUT_SECONDS,
 ) -> PinnedEndpoint:
     """Non-blocking async endpoint validator and DNS resolver with bounded timeout and executor concurrency."""
+    # A different task may replace the process-wide policy while DNS is in flight. A destination
+    # must satisfy both the policy at entry and the current one, not a newly widened snapshot.
+    # This is a race guard, not isolation between independently configured application instances.
+    initial_policy = get_egress_policy(fail_closed=True)
+    initial_hosts = list(initial_policy["allowed_hosts"]) if allowed_hosts is None else allowed_hosts
+    initial_cidrs = list(initial_policy["allowed_private_cidrs"]) if allowed_private_cidrs is None else allowed_private_cidrs
     # First validate URL syntax, scheme, and IP literal/metadata rules without DNS resolution
     if endpoint_url and isinstance(endpoint_url, str) and protocol_profile != "synthetic.v1":
         parsed = urlparse(endpoint_url.strip())
@@ -2991,6 +2997,18 @@ async def resolve_and_pin_endpoint_async(
                 finally:
                     guard.release_once()
 
+            resolve_and_pin_endpoint(
+                endpoint_url,
+                protocol_profile,
+                allow_loopback=allow_loopback,
+                allowed_hosts=initial_hosts,
+                allowed_private_cidrs=initial_cidrs,
+                is_production=is_production,
+                resolver=resolver,
+                require_dns_resolution=require_dns_resolution,
+                dns_timeout_seconds=effective_dns_timeout,
+                _pre_resolved_ips=resolved_strs,
+            )
             return resolve_and_pin_endpoint(
                 endpoint_url,
                 protocol_profile,

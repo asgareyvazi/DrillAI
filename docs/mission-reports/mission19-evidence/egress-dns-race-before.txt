@@ -1,0 +1,30 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_ test_async_dns_cannot_gain_private_access_from_another_policy_during_resolution _
+
+    @pytest.mark.asyncio
+    async def test_async_dns_cannot_gain_private_access_from_another_policy_during_resolution():
+        import threading
+        from drillai.telemetry.connectors import resolve_and_pin_http_endpoint_async, set_egress_policy
+    
+        entered, release = threading.Event(), threading.Event()
+    
+        def resolver(host: str, port: int) -> list[str]:
+            entered.set()
+            assert release.wait(3)
+            return ["10.42.1.10"]
+    
+        set_egress_policy(allowed_hosts=[], allowed_private_cidrs=[])
+        task = asyncio.create_task(resolve_and_pin_http_endpoint_async(
+            "https://rig.example", resolver=resolver, dns_timeout_seconds=5
+        ))
+        try:
+            assert await asyncio.to_thread(entered.wait, 3)
+            set_egress_policy(allowed_hosts=["rig.example"], allowed_private_cidrs=["10.42.0.0/16"])
+            release.set()
+>           with pytest.raises(ValidationFailed, match="private network destination"):
+E           Failed: DID NOT RAISE ValidationFailed
+
+tests/workflow/test_workflow_http_egress.py:372: Failed
+=========================== short test summary info ============================
+FAILED tests/workflow/test_workflow_http_egress.py::test_async_dns_cannot_gain_private_access_from_another_policy_during_resolution

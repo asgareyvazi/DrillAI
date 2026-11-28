@@ -27,6 +27,14 @@
       "change": "Preserve the first configured ceiling for the registry lifetime, reject escalations before clearing providers, fail closed after a cleared ceiling and enforce both provider and model privacy during chat selection.",
       "evidence": "Fail-first tests in mission19-evidence/deployment-ceiling-before.txt and chat-provider-privacy-before.txt; focused and broader security regression tests.",
       "limitations": "Not a sandbox against arbitrary Python private-state mutation; per-tenant policy, complete recovery/atomic bootstrap and layered network restrictions remain open."
+    },
+    {
+      "id": "M19-EGRESS-004",
+      "initial_state": "Async DNS lookup yielded to other tasks, allowing a restrictive snapshot to be replaced with a permissive snapshot before destination validation.",
+      "status": "PARTIAL",
+      "change": "Validate the same DNS answers against both the entry snapshot and current snapshot; fail closed if either rejects.",
+      "evidence": "mission19-evidence/egress-dns-race-before.txt, egress-broad.txt and egress-webhook-integration.txt demonstrate the deterministic race, regression and webhook no-client-created behavior.",
+      "limitations": "Process-wide snapshots still conflate application/database ownership, explicit caller overrides are not ownership enforcement, and policy changes after pinning or during network activity are not prevented. This is not complete isolation or cancellation."
     }
   ],
   "open": [

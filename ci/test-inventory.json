@@ -1,7 +1,7 @@
 {
   "version": 1,
   "backend": {
-    "collected": 1987,
+    "collected": 1991,
     "postgres_files": 13,
     "postgres": [
       "tests/api/test_engineering_products_api.py::test_postgres_review_then_competing_withdrawal_preserves_history",
@@ -22,17 +22,17 @@
       "tests/workflow/test_notification_worker.py::test_competing_notification_worker_claims_skip_locked_rows_on_postgres"
     ],
     "default": {
-      "passed": 1971,
+      "passed": 1975,
       "skipped": 16,
       "deselected": 0
     },
     "linux": {
-      "passed": 1987,
+      "passed": 1991,
       "skipped": 0,
       "deselected": 0
     },
     "windows": {
-      "passed": 1970,
+      "passed": 1974,
       "skipped": 1,
       "deselected": 16,
       "expected_skip_path": "tests/ingestion/test_ocr.py",
