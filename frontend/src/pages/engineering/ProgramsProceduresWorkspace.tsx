@@ -968,6 +968,7 @@ export default function ProgramsProceduresWorkspace() {
   const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null)
   const [editorMode, setEditorMode] = useState<'create' | 'revise' | null>(null)
   const [reviewNotes, setReviewNotes] = useState('')
+  const [withdrawalReason, setWithdrawalReason] = useState('')
   const [decisionNote, setDecisionNote] = useState('')
   const [error, setError] = useState<unknown>(null)
   const products = useQuery({ queryKey: ['engineering-products', wellId], queryFn: ({ signal }) => drillingApi.listEngineeringProducts(wellId, undefined, signal), enabled: Boolean(wellId) })
@@ -1042,6 +1043,11 @@ export default function ProgramsProceduresWorkspace() {
     onSuccess: async () => refresh(selectedId ?? undefined, activeVersionId ?? undefined),
     onError: setError,
   })
+  const withdrawMutation = useMutation({
+    mutationFn: () => drillingApi.withdrawEngineeringProduct(selectedId!, activeVersionId!, withdrawalReason.trim()),
+    onSuccess: async () => { setWithdrawalReason(''); setReviewNotes(''); setDecisionNote(''); await refresh(selectedId ?? undefined, activeVersionId ?? undefined) },
+    onError: setError,
+  })
   const reviewMutation = useMutation({
     mutationFn: () => drillingApi.reviewEngineeringProduct(selectedId!, activeVersionId!, reviewNotes),
     onSuccess: async () => { setReviewNotes(''); await refresh(selectedId ?? undefined, activeVersionId ?? undefined) },
@@ -1081,6 +1087,7 @@ export default function ProgramsProceduresWorkspace() {
     const item = products.data?.items.find((candidate) => candidate.artifact.id === id)
     setSelectedId(id)
     setSelectedVersionId(item?.current_version?.id ?? null)
+    setWithdrawalReason('')
     setEditorMode(null)
     setError(null)
   }
@@ -1112,8 +1119,8 @@ export default function ProgramsProceduresWorkspace() {
         <div className="grid gap-4 xl:grid-cols-[minmax(18rem,0.8fr)_minmax(0,2fr)]">
           <Card title={t('engineeringProducts.productRegister')} subtitle={t('engineeringProducts.productRegisterHint')}>
             <div className="mb-3 flex flex-wrap gap-2">
-              <Button size="sm" variant={kind === 'program' ? 'primary' : 'default'} onClick={() => { setKind('program'); setSelectedId(null); setSelectedVersionId(null); setEditorMode(null) }}>{t('engineeringProducts.program')}</Button>
-              <Button size="sm" variant={kind === 'procedure' ? 'primary' : 'default'} onClick={() => { setKind('procedure'); setSelectedId(null); setSelectedVersionId(null); setEditorMode(null) }}>{t('engineeringProducts.procedure')}</Button>
+              <Button size="sm" variant={kind === 'program' ? 'primary' : 'default'} onClick={() => { setKind('program'); setSelectedId(null); setSelectedVersionId(null); setWithdrawalReason(''); setEditorMode(null) }}>{t('engineeringProducts.program')}</Button>
+              <Button size="sm" variant={kind === 'procedure' ? 'primary' : 'default'} onClick={() => { setKind('procedure'); setSelectedId(null); setSelectedVersionId(null); setWithdrawalReason(''); setEditorMode(null) }}>{t('engineeringProducts.procedure')}</Button>
               <Button size="sm" onClick={openNew}>{t('engineeringProducts.createNew')}</Button>
             </div>
             <div className="space-y-2" data-testid="engineering-product-list">
@@ -1167,15 +1174,28 @@ export default function ProgramsProceduresWorkspace() {
                 </Card>
                 {selectedVersion.state === 'in_review' && (
                   <Card title={t('engineeringProducts.independentReview')} subtitle={t('engineeringProducts.independentReviewHint')}>
+                    <div className="mb-3 space-y-2 border-b border-graphite-200 pb-3 dark:border-graphite-800">
+                      <p className="text-xs text-graphite-500">{t('engineeringProducts.withdrawalHint')}</p>
+                      <Field label={t('engineeringProducts.withdrawalReason')}><textarea className={TEXTAREA} maxLength={4000} value={withdrawalReason} onChange={(event) => setWithdrawalReason(event.target.value)} /></Field>
+                      <Button size="sm" onClick={() => withdrawMutation.mutate()} disabled={!isCurrentVersion || !withdrawalReason.trim() || withdrawMutation.isPending}>{t('engineeringProducts.withdrawReview')}</Button>
+                    </div>
                     {approvalReviewNotes && <div className="mb-2 rounded bg-graphite-50 p-2 text-xs dark:bg-graphite-950">{t('engineeringProducts.reviewRecordedBy')}: {selectedVersion.reviewed_by ?? '—'} · {approvalReviewNotes}</div>}
                     {!selectedVersion.reviewed_by && <div className="space-y-2"><Field label={t('engineeringProducts.reviewNotes')}><textarea className={TEXTAREA} value={reviewNotes} onChange={(event) => setReviewNotes(event.target.value)} /></Field><Button size="sm" onClick={() => reviewMutation.mutate()} disabled={!reviewNotes.trim() || reviewMutation.isPending}>{t('engineeringProducts.recordReview')}</Button></div>}
                     {selectedVersion.reviewed_by && <div className="mt-3 space-y-2"><Field label={t('engineeringProducts.decisionNote')}><textarea className={TEXTAREA} value={decisionNote} onChange={(event) => setDecisionNote(event.target.value)} /></Field><div className="flex gap-2"><Button size="sm" variant="primary" onClick={() => decisionMutation.mutate('approved')} disabled={!decisionNote.trim() || decisionMutation.isPending}>{t('engineeringProducts.approveRevision')}</Button><Button size="sm" variant="danger" onClick={() => decisionMutation.mutate('rejected')} disabled={!decisionNote.trim() || decisionMutation.isPending}>{t('engineeringProducts.rejectRevision')}</Button></div></div>}
                   </Card>
                 )}
+                {(detail.data?.approval_history?.length ?? 0) > 0 && <Card title={t('engineeringProducts.approvalHistory')}>
+                  <ul className="space-y-2 text-xs">{detail.data?.approval_history?.map((entry) => <li key={entry.id} className="rounded border border-graphite-200 p-2 dark:border-graphite-800">
+                    <div className="flex flex-wrap items-center gap-2"><Badge tone={stateTone(entry.status)}>{entry.status}</Badge><span className="break-all">{entry.id}</span></div>
+                    <p>{entry.requested_by ?? '—'} · {entry.requested_at ?? '—'}</p>
+                    {entry.decision_note && <p className="whitespace-pre-wrap">{entry.decision_note}</p>}
+                    {text(row(entry.request_payload.review).notes) && <p className="whitespace-pre-wrap">{text(row(entry.request_payload.review).notes)}</p>}
+                  </li>)}</ul>
+                </Card>}
                 {validation && <Card title={t('engineeringProducts.validationFindings')}><ul className="space-y-2 text-xs">{validation.findings.map((finding, index) => <li className="rounded border border-graphite-200 p-2 dark:border-graphite-800" key={`${finding.code}-${index}`}><div className="flex gap-2"><Badge tone={stateTone(finding.severity)}>{finding.severity}</Badge><strong>{finding.code}</strong></div><p>{finding.message}</p>{finding.path && <code className="text-[10px]">{finding.path}</code>}</li>)}</ul><p className="mt-2 text-[11px] text-graphite-500">{t('engineeringProducts.fieldAcceptanceNotEstablished')}</p></Card>}
                 <Card title={t('engineeringProducts.revisionHistory')}>
                   {versions.isLoading ? <Loading /> : versions.error ? <ErrorState error={versions.error} onRetry={() => void versions.refetch()} /> : (
-                    <div className="flex flex-wrap gap-2">{(versions.data?.items ?? []).map((version) => <Button key={version.id} size="sm" variant={activeVersionId === version.id ? 'primary' : 'default'} onClick={() => setSelectedVersionId(version.id)}>v{version.version} · {version.state}</Button>)}</div>
+                    <div className="flex flex-wrap gap-2">{(versions.data?.items ?? []).map((version) => <Button key={version.id} size="sm" variant={activeVersionId === version.id ? 'primary' : 'default'} onClick={() => { setSelectedVersionId(version.id); setWithdrawalReason('') }}>v{version.version} · {version.state}</Button>)}</div>
                   )}
                 </Card>
                 <Card title={t('engineeringProducts.structuredPayload')}><Json value={selectedVersion.payload} /></Card>

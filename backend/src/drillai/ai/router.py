@@ -31,6 +31,7 @@ from drillai.ai.providers import (
     ModelSpec,
     PrivacyClass,
     ProviderRegistry,
+    registry_for_session,
 )
 from drillai.core.errors import ConfigurationError, ModelNotConfigured, ProviderError
 from drillai.core.logging import get_logger, log_context
@@ -43,6 +44,7 @@ __all__ = [
     "RouteDecision",
     "RoutingPolicy",
     "TaskProfile",
+    "require_owned_router",
 ]
 
 
@@ -126,6 +128,7 @@ class LlmRouter:
     # ------------------------------------------------------------------ selection
     def route(self, *, profile: TaskProfile, prompt_tokens: int = 0) -> RouteDecision:
         required = _TASK_CAPABILITIES[profile]
+        self.registry.ensure_open()
         ceiling = self.registry.max_privacy
         if self._requires_ceiling and ceiling is None:
             raise ConfigurationError("application privacy ceiling is no longer configured")
@@ -184,7 +187,7 @@ class LlmRouter:
         )
         if len(candidates) > 1:
             rationale.append(f"{len(candidates) - 1} other model(s) were eligible; cheapest-fastest wins")
-        return RouteDecision(provider=provider, spec=spec, rationale=rationale, considered=considered)
+        return RouteDecision(provider=provider, spec=spec.model_copy(deep=True), rationale=rationale, considered=considered)
 
     # ------------------------------------------------------------------ completion
     async def complete(
@@ -200,14 +203,20 @@ class LlmRouter:
         workflow_run_id: str | None = None,
         validate: bool = True,
     ) -> tuple[CompletionResponse, RouteDecision]:
+        if registry_for_session(session) is not self.registry:
+            raise ConfigurationError("router registry does not match the session owner")
         prompt_tokens = sum(len(message.content) // 4 + 4 for message in request.messages)
         decision = self.route(profile=profile, prompt_tokens=prompt_tokens)
-        request = request.model_copy(update={"model": request.model or decision.spec.model})
+        if request.model is not None and request.model != decision.spec.model:
+            raise ConfigurationError("requested model does not match the authorized routing decision")
+        request = request.model_copy(update={"model": decision.spec.model})
         if decision.spec.supports_temperature is False:
             request = request.model_copy(update={"temperature": 0.0})
 
         with log_context(llm_provider=decision.spec.provider, llm_model=decision.spec.model):
-            response = await self._call_with_retry(decision, request, validate=validate)
+            response = await self._call_with_retry(
+                decision, request, validate=validate, session=session, profile=profile, prompt_tokens=prompt_tokens
+            )
 
         if session is not None and org_id is not None:
             await self._persist_call(
@@ -225,9 +234,18 @@ class LlmRouter:
         return response, decision
 
     async def _call_with_retry(
-        self, decision: RouteDecision, request: CompletionRequest, *, validate: bool
+        self, decision: RouteDecision, request: CompletionRequest, *, validate: bool,
+        session: AsyncSession, profile: TaskProfile, prompt_tokens: int,
     ) -> CompletionResponse:
+        def verify_decision() -> None:
+            if registry_for_session(session) is not self.registry:
+                raise ConfigurationError("router registry no longer matches the session owner")
+            current = self.route(profile=profile, prompt_tokens=prompt_tokens)
+            if current.provider is not decision.provider or current.spec != decision.spec:
+                raise ConfigurationError("provider routing changed during the request")
+
         provider = decision.provider
+        verify_decision()
         try:
             response = await provider.complete(request)
         except ProviderError:
@@ -241,6 +259,7 @@ class LlmRouter:
                 # The retry is explicit about what was wrong; it is not a hidden repair loop.
                 request.messages[-1].model_copy(update={"content": request.messages[-1].content + "\n\nYour previous answer was not valid JSON matching the schema. Reply with JSON only."}),
             ]
+            verify_decision()
             response = await provider.complete(request.model_copy(update={"messages": retry_messages}))
             if response.structured is None:
                 raise ProviderError("provider failed to produce schema-valid JSON after one retry")
@@ -314,3 +333,16 @@ class LlmRouter:
         )
         session.add(row)
         await session.flush()
+
+
+def require_owned_router(session: AsyncSession, router: object) -> LlmRouter:
+    """Reject injected service objects or routers belonging to a different application.
+
+    Trusted in-process code can still mutate Python objects; this check is an application
+    boundary, not a sandbox for arbitrary code running in the service process.
+    """
+    if not isinstance(router, LlmRouter):
+        raise ConfigurationError("injected router must be an application-owned LlmRouter")
+    if registry_for_session(session) is not router.registry:
+        raise ConfigurationError("router registry does not match the session owner")
+    return router

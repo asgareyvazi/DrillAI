@@ -553,18 +553,34 @@ class ProviderRegistry:
     def __init__(self) -> None:
         self._providers: dict[str, LLMProvider] = {}
         self.max_privacy: PrivacyClass | None = None
+        self._closed = False
+
+    def ensure_open(self) -> None:
+        from drillai.core.errors import ConfigurationError
+
+        if self._closed:
+            raise ConfigurationError("application provider registry is closed after shutdown")
+
+    def close(self) -> None:
+        """Permanently invalidate this application's provider registry."""
+        self._closed = True
+        self._providers.clear()
+        self.max_privacy = None
 
     def register(self, provider: LLMProvider, *, replace: bool = False) -> None:
+        self.ensure_open()
         if provider.name in self._providers and not replace:
             raise ProviderError(f"provider {provider.name!r} is already registered")
         self._providers[provider.name] = provider
 
     def clear(self) -> None:
         """Remove registrations and routing policy before rebuilding a deployment configuration."""
+        self.ensure_open()
         self._providers.clear()
         self.max_privacy = None
 
     def get(self, name: str) -> LLMProvider:
+        self.ensure_open()
         provider = self._providers.get(name)
         if provider is None:
             raise ModelNotConfigured(
@@ -574,12 +590,15 @@ class ProviderRegistry:
         return provider
 
     def providers(self) -> dict[str, LLMProvider]:
+        self.ensure_open()
         return dict(self._providers)
 
     def models(self) -> list[ModelSpec]:
+        self.ensure_open()
         return [spec for provider in self._providers.values() for spec in provider.models()]
 
     def find_model(self, model: str) -> tuple[LLMProvider, ModelSpec] | None:
+        self.ensure_open()
         for provider in self._providers.values():
             for spec in provider.models():
                 if spec.model == model:
@@ -587,6 +606,7 @@ class ProviderRegistry:
         return None
 
     async def health(self) -> list[ProviderHealth]:
+        self.ensure_open()
         reports: list[ProviderHealth] = []
         for provider in self._providers.values():
             try:
@@ -610,6 +630,7 @@ def registry_for_session(session: Any) -> ProviderRegistry:
     registry = database.provider_registry if isinstance(database, Database) else info.get("drillai_provider_registry")
     if not isinstance(registry, ProviderRegistry):
         raise ConfigurationError("database session has no application-scoped AI provider registry")
+    registry.ensure_open()
     return registry
 
 

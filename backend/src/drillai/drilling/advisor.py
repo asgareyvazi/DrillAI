@@ -37,7 +37,7 @@ from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from drillai.ai.providers import ChatMessage, CompletionRequest
-from drillai.ai.router import LlmRouter, TaskProfile
+from drillai.ai.router import LlmRouter, TaskProfile, require_owned_router
 from drillai.core.errors import EngineNotFound, ProviderError, ValidationFailed
 from drillai.db.models import (
     Document,
@@ -899,6 +899,7 @@ class OperationsAdvisor:
         """
         if self.llm_router is None or not answer.facts:
             return None
+        require_owned_router(self.session, self.llm_router)
         from drillai.ai.guardrails import evaluate_output, wrap_untrusted_content
 
         payload = {

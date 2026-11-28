@@ -195,6 +195,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             harness = getattr(app.state, "protocol_harness", None)
             if harness is not None:
                 await harness.stop()
+            app.state.provider_registry.close()
             await app.state.database.dispose()
 
     # Registries are warmed in the factory, not only in the lifespan: an ASGI app mounted without

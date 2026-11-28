@@ -1,0 +1,28 @@
+{
+  "mission": 18,
+  "verdict": "NOT_ACCEPTED",
+  "scope_note": "This is an honest workstream ledger, not evidence that requested phases 0-55 were all completed or individually verified.",
+  "start": {
+    "branch": "arena/9d8f5568-drillai",
+    "head": "a2edc67129a1c7b0261ce25c21dc7da1467c2c5f",
+    "main": "bfa066b28e0071880cb9191a4f1d47fdaa143e04",
+    "remote_tracked_blobs_and_modes_matched": 926,
+    "workspace_manifest_sha256": "c5fca25be150a4046b03942d77032fda4d7bd808a578e7d60d8f99ae07b09ce7",
+    "inherited_untracked_files": 24,
+    "protected_entries": 9
+  },
+  "workstreams": [
+    {"name": "provider ownership and privacy", "status": "PARTIAL", "evidence": "90 focused passed; broader 502 passed, 2 skipped", "open": "complete tenant isolation, layered egress, notification separation, in-process mutation and key rotation"},
+    {"name": "structured programs and procedures", "status": "PARTIAL", "evidence": "overlap and ruleset freshness checks, withdrawal/history, 31 product/security tests; 1 isolated browser pilot with query-only SQLite history readback", "open": "competing withdrawal and decision, rollback, engineering completeness and field use"},
+    {"name": "OCR", "status": "NOT_ACCEPTED", "evidence": "preceding deployment-image exact-SHA CI failed; 308 of 384 frozen-corpus critical fields", "open": "deployed root cause, every stratum >= 90 percent, bilingual/table reconstruction, process-tree containment and whole-document deadlines"},
+    {"name": "DDR, chronology and NPT", "status": "PARTIAL", "open": "canonical completeness, identities, chronology and approval"},
+    {"name": "trajectory, uncertainty and anti-collision", "status": "NOT_ESTABLISHED", "open": "comprehensive uncertainty models and independent assurance"},
+    {"name": "drilling calculation engines and integrated well design", "status": "NOT_ESTABLISHED", "open": "complete safety-critical inputs, independent reference vectors, assumptions and human approval"},
+    {"name": "AI/RAG, telemetry, analytics, UX, database and reliability", "status": "PARTIAL", "open": "repository-wide implementation and evidence remain incomplete"},
+    {"name": "historical provenance, competitive review and roadmap", "status": "NOT_ESTABLISHED", "open": "comprehensive current artifacts and evidence review"},
+    {"name": "field and vendor qualification", "status": "BLOCKED_BY_MISSING_AUTHORIZED_EVIDENCE", "open": "authorized representative external evidence"},
+    {"name": "final SHA and CI", "status": "NOT_ESTABLISHED", "open": "push final candidate, inspect exact-SHA Linux/PostgreSQL, deployment OCR, Windows, browser and all required jobs; recheck main"}
+  ],
+  "evidence_directory": "mission18-evidence",
+  "limits": "Synthetic workflows, local test passes and a prior SHA do not constitute operational, field, vendor or final-SHA certification."
+}

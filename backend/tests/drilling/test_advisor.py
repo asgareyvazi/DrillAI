@@ -77,7 +77,16 @@ class StubRouter:
 
 
 def _advisor(router: Any) -> OperationsAdvisor:
-    return OperationsAdvisor(session=None, org_id="org_test", llm_router=router)
+    from drillai.ai.providers import ProviderRegistry
+    from drillai.ai.router import LlmRouter, RoutingPolicy
+
+    registry = ProviderRegistry()
+    owned_router = LlmRouter(registry=registry, policy=RoutingPolicy())
+    owned_router.complete = router.complete
+    return OperationsAdvisor(
+        session=SimpleNamespace(info={"drillai_provider_registry": registry}),
+        org_id="org_test", llm_router=owned_router,
+    )
 
 
 @pytest.mark.asyncio

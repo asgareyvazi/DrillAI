@@ -1,0 +1,37 @@
+{
+  "start_manifest_sha256": "c5fca25be150a4046b03942d77032fda4d7bd808a578e7d60d8f99ae07b09ce7",
+  "inherited_untracked_differences": {},
+  "protected_entry_differences": {},
+  "unexpected_baseline_file_differences": {},
+  "expected_modified_baseline_files": [
+    "README.md",
+    "backend/src/drillai/ai/providers.py",
+    "backend/src/drillai/ai/router.py",
+    "backend/src/drillai/api/app.py",
+    "backend/src/drillai/api/routers/engineering_products.py",
+    "backend/src/drillai/drilling/advisor.py",
+    "backend/src/drillai/engineering/products.py",
+    "backend/src/drillai/engineering/service.py",
+    "backend/src/drillai/workflow/nodes.py",
+    "backend/tests/ai/test_ai_layer.py",
+    "backend/tests/api/test_engineering_products_api.py",
+    "backend/tests/drilling/test_advisor.py",
+    "backend/tests/engineering/test_products.py",
+    "backend/tests/workflow/test_ai_context_injection.py",
+    "ci/test-inventory.json",
+    "frontend/e2e/cp150-two-well-pilot.spec.ts",
+    "frontend/e2e/database-readback.ts",
+    "frontend/src/api/endpoints.ts",
+    "frontend/src/api/types.ts",
+    "frontend/src/i18n/en.ts",
+    "frontend/src/i18n/fa.ts",
+    "frontend/src/pages/engineering/ProgramsProceduresWorkspace.test.tsx",
+    "frontend/src/pages/engineering/ProgramsProceduresWorkspace.tsx",
+    "scripts/verify_engineering_product_db_readback.py"
+  ],
+  "notes": [
+    "Directory metadata can change when documented new outputs are created.",
+    "Generated ignored test dependencies, caches and isolated CP150 artifacts are not represented as inherited files.",
+    "This is a pre-commit workspace check, not a final remote CI certification."
+  ]
+}

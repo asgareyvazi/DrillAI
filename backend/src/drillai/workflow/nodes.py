@@ -544,7 +544,7 @@ async def _ai_complete(context: NodeContext, config: BaseModel) -> NodeOutcome:
         wrap_untrusted_content,
     )
     from drillai.ai.providers import ChatMessage, CompletionRequest, registry_for_session
-    from drillai.ai.router import LlmRouter, RoutingPolicy, TaskProfile
+    from drillai.ai.router import LlmRouter, RoutingPolicy, TaskProfile, require_owned_router
     from drillai.core.errors import ModelNotConfigured
 
     cfg = AiCompleteConfig.model_validate(config)
@@ -571,6 +571,7 @@ async def _ai_complete(context: NodeContext, config: BaseModel) -> NodeOutcome:
             require_structured_output=cfg.output_schema is not None,
         )
         router = LlmRouter(registry=registry, policy=policy)
+    router = require_owned_router(context.session, router)
     grounded_context = context.variable(cfg.context_variable) or ""
     context_guardrails = GuardrailReport()
     model_context = str(grounded_context)

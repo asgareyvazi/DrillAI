@@ -50,6 +50,10 @@ class EngineeringProductReview(_StrictModel):
     notes: str = Field(min_length=1, max_length=4000)
 
 
+class EngineeringProductWithdrawal(_StrictModel):
+    reason: str = Field(min_length=1, max_length=4000)
+
+
 class EngineeringProductDecision(_StrictModel):
     approval_id: str = Field(min_length=1, max_length=64)
     decision: Literal["approved", "rejected"]
@@ -249,13 +253,15 @@ async def get_engineering_product(
     artifact = await service.get(artifact_id)
     version = await service.get_current_version(artifact)
     linked_snapshot, linked_state = await service.linked_program_state(version)
-    approval = await service.approval_for_version(version)
+    history = await service.approval_history_for_version(version)
+    approval = history[0] if history else None
     return {
         "artifact": _artifact_json(artifact),
         "current_version": _version_json(version),
         "linked_program": linked_snapshot,
         "linked_program_current_state": linked_state,
         "approval_request": _approval_json(approval) if approval else None,
+        "approval_history": [_approval_json(item) for item in history],
     }
 
 
@@ -285,13 +291,15 @@ async def get_engineering_product_version(
     artifact = await service.get(artifact_id)
     version = await service.get_version(artifact, version_id)
     linked_snapshot, linked_state = await service.linked_program_state(version)
-    approval = await service.approval_for_version(version)
+    history = await service.approval_history_for_version(version)
+    approval = history[0] if history else None
     return {
         "artifact": _artifact_json(artifact),
         "version": _version_json(version),
         "linked_program": linked_snapshot,
         "linked_program_current_state": linked_state,
         "approval_request": _approval_json(approval) if approval else None,
+        "approval_history": [_approval_json(item) for item in history],
     }
 
 
@@ -405,6 +413,32 @@ async def submit_engineering_product(
         before={"state": "draft"},
         after={"state": version.state, "approval_request_id": approval.id},
         details={"content_hash": version.content_hash},
+    )
+    return {"artifact": _artifact_json(artifact), "version": _version_json(version), "approval_request": _approval_json(approval)}
+
+
+@router.post(
+    "/engineering-products/{artifact_id}/versions/{version_id}/withdraw",
+    summary="Withdraw a pending review, retaining its history and requiring fresh validation",
+)
+async def withdraw_engineering_product(
+    artifact_id: str,
+    version_id: str,
+    payload: EngineeringProductWithdrawal,
+    request: Request,
+    session: Annotated[AsyncSession, Depends(get_db)],
+    auth: Annotated[AuthContext, Depends(require("action:artifact.submit"))],
+) -> dict[str, Any]:
+    authorize(auth.principal, "artifact.submit", context={"artifact_id": artifact_id, "version_id": version_id})
+    service = _service(session, auth)
+    artifact = await service.get(artifact_id, for_update=True)
+    version = await service.get_version(artifact, version_id)
+    approval = await service.withdraw(artifact, version, actor_id=auth.principal.id, reason=payload.reason)
+    await _audit(
+        session, request, auth, action="artifact.withdraw", permission="action:artifact.submit",
+        artifact=artifact, version=version, before={"state": "in_review"},
+        after={"state": version.state, "approval_request_id": approval.id, "approval_status": approval.status},
+        details={"content_hash": version.content_hash, "reason": payload.reason},
     )
     return {"artifact": _artifact_json(artifact), "version": _version_json(version), "approval_request": _approval_json(approval)}
 

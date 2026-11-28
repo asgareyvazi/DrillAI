@@ -433,3 +433,153 @@ async def test_two_well_and_two_tenant_scope_isolation(fabric):
         )
         assert {item.well_id for item in scoped} == set(created_ids)
         assert all(item.org_id == fabric.org_id(alpha) for item in scoped)
+
+
+async def test_program_overlapping_hole_sections_are_blocked_before_submission(client):
+    import copy
+
+    project_id, well_id, wellbore_id, section_id = await _create_well(client, name="Overlapping sections")
+    payload = _program_payload(section_id)
+    payload["sections"][0]["planned_md_to"] = _quantity(1000, "m")
+    second = copy.deepcopy(payload["sections"][0])
+    second.update(sequence=2, name="Overlapping section", section_id=None,
+                  planned_md_from=_quantity(900, "m"), planned_md_to=_quantity(2000, "m"))
+    payload["sections"].append(second)
+    created = await client.post(
+        f"/api/v1/wells/{well_id}/engineering-products",
+        json={"kind": "program", "title": "Synthetic overlap draft", "project_id": project_id,
+              "wellbore_id": wellbore_id, "payload": payload},
+        headers=headers("engineer"),
+    )
+    assert created.status_code == 201, created.text
+    artifact, version = created.json()["artifact"], created.json()["version"]
+    path = f"/api/v1/engineering-products/{artifact['id']}/versions/{version['id']}"
+    validated = await client.post(path + "/validate", headers=headers("engineer"))
+    assert validated.status_code == 200, validated.text
+    validation = validated.json()["validation"]
+    assert validation["state"] == "blocked"
+    assert any(item["code"] == "section_depth_overlap" for item in validation["findings"])
+    rejected = await client.post(path + "/submit", headers=headers("drilling_supervisor"))
+    assert rejected.status_code == 422, rejected.text
+
+
+async def test_program_cannot_submit_with_outdated_validation_ruleset(client, db):
+    from drillai.db.models import ArtifactVersion
+
+    project_id, well_id, wellbore_id, section_id = await _create_well(client, name="Stale ruleset")
+    created = await client.post(
+        f"/api/v1/wells/{well_id}/engineering-products",
+        json={"kind": "program", "title": "Ruleset test", "project_id": project_id,
+              "wellbore_id": wellbore_id, "payload": _program_payload(section_id)},
+        headers=headers("engineer"),
+    )
+    assert created.status_code == 201, created.text
+    artifact, version = created.json()["artifact"], created.json()["version"]
+    path = f"/api/v1/engineering-products/{artifact['id']}/versions/{version['id']}"
+    validated = await client.post(path + "/validate", headers=headers("engineer"))
+    assert validated.status_code == 200, validated.text
+    async with db.session() as session:
+        stored = (await session.execute(select(ArtifactVersion).where(ArtifactVersion.id == version["id"]))).scalar_one()
+        summary = dict(stored.validation_summary)
+        summary["validation"] = {**summary["validation"], "ruleset": "drillai.program-structure.v0"}
+        stored.validation_summary = summary
+    rejected = await client.post(path + "/submit", headers=headers("drilling_supervisor"))
+    assert rejected.status_code == 409, rejected.text
+    refreshed = await client.post(path + "/validate", headers=headers("engineer"))
+    assert refreshed.status_code == 200, refreshed.text
+    assert refreshed.json()["validation"]["ruleset"] == "drillai.program-structure.v2"
+    accepted = await client.post(path + "/submit", headers=headers("drilling_supervisor"))
+    assert accepted.status_code == 202, accepted.text
+
+
+async def test_in_review_program_rejects_outdated_rules_until_revalidated(client, db):
+    from drillai.db.models import ArtifactVersion
+
+    project_id, well_id, wellbore_id, section_id = await _create_well(client, name="Stale review")
+    created = await client.post(
+        f"/api/v1/wells/{well_id}/engineering-products",
+        json={"kind": "program", "title": "Ruleset review test", "project_id": project_id,
+              "wellbore_id": wellbore_id, "payload": _program_payload(section_id)},
+        headers=headers("engineer"),
+    )
+    assert created.status_code == 201, created.text
+    artifact, version = created.json()["artifact"], created.json()["version"]
+    path = f"/api/v1/engineering-products/{artifact['id']}/versions/{version['id']}"
+    assert (await client.post(path + "/validate", headers=headers("engineer"))).status_code == 200
+    submitted = await client.post(path + "/submit", headers=headers("drilling_supervisor"))
+    assert submitted.status_code == 202
+    old_approval_id = submitted.json()["approval_request"]["id"]
+    async with db.session() as session:
+        stored = (await session.execute(select(ArtifactVersion).where(ArtifactVersion.id == version["id"]))).scalar_one()
+        summary = dict(stored.validation_summary)
+        summary["validation"] = {**summary["validation"], "ruleset": "drillai.program-structure.v1"}
+        stored.validation_summary = summary
+    review_body = {"notes": "Synthetic review only, not field acceptance."}
+    rejected = await client.post(path + "/review", headers=headers("well_manager"), json=review_body)
+    assert rejected.status_code == 409, rejected.text
+    withdrawn = await client.post(path + "/withdraw", headers=headers("drilling_supervisor"),
+                                  json={"reason": "Validation rules changed; restart independent review."})
+    assert withdrawn.status_code == 200, withdrawn.text
+    assert withdrawn.json()["version"]["state"] == "draft"
+    assert withdrawn.json()["approval_request"]["status"] == "cancelled"
+    assert withdrawn.json()["approval_request"]["id"] == old_approval_id
+    revalidated = await client.post(path + "/validate", headers=headers("engineer"))
+    assert revalidated.status_code == 200, revalidated.text
+    assert revalidated.json()["validation"]["ruleset"] == "drillai.program-structure.v2"
+    resubmitted = await client.post(path + "/submit", headers=headers("drilling_supervisor"))
+    assert resubmitted.status_code == 202, resubmitted.text
+    assert resubmitted.json()["approval_request"]["id"] != old_approval_id
+    detail = await client.get(path, headers=headers("engineer"))
+    assert detail.status_code == 200, detail.text
+    history = detail.json()["approval_history"]
+    assert {item["id"] for item in history} == {old_approval_id, resubmitted.json()["approval_request"]["id"]}
+    assert next(item for item in history if item["id"] == old_approval_id)["status"] == "cancelled"
+    reviewed = await client.post(path + "/review", headers=headers("well_manager"), json=review_body)
+    assert reviewed.status_code == 200, reviewed.text
+
+
+async def test_withdrawal_preserves_review_history_and_requires_new_authorization(client, db):
+    from drillai.db.models import ApprovalRequest
+
+    project_id, well_id, wellbore_id, section_id = await _create_well(client, name="Withdraw review")
+    created = await client.post(
+        f"/api/v1/wells/{well_id}/engineering-products",
+        json={"kind": "program", "title": "Withdrawal history", "project_id": project_id,
+              "wellbore_id": wellbore_id, "payload": _program_payload(section_id)},
+        headers=headers("engineer"),
+    )
+    assert created.status_code == 201, created.text
+    artifact, version = created.json()["artifact"], created.json()["version"]
+    path = f"/api/v1/engineering-products/{artifact['id']}/versions/{version['id']}"
+    assert (await client.post(path + "/validate", headers=headers("engineer"))).status_code == 200
+    submitted = await client.post(path + "/submit", headers=headers("drilling_supervisor"))
+    assert submitted.status_code == 202, submitted.text
+    old_id = submitted.json()["approval_request"]["id"]
+    reviewed = await client.post(path + "/review", headers=headers("well_manager"),
+                                 json={"notes": "Synthetic review to retain in history."})
+    assert reviewed.status_code == 200, reviewed.text
+    forbidden = await client.post(path + "/withdraw", headers=headers("engineer"), json={"reason": "No permission."})
+    assert forbidden.status_code == 403, forbidden.text
+    withdrawn = await client.post(path + "/withdraw", headers=headers("drilling_supervisor"),
+                                  json={"reason": "Restart review after revised validation."})
+    assert withdrawn.status_code == 200, withdrawn.text
+    assert withdrawn.json()["version"]["reviewed_by"] is None
+    assert withdrawn.json()["version"]["validation_summary"].get("validation") is None
+    async with db.session() as session:
+        old = (await session.execute(select(ApprovalRequest).where(ApprovalRequest.id == old_id))).scalar_one()
+        assert old.status == "cancelled"
+        assert old.request_payload["review"]["notes"] == "Synthetic review to retain in history."
+        assert old.request_payload["withdrawal"]["reason"] == "Restart review after revised validation."
+        assert old.request_payload["withdrawn_validation"]["ruleset"] == "drillai.program-structure.v2"
+        audit = (await session.execute(select(AuditLog).where(
+            AuditLog.org_id == artifact["org_id"], AuditLog.resource_id == version["id"],
+            AuditLog.action == "artifact.withdraw",
+        ))).scalars().all()
+        assert len(audit) == 1
+    repeated = await client.post(path + "/withdraw", headers=headers("drilling_supervisor"), json={"reason": "Repeat"})
+    assert repeated.status_code == 409
+    resubmit_without_validation = await client.post(path + "/submit", headers=headers("drilling_supervisor"))
+    assert resubmit_without_validation.status_code == 409
+    old_decision = await client.post(path + "/decision", headers=headers("well_manager,drilling_supervisor"),
+                                     json={"approval_id": old_id, "decision": "approved", "note": "Stale"})
+    assert old_decision.status_code == 409

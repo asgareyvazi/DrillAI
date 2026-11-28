@@ -29,6 +29,11 @@ from drillai.engineering.products import (
     validation_state,
 )
 
+_VALIDATION_RULESETS = {
+    "program": "drillai.program-structure.v2",
+    "procedure": "drillai.procedure-structure.v1",
+}
+
 
 class EngineeringProductService:
     """Application services for structured program/procedure authoring and human control gates."""
@@ -395,7 +400,7 @@ class EngineeringProductService:
             "validated_at": now.isoformat(),
             "validated_by": actor_id,
             "content_hash": version.content_hash,
-            "ruleset": f"drillai.{artifact.kind}-structure.v1",
+            "ruleset": _VALIDATION_RULESETS[artifact.kind],
             "engine_finding_count": len(engine_findings),
             "engine_run_snapshots": engine_snapshots,
             "attached_engine_findings_fingerprint": attached_engine_fingerprint,
@@ -407,6 +412,7 @@ class EngineeringProductService:
         previous = summary.get("validation")
         if (
             isinstance(previous, dict)
+            and previous.get("ruleset") == validation["ruleset"]
             and previous.get("content_hash") == validation["content_hash"]
             and previous.get("engine_finding_count") == validation["engine_finding_count"]
             and previous.get("engine_run_snapshots") == validation["engine_run_snapshots"]
@@ -598,6 +604,8 @@ class EngineeringProductService:
         validation = summary.get("validation")
         if not isinstance(validation, dict):
             raise Conflict("validate this exact revision before submission or approval")
+        if validation.get("ruleset") != _VALIDATION_RULESETS.get(artifact.kind):
+            raise Conflict("the validation ruleset has changed; validate this exact revision again")
         scope = DocumentScope(
             project_id=artifact.project_id,
             well_id=artifact.well_id,
@@ -739,6 +747,66 @@ class EngineeringProductService:
         self.session.add(request)
         await self.session.flush()
         return request
+
+    async def withdraw(
+        self, artifact: Artifact, version: ArtifactVersion, *, actor_id: str, reason: str,
+    ) -> ApprovalRequest:
+        """Cancel a pending review and return the same immutable revision to draft.
+
+        Prior validation and any review remain on the cancelled request; a fresh validation,
+        submission and independent review are required before any later decision.
+        """
+        if artifact.current_version != version.version or version.state != "in_review":
+            raise Conflict("only the current submitted revision can be withdrawn")
+        reason = reason.strip()
+        if not reason:
+            raise ValidationFailed("a written withdrawal reason is required")
+        approval = await self._pending_approval(version.id, for_update=True)
+        if approval is None:
+            raise Conflict("the revision has no pending approval request")
+        now = utc_now()
+        archived = {
+            **(approval.request_payload or {}),
+            "withdrawal": {"by": actor_id, "at": now.isoformat(), "reason": reason},
+            "withdrawn_validation": (version.validation_summary or {}).get("validation"),
+        }
+        approval_update = await self.session.execute(
+            update(ApprovalRequest)
+            .where(ApprovalRequest.id == approval.id, ApprovalRequest.org_id == self.org_id,
+                   ApprovalRequest.status == "pending")
+            .values(status="cancelled", decided_by=actor_id, decided_at=now, decision_note=reason,
+                    request_payload=archived)
+            .execution_options(synchronize_session=False)
+        )
+        if approval_update.rowcount != 1:
+            raise Conflict("the approval request changed before withdrawal")
+        summary = dict(version.validation_summary or {})
+        summary.pop("validation", None)
+        version_update = await self.session.execute(
+            update(ArtifactVersion)
+            .where(ArtifactVersion.id == version.id, ArtifactVersion.org_id == self.org_id,
+                   ArtifactVersion.artifact_id == artifact.id, ArtifactVersion.state == "in_review")
+            .values(state="draft", reviewed_by=None, reviewed_at=None, validation_summary=summary)
+            .execution_options(synchronize_session=False)
+        )
+        if version_update.rowcount != 1:
+            raise Conflict("the revision changed before withdrawal")
+        artifact_update = await self.session.execute(
+            update(Artifact)
+            .where(Artifact.id == artifact.id, Artifact.org_id == self.org_id,
+                   Artifact.current_version == version.version, Artifact.status == "in_review")
+            .values(status="draft", updated_at=now)
+            .execution_options(synchronize_session=False)
+        )
+        if artifact_update.rowcount != 1:
+            raise Conflict("the artifact changed before withdrawal")
+        approval.status, approval.decided_by, approval.decided_at = "cancelled", actor_id, now
+        approval.decision_note, approval.request_payload = reason, archived
+        version.state, version.reviewed_by, version.reviewed_at = "draft", None, None
+        version.validation_summary = summary
+        artifact.status, artifact.updated_at = "draft", now
+        await self.session.flush()
+        return approval
 
     async def review(
         self,
@@ -889,6 +957,17 @@ class EngineeringProductService:
             return None, None
         linked_version = await self._get_linked_program_version(snapshot)
         return snapshot, linked_version.state if linked_version else "missing"
+
+    async def approval_history_for_version(self, version: ArtifactVersion) -> list[ApprovalRequest]:
+        """Return this tenant's complete review history for the exact revision."""
+        return list((await self.session.execute(
+            select(ApprovalRequest).where(
+                ApprovalRequest.org_id == self.org_id,
+                ApprovalRequest.kind == "engineering_artifact",
+                ApprovalRequest.subject_kind == "engineering_artifact_version",
+                ApprovalRequest.subject_id == version.id,
+            ).order_by(ApprovalRequest.created_at.desc(), ApprovalRequest.id.desc())
+        )).scalars().all())
 
     async def approval_for_version(self, version: ArtifactVersion) -> ApprovalRequest | None:
         """Return the latest review/decision request attached to this exact immutable revision."""

@@ -97,6 +97,15 @@ def read_snapshot(
             """,
             (artifact_id, artifact_row["org_id"]),
         ).fetchall()
+        approval_history_rows = connection.execute(
+            """
+            SELECT id, status, requested_by, decided_by, decision_note, request_payload
+            FROM approval_requests
+            WHERE org_id = ? AND subject_kind = 'engineering_artifact_version' AND subject_id = ?
+            ORDER BY requested_at, id
+            """,
+            (artifact_row["org_id"], version_id),
+        ).fetchall()
         approval_row = None
         if version_row["approval_request_id"]:
             approval_row = connection.execute(
@@ -123,7 +132,16 @@ def read_snapshot(
         request_payload = _json_object(approval_row["request_payload"])
         review = request_payload.get("review")
         approval["reviewed_by"] = review.get("reviewed_by") if isinstance(review, dict) else None
-    return {"artifact": artifact, "version": version, "versions": revisions, "approval": approval}
+    history = []
+    for row in approval_history_rows:
+        item = dict(row)
+        payload = _json_object(item.pop("request_payload"))
+        item["review"] = payload.get("review")
+        item["withdrawal"] = payload.get("withdrawal")
+        item["withdrawn_validation"] = payload.get("withdrawn_validation")
+        history.append(item)
+    return {"artifact": artifact, "version": version, "versions": revisions, "approval": approval,
+            "approval_history": history}
 
 
 def main() -> int:

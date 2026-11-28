@@ -1684,6 +1684,7 @@ export interface EngineeringProductDetail {
   linked_program: Record<string, unknown> | null
   linked_program_current_state: EngineeringProductState | 'missing' | null
   approval_request: EngineeringProductApproval | null
+  approval_history?: EngineeringProductApproval[]
 }
 
 export interface EngineeringProductVersionDetail {
@@ -1692,6 +1693,7 @@ export interface EngineeringProductVersionDetail {
   linked_program: Record<string, unknown> | null
   linked_program_current_state: EngineeringProductState | 'missing' | null
   approval_request: EngineeringProductApproval | null
+  approval_history?: EngineeringProductApproval[]
 }
 
 // --------------------------------------------------------------------------- daily drilling reports

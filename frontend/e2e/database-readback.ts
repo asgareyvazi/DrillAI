@@ -46,6 +46,13 @@ export interface EngineeringProductDatabaseSnapshot {
     approval_request_id: string | null
     supersedes_version_id: string | null
   }>
+  approval_history: Array<{
+    id: string
+    status: string
+    decision_note: string | null
+    withdrawal: { reason: string } | null
+    withdrawn_validation: { ruleset: string } | null
+  }>
   approval: {
     id: string
     status: string

@@ -735,6 +735,12 @@ export const drillingApi = {
       version: EngineeringProductVersion
       approval_request: EngineeringProductApproval
     }>(`/engineering-products/${enc(artifactId)}/versions/${enc(versionId)}/submit`),
+  withdrawEngineeringProduct: (artifactId: string, versionId: string, reason: string) =>
+    api.post<{
+      artifact: EngineeringProductArtifact
+      version: EngineeringProductVersion
+      approval_request: EngineeringProductApproval
+    }>(`/engineering-products/${enc(artifactId)}/versions/${enc(versionId)}/withdraw`, { reason }),
   reviewEngineeringProduct: (artifactId: string, versionId: string, notes: string) =>
     api.post<{
       artifact: EngineeringProductArtifact

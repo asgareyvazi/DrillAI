@@ -275,3 +275,44 @@ def test_empty_procedure_is_not_a_submission_ready_free_text_form() -> None:
     codes = {item.code for item in product_validation_findings("procedure", normalized)}
 
     assert {"procedure_scope_missing", "procedure_steps_missing", "stop_work_conditions_missing"} <= codes
+
+
+@pytest.mark.parametrize(
+    ("next_top_m", "expect_overlap"),
+    [(999.0, True), (1000.0, False), (1100.0, False)],
+)
+def test_program_sections_cannot_overlap_in_measured_depth(next_top_m, expect_overlap):
+    import copy
+
+    payload = valid_program_payload()
+    first = payload["sections"][0]
+    first["planned_md_to"] = quantity(1000, "m")
+    second = copy.deepcopy(first)
+    second.update(sequence=2, name="Next section", planned_md_from=quantity(next_top_m, "m"),
+                  planned_md_to=quantity(2000, "m"))
+    payload["sections"].append(second)
+    model = parse_product_payload("program", payload)
+    normalized = normalize_payload(model, actor_id="reviewer", authored_at=dt.datetime(2026, 1, 1, tzinfo=dt.UTC))
+    issues = product_validation_findings("program", normalized)
+    overlap = [item for item in issues if item.code == "section_depth_overlap"]
+    assert bool(overlap) is expect_overlap
+    if expect_overlap:
+        assert overlap[0].severity == "error"
+        assert overlap[0].path == "sections.1.planned_md_from"
+        assert validation_state(issues) == "blocked"
+
+
+def test_program_section_boundary_converts_feet_without_inventing_overlap() -> None:
+    import copy
+
+    payload = valid_program_payload()
+    first = payload["sections"][0]
+    first["planned_md_to"] = quantity(1000.0, "m")
+    second = copy.deepcopy(first)
+    second.update(sequence=2, name="Converted boundary", planned_md_from=quantity(1000.0 / 0.3048, "ft"),
+                  planned_md_to=quantity(2000.0, "m"))
+    payload["sections"].append(second)
+    normalized = normalize_payload(parse_product_payload("program", payload), actor_id="reviewer",
+                                   authored_at=dt.datetime(2026, 1, 1, tzinfo=dt.UTC))
+    assert normalized["sections"][1]["planned_md_from"]["value_si"] == pytest.approx(1000.0)
+    assert not any(issue.code == "section_depth_overlap" for issue in product_validation_findings("program", normalized))

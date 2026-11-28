@@ -29,6 +29,7 @@ const apiMock = vi.hoisted(() => ({
   reviseEngineeringProduct: vi.fn(),
   validateEngineeringProduct: vi.fn(),
   submitEngineeringProduct: vi.fn(),
+  withdrawEngineeringProduct: vi.fn(),
   reviewEngineeringProduct: vi.fn(),
   decideEngineeringProduct: vi.fn(),
   exportEngineeringProduct: vi.fn(),
@@ -343,6 +344,7 @@ function configureCommonMocks() {
       linked_program: null,
       linked_program_current_state: null,
       approval_request: store.approval ? { ...store.approval, request_payload: { ...store.approval.request_payload } } : null,
+      approval_history: store.approval ? [{ ...store.approval, request_payload: { ...store.approval.request_payload } }] : [],
     }
   })
   apiMock.getEngineeringProduct.mockRejectedValue(new Error('not used'))
@@ -387,6 +389,17 @@ function configureCommonMocks() {
     store.artifact = { ...store.artifact, status: 'in_review' }
     const approval = approvalRequest()
     return { artifact: { ...store.artifact }, version, approval_request: approval }
+  })
+  apiMock.withdrawEngineeringProduct.mockImplementation(async (_artifactId: string, _versionId: string, reason: string) => {
+    if (!store) throw new Error('no store')
+    const previous = currentVersion()
+    const version = { ...previous, state: 'draft' as const, reviewed_by: null, reviewed_at: null,
+      validation_summary: { ...previous.validation_summary, validation: null } }
+    store.versions = store.versions.map((item) => item.id === version.id ? version : item)
+    store.artifact = { ...store.artifact, status: 'draft' }
+    const approval = approvalRequest()
+    store.approval = { ...approval, status: 'cancelled', decision_note: reason }
+    return { artifact: { ...store.artifact }, version, approval_request: store.approval }
   })
   apiMock.reviewEngineeringProduct.mockImplementation(async (_artifactId: string, _versionId: string, notes: string) => {
     if (!store) throw new Error('no store')
@@ -625,6 +638,28 @@ describe('ProgramsProceduresWorkspace', () => {
       if (originalRevokeObjectURL) Object.defineProperty(URL, 'revokeObjectURL', originalRevokeObjectURL)
       else Reflect.deleteProperty(URL, 'revokeObjectURL')
     }
+  }, 20_000)
+
+  it('withdraws a pending review with a reason and requires validation again', async () => {
+    const user = userEvent.setup()
+    store = makeStore()
+    const { client } = renderWorkspace()
+    await user.click(await screen.findByRole('button', { name: /Synthetic program for UI test/ }))
+    await user.click(await screen.findByRole('button', { name: 'Validate this exact draft' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Submit for independent review' })).toBeEnabled())
+    await user.click(screen.getByRole('button', { name: 'Submit for independent review' }))
+    await screen.findByText('Independent review and decision')
+    await waitFor(() => expect(client.isMutating()).toBe(0))
+    await waitFor(() => expect(client.isFetching()).toBe(0))
+    const withdraw = screen.getByRole('button', { name: 'Withdraw review and return to draft' })
+    expect(withdraw).toBeDisabled()
+    await user.type(screen.getByLabelText('Withdrawal reason'), 'The validation rules changed.')
+    await user.click(withdraw)
+    await waitFor(() => expect(apiMock.withdrawEngineeringProduct).toHaveBeenCalledWith('art_ui_1', 'ver_ui_1', 'The validation rules changed.'))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Submit for independent review' })).toBeDisabled())
+    expect(screen.getByRole('button', { name: 'Validate this exact draft' })).toBeEnabled()
+    expect(await screen.findByText('The validation rules changed.')).toBeInTheDocument()
+    expect(screen.getByText('cancelled')).toBeInTheDocument()
   }, 20_000)
 
   it('renders the product-authoring route in Persian and applies right-to-left document direction', async () => {

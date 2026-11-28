@@ -465,9 +465,19 @@ def product_validation_findings(
                 bottom_si = bottom.get("value_si")
                 if isinstance(top_si, (int, float)) and isinstance(bottom_si, (int, float)) and bottom_si <= top_si:
                     findings.append(PayloadValidationIssue("section_depth_order_invalid", "error", "Planned bottom measured depth must exceed planned top measured depth.", f"{field_prefix}.planned_md_to"))
+                # Sections represent successive hole intervals. Permit coincident boundaries and
+                # a 1e-6 m conversion-roundoff tolerance, not an inferred correction of overlaps.
+                if (isinstance(top_si, (int, float)) and math.isfinite(top_si)
+                        and previous_bottom is not None and top_si < previous_bottom - 1e-6):
+                    findings.append(PayloadValidationIssue(
+                        "section_depth_overlap", "error",
+                        "This hole section starts above the preceding section's bottom; resolve the overlap before submission.",
+                        f"{field_prefix}.planned_md_from",
+                        {"previous_bottom_m": previous_bottom, "current_top_m": float(top_si), "comparison_tolerance_m": 1e-6},
+                    ))
                 if isinstance(bottom_si, (int, float)) and previous_bottom is not None and bottom_si < previous_bottom:
                     findings.append(PayloadValidationIssue("section_depth_sequence_decreases", "error", "Section bottom depths must not decrease with sequence.", f"{field_prefix}.planned_md_to"))
-                if isinstance(bottom_si, (int, float)):
+                if isinstance(bottom_si, (int, float)) and math.isfinite(bottom_si):
                     previous_bottom = float(bottom_si)
             has_min = section.get("mud_density_min") is not None
             has_max = section.get("mud_density_max") is not None

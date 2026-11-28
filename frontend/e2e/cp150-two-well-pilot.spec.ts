@@ -346,6 +346,7 @@ async function approveSelectedRevision(
   title: string,
   artifactId: string,
   versionId: string,
+  withdrawFirst = false,
 ): Promise<EngineeringProductMutationRead> {
   const validationPath = `/api/v1/engineering-products/${encodeURIComponent(artifactId)}/versions/${encodeURIComponent(versionId)}/validate`
   const validationResponsePromise = waitForApiResponse(page, 'POST', validationPath)
@@ -363,8 +364,34 @@ async function approveSelectedRevision(
   await page.getByRole('button', { name: 'Submit for independent review', exact: true }).click()
   const submittedResponse = await submitResponsePromise
   expect(submittedResponse.status()).toBe(202)
-  const submitted = (await submittedResponse.json()) as EngineeringProductMutationRead
+  let submitted = (await submittedResponse.json()) as EngineeringProductMutationRead
   expect(submitted.version.state).toBe('in_review')
+  if (withdrawFirst) {
+    const oldApprovalId = submitted.approval_request?.id
+    expect(oldApprovalId).toBeTruthy()
+    await page.getByLabel('Withdrawal reason').fill('Synthetic review restart; no operational authorization.')
+    const withdrawalPath = `/api/v1/engineering-products/${encodeURIComponent(artifactId)}/versions/${encodeURIComponent(versionId)}/withdraw`
+    const withdrawalPromise = waitForApiResponse(page, 'POST', withdrawalPath)
+    await page.getByRole('button', { name: 'Withdraw review and return to draft', exact: true }).click()
+    const withdrawal = await withdrawalPromise
+    expect(withdrawal.status()).toBe(200)
+    const withdrawn = await withdrawal.json() as EngineeringProductMutationRead
+    expect(withdrawn.version.state).toBe('draft')
+    expect(withdrawn.approval_request).toMatchObject({ id: oldApprovalId, status: 'cancelled' })
+    await expect(page.getByRole('button', { name: 'Submit for independent review', exact: true })).toBeDisabled()
+    await expect(page.getByText('Synthetic review restart; no operational authorization.')).toBeVisible()
+    await selectRole(page, 'engineer')
+    const revalidationPromise = waitForApiResponse(page, 'POST', validationPath)
+    await page.getByRole('button', { name: 'Validate this exact draft', exact: true }).click()
+    expect((await revalidationPromise).status()).toBe(200)
+    await selectRole(page, 'supervisor')
+    const resubmitPromise = waitForApiResponse(page, 'POST', submitPath)
+    await page.getByRole('button', { name: 'Submit for independent review', exact: true }).click()
+    const resubmitted = await resubmitPromise
+    expect(resubmitted.status()).toBe(202)
+    submitted = await resubmitted.json() as EngineeringProductMutationRead
+    expect(submitted.approval_request?.id).not.toBe(oldApprovalId)
+  }
   const approvalId = submitted.approval_request?.id
   if (!approvalId) throw new Error('the synthetic submission did not persist an approval request')
 
@@ -752,6 +779,7 @@ test('creates scoped synthetic daily reports, versioned programs and controlled 
     programA.artifact.title,
     programA.artifact.id,
     programA.version.id,
+    true,
   )
   const procedureA = await createProcedureThroughBrowser(
     page,
@@ -1043,6 +1071,13 @@ test('creates scoped synthetic daily reports, versioned programs and controlled 
       state: entry.state,
       content_hash: entry.version.content_hash,
     })
+    if (entry.version.id === historicalProgramARevision1.version.id) {
+      expect(database.approval_history).toHaveLength(2)
+      expect(database.approval_history).toEqual(expect.arrayContaining([
+        expect.objectContaining({ status: 'cancelled', withdrawal: expect.objectContaining({ reason: 'Synthetic review restart; no operational authorization.' }), withdrawn_validation: expect.objectContaining({ ruleset: 'drillai.program-structure.v2' }) }),
+        expect.objectContaining({ id: entry.version.approval_request_id, status: 'approved' }),
+      ]))
+    }
     const historyRow = database.versions.find((item) => item.id === entry.version.id)
     expect(historyRow).toMatchObject({ id: entry.version.id, state: entry.state, content_hash: entry.version.content_hash })
     expect(database.version.validation_summary).toMatchObject(entry.version.validation_summary)

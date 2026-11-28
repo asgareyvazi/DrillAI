@@ -185,8 +185,11 @@ async def test_production_stub_mode_has_no_llm_and_live_registration_has_no_echo
         policy=RoutingPolicy(max_privacy=PrivacyClass.PRIVATE_CLOUD),
     )
     assert router.route(profile=TaskProfile.SUMMARIZE).spec.model == "frontier-model"
+    from types import SimpleNamespace
+
+    owned_session = SimpleNamespace(info={"drillai_provider_registry": live_registry})
     with pytest.raises(ModelNotConfigured, match="no API key"):
-        await router.complete(_request("Summarise the report."))
+        await router.complete(_request("Summarise the report."), session=owned_session)
 
 
 def test_router_default_privacy_ceiling_uses_bootstrapped_settings():
@@ -358,6 +361,20 @@ async def test_content_capture_is_opt_in(session, scope):
 # --------------------------------------------------------------------------- guardrails
 
 
+def _advisor_with_stub(stub):
+    from types import SimpleNamespace
+
+    from drillai.drilling.advisor import OperationsAdvisor
+
+    registry = ProviderRegistry()
+    router = LlmRouter(registry=registry, policy=RoutingPolicy())
+    router.complete = stub.complete
+    return OperationsAdvisor(
+        session=SimpleNamespace(info={"drillai_provider_registry": registry}),
+        org_id="org_test", llm_router=router,
+    )
+
+
 @pytest.mark.parametrize(
     ("text", "finding_code"),
     [
@@ -373,7 +390,7 @@ async def test_operations_advisor_blocks_ungrounded_or_authoritative_narration(t
     from types import SimpleNamespace
 
     from drillai.ai.providers import CompletionResponse, Usage
-    from drillai.drilling.advisor import AdvisorAnswer, Fact, OperationsAdvisor
+    from drillai.drilling.advisor import AdvisorAnswer, Fact
 
     class StubRouter:
         async def complete(self, request, **kwargs):
@@ -401,7 +418,7 @@ async def test_operations_advisor_blocks_ungrounded_or_authoritative_narration(t
             )
         ],
     )
-    advisor = OperationsAdvisor(session=None, org_id="org_test", llm_router=StubRouter())
+    advisor = _advisor_with_stub(StubRouter())
     narration = await advisor._narrate(answer)
 
     assert narration is not None
@@ -415,7 +432,7 @@ async def test_operations_advisor_allows_only_an_exact_source_statement():
     from types import SimpleNamespace
 
     from drillai.ai.providers import CompletionResponse, Usage
-    from drillai.drilling.advisor import AdvisorAnswer, Fact, OperationsAdvisor
+    from drillai.drilling.advisor import AdvisorAnswer, Fact
 
     statement = "Recorded mud weight is 12.4 ppg"
 
@@ -448,9 +465,7 @@ async def test_operations_advisor_allows_only_an_exact_source_statement():
             )
         ],
     )
-    narration = await OperationsAdvisor(
-        session=None, org_id="org_test", llm_router=StubRouter()
-    )._narrate(answer)
+    narration = await _advisor_with_stub(StubRouter())._narrate(answer)
 
     assert narration is not None
     assert narration["status"] == "generated"
@@ -463,7 +478,7 @@ async def test_operations_advisor_preserves_unicode_exact_match_and_rejects_unma
     from types import SimpleNamespace
 
     from drillai.ai.providers import CompletionResponse, Usage
-    from drillai.drilling.advisor import AdvisorAnswer, Fact, OperationsAdvisor
+    from drillai.drilling.advisor import AdvisorAnswer, Fact
 
     source_statement = "وزن گل ثبت نشده است"
 
@@ -501,12 +516,8 @@ async def test_operations_advisor_preserves_unicode_exact_match_and_rejects_unma
         unknown=[{"key": "mud_weight", "statement": source_statement}],
     )
 
-    exact = await OperationsAdvisor(
-        session=None, org_id="org_test", llm_router=StubRouter(source_statement)
-    )._narrate(answer)
-    unmatched = await OperationsAdvisor(
-        session=None, org_id="org_test", llm_router=StubRouter("این ادعا پشتیبانی نشده است")
-    )._narrate(answer)
+    exact = await _advisor_with_stub(StubRouter(source_statement))._narrate(answer)
+    unmatched = await _advisor_with_stub(StubRouter("این ادعا پشتیبانی نشده است"))._narrate(answer)
 
     assert exact is not None and exact["status"] == "generated"
     assert unmatched is not None and unmatched["status"] == "blocked_by_guardrail"
