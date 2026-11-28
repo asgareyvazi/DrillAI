@@ -1,0 +1,8 @@
+...                                                                      [100%]
+=============================== warnings summary ===============================
+tests/api/test_engineering_products_api.py::test_postgres_review_then_competing_withdrawal_preserves_history
+  /tmp/drillai-m18.4oUuWMQA/venv/lib/python3.11/site-packages/platformdirs/api.py:441: RuntimeDirWarning: XDG_RUNTIME_DIR is not set, falling back to /tmp/runtime-1001
+    return Path(self.user_runtime_dir)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+3 passed, 1 warning in 9.07s

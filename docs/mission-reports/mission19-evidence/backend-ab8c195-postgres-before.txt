@@ -1,0 +1,835 @@
+........................................................................ [  3%]
+........................................................................ [  7%]
+........................................................................ [ 10%]
+........................................................................ [ 14%]
+........................................................................ [ 18%]
+...................................................F.................... [ 21%]
+........................................................................ [ 25%]
+........................................................................ [ 28%]
+........................................................................ [ 32%]
+........................................................................ [ 36%]
+........................................................................ [ 39%]
+........................................................................ [ 43%]
+........................................................................ [ 47%]
+........................................................................ [ 50%]
+........................................................................ [ 54%]
+........................................................................ [ 57%]
+........................................................................ [ 61%]
+........................................................................ [ 65%]
+........................................................................ [ 68%]
+........................................................................ [ 72%]
+........................................................................ [ 75%]
+........................................................................ [ 79%]
+........................................................................ [ 83%]
+........................................................................ [ 86%]
+........................................................................ [ 90%]
+........................................................................ [ 94%]
+.........F.............................................................. [ 97%]
+...............................................                          [100%]
+=================================== FAILURES ===================================
+___ test_migration_chain_applies_reverses_and_refuses_duplicates_on_postgres ___
+
+self = <sqlalchemy.dialects.postgresql.asyncpg.AsyncAdapt_asyncpg_cursor object at 0x7fe7b87cc0a0>
+operation = '\nCREATE TABLE agent_runs (\n\tagent_key VARCHAR(120) NOT NULL, \n\tagent_version INTEGER NOT NULL, \n\tstatus VARCHA...LT (CURRENT_TIMESTAMP) NOT NULL, \n\torg_id VARCHAR(64) NOT NULL, \n\tCONSTRAINT pk_agent_runs PRIMARY KEY (id)\n)\n\n'
+parameters = ()
+
+    async def _prepare_and_execute(self, operation, parameters):
+        adapt_connection = self._adapt_connection
+    
+        async with adapt_connection._execute_mutex:
+            if not adapt_connection._started:
+                await adapt_connection._start_transaction()
+    
+            if parameters is None:
+                parameters = ()
+    
+            try:
+                prepared_stmt, attributes = await adapt_connection._prepare(
+                    operation, self._invalidate_schema_cache_asof
+                )
+    
+                if attributes:
+                    self.description = [
+                        (
+                            attr.name,
+                            attr.type.oid,
+                            None,
+                            None,
+                            None,
+                            None,
+                            None,
+                        )
+                        for attr in attributes
+                    ]
+                else:
+                    self.description = None
+    
+                if self.server_side:
+                    self._cursor = await prepared_stmt.cursor(*parameters)
+                    self.rowcount = -1
+                else:
+>                   self._rows = deque(await prepared_stmt.fetch(*parameters))
+                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+/tmp/drillai-m18.4oUuWMQA/venv/lib/python3.11/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:550: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tmp/drillai-m18.4oUuWMQA/venv/lib/python3.11/site-packages/asyncpg/prepared_stmt.py:177: in fetch
+    data = await self.__bind_execute(args, 0, timeout)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/tmp/drillai-m18.4oUuWMQA/venv/lib/python3.11/site-packages/asyncpg/prepared_stmt.py:268: in __bind_execute
+    data, status, _ = await self.__do_execute(
+/tmp/drillai-m18.4oUuWMQA/venv/lib/python3.11/site-packages/asyncpg/prepared_stmt.py:257: in __do_execute
+    return await executor(protocol)
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+>   ???
+E   asyncpg.exceptions.DuplicateTableError: relation "agent_runs" already exists
+
+asyncpg/protocol/protocol.pyx:197: DuplicateTableError
+
+The above exception was the direct cause of the following exception:
+
+self = <sqlalchemy.engine.base.Connection object at 0x7fe7a98f5510>
+dialect = <sqlalchemy.dialects.postgresql.asyncpg.PGDialect_asyncpg object at 0x7fe7a94d72d0>
+context = <sqlalchemy.dialects.postgresql.asyncpg.PGExecutionContext_asyncpg object at 0x7fe7a97030d0>
+statement = <sqlalchemy.dialects.postgresql.base.PGDDLCompiler object at 0x7fe7a9701190>
+parameters = [()]
+
+    def _exec_single_context(
+        self,
+        dialect: Dialect,
+        context: ExecutionContext,
+        statement: Union[str, Compiled],
+        parameters: Optional[_AnyMultiExecuteParams],
+    ) -> CursorResult[Any]:
+        """continue the _execute_context() method for a single DBAPI
+        cursor.execute() or cursor.executemany() call.
+    
+        """
+        if dialect.bind_typing is BindTyping.SETINPUTSIZES:
+            generic_setinputsizes = context._prepare_set_input_sizes()
+    
+            if generic_setinputsizes:
+                try:
+                    dialect.do_set_input_sizes(
+                        context.cursor, generic_setinputsizes, context
+                    )
+                except BaseException as e:
+                    self._handle_dbapi_exception(
+                        e, str(statement), parameters, None, context
+                    )
+    
+        cursor, str_statement, parameters = (
+            context.cursor,
+            context.statement,
+            context.parameters,
+        )
+    
+        effective_parameters: Optional[_AnyExecuteParams]
+    
+        if not context.executemany:
+            effective_parameters = parameters[0]
+        else:
+            effective_parameters = parameters
+    
+        if self._has_events or self.engine._has_events:
+            for fn in self.dispatch.before_cursor_execute:
+                str_statement, effective_parameters = fn(
+                    self,
+                    cursor,
+                    str_statement,
+                    effective_parameters,
+                    context,
+                    context.executemany,
+                )
+    
+        if self._echo:
+            self._log_info(str_statement)
+    
+            stats = context._get_cache_stats()
+    
+            self._log_parameters(
+                effective_parameters, stats, ismulti=context.executemany
+            )
+    
+        evt_handled: bool = False
+        try:
+            if context.execute_style is ExecuteStyle.EXECUTEMANY:
+                effective_parameters = cast(
+                    "_CoreMultiExecuteParams", effective_parameters
+                )
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_executemany:
+                        if fn(
+                            cursor,
+                            str_statement,
+                            effective_parameters,
+                            context,
+                        ):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+                    self.dialect.do_executemany(
+                        cursor,
+                        str_statement,
+                        effective_parameters,
+                        context,
+                    )
+            elif not effective_parameters and context.no_parameters:
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_execute_no_params:
+                        if fn(cursor, str_statement, context):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+                    self.dialect.do_execute_no_params(
+                        cursor, str_statement, context
+                    )
+            else:
+                effective_parameters = cast(
+                    "_CoreSingleExecuteParams", effective_parameters
+                )
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_execute:
+                        if fn(
+                            cursor,
+                            str_statement,
+                            effective_parameters,
+                            context,
+                        ):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+>                   self.dialect.do_execute(
+                        cursor, str_statement, effective_parameters, context
+                    )
+
+/tmp/drillai-m18.4oUuWMQA/venv/lib/python3.11/site-packages/sqlalchemy/engine/base.py:2000: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tmp/drillai-m18.4oUuWMQA/venv/lib/python3.11/site-packages/sqlalchemy/engine/default.py:964: in do_execute
+    cursor.execute(statement, parameters)
+/tmp/drillai-m18.4oUuWMQA/venv/lib/python3.11/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:585: in execute
+    self._adapt_connection.await_(
+/tmp/drillai-m18.4oUuWMQA/venv/lib/python3.11/site-packages/sqlalchemy/util/_concurrency_py3k.py:132: in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/tmp/drillai-m18.4oUuWMQA/venv/lib/python3.11/site-packages/sqlalchemy/util/_concurrency_py3k.py:196: in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+/tmp/drillai-m18.4oUuWMQA/venv/lib/python3.11/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:563: in _prepare_and_execute
+    self._handle_exception(error)
+/tmp/drillai-m18.4oUuWMQA/venv/lib/python3.11/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:513: in _handle_exception
+    self._adapt_connection._handle_exception(error)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <AdaptedConnection <asyncpg.connection.Connection object at 0x7fe7aac53010>>
+error = DuplicateTableError('relation "agent_runs" already exists')
+
+    def _handle_exception(self, error):
+        if self._connection.is_closed():
+            self._transaction = None
+            self._started = False
+    
+        if not isinstance(error, AsyncAdapt_asyncpg_dbapi.Error):
+            exception_mapping = self.dbapi._asyncpg_error_translate
+    
+            for super_ in type(error).__mro__:
+                if super_ in exception_mapping:
+                    translated_error = exception_mapping[super_](
+                        "%s: %s" % (type(error), error)
+                    )
+                    translated_error.pgcode = translated_error.sqlstate = (
+                        getattr(error, "sqlstate", None)
+                    )
+>                   raise translated_error from error
+E                   sqlalchemy.dialects.postgresql.asyncpg.AsyncAdapt_asyncpg_dbapi.ProgrammingError: <class 'asyncpg.exceptions.DuplicateTableError'>: relation "agent_runs" already exists
+
+/tmp/drillai-m18.4oUuWMQA/venv/lib/python3.11/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:797: ProgrammingError
+
+The above exception was the direct cause of the following exception:
+
+postgres_url = 'postgresql+asyncpg://postgres:@/postgres?host=/tmp/drillai-pg-vmo5qcfh'
+
+    @pytest.mark.postgres
+    def test_migration_chain_applies_reverses_and_refuses_duplicates_on_postgres(postgres_url):
+        """Synchronous on purpose: Alembic's environment runs the migrations with ``asyncio.run``, so a
+        migration driven from inside a running event loop cannot work — and neither can the real
+        deployment command, which is the thing being tested."""
+        config = _config(postgres_url)
+    
+        # 1. Fresh database, whole chain.
+>       command.upgrade(config, "head")
+
+tests/db/test_migrations_postgres.py:758: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tmp/drillai-m18.4oUuWMQA/venv/lib/python3.11/site-packages/alembic/command.py:487: in upgrade
+    script.run_env()
+/tmp/drillai-m18.4oUuWMQA/venv/lib/python3.11/site-packages/alembic/script/base.py:550: in run_env
+    util.load_python_file(self.dir, "env.py")
+/tmp/drillai-m18.4oUuWMQA/venv/lib/python3.11/site-packages/alembic/util/pyfiles.py:114: in load_python_file
+    module = load_module_py(module_id, path)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/tmp/drillai-m18.4oUuWMQA/venv/lib/python3.11/site-packages/alembic/util/pyfiles.py:132: in load_module_py
+    spec.loader.exec_module(module)  # type: ignore
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap_external>:940: in exec_module
+    ???
+<frozen importlib._bootstrap>:241: in _call_with_frames_removed
+    ???
+alembic/env.py:105: in <module>
+    run_migrations_online()
+alembic/env.py:99: in run_migrations_online
+    asyncio.run(run_async_migrations())
+/usr/lib/python3.11/asyncio/runners.py:190: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+/usr/lib/python3.11/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/lib/python3.11/asyncio/base_events.py:653: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+alembic/env.py:73: in run_async_migrations
+    await connection.run_sync(do_run_migrations)
+/tmp/drillai-m18.4oUuWMQA/venv/lib/python3.11/site-packages/sqlalchemy/ext/asyncio/engine.py:887: in run_sync
+    return await greenlet_spawn(
+/tmp/drillai-m18.4oUuWMQA/venv/lib/python3.11/site-packages/sqlalchemy/util/_concurrency_py3k.py:203: in greenlet_spawn
+    result = context.switch(value)
+             ^^^^^^^^^^^^^^^^^^^^^
+alembic/env.py:65: in do_run_migrations
+    context.run_migrations()
+<string>:8: in run_migrations
+    ???
+/tmp/drillai-m18.4oUuWMQA/venv/lib/python3.11/site-packages/alembic/runtime/environment.py:970: in run_migrations
+    self.get_context().run_migrations(**kw)
+/tmp/drillai-m18.4oUuWMQA/venv/lib/python3.11/site-packages/alembic/runtime/migration.py:616: in run_migrations
+    step.migration_fn(**kw)
+alembic/versions/6867078e1e32_initial_schema.py:21: in upgrade
+    op.create_table('agent_runs',
+<string>:8: in create_table
+    ???
+<string>:3: in create_table
+    ???
+/tmp/drillai-m18.4oUuWMQA/venv/lib/python3.11/site-packages/alembic/operations/ops.py:1323: in create_table
+    return operations.invoke(op)
+           ^^^^^^^^^^^^^^^^^^^^^
+/tmp/drillai-m18.4oUuWMQA/venv/lib/python3.11/site-packages/alembic/operations/base.py:448: in invoke
+    return fn(self, operation)
+           ^^^^^^^^^^^^^^^^^^^
+/tmp/drillai-m18.4oUuWMQA/venv/lib/python3.11/site-packages/alembic/operations/toimpl.py:139: in create_table
+    operations.impl.create_table(table, **kw)
+/tmp/drillai-m18.4oUuWMQA/venv/lib/python3.11/site-packages/alembic/ddl/impl.py:434: in create_table
+    self._exec(schema.CreateTable(table, **kw))
+/tmp/drillai-m18.4oUuWMQA/venv/lib/python3.11/site-packages/alembic/ddl/impl.py:252: in _exec
+    return conn.execute(construct, params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/tmp/drillai-m18.4oUuWMQA/venv/lib/python3.11/site-packages/sqlalchemy/engine/base.py:1464: in execute
+    return meth(
+/tmp/drillai-m18.4oUuWMQA/venv/lib/python3.11/site-packages/sqlalchemy/sql/ddl.py:188: in _execute_on_connection
+    return connection._execute_ddl(
+/tmp/drillai-m18.4oUuWMQA/venv/lib/python3.11/site-packages/sqlalchemy/engine/base.py:1575: in _execute_ddl
+    ret = self._execute_context(
+/tmp/drillai-m18.4oUuWMQA/venv/lib/python3.11/site-packages/sqlalchemy/engine/base.py:1891: in _execute_context
+    return self._exec_single_context(
+/tmp/drillai-m18.4oUuWMQA/venv/lib/python3.11/site-packages/sqlalchemy/engine/base.py:2019: in _exec_single_context
+    self._handle_dbapi_exception(
+/tmp/drillai-m18.4oUuWMQA/venv/lib/python3.11/site-packages/sqlalchemy/engine/base.py:2381: in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+/tmp/drillai-m18.4oUuWMQA/venv/lib/python3.11/site-packages/sqlalchemy/engine/base.py:2000: in _exec_single_context
+    self.dialect.do_execute(
+/tmp/drillai-m18.4oUuWMQA/venv/lib/python3.11/site-packages/sqlalchemy/engine/default.py:964: in do_execute
+    cursor.execute(statement, parameters)
+/tmp/drillai-m18.4oUuWMQA/venv/lib/python3.11/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:585: in execute
+    self._adapt_connection.await_(
+/tmp/drillai-m18.4oUuWMQA/venv/lib/python3.11/site-packages/sqlalchemy/util/_concurrency_py3k.py:132: in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/tmp/drillai-m18.4oUuWMQA/venv/lib/python3.11/site-packages/sqlalchemy/util/_concurrency_py3k.py:196: in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+/tmp/drillai-m18.4oUuWMQA/venv/lib/python3.11/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:563: in _prepare_and_execute
+    self._handle_exception(error)
+/tmp/drillai-m18.4oUuWMQA/venv/lib/python3.11/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:513: in _handle_exception
+    self._adapt_connection._handle_exception(error)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <AdaptedConnection <asyncpg.connection.Connection object at 0x7fe7aac53010>>
+error = DuplicateTableError('relation "agent_runs" already exists')
+
+    def _handle_exception(self, error):
+        if self._connection.is_closed():
+            self._transaction = None
+            self._started = False
+    
+        if not isinstance(error, AsyncAdapt_asyncpg_dbapi.Error):
+            exception_mapping = self.dbapi._asyncpg_error_translate
+    
+            for super_ in type(error).__mro__:
+                if super_ in exception_mapping:
+                    translated_error = exception_mapping[super_](
+                        "%s: %s" % (type(error), error)
+                    )
+                    translated_error.pgcode = translated_error.sqlstate = (
+                        getattr(error, "sqlstate", None)
+                    )
+>                   raise translated_error from error
+E                   sqlalchemy.exc.ProgrammingError: (sqlalchemy.dialects.postgresql.asyncpg.ProgrammingError) <class 'asyncpg.exceptions.DuplicateTableError'>: relation "agent_runs" already exists
+E                   [SQL: 
+E                   CREATE TABLE agent_runs (
+E                   	agent_key VARCHAR(120) NOT NULL, 
+E                   	agent_version INTEGER NOT NULL, 
+E                   	status VARCHAR(24) NOT NULL, 
+E                   	goal TEXT, 
+E                   	trigger VARCHAR(32) NOT NULL, 
+E                   	project_id VARCHAR(64), 
+E                   	well_id VARCHAR(64), 
+E                   	wellbore_id VARCHAR(64), 
+E                   	inputs JSON NOT NULL, 
+E                   	outputs JSON NOT NULL, 
+E                   	context_refs JSON NOT NULL, 
+E                   	steps JSON NOT NULL, 
+E                   	llm_call_ids JSON NOT NULL, 
+E                   	tool_call_ids JSON NOT NULL, 
+E                   	engine_run_ids JSON NOT NULL, 
+E                   	recommendation_ids JSON NOT NULL, 
+E                   	workflow_run_id VARCHAR(64), 
+E                   	parent_agent_run_id VARCHAR(64), 
+E                   	action_level VARCHAR(8) NOT NULL, 
+E                   	approval_id VARCHAR(64), 
+E                   	started_at TIMESTAMP WITH TIME ZONE NOT NULL, 
+E                   	finished_at TIMESTAMP WITH TIME ZONE, 
+E                   	duration_ms FLOAT, 
+E                   	total_tokens INTEGER, 
+E                   	cost_usd NUMERIC(18, 4), 
+E                   	step_count INTEGER NOT NULL, 
+E                   	error TEXT, 
+E                   	stop_reason VARCHAR(80), 
+E                   	trace_id VARCHAR(64), 
+E                   	initiated_by VARCHAR(64), 
+E                   	attributes JSON NOT NULL, 
+E                   	id VARCHAR(64) NOT NULL, 
+E                   	updated_at TIMESTAMP WITH TIME ZONE DEFAULT (CURRENT_TIMESTAMP) NOT NULL, 
+E                   	created_at TIMESTAMP WITH TIME ZONE DEFAULT (CURRENT_TIMESTAMP) NOT NULL, 
+E                   	org_id VARCHAR(64) NOT NULL, 
+E                   	CONSTRAINT pk_agent_runs PRIMARY KEY (id)
+E                   )
+E                   
+E                   ]
+E                   (Background on this error at: https://sqlalche.me/e/20/f405)
+
+/tmp/drillai-m18.4oUuWMQA/venv/lib/python3.11/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:797: ProgrammingError
+----------------------------- Captured stderr call -----------------------------
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade  -> 6867078e1e32, initial schema
+___ test_cp20_01_pgvector_nearest_neighbor_and_hybrid_retrieval_on_postgres ____
+
+self = <sqlalchemy.dialects.postgresql.asyncpg.AsyncAdapt_asyncpg_cursor object at 0x7fe7abc71ea0>
+operation = '\nCREATE TABLE agent_runs (\n\tagent_key VARCHAR(120) NOT NULL, \n\tagent_version INTEGER NOT NULL, \n\tstatus VARCHA...LT (CURRENT_TIMESTAMP) NOT NULL, \n\torg_id VARCHAR(64) NOT NULL, \n\tCONSTRAINT pk_agent_runs PRIMARY KEY (id)\n)\n\n'
+parameters = ()
+
+    async def _prepare_and_execute(self, operation, parameters):
+        adapt_connection = self._adapt_connection
+    
+        async with adapt_connection._execute_mutex:
+            if not adapt_connection._started:
+                await adapt_connection._start_transaction()
+    
+            if parameters is None:
+                parameters = ()
+    
+            try:
+                prepared_stmt, attributes = await adapt_connection._prepare(
+                    operation, self._invalidate_schema_cache_asof
+                )
+    
+                if attributes:
+                    self.description = [
+                        (
+                            attr.name,
+                            attr.type.oid,
+                            None,
+                            None,
+                            None,
+                            None,
+                            None,
+                        )
+                        for attr in attributes
+                    ]
+                else:
+                    self.description = None
+    
+                if self.server_side:
+                    self._cursor = await prepared_stmt.cursor(*parameters)
+                    self.rowcount = -1
+                else:
+>                   self._rows = deque(await prepared_stmt.fetch(*parameters))
+                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+/tmp/drillai-m18.4oUuWMQA/venv/lib/python3.11/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:550: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tmp/drillai-m18.4oUuWMQA/venv/lib/python3.11/site-packages/asyncpg/prepared_stmt.py:177: in fetch
+    data = await self.__bind_execute(args, 0, timeout)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/tmp/drillai-m18.4oUuWMQA/venv/lib/python3.11/site-packages/asyncpg/prepared_stmt.py:268: in __bind_execute
+    data, status, _ = await self.__do_execute(
+/tmp/drillai-m18.4oUuWMQA/venv/lib/python3.11/site-packages/asyncpg/prepared_stmt.py:257: in __do_execute
+    return await executor(protocol)
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+>   ???
+E   asyncpg.exceptions.DuplicateTableError: relation "agent_runs" already exists
+
+asyncpg/protocol/protocol.pyx:197: DuplicateTableError
+
+The above exception was the direct cause of the following exception:
+
+self = <sqlalchemy.engine.base.Connection object at 0x7fe7ab8df910>
+dialect = <sqlalchemy.dialects.postgresql.asyncpg.PGDialect_asyncpg object at 0x7fe7ba191e90>
+context = <sqlalchemy.dialects.postgresql.asyncpg.PGExecutionContext_asyncpg object at 0x7fe78de2cc50>
+statement = <sqlalchemy.dialects.postgresql.base.PGDDLCompiler object at 0x7fe78de2cad0>
+parameters = [()]
+
+    def _exec_single_context(
+        self,
+        dialect: Dialect,
+        context: ExecutionContext,
+        statement: Union[str, Compiled],
+        parameters: Optional[_AnyMultiExecuteParams],
+    ) -> CursorResult[Any]:
+        """continue the _execute_context() method for a single DBAPI
+        cursor.execute() or cursor.executemany() call.
+    
+        """
+        if dialect.bind_typing is BindTyping.SETINPUTSIZES:
+            generic_setinputsizes = context._prepare_set_input_sizes()
+    
+            if generic_setinputsizes:
+                try:
+                    dialect.do_set_input_sizes(
+                        context.cursor, generic_setinputsizes, context
+                    )
+                except BaseException as e:
+                    self._handle_dbapi_exception(
+                        e, str(statement), parameters, None, context
+                    )
+    
+        cursor, str_statement, parameters = (
+            context.cursor,
+            context.statement,
+            context.parameters,
+        )
+    
+        effective_parameters: Optional[_AnyExecuteParams]
+    
+        if not context.executemany:
+            effective_parameters = parameters[0]
+        else:
+            effective_parameters = parameters
+    
+        if self._has_events or self.engine._has_events:
+            for fn in self.dispatch.before_cursor_execute:
+                str_statement, effective_parameters = fn(
+                    self,
+                    cursor,
+                    str_statement,
+                    effective_parameters,
+                    context,
+                    context.executemany,
+                )
+    
+        if self._echo:
+            self._log_info(str_statement)
+    
+            stats = context._get_cache_stats()
+    
+            self._log_parameters(
+                effective_parameters, stats, ismulti=context.executemany
+            )
+    
+        evt_handled: bool = False
+        try:
+            if context.execute_style is ExecuteStyle.EXECUTEMANY:
+                effective_parameters = cast(
+                    "_CoreMultiExecuteParams", effective_parameters
+                )
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_executemany:
+                        if fn(
+                            cursor,
+                            str_statement,
+                            effective_parameters,
+                            context,
+                        ):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+                    self.dialect.do_executemany(
+                        cursor,
+                        str_statement,
+                        effective_parameters,
+                        context,
+                    )
+            elif not effective_parameters and context.no_parameters:
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_execute_no_params:
+                        if fn(cursor, str_statement, context):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+                    self.dialect.do_execute_no_params(
+                        cursor, str_statement, context
+                    )
+            else:
+                effective_parameters = cast(
+                    "_CoreSingleExecuteParams", effective_parameters
+                )
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_execute:
+                        if fn(
+                            cursor,
+                            str_statement,
+                            effective_parameters,
+                            context,
+                        ):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+>                   self.dialect.do_execute(
+                        cursor, str_statement, effective_parameters, context
+                    )
+
+/tmp/drillai-m18.4oUuWMQA/venv/lib/python3.11/site-packages/sqlalchemy/engine/base.py:2000: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tmp/drillai-m18.4oUuWMQA/venv/lib/python3.11/site-packages/sqlalchemy/engine/default.py:964: in do_execute
+    cursor.execute(statement, parameters)
+/tmp/drillai-m18.4oUuWMQA/venv/lib/python3.11/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:585: in execute
+    self._adapt_connection.await_(
+/tmp/drillai-m18.4oUuWMQA/venv/lib/python3.11/site-packages/sqlalchemy/util/_concurrency_py3k.py:132: in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/tmp/drillai-m18.4oUuWMQA/venv/lib/python3.11/site-packages/sqlalchemy/util/_concurrency_py3k.py:196: in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+/tmp/drillai-m18.4oUuWMQA/venv/lib/python3.11/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:563: in _prepare_and_execute
+    self._handle_exception(error)
+/tmp/drillai-m18.4oUuWMQA/venv/lib/python3.11/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:513: in _handle_exception
+    self._adapt_connection._handle_exception(error)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <AdaptedConnection <asyncpg.connection.Connection object at 0x7fe76d26ad40>>
+error = DuplicateTableError('relation "agent_runs" already exists')
+
+    def _handle_exception(self, error):
+        if self._connection.is_closed():
+            self._transaction = None
+            self._started = False
+    
+        if not isinstance(error, AsyncAdapt_asyncpg_dbapi.Error):
+            exception_mapping = self.dbapi._asyncpg_error_translate
+    
+            for super_ in type(error).__mro__:
+                if super_ in exception_mapping:
+                    translated_error = exception_mapping[super_](
+                        "%s: %s" % (type(error), error)
+                    )
+                    translated_error.pgcode = translated_error.sqlstate = (
+                        getattr(error, "sqlstate", None)
+                    )
+>                   raise translated_error from error
+E                   sqlalchemy.dialects.postgresql.asyncpg.AsyncAdapt_asyncpg_dbapi.ProgrammingError: <class 'asyncpg.exceptions.DuplicateTableError'>: relation "agent_runs" already exists
+
+/tmp/drillai-m18.4oUuWMQA/venv/lib/python3.11/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:797: ProgrammingError
+
+The above exception was the direct cause of the following exception:
+
+postgres_url = 'postgresql+asyncpg://postgres:@/postgres?host=/tmp/drillai-pg-vmo5qcfh'
+
+    @pytest.mark.postgres
+    async def test_cp20_01_pgvector_nearest_neighbor_and_hybrid_retrieval_on_postgres(
+        postgres_url: str,
+    ) -> None:
+        """Verify real PostgreSQL pgvector (<=> cosine distance) semantic and hybrid retrieval,
+        tenant/section scope isolation, and graceful lexical fallback."""
+>       await asyncio.to_thread(command.upgrade, _alembic_config(postgres_url), "head")
+
+tests/test_cp20_integration_completeness.py:79: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/lib/python3.11/asyncio/threads.py:25: in to_thread
+    return await loop.run_in_executor(None, func_call)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/lib/python3.11/concurrent/futures/thread.py:58: in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/tmp/drillai-m18.4oUuWMQA/venv/lib/python3.11/site-packages/alembic/command.py:487: in upgrade
+    script.run_env()
+/tmp/drillai-m18.4oUuWMQA/venv/lib/python3.11/site-packages/alembic/script/base.py:550: in run_env
+    util.load_python_file(self.dir, "env.py")
+/tmp/drillai-m18.4oUuWMQA/venv/lib/python3.11/site-packages/alembic/util/pyfiles.py:114: in load_python_file
+    module = load_module_py(module_id, path)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/tmp/drillai-m18.4oUuWMQA/venv/lib/python3.11/site-packages/alembic/util/pyfiles.py:132: in load_module_py
+    spec.loader.exec_module(module)  # type: ignore
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap_external>:940: in exec_module
+    ???
+<frozen importlib._bootstrap>:241: in _call_with_frames_removed
+    ???
+alembic/env.py:105: in <module>
+    run_migrations_online()
+alembic/env.py:99: in run_migrations_online
+    asyncio.run(run_async_migrations())
+/usr/lib/python3.11/asyncio/runners.py:190: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+/usr/lib/python3.11/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/lib/python3.11/asyncio/base_events.py:653: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+alembic/env.py:73: in run_async_migrations
+    await connection.run_sync(do_run_migrations)
+/tmp/drillai-m18.4oUuWMQA/venv/lib/python3.11/site-packages/sqlalchemy/ext/asyncio/engine.py:887: in run_sync
+    return await greenlet_spawn(
+/tmp/drillai-m18.4oUuWMQA/venv/lib/python3.11/site-packages/sqlalchemy/util/_concurrency_py3k.py:203: in greenlet_spawn
+    result = context.switch(value)
+             ^^^^^^^^^^^^^^^^^^^^^
+alembic/env.py:65: in do_run_migrations
+    context.run_migrations()
+<string>:8: in run_migrations
+    ???
+/tmp/drillai-m18.4oUuWMQA/venv/lib/python3.11/site-packages/alembic/runtime/environment.py:970: in run_migrations
+    self.get_context().run_migrations(**kw)
+/tmp/drillai-m18.4oUuWMQA/venv/lib/python3.11/site-packages/alembic/runtime/migration.py:616: in run_migrations
+    step.migration_fn(**kw)
+alembic/versions/6867078e1e32_initial_schema.py:21: in upgrade
+    op.create_table('agent_runs',
+<string>:8: in create_table
+    ???
+<string>:3: in create_table
+    ???
+/tmp/drillai-m18.4oUuWMQA/venv/lib/python3.11/site-packages/alembic/operations/ops.py:1323: in create_table
+    return operations.invoke(op)
+           ^^^^^^^^^^^^^^^^^^^^^
+/tmp/drillai-m18.4oUuWMQA/venv/lib/python3.11/site-packages/alembic/operations/base.py:448: in invoke
+    return fn(self, operation)
+           ^^^^^^^^^^^^^^^^^^^
+/tmp/drillai-m18.4oUuWMQA/venv/lib/python3.11/site-packages/alembic/operations/toimpl.py:139: in create_table
+    operations.impl.create_table(table, **kw)
+/tmp/drillai-m18.4oUuWMQA/venv/lib/python3.11/site-packages/alembic/ddl/impl.py:434: in create_table
+    self._exec(schema.CreateTable(table, **kw))
+/tmp/drillai-m18.4oUuWMQA/venv/lib/python3.11/site-packages/alembic/ddl/impl.py:252: in _exec
+    return conn.execute(construct, params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/tmp/drillai-m18.4oUuWMQA/venv/lib/python3.11/site-packages/sqlalchemy/engine/base.py:1464: in execute
+    return meth(
+/tmp/drillai-m18.4oUuWMQA/venv/lib/python3.11/site-packages/sqlalchemy/sql/ddl.py:188: in _execute_on_connection
+    return connection._execute_ddl(
+/tmp/drillai-m18.4oUuWMQA/venv/lib/python3.11/site-packages/sqlalchemy/engine/base.py:1575: in _execute_ddl
+    ret = self._execute_context(
+/tmp/drillai-m18.4oUuWMQA/venv/lib/python3.11/site-packages/sqlalchemy/engine/base.py:1891: in _execute_context
+    return self._exec_single_context(
+/tmp/drillai-m18.4oUuWMQA/venv/lib/python3.11/site-packages/sqlalchemy/engine/base.py:2019: in _exec_single_context
+    self._handle_dbapi_exception(
+/tmp/drillai-m18.4oUuWMQA/venv/lib/python3.11/site-packages/sqlalchemy/engine/base.py:2381: in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+/tmp/drillai-m18.4oUuWMQA/venv/lib/python3.11/site-packages/sqlalchemy/engine/base.py:2000: in _exec_single_context
+    self.dialect.do_execute(
+/tmp/drillai-m18.4oUuWMQA/venv/lib/python3.11/site-packages/sqlalchemy/engine/default.py:964: in do_execute
+    cursor.execute(statement, parameters)
+/tmp/drillai-m18.4oUuWMQA/venv/lib/python3.11/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:585: in execute
+    self._adapt_connection.await_(
+/tmp/drillai-m18.4oUuWMQA/venv/lib/python3.11/site-packages/sqlalchemy/util/_concurrency_py3k.py:132: in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/tmp/drillai-m18.4oUuWMQA/venv/lib/python3.11/site-packages/sqlalchemy/util/_concurrency_py3k.py:196: in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+/tmp/drillai-m18.4oUuWMQA/venv/lib/python3.11/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:563: in _prepare_and_execute
+    self._handle_exception(error)
+/tmp/drillai-m18.4oUuWMQA/venv/lib/python3.11/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:513: in _handle_exception
+    self._adapt_connection._handle_exception(error)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <AdaptedConnection <asyncpg.connection.Connection object at 0x7fe76d26ad40>>
+error = DuplicateTableError('relation "agent_runs" already exists')
+
+    def _handle_exception(self, error):
+        if self._connection.is_closed():
+            self._transaction = None
+            self._started = False
+    
+        if not isinstance(error, AsyncAdapt_asyncpg_dbapi.Error):
+            exception_mapping = self.dbapi._asyncpg_error_translate
+    
+            for super_ in type(error).__mro__:
+                if super_ in exception_mapping:
+                    translated_error = exception_mapping[super_](
+                        "%s: %s" % (type(error), error)
+                    )
+                    translated_error.pgcode = translated_error.sqlstate = (
+                        getattr(error, "sqlstate", None)
+                    )
+>                   raise translated_error from error
+E                   sqlalchemy.exc.ProgrammingError: (sqlalchemy.dialects.postgresql.asyncpg.ProgrammingError) <class 'asyncpg.exceptions.DuplicateTableError'>: relation "agent_runs" already exists
+E                   [SQL: 
+E                   CREATE TABLE agent_runs (
+E                   	agent_key VARCHAR(120) NOT NULL, 
+E                   	agent_version INTEGER NOT NULL, 
+E                   	status VARCHAR(24) NOT NULL, 
+E                   	goal TEXT, 
+E                   	trigger VARCHAR(32) NOT NULL, 
+E                   	project_id VARCHAR(64), 
+E                   	well_id VARCHAR(64), 
+E                   	wellbore_id VARCHAR(64), 
+E                   	inputs JSON NOT NULL, 
+E                   	outputs JSON NOT NULL, 
+E                   	context_refs JSON NOT NULL, 
+E                   	steps JSON NOT NULL, 
+E                   	llm_call_ids JSON NOT NULL, 
+E                   	tool_call_ids JSON NOT NULL, 
+E                   	engine_run_ids JSON NOT NULL, 
+E                   	recommendation_ids JSON NOT NULL, 
+E                   	workflow_run_id VARCHAR(64), 
+E                   	parent_agent_run_id VARCHAR(64), 
+E                   	action_level VARCHAR(8) NOT NULL, 
+E                   	approval_id VARCHAR(64), 
+E                   	started_at TIMESTAMP WITH TIME ZONE NOT NULL, 
+E                   	finished_at TIMESTAMP WITH TIME ZONE, 
+E                   	duration_ms FLOAT, 
+E                   	total_tokens INTEGER, 
+E                   	cost_usd NUMERIC(18, 4), 
+E                   	step_count INTEGER NOT NULL, 
+E                   	error TEXT, 
+E                   	stop_reason VARCHAR(80), 
+E                   	trace_id VARCHAR(64), 
+E                   	initiated_by VARCHAR(64), 
+E                   	attributes JSON NOT NULL, 
+E                   	id VARCHAR(64) NOT NULL, 
+E                   	updated_at TIMESTAMP WITH TIME ZONE DEFAULT (CURRENT_TIMESTAMP) NOT NULL, 
+E                   	created_at TIMESTAMP WITH TIME ZONE DEFAULT (CURRENT_TIMESTAMP) NOT NULL, 
+E                   	org_id VARCHAR(64) NOT NULL, 
+E                   	CONSTRAINT pk_agent_runs PRIMARY KEY (id)
+E                   )
+E                   
+E                   ]
+E                   (Background on this error at: https://sqlalche.me/e/20/f405)
+
+/tmp/drillai-m18.4oUuWMQA/venv/lib/python3.11/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:797: ProgrammingError
+----------------------------- Captured stderr call -----------------------------
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade  -> 6867078e1e32, initial schema
+=============================== warnings summary ===============================
+tests/api/test_engineering_products_api.py::test_postgres_review_then_competing_withdrawal_preserves_history
+  /tmp/drillai-m18.4oUuWMQA/venv/lib/python3.11/site-packages/platformdirs/api.py:441: RuntimeDirWarning: XDG_RUNTIME_DIR is not set, falling back to /tmp/runtime-1001
+    return Path(self.user_runtime_dir)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/db/test_migrations_postgres.py::test_migration_chain_applies_reverses_and_refuses_duplicates_on_postgres
+FAILED tests/test_cp20_integration_completeness.py::test_cp20_01_pgvector_nearest_neighbor_and_hybrid_retrieval_on_postgres
+2 failed, 1989 passed, 1 warning in 493.29s (0:08:13)

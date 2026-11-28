@@ -749,8 +749,22 @@ async def test_withdrawal_preserves_review_committed_after_approval_read(client,
         assert approval.request_payload["withdrawal"]["reason"] == "Retry after concurrent review."
 
 
+@pytest.fixture
+def isolated_program_postgres_url(postgres_url, tmp_path):
+    """A separate disposable server prevents this create_all test contaminating migration tests."""
+    import pgserver
+
+    data_dir = tmp_path / "program-postgres"
+    data_dir.mkdir()
+    server = pgserver.get_server(str(data_dir))
+    try:
+        yield server.get_uri().replace("postgresql://", "postgresql+asyncpg://")
+    finally:
+        server.cleanup()
+
+
 @pytest.mark.postgres
-async def test_postgres_review_then_competing_withdrawal_preserves_history(postgres_url, monkeypatch):
+async def test_postgres_review_then_competing_withdrawal_preserves_history(isolated_program_postgres_url, monkeypatch):
     """Exercise row locks with separate real HTTP transactions on PostgreSQL."""
     from contextvars import ContextVar
 
@@ -762,7 +776,7 @@ async def test_postgres_review_then_competing_withdrawal_preserves_history(postg
     from drillai.engineering.service import EngineeringProductService
 
     settings = Settings(_env_file=None, environment="test", auth_enabled=False,
-                        database_url=postgres_url, blob_backend="memory", scheduler_enabled=False)
+                        database_url=isolated_program_postgres_url, blob_backend="memory", scheduler_enabled=False)
     app = create_app(settings)
     app.state.catalogues = _warm_registries()
     await app.state.database.create_all()

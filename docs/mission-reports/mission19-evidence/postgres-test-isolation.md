@@ -1,0 +1,7 @@
+# PostgreSQL suite regression and isolation fix
+
+The complete PostgreSQL-enabled local suite on `ab8c195` failed with 1,989 passed and two failures: migration and pgvector tests attempted initial Alembic migration into a schema already populated by the preceding Mission 19 HTTP concurrency test. The same two node IDs and exception class were reported by exact-SHA CI run 46147580577. The concurrency test used `create_all()` on the session-scoped embedded PostgreSQL server without removing its tables. Its earlier isolated test run was not sufficient to detect suite-order contamination.
+
+The test now creates a separate disposable embedded PostgreSQL server for the HTTP concurrency scenario, with cleanup in a fixture finalizer; it does not alter any user database. Running the concurrency test followed by both formerly failing migration/pgvector tests passed 3/3 (`postgres-isolation-after.txt`). The complete failing suite log is preserved in `backend-ab8c195-postgres-before.txt`; a full suite and fresh exact-SHA CI are still required for the changed commit.
+
+At `ab8c195`, the full default SQLite suite passed 1,975 with 16 PostgreSQL skips, and the inventory verifier accepted the counts. Exact-SHA CI deployment-image OCR failed on the frozen corpus: 308/384 critical fields, Persian 118/192, table 50/96 and two-column 82/96. GitHub check-run annotations are retained as `ci-ab8c195-failure-annotations.json`; they are not the unavailable full job artifact. This was not a passing certification.
