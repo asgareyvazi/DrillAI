@@ -1,0 +1,127 @@
+........................................................................ [  3%]
+........................................................................ [  7%]
+........................................................................ [ 10%]
+......s................................................................. [ 14%]
+........................................................................ [ 18%]
+..........................................s........s..................ss [ 21%]
+s...................s............ss..................................... [ 25%]
+........................................................................ [ 28%]
+................s....................................................... [ 32%]
+........................................................................ [ 36%]
+........................................................................ [ 39%]
+........................................................................ [ 43%]
+........................................................................ [ 47%]
+........................................................................ [ 50%]
+........................................................................ [ 54%]
+........................................................................ [ 57%]
+........................................................................ [ 61%]
+........................................................................ [ 65%]
+.................................F...................................... [ 68%]
+........................................................................ [ 72%]
+........................................................................ [ 76%]
+........................................................................ [ 79%]
+........................................................................ [ 83%]
+...s............................s..............s.....................s.. [ 86%]
+........................................................................ [ 90%]
+........................................................................ [ 94%]
+.........s.............................................................. [ 97%]
+...s.......................................                              [100%]
+=================================== FAILURES ===================================
+________ test_cp24_04_github_actions_sha_pinning_and_supply_chain_gate _________
+
+    def test_cp24_04_github_actions_sha_pinning_and_supply_chain_gate() -> None:
+        """Verifies GitHub Actions SHA pinning, secret scan, and SECURITY.md via verify_supply_chain_and_secrets.py."""
+        script_path = REPO_ROOT / "scripts" / "verify_supply_chain_and_secrets.py"
+        spec = importlib.util.spec_from_file_location("verify_supply_chain_and_secrets", script_path)
+        assert spec is not None and spec.loader is not None
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+    
+        pinned = mod.verify_workflow_sha_pinning()
+        assert len(pinned) >= 8
+>       scanned = mod.verify_no_leaked_secrets()
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/security/test_cp24_deployment_and_supply_chain.py:116: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../scripts/verify_supply_chain_and_secrets.py:86: in verify_no_leaked_secrets
+    tracked_and_unignored = subprocess.run(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+input = None, capture_output = True, timeout = None, check = True
+popenargs = (['git', 'ls-files', '--cached', '--others', '--exclude-standard'],)
+kwargs = {'cwd': '/tmp/drillai-m19.Um3wHsUn/committed-d76cc89', 'text': True, 'stdout': -1, 'stderr': -1}
+
+    def run(*popenargs,
+            input=None, capture_output=False, timeout=None, check=False, **kwargs):
+        """Run command with arguments and return a CompletedProcess instance.
+    
+        The returned instance will have attributes args, returncode, stdout and
+        stderr. By default, stdout and stderr are not captured, and those attributes
+        will be None. Pass stdout=PIPE and/or stderr=PIPE in order to capture them,
+        or pass capture_output=True to capture both.
+    
+        If check is True and the exit code was non-zero, it raises a
+        CalledProcessError. The CalledProcessError object will have the return code
+        in the returncode attribute, and output & stderr attributes if those streams
+        were captured.
+    
+        If timeout is given, and the process takes too long, a TimeoutExpired
+        exception will be raised.
+    
+        There is an optional argument "input", allowing you to
+        pass bytes or a string to the subprocess's stdin.  If you use this argument
+        you may not also use the Popen constructor's "stdin" argument, as
+        it will be used internally.
+    
+        By default, all communication is in bytes, and therefore any "input" should
+        be bytes, and the stdout and stderr will be bytes. If in text mode, any
+        "input" should be a string, and stdout and stderr will be strings decoded
+        according to locale encoding, or by "encoding" if set. Text mode is
+        triggered by setting any of text, encoding, errors or universal_newlines.
+    
+        The other arguments are the same as for the Popen constructor.
+        """
+        if input is not None:
+            if kwargs.get('stdin') is not None:
+                raise ValueError('stdin and input arguments may not both be used.')
+            kwargs['stdin'] = PIPE
+    
+        if capture_output:
+            if kwargs.get('stdout') is not None or kwargs.get('stderr') is not None:
+                raise ValueError('stdout and stderr arguments may not be used '
+                                 'with capture_output.')
+            kwargs['stdout'] = PIPE
+            kwargs['stderr'] = PIPE
+    
+        with Popen(*popenargs, **kwargs) as process:
+            try:
+                stdout, stderr = process.communicate(input, timeout=timeout)
+            except TimeoutExpired as exc:
+                process.kill()
+                if _mswindows:
+                    # Windows accumulates the output in a single blocking
+                    # read() call run on child threads, with the timeout
+                    # being done in a join() on those threads.  communicate()
+                    # _after_ kill() is required to collect that and add it
+                    # to the exception.
+                    exc.stdout, exc.stderr = process.communicate()
+                else:
+                    # POSIX _communicate already populated the output so
+                    # far into the TimeoutExpired exception.
+                    process.wait()
+                raise
+            except:  # Including KeyboardInterrupt, communicate handled that.
+                process.kill()
+                # We don't call process.wait() as .__exit__ does that for us.
+                raise
+            retcode = process.poll()
+            if check and retcode:
+>               raise CalledProcessError(retcode, process.args,
+                                         output=stdout, stderr=stderr)
+E               subprocess.CalledProcessError: Command '['git', 'ls-files', '--cached', '--others', '--exclude-standard']' returned non-zero exit status 128.
+
+/usr/lib/python3.11/subprocess.py:571: CalledProcessError
+=========================== short test summary info ============================
+FAILED tests/security/test_cp24_deployment_and_supply_chain.py::test_cp24_04_github_actions_sha_pinning_and_supply_chain_gate
+1 failed, 1970 passed, 16 skipped in 454.71s (0:07:34)
