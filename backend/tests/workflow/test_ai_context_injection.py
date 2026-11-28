@@ -15,7 +15,7 @@ from drillai.workflow.nodes import AiCompleteConfig, NodeContext, _ai_complete
 @pytest.mark.asyncio
 async def test_ai_node_reports_unavailable_instead_of_synthesizing_when_no_provider_is_registered():
     from drillai.ai.providers import ProviderRegistry
-    from drillai.ai.router import LlmRouter
+    from drillai.ai.router import LlmRouter, RoutingPolicy
 
     context = NodeContext(
         session=None,
@@ -27,7 +27,7 @@ async def test_ai_node_reports_unavailable_instead_of_synthesizing_when_no_provi
         inputs={},
         variables={"context_prompt": "A report records 12.4 ppg."},
         node_outputs={},
-        services={"llm_router": LlmRouter(registry=ProviderRegistry())},
+        services={"llm_router": LlmRouter(registry=ProviderRegistry(), policy=RoutingPolicy())},
     )
 
     with pytest.raises(NodeExecutionFailed, match="no LLM provider available"):

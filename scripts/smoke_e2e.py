@@ -18,11 +18,12 @@ import traceback
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from drillai.ai.providers import ChatMessage, CompletionRequest
+from drillai.ai.providers import ChatMessage, CompletionRequest, ProviderRegistry, bootstrap_default_providers
 from drillai.ai.router import LlmRouter, TaskProfile
 from drillai.ai.tools import ToolContext, invoke_tool
 from drillai.context.builder import default_context_builder
 from drillai.context.model import ContextPurpose, ContextRequest, ContextScope
+from drillai.core.config import Settings
 from drillai.db.models import (
     Base,
     EvidenceLink,
@@ -56,9 +57,12 @@ async def main() -> None:
     engine = create_async_engine("sqlite+aiosqlite:///:memory:")
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    factory = async_sessionmaker(bind=engine, expire_on_commit=False)
+    factory = async_sessionmaker(bind=engine, expire_on_commit=False, autoflush=False)
 
     async with factory() as session:
+        registry = ProviderRegistry()
+        bootstrap_default_providers(registry=registry, settings=Settings(_env_file=None, environment="test", llm_provider="stub"))
+        session.info["drillai_provider_registry"] = registry
         org = Organization(slug="smoke", name="Smoke Co")
         session.add(org)
         await session.flush()
@@ -152,15 +156,15 @@ async def main() -> None:
             tool_context,
             {"engine_key": "trajectory.minimum_curvature", "inputs": {
                 "stations": [
-                    {"md_si": 0.0, "inclination_deg": 0.0, "azimuth_deg": 0.0},
-                    {"md_si": 1000.0, "inclination_deg": 0.0, "azimuth_deg": 0.0},
+                    {"md_si": 0.0, "inclination_deg": 0.0, "azimuth_deg": 0.0, "azimuth_reference": "grid", "azimuth_reference_id": "synthetic-grid"},
+                    {"md_si": 1000.0, "inclination_deg": 0.0, "azimuth_deg": 0.0, "azimuth_reference": "grid", "azimuth_reference_id": "synthetic-grid"},
                 ]
             }},
         )
         check("tools: run_engine executed", engine_result.status == "succeeded", engine_result.output.get("engine_key", ""))
 
         # ---------------------------------------------------------------- llm router
-        router = LlmRouter()
+        router = LlmRouter(registry=registry)
         response, decision = await router.complete(
             CompletionRequest(messages=[ChatMessage(role="user", content="Summarise: md = 1000 m")]),
             session=session,
@@ -186,9 +190,9 @@ async def main() -> None:
                         "engine_key": "trajectory.minimum_curvature",
                         "inputs": {
                             "stations": [
-                                {"md_si": 0.0, "inclination_deg": 0.0, "azimuth_deg": 0.0},
-                                {"md_si": 1000.0, "inclination_deg": 0.0, "azimuth_deg": 0.0},
-                                {"md_si": 1300.0, "inclination_deg": 30.0, "azimuth_deg": 0.0},
+                                {"md_si": 0.0, "inclination_deg": 0.0, "azimuth_deg": 0.0, "azimuth_reference": "grid", "azimuth_reference_id": "synthetic-grid"},
+                                {"md_si": 1000.0, "inclination_deg": 0.0, "azimuth_deg": 0.0, "azimuth_reference": "grid", "azimuth_reference_id": "synthetic-grid"},
+                                {"md_si": 1300.0, "inclination_deg": 30.0, "azimuth_deg": 0.0, "azimuth_reference": "grid", "azimuth_reference_id": "synthetic-grid"},
                             ]
                         },
                     },

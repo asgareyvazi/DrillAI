@@ -32,7 +32,7 @@ from drillai.ai.providers import (
     PrivacyClass,
     ProviderRegistry,
     bootstrap_default_providers,
-    provider_registry,
+    registry_for_session,
 )
 from drillai.ai.router import LlmRouter, RoutingPolicy, TaskProfile
 from drillai.ai.tools import ToolContext, invoke_tool, register_tool, registered_tools, tool_schemas_for_llm
@@ -119,8 +119,12 @@ def test_registry_rejects_duplicate_providers_and_reports_models():
         registry.get("not-configured")
 
 
-def test_default_registry_ships_the_offline_provider():
-    assert "echo" in provider_registry().providers()
+def test_explicit_development_registry_ships_the_offline_provider():
+    from drillai.core.config import Settings
+
+    registry = ProviderRegistry()
+    bootstrap_default_providers(registry=registry, settings=Settings(_env_file=None, environment="test", llm_provider="stub"))
+    assert "echo" in registry.providers()
 
 
 def test_provider_bootstrap_uses_configured_stub_and_deterministic_embedding_modes():
@@ -313,7 +317,7 @@ async def test_completion_is_audited_with_cost_latency_and_routing(session, scop
 
     from drillai.db.models import LlmCall
 
-    router = LlmRouter()
+    router = LlmRouter(registry=registry_for_session(session))
     response, decision = await router.complete(
         _request("mud_weight = 12.4 ppg"),
         session=session,
@@ -340,7 +344,7 @@ async def test_content_capture_is_opt_in(session, scope):
 
     from drillai.db.models import LlmCall
 
-    router = LlmRouter()
+    router = LlmRouter(registry=registry_for_session(session))
     await router.complete(
         _request("mud_weight = 12.4 ppg", metadata={"capture_content": True}),
         session=session,

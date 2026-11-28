@@ -1,0 +1,17 @@
+# Mission 17 — interim report
+
+**Verdict: NOT_ACCEPTED.** This is a limited security increment, not completion of the 54-phase mission. The required comprehensive ledger, engineering and historical inventories, golden results, roadmap, expanded pilot and final certification remain outstanding. In particular, field qualification is `BLOCKED_BY_MISSING_AUTHORIZED_EVIDENCE`.
+
+## Security increment
+
+Removed the process-global provider registry, its public accessor and import-time bootstrap. Bootstrap now requires an explicit registry and settings; router construction without a registry fails closed, and without a registry privacy ceiling requires an explicit policy. A bootstrapped registry's privacy ceiling limits explicit routing policies and is rechecked at route time. Standalone and test callers now provide registry ownership. These changes are **PARTIAL**, not a claim of complete app/tenant/provider isolation: custom injected workflow/advisor routers, deployment-wide and layered egress, SMTP/worker isolation and recoverable key rotation still require comprehensive security work.
+
+New security tests first reproduced four failures (missing ownership, missing ceiling, policy above ceiling, implicit bootstrap). Seven tests subsequently passed, including lowered or removed ceilings after router creation. The focused AI/RAG/workflow/provider run passed 123 tests before the last added test; the benchmark ownership and final focused checks passed. The RAG benchmark test now examines the actual session registry rather than substituting an unrelated registry. Ruff and diff checks were run locally.
+
+The first full SQLite backend run had **1 failed, 1,922 passed, 15 skipped**: the documentation contract detected that the new test file changed the inventory. Inventory was updated; the separate full rerun passed **1,924 tests, 15 skipped**. The first failure remains evidence. The standalone smoke initially failed on missing survey reference and, after providing a synthetic grid reference, on the approval path using an autoflush session. The script now uses the production session's `autoflush=False`; the rerun passed, including an intentionally failed outbound node whose error was recorded. That does not prove the approval path is safe under all session configurations.
+
+## Unresolved acceptance
+
+The frozen OCR corpus and thresholds are unchanged. The preceding exact-SHA deployment-image OCR failed; this increment is not evidence of reconstruction, stratum quality, native Windows/Linux containment or a whole-document deadline. Engineering calculations, controlled Programs/Procedures, broad DDR/NPT workflows, two-well scenario, UX, external protocol interoperability, and the requested independent reference/field assurance have not been fully assessed or completed in Mission 17. SQLite smoke/tests are not field validation.
+
+Mission 16's [CI run 46122539281](https://github.com/asgareyvazi/DrillAI/actions/runs/46122539281) is historical and cannot certify a later commit. Mission 17 exact-final-SHA Linux/PostgreSQL, native Windows, deployment image OCR, browser, security and golden jobs must all be independently inspected; no result is asserted here. Private baseline and test logs are retained separately. The nine inherited protected entries matched content/type/mode/size at start but their old historical timestamps differed, cause unknown. The 24 inherited untracked artifacts are retained.

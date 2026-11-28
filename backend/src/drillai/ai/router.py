@@ -31,9 +31,8 @@ from drillai.ai.providers import (
     ModelSpec,
     PrivacyClass,
     ProviderRegistry,
-    provider_registry,
 )
-from drillai.core.errors import ModelNotConfigured, ProviderError
+from drillai.core.errors import ConfigurationError, ModelNotConfigured, ProviderError
 from drillai.core.logging import get_logger, log_context
 from drillai.db.models import LlmCall
 
@@ -111,18 +110,25 @@ class LlmRouter:
         registry: ProviderRegistry | None = None,
         policy: RoutingPolicy | None = None,
     ) -> None:
-        self.registry = registry or provider_registry()
+        if not isinstance(registry, ProviderRegistry):
+            raise ConfigurationError("an explicit application-owned provider registry is required")
+        self.registry = registry
+        ceiling = registry.max_privacy
+        self._requires_ceiling = ceiling is not None
         if policy is None:
-            from drillai.core.config import get_settings
-
-            settings = get_settings()
-            configured_ceiling = self.registry.max_privacy or PrivacyClass(settings.llm_max_privacy)
-            policy = RoutingPolicy(max_privacy=configured_ceiling)
+            if ceiling is None:
+                raise ConfigurationError("provider registry has no configured privacy ceiling")
+            policy = RoutingPolicy(max_privacy=ceiling)
+        if ceiling is not None and not RoutingPolicy(max_privacy=ceiling).allows_privacy(policy.max_privacy):
+            raise ConfigurationError("routing policy cannot exceed the application privacy ceiling")
         self.policy = policy
 
     # ------------------------------------------------------------------ selection
     def route(self, *, profile: TaskProfile, prompt_tokens: int = 0) -> RouteDecision:
         required = _TASK_CAPABILITIES[profile]
+        ceiling = self.registry.max_privacy
+        if self._requires_ceiling and ceiling is None:
+            raise ConfigurationError("application privacy ceiling is no longer configured")
         rationale: list[str] = []
         candidates: list[tuple[ModelSpec, LLMProvider]] = []
         considered: list[str] = []
@@ -136,6 +142,8 @@ class LlmRouter:
                 if not required <= set(spec.capabilities):
                     continue
                 if not self.policy.allows_privacy(spec.privacy):
+                    continue
+                if ceiling is not None and not RoutingPolicy(max_privacy=ceiling).allows_privacy(spec.privacy):
                     continue
                 needed = max(prompt_tokens, self.policy.min_context_tokens)
                 if spec.context_window_tokens < needed:

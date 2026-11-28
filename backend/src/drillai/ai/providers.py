@@ -49,7 +49,7 @@ __all__ = [
     "ProviderRegistry",
     "Usage",
     "deterministic_text_embedding",
-    "provider_registry",
+    "registry_for_session",
 ]
 
 
@@ -596,13 +596,6 @@ class ProviderRegistry:
         return reports
 
 
-_REGISTRY = ProviderRegistry()
-
-
-def provider_registry() -> ProviderRegistry:
-    return _REGISTRY
-
-
 def registry_for_session(session: Any) -> ProviderRegistry:
     """Find the registry explicitly owned by a session's application, or fail closed.
 
@@ -622,8 +615,8 @@ def registry_for_session(session: Any) -> ProviderRegistry:
 
 def bootstrap_default_providers(
     *,
-    registry: ProviderRegistry | None = None,
-    settings: Any | None = None,
+    registry: ProviderRegistry,
+    settings: Any,
 ) -> None:
     """Register only the provider modes explicitly selected by deployment settings.
 
@@ -632,11 +625,12 @@ def bootstrap_default_providers(
     production, ``stub`` means no LLM provider is registered. Embedding configuration is separate:
     deterministic feature hashing is reproducible but is not semantic-quality evidence.
     """
-    if settings is None:
-        from drillai.core.config import get_settings
+    from drillai.core.config import Settings
+    from drillai.core.errors import ConfigurationError
 
-        settings = get_settings()
-    target = registry or _REGISTRY
+    if not isinstance(registry, ProviderRegistry) or not isinstance(settings, Settings):
+        raise ConfigurationError("provider bootstrap requires an explicit registry and application settings")
+    target = registry
     target.clear()
     target.max_privacy = PrivacyClass(settings.llm_max_privacy)
 
@@ -695,6 +689,3 @@ def bootstrap_default_providers(
                 ],
             )
         )
-
-
-bootstrap_default_providers()

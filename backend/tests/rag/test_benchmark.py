@@ -11,23 +11,19 @@ from drillai.rag.benchmark import DATASET_VERSION, _dataset_sha256, evaluate
 
 @pytest.mark.asyncio
 async def test_versioned_synthetic_retrieval_benchmark_scales_modes_scope_and_unknowns(monkeypatch) -> None:
-    from drillai.ai.providers import LLMCapability
+    from drillai.ai.providers import registry_for_session
 
-    class ForbiddenNetworkEmbeddingProvider:
-        name = "benchmark-must-not-call-embedding-provider"
+    checked = []
 
-        def supports(self, capability):
-            return capability is LLMCapability.EMBEDDING
+    def inspect_actual_registry(session):
+        registry = registry_for_session(session)
+        assert not registry.providers(), "benchmark must use an empty offline registry"
+        checked.append(registry)
+        return registry
 
-        async def embed(self, texts):
-            raise AssertionError("offline benchmark must not request embeddings")
-
-    class Registry:
-        def providers(self):
-            return {"sentinel": ForbiddenNetworkEmbeddingProvider()}
-
-    monkeypatch.setattr("drillai.ai.providers.provider_registry", lambda: Registry())
+    monkeypatch.setattr("drillai.ai.providers.registry_for_session", inspect_actual_registry)
     report = await evaluate()
+    assert checked, "semantic retrieval must resolve and check the benchmark registry"
 
     assert report["tool"] == "drillai-rag-benchmark-v4"
     assert report["dataset_classification"] == "synthetic"

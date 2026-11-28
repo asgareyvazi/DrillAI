@@ -27,7 +27,7 @@ from drillai.ai.providers import (
     ProviderRegistry,
     Usage,
     bootstrap_default_providers,
-    provider_registry,
+    registry_for_session,
 )
 from drillai.ai.router import LlmRouter, RouteDecision, RoutingPolicy, TaskProfile
 from drillai.ai.tools import (
@@ -69,9 +69,9 @@ __all__ = [
     "ground_numbers",
     "install_default_tools",
     "invoke_tool",
-    "provider_registry",
     "register_tool",
     "registered_tools",
+    "registry_for_session",
     "require_citations",
     "scan_for_injection",
     "tool_catalogue",
