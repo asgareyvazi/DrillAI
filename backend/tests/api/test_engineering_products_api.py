@@ -583,3 +583,245 @@ async def test_withdrawal_preserves_review_history_and_requires_new_authorizatio
     old_decision = await client.post(path + "/decision", headers=headers("well_manager,drilling_supervisor"),
                                      json={"approval_id": old_id, "decision": "approved", "note": "Stale"})
     assert old_decision.status_code == 409
+
+
+async def _submitted_program_for_transition_test(client):
+    project_id, well_id, wellbore_id, section_id = await _create_well(client, name="Concurrent review")
+    created = await client.post(
+        f"/api/v1/wells/{well_id}/engineering-products",
+        json={"kind": "program", "title": "Synthetic concurrent review", "project_id": project_id,
+              "wellbore_id": wellbore_id, "payload": _program_payload(section_id)},
+        headers=headers("engineer"),
+    )
+    assert created.status_code == 201, created.text
+    artifact, version = created.json()["artifact"], created.json()["version"]
+    path = f"/api/v1/engineering-products/{artifact['id']}/versions/{version['id']}"
+    assert (await client.post(path + "/validate", headers=headers("engineer"))).status_code == 200
+    submitted = await client.post(path + "/submit", headers=headers("drilling_supervisor"))
+    assert submitted.status_code == 202, submitted.text
+    return artifact, version, path, submitted.json()["approval_request"]["id"]
+
+
+@pytest.mark.parametrize("competitor", ["decision", "review", "withdraw"])
+async def test_competing_withdrawal_transitions_keep_one_consistent_record(client, db, competitor):
+    from drillai.db.models import ApprovalRequest, ArtifactVersion
+
+    artifact, version, path, approval_id = await _submitted_program_for_transition_test(client)
+    if competitor == "decision":
+        reviewed = await client.post(path + "/review", headers=headers("well_manager"),
+                                     json={"notes": "Independent synthetic review."})
+        assert reviewed.status_code == 200, reviewed.text
+
+    async def withdraw():
+        return await client.post(path + "/withdraw", headers=headers("drilling_supervisor"),
+                                 json={"reason": "Concurrent synthetic withdrawal."})
+
+    async def competing():
+        if competitor == "decision":
+            return await client.post(path + "/decision", headers=headers("well_manager,drilling_supervisor"),
+                                     json={"approval_id": approval_id, "decision": "approved",
+                                           "note": "Synthetic decision only."})
+        if competitor == "review":
+            return await client.post(path + "/review", headers=headers("well_manager"),
+                                     json={"notes": "Concurrent independent synthetic review."})
+        return await withdraw()
+
+    first, second = await asyncio.gather(withdraw(), competing())
+    async with db.session() as session:
+        actual_artifact = (await session.execute(select(Artifact).where(Artifact.id == artifact["id"]))).scalar_one()
+        actual_version = (await session.execute(select(ArtifactVersion).where(ArtifactVersion.id == version["id"]))).scalar_one()
+        approval = (await session.execute(select(ApprovalRequest).where(ApprovalRequest.id == approval_id))).scalar_one()
+        terminal = list((await session.execute(select(AuditLog).where(
+            AuditLog.org_id == artifact["org_id"], AuditLog.resource_id == version["id"],
+            AuditLog.action.in_(["artifact.withdraw", "artifact.approve"]),
+        ))).scalars().all())
+        assert len(terminal) == 1
+        if approval.status == "cancelled":
+            assert first.status_code == 200 or second.status_code == 200
+            assert actual_artifact.status == actual_version.state == "draft"
+            assert actual_version.reviewed_by is None
+            assert terminal[0].action == "artifact.withdraw"
+            assert approval.request_payload["withdrawal"]["reason"] == "Concurrent synthetic withdrawal."
+            if competitor == "review" and second.status_code == 200:
+                assert approval.request_payload["review"]["notes"] == "Concurrent independent synthetic review."
+        else:
+            assert competitor == "decision"
+            assert approval.status == actual_artifact.status == actual_version.state == "approved"
+            assert terminal[0].action == "artifact.approve"
+        if competitor != "review":
+            assert sorted([first.status_code, second.status_code]) in ([200, 404], [200, 409])
+        else:
+            assert first.status_code == 200 and second.status_code in {200, 409}
+
+
+async def test_withdrawal_rolls_back_every_change_if_audit_fails(client, db, monkeypatch):
+    from drillai.api.routers import engineering_products
+    from drillai.db.models import ApprovalRequest, ArtifactVersion
+
+    artifact, version, path, approval_id = await _submitted_program_for_transition_test(client)
+    reviewed = await client.post(path + "/review", headers=headers("well_manager"),
+                                 json={"notes": "Review retained after failed transaction."})
+    assert reviewed.status_code == 200
+    original_audit = engineering_products._audit
+
+    async def fail_audit(*args, **kwargs):
+        if kwargs.get("action") == "artifact.withdraw":
+            raise RuntimeError("injected audit storage failure")
+        await original_audit(*args, **kwargs)
+
+    monkeypatch.setattr(engineering_products, "_audit", fail_audit)
+    with pytest.raises(RuntimeError, match="injected audit storage failure"):
+        await client.post(path + "/withdraw", headers=headers("drilling_supervisor"),
+                          json={"reason": "Synthetic transaction rollback."})
+    async with db.session() as session:
+        current_artifact = (await session.execute(select(Artifact).where(Artifact.id == artifact["id"]))).scalar_one()
+        current_version = (await session.execute(select(ArtifactVersion).where(ArtifactVersion.id == version["id"]))).scalar_one()
+        approval = (await session.execute(select(ApprovalRequest).where(ApprovalRequest.id == approval_id))).scalar_one()
+        assert current_artifact.status == current_version.state == "in_review"
+        assert current_version.reviewed_by is not None
+        assert approval.status == "pending"
+        assert approval.request_payload["review"]["notes"] == "Review retained after failed transaction."
+        assert "withdrawal" not in approval.request_payload
+        audit = (await session.execute(select(AuditLog).where(
+            AuditLog.org_id == artifact["org_id"], AuditLog.resource_id == version["id"],
+            AuditLog.action == "artifact.withdraw",
+        ))).scalars().all()
+        assert audit == []
+    monkeypatch.setattr(engineering_products, "_audit", original_audit)
+    retried = await client.post(path + "/withdraw", headers=headers("drilling_supervisor"),
+                                json={"reason": "Synthetic retry after rollback."})
+    assert retried.status_code == 200, retried.text
+
+
+async def test_withdrawal_preserves_review_committed_after_approval_read(client, db, monkeypatch):
+    """Force a SQLite race at a real read boundary; do not replace persistence or transition code."""
+    from contextvars import ContextVar
+
+    from drillai.db.models import ApprovalRequest
+    from drillai.engineering.service import EngineeringProductService
+
+    _artifact, _version, path, approval_id = await _submitted_program_for_transition_test(client)
+    original = EngineeringProductService._pending_approval
+    approval_read = asyncio.Event()
+    review_committed = asyncio.Event()
+    is_withdrawal = ContextVar("is_withdrawal", default=False)
+
+    async def interleaved(self, version_id, *, for_update=False):
+        approval = await original(self, version_id, for_update=for_update)
+        if is_withdrawal.get():
+            approval_read.set()
+            await asyncio.wait_for(review_committed.wait(), timeout=10)
+        return approval
+
+    monkeypatch.setattr(EngineeringProductService, "_pending_approval", interleaved)
+
+    async def withdraw_request():
+        token = is_withdrawal.set(True)
+        try:
+            return await client.post(
+                path + "/withdraw", headers=headers("drilling_supervisor"), json={"reason": "Race withdrawal."},
+            )
+        finally:
+            is_withdrawal.reset(token)
+
+    withdrawal = asyncio.create_task(withdraw_request())
+    try:
+        await asyncio.wait_for(approval_read.wait(), timeout=10)
+        reviewed = await client.post(path + "/review", headers=headers("well_manager"),
+                                     json={"notes": "Review committed during withdrawal."})
+        assert reviewed.status_code == 200, reviewed.text
+    finally:
+        review_committed.set()
+    withdrawn = await withdrawal
+    assert withdrawn.status_code == 409, withdrawn.text
+    async with db.session() as session:
+        approval = (await session.execute(select(ApprovalRequest).where(ApprovalRequest.id == approval_id))).scalar_one()
+        assert approval.status == "pending"
+        assert approval.request_payload["review"]["notes"] == "Review committed during withdrawal."
+        assert "withdrawal" not in approval.request_payload
+    retried = await client.post(path + "/withdraw", headers=headers("drilling_supervisor"),
+                                json={"reason": "Retry after concurrent review."})
+    assert retried.status_code == 200, retried.text
+    async with db.session() as session:
+        approval = (await session.execute(select(ApprovalRequest).where(ApprovalRequest.id == approval_id))).scalar_one()
+        assert approval.status == "cancelled"
+        assert approval.request_payload["review"]["notes"] == "Review committed during withdrawal."
+        assert approval.request_payload["withdrawal"]["reason"] == "Retry after concurrent review."
+
+
+@pytest.mark.postgres
+async def test_postgres_review_then_competing_withdrawal_preserves_history(postgres_url, monkeypatch):
+    """Exercise row locks with separate real HTTP transactions on PostgreSQL."""
+    from contextvars import ContextVar
+
+    import httpx
+
+    from drillai.api.app import _warm_registries, create_app
+    from drillai.core.config import Settings
+    from drillai.db.models import ApprovalRequest
+    from drillai.engineering.service import EngineeringProductService
+
+    settings = Settings(_env_file=None, environment="test", auth_enabled=False,
+                        database_url=postgres_url, blob_backend="memory", scheduler_enabled=False)
+    app = create_app(settings)
+    app.state.catalogues = _warm_registries()
+    await app.state.database.create_all()
+    reading = asyncio.Event()
+    withdraw_attempted = asyncio.Event()
+    release_review = asyncio.Event()
+    is_review = ContextVar("pg_review", default=False)
+    is_withdraw = ContextVar("pg_withdraw", default=False)
+    original_pending = EngineeringProductService._pending_approval
+    original_get = EngineeringProductService.get
+
+    async def hold_review(self, version_id, *, for_update=False):
+        approval = await original_pending(self, version_id, for_update=for_update)
+        if is_review.get():
+            reading.set()
+            await asyncio.wait_for(release_review.wait(), timeout=15)
+        return approval
+
+    async def observe_withdraw(self, artifact_id, *, for_update=False):
+        if is_withdraw.get():
+            withdraw_attempted.set()
+        return await original_get(self, artifact_id, for_update=for_update)
+
+    async def scoped_post(http, context, url, **kwargs):
+        token = context.set(True)
+        try:
+            return await http.post(url, **kwargs)
+        finally:
+            context.reset(token)
+
+    try:
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as http:
+            _artifact, _version, path, approval_id = await _submitted_program_for_transition_test(http)
+            monkeypatch.setattr(EngineeringProductService, "_pending_approval", hold_review)
+            monkeypatch.setattr(EngineeringProductService, "get", observe_withdraw)
+            review_task = asyncio.create_task(scoped_post(
+                http, is_review, path + "/review", headers=headers("well_manager"),
+                json={"notes": "PostgreSQL concurrent review."},
+            ))
+            withdraw_task = None
+            try:
+                await asyncio.wait_for(reading.wait(), timeout=15)
+                withdraw_task = asyncio.create_task(scoped_post(
+                    http, is_withdraw, path + "/withdraw", headers=headers("drilling_supervisor"),
+                    json={"reason": "PostgreSQL concurrent withdrawal."},
+                ))
+                await asyncio.wait_for(withdraw_attempted.wait(), timeout=15)
+            finally:
+                release_review.set()
+            review_response = await review_task
+            assert review_response.status_code == 200, review_response.text
+            assert withdraw_task is not None
+            withdrawal = await withdraw_task
+            assert withdrawal.status_code == 200, withdrawal.text
+            async with app.state.database.session() as session:
+                approval = (await session.execute(select(ApprovalRequest).where(ApprovalRequest.id == approval_id))).scalar_one()
+                assert approval.status == "cancelled"
+                assert approval.request_payload["review"]["notes"] == "PostgreSQL concurrent review."
+                assert approval.request_payload["withdrawal"]["reason"] == "PostgreSQL concurrent withdrawal."
+    finally:
+        release_review.set()
+        await app.state.database.dispose()

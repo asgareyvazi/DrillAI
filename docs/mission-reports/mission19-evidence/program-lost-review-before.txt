@@ -1,0 +1,59 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+________ test_withdrawal_preserves_review_committed_after_approval_read ________
+
+client = <httpx.AsyncClient object at 0x7ff1791fae90>
+db = <drillai.db.session.Database object at 0x7ff16a00d990>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7ff178e63190>
+
+    async def test_withdrawal_preserves_review_committed_after_approval_read(client, db, monkeypatch):
+        """Force a SQLite race at a real read boundary; do not replace persistence or transition code."""
+        from contextvars import ContextVar
+    
+        from drillai.db.models import ApprovalRequest
+        from drillai.engineering.service import EngineeringProductService
+    
+        _artifact, _version, path, approval_id = await _submitted_program_for_transition_test(client)
+        original = EngineeringProductService._pending_approval
+        approval_read = asyncio.Event()
+        review_committed = asyncio.Event()
+        is_withdrawal = ContextVar("is_withdrawal", default=False)
+    
+        async def interleaved(self, version_id, *, for_update=False):
+            approval = await original(self, version_id, for_update=for_update)
+            if is_withdrawal.get():
+                approval_read.set()
+                await asyncio.wait_for(review_committed.wait(), timeout=10)
+            return approval
+    
+        monkeypatch.setattr(EngineeringProductService, "_pending_approval", interleaved)
+    
+        async def withdraw_request():
+            token = is_withdrawal.set(True)
+            try:
+                return await client.post(
+                    path + "/withdraw", headers=headers("drilling_supervisor"), json={"reason": "Race withdrawal."},
+                )
+            finally:
+                is_withdrawal.reset(token)
+    
+        withdrawal = asyncio.create_task(withdraw_request())
+        try:
+            await asyncio.wait_for(approval_read.wait(), timeout=10)
+            reviewed = await client.post(path + "/review", headers=headers("well_manager"),
+                                         json={"notes": "Review committed during withdrawal."})
+            assert reviewed.status_code == 200, reviewed.text
+        finally:
+            review_committed.set()
+        withdrawn = await withdrawal
+        assert withdrawn.status_code == 200, withdrawn.text
+        async with db.session() as session:
+            approval = (await session.execute(select(ApprovalRequest).where(ApprovalRequest.id == approval_id))).scalar_one()
+            assert approval.status == "cancelled"
+>           assert approval.request_payload["review"]["notes"] == "Review committed during withdrawal."
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           KeyError: 'review'
+
+backend/tests/api/test_engineering_products_api.py:740: KeyError
+=========================== short test summary info ============================
+FAILED backend/tests/api/test_engineering_products_api.py::test_withdrawal_preserves_review_committed_after_approval_read

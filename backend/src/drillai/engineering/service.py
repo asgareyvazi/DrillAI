@@ -785,7 +785,11 @@ class EngineeringProductService:
         version_update = await self.session.execute(
             update(ArtifactVersion)
             .where(ArtifactVersion.id == version.id, ArtifactVersion.org_id == self.org_id,
-                   ArtifactVersion.artifact_id == artifact.id, ArtifactVersion.state == "in_review")
+                   ArtifactVersion.artifact_id == artifact.id, ArtifactVersion.state == "in_review",
+                   # SQLite ignores SELECT FOR UPDATE. If review committed since our read,
+                   # abort this transaction rather than overwrite its approval history.
+                   ArtifactVersion.reviewed_by == version.reviewed_by,
+                   ArtifactVersion.reviewed_at == version.reviewed_at)
             .values(state="draft", reviewed_by=None, reviewed_at=None, validation_summary=summary)
             .execution_options(synchronize_session=False)
         )

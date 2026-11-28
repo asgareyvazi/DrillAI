@@ -1,0 +1,18 @@
+
+> drillai-frontend@0.1.0 e2e:cp150
+> node scripts/run-e2e.mjs --config=playwright.cp150.config.ts
+
+[WebServer] {"ts": "2026-11-28T12:43:53.575499+00:00", "level": "INFO", "logger": "drillai.api.app", "message": "catalogues loaded", "engines": 16, "agents": 4, "skills": 5, "node_types": 17, "actions": 95, "tools": 3, "context_sections": 21, "extractors": 7}
+[WebServer] 
+[WebServer]   VITE v6.4.5  ready in 167 ms
+[WebServer] 
+[WebServer]   ➜  Local:   http://127.0.0.1:5199/
+
+Running 1 test using 1 worker
+
+[WebServer] {"ts": "2026-11-28T12:44:00.964942+00:00", "level": "INFO", "logger": "drillai.api.app", "message": "daily report 'ddr_01M8H2Y59TKKHT6XZ1KNAETAHC' not found", "request_id": "req_01M8H2Y5J15F739DX425SEK3VN", "http_path": "/api/v1/wells/wel_01M8H2XW21MP9N1ZF7PC7XPQ1X/daily-reports/ddr_01M8H2Y59TKKHT6XZ1KNAETAHC", "http_method": "GET", "code": "platform.not_found", "path": "/api/v1/wells/wel_01M8H2XW21MP9N1ZF7PC7XPQ1X/daily-reports/ddr_01M8H2Y59TKKHT6XZ1KNAETAHC"}
+[WebServer] {"ts": "2026-11-28T12:44:20.013990+00:00", "level": "INFO", "logger": "drillai.api.app", "message": "the linked program belongs to a different well", "request_id": "req_01M8H2YR58HV3H7JEKVXNXXAE4", "http_path": "/api/v1/wells/wel_01M8H2XW21MP9N1ZF7PC7XPQ1X/engineering-products", "http_method": "POST", "code": "platform.validation_failed", "path": "/api/v1/wells/wel_01M8H2XW21MP9N1ZF7PC7XPQ1X/engineering-products"}
+[WebServer] {"ts": "2026-11-28T12:44:23.014054+00:00", "level": "INFO", "logger": "drillai.api.app", "message": "a controlled procedure can link only to an approved drilling-program revision", "request_id": "req_01M8H2YV2VE6RE5AN5FK919KF3", "http_path": "/api/v1/engineering-products/art_01M8H2YDQ049P8P2FR0KK73QPC/versions", "http_method": "POST", "code": "platform.conflict", "path": "/api/v1/engineering-products/art_01M8H2YDQ049P8P2FR0KK73QPC/versions"}
+  ✓  1 [chromium-cp150] › e2e/cp150-two-well-pilot.spec.ts:545:1 › creates scoped synthetic daily reports, versioned programs and controlled procedures across two wells (31.3s)
+
+  1 passed (38.9s)

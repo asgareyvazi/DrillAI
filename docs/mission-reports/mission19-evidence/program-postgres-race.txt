@@ -1,0 +1,27 @@
+============================= test session starts ==============================
+platform linux -- Python 3.11.2, pytest-9.2.0, pluggy-1.7.0
+rootdir: /home/user/DrillAI/backend
+configfile: pyproject.toml
+plugins: platformdirs-4.14.9, anyio-4.16.0, cov-7.1.0, asyncio-1.5.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 1 item
+
+backend/tests/api/test_engineering_products_api.py .                     [100%]
+
+=============================== warnings summary ===============================
+tests/api/test_engineering_products_api.py::test_postgres_review_then_competing_withdrawal_preserves_history
+  /tmp/drillai-m18.4oUuWMQA/venv/lib/python3.11/site-packages/platformdirs/api.py:441: RuntimeDirWarning: XDG_RUNTIME_DIR is not set, falling back to /tmp/runtime-1001
+    return Path(self.user_runtime_dir)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+========================= 1 passed, 1 warning in 3.91s =========================
+--- Logging error ---
+Traceback (most recent call last):
+  File "/usr/lib/python3.11/logging/__init__.py", line 1113, in emit
+    stream.write(msg + self.terminator)
+ValueError: I/O operation on closed file.
+Call stack:
+  File "/tmp/drillai-m18.4oUuWMQA/venv/lib/python3.11/site-packages/pgserver/postgres_server.py", line 206, in _cleanup
+    _logger.info(f"exiting {os.getpid()} remaining {pids=}")
+Message: 'exiting 112920 remaining pids=[]'
+Arguments: ()

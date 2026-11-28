@@ -1,9 +1,10 @@
 {
   "version": 1,
   "backend": {
-    "collected": 1974,
-    "postgres_files": 12,
+    "collected": 1980,
+    "postgres_files": 13,
     "postgres": [
+      "tests/api/test_engineering_products_api.py::test_postgres_review_then_competing_withdrawal_preserves_history",
       "tests/db/test_cp18_postgres_backup_restore.py::test_cp18_01_postgres_logical_backup_restore_and_migration_recovery_drill",
       "tests/db/test_migrations_postgres.py::test_migration_chain_applies_reverses_and_refuses_duplicates_on_postgres",
       "tests/db/test_persistence.py::test_postgres_migration_matches_metadata",
@@ -21,19 +22,19 @@
       "tests/workflow/test_notification_worker.py::test_competing_notification_worker_claims_skip_locked_rows_on_postgres"
     ],
     "default": {
-      "passed": 1959,
-      "skipped": 15,
+      "passed": 1964,
+      "skipped": 16,
       "deselected": 0
     },
     "linux": {
-      "passed": 1974,
+      "passed": 1980,
       "skipped": 0,
       "deselected": 0
     },
     "windows": {
-      "passed": 1958,
+      "passed": 1963,
       "skipped": 1,
-      "deselected": 15,
+      "deselected": 16,
       "expected_skip_path": "tests/ingestion/test_ocr.py",
       "expected_skip_reason": "temporary shebang executables are POSIX-only"
     }
