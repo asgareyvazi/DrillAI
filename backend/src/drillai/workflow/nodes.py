@@ -543,9 +543,8 @@ async def _ai_complete(context: NodeContext, config: BaseModel) -> NodeOutcome:
         validate_json_schema_definition,
         wrap_untrusted_content,
     )
-    from drillai.ai.providers import ChatMessage, CompletionRequest, PrivacyClass, provider_registry
+    from drillai.ai.providers import ChatMessage, CompletionRequest, registry_for_session
     from drillai.ai.router import LlmRouter, RoutingPolicy, TaskProfile
-    from drillai.core.config import get_settings
     from drillai.core.errors import ModelNotConfigured
 
     cfg = AiCompleteConfig.model_validate(config)
@@ -558,14 +557,20 @@ async def _ai_complete(context: NodeContext, config: BaseModel) -> NodeOutcome:
         schema_error = validate_json_schema_definition(cfg.output_schema)
         if schema_error:
             raise NodeExecutionFailed(f"AI node output_schema is invalid: {schema_error}")
-    configured_ceiling = provider_registry().max_privacy or PrivacyClass(get_settings().llm_max_privacy)
-    policy = RoutingPolicy(
-        max_privacy=configured_ceiling,
-        prefer_provider=cfg.provider,
-        prefer_model=cfg.model,
-        require_structured_output=cfg.output_schema is not None,
-    )
-    router = context.services.get("llm_router") or LlmRouter(policy=policy)
+    router = context.services.get("llm_router")
+    if router is None:
+        registry = registry_for_session(context.session)
+        if registry.max_privacy is None:
+            from drillai.core.errors import ConfigurationError
+
+            raise ConfigurationError("application AI privacy ceiling is not configured")
+        policy = RoutingPolicy(
+            max_privacy=registry.max_privacy,
+            prefer_provider=cfg.provider,
+            prefer_model=cfg.model,
+            require_structured_output=cfg.output_schema is not None,
+        )
+        router = LlmRouter(registry=registry, policy=policy)
     grounded_context = context.variable(cfg.context_variable) or ""
     context_guardrails = GuardrailReport()
     model_context = str(grounded_context)

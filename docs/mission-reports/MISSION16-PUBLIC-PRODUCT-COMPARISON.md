@@ -1,0 +1,12 @@
+# Mission 16: preliminary public product comparison
+
+This is a limited review of vendor-published descriptions, not independent product testing or certification of vendor claims. It does not establish feature parity or the quality of either DrillAI or the compared products.
+
+| Product | Publicly described workflow | Implication for DrillAI |
+|---|---|---|
+| Gain.Energy / Upstrima | The vendor describes an agent marketplace for offset analysis, stuck-pipe prevention, end-of-well reporting and well integrity, with multi-agent workflows and ingestion of oilfield documents and WITSML. [2](https://www.businesswire.com/news/home/20260818836212/en/Gain.Energy-Launches-Upstrima-The-Industrys-Premier-AI-Marketplace-for-Automated-Oil-Gas-Engineering) | Govern tenant-scoped retrieval and tool execution, source citations, data lineage and human review. DrillAI's scoped provider improvement is only one dependency, not complete RAG or agent assurance. |
+| Drillmaster | Its public site describes cost control, operational reporting, NPT Pareto analysis and campaign-level comparison. [1](https://drillmaster.ir/) | Reconcile approved NPT with chronology before presenting trustworthy cross-well dashboards; do not equate a chart with approved accounting. |
+| Halliburton Landmark Digital Well Program | The vendor describes integrated planning across offset data, trajectory, casing, torque/drag, hydraulics, time and cost. [2](https://www.halliburton.com/en/webinars/1-click-design-in-digital-well-program-a-new-revolution-in-well-planning) | Prioritize traceable, versioned design inputs and dependency invalidation before automated program generation; the required integrated engineering lifecycle remains incomplete. |
+| SLB DrillPlan | The published product sheet describes a shared planning system, scenario comparison, automated design validation and drilling-program generation using current engineering outputs. [2](https://www.software.slb.com/-/media/software-media-items/software/documents/external/product-sheets/23_di_1681639_ps_drillplan.pdf) | Provide reviewed design revisions, stale-result checks, scenario comparisons and controlled program publication. DrillAI's existing pages and pilot are not evidence of full parity. |
+
+No pricing, interoperability, performance, field accuracy or proprietary algorithm claims were independently verified. Prioritize verifiable engineering provenance and deterministic calculations over unsupported comparisons.

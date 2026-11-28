@@ -664,12 +664,12 @@ async def index_chunk_embeddings(
     provider: Any = None,
 ) -> int:
     """Generate and persist embeddings for `chunks` (and sync to `document_chunk_vectors` on PostgreSQL)."""
-    from drillai.ai.providers import LLMCapability, provider_registry
+    from drillai.ai.providers import LLMCapability, registry_for_session
 
     if not chunks:
         return 0
     if provider is None:
-        reg = provider_registry()
+        reg = registry_for_session(session)
         provider = next(
             (item for item in reg.providers().values() if item.supports(LLMCapability.EMBEDDING)),
             None,
@@ -758,9 +758,9 @@ async def _semantic_scores_with_backend(
     text: str,
 ) -> tuple[list[float], str | None, set[str]]:
     """Score only vectors made by the exact active model and with its exact dimension."""
-    from drillai.ai.providers import LLMCapability, provider_registry
+    from drillai.ai.providers import LLMCapability, registry_for_session
 
-    registry = provider_registry()
+    registry = registry_for_session(session)
     provider = next(
         (item for item in registry.providers().values() if item.supports(LLMCapability.EMBEDDING)),
         None,

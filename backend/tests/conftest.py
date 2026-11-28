@@ -107,6 +107,11 @@ async def pg_engine(postgres_url):
 async def pg_session(pg_engine) -> AsyncSession:
     factory = async_sessionmaker(bind=pg_engine, expire_on_commit=False, autoflush=False)
     async with factory() as sess:
+        from drillai.ai.providers import ProviderRegistry, bootstrap_default_providers
+
+        registry = ProviderRegistry()
+        bootstrap_default_providers(registry=registry)
+        sess.info["drillai_provider_registry"] = registry
         yield sess
 
 
@@ -124,6 +129,11 @@ async def engine():
 async def session(engine) -> AsyncSession:
     factory = async_sessionmaker(bind=engine, expire_on_commit=False, autoflush=False)
     async with factory() as sess:
+        from drillai.ai.providers import ProviderRegistry, bootstrap_default_providers
+
+        registry = ProviderRegistry()
+        bootstrap_default_providers(registry=registry)
+        sess.info["drillai_provider_registry"] = registry
         yield sess
 
 

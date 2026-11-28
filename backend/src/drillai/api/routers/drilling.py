@@ -15,7 +15,7 @@ from fastapi import APIRouter, Depends, Query, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from drillai.ai.providers import ProviderRegistry, provider_registry
+from drillai.ai.providers import registry_for_session
 from drillai.ai.router import LlmRouter
 from drillai.api.deps import AuthContext, OptionalFilter, get_db, require
 from drillai.core.audit import record_audit
@@ -291,8 +291,7 @@ async def ask_advisor(
     router_instance: LlmRouter | None = None
     if payload.use_llm:
         authorize(auth.principal, "rag.search", context={"well_id": well_id})
-        registry: ProviderRegistry = provider_registry()
-        router_instance = LlmRouter(registry=registry)
+        router_instance = LlmRouter(registry=registry_for_session(session))
     # The question is validated against the catalogue here, at the boundary, so a client typo is a
     # 422 naming the valid questions instead of an unhandled domain error surfacing as a 500.
     if payload.question not in ADVISOR_QUESTIONS:

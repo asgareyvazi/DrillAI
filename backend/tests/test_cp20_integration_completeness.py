@@ -34,8 +34,6 @@ from sqlalchemy import select, text
 
 from drillai.ai.providers import (
     DeterministicEmbeddingProvider,
-    bootstrap_default_providers,
-    provider_registry,
 )
 from drillai.db.models import (
     ApprovalRequest,
@@ -81,7 +79,7 @@ async def test_cp20_01_pgvector_nearest_neighbor_and_hybrid_retrieval_on_postgre
     await asyncio.to_thread(command.upgrade, _alembic_config(postgres_url), "head")
 
     db = Database(postgres_url)
-    reg = provider_registry()
+    reg = db.provider_registry
     emb_provider = DeterministicEmbeddingProvider(dimensions=32)
     reg.register(emb_provider, replace=True)
     try:
@@ -265,7 +263,6 @@ async def test_cp20_01_pgvector_nearest_neighbor_and_hybrid_retrieval_on_postgre
             assert fallback_res.hits[0].chunk_id == chk_85_lcm.id
     finally:
         reg._providers.pop(emb_provider.name, None)
-        bootstrap_default_providers()
         await db.dispose()
 
 

@@ -737,6 +737,11 @@ async def evaluate() -> dict[str, Any]:
         async with engine.begin() as connection:
             await connection.run_sync(Base.metadata.create_all)
         async with session_factory() as session:
+            # The synthetic benchmark is deliberately offline: it owns an empty registry and
+            # must never inherit a live provider or credentials from the process.
+            from drillai.ai.providers import ProviderRegistry
+
+            session.info["drillai_provider_registry"] = ProviderRegistry()
             main_org = Organization(id=_MAIN_ORG_ID, slug="rag-benchmark", name="Synthetic RAG benchmark")
             main_project = Project(id=_MAIN_PROJECT_ID, org_id=main_org.id, name="Synthetic benchmark project")
             main_well = Well(id=_MAIN_WELL_ID, org_id=main_org.id, project_id=main_project.id, name="Synthetic well")

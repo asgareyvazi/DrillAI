@@ -197,12 +197,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 await harness.stop()
             await app.state.database.dispose()
 
-    # The provider registry is process-scoped; rebuild it from this deployment's explicit settings
-    # before any route can plan or execute an LLM call. A live mode never retains Echo as fallback.
-    from drillai.ai.providers import bootstrap_default_providers
-
-    bootstrap_default_providers(settings=settings)
-
     # Registries are warmed in the factory, not only in the lifespan: an ASGI app mounted without
     # a lifespan (test clients, worker entry points) must not present an empty catalogue, which
     # would make every action resolve to the fail-closed L4 default.
@@ -224,6 +218,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.settings = settings
     app.state.catalogues = catalogues
     app.state.database = Database(settings=settings)
+    app.state.provider_registry = app.state.database.provider_registry
     # The blob store is process-scoped: a per-request instance would be correct for the
     # filesystem backend and would silently lose every blob for the in-memory one.
     app.state.blob_store = blob_store_from_settings(settings)

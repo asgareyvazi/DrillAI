@@ -47,6 +47,11 @@ class Database:
 
     def __init__(self, url: str | None = None, *, echo: bool | None = None, settings: Settings | None = None) -> None:
         self.settings = settings or get_settings()
+        # Providers belong to this database/application, not to a process-wide registry.
+        from drillai.ai.providers import ProviderRegistry, bootstrap_default_providers
+
+        self.provider_registry = ProviderRegistry()
+        bootstrap_default_providers(registry=self.provider_registry, settings=self.settings)
         resolved_url = url or self.settings.sqlalchemy_url()
         if resolved_url.startswith("sqlite") and ":memory:" not in resolved_url:
             resolved_url = resolved_url.replace("\\", "/")

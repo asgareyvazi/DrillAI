@@ -160,9 +160,7 @@ async def providers(
     request: Request,
     _: Annotated[AuthContext, Depends(require("registry.read"))],
 ) -> dict[str, Any]:
-    from drillai.ai.providers import provider_registry
-
-    registry = provider_registry()
+    registry = request.app.state.provider_registry
     providers = registry.providers()
     return {
         "items": [
@@ -194,6 +192,7 @@ async def providers(
 
 @router.get("/platform/providers/routing", summary="How each task profile routes today")
 async def provider_routing(
+    request: Request,
     _: Annotated[AuthContext, Depends(require("registry.read"))],
 ) -> dict[str, Any]:
     """Show the routing decision per task profile.
@@ -202,10 +201,9 @@ async def provider_routing(
     configured providers — this endpoint reports the decision the router would actually make, not
     the policy nobody runs.
     """
-    from drillai.ai.providers import provider_registry
     from drillai.ai.router import LlmRouter, TaskProfile
 
-    registry = provider_registry()
+    registry = request.app.state.provider_registry
     router_ = LlmRouter(registry=registry)
     items = []
     for profile in TaskProfile:

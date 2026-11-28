@@ -201,11 +201,15 @@ async def test_ai_node_rejects_unsupported_schema_key_before_calling_provider():
 @pytest.mark.asyncio
 async def test_empty_inline_schema_still_requires_structured_output_routing(monkeypatch):
     from drillai.ai import router as router_module
+    from drillai.ai.providers import PrivacyClass, ProviderRegistry
+
+    registry = ProviderRegistry()
+    registry.max_privacy = PrivacyClass.LOCAL
 
     class CapturingRouter:
         policy = None
 
-        def __init__(self, *, policy):
+        def __init__(self, *, registry, policy):
             self.policy = policy
             assert policy.require_structured_output is True
 
@@ -224,7 +228,7 @@ async def test_empty_inline_schema_still_requires_structured_output_routing(monk
 
     monkeypatch.setattr(router_module, "LlmRouter", CapturingRouter)
     context = NodeContext(
-        session=None,
+        session=SimpleNamespace(info={"drillai_provider_registry": registry}),
         org_id="org_test",
         principal=Principal(id="usr_test", max_action_level=ActionLevel.OBSERVE),
         run_id="run_empty_schema",

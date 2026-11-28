@@ -1,0 +1,25 @@
+{
+  "status": "PARTIAL",
+  "scope": "Application-owned AI provider selection on tested routes, workflow node and RAG semantic scoring. Not a complete security audit.",
+  "changes": [
+    "Database owns a provider registry bootstrapped from its explicit settings.",
+    "Provider APIs, advisor and workflow node resolve the owning application/session registry.",
+    "RAG indexing and semantic scoring use a session-owned or explicitly injected registry; unowned session resolution fails closed.",
+    "Offline benchmark explicitly owns an empty provider registry."
+  ],
+  "known_limits": [
+    "Global legacy provider registry remains callable outside the scoped service paths.",
+    "Explicitly injected workflow services remain trusted; worker egress policies and environment-backed settings remain process-scoped.",
+    "Atomic secret rotation, tenant-specific egress and complete app lifecycle isolation not proved."
+  ],
+  "tests": {
+    "pre_fix": "Initial tests 3 failed; first run had an incorrect auth assumption, corrected reproduction still 3 failed.",
+    "focus_first": "116 passed, 1 skipped, 2 failed due unscoped synthetic benchmark and fixture; corrected by explicit registry ownership.",
+    "focus_rerun": "118 passed, 1 PostgreSQL skip.",
+    "new_security": "5 passed, including concurrent two-app HTTP, workflow audit and semantic scoring.",
+    "security_suite": "219 passed.",
+    "reversed_order": "15 passed.",
+    "postgres_subset": "4 passed, 1 runtime-directory warning.",
+    "full_sqlite": "1917 passed, 15 PostgreSQL-only skips in 577.67 seconds."
+  }
+}

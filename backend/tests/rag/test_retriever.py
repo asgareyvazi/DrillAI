@@ -500,7 +500,7 @@ async def test_hybrid_rrf_does_not_return_unmatched_chunks_without_compatible_ve
     provider = OneVectorProvider()
     registry = ProviderRegistry()
     registry.register(provider)
-    monkeypatch.setattr("drillai.ai.providers.provider_registry", lambda: registry)
+    session.info["drillai_provider_registry"] = registry
     chunks = (await session.execute(select(DocumentChunk).order_by(DocumentChunk.created_at))).scalars().all()
     assert len(chunks) >= 2
     target = chunks[0]
@@ -558,7 +558,7 @@ async def test_embedding_provider_failure_reports_the_real_fallback_without_logg
     provider = FailingProvider()
     registry = ProviderRegistry()
     registry.register(provider)
-    monkeypatch.setattr("drillai.ai.providers.provider_registry", lambda: registry)
+    session.info["drillai_provider_registry"] = registry
     chunks = (await session.execute(select(DocumentChunk))).scalars().all()
     for chunk in chunks:
         chunk.embedding = [1.0, 0.0]
@@ -692,7 +692,7 @@ async def test_hybrid_stopword_only_query_uses_semantic_ranking_when_vectors_mat
     provider = QueryEmbeddingProvider()
     registry = ProviderRegistry()
     registry.register(provider)
-    monkeypatch.setattr("drillai.ai.providers.provider_registry", lambda: registry)
+    session.info["drillai_provider_registry"] = registry
     chunks = (await session.execute(select(DocumentChunk))).scalars().all()
     for chunk in chunks:
         chunk.embedding = [1.0, 0.0]
@@ -742,7 +742,7 @@ async def test_stale_embedding_content_fingerprint_is_rejected(corpus, session, 
     provider = QueryEmbeddingProvider()
     registry = ProviderRegistry()
     registry.register(provider)
-    monkeypatch.setattr("drillai.ai.providers.provider_registry", lambda: registry)
+    session.info["drillai_provider_registry"] = registry
     chunks = (await session.execute(select(DocumentChunk))).scalars().all()
     for chunk in chunks:
         old_text = chunk.text
@@ -792,7 +792,7 @@ async def test_semantic_search_never_compares_equal_dimensions_from_different_mo
 
     registry = ProviderRegistry()
     registry.register(QueryEmbeddingProvider())
-    monkeypatch.setattr("drillai.ai.providers.provider_registry", lambda: registry)
+    session.info["drillai_provider_registry"] = registry
 
     class OtherProviderSameModelName:
         name = "different-provider"

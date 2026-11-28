@@ -603,6 +603,23 @@ def provider_registry() -> ProviderRegistry:
     return _REGISTRY
 
 
+def registry_for_session(session: Any) -> ProviderRegistry:
+    """Find the registry explicitly owned by a session's application, or fail closed.
+
+    A non-Database session may explicitly carry its own registry in ``info`` (e.g. a
+    standalone service or test), but never falls back to a process-global provider.
+    """
+    from drillai.core.errors import ConfigurationError
+    from drillai.db.session import Database
+
+    info = getattr(session, "info", {})
+    database = info.get("drillai_database")
+    registry = database.provider_registry if isinstance(database, Database) else info.get("drillai_provider_registry")
+    if not isinstance(registry, ProviderRegistry):
+        raise ConfigurationError("database session has no application-scoped AI provider registry")
+    return registry
+
+
 def bootstrap_default_providers(
     *,
     registry: ProviderRegistry | None = None,

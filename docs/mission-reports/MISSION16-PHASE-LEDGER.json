@@ -1,0 +1,300 @@
+{
+  "status": "NOT_ACCEPTED",
+  "scope": "Interim partial execution; UNKNOWN means not fully reviewed in this increment.",
+  "phases": [
+    {
+      "phase": 0,
+      "title": "Live forensic baseline",
+      "status": "PARTIAL",
+      "evidence": "Live refs, SHA, status and complete non-.git starting path manifest captured; restored local metadata reconciled after 916 blob/mode matches. Final closure pending.",
+      "remaining": "All detailed phase acceptance criteria remain open unless explicitly evidenced elsewhere."
+    },
+    {
+      "phase": 1,
+      "title": "Recover previous mission requirements",
+      "status": "PARTIAL",
+      "evidence": "Prior Mission 14/15 reports inspected; exhaustive original requirements not recovered.",
+      "remaining": "All detailed phase acceptance criteria remain open unless explicitly evidenced elsewhere."
+    },
+    {
+      "phase": 2,
+      "title": "Architecture and code-quality audit",
+      "status": "PARTIAL",
+      "evidence": "Provider call sites, global egress state and test inventories inspected; repository-wide architecture audit incomplete.",
+      "remaining": "All detailed phase acceptance criteria remain open unless explicitly evidenced elsewhere."
+    },
+    {
+      "phase": 3,
+      "title": "Governance and acceptance evidence",
+      "status": "PARTIAL",
+      "evidence": "Interim ledger only; exhaustive evidence model incomplete.",
+      "remaining": "All detailed phase acceptance criteria remain open unless explicitly evidenced elsewhere."
+    },
+    {
+      "phase": 4,
+      "title": "Application-scoped security",
+      "status": "PARTIAL",
+      "evidence": "Application-owned provider registries used by provider APIs, advisor, workflow AI and RAG; broader configuration and egress isolation not completed.",
+      "remaining": "All detailed phase acceptance criteria remain open unless explicitly evidenced elsewhere."
+    },
+    {
+      "phase": 5,
+      "title": "Secret lifecycle and atomic rotation",
+      "status": "NOT_ACCEPTED",
+      "evidence": "No transactionally recoverable atomic key rotation protocol proved.",
+      "remaining": "All detailed phase acceptance criteria remain open unless explicitly evidenced elsewhere."
+    },
+    {
+      "phase": 6,
+      "title": "Network egress, connectors and notifications",
+      "status": "NOT_ACCEPTED",
+      "evidence": "Global connector egress state and process-scoped notification and environment settings remain.",
+      "remaining": "All detailed phase acceptance criteria remain open unless explicitly evidenced elsewhere."
+    },
+    {
+      "phase": 7,
+      "title": "OCR root-cause investigation",
+      "status": "PARTIAL",
+      "evidence": "Mission 15 deployment failures and frozen corpus hash rechecked; per-case root cause not resolved.",
+      "remaining": "All detailed phase acceptance criteria remain open unless explicitly evidenced elsewhere."
+    },
+    {
+      "phase": 8,
+      "title": "Deployment OCR accuracy",
+      "status": "NOT_ACCEPTED",
+      "evidence": "Inherited exact-SHA deployment OCR failed 308/384 critical fields; no deployment-image correction.",
+      "remaining": "All detailed phase acceptance criteria remain open unless explicitly evidenced elsewhere."
+    },
+    {
+      "phase": 9,
+      "title": "Linux and Windows process containment",
+      "status": "NOT_ACCEPTED",
+      "evidence": "Linux descendant escape and Windows Job Object containment remain unproved.",
+      "remaining": "All detailed phase acceptance criteria remain open unless explicitly evidenced elsewhere."
+    },
+    {
+      "phase": 10,
+      "title": "Document-wide deadline",
+      "status": "NOT_IMPLEMENTED",
+      "evidence": "Whole-document absolute deadline not implemented.",
+      "remaining": "All detailed phase acceptance criteria remain open unless explicitly evidenced elsewhere."
+    },
+    {
+      "phase": 11,
+      "title": "DDR manual authoring",
+      "status": "UNKNOWN",
+      "evidence": "Not fully inspected or implemented during this increment; no claim of capability absence or completion.",
+      "remaining": "All detailed phase acceptance criteria remain open unless explicitly evidenced elsewhere."
+    },
+    {
+      "phase": 12,
+      "title": "Batch DDR import",
+      "status": "UNKNOWN",
+      "evidence": "Not fully inspected or implemented during this increment; no claim of capability absence or completion.",
+      "remaining": "All detailed phase acceptance criteria remain open unless explicitly evidenced elsewhere."
+    },
+    {
+      "phase": 13,
+      "title": "Document intelligence",
+      "status": "UNKNOWN",
+      "evidence": "Not fully inspected or implemented during this increment; no claim of capability absence or completion.",
+      "remaining": "All detailed phase acceptance criteria remain open unless explicitly evidenced elsewhere."
+    },
+    {
+      "phase": 14,
+      "title": "Operations chronology",
+      "status": "UNKNOWN",
+      "evidence": "Not fully inspected or implemented during this increment; no claim of capability absence or completion.",
+      "remaining": "All detailed phase acceptance criteria remain open unless explicitly evidenced elsewhere."
+    },
+    {
+      "phase": 15,
+      "title": "Canonical NPT",
+      "status": "UNKNOWN",
+      "evidence": "Not fully inspected or implemented during this increment; no claim of capability absence or completion.",
+      "remaining": "All detailed phase acceptance criteria remain open unless explicitly evidenced elsewhere."
+    },
+    {
+      "phase": 16,
+      "title": "Survey data",
+      "status": "UNKNOWN",
+      "evidence": "Not fully inspected or implemented during this increment; no claim of capability absence or completion.",
+      "remaining": "All detailed phase acceptance criteria remain open unless explicitly evidenced elsewhere."
+    },
+    {
+      "phase": 17,
+      "title": "Trajectory calculations",
+      "status": "UNKNOWN",
+      "evidence": "Not fully inspected or implemented during this increment; no claim of capability absence or completion.",
+      "remaining": "All detailed phase acceptance criteria remain open unless explicitly evidenced elsewhere."
+    },
+    {
+      "phase": 18,
+      "title": "Uncertainty-aware anti-collision",
+      "status": "UNKNOWN",
+      "evidence": "Not fully inspected or implemented during this increment; no claim of capability absence or completion.",
+      "remaining": "All detailed phase acceptance criteria remain open unless explicitly evidenced elsewhere."
+    },
+    {
+      "phase": 19,
+      "title": "Wellbore capacity",
+      "status": "UNKNOWN",
+      "evidence": "Not fully inspected or implemented during this increment; no claim of capability absence or completion.",
+      "remaining": "All detailed phase acceptance criteria remain open unless explicitly evidenced elsewhere."
+    },
+    {
+      "phase": 20,
+      "title": "Hydraulics",
+      "status": "UNKNOWN",
+      "evidence": "Not fully inspected or implemented during this increment; no claim of capability absence or completion.",
+      "remaining": "All detailed phase acceptance criteria remain open unless explicitly evidenced elsewhere."
+    },
+    {
+      "phase": 21,
+      "title": "Rheology",
+      "status": "UNKNOWN",
+      "evidence": "Not fully inspected or implemented during this increment; no claim of capability absence or completion.",
+      "remaining": "All detailed phase acceptance criteria remain open unless explicitly evidenced elsewhere."
+    },
+    {
+      "phase": 22,
+      "title": "ECD and hole cleaning",
+      "status": "UNKNOWN",
+      "evidence": "Not fully inspected or implemented during this increment; no claim of capability absence or completion.",
+      "remaining": "All detailed phase acceptance criteria remain open unless explicitly evidenced elsewhere."
+    },
+    {
+      "phase": 23,
+      "title": "Torque drag and buckling",
+      "status": "UNKNOWN",
+      "evidence": "Not fully inspected or implemented during this increment; no claim of capability absence or completion.",
+      "remaining": "All detailed phase acceptance criteria remain open unless explicitly evidenced elsewhere."
+    },
+    {
+      "phase": 24,
+      "title": "Tubulars and casing",
+      "status": "UNKNOWN",
+      "evidence": "Not fully inspected or implemented during this increment; no claim of capability absence or completion.",
+      "remaining": "All detailed phase acceptance criteria remain open unless explicitly evidenced elsewhere."
+    },
+    {
+      "phase": 25,
+      "title": "Well control and MPD",
+      "status": "UNKNOWN",
+      "evidence": "Not fully inspected or implemented during this increment; no claim of capability absence or completion.",
+      "remaining": "All detailed phase acceptance criteria remain open unless explicitly evidenced elsewhere."
+    },
+    {
+      "phase": 26,
+      "title": "Cementing stability surge and swab",
+      "status": "UNKNOWN",
+      "evidence": "Not fully inspected or implemented during this increment; no claim of capability absence or completion.",
+      "remaining": "All detailed phase acceptance criteria remain open unless explicitly evidenced elsewhere."
+    },
+    {
+      "phase": 27,
+      "title": "Well Design",
+      "status": "UNKNOWN",
+      "evidence": "Not fully inspected or implemented during this increment; no claim of capability absence or completion.",
+      "remaining": "All detailed phase acceptance criteria remain open unless explicitly evidenced elsewhere."
+    },
+    {
+      "phase": 28,
+      "title": "Programs and Procedures",
+      "status": "UNKNOWN",
+      "evidence": "Not fully inspected or implemented during this increment; no claim of capability absence or completion.",
+      "remaining": "All detailed phase acceptance criteria remain open unless explicitly evidenced elsewhere."
+    },
+    {
+      "phase": 29,
+      "title": "AI Advisor and RAG",
+      "status": "PARTIAL",
+      "evidence": "Scoped provider selection implemented for tested paths; complete RAG, governance and specialist-agent workflows not assured.",
+      "remaining": "All detailed phase acceptance criteria remain open unless explicitly evidenced elsewhere."
+    },
+    {
+      "phase": 30,
+      "title": "Telemetry WITSML ETP Twin",
+      "status": "UNKNOWN",
+      "evidence": "Not fully inspected or implemented during this increment; no claim of capability absence or completion.",
+      "remaining": "All detailed phase acceptance criteria remain open unless explicitly evidenced elsewhere."
+    },
+    {
+      "phase": 31,
+      "title": "Reporting and bilingual UX",
+      "status": "UNKNOWN",
+      "evidence": "Not fully inspected or implemented during this increment; no claim of capability absence or completion.",
+      "remaining": "All detailed phase acceptance criteria remain open unless explicitly evidenced elsewhere."
+    },
+    {
+      "phase": 32,
+      "title": "Frontend workflows",
+      "status": "UNKNOWN",
+      "evidence": "Not fully inspected or implemented during this increment; no claim of capability absence or completion.",
+      "remaining": "All detailed phase acceptance criteria remain open unless explicitly evidenced elsewhere."
+    },
+    {
+      "phase": 33,
+      "title": "Independent calculation assurance",
+      "status": "NOT_ACCEPTED",
+      "evidence": "16-engine and 127-candidate lists are inherited, not comprehensive independent assurance.",
+      "remaining": "All detailed phase acceptance criteria remain open unless explicitly evidenced elsewhere."
+    },
+    {
+      "phase": 34,
+      "title": "Expanded two-well scenario",
+      "status": "NOT_ACCEPTED",
+      "evidence": "CP150 is only a synthetic smoke pilot; expanded golden scenario not implemented.",
+      "remaining": "All detailed phase acceptance criteria remain open unless explicitly evidenced elsewhere."
+    },
+    {
+      "phase": 35,
+      "title": "API database migrations",
+      "status": "UNKNOWN",
+      "evidence": "Not fully inspected or implemented during this increment; no claim of capability absence or completion.",
+      "remaining": "All detailed phase acceptance criteria remain open unless explicitly evidenced elsewhere."
+    },
+    {
+      "phase": 36,
+      "title": "Test quality",
+      "status": "PARTIAL",
+      "evidence": "Fresh full local SQLite test run and focused PostgreSQL, security and RAG tests completed; final CI pending.",
+      "remaining": "All detailed phase acceptance criteria remain open unless explicitly evidenced elsewhere."
+    },
+    {
+      "phase": 37,
+      "title": "Deployment readiness",
+      "status": "NOT_ACCEPTED",
+      "evidence": "Last exact-SHA CI failed deployed OCR; current candidate exact-SHA CI pending.",
+      "remaining": "All detailed phase acceptance criteria remain open unless explicitly evidenced elsewhere."
+    },
+    {
+      "phase": 38,
+      "title": "Public product comparison",
+      "status": "PARTIAL",
+      "evidence": "Limited vendor-stated public descriptions compared; no independent product evaluation.",
+      "remaining": "All detailed phase acceptance criteria remain open unless explicitly evidenced elsewhere."
+    },
+    {
+      "phase": 39,
+      "title": "Master capability register",
+      "status": "PARTIAL",
+      "evidence": "Inherited Mission 15 register remains generic and is not an evidence-backed master register.",
+      "remaining": "All detailed phase acceptance criteria remain open unless explicitly evidenced elsewhere."
+    },
+    {
+      "phase": 40,
+      "title": "Historical implementation audit",
+      "status": "PARTIAL",
+      "evidence": "Inherited Mission 14/15 historical matrix remains incomplete.",
+      "remaining": "All detailed phase acceptance criteria remain open unless explicitly evidenced elsewhere."
+    },
+    {
+      "phase": 41,
+      "title": "Engineering roadmap",
+      "status": "PARTIAL",
+      "evidence": "Inherited 22 planned items remain; comprehensive technically grounded roadmap not completed.",
+      "remaining": "All detailed phase acceptance criteria remain open unless explicitly evidenced elsewhere."
+    }
+  ]
+}
