@@ -1,0 +1,443 @@
+
+> drillai-frontend@0.1.0 test
+> vitest run --run src/pages/engineering/ProgramsProceduresWorkspace.test.tsx -t withdraws a pending review
+
+
+[1m[30m[46m RUN [49m[39m[22m [36mv5.0.5 [39m[90m/home/user/DrillAI/frontend[39m
+
+ [31m❯[39m src/pages/engineering/ProgramsProceduresWorkspace.test.tsx [2m([22m[2m5 tests[22m[2m | [22m[31m1 failed[39m[2m | [22m[33m4 skipped[39m[2m)[22m[33m 359[2mms[22m[39m
+   [31m❯[39m ProgramsProceduresWorkspace [2m(5)[22m
+     [2m[90m↓[39m[22m authors a structured, wellbore-scoped drilling program and keeps required values explicitly unknown
+     [2m[90m↓[39m[22m authors controlled prerequisites, ordered steps, verification and stop-work response without turning the procedure into a free-text canvas
+     [2m[90m↓[39m[22m requires current validation, records independent review, decides an exact revision, creates a compare-and-swap revision and exports Markdown
+[31m     [31m×[31m withdraws a pending review with a reason and requires validation again[39m[33m 357[2mms[22m[39m
+     [2m[90m↓[39m[22m renders the product-authoring route in Persian and applies right-to-left document direction
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 1 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m src/pages/engineering/ProgramsProceduresWorkspace.test.tsx[2m > [22mProgramsProceduresWorkspace[2m > [22mwithdraws a pending review with a reason and requires validation again
+[31m[1mTestingLibraryElementError[22m[39m: Unable to find an accessible element with the role "button" and name "Withdraw review and return to draft"
+
+Here are the accessible roles:
+
+  heading:
+
+  Name "Drilling Programs & Controlled Procedures":
+  [36m<h1[39m
+    [33mclass[39m=[32m"text-lg font-semibold tracking-tight"[39m
+  [36m/>[39m
+
+  Name "Grounded engineering context":
+  [36m<h2[39m
+    [33mclass[39m=[32m"truncate text-sm font-semibold tracking-tight"[39m
+  [36m/>[39m
+
+  Name "Well product register":
+  [36m<h2[39m
+    [33mclass[39m=[32m"truncate text-sm font-semibold tracking-tight"[39m
+  [36m/>[39m
+
+  Name "Synthetic program for UI test":
+  [36m<h2[39m
+    [33mclass[39m=[32m"truncate text-sm font-semibold tracking-tight"[39m
+  [36m/>[39m
+
+  Name "Project / well / wellbore / section scope":
+  [36m<h3[39m
+    [33mclass[39m=[32m"text-xs font-semibold"[39m
+  [36m/>[39m
+
+  Name "Immutable revision lineage":
+  [36m<h3[39m
+    [33mclass[39m=[32m"text-xs font-semibold"[39m
+  [36m/>[39m
+
+  Name "Independent review and decision":
+  [36m<h2[39m
+    [33mclass[39m=[32m"truncate text-sm font-semibold tracking-tight"[39m
+  [36m/>[39m
+
+  Name "Deterministic findings":
+  [36m<h2[39m
+    [33mclass[39m=[32m"truncate text-sm font-semibold tracking-tight"[39m
+  [36m/>[39m
+
+  Name "Immutable revision history":
+  [36m<h2[39m
+    [33mclass[39m=[32m"truncate text-sm font-semibold tracking-tight"[39m
+  [36m/>[39m
+
+  Name "Structured, versioned product payload":
+  [36m<h2[39m
+    [33mclass[39m=[32m"truncate text-sm font-semibold tracking-tight"[39m
+  [36m/>[39m
+
+  Name "Resolved source and registered-engine lineage":
+  [36m<h2[39m
+    [33mclass[39m=[32m"truncate text-sm font-semibold tracking-tight"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+  paragraph:
+
+  Name "":
+  [36m<p[39m
+    [33mclass[39m=[32m"mt-0.5 max-w-3xl text-xs text-graphite-500"[39m
+  [36m/>[39m
+
+  Name "":
+  [36m<p[39m
+    [33mclass[39m=[32m"mt-0.5 text-xs text-graphite-500 dark:text-graphite-400"[39m
+  [36m/>[39m
+
+  Name "":
+  [36m<p[39m
+    [33mclass[39m=[32m"mt-2 text-[11px] text-graphite-500"[39m
+  [36m/>[39m
+
+  Name "":
+  [36m<p[39m
+    [33mclass[39m=[32m"mt-0.5 text-xs text-graphite-500 dark:text-graphite-400"[39m
+  [36m/>[39m
+
+  Name "":
+  [36m<p[39m
+    [33mclass[39m=[32m"mt-0.5 text-xs text-graphite-500 dark:text-graphite-400"[39m
+  [36m/>[39m
+
+  Name "":
+  [36m<p[39m
+    [33mclass[39m=[32m"break-all text-xs"[39m
+  [36m/>[39m
+
+  Name "":
+  [36m<p[39m
+    [33mclass[39m=[32m"text-xs"[39m
+  [36m/>[39m
+
+  Name "":
+  [36m<p[39m
+    [33mclass[39m=[32m"text-xs"[39m
+  [36m/>[39m
+
+  Name "":
+  [36m<p[39m
+    [33mclass[39m=[32m"mt-0.5 text-xs text-graphite-500 dark:text-graphite-400"[39m
+  [36m/>[39m
+
+  Name "":
+  [36m<p />[39m
+
+  Name "":
+  [36m<p[39m
+    [33mclass[39m=[32m"mt-2 text-[11px] text-graphite-500"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+  note:
+
+  Name "":
+  [36m<p[39m
+    [33mclass[39m=[32m"rounded border border-warning/30 bg-amber-50 p-2 text-xs text-graphite-700 dark:bg-amber-950/20 dark:text-graphite-200"[39m
+    [33mrole[39m=[32m"note"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+  banner:
+
+  Name "":
+  [36m<header[39m
+    [33mclass[39m=[32m"flex items-start justify-between gap-3 border-b border-graphite-100 px-4 py-3 dark:border-graphite-800"[39m
+  [36m/>[39m
+
+  Name "":
+  [36m<header[39m
+    [33mclass[39m=[32m"flex items-start justify-between gap-3 border-b border-graphite-100 px-4 py-3 dark:border-graphite-800"[39m
+  [36m/>[39m
+
+  Name "":
+  [36m<header[39m
+    [33mclass[39m=[32m"flex items-start justify-between gap-3 border-b border-graphite-100 px-4 py-3 dark:border-graphite-800"[39m
+  [36m/>[39m
+
+  Name "":
+  [36m<header[39m
+    [33mclass[39m=[32m"flex items-start justify-between gap-3 border-b border-graphite-100 px-4 py-3 dark:border-graphite-800"[39m
+  [36m/>[39m
+
+  Name "":
+  [36m<header[39m
+    [33mclass[39m=[32m"flex items-start justify-between gap-3 border-b border-graphite-100 px-4 py-3 dark:border-graphite-800"[39m
+  [36m/>[39m
+
+  Name "":
+  [36m<header[39m
+    [33mclass[39m=[32m"flex items-start justify-between gap-3 border-b border-graphite-100 px-4 py-3 dark:border-graphite-800"[39m
+  [36m/>[39m
+
+  Name "":
+  [36m<header[39m
+    [33mclass[39m=[32m"flex items-start justify-between gap-3 border-b border-graphite-100 px-4 py-3 dark:border-graphite-800"[39m
+  [36m/>[39m
+
+  Name "":
+  [36m<header[39m
+    [33mclass[39m=[32m"flex items-start justify-between gap-3 border-b border-graphite-100 px-4 py-3 dark:border-graphite-800"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+  checkbox:
+
+  Name "Request the configured copy-only narrative (optional)":
+  [36m<input[39m
+    [33mtype[39m=[32m"checkbox"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+  button:
+
+  Name "Read grounded well context":
+  [36m<button[39m
+    [33mclass[39m=[32m"inline-flex items-center justify-center gap-1.5 rounded-md border font-medium transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-signal disabled:cursor-not-allowed disabled:opacity-50 px-2 py-1 text-xs border-graphite-300 bg-white text-graphite-800 hover:bg-graphite-50 dark:border-graphite-700 dark:bg-graphite-900 dark:text-graphite-100 dark:hover:bg-graphite-800"[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m/>[39m
+
+  Name "Drilling program":
+  [36m<button[39m
+    [33mclass[39m=[32m"inline-flex items-center justify-center gap-1.5 rounded-md border font-medium transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-signal disabled:cursor-not-allowed disabled:opacity-50 px-2 py-1 text-xs border-signal-deep bg-signal text-white hover:bg-signal-deep dark:border-signal-light"[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m/>[39m
+
+  Name "Controlled procedure":
+  [36m<button[39m
+    [33mclass[39m=[32m"inline-flex items-center justify-center gap-1.5 rounded-md border font-medium transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-signal disabled:cursor-not-allowed disabled:opacity-50 px-2 py-1 text-xs border-graphite-300 bg-white text-graphite-800 hover:bg-graphite-50 dark:border-graphite-700 dark:bg-graphite-900 dark:text-graphite-100 dark:hover:bg-graphite-800"[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m/>[39m
+
+  Name "Create product":
+  [36m<button[39m
+    [33mclass[39m=[32m"inline-flex items-center justify-center gap-1.5 rounded-md border font-medium transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-signal disabled:cursor-not-allowed disabled:opacity-50 px-2 py-1 text-xs border-graphite-300 bg-white text-graphite-800 hover:bg-graphite-50 dark:border-graphite-700 dark:bg-graphite-900 dark:text-graphite-100 dark:hover:bg-graphite-800"[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m/>[39m
+
+  Name "Synthetic program for UI test in_review SYN-UI-1 · v1 · in_review":
+  [36m<button[39m
+    [33mclass[39m=[32m"w-full rounded border p-2 text-start border-signal bg-sky-50/50 dark:bg-sky-950/20"[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m/>[39m
+
+  Name "Validate this exact draft":
+  [36m<button[39m
+    [33mclass[39m=[32m"inline-flex items-center justify-center gap-1.5 rounded-md border font-medium transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-signal disabled:cursor-not-allowed disabled:opacity-50 px-2 py-1 text-xs border-graphite-300 bg-white text-graphite-800 hover:bg-graphite-50 dark:border-graphite-700 dark:bg-graphite-900 dark:text-graphite-100 dark:hover:bg-graphite-800"[39m
+    [33mdisabled[39m=[32m""[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m/>[39m
+
+  Name "Submit for independent review":
+  [36m<button[39m
+    [33mclass[39m=[32m"inline-flex items-center justify-center gap-1.5 rounded-md border font-medium transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-signal disabled:cursor-not-allowed disabled:opacity-50 px-2 py-1 text-xs border-graphite-300 bg-white text-graphite-800 hover:bg-graphite-50 dark:border-graphite-700 dark:bg-graphite-900 dark:text-graphite-100 dark:hover:bg-graphite-800"[39m
+    [33mdisabled[39m=[32m""[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m/>[39m
+
+  Name "Export JSON":
+  [36m<button[39m
+    [33mclass[39m=[32m"inline-flex items-center justify-center gap-1.5 rounded-md border font-medium transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-signal disabled:cursor-not-allowed disabled:opacity-50 px-2 py-1 text-xs border-graphite-300 bg-white text-graphite-800 hover:bg-graphite-50 dark:border-graphite-700 dark:bg-graphite-900 dark:text-graphite-100 dark:hover:bg-graphite-800"[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m/>[39m
+
+  Name "Export Markdown":
+  [36m<button[39m
+    [33mclass[39m=[32m"inline-flex items-center justify-center gap-1.5 rounded-md border font-medium transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-signal disabled:cursor-not-allowed disabled:opacity-50 px-2 py-1 text-xs border-graphite-300 bg-white text-graphite-800 hover:bg-graphite-50 dark:border-graphite-700 dark:bg-graphite-900 dark:text-graphite-100 dark:hover:bg-graphite-800"[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m/>[39m
+
+  Name "Record independent review":
+  [36m<button[39m
+    [33mclass[39m=[32m"inline-flex items-center justify-center gap-1.5 rounded-md border font-medium transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-signal disabled:cursor-not-allowed disabled:opacity-50 px-2 py-1 text-xs border-graphite-300 bg-white text-graphite-800 hover:bg-graphite-50 dark:border-graphite-700 dark:bg-graphite-900 dark:text-graphite-100 dark:hover:bg-graphite-800"[39m
+    [33mdisabled[39m=[32m""[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m/>[39m
+
+  Name "v1 · in_review":
+  [36m<button[39m
+    [33mclass[39m=[32m"inline-flex items-center justify-center gap-1.5 rounded-md border font-medium transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-signal disabled:cursor-not-allowed disabled:opacity-50 px-2 py-1 text-xs border-signal-deep bg-signal text-white hover:bg-signal-deep dark:border-signal-light"[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+  textbox:
+
+  Name "Independent review notes":
+  [36m<textarea[39m
+    [33mclass[39m=[32m"w-full rounded border border-graphite-300 bg-white px-2 py-1.5 text-sm dark:border-graphite-700 dark:bg-graphite-950 min-h-16"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+  list:
+
+  Name "":
+  [36m<ul[39m
+    [33mclass[39m=[32m"space-y-2 text-xs"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+  listitem:
+
+  Name "":
+  [36m<li[39m
+    [33mclass[39m=[32m"rounded border border-graphite-200 p-2 dark:border-graphite-800"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+  strong:
+
+  Name "":
+  [36m<strong />[39m
+
+  --------------------------------------------------
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"space-y-4"[39m
+      [33mdata-testid[39m=[32m"engineering-products-workspace"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"mb-4 flex flex-wrap items-start justify-between gap-3"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"min-w-0"[39m
+        [36m>[39m
+          [36m<h1[39m
+            [33mclass[39m=[32m"text-lg font-semibold tracking-tight"[39m
+          [36m>[39m
+            [0mDrilling Programs & Controlled Procedures[0m
+          [36m</h1>[39m
+          [36m<p[39m
+            [33mclass[39m=[32m"mt-0.5 max-w-3xl text-xs text-graphite-500"[39m
+          [36m>[39m
+            [0mAuthor structured, scoped revisions; validate exact source and engine lineage; record independent review; export a fingerprint-verified revision.[0m
+          [36m</p>[39m
+        [36m</div>[39m
+      [36m</div>[39m
+      [36m<p[39m
+        [33mclass[39m=[32m"rounded border border-warning/30 bg-amber-50 p-2 text-xs text-graphite-700 dark:bg-amber-950/20 dark:text-graphite-200"[39m
+        [33mrole[39m=[32m"note"[39m
+      [36m>[39m
+        [0mDrafts and exports are not field acceptance, operational authorization, or rig control. Unknown and conflicting inputs remain explicit; no missing value, unit, source, limit, or program link is inferred.[0m
+      [36m</p>[39m
+      [36m<section[39m
+        [33mclass[39m=[32m"rounded-lg border border-graphite-200 bg-white shadow-sm dark:border-graphite-800 dark:bg-graphite-900"[39m
+      [36m>[39m
+        [36m<header[39m
+          [33mclass[39m=[32m"flex items-start justify-between gap-3 border-b border-graphite-100 px-4 py-3 dark:border-graphite-800"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"min-w-0"[39m
+          [36m>[39m
+            [36m<h2[39m
+              [33mclass[39m=[32m"truncate text-sm font-semibold tracking-tight"[39m
+            [36m>[39m
+              [0mGrounded engineering context[0m
+            [36m</h2>[39m
+            [36m<p[39m
+              [33mclass[39m=[32m"mt-0.5 text-xs text-graphite-500 dark:text-graphite-400"[39m
+            [36m>[39m
+              [0mRead-only recorded facts, registered-engine results, unknowns, and cited context for this well.[0m
+            [36m</p>[39m
+          [36m</div>[39m
+        [36m</header>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"p-4"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex flex-wrap items-center gap-3"[39m
+          [36m>[39m
+            [36m<label[39m
+              [33mclass[39m=[32m"flex items-center gap-2 text-xs"[39m
+            [36m>[39m
+              [36m<input[39m
+                [33mtype[39m=[32m"checkbox"[39m
+              [36m/>[39m
+              [0mRequest the configured copy-only narrative (optional)[0m
+            [36m</label>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"inline-flex items-center justify-center gap-1.5 rounded-md border font-medium transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-signal disabled:cursor-not-allowed disabled:opacity-50 px-2 py-1 text-xs border-graphite-300 bg-white text-graphite-800 hover:bg-graphite-50 dark:border-graphite-700 dark:bg-graphite-900 dark:text-graphite-100 dark:hover:bg-graphite-800"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [0mRead grounded well context[0m
+            [36m</button>[39m
+          [36m</div>[39m
+          [36m<p[39m
+            [33mclass[39m=[32m"mt-2 text-[11px] text-graphite-500"[39m
+          [36m>[39m
+            [0mGrounded context is read-only. The optional configured-provider request may process source statements according to deployment settings; leave it disabled unless policy authorizes that processing. The provider cannot add facts, invent citations, approve a draft, or control a rig.[0m
+          [36m</p>[39m
+        [36m</div>[39m
+      [36m</section>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"grid gap-4 xl:grid-cols-[minmax(18rem,0.8fr)_minmax(0,2fr)]"[39m
+      [36m>[39m
+        [36m<section[39m
+          [33mclass[39m=[32m"rounded-lg border border-graphite-200 bg-white shadow-sm dark:border-graphite-800 dark:bg-graphite-900"[39m
+        [36m>[39m
+          [36m<header[39m
+            [33mclass[39m=[32m"flex items-start justify-between gap-3 border-b border-graphite-100 px-4 py-3 dark:border-graphite-800"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"min-w-0"[39m
+            [36m>[39m
+              [36m<h2[39m
+                [33mclass[39m=[32m"truncate text-sm font-semibold tracking-tight"[39m
+              [36m>[39m
+                [0mWell product register[0m
+              [36m</h2>[39m
+              [36m<p[39m
+                [33mclass[39m=[32m"mt-0.5 text-xs text-graphite-500 dark:text-graphite-400"[39m
+              [36m>[39m
+                [0mThis list is scoped to the well in the URL. Every product also retains its project and wellbore scope.[0m
+              [36m</p>[39m
+            [36m</div>[39m
+          [36m</header>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"p-4"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"mb-3 flex flex-wrap gap-2"[39m
+            [36m>[39m
+              [36m<button[39m
+                [33mclass[39m=[32m"inline-flex items-center justify-center gap-1.5 rounded-md border font-medium transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-signal disabled:cursor-not-allowed disabled:opacity-50 px-2 py-1 text-xs border-signal-deep bg-signal text-white hover:bg-signal-deep dark:border-signal-light"[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mDrilling program[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33mclass[39m=[32m"inline-flex items-center justify-center gap-1.5 rounded-md border font-medium transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-signal disabled:cursor-not-allowed disabled:opacity-50 px-2 py-1 text-xs border-graphite-300 bg-white text-graphite-800 hover:bg-graphite-50 dark:border-graphite-700 dark:bg-graphite-900 dark:text-graphite-100 dark:hover:bg-graphite-800"[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mControlled procedure[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33mclass[39m=[32m"inline-flex items-center justify-center gap-1.5 rounded-md border font-medium t...
+[90m [2m❯[22m Object.getElementError node_modules/@testing-library/dom/dist/config.js:[2m37:19[22m[39m
+[90m [2m❯[22m node_modules/@testing-library/dom/dist/query-helpers.js:[2m76:38[22m[39m
+[90m [2m❯[22m node_modules/@testing-library/dom/dist/query-helpers.js:[2m52:17[22m[39m
+[90m [2m❯[22m node_modules/@testing-library/dom/dist/query-helpers.js:[2m95:19[22m[39m
+[36m [2m❯[22m src/pages/engineering/ProgramsProceduresWorkspace.test.tsx:[2m653:29[22m[39m
+    [90m651|[39m     await waitFor(() => expect(client.isMutating()).toBe(0))
+    [90m652|[39m     await waitFor(() => expect(client.isFetching()).toBe(0))
+    [90m653|[39m     const withdraw = screen.getByRole('button', { name: 'Withdraw revi…
+    [90m   |[39m                             [31m^[39m
+    [90m654|[39m     expect(withdraw).toBeDisabled()
+    [90m655|[39m     await user.type(screen.getByLabelText('Withdrawal reason'), 'The v…
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[31m1 failed[39m[22m[2m | [22m[33m4 skipped[39m[90m (5)[39m
+[2m   Start at [22m 11:35:35
+[2m   Duration [22m 1.84s[2m (transform 33%, environment 23%, tests 22%, import 13%, setup 9%)[22m
+

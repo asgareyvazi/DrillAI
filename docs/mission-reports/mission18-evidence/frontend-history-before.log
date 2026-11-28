@@ -1,0 +1,287 @@
+
+> drillai-frontend@0.1.0 test
+> vitest run --run src/pages/engineering/ProgramsProceduresWorkspace.test.tsx -t withdraws a pending review
+
+
+[1m[30m[46m RUN [49m[39m[22m [36mv5.0.5 [39m[90m/home/user/DrillAI/frontend[39m
+
+ [31m❯[39m src/pages/engineering/ProgramsProceduresWorkspace.test.tsx [2m([22m[2m5 tests[22m[2m | [22m[31m1 failed[39m[2m | [22m[33m4 skipped[39m[2m)[22m[33m 1584[2mms[22m[39m
+   [31m❯[39m ProgramsProceduresWorkspace [2m(5)[22m
+     [2m[90m↓[39m[22m authors a structured, wellbore-scoped drilling program and keeps required values explicitly unknown
+     [2m[90m↓[39m[22m authors controlled prerequisites, ordered steps, verification and stop-work response without turning the procedure into a free-text canvas
+     [2m[90m↓[39m[22m requires current validation, records independent review, decides an exact revision, creates a compare-and-swap revision and exports Markdown
+[31m     [31m×[31m withdraws a pending review with a reason and requires validation again[39m[33m 1582[2mms[22m[39m
+     [2m[90m↓[39m[22m renders the product-authoring route in Persian and applies right-to-left document direction
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 1 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m src/pages/engineering/ProgramsProceduresWorkspace.test.tsx[2m > [22mProgramsProceduresWorkspace[2m > [22mwithdraws a pending review with a reason and requires validation again
+[31m[1mTestingLibraryElementError[22m[39m: Unable to find an element with the text: The validation rules changed.. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"space-y-4"[39m
+      [33mdata-testid[39m=[32m"engineering-products-workspace"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"mb-4 flex flex-wrap items-start justify-between gap-3"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"min-w-0"[39m
+        [36m>[39m
+          [36m<h1[39m
+            [33mclass[39m=[32m"text-lg font-semibold tracking-tight"[39m
+          [36m>[39m
+            [0mDrilling Programs & Controlled Procedures[0m
+          [36m</h1>[39m
+          [36m<p[39m
+            [33mclass[39m=[32m"mt-0.5 max-w-3xl text-xs text-graphite-500"[39m
+          [36m>[39m
+            [0mAuthor structured, scoped revisions; validate exact source and engine lineage; record independent review; export a fingerprint-verified revision.[0m
+          [36m</p>[39m
+        [36m</div>[39m
+      [36m</div>[39m
+      [36m<p[39m
+        [33mclass[39m=[32m"rounded border border-warning/30 bg-amber-50 p-2 text-xs text-graphite-700 dark:bg-amber-950/20 dark:text-graphite-200"[39m
+        [33mrole[39m=[32m"note"[39m
+      [36m>[39m
+        [0mDrafts and exports are not field acceptance, operational authorization, or rig control. Unknown and conflicting inputs remain explicit; no missing value, unit, source, limit, or program link is inferred.[0m
+      [36m</p>[39m
+      [36m<section[39m
+        [33mclass[39m=[32m"rounded-lg border border-graphite-200 bg-white shadow-sm dark:border-graphite-800 dark:bg-graphite-900"[39m
+      [36m>[39m
+        [36m<header[39m
+          [33mclass[39m=[32m"flex items-start justify-between gap-3 border-b border-graphite-100 px-4 py-3 dark:border-graphite-800"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"min-w-0"[39m
+          [36m>[39m
+            [36m<h2[39m
+              [33mclass[39m=[32m"truncate text-sm font-semibold tracking-tight"[39m
+            [36m>[39m
+              [0mGrounded engineering context[0m
+            [36m</h2>[39m
+            [36m<p[39m
+              [33mclass[39m=[32m"mt-0.5 text-xs text-graphite-500 dark:text-graphite-400"[39m
+            [36m>[39m
+              [0mRead-only recorded facts, registered-engine results, unknowns, and cited context for this well.[0m
+            [36m</p>[39m
+          [36m</div>[39m
+        [36m</header>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"p-4"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex flex-wrap items-center gap-3"[39m
+          [36m>[39m
+            [36m<label[39m
+              [33mclass[39m=[32m"flex items-center gap-2 text-xs"[39m
+            [36m>[39m
+              [36m<input[39m
+                [33mtype[39m=[32m"checkbox"[39m
+              [36m/>[39m
+              [0mRequest the configured copy-only narrative (optional)[0m
+            [36m</label>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"inline-flex items-center justify-center gap-1.5 rounded-md border font-medium transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-signal disabled:cursor-not-allowed disabled:opacity-50 px-2 py-1 text-xs border-graphite-300 bg-white text-graphite-800 hover:bg-graphite-50 dark:border-graphite-700 dark:bg-graphite-900 dark:text-graphite-100 dark:hover:bg-graphite-800"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [0mRead grounded well context[0m
+            [36m</button>[39m
+          [36m</div>[39m
+          [36m<p[39m
+            [33mclass[39m=[32m"mt-2 text-[11px] text-graphite-500"[39m
+          [36m>[39m
+            [0mGrounded context is read-only. The optional configured-provider request may process source statements according to deployment settings; leave it disabled unless policy authorizes that processing. The provider cannot add facts, invent citations, approve a draft, or control a rig.[0m
+          [36m</p>[39m
+        [36m</div>[39m
+      [36m</section>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"grid gap-4 xl:grid-cols-[minmax(18rem,0.8fr)_minmax(0,2fr)]"[39m
+      [36m>[39m
+        [36m<section[39m
+          [33mclass[39m=[32m"rounded-lg border border-graphite-200 bg-white shadow-sm dark:border-graphite-800 dark:bg-graphite-900"[39m
+        [36m>[39m
+          [36m<header[39m
+            [33mclass[39m=[32m"flex items-start justify-between gap-3 border-b border-graphite-100 px-4 py-3 dark:border-graphite-800"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"min-w-0"[39m
+            [36m>[39m
+              [36m<h2[39m
+                [33mclass[39m=[32m"truncate text-sm font-semibold tracking-tight"[39m
+              [36m>[39m
+                [0mWell product register[0m
+              [36m</h2>[39m
+              [36m<p[39m
+                [33mclass[39m=[32m"mt-0.5 text-xs text-graphite-500 dark:text-graphite-400"[39m
+              [36m>[39m
+                [0mThis list is scoped to the well in the URL. Every product also retains its project and wellbore scope.[0m
+              [36m</p>[39m
+            [36m</div>[39m
+          [36m</header>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"p-4"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"mb-3 flex flex-wrap gap-2"[39m
+            [36m>[39m
+              [36m<button[39m
+                [33mclass[39m=[32m"inline-flex items-center justify-center gap-1.5 rounded-md border font-medium transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-signal disabled:cursor-not-allowed disabled:opacity-50 px-2 py-1 text-xs border-signal-deep bg-signal text-white hover:bg-signal-deep dark:border-signal-light"[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mDrilling program[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33mclass[39m=[32m"inline-flex items-center justify-center gap-1.5 rounded-md border font-medium transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-signal disabled:cursor-not-allowed disabled:opacity-50 px-2 py-1 text-xs border-graphite-300 bg-white text-graphite-800 hover:bg-graphite-50 dark:border-graphite-700 dark:bg-graphite-900 dark:text-graphite-100 dark:hover:bg-graphite-800"[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mControlled procedure[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33mclass[39m=[32m"inline-flex items-center justify-center gap-1.5 rounded-md border font-medium t...
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"space-y-4"[39m
+      [33mdata-testid[39m=[32m"engineering-products-workspace"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"mb-4 flex flex-wrap items-start justify-between gap-3"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"min-w-0"[39m
+        [36m>[39m
+          [36m<h1[39m
+            [33mclass[39m=[32m"text-lg font-semibold tracking-tight"[39m
+          [36m>[39m
+            [0mDrilling Programs & Controlled Procedures[0m
+          [36m</h1>[39m
+          [36m<p[39m
+            [33mclass[39m=[32m"mt-0.5 max-w-3xl text-xs text-graphite-500"[39m
+          [36m>[39m
+            [0mAuthor structured, scoped revisions; validate exact source and engine lineage; record independent review; export a fingerprint-verified revision.[0m
+          [36m</p>[39m
+        [36m</div>[39m
+      [36m</div>[39m
+      [36m<p[39m
+        [33mclass[39m=[32m"rounded border border-warning/30 bg-amber-50 p-2 text-xs text-graphite-700 dark:bg-amber-950/20 dark:text-graphite-200"[39m
+        [33mrole[39m=[32m"note"[39m
+      [36m>[39m
+        [0mDrafts and exports are not field acceptance, operational authorization, or rig control. Unknown and conflicting inputs remain explicit; no missing value, unit, source, limit, or program link is inferred.[0m
+      [36m</p>[39m
+      [36m<section[39m
+        [33mclass[39m=[32m"rounded-lg border border-graphite-200 bg-white shadow-sm dark:border-graphite-800 dark:bg-graphite-900"[39m
+      [36m>[39m
+        [36m<header[39m
+          [33mclass[39m=[32m"flex items-start justify-between gap-3 border-b border-graphite-100 px-4 py-3 dark:border-graphite-800"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"min-w-0"[39m
+          [36m>[39m
+            [36m<h2[39m
+              [33mclass[39m=[32m"truncate text-sm font-semibold tracking-tight"[39m
+            [36m>[39m
+              [0mGrounded engineering context[0m
+            [36m</h2>[39m
+            [36m<p[39m
+              [33mclass[39m=[32m"mt-0.5 text-xs text-graphite-500 dark:text-graphite-400"[39m
+            [36m>[39m
+              [0mRead-only recorded facts, registered-engine results, unknowns, and cited context for this well.[0m
+            [36m</p>[39m
+          [36m</div>[39m
+        [36m</header>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"p-4"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex flex-wrap items-center gap-3"[39m
+          [36m>[39m
+            [36m<label[39m
+              [33mclass[39m=[32m"flex items-center gap-2 text-xs"[39m
+            [36m>[39m
+              [36m<input[39m
+                [33mtype[39m=[32m"checkbox"[39m
+              [36m/>[39m
+              [0mRequest the configured copy-only narrative (optional)[0m
+            [36m</label>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"inline-flex items-center justify-center gap-1.5 rounded-md border font-medium transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-signal disabled:cursor-not-allowed disabled:opacity-50 px-2 py-1 text-xs border-graphite-300 bg-white text-graphite-800 hover:bg-graphite-50 dark:border-graphite-700 dark:bg-graphite-900 dark:text-graphite-100 dark:hover:bg-graphite-800"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [0mRead grounded well context[0m
+            [36m</button>[39m
+          [36m</div>[39m
+          [36m<p[39m
+            [33mclass[39m=[32m"mt-2 text-[11px] text-graphite-500"[39m
+          [36m>[39m
+            [0mGrounded context is read-only. The optional configured-provider request may process source statements according to deployment settings; leave it disabled unless policy authorizes that processing. The provider cannot add facts, invent citations, approve a draft, or control a rig.[0m
+          [36m</p>[39m
+        [36m</div>[39m
+      [36m</section>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"grid gap-4 xl:grid-cols-[minmax(18rem,0.8fr)_minmax(0,2fr)]"[39m
+      [36m>[39m
+        [36m<section[39m
+          [33mclass[39m=[32m"rounded-lg border border-graphite-200 bg-white shadow-sm dark:border-graphite-800 dark:bg-graphite-900"[39m
+        [36m>[39m
+          [36m<header[39m
+            [33mclass[39m=[32m"flex items-start justify-between gap-3 border-b border-graphite-100 px-4 py-3 dark:border-graphite-800"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"min-w-0"[39m
+            [36m>[39m
+              [36m<h2[39m
+                [33mclass[39m=[32m"truncate text-sm font-semibold tracking-tight"[39m
+              [36m>[39m
+                [0mWell product register[0m
+              [36m</h2>[39m
+              [36m<p[39m
+                [33mclass[39m=[32m"mt-0.5 text-xs text-graphite-500 dark:text-graphite-400"[39m
+              [36m>[39m
+                [0mThis list is scoped to the well in the URL. Every product also retains its project and wellbore scope.[0m
+              [36m</p>[39m
+            [36m</div>[39m
+          [36m</header>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"p-4"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"mb-3 flex flex-wrap gap-2"[39m
+            [36m>[39m
+              [36m<button[39m
+                [33mclass[39m=[32m"inline-flex items-center justify-center gap-1.5 rounded-md border font-medium transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-signal disabled:cursor-not-allowed disabled:opacity-50 px-2 py-1 text-xs border-signal-deep bg-signal text-white hover:bg-signal-deep dark:border-signal-light"[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mDrilling program[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33mclass[39m=[32m"inline-flex items-center justify-center gap-1.5 rounded-md border font-medium transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-signal disabled:cursor-not-allowed disabled:opacity-50 px-2 py-1 text-xs border-graphite-300 bg-white text-graphite-800 hover:bg-graphite-50 dark:border-graphite-700 dark:bg-graphite-900 dark:text-graphite-100 dark:hover:bg-graphite-800"[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mControlled procedure[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33mclass[39m=[32m"inline-flex items-center justify-center gap-1.5 rounded-md border font-medium t...
+[90m [2m❯[22m waitForWrapper node_modules/@testing-library/dom/dist/wait-for.js:[2m163:27[22m[39m
+[90m [2m❯[22m node_modules/@testing-library/dom/dist/query-helpers.js:[2m86:33[22m[39m
+[36m [2m❯[22m src/pages/engineering/ProgramsProceduresWorkspace.test.tsx:[2m661:25[22m[39m
+    [90m659|[39m     await waitFor(() => expect(screen.getByRole('button', { name: 'Sub…
+    [90m660|[39m     expect(screen.getByRole('button', { name: 'Validate this exact dra…
+    [90m661|[39m     expect(await screen.findByText('The validation rules changed.')).t…
+    [90m   |[39m                         [31m^[39m
+    [90m662|[39m     expect(screen.getByText('cancelled')).toBeInTheDocument()
+    [90m663|[39m   }, 20_000)
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[31m1 failed[39m[22m[2m | [22m[33m4 skipped[39m[90m (5)[39m
+[2m   Start at [22m 11:37:29
+[2m   Duration [22m 2.85s[2m (tests 59%, environment 15%, transform 13%, import 8%, setup 4%)[22m
+

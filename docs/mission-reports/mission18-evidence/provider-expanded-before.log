@@ -1,0 +1,44 @@
+FFFFFFF                                                                  [100%]
+=================================== FAILURES ===================================
+__ test_foreign_router_denied_before_direct_and_workflow_calls[direct-order0] __
+backend/tests/security/test_m18_provider_boundary.py:46: in test_foreign_router_denied_before_direct_and_workflow_calls
+    with pytest.raises(ConfigurationError, match="owner|registry"):
+E   Failed: DID NOT RAISE ConfigurationError
+__ test_foreign_router_denied_before_direct_and_workflow_calls[direct-order1] __
+backend/tests/security/test_m18_provider_boundary.py:46: in test_foreign_router_denied_before_direct_and_workflow_calls
+    with pytest.raises(ConfigurationError, match="owner|registry"):
+E   Failed: DID NOT RAISE ConfigurationError
+_ test_foreign_router_denied_before_direct_and_workflow_calls[workflow-order0] _
+backend/tests/security/test_m18_provider_boundary.py:46: in test_foreign_router_denied_before_direct_and_workflow_calls
+    with pytest.raises(ConfigurationError, match="owner|registry"):
+E   Failed: DID NOT RAISE ConfigurationError
+_ test_foreign_router_denied_before_direct_and_workflow_calls[workflow-order1] _
+backend/tests/security/test_m18_provider_boundary.py:46: in test_foreign_router_denied_before_direct_and_workflow_calls
+    with pytest.raises(ConfigurationError, match="owner|registry"):
+E   Failed: DID NOT RAISE ConfigurationError
+__________ test_unregistered_requested_model_is_not_sent_to_provider ___________
+backend/tests/security/test_m18_provider_boundary.py:73: in test_unregistered_requested_model_is_not_sent_to_provider
+    with pytest.raises(ConfigurationError, match="model"):
+E   Failed: DID NOT RAISE ConfigurationError
+________ test_privacy_change_during_structured_retry_stops_second_call _________
+backend/tests/security/test_m18_provider_boundary.py:94: in test_privacy_change_during_structured_retry_stops_second_call
+    await router.complete(_request(response_schema={"type": "object"}), session=session)
+backend/src/drillai/ai/router.py:210: in complete
+    response = await self._call_with_retry(decision, request, validate=validate)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/src/drillai/ai/router.py:246: in _call_with_retry
+    raise ProviderError("provider failed to produce schema-valid JSON after one retry")
+E   drillai.core.errors.ProviderError: provider failed to produce schema-valid JSON after one retry
+_______________ test_router_rejects_absent_and_unowned_sessions ________________
+backend/tests/security/test_m18_provider_boundary.py:106: in test_router_rejects_absent_and_unowned_sessions
+    with pytest.raises(ConfigurationError, match="owner|registry"):
+E   Failed: DID NOT RAISE ConfigurationError
+=========================== short test summary info ============================
+FAILED backend/tests/security/test_m18_provider_boundary.py::test_foreign_router_denied_before_direct_and_workflow_calls[direct-order0]
+FAILED backend/tests/security/test_m18_provider_boundary.py::test_foreign_router_denied_before_direct_and_workflow_calls[direct-order1]
+FAILED backend/tests/security/test_m18_provider_boundary.py::test_foreign_router_denied_before_direct_and_workflow_calls[workflow-order0]
+FAILED backend/tests/security/test_m18_provider_boundary.py::test_foreign_router_denied_before_direct_and_workflow_calls[workflow-order1]
+FAILED backend/tests/security/test_m18_provider_boundary.py::test_unregistered_requested_model_is_not_sent_to_provider
+FAILED backend/tests/security/test_m18_provider_boundary.py::test_privacy_change_during_structured_retry_stops_second_call
+FAILED backend/tests/security/test_m18_provider_boundary.py::test_router_rejects_absent_and_unowned_sessions
+7 failed in 3.08s

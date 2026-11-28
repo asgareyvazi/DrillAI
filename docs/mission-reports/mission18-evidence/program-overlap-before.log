@@ -1,0 +1,18 @@
+F..F                                                                     [100%]
+=================================== FAILURES ===================================
+______ test_program_sections_cannot_overlap_in_measured_depth[999.0-True] ______
+backend/tests/engineering/test_products.py:298: in test_program_sections_cannot_overlap_in_measured_depth
+    assert bool(overlap) is expect_overlap
+E   assert False is True
+E    +  where False = bool([])
+_____ test_program_overlapping_hole_sections_are_blocked_before_submission _____
+backend/tests/api/test_engineering_products_api.py:460: in test_program_overlapping_hole_sections_are_blocked_before_submission
+    assert validation["state"] == "blocked"
+E   AssertionError: assert 'warnings' == 'blocked'
+E     
+E     - blocked
+E     + warnings
+=========================== short test summary info ============================
+FAILED backend/tests/engineering/test_products.py::test_program_sections_cannot_overlap_in_measured_depth[999.0-True]
+FAILED backend/tests/api/test_engineering_products_api.py::test_program_overlapping_hole_sections_are_blocked_before_submission
+2 failed, 2 passed in 3.17s

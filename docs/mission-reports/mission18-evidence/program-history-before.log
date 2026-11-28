@@ -1,0 +1,14 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_______ test_in_review_program_rejects_outdated_rules_until_revalidated ________
+backend/tests/api/test_engineering_products_api.py:534: in test_in_review_program_rejects_outdated_rules_until_revalidated
+    history = detail.json()["approval_history"]
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'approval_history'
+----------------------------- Captured stdout call -----------------------------
+{"ts": "2026-11-28T11:36:58.607140+00:00", "level": "INFO", "logger": "drillai.api.app", "message": "the validation ruleset has changed; validate this exact revision again", "request_id": "req_01M8GZ3DFBS647VE5RX43D7NDF", "http_path": "/api/v1/engineering-products/art_01M8GZ3DEGHGCYYAV26NNYT54S/versions/artv_01M8GZ3DEJBSEXJXVAQV1A1AFH/review", "http_method": "POST", "code": "platform.conflict", "path": "/api/v1/engineering-products/art_01M8GZ3DEGHGCYYAV26NNYT54S/versions/artv_01M8GZ3DEJBSEXJXVAQV1A1AFH/review"}
+------------------------------ Captured log call -------------------------------
+INFO     drillai.api.app:app.py:375 request rejected
+=========================== short test summary info ============================
+FAILED backend/tests/api/test_engineering_products_api.py::test_in_review_program_rejects_outdated_rules_until_revalidated
+1 failed in 3.09s

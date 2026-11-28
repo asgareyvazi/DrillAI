@@ -1,0 +1,12 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+________ test_advisor_rejects_unowned_injected_router_before_narration _________
+backend/tests/security/test_m18_provider_boundary.py:174: in test_advisor_rejects_unowned_injected_router_before_narration
+    await advisor._narrate(answer)
+backend/src/drillai/drilling/advisor.py:1029: in _narrate
+    "routing": {"reason": decision.rationale, "provider": decision.provider.name},
+                          ^^^^^^^^^^^^^^^^^^
+E   AttributeError: 'NoneType' object has no attribute 'rationale'
+=========================== short test summary info ============================
+FAILED backend/tests/security/test_m18_provider_boundary.py::test_advisor_rejects_unowned_injected_router_before_narration
+1 failed in 1.37s

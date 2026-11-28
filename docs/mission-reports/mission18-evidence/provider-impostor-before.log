@@ -1,0 +1,12 @@
+.......F.                                                                [100%]
+=================================== FAILURES ===================================
+_________ test_unowned_injected_workflow_router_cannot_bypass_boundary _________
+backend/tests/security/test_m18_provider_boundary.py:131: in test_unowned_injected_workflow_router_cannot_bypass_boundary
+    await _ai_complete(context, AiCompleteConfig(user_prompt="Summarize the report."))
+backend/src/drillai/workflow/nodes.py:643: in _ai_complete
+    "routing": decision.rationale,
+               ^^^^^^^^^^^^^^^^^^
+E   AttributeError: 'NoneType' object has no attribute 'rationale'
+=========================== short test summary info ============================
+FAILED backend/tests/security/test_m18_provider_boundary.py::test_unowned_injected_workflow_router_cannot_bypass_boundary
+1 failed, 8 passed in 3.29s

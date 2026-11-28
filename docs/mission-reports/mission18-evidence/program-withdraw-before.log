@@ -1,0 +1,15 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_______ test_in_review_program_rejects_outdated_rules_until_revalidated ________
+backend/tests/api/test_engineering_products_api.py:522: in test_in_review_program_rejects_outdated_rules_until_revalidated
+    assert withdrawn.status_code == 200, withdrawn.text
+E   AssertionError: {"detail":"Not Found"}
+E   assert 404 == 200
+E    +  where 404 = <Response [404 Not Found]>.status_code
+----------------------------- Captured stdout call -----------------------------
+{"ts": "2026-11-28T11:34:01.815242+00:00", "level": "INFO", "logger": "drillai.api.app", "message": "the validation ruleset has changed; validate this exact revision again", "request_id": "req_01M8GYY0TJGGP8YTZ56N5C4GD1", "http_path": "/api/v1/engineering-products/art_01M8GYY0SECBC1JXH2V8GG8PPH/versions/artv_01M8GYY0SGXNR0N2HK3FZ2ZPF9/review", "http_method": "POST", "code": "platform.conflict", "path": "/api/v1/engineering-products/art_01M8GYY0SECBC1JXH2V8GG8PPH/versions/artv_01M8GYY0SGXNR0N2HK3FZ2ZPF9/review"}
+------------------------------ Captured log call -------------------------------
+INFO     drillai.api.app:app.py:375 request rejected
+=========================== short test summary info ============================
+FAILED backend/tests/api/test_engineering_products_api.py::test_in_review_program_rejects_outdated_rules_until_revalidated
+1 failed in 3.30s
