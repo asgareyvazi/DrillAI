@@ -499,6 +499,7 @@ async def test_hybrid_rrf_does_not_return_unmatched_chunks_without_compatible_ve
 
     provider = OneVectorProvider()
     registry = ProviderRegistry()
+    registry.max_privacy = PrivacyClass.LOCAL
     registry.register(provider)
     session.info["drillai_provider_registry"] = registry
     chunks = (await session.execute(select(DocumentChunk).order_by(DocumentChunk.created_at))).scalars().all()
@@ -557,6 +558,7 @@ async def test_embedding_provider_failure_reports_the_real_fallback_without_logg
 
     provider = FailingProvider()
     registry = ProviderRegistry()
+    registry.max_privacy = PrivacyClass.LOCAL
     registry.register(provider)
     session.info["drillai_provider_registry"] = registry
     chunks = (await session.execute(select(DocumentChunk))).scalars().all()
@@ -691,6 +693,7 @@ async def test_hybrid_stopword_only_query_uses_semantic_ranking_when_vectors_mat
 
     provider = QueryEmbeddingProvider()
     registry = ProviderRegistry()
+    registry.max_privacy = PrivacyClass.LOCAL
     registry.register(provider)
     session.info["drillai_provider_registry"] = registry
     chunks = (await session.execute(select(DocumentChunk))).scalars().all()
@@ -741,6 +744,7 @@ async def test_stale_embedding_content_fingerprint_is_rejected(corpus, session, 
 
     provider = QueryEmbeddingProvider()
     registry = ProviderRegistry()
+    registry.max_privacy = PrivacyClass.LOCAL
     registry.register(provider)
     session.info["drillai_provider_registry"] = registry
     chunks = (await session.execute(select(DocumentChunk))).scalars().all()
@@ -791,6 +795,7 @@ async def test_semantic_search_never_compares_equal_dimensions_from_different_mo
             return [[1.0, 0.0] for _ in texts]
 
     registry = ProviderRegistry()
+    registry.max_privacy = PrivacyClass.LOCAL
     registry.register(QueryEmbeddingProvider())
     session.info["drillai_provider_registry"] = registry
 

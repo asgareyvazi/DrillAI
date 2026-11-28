@@ -1,0 +1,22 @@
+{
+  "entries": 14802,
+  "by_type": {
+    "directory": 1718,
+    "file": 13051,
+    "symlink": 33
+  },
+  "by_git_class": {
+    "directory": 1718,
+    "tracked": 954,
+    "ignored": 12106,
+    "untracked": 24
+  },
+  "errors": [],
+  "sha256": "bece963a3b6c006a3f3f5a3bfafb2cff0bc015e79e20137a9fb74384008ed6c1",
+  "excluded": [
+    ".git internals (git status, refs, worktree and tracked index separately inventoried; credentials not captured)"
+  ],
+  "tracked_index_count": 954,
+  "untracked_file_count": 24,
+  "ignored_file_count": 12106
+}

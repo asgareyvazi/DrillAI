@@ -1,0 +1,95 @@
+FFFFF...                                                                 [100%]
+=================================== FAILURES ===================================
+____ test_index_rejects_foreign_explicit_embedding_provider_before_sending _____
+
+    async def test_index_rejects_foreign_explicit_embedding_provider_before_sending():
+        app = _app()
+        foreign = RecordingEmbedding(PrivacyClass.LOCAL)
+        try:
+            async with app.state.database.session() as session:
+>               with pytest.raises(ConfigurationError, match=r"owner|registry"):
+E               Failed: DID NOT RAISE ConfigurationError
+
+backend/tests/security/test_m19_embedding_boundary.py:54: Failed
+__ test_disallowed_or_missing_ceiling_never_sends_embedding_text[local-index] __
+
+operation = 'index', ceiling = <PrivacyClass.LOCAL: 'local'>
+
+    @pytest.mark.parametrize("operation", ["index", "query"])
+    @pytest.mark.parametrize("ceiling", [PrivacyClass.LOCAL, None])
+    async def test_disallowed_or_missing_ceiling_never_sends_embedding_text(operation, ceiling):
+        app = _app()
+        provider = RecordingEmbedding(PrivacyClass.PUBLIC_CLOUD)
+        registry = app.state.database.provider_registry
+        registry.clear()
+        registry.max_privacy = ceiling
+        registry.register(provider)
+        try:
+            async with app.state.database.session() as session:
+>               with pytest.raises(ConfigurationError, match=r"privacy|ceiling"):
+E               Failed: DID NOT RAISE ConfigurationError
+
+backend/tests/security/test_m19_embedding_boundary.py:72: Failed
+__ test_disallowed_or_missing_ceiling_never_sends_embedding_text[local-query] __
+
+operation = 'query', ceiling = <PrivacyClass.LOCAL: 'local'>
+
+    @pytest.mark.parametrize("operation", ["index", "query"])
+    @pytest.mark.parametrize("ceiling", [PrivacyClass.LOCAL, None])
+    async def test_disallowed_or_missing_ceiling_never_sends_embedding_text(operation, ceiling):
+        app = _app()
+        provider = RecordingEmbedding(PrivacyClass.PUBLIC_CLOUD)
+        registry = app.state.database.provider_registry
+        registry.clear()
+        registry.max_privacy = ceiling
+        registry.register(provider)
+        try:
+            async with app.state.database.session() as session:
+>               with pytest.raises(ConfigurationError, match=r"privacy|ceiling"):
+E               Failed: DID NOT RAISE ConfigurationError
+
+backend/tests/security/test_m19_embedding_boundary.py:72: Failed
+__ test_disallowed_or_missing_ceiling_never_sends_embedding_text[None-index] ___
+
+operation = 'index', ceiling = None
+
+    @pytest.mark.parametrize("operation", ["index", "query"])
+    @pytest.mark.parametrize("ceiling", [PrivacyClass.LOCAL, None])
+    async def test_disallowed_or_missing_ceiling_never_sends_embedding_text(operation, ceiling):
+        app = _app()
+        provider = RecordingEmbedding(PrivacyClass.PUBLIC_CLOUD)
+        registry = app.state.database.provider_registry
+        registry.clear()
+        registry.max_privacy = ceiling
+        registry.register(provider)
+        try:
+            async with app.state.database.session() as session:
+>               with pytest.raises(ConfigurationError, match=r"privacy|ceiling"):
+E               Failed: DID NOT RAISE ConfigurationError
+
+backend/tests/security/test_m19_embedding_boundary.py:72: Failed
+__ test_disallowed_or_missing_ceiling_never_sends_embedding_text[None-query] ___
+
+operation = 'query', ceiling = None
+
+    @pytest.mark.parametrize("operation", ["index", "query"])
+    @pytest.mark.parametrize("ceiling", [PrivacyClass.LOCAL, None])
+    async def test_disallowed_or_missing_ceiling_never_sends_embedding_text(operation, ceiling):
+        app = _app()
+        provider = RecordingEmbedding(PrivacyClass.PUBLIC_CLOUD)
+        registry = app.state.database.provider_registry
+        registry.clear()
+        registry.max_privacy = ceiling
+        registry.register(provider)
+        try:
+            async with app.state.database.session() as session:
+>               with pytest.raises(ConfigurationError, match=r"privacy|ceiling"):
+E               Failed: DID NOT RAISE ConfigurationError
+
+backend/tests/security/test_m19_embedding_boundary.py:72: Failed
+=========================== short test summary info ============================
+FAILED backend/tests/security/test_m19_embedding_boundary.py::test_index_rejects_foreign_explicit_embedding_provider_before_sending
+FAILED backend/tests/security/test_m19_embedding_boundary.py::test_disallowed_or_missing_ceiling_never_sends_embedding_text[local-index]
+FAILED backend/tests/security/test_m19_embedding_boundary.py::test_disallowed_or_missing_ceiling_never_sends_embedding_text[local-query]
+FAILED backend/tests/security/test_m19_embedding_boundary.py::test_disallowed_or_missing_ceiling_never_sends_embedding_text[None-index]
+FAILED backend/tests/security/test_m19_embedding_boundary.py::test_disallowed_or_missing_ceiling_never_sends_embedding_text[None-query]

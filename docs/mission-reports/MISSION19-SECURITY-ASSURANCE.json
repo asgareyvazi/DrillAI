@@ -1,0 +1,26 @@
+{
+  "mission": 19,
+  "status": "PARTIAL",
+  "scope": "Embedding provider selection and tenant batch boundary; not complete platform security assurance.",
+  "baseline_sha": "5519b4520e1a064fe8e7d091fa3e101e4306e833",
+  "findings": [
+    {
+      "id": "M19-EMBED-001",
+      "initial_state": "Explicit embedding providers bypassed session registry ownership, and both indexing and semantic query embedding bypassed the application privacy ceiling.",
+      "status": "PARTIAL",
+      "change": "Require an owned registered provider, a configured ceiling and one unambiguous model within the provider and model privacy limits; recheck ownership, ceiling and embedding space after the asynchronous call.",
+      "evidence": "mission19-evidence/embedding-before.txt records five fail-first cases. Focused tests verify no outbound invocation on rejection and reject changed configuration before persistence or scoring.",
+      "limitations": "The application ceiling remains mutable in process; layered deployment/tenant ceilings, provider endpoint egress, tenant authorization of each indexing invocation, atomic configuration and in-flight cancellation remain unproven."
+    },
+    {
+      "id": "M19-EMBED-002",
+      "initial_state": "A single embedding request could combine chunks belonging to different organizations.",
+      "status": "PARTIAL",
+      "change": "Reject missing or mixed organization identities before invoking the provider; PostgreSQL integration indexes separate tenant batches.",
+      "evidence": "mission19-evidence/embedding-mixed-tenant-before.txt; focused regression and PostgreSQL pgvector integration.",
+      "limitations": "Same-tenant batching does not itself authorize the caller or prove tenant-specific provider/credential isolation."
+    }
+  ],
+  "open": ["immutable layered privacy ceilings", "layered egress and SSRF", "notification and worker isolation", "atomic secret rotation", "tenant-scoped embedding authorization", "complete concurrency and lifecycle security assurance"],
+  "field_or_vendor_qualification": "BLOCKED_BY_MISSING_AUTHORIZED_EVIDENCE"
+}

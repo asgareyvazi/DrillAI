@@ -1,0 +1,474 @@
+...........................................................FF...FFF..... [ 86%]
+...........                                                              [100%]
+=================================== FAILURES ===================================
+_ test_hybrid_rrf_does_not_return_unmatched_chunks_without_compatible_vectors __
+
+corpus = {'org': <Organization org_01M8H22CA92SKY4NWM77HD51VG>, 'artifact': <RawArtifact raw_01M8H22CAJ3J6MBNW1RX6CYCBC>, 'project': <Project prj_01M8H22CAA4QDXPKCE8HNERJJW>, 'well': <Well wel_01M8H22CACE4NMHNSVPF0WW7V9>, ...}
+session = <sqlalchemy.ext.asyncio.session.AsyncSession object at 0x7f00349d4750>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7f003486cf90>
+
+    async def test_hybrid_rrf_does_not_return_unmatched_chunks_without_compatible_vectors(
+        corpus, session, monkeypatch
+    ):
+        import hashlib
+    
+        from drillai.ai.providers import LLMCapability, ModelSpec, PrivacyClass, ProviderRegistry
+        from drillai.db.models import DocumentChunk
+        from drillai.rag.retriever import _embedding_space_id
+    
+        class OneVectorProvider:
+            name = "one-vector-space"
+            model_name = "one-vector-model"
+    
+            def supports(self, capability):
+                return capability is LLMCapability.EMBEDDING
+    
+            def models(self):
+                return [
+                    ModelSpec(
+                        provider=self.name,
+                        model=self.model_name,
+                        capabilities=frozenset({LLMCapability.EMBEDDING}),
+                        privacy=PrivacyClass.LOCAL,
+                    )
+                ]
+    
+            async def embed(self, texts):
+                return [[1.0, 0.0] for _ in texts]
+    
+        provider = OneVectorProvider()
+        registry = ProviderRegistry()
+        registry.register(provider)
+        session.info["drillai_provider_registry"] = registry
+        chunks = (await session.execute(select(DocumentChunk).order_by(DocumentChunk.created_at))).scalars().all()
+        assert len(chunks) >= 2
+        target = chunks[0]
+        target.embedding = [1.0, 0.0]
+        target.embedding_dim = 2
+        target.embedding_model = _embedding_space_id(provider)
+        target.embedding_content_hash = hashlib.sha256(target.text.encode("utf-8")).hexdigest()
+        await session.flush()
+    
+>       result = await retrieve(
+            session,
+            corpus["org"].id,
+            RetrievalQuery(
+                text="unmatchedlexicaltoken",
+                mode=RetrieveMode.HYBRID,
+                well_id=corpus["well"].id,
+                limit=10,
+            ),
+        )
+
+backend/tests/rag/test_retriever.py:513: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+backend/src/drillai/rag/retriever.py:379: in retrieve
+    semantic_scores, vector_backend, semantic_chunk_ids = await _semantic_scores_with_backend(
+backend/src/drillai/rag/retriever.py:790: in _semantic_scores_with_backend
+    provider = _owned_embedding_provider(session)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+session = <sqlalchemy.ext.asyncio.session.AsyncSession object at 0x7f00349d4750>
+requested = None
+
+    def _owned_embedding_provider(session: AsyncSession, requested: Any = None) -> Any:
+        """Resolve an owned, unambiguous embedding provider under its application's ceiling.
+    
+        Embeddings send document text or search queries just like chat completions. Explicit
+        injection is allowed only for the exact registered instance; it cannot bypass privacy.
+        """
+        from drillai.ai.providers import LLMCapability, PrivacyClass, registry_for_session
+        from drillai.ai.router import RoutingPolicy
+        from drillai.core.errors import ConfigurationError
+    
+        registry = registry_for_session(session)
+        providers = registry.providers()
+        if requested is not None:
+            if not any(item is requested for item in providers.values()):
+                raise ConfigurationError("embedding provider does not belong to the session owner registry")
+            provider = requested
+        else:
+            provider = next((item for item in providers.values() if item.supports(LLMCapability.EMBEDDING)), None)
+        if provider is None:
+            return None
+        if registry.max_privacy is None:
+>           raise ConfigurationError("application embedding privacy ceiling is not configured")
+E           drillai.core.errors.ConfigurationError: application embedding privacy ceiling is not configured
+
+backend/src/drillai/rag/retriever.py:681: ConfigurationError
+_ test_embedding_provider_failure_reports_the_real_fallback_without_logging_details _
+
+corpus = {'org': <Organization org_01M8H22CSSPW58DWJH1P04PFYG>, 'artifact': <RawArtifact raw_01M8H22CT1C8XEQQZXJ9DE9VEA>, 'project': <Project prj_01M8H22CSV4XKD7E05F2NCGX9C>, 'well': <Well wel_01M8H22CSXH6DTS9V1F4EZF9ME>, ...}
+session = <sqlalchemy.ext.asyncio.session.AsyncSession object at 0x7f003485b890>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7f0034844890>
+caplog = <_pytest.logging.LogCaptureFixture object at 0x7f0034944210>
+
+    async def test_embedding_provider_failure_reports_the_real_fallback_without_logging_details(
+        corpus, session, monkeypatch, caplog
+    ):
+        import hashlib
+    
+        from drillai.ai.providers import LLMCapability, ModelSpec, PrivacyClass, ProviderRegistry
+        from drillai.db.models import DocumentChunk
+        from drillai.rag.retriever import _embedding_space_id
+    
+        class FailingProvider:
+            name = "failing-embedding-provider"
+            model_name = "failing-embedding-model"
+    
+            def supports(self, capability):
+                return capability is LLMCapability.EMBEDDING
+    
+            def models(self):
+                return [
+                    ModelSpec(
+                        provider=self.name,
+                        model=self.model_name,
+                        capabilities=frozenset({LLMCapability.EMBEDDING}),
+                        privacy=PrivacyClass.LOCAL,
+                    )
+                ]
+    
+            async def embed(self, texts):
+                raise RuntimeError("credential=must-not-appear-in-logs")
+    
+        provider = FailingProvider()
+        registry = ProviderRegistry()
+        registry.register(provider)
+        session.info["drillai_provider_registry"] = registry
+        chunks = (await session.execute(select(DocumentChunk))).scalars().all()
+        for chunk in chunks:
+            chunk.embedding = [1.0, 0.0]
+            chunk.embedding_dim = 2
+            chunk.embedding_model = _embedding_space_id(provider)
+            chunk.embedding_content_hash = hashlib.sha256(chunk.text.encode("utf-8")).hexdigest()
+        await session.flush()
+    
+>       result = await retrieve(
+            session,
+            corpus["org"].id,
+            RetrievalQuery(
+                text="plastic viscosity",
+                mode=RetrieveMode.HYBRID,
+                well_id=corpus["well"].id,
+                limit=3,
+            ),
+        )
+
+backend/tests/rag/test_retriever.py:570: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+backend/src/drillai/rag/retriever.py:379: in retrieve
+    semantic_scores, vector_backend, semantic_chunk_ids = await _semantic_scores_with_backend(
+backend/src/drillai/rag/retriever.py:790: in _semantic_scores_with_backend
+    provider = _owned_embedding_provider(session)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+session = <sqlalchemy.ext.asyncio.session.AsyncSession object at 0x7f003485b890>
+requested = None
+
+    def _owned_embedding_provider(session: AsyncSession, requested: Any = None) -> Any:
+        """Resolve an owned, unambiguous embedding provider under its application's ceiling.
+    
+        Embeddings send document text or search queries just like chat completions. Explicit
+        injection is allowed only for the exact registered instance; it cannot bypass privacy.
+        """
+        from drillai.ai.providers import LLMCapability, PrivacyClass, registry_for_session
+        from drillai.ai.router import RoutingPolicy
+        from drillai.core.errors import ConfigurationError
+    
+        registry = registry_for_session(session)
+        providers = registry.providers()
+        if requested is not None:
+            if not any(item is requested for item in providers.values()):
+                raise ConfigurationError("embedding provider does not belong to the session owner registry")
+            provider = requested
+        else:
+            provider = next((item for item in providers.values() if item.supports(LLMCapability.EMBEDDING)), None)
+        if provider is None:
+            return None
+        if registry.max_privacy is None:
+>           raise ConfigurationError("application embedding privacy ceiling is not configured")
+E           drillai.core.errors.ConfigurationError: application embedding privacy ceiling is not configured
+
+backend/src/drillai/rag/retriever.py:681: ConfigurationError
+___ test_hybrid_stopword_only_query_uses_semantic_ranking_when_vectors_match ___
+
+corpus = {'org': <Organization org_01M8H22EJ3Y0Y1R8TBA9FYXVA3>, 'artifact': <RawArtifact raw_01M8H22EJATXBEDX8Z1HCM1V0X>, 'project': <Project prj_01M8H22EJ4H696NYTJ28B4588E>, 'well': <Well wel_01M8H22EJ6FYP6V7EFXQWJN3W0>, ...}
+session = <sqlalchemy.ext.asyncio.session.AsyncSession object at 0x7f0034992ed0>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7f003438a8d0>
+
+    async def test_hybrid_stopword_only_query_uses_semantic_ranking_when_vectors_match(corpus, session, monkeypatch):
+        import hashlib
+    
+        from drillai.ai.providers import LLMCapability, ModelSpec, PrivacyClass, ProviderRegistry
+        from drillai.db.models import DocumentChunk
+        from drillai.rag.retriever import _embedding_space_id
+    
+        class QueryEmbeddingProvider:
+            name = "stopword-query-space"
+            model_name = "stopword-query-model"
+    
+            def supports(self, capability):
+                return capability is LLMCapability.EMBEDDING
+    
+            def models(self):
+                return [
+                    ModelSpec(
+                        provider=self.name,
+                        model=self.model_name,
+                        capabilities=frozenset({LLMCapability.EMBEDDING}),
+                        privacy=PrivacyClass.LOCAL,
+                    )
+                ]
+    
+            async def embed(self, texts):
+                return [[1.0, 0.0] for _ in texts]
+    
+        provider = QueryEmbeddingProvider()
+        registry = ProviderRegistry()
+        registry.register(provider)
+        session.info["drillai_provider_registry"] = registry
+        chunks = (await session.execute(select(DocumentChunk))).scalars().all()
+        for chunk in chunks:
+            chunk.embedding = [1.0, 0.0]
+            chunk.embedding_dim = 2
+            chunk.embedding_model = _embedding_space_id(provider)
+            chunk.embedding_content_hash = hashlib.sha256(chunk.text.encode("utf-8")).hexdigest()
+        await session.flush()
+    
+>       result = await retrieve(
+            session,
+            corpus["org"].id,
+            RetrievalQuery(text="the and", mode="hybrid", well_id=corpus["well"].id, limit=3),
+        )
+
+backend/tests/rag/test_retriever.py:704: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+backend/src/drillai/rag/retriever.py:379: in retrieve
+    semantic_scores, vector_backend, semantic_chunk_ids = await _semantic_scores_with_backend(
+backend/src/drillai/rag/retriever.py:790: in _semantic_scores_with_backend
+    provider = _owned_embedding_provider(session)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+session = <sqlalchemy.ext.asyncio.session.AsyncSession object at 0x7f0034992ed0>
+requested = None
+
+    def _owned_embedding_provider(session: AsyncSession, requested: Any = None) -> Any:
+        """Resolve an owned, unambiguous embedding provider under its application's ceiling.
+    
+        Embeddings send document text or search queries just like chat completions. Explicit
+        injection is allowed only for the exact registered instance; it cannot bypass privacy.
+        """
+        from drillai.ai.providers import LLMCapability, PrivacyClass, registry_for_session
+        from drillai.ai.router import RoutingPolicy
+        from drillai.core.errors import ConfigurationError
+    
+        registry = registry_for_session(session)
+        providers = registry.providers()
+        if requested is not None:
+            if not any(item is requested for item in providers.values()):
+                raise ConfigurationError("embedding provider does not belong to the session owner registry")
+            provider = requested
+        else:
+            provider = next((item for item in providers.values() if item.supports(LLMCapability.EMBEDDING)), None)
+        if provider is None:
+            return None
+        if registry.max_privacy is None:
+>           raise ConfigurationError("application embedding privacy ceiling is not configured")
+E           drillai.core.errors.ConfigurationError: application embedding privacy ceiling is not configured
+
+backend/src/drillai/rag/retriever.py:681: ConfigurationError
+_____________ test_stale_embedding_content_fingerprint_is_rejected _____________
+
+corpus = {'org': <Organization org_01M8H22F0Z4C794DSN15PYQVZN>, 'artifact': <RawArtifact raw_01M8H22F170FEWMGBQ1JK28S7C>, 'project': <Project prj_01M8H22F11NVZ8GB2CC36VSF6P>, 'well': <Well wel_01M8H22F12EZC2YPPF0GKZT26A>, ...}
+session = <sqlalchemy.ext.asyncio.session.AsyncSession object at 0x7f003433e750>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7f0034308c10>
+
+    async def test_stale_embedding_content_fingerprint_is_rejected(corpus, session, monkeypatch):
+        import hashlib
+    
+        from drillai.ai.providers import LLMCapability, ModelSpec, PrivacyClass, ProviderRegistry
+        from drillai.db.models import DocumentChunk
+        from drillai.rag.retriever import _embedding_space_id
+    
+        class QueryEmbeddingProvider:
+            name = "stale-query-space"
+            model_name = "stale-query-model"
+    
+            def supports(self, capability):
+                return capability is LLMCapability.EMBEDDING
+    
+            def models(self):
+                return [
+                    ModelSpec(
+                        provider=self.name,
+                        model=self.model_name,
+                        capabilities=frozenset({LLMCapability.EMBEDDING}),
+                        privacy=PrivacyClass.LOCAL,
+                    )
+                ]
+    
+            async def embed(self, texts):
+                return [[1.0, 0.0] for _ in texts]
+    
+        provider = QueryEmbeddingProvider()
+        registry = ProviderRegistry()
+        registry.register(provider)
+        session.info["drillai_provider_registry"] = registry
+        chunks = (await session.execute(select(DocumentChunk))).scalars().all()
+        for chunk in chunks:
+            old_text = chunk.text
+            chunk.embedding = [1.0, 0.0]
+            chunk.embedding_dim = 2
+            chunk.embedding_model = _embedding_space_id(provider)
+            chunk.embedding_content_hash = hashlib.sha256(old_text.encode("utf-8")).hexdigest()
+            chunk.text = old_text + " edited after embedding"
+        await session.flush()
+    
+>       result = await retrieve(
+            session,
+            corpus["org"].id,
+            RetrievalQuery(text="plastic viscosity", mode="semantic", well_id=corpus["well"].id, limit=3),
+        )
+
+backend/tests/rag/test_retriever.py:756: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+backend/src/drillai/rag/retriever.py:379: in retrieve
+    semantic_scores, vector_backend, semantic_chunk_ids = await _semantic_scores_with_backend(
+backend/src/drillai/rag/retriever.py:790: in _semantic_scores_with_backend
+    provider = _owned_embedding_provider(session)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+session = <sqlalchemy.ext.asyncio.session.AsyncSession object at 0x7f003433e750>
+requested = None
+
+    def _owned_embedding_provider(session: AsyncSession, requested: Any = None) -> Any:
+        """Resolve an owned, unambiguous embedding provider under its application's ceiling.
+    
+        Embeddings send document text or search queries just like chat completions. Explicit
+        injection is allowed only for the exact registered instance; it cannot bypass privacy.
+        """
+        from drillai.ai.providers import LLMCapability, PrivacyClass, registry_for_session
+        from drillai.ai.router import RoutingPolicy
+        from drillai.core.errors import ConfigurationError
+    
+        registry = registry_for_session(session)
+        providers = registry.providers()
+        if requested is not None:
+            if not any(item is requested for item in providers.values()):
+                raise ConfigurationError("embedding provider does not belong to the session owner registry")
+            provider = requested
+        else:
+            provider = next((item for item in providers.values() if item.supports(LLMCapability.EMBEDDING)), None)
+        if provider is None:
+            return None
+        if registry.max_privacy is None:
+>           raise ConfigurationError("application embedding privacy ceiling is not configured")
+E           drillai.core.errors.ConfigurationError: application embedding privacy ceiling is not configured
+
+backend/src/drillai/rag/retriever.py:681: ConfigurationError
+__ test_semantic_search_never_compares_equal_dimensions_from_different_models __
+
+corpus = {'org': <Organization org_01M8H22FN11BX2VA45DCGS24MG>, 'artifact': <RawArtifact raw_01M8H22FN96V1JJW4NRDE8RD1M>, 'project': <Project prj_01M8H22FN34NYRYVQXN20PK660>, 'well': <Well wel_01M8H22FN4JFADJT6H9S5H3AM0>, ...}
+session = <sqlalchemy.ext.asyncio.session.AsyncSession object at 0x7f00346d83d0>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7f00347ef4d0>
+
+    async def test_semantic_search_never_compares_equal_dimensions_from_different_models(
+        corpus, session, monkeypatch
+    ):
+        """Equal dimensions and model labels still do not make different providers' spaces compatible."""
+        from drillai.ai.providers import LLMCapability, ModelSpec, PrivacyClass, ProviderRegistry
+        from drillai.db.models import DocumentChunk
+    
+        class QueryEmbeddingProvider:
+            name = "query-space"
+            model_name = "shared-model-name"
+    
+            def supports(self, capability):
+                return capability is LLMCapability.EMBEDDING
+    
+            def models(self):
+                return [
+                    ModelSpec(
+                        provider=self.name,
+                        model=self.model_name,
+                        capabilities=frozenset({LLMCapability.EMBEDDING}),
+                        privacy=PrivacyClass.LOCAL,
+                    )
+                ]
+    
+            async def embed(self, texts):
+                return [[1.0, 0.0] for _ in texts]
+    
+        registry = ProviderRegistry()
+        registry.register(QueryEmbeddingProvider())
+        session.info["drillai_provider_registry"] = registry
+    
+        class OtherProviderSameModelName:
+            name = "different-provider"
+            model_name = "shared-model-name"
+    
+        from drillai.rag.retriever import _embedding_space_id
+    
+        chunks = (await session.execute(select(DocumentChunk))).scalars().all()
+        assert chunks
+        stored_space = _embedding_space_id(OtherProviderSameModelName())
+        assert stored_space is not None
+        for chunk in chunks:
+            chunk.embedding = [1.0, 0.0]
+            chunk.embedding_dim = 2
+            chunk.embedding_model = stored_space
+    
+>       result = await retrieve(
+            session,
+            corpus["org"].id,
+            RetrievalQuery(text="plastic viscosity", mode="semantic", well_id=corpus["well"].id, limit=3),
+        )
+
+backend/tests/rag/test_retriever.py:812: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+backend/src/drillai/rag/retriever.py:379: in retrieve
+    semantic_scores, vector_backend, semantic_chunk_ids = await _semantic_scores_with_backend(
+backend/src/drillai/rag/retriever.py:790: in _semantic_scores_with_backend
+    provider = _owned_embedding_provider(session)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+session = <sqlalchemy.ext.asyncio.session.AsyncSession object at 0x7f00346d83d0>
+requested = None
+
+    def _owned_embedding_provider(session: AsyncSession, requested: Any = None) -> Any:
+        """Resolve an owned, unambiguous embedding provider under its application's ceiling.
+    
+        Embeddings send document text or search queries just like chat completions. Explicit
+        injection is allowed only for the exact registered instance; it cannot bypass privacy.
+        """
+        from drillai.ai.providers import LLMCapability, PrivacyClass, registry_for_session
+        from drillai.ai.router import RoutingPolicy
+        from drillai.core.errors import ConfigurationError
+    
+        registry = registry_for_session(session)
+        providers = registry.providers()
+        if requested is not None:
+            if not any(item is requested for item in providers.values()):
+                raise ConfigurationError("embedding provider does not belong to the session owner registry")
+            provider = requested
+        else:
+            provider = next((item for item in providers.values() if item.supports(LLMCapability.EMBEDDING)), None)
+        if provider is None:
+            return None
+        if registry.max_privacy is None:
+>           raise ConfigurationError("application embedding privacy ceiling is not configured")
+E           drillai.core.errors.ConfigurationError: application embedding privacy ceiling is not configured
+
+backend/src/drillai/rag/retriever.py:681: ConfigurationError
+=========================== short test summary info ============================
+FAILED backend/tests/rag/test_retriever.py::test_hybrid_rrf_does_not_return_unmatched_chunks_without_compatible_vectors
+FAILED backend/tests/rag/test_retriever.py::test_embedding_provider_failure_reports_the_real_fallback_without_logging_details
+FAILED backend/tests/rag/test_retriever.py::test_hybrid_stopword_only_query_uses_semantic_ranking_when_vectors_match
+FAILED backend/tests/rag/test_retriever.py::test_stale_embedding_content_fingerprint_is_rejected
+FAILED backend/tests/rag/test_retriever.py::test_semantic_search_never_compares_equal_dimensions_from_different_models

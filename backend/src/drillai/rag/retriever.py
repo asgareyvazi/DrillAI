@@ -657,6 +657,41 @@ async def _sync_pgvector_rows(session: AsyncSession, chunks: list[DocumentChunk]
         return False
 
 
+def _owned_embedding_provider(session: AsyncSession, requested: Any = None) -> Any:
+    """Resolve an owned, unambiguous embedding provider under its application's ceiling.
+
+    Embeddings send document text or search queries just like chat completions. Explicit
+    injection is allowed only for the exact registered instance; it cannot bypass privacy.
+    """
+    from drillai.ai.providers import LLMCapability, PrivacyClass, registry_for_session
+    from drillai.ai.router import RoutingPolicy
+    from drillai.core.errors import ConfigurationError
+
+    registry = registry_for_session(session)
+    providers = registry.providers()
+    if requested is not None:
+        if not any(item is requested for item in providers.values()):
+            raise ConfigurationError("embedding provider does not belong to the session owner registry")
+        provider = requested
+    else:
+        provider = next((item for item in providers.values() if item.supports(LLMCapability.EMBEDDING)), None)
+    if provider is None:
+        return None
+    if registry.max_privacy is None:
+        raise ConfigurationError("application embedding privacy ceiling is not configured")
+    models = [spec for spec in provider.models() if LLMCapability.EMBEDDING in spec.capabilities]
+    if (len(models) != 1 or models[0].provider != provider.name
+            or models[0].model != _embedding_model_name(provider)):
+        raise ConfigurationError("embedding provider must declare one unambiguous owned model")
+    policy = RoutingPolicy(max_privacy=registry.max_privacy)
+    provider_privacy = getattr(provider, "privacy", models[0].privacy)
+    if not isinstance(provider_privacy, PrivacyClass):
+        raise ConfigurationError("embedding provider privacy is invalid")
+    if not policy.allows_privacy(models[0].privacy) or not policy.allows_privacy(provider_privacy):
+        raise ConfigurationError("embedding provider exceeds the application privacy ceiling")
+    return provider
+
+
 async def index_chunk_embeddings(
     session: AsyncSession,
     chunks: list[DocumentChunk],
@@ -664,23 +699,26 @@ async def index_chunk_embeddings(
     provider: Any = None,
 ) -> int:
     """Generate and persist embeddings for `chunks` (and sync to `document_chunk_vectors` on PostgreSQL)."""
-    from drillai.ai.providers import LLMCapability, registry_for_session
-
     if not chunks:
         return 0
-    if provider is None:
-        reg = registry_for_session(session)
-        provider = next(
-            (item for item in reg.providers().values() if item.supports(LLMCapability.EMBEDDING)),
-            None,
-        )
-    if provider is None or getattr(provider, "embed", None) is None:
+    from drillai.core.errors import ConfigurationError
+
+    tenant_ids = {getattr(chunk, "org_id", None) for chunk in chunks}
+    if len(tenant_ids) != 1 or not all(isinstance(org_id, str) and org_id.strip() for org_id in tenant_ids):
+        raise ConfigurationError("embedding batch must belong to exactly one identified tenant")
+    provider = _owned_embedding_provider(session, provider)
+    if provider is None or not callable(getattr(provider, "embed", None)):
         return 0
     space_id = _embedding_space_id(provider)
     if space_id is None:
         return 0
     texts = [c.text for c in chunks]
     vectors = await provider.embed(texts)
+    _owned_embedding_provider(session, provider)
+    if _embedding_space_id(provider) != space_id:
+        from drillai.core.errors import ConfigurationError
+
+        raise ConfigurationError("embedding provider configuration changed during the request")
     if len(vectors) != len(chunks):
         raise ValueError("embedding provider returned a different number of vectors than input chunks")
     count = 0
@@ -758,13 +796,7 @@ async def _semantic_scores_with_backend(
     text: str,
 ) -> tuple[list[float], str | None, set[str]]:
     """Score only vectors made by the exact active model and with its exact dimension."""
-    from drillai.ai.providers import LLMCapability, registry_for_session
-
-    registry = registry_for_session(session)
-    provider = next(
-        (item for item in registry.providers().values() if item.supports(LLMCapability.EMBEDDING)),
-        None,
-    )
+    provider = _owned_embedding_provider(session)
     if provider is None:
         return [], "no_embedding_provider", set()
     with_vectors = [chunk for chunk in chunks if chunk.embedding is not None]
@@ -799,6 +831,11 @@ async def _semantic_scores_with_backend(
             extra={"extra_fields": {"provider": provider.name, "error_type": type(exc).__name__}},
         )
         return [], "query_embedding_failed", set()
+    _owned_embedding_provider(session, provider)
+    if _embedding_space_id(provider) != space_id:
+        from drillai.core.errors import ConfigurationError
+
+        raise ConfigurationError("embedding provider configuration changed during the request")
     if not vectors or len(vectors) != 1:
         return [], "invalid_query_embedding", set()
     try:

@@ -195,7 +195,9 @@ async def test_cp20_01_pgvector_nearest_neighbor_and_hybrid_retrieval_on_postgre
             session.add_all(all_chunks)
             await session.flush()
 
-            indexed_count = await index_chunk_embeddings(session, all_chunks, provider=emb_provider)
+            # Never send different tenants' source text in the same embedding request.
+            indexed_count = await index_chunk_embeddings(session, all_chunks[:3], provider=emb_provider)
+            indexed_count += await index_chunk_embeddings(session, all_chunks[3:], provider=emb_provider)
             assert indexed_count == 4
 
             # Verify rows exist in PostgreSQL `document_chunk_vectors` table

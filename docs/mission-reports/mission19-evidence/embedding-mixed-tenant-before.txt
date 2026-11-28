@@ -1,0 +1,21 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+__________ test_index_rejects_mixed_tenant_batch_before_sending_text ___________
+
+    async def test_index_rejects_mixed_tenant_batch_before_sending_text():
+        app = _app()
+        registry = app.state.database.provider_registry
+        provider = RecordingEmbedding(PrivacyClass.LOCAL)
+        registry.clear()
+        registry.max_privacy = PrivacyClass.LOCAL
+        registry.register(provider)
+        first, second = _chunk(provider), _chunk(provider)
+        second.org_id = "org-b"
+        try:
+            async with app.state.database.session() as session:
+>               with pytest.raises(ConfigurationError, match="tenant"):
+E               Failed: DID NOT RAISE ConfigurationError
+
+backend/tests/security/test_m19_embedding_boundary.py:172: Failed
+=========================== short test summary info ============================
+FAILED backend/tests/security/test_m19_embedding_boundary.py::test_index_rejects_mixed_tenant_batch_before_sending_text
